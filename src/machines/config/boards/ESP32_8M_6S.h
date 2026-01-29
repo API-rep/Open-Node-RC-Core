@@ -19,8 +19,6 @@
 #include <const.h>
 #include <macro.h>
 
-#include <config/config.h>
-
 /**
  * Board devices definition
  * Place here all config of devices embedded on the board such as :

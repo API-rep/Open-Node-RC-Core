@@ -1,6 +1,4 @@
 
-#include "config/config.h"
-
 #include "volvo_A60H_bruder.h"
 
 

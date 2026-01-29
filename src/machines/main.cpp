@@ -1,6 +1,6 @@
-#include <config/config.h>
-#include <init/init.h>
-#include <utils/drv_control.h>
+#include "config.h"
+#include "init/init.h"
+#include "utils/utils.h"
 
 #include <PS4Controller.h>
 

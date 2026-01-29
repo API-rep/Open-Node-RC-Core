@@ -1,5 +1,3 @@
-#include "config/config.h"
-
 #include "ESP32_8M_6S.h"
 
 

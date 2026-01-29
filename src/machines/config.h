@@ -73,8 +73,8 @@
 #define COOLING_FAN_SPEED       100       // cooling fan speed (in %)
 
 
-#include "sys_config/sys_config.h"
-#include "machines/machines.h"
-#include "inputs/inputs.h"
+#include "../common/sys_config/sys_config.h"
+#include "config/machines.h"
+#include "config/inputs/inputs.h"
 
 // EOF config.h

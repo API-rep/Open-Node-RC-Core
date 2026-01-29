@@ -1,4 +1,3 @@
-#include "config/config.h"
 
 #include "sys_config.h"
 
@@ -40,7 +39,7 @@ DigitalBus digitalBusArray[] = {
  */
 
 ComBus comBus {
-  .runLevel = DEF_RUNLEVEL,
+  .runLevel = RunLevel::NOT_YET_SET,
   .analogBus = analogBusArray,
   .digitalBus = digitalBusArray,
   .analogBusMaxVal = (1UL << (sizeof(decltype(AnalogBus::value)) * 8)) - 1

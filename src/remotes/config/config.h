@@ -9,7 +9,7 @@
 #include "struct.h"
 #include "macro.h"
 
-#include "remotes/remotes.h"
+#include "remotes.h"
 // #include "other_input/other_input.h"
 
 
