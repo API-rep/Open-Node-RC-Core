@@ -1,0 +1,25 @@
+Note about project
+
+This project intent du design a framework for RC vehicle with DIY harware.
+Years afer years, our (me and my son) RC vehicle squad grow up and code maintenance become harder to maintain.
+A overall projet, based on config files, grow up.
+
+Todo list :
+1. Code side
+    - Enhance enum with type (ex : enum nameOfPinGroup { PIN_A = 0, PIN_B, PIN_COUNT }
+    - Use namespace to structure code
+
+2. Intégration ESP32 sound module
+
+Requète de base IA:
+
+Il s'agit de ce projet https://github.com/TheDIYGuy999/Rc_Engine_Sound_ESP32
+J'ai déjà fait le design d'une carte d'extension, dédiée à la génération de son et lumière. Celle-ci devrait se brancher à ma carte principale via une connexion filaire et un protocole à déterminer. Mon projet actuel est articulé autour d'un ComBus, une structure composée de canaux analogiques et numérique. C'est là dessus que les périphériques d'entrée viennent se greffer (en écriture) et ceux de sortie (module moteurs, servos ...) pour déterminer leur état. J'aimerai simplement relayer ce ComBus vers la carte d'extension et qu'il puisse exploiter ces données de la même manière que les entrées actuelles supportées par ce projet (SBUS, IBUS, etc ...). A noter que mes structures de config machine, remote, ComBus sont écrite pour contenir les infos "son" (par exemple, .type pour les moteurs qui peut être wheel, actuator ... et générer le son adéquat). J'aimerai donc garder cette structure commune pour ces deux projets (3 en fait, un autre sous projet de télécommande devrait être créé aussi).
+Peux-tu me dire dans les grandes ligne comment tu pourrais m'aider pour ce projet?
+
+
+Sa proposition :
+
+Architecture ComBus : Rappelle que le système repose sur une structure extern ComBus partagée, avec des tableaux AnalogBus et DigitalBus.
+Objectif Esclave : Note que la carte Son/Lumière doit agir comme un module "ComBus passif" recevant ses données via Serial/ESP-NOW.
+Lien GitHub : Garde l'URL du projet de TheDIYGuy999 sous le coude.
