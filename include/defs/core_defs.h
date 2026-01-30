@@ -3,10 +3,10 @@
  * @brief RC system core environement definitions.
  * @details This file defines datas common on all core nodes.
  *******************************************************************************/// 
-
 #pragma once
 
 #include <cstdint>
+
 
 /**
  * @brief Remote protocol definition 

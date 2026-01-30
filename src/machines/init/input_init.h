@@ -15,9 +15,9 @@
 
 #include "config.h"
 
-#include <struct.h>
 #include <const.h>
-#include <macro.h>
+#include <struct/struct.h>
+#include <defs/defs.h>
 
 /**  ### INPUT DEVICE CONFIGURATION ### */
 

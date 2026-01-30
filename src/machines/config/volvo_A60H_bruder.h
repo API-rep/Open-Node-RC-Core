@@ -12,14 +12,11 @@
 #include <struct/struct.h>
 #include <defs/defs.h>
 
-#include <core/config/config.h>
-#include <machines/config.h>
+#include <core/config/combus.h>
 
 /**
  * @brief Vehicle configuration
  */
-
-#define MACHINE_INFO_NAME  "Volvo A60H Bruder"
 
 #ifndef BOARD 
   #define BOARD              ESP32_8M_6S       // défault vehicle motherboard
@@ -31,8 +28,13 @@
 #define DEFAULT_SERVO_SPEED    NOT_SET   // default servo speed
 #define DEFAULT_SERVO_ACCEL    NOT_SET   // default servo speed
 
+/** @brief motors/servo settings */
 
-#include "boards/boards.h"
+#define M_DEF_PWM_FREQ        16000       // motors default PWM frequency (in hz)
+#define SRV_DEF_PWM_FREQ         50       // servo default PWM frequency (in hz)
+#define COOLING_FAN_SPEED       100       // cooling fan speed (in %)
+
+#include <machines/config/boards/boards.h>
 
 /**
  * Vehicle devices definition

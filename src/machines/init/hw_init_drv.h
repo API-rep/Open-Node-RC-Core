@@ -11,16 +11,14 @@
  * 
 * This script MUST be include in hw_init.h top file
  *******************************************************************************/// 
-
 #pragma once
 
-#include <struct.h>
 #include <const.h>
-#include <macro.h>
+#include <struct/struct.h>
 #include <defs/defs.h>
 
-
 #include <ESP32_PWM_Motor.h>
+
 
 /**
  * @brief Initialize and allocate DC drivers pointer

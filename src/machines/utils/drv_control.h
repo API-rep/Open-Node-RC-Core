@@ -20,7 +20,12 @@
  *******************************************************************************///
 #pragma once
 
-#include "struct.h"
+#include <const.h>
+#include <struct/struct.h>
+#include <defs/defs.h>
+
+#include <machines/config.h>
+#include <machines/init/init.h>
 
 /**
  * @brief Sleep all DC drivers

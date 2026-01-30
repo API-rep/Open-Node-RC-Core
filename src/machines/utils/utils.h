@@ -7,13 +7,11 @@
  *******************************************************************************/// 
 #pragma once
 
-#include <struct.h>
 #include <const.h>
-#include <macro.h>
-
+#include <struct/struct.h>
 #include <defs/defs.h>
 
-#include "../config.h"
+#include <machines/config.h>
 
 #include "drv_control.h"
 

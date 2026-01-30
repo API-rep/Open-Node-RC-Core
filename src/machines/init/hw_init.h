@@ -12,9 +12,9 @@
  *******************************************************************************/// 
 #pragma once
 
-#include <struct.h>
 #include <const.h>
-#include <macro.h>
+#include <struct/struct.h>
+#include <defs/defs.h>
 
 #include "hw_init_drv.h"
 #include "hw_init_srv.h"

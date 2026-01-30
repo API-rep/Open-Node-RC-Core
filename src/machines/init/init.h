@@ -7,12 +7,11 @@
  *******************************************************************************/// 
 #pragma once
 
-#include <struct.h>
 #include <const.h>
-#include <macro.h>
+#include <struct/struct.h>
 #include <defs/defs.h>
 
-#include "../config.h"
+#include <machines/config.h>
 
 #include "sys_init.h"
 #include "hw_init.h"

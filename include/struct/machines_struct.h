@@ -1,5 +1,5 @@
 /*!****************************************************************************
- * @file  struct.h
+ * @file  machines_struct.h
  * @brief machines structure and variable definition file
  * This file contain all structure used to define machine configuration and features.
  *******************************************************************************/// 
@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include <const.h>
+#include <struct/struct.h>
 #include <defs/defs.h>
 
 /**
@@ -87,18 +88,18 @@ typedef struct {
  */
 
 typedef struct {
-  const int8_t ID;                           // DC device ID
-  const char* infoName;                      // attached device short description
-  const DriverPort* drvPort;                 // DC device board driver port
-  DcDevType DevType = DcDevType::UNDEFINED;  // attached device type
-  DevUsage usage = DevUsage::UNDEFINED;      // attached device usage in the vehicle
-  DcDrvMode mode = DcDrvMode::UNDEFINED;     // DC device configuration
-  int8_t comChannel = NOT_SET;               // internal com-bus channel used to set the driver speed
-  uint32_t pwmFreq = NOT_SET;                // driver PWM frequency (in hz)
-  bool polInv = false;                       // driver polarity inversion (true = inverted)
-  float maxFwSpeed = PERCENT_MAX;            // maximum forward speed (0 to 100% - Defaut 100%)
-  float maxBackSpeed = PERCENT_MAX;          // maximum backward speed (0 to 100% - Defaut 100%)
-  const int8_t parentID = NOT_SET;           // parent identifier (used in clone mode)
+  const int8_t ID;                            // DC device ID
+  const char* infoName;                       // attached device short description
+  const DriverPort* drvPort;                  // DC device board driver port
+  DcDevType DevType = DcDevType::UNDEFINED;   // attached device type
+  DevUsage usage = DevUsage::UNDEFINED;       // attached device usage in the vehicle
+  DcDrvMode mode = DcDrvMode::UNDEFINED;      // DC device configuration
+  int8_t comChannel = NOT_SET;                // internal com-bus channel used to set the driver speed
+  uint32_t pwmFreq = NOT_SET;                 // driver PWM frequency (in hz)
+  bool polInv = false;                        // driver polarity inversion (true = inverted)
+  float maxFwSpeed = PERCENT_MAX;             // maximum forward speed (0 to 100% - Defaut 100%)
+  float maxBackSpeed = PERCENT_MAX;           // maximum backward speed (0 to 100% - Defaut 100%)
+  const int8_t parentID = NOT_SET;            // parent identifier (used in clone mode)
 } DcDevice;
 
 
@@ -146,4 +147,4 @@ typedef struct {
   int8_t srvDevCount = NOT_SET;                 // number of servo device configured
 } Machine;
 
-// EOF struct.h
+// EOF machines_struct.h

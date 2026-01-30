@@ -15,29 +15,7 @@
 #include <struct/struct.h>
 #include <defs/defs.h>
 
-#include <core/config/config.h>
-
-
-/**
- * @brief vehicle selection.
- * Uncomment one of this line (remove //) to select a vehicle
- */
-
-  /** @brief Machine selection */
-#ifndef MACHINE
-  #define MACHINE  VOLVO_A60_H_BRUDER
-  //#define MACHINE  ANOTHER_MACHINE
-#endif
-
-  /** @brief MotherboardDC driver selection 
-   * Uncomment one of this line to select a DC driver model
-   * Leave uncommented if the driver is onboard (soldered on board)
-  */
-#ifndef DC_DRIVER_MODEL
-  #define DC_DRIVER_MODEL  DRV8801
-  //  #define DC_DRIVER_MODEL  DRV8874
-#endif
-
+#include <core/config.h>
 
 /**
  * @brief remote selection.
@@ -68,19 +46,8 @@
     #define VBAT_SENSE_SAMPLING       10     // number of VBAT measure used to compute average value
   #endif
 
-/**
- * @brief motors/servo settings
- * 
- */
-
-#define M_DEF_PWM_FREQ        16000       // motors default PWM frequency (in hz)
-#define SRV_DEF_PWM_FREQ         50       // servo default PWM frequency (in hz)
-#define COOLING_FAN_SPEED       100       // cooling fan speed (in %)
-
 
 #include "config/machines.h"
-#include "config/boards/boards.h"
-#include "config/boards/drivers/drivers.h"
 
 
 // EOF config.h

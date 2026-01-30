@@ -13,10 +13,10 @@
 #endif
 
 #ifndef MACHINE 
- #error "No machine defined for compilation. Check config.h file or -DMACHINE=... command line parameter to fix the problem" 
+ #error "No machine defined for compilation. Check platformio.ini file and env:xxx setting to fix the problem" 
 #endif
 
 
 #include "boards/boards.h"
 
-// EOF boards.h
+// EOF machines.h

@@ -1,5 +1,5 @@
 
-#include "config.h"
+#include "dumper_truck.h"
 
 AnalogBus analogBusArray[] = {
 

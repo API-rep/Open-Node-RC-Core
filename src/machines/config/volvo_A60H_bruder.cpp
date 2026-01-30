@@ -1,5 +1,6 @@
 #include "volvo_A60H_bruder.h"
 
+
 DcDevice dcDevArray[DC_DRV_COUNT] = {
 
   { 
@@ -9,7 +10,7 @@ DcDevice dcDevArray[DC_DRV_COUNT] = {
     .DevType = DcDevType::DC_MOTOR,
     .usage = DevUsage::GEN_ACTUATOR,
     .mode = DcDrvMode::TWO_WAY_NEUTRAL_CENTER,
-    .comChannel = STEERING_BUS, // naming from enum in common/config.h
+    .comChannel = STEERING_BUS, // naming from enum in core/config/combus.h
     .pwmFreq = M_DEF_PWM_FREQ, 
     .polInv = true
   },
