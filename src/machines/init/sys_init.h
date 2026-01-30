@@ -17,8 +17,6 @@
 #include <const.h>
 #include <macro.h>
 
-#include <config/config.h>
-
 
   // system configuration function
 void sys_init_setup();

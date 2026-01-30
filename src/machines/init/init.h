@@ -10,8 +10,9 @@
 #include <struct.h>
 #include <const.h>
 #include <macro.h>
+#include <defs/defs.h>
 
-#include "config.h"
+#include "../config.h"
 
 #include "sys_init.h"
 #include "hw_init.h"

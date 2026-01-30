@@ -1,16 +1,11 @@
 /*!****************************************************************************
  * @file machines.h
- * @author API
  * @brief Top machines configuration file.
  * This file contain all available machines configuation files supported by the project.
- * To use ONE of them, uncomment the machine line.
- * Multiple uncommented line will cause unatended compilation result.
+ * To use ONE of them, uncomment the machine line in main config file or specify
+ * a -DMACHINE=... parameter in compiler command line. 
  *******************************************************************************/// 
 #pragma once
-
-#include "const.h"
-#include "struct.h"
-#include "macro.h"
 
   /* TP dumper trucks */
 #if MACHINE == VOLVO_A60_H_BRUDER    // Bruder Volvo_A60H full electric conversion

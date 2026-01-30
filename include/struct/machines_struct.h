@@ -1,9 +1,7 @@
 /*!****************************************************************************
  * @file  struct.h
- * @brief structure and variable definition file
- * This file contain the recurent structure and variable used in the projet
- * Share it with other device of the same project to ensure compatibility (trailer, 
- * light module, sound module ...)
+ * @brief machines structure and variable definition file
+ * This file contain all structure used to define machine configuration and features.
  *******************************************************************************/// 
 #pragma once
 
@@ -11,48 +9,6 @@
 
 #include <const.h>
 #include <defs/defs.h>
-
-/**
- * @brief Internal communication bus structure
- * This structure is used to standardized communication into main code. It act as a harware
- * abstraction layer between different input modules (RC protocol, bluetooth, wifi ...), the main code 
- * and output modules (IO expander, sound module). Its data structure is devided in channels :
- * - Digital channel to store two state date
- * - Analog channel to store analog/multi state data
- * - A runlevel data to store machine state
- * 
- * Its instance is create in init\sys_config.h file
- * 
- * NOTE:
- * - do not change uint16_t size for AnalogBus. Some system sub value depend of this size
- * - "isDrived" flag have to be set true if its channel is perodicaly update.
- *   For safety, a watchdog should manage a disconnect timout an set "isDrived" false after a delay.
- * - All input/output modules had to write/read this struct to share data
- */
-
-  // analogic bus data structure
- typedef struct {
-  const char* infoName;                         // analog bus short description
-  uint16_t value;                               // analog bus current value
-  bool isDrived = false;                        // true if the AnalogBus have a driving source
-} AnalogBus;
-
-  // digital bus data structure (two state)
- typedef struct {
-  const char* infoName;                         // digital bus short description
-  bool value;                                   // digital bus current value (true of false)
-  bool isDrived = false;                        // true if the DigitalBus have a driving source
-} DigitalBus;
-
-  // Main communication bus structure
-typedef struct {
-  RunLevel runLevel;                            // runlevel state
-  AnalogBus* analogBus;                         // analogic bus channels
-  DigitalBus* digitalBus;                       // digital bus channels
-  uint32_t analogBusMaxVal;                     // Com-bus analog channel maximum value
-} ComBus;
-
-
 
 /**
  * @brief DC driver module structure
@@ -190,57 +146,4 @@ typedef struct {
   int8_t srvDevCount = NOT_SET;                 // number of servo device configured
 } Machine;
 
-
-
-
-
-/**
- * @brief Internal input device data structure
- * This structure is used to store input device data.It act as a harware abstraction layer between 
- * devices input module (RC protocol, bluetooth, wifi ...) and internal communication bus(com-bus).
- * Its data structure is devided in channels :
- * - Digital channel to store two state devices (button, switches ...)
- * - Analog channel to store analog devices (sticks, slider, trimmers ...)
- * - A status flag use to track input device state (disconnect timout i.e.)
- * - An analog/digital channels counter
- * 
- * Its instance is create in init\input_init.h file
- * For convenance, a user editable liker map input device data to com-bus channel. By this, it allow
- * 
- *
- * 
- * NOTE:
- * - do not change uint16_t size for devices. Some system sub value depend of this size
- * - "status" flag have to be set true if input device data perodicaly update.
- *   For safety, a input module watchdog should manage a disconnect timout an set "status" to disconnect after a delay.
- * - All input device modules had to write this struct to share incomming data
- */
-
-  // analog devices (sticks, analog buttons, sliders)
-typedef struct {
-  const char* infoName;                       // device short description
-  const int8_t type = NOT_SET;                // analog device type
-  uint16_t val;                               // analog device value
-  const int32_t minVal = 0;                   // minimum value return by analog device decoder module at lower state
-  const int32_t maxVal = 0;                   // maximum value return by analog device decoder module at higher state
-  const bool isInverted = false;              // true if analog device axe is inverted
-} AnalogDev;
-
-  // digital devices (pushbuttons, switches)
-typedef struct {
-  const char* infoName;                       // device short description
-  const int8_t type = NOT_SET;                // switch device type
-  bool val;                                   // digital device value
-  const bool isInverted = false;              // true if switch logic is inverted
-} DigitalDev;
-
-  // remote data structure
-typedef struct {
-  int8_t status = NOT_SET;              // remote controle status
-  AnalogDev* analogDev;                 // pointer to external AnalogDev structure
-  DigitalDev* digitalDev;               // pointer to external DigitalgDev structure
-  uint8_t numAnalogCh;                  // number of input analog channel
-  uint8_t numDigitalCh;                 // number of input digital channel
-} InputDev;
-
-// EOF const.h
+// EOF struct.h

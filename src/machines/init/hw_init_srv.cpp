@@ -1,5 +1,6 @@
 #include "hw_init_srv.h"
 
+#include "../config.h"
 
 void servoInit() {
   if (machine.srvDevCount > 0) {

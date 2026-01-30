@@ -1,4 +1,9 @@
 #include "drv_control.h"
+#include "../config.h"
+
+#include <Arduino.h>
+
+#include <defs/defs.h>
 
 void sleepAllDcDrivers(const Machine &config) {
           // Check if there are any drivers to initialize

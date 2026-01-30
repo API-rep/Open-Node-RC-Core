@@ -1,7 +1,7 @@
 /*!****************************************************************************
  * @file  const.h
- * @brief Environment constant definition file
- * This file contain the constant definition used to manage the projet
+ * @brief Projects constants definition file
+ * This file contain the constants definition used to manage the projet
  * These constants enhance main code structure, maintenance and readability
  * Share it with other deveice of the same project (trailer, light module, sound module ...)
  *******************************************************************************/// 

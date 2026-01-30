@@ -1,11 +1,11 @@
 /*!****************************************************************************
- * @file defs.h
- * @brief Global definition top file
+ * @file struct.h
+ * @brief Global structure definition top file
  *******************************************************************************/// 
 #pragma once
 
-#include "core_defs.h"
-#include "machines_defs.h"
-#include "remotes_defs.h"
+#include "core_struct.h"
+#include "machines_struct.h"
+#include "remotes_struct.h"
 
-// EOF defs.h
+// EOF struct.h

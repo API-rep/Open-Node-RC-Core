@@ -16,8 +16,7 @@
 #include <struct.h>
 #include <const.h>
 #include <macro.h>
-
-#include <config/config.h>
+#include <defs/defs.h>
 
 #include <ESP32_PWM_Servo.h>
 

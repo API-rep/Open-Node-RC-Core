@@ -11,7 +11,9 @@
 #include <const.h>
 #include <macro.h>
 
-#include "config.h"
+#include <defs/defs.h>
+
+#include "../config.h"
 
 #include "drv_control.h"
 

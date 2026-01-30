@@ -8,6 +8,23 @@
 
 #include <cstdint>
 
+
+/******************************************************************************
+ * @brief Global machine system states definitions
+ *******************************************************************************///
+ 
+   /** @brief available run levels */
+enum class RunLevel : int8_t {
+    NOT_YET_SET = -1,
+    IDLE        =  0,
+    STARTING    =  1,
+    RUNNING     =  2,
+    TURNING_OFF =  3,
+    SLEEPING    =  4,
+    RESET       =  5
+};
+
+
 /******************************************************************************
  * @brief Motherboard related hardware definitions
  *******************************************************************************/// 

@@ -12,27 +12,32 @@
 #pragma once
 
 #include <const.h>
-#include <struct.h>
-#include <macro.h>
+#include <struct/struct.h>
 #include <defs/defs.h>
+
+#include <core/config/config.h>
 
 
 /**
  * @brief vehicle selection.
  * Uncomment one of this line (remove //) to select a vehicle
- *   or
- * specify a -DMACHINE=... parameter in compiler command line.
  */
 
+  /** @brief Machine selection */
 #ifndef MACHINE
   #define MACHINE  VOLVO_A60_H_BRUDER
   //#define MACHINE  ANOTHER_MACHINE
 #endif
 
+  /** @brief MotherboardDC driver selection 
+   * Uncomment one of this line to select a DC driver model
+   * Leave uncommented if the driver is onboard (soldered on board)
+  */
 #ifndef DC_DRIVER_MODEL
   #define DC_DRIVER_MODEL  DRV8801
   //  #define DC_DRIVER_MODEL  DRV8874
 #endif
+
 
 /**
  * @brief remote selection.
@@ -73,8 +78,9 @@
 #define COOLING_FAN_SPEED       100       // cooling fan speed (in %)
 
 
-#include "../common/sys_config/sys_config.h"
 #include "config/machines.h"
-#include "config/inputs/inputs.h"
+#include "config/boards/boards.h"
+#include "config/boards/drivers/drivers.h"
+
 
 // EOF config.h

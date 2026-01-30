@@ -16,8 +16,6 @@
 #include <const.h>
 #include <macro.h>
 
-#include <config/config.h>
-
 #include "hw_init_drv.h"
 #include "hw_init_srv.h"
 

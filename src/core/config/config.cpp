@@ -1,5 +1,5 @@
 
-#include "sys_config.h"
+#include "config.h"
 
 AnalogBus analogBusArray[] = {
 

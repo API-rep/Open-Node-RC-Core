@@ -8,9 +8,12 @@
  *******************************************************************************/// 
 #pragma once
 
-#include "const.h"
-#include "struct.h"
-#include "macro.h"
+#include <const.h>
+#include <struct/struct.h>
+#include <defs/defs.h>
+
+#include <core/config/config.h>
+#include <machines/config.h>
 
 /**
  * @brief Vehicle configuration
@@ -75,11 +78,6 @@ extern DcDevice dcDevArray[DC_DRV_COUNT];
 //  
 
 
-
-
-/** Vehicle structure definition
- * 
-*/
 
 /**
  * @brief Vehicle structure definition

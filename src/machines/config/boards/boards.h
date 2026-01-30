@@ -7,7 +7,6 @@
  *******************************************************************************/// 
 #pragma once
 
-#include "drivers/drivers.h"
   /* ESP32 based board */
 #if BOARD == ESP32_8M_6S    // Bruder Volvo_A60H full electric conversion
   #include "ESP32_8M_6S.h"
