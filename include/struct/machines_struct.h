@@ -6,6 +6,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <optional>
 
 #include <const.h>
 #include <struct/struct.h>
@@ -18,9 +19,9 @@
 
 typedef struct {
   const char* infoName;
-  const InputPinMode sleepPinMode = InputPinMode::UNDEFINED;  // driver sleep mode (ACTIVE_LOW/HIGH, NOT_SET if not available)
-  const InputPinMode brakePinMode = InputPinMode::UNDEFINED;  // driver brake mode (ACTIVE_LOW/HIGH, NOT_SET if not available)
-  const InputPinMode faultPinMode = InputPinMode::UNDEFINED;  // driver fault mode (ACTIVE_LOW/HIGH, OPEN_DRAIN, NOT_SET if not available)
+  const InputPinMode sleepPinMode = InputPinMode::UNDEFINED;  // driver sleep mode (ACTIVE_LOW/HIGH, UNDEFINED if not available)
+  const InputPinMode brakePinMode = InputPinMode::UNDEFINED;  // driver brake mode (ACTIVE_LOW/HIGH, UNDEFINED if not available)
+  const InputPinMode faultPinMode = InputPinMode::UNDEFINED;  // driver fault mode (ACTIVE_LOW/HIGH, OPEN_DRAIN, UNDEFINED if not available)
 } DriverModel;
 
 
@@ -138,13 +139,14 @@ typedef struct {
  */
 
 typedef struct {
-  const char* infoName;                         // machine name
-  float maxFwSpeed =  PERCENT_MAX;              // maximum forward driving speed (0 to 100% - Defaut 100%)
-  float maxBackSpeed = PERCENT_MAX;             // maximum backward driving speed (0 to 100% - Defaut 100%)
-  DcDevice* dcDev;                              // DC driver device config structure
-  int8_t dcDevCount = NOT_SET;                  // number of DC driver device configured
-  SrvDevice* srvDev;                            // DC driver device config structure
-  int8_t srvDevCount = NOT_SET;                 // number of servo device configured
+  const char* infoName;                                 // machine name
+  CombusLayout combusLayout = CombusLayout::UNDEFINED;  // machine com-bus layout
+  float maxFwSpeed =  PERCENT_MAX;                      // maximum forward driving speed (0 to 100% - Defaut 100%)
+  float maxBackSpeed = PERCENT_MAX;                     // maximum backward driving speed (0 to 100% - Defaut 100%)
+  DcDevice* dcDev;                                      // DC driver device config structure
+  int8_t dcDevCount = NOT_SET;                          // number of DC driver device configured
+  SrvDevice* srvDev;                                    // DC driver device config structure
+  int8_t srvDevCount = NOT_SET;                         // number of servo device configured
 } Machine;
 
 // EOF machines_struct.h

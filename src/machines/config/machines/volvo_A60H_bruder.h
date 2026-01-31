@@ -25,9 +25,6 @@
 #define MAX_FW_SPEED       100.00              // maximum vehicle forward driving speed (0 to 100.00%)
 #define MAX_BACK_SPEED     100.00              // maximum vehicle backward driving speed (0 to 100.00%)
 
-#define DEFAULT_SERVO_SPEED    NOT_SET   // default servo speed
-#define DEFAULT_SERVO_ACCEL    NOT_SET   // default servo speed
-
 /** @brief motors/servo settings */
 
 #define M_DEF_PWM_FREQ        16000       // motors default PWM frequency (in hz)
@@ -44,11 +41,8 @@
  * - Lights
  * 
  * NOTE:
- * - If multiple motors are wired on se same driver output, configure only one MOTOR_x section for the group
- * - enum entry and dcDevArray/srvDevArray MUST have the same order
- * - if a entry is not used :
- *   -> set  .dcDrvDev = nullptr  and/or  .srvDev = nullptr
- *   -> set  dcDrvDevCount = 0  and/or  srvDevCount = 0
+ * - In device control loop, use DC_DRv_COUNT/SRV_COUNT to loop through all devices
+ *   and avoid zero size array issue.
  */
 
   // DC drivers index
@@ -66,35 +60,26 @@ enum DrvDev { STEERING = 0,
 extern DcDevice dcDevArray[DC_DRV_COUNT];
 
 
-// uncomment for servo configuration
-//    // DC driver config structure declaration. Edit data in cpp file
-//  extern ServoPort SrvDevArray[];
-//  
-//  
-//  
-//    // servos index
-//  enum SrvDev { STEERING = 0
-//         // ANOTHER SERVO
-//              };
-//  
-//  
+
+  // servos index
+ enum SrvDev { // STEERING = 0
+               SRV_COUNT
+             };
+
+   // Servo config structure declaration. Edit data in cpp file
+ extern SrvDevice SrvDevArray[];
+ 
 
 
+  /** @brief Vehicle config structure definition */
 
-/**
- * @brief Vehicle structure definition
- * Place here all vehicle configuration contants
- * NOTE:
- * -If no ServoPort and/or drvDevConfig is need, place .xxxDevCount to 0 and xxxDevConfig to nullptr
- */
 inline constexpr Machine machine {
   .infoName = "Volvo A60H Bruder",
+  .combusLayout = CombusLayout::DUMPER_TRUCK,
   .dcDev = dcDevArray,
   .dcDevCount = DC_DRV_COUNT,
-  .srvDev = nullptr,
-  .srvDevCount = 0
-//  .srvDev = srvDevArray,
-//  .srvDevCount = sizeof(srvDevArray) / sizeof(srvDevArray[0])
+  .srvDev = SrvDevArray,  // set to nullptr if no servo used or srvDevArray if servo used
+  .srvDevCount = SRV_COUNT
 };
 
 // EOF volvo_A60H_bruder.h

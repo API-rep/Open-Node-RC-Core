@@ -78,21 +78,21 @@ DcDevice dcDevArray[DC_DRV_COUNT] = {
 };
 
 
-//  ServoPort SrvDevArray[] = {
-//  
-//        // steering servo
-//      { 
-//          .infoName = "steering servo",
-//          .srvPort = &srvPortArray[SRV_PORT_1A],
-//          .type = SrvDevType::SERVO,
-//          .usage = DevUsage::GEN_ACTUATOR,
-//          .mode = TWO_WAY_NEUTRAL_CENTER,
-//          .pwmPin = SRV_1_PIN,
-//          .comChannel = A_CH1,
-//          .pwmFreq = SRV_DEF_PWM_FREQ, 
-//          .isInverted = true,
-//          .minAngleLimit = -90.00,
-//          .maxAngleLimit = 90.00,
-//          .zeroAtHwAngle = 0
-//      },
-//  };
+SrvDevice SrvDevArray[SRV_COUNT] = {
+
+//  TEMPLATE   // steering servo
+//  TEMPLATE { 
+//  TEMPLATE     .infoName = "steering servo",
+//  TEMPLATE     .srvPort = &srvPortArray[SRV_PORT_1A],
+//  TEMPLATE     .type = SrvDevType::SERVO,
+//  TEMPLATE     .usage = DevUsage::GEN_ACTUATOR,
+//  TEMPLATE     .mode = TWO_WAY_NEUTRAL_CENTER,
+//  TEMPLATE     .pwmPin = SRV_1_PIN,
+//  TEMPLATE     .comChannel = A_CH1,
+//  TEMPLATE     .pwmFreq = SRV_DEF_PWM_FREQ, 
+//  TEMPLATE     .isInverted = true,
+//  TEMPLATE     .minAngleLimit = -90.00,
+//  TEMPLATE     .maxAngleLimit = 90.00,
+//  TEMPLATE     .zeroAtHwAngle = 0
+//  TEMPLATE },
+};

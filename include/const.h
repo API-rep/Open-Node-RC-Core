@@ -8,8 +8,6 @@
 #pragma once
 
 #include <cstdint>
-
-#define NOT_SET                -1
 #define PERCENT_MAX           100   // maximum value in %    
 
 /**

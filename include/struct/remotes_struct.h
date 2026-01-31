@@ -37,7 +37,7 @@
   // analog devices (sticks, analog buttons, sliders)
 typedef struct {
   const char* infoName;                       // device short description
-  const int8_t type = NOT_SET;                // analog device type
+  RemoteComp type = RemoteComp::UNDEFINED;    // analog device type
   uint16_t val;                               // analog device value
   const int32_t minVal = 0;                   // minimum value return by analog device decoder module at lower state
   const int32_t maxVal = 0;                   // maximum value return by analog device decoder module at higher state
@@ -47,18 +47,20 @@ typedef struct {
   // digital devices (pushbuttons, switches)
 typedef struct {
   const char* infoName;                       // device short description
-  const int8_t type = NOT_SET;                // switch device type
+  RemoteComp type = RemoteComp::UNDEFINED;    // switch device type
   bool val;                                   // digital device value
   const bool isInverted = false;              // true if switch logic is inverted
 } DigitalDev;
 
   // remote data structure
 typedef struct {
-  int8_t status = NOT_SET;              // remote controle status
-  AnalogDev* analogDev;                 // pointer to external AnalogDev structure
-  DigitalDev* digitalDev;               // pointer to external DigitalgDev structure
-  uint8_t numAnalogCh;                  // number of input analog channel
-  uint8_t numDigitalCh;                 // number of input digital channel
-} InputDev;
+  const char* infoName;                                 // remote short description
+  RemoteProtocol protocol = RemoteProtocol::UNDEFINED;  // Remote protocol definition{
+  AnalogDev* analogDev;                                 // pointer to external AnalogDev structure
+  DigitalDev* digitalDev;                               // pointer to external DigitalgDev structure
+  uint8_t analogDevCount;                               // number of input analog channel
+  uint8_t digitalDevCount;                              // number of input digital channel
+  Status status = Status::NOT_SET;                      // remote controle status
+} Remote;
 
 // EOF remotes_struct.h
