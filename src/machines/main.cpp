@@ -1,4 +1,4 @@
-#include "config.h"
+#include "config/config.h"
 #include "init/init.h"
 #include "utils/utils.h"
 

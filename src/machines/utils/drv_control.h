@@ -24,8 +24,8 @@
 #include <struct/struct.h>
 #include <defs/defs.h>
 
-#include <machines/config.h>
-#include <machines/init/init.h>
+#include <config/config.h>
+#include <init/init.h>
 
 /**
  * @brief Sleep all DC drivers

@@ -16,6 +16,8 @@
 #include <struct/struct.h>
 #include <defs/defs.h>
 
+#include <config/config.h>
+
 #include "hw_init_drv.h"
 #include "hw_init_srv.h"
 

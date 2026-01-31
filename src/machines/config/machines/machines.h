@@ -17,6 +17,6 @@
 #endif
 
 
-#include "boards/boards.h"
+#include <machines/config/machines/machines.h>
 
 // EOF machines.h

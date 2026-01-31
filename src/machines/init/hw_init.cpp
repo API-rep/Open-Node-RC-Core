@@ -7,7 +7,6 @@
 
 #include "hw_init.h"
 
-#include "../config.h"
 
 void machine_hardware_setup() {
     Serial.println(F("[INIT] Starting Hardware Setup..."));

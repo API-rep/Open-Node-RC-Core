@@ -11,8 +11,11 @@
  *******************************************************************************/// 
 #pragma once
 
+#include <const.h>
+#include <struct/struct.h>
+#include <defs/defs.h>
+
 #include <config/config.h>
-#include "const.h"
 
 #include <PS4Controller.h>
 

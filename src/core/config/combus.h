@@ -10,6 +10,21 @@
  * - Analog channels (steering, speed, actuator position ...)
  * - Digital channels (lights, horn, ...)
  * - Machine state (runlevel, ...)
+ * NOTE:
+ * - Cummunication chain :
+ *   1. Remote side
+ *     - Vehicle config definition :
+ *      -> Vehicle ID, address, combus template (combus.h), name ...
+ *     - Map remote devices to combus channels (analog, digital ...)
+ *     - Send combus packet via output module (BT, WiFi, RF ...)
+ *       .
+ *       . 
+ *       .
+ *   2. Machine side
+ *    - Receive combus packet via input module (BT, WiFi, RF ...)
+ *    - Parse combus packet and fill machine combus structure (combus.h)
+ *    - Machine side com-bus exploitation (see machine sub project for more info)
+ * 
  *******************************************************************************/// 
 #pragma once
 

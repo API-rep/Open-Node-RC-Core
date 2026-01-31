@@ -11,7 +11,7 @@
 #include <struct/struct.h>
 #include <defs/defs.h>
 
-#include <machines/config.h>
+#include <config/config.h>
 
 #include "sys_init.h"
 #include "hw_init.h"

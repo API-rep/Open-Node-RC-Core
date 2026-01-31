@@ -47,7 +47,7 @@
   #endif
 
 
-#include "config/machines.h"
+#include "machines/machines.h"
 
 
 // EOF config.h

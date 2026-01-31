@@ -8,12 +8,12 @@
 #pragma once
 
   //Devices decoded directly by the onboard controller
-#if REMOTE == PS4_DS4_BT    // PS4 Dualshock 4 controller 
-  #include "PS4_dualshock4.h"
+#if REMOTE == MY_REMOTE    // PS4 Dualshock 4 controller 
+  #include "my_remote.h"
 #endif
 
 #ifndef REMOTE 
- #error "No remote defined for compilation. Check config.h file or -DREMOTE=... command line parameter to fix the problem" 
+ #error "No remote defined for compilation. Check config.h file or -D REMOTE=... command line parameter to fix the problem" 
 #endif
 
 // EOF remotes.h
