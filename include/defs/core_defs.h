@@ -7,14 +7,6 @@
 
 #include <cstdint>
 
-/**
- * @brief Status flags definition
- */
-enum class Status : uint8_t {
-  NOT_SET = 0,    ///< Not set state
-  SET     = 1     ///< generic dumper truck layout
-};
-
 
 /**
  * @brief Com-bus presets

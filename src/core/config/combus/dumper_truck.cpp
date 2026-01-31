@@ -1,38 +1,21 @@
 
 #include "dumper_truck.h"
 
-AnalogBus analogBusArray[] = {
-
-    // steering channel
-  { 
-    .infoName = "steering channel"
-  },
-  
-    // driving speed channel
-  { 
-    .infoName = "driving speed channel"
-  },
-
-    // dump actuators channel
-  { 
-    .infoName = "dump actuators channel"
-  },
+AnalogBus analogBusArray[COMBUS_ANALOG_CH_COUNT] = {
+  { .infoName = "steering channel" },
+  { .infoName = "driving speed channel" },
+  { .infoName = "dump actuators channel" },
 };
 
 
 
-DigitalBus digitalBusArray[] = {
+DigitalBus digitalBusArray[COMBUS_DIGITAL_CH_COUNT] = {
   
-    // steering channel
-  { 
-    .infoName = "horn channel"
-  },
-  
-    // driving speed channel
-  { 
-    .infoName = "lights channel"
-  },
+  { .infoName = "horn channel" },
+  { .infoName = "lights channel" },
 };
+
+
 
 /**
  * @brief Communication bus structure definition

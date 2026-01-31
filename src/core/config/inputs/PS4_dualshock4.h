@@ -75,7 +75,7 @@ enum DigitalDevID { SQUARE_BTN = 0,
                     DIGITAL_DEV_COUNT};
 
   // remote digital device config structure array
-extern DigitalDev digitalDevArray[ANALOG_DEV_COUNT];
+extern DigitalDev digitalDevArray[DIGITAL_DEV_COUNT];
 
 
 

@@ -11,7 +11,8 @@
 #include <struct/struct.h>
 #include <defs/defs.h>
 
-#include "config/combus.h"
+#include "combus/combus.h"
+#include "inputs/inputs.h"
 
 /**
 * Environement variable

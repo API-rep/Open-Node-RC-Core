@@ -108,12 +108,12 @@ void loop() {
         // update all configured DC drivers speed from comBus
       for (int i = 0; i < machine.dcDevCount; i++) {
           // raw analog bus value readed
-        uint16_t rawValue = comBus.analogBus[machine.dcDev[i].comChannel].value;
+        uint16_t rawValue = comBus.analogBus[*machine.dcDev[i].comChannel].value;
 
           // set DC driver in safe mode if comBus is not drived 
 
           // attention, à relire //
-        if (!comBus.analogBus[machine.dcDev[i].comChannel].value) {
+        if (!comBus.analogBus[*machine.dcDev[i].comChannel].value) {
           switch (machine.dcDev[i].mode)
           {
           case DcDrvMode::ONE_WAY:

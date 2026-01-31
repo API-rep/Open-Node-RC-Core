@@ -13,14 +13,14 @@ void sleepAllDcDrivers(const Machine &config) {
         const DcDevice* currentDcDev = &config.dcDev[i];
 
             // write sleep pin on
-        if (currentDcDev->drvPort->slpPin != NOT_SET) {
+        if (currentDcDev->drvPort->slpPin) {
             dcDevObj[i].sleep();
                 
             Serial.printf("[DRV] DC driver ID %d put in sleep mode\n", currentDcDev->ID);
         }
 
         else {
-            Serial.printf("[DRV] No valid DC driver to put in sleep mode");
+            Serial.printf("[DRV] Driver ID %d has no sleep pin configured\n", currentDcDev->ID);
             
         }
     }
@@ -39,7 +39,7 @@ void wakeupDcDrivers(const Machine &config) {
         const DcDevice* currentDcDev = &config.dcDev[i];
 
             // write sleep pin off
-        if (currentDcDev->drvPort->slpPin != NOT_SET) {
+        if (currentDcDev->drvPort->slpPin) {
             dcDevObj[i].wakeup();
                 
             Serial.printf("[DRV] DC driver ID %d wake up\n", currentDcDev->ID);

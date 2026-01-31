@@ -60,7 +60,6 @@ typedef struct {
   DigitalDev* digitalDev;                               // pointer to external DigitalgDev structure
   uint8_t analogDevCount;                               // number of input analog channel
   uint8_t digitalDevCount;                              // number of input digital channel
-  Status status = Status::NOT_SET;                      // remote controle status
 } Remote;
 
 // EOF remotes_struct.h

@@ -39,11 +39,11 @@ typedef struct {
   const int8_t ID;
   const char* infoName;
   const DriverModel* driverModel = nullptr;
-  int8_t pwmPin = NOT_SET;
-  int8_t brkPin = NOT_SET;
-  int8_t enPin = NOT_SET;
-  int8_t slpPin = NOT_SET;
-  int8_t fltPin = NOT_SET;
+  std::optional<uint8_t> pwmPin;
+  std::optional<uint8_t> brkPin;
+  std::optional<uint8_t> enPin;
+  std::optional<uint8_t> slpPin;
+  std::optional<uint8_t> fltPin;
 } DriverPort;
 
 
@@ -55,8 +55,8 @@ typedef struct {
  typedef struct {
   const int8_t ID;
   const char* infoName;
-  int8_t pwmPin = NOT_SET;
-  int8_t sensePin = NOT_SET;
+  std::optional<uint8_t> pwmPin;
+  std::optional<uint8_t> sensePin;
 } ServoPort;
 
 
@@ -71,9 +71,9 @@ typedef struct {
 //  float maxFwSpeed =  PERCENT_MAX;            // maximum forward driving speed (0 to 100% - Defaut 100%)
 //  float maxBackSpeed = PERCENT_MAX;           // maximum backward driving speed (0 to 100% - Defaut 100%)
   DriverPort* drvPort;                          // DC driver device config structure
-  int8_t drvPortCount = NOT_SET;                // number of DC driver device configured
+  uint8_t drvPortCount;                         // number of DC driver device configured
   ServoPort* srvPort;                           // DC driver device config structure
-  int8_t srvPortCount = NOT_SET;                 // number of servo device configured
+  uint8_t srvPortCount;                         // number of servo device configured
 } Board;
 
 
@@ -95,12 +95,12 @@ typedef struct {
   DcDevType DevType = DcDevType::UNDEFINED;   // attached device type
   DevUsage usage = DevUsage::UNDEFINED;       // attached device usage in the vehicle
   DcDrvMode mode = DcDrvMode::UNDEFINED;      // DC device configuration
-  int8_t comChannel = NOT_SET;                // internal com-bus channel used to set the driver speed
-  uint32_t pwmFreq = NOT_SET;                 // driver PWM frequency (in hz)
+  std::optional<uint8_t> comChannel;          // internal com-bus channel used to set the driver speed
+  std::optional<uint32_t> pwmFreq;            // driver PWM frequency (in hz)
   bool polInv = false;                        // driver polarity inversion (true = inverted)
-  float maxFwSpeed = PERCENT_MAX;             // maximum forward speed (0 to 100% - Defaut 100%)
-  float maxBackSpeed = PERCENT_MAX;           // maximum backward speed (0 to 100% - Defaut 100%)
-  const int8_t parentID = NOT_SET;            // parent identifier (used in clone mode)
+  std::optional<float> maxFwSpeed;            // maximum forward speed (0 to 100% - Defaut 100%)
+  std::optional<float> maxBackSpeed;          // maximum backward speed (0 to 100% - Defaut 100%)
+  const std::optional<uint8_t> parentID;      // parent identifier (used in clone mode)
 } DcDevice;
 
 
@@ -117,17 +117,17 @@ typedef struct {
   const char* infoName;                     // device short description
   const ServoPort* srvPort;                 // DC device board driver port
   SrvDevType type = SrvDevType::UNDEFINED;  // device wired to servo output
-  int8_t usage = NOT_SET;                   // device usage in the vehicle
-  int8_t mode = NOT_SET;                    // servo configuration
-  int8_t comChannel = NOT_SET;              // internal com-bus used to set the servo angle
-  uint32_t pwmFreq = NOT_SET;               // output PWM frequency (in hz)
+  std::optional<uint8_t> usage;             // device usage in the vehicle
+  std::optional<uint8_t> mode;              // servo configuration
+  std::optional<uint8_t> comChannel;        // internal com-bus used to set the servo angle
+  std::optional<uint32_t> pwmFreq;          // output PWM frequency (in hz)
   bool isInverted = false;                  // servo sense inversion (true = inverted)
-  float minAngleLimit = NOT_SET;            // servo minimun angle limit (0 to min HW angle)
-  float maxAngleLimit = NOT_SET;            // servo maximum angle limit (0 to max HW angle)
-  float zeroAtHwAngle = 0;                  // servo zero at hardware angle (min HW angle to max HW angle, typ. 0)
-  float maxSpeed = NOT_SET;                 // servo maximum speed
-  float maxAccel = NOT_SET;                 // servo maximum acceleration
-  const int8_t parentID = NOT_SET;          // parent identifier (used in clone mode)
+  std::optional<float> minAngleLimit;       // servo minimun angle limit (0 to min HW angle)
+  std::optional<float> maxAngleLimit;       // servo maximum angle limit (0 to max HW angle)
+  std::optional<float> zeroAtHwAngle;       // servo zero at hardware angle (min HW angle to max HW angle, typ. 0)
+  std::optional<float> maxSpeed;            // servo maximum speed
+  std::optional<float> maxAccel;            // servo maximum acceleration
+  const std::optional<uint8_t> parentID;    // parent identifier (used in clone mode)
 } SrvDevice;
 
 
@@ -141,12 +141,12 @@ typedef struct {
 typedef struct {
   const char* infoName;                                 // machine name
   CombusLayout combusLayout = CombusLayout::UNDEFINED;  // machine com-bus layout
-  float maxFwSpeed =  PERCENT_MAX;                      // maximum forward driving speed (0 to 100% - Defaut 100%)
-  float maxBackSpeed = PERCENT_MAX;                     // maximum backward driving speed (0 to 100% - Defaut 100%)
+  std::optional<float> maxFwSpeed;                      // maximum forward driving speed (0 to 100% - Defaut 100%)
+  std::optional<float> maxBackSpeed;                     // maximum backward driving speed (0 to 100% - Defaut 100%)
   DcDevice* dcDev;                                      // DC driver device config structure
-  int8_t dcDevCount = NOT_SET;                          // number of DC driver device configured
+  uint8_t dcDevCount;                                    // number of DC driver device configured
   SrvDevice* srvDev;                                    // DC driver device config structure
-  int8_t srvDevCount = NOT_SET;                         // number of servo device configured
+  uint8_t srvDevCount;                                   // number of servo device configured
 } Machine;
 
 // EOF machines_struct.h

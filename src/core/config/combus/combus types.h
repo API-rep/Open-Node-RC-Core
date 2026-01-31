@@ -35,7 +35,7 @@
 
   /* TP dumper trucks */
 #if MACHINE_TYPE == DUMPER_TRUCK
-  #include "combus/dumper_truck.h"
+  #include "dumper_truck.h"
 #endif
 
 #ifndef MACHINE_TYPE 

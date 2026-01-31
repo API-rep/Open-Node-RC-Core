@@ -1,4 +1,0 @@
-Place here all inputs configuration data need for each specific standalone input module (managed only by the vehicle). Ex : PS4BT, Analalog receiver decoder ...)
-If a module is share by a DIY remote and vehicle, put these data in src/core directory
-Overall/generic structure will sit in include/... directory
-Volatiles data specific to an unique fehicle (ID, address etc) must be manages as compile flag in platformio (further compile script).

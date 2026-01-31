@@ -12,26 +12,28 @@
 #include <struct/struct.h>
 #include <defs/defs.h>
 
-#include <core/config/combus.h>
+#include <core/config/combus/combus.h>
 
 /**
  * @brief Vehicle configuration
  */
 
 #ifndef BOARD 
-  #define BOARD              ESP32_8M_6S       // défault vehicle motherboard
+  #define BOARD         ESP32_8M_6S     // défault vehicle motherboard
 #endif
 
-#define MAX_FW_SPEED       100.00              // maximum vehicle forward driving speed (0 to 100.00%)
-#define MAX_BACK_SPEED     100.00              // maximum vehicle backward driving speed (0 to 100.00%)
+#define MAX_FW_SPEED         100.00     // maximum vehicle forward driving speed (0 to 100.00%)
+#define MAX_BACK_SPEED       100.00     // maximum vehicle backward driving speed (0 to 100.00%)
 
 /** @brief motors/servo settings */
 
-#define M_DEF_PWM_FREQ        16000       // motors default PWM frequency (in hz)
-#define SRV_DEF_PWM_FREQ         50       // servo default PWM frequency (in hz)
-#define COOLING_FAN_SPEED       100       // cooling fan speed (in %)
+#define M_DEF_PWM_FREQ        16000     // motors default PWM frequency (in hz)
+#define SRV_DEF_PWM_FREQ         50     // servo default PWM frequency (in hz)
+#define COOLING_FAN_SPEED       100     // cooling fan speed (in %)
 
+  // include board definition
 #include <machines/config/boards/boards.h>
+
 
 /**
  * Vehicle devices definition

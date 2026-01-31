@@ -15,7 +15,7 @@
 #include <struct/struct.h>
 #include <defs/defs.h>
 
-#include <core/config.h>
+#include <core/config/config.h>
 
 /**
  * @brief remote selection.
@@ -24,14 +24,10 @@
  * specify a -DREMOTE=... parameter in compiler command line.
  */
 
-#ifndef REMOTE
-  #define REMOTE  PS4_DS4_BT
-  //#define REMOTE  ANOTHER_REMOTE
-#endif
-
-  // addressing
-#ifndef PS4_BLUETOOTH_ADDRESS
-  #define PS4_BLUETOOTH_ADDRESS "28:3a:4d:14:e6:e7"
+#if INPUT_MODULE == PS4_DS4_BT
+  #ifndef PS4_BLUETOOTH_ADDRESS
+    #define PS4_BLUETOOTH_ADDRESS "28:3a:4d:14:e6:e7"
+  #endif
 #endif
 
 

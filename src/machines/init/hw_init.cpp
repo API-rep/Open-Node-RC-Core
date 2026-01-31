@@ -53,36 +53,59 @@ void debugVehicleConfig() {
   Serial.println(F("----------------------------------------"));
   Serial.flush();
 
-  // --- DC DEVICES DEBUG ---
-  if (machine.dcDev != nullptr && machine.dcDevCount > 0) {
-    for (int i = 0; i < machine.dcDevCount; i++) {
-      const DcDevice* d = &machine.dcDev[i];
+// --- DC DEVICES DEBUG ---
+if (machine.dcDev != nullptr && machine.dcDevCount > 0) {
+  for (int i = 0; i < machine.dcDevCount; i++) {
+    const DcDevice* d = &machine.dcDev[i];
+    
+    Serial.printf("[DC DEV #%d] %s\n", d->ID, d->infoName);
+    
+    // Hardware Mapping (from drvPort)
+    if (d->drvPort != nullptr) {
+      Serial.printf("  > Board Port: %s (ID: %d)\n", d->drvPort->infoName, d->drvPort->ID);
       
-      Serial.printf("[DC DEV #%d] %s\n", d->ID, d->infoName);
-      
-      // Hardware Mapping (from drvPort)
-      if (d->drvPort != nullptr) {
-        Serial.printf("  > Board Port: %s (ID: %d)\n", d->drvPort->infoName, d->drvPort->ID);
-        Serial.printf("  > Pins: PWM:%d BRK:%d EN:%d SLP:%d FLT:%d\n", 
-                      d->drvPort->pwmPin, d->drvPort->brkPin, d->drvPort->enPin, d->drvPort->slpPin, d->drvPort->fltPin);
-      } else {
-        Serial.println(F("  > Hardware: NOT MAPPED (Check board config)"));
-      }
-
-      // Logic Settings
-      if (d->pwmFreq != (uint32_t)NOT_SET) Serial.printf("  > Config: Freq:%u Hz", d->pwmFreq); else Serial.print(F("  > Config: Freq:NOT SET"));
-      Serial.printf(" | PolInv:%s | Mode:%d\n", d->polInv ? "YES" : "NO", d->mode);
-
-      // Routing & Limits
-      if (d->comChannel != NOT_SET) Serial.printf("  > Com Ch: %d", d->comChannel); else Serial.print(F("  > Com Ch: NOT SET"));
-      if (d->parentID != NOT_SET) Serial.printf(" | Parent: %d (CLONE)", d->parentID); else Serial.print(F(" | Parent: NONE (MASTER)"));
-      Serial.printf("\n  > Max Speed FW: %.1f%% | BK: %.1f%%\n", d->maxFwSpeed, d->maxBackSpeed);
-      
-      Serial.println(F("  ---"));
-      Serial.flush();
-      delay(10);
+      // Using value_or(-1) to show -1 if the optional pin is not defined
+      Serial.printf("  > Pins: PWM:%d BRK:%d EN:%d SLP:%d FLT:%d\n", 
+                    d->drvPort->pwmPin.value_or(-1), 
+                    d->drvPort->brkPin.value_or(-1), 
+                    d->drvPort->enPin.value_or(-1), 
+                    d->drvPort->slpPin.value_or(-1), 
+                    d->drvPort->fltPin.value_or(-1));
+    } else {
+      Serial.println(F("  > Hardware: NOT MAPPED (Check board config)"));
     }
+
+    // Logic Settings
+    if (d->pwmFreq) {
+      Serial.printf("  > Config: Freq:%u Hz", *d->pwmFreq); 
+    } else {
+      Serial.print(F("  > Config: Freq:NOT SET"));
+    }
+    Serial.printf(" | PolInv:%s | Mode:%d\n", d->polInv ? "YES" : "NO", d->mode);
+
+    // Routing & Limits
+    if (d->comChannel) {
+      Serial.printf("  > Com Ch: %d", *d->comChannel); 
+    } else {
+      Serial.print(F("  > Com Ch: NOT SET"));
+    }
+
+    if (d->parentID) {
+      Serial.printf(" | Parent: %d (CLONE)", *d->parentID); 
+    } else {
+      Serial.print(F(" | Parent: NONE (MASTER)"));
+    }
+
+    // Display values or 100.0% as default fallback
+    Serial.printf("\n  > Max Speed FW: %.1f%% | BK: %.1f%%\n", 
+                  d->maxFwSpeed.value_or(100.0f), 
+                  d->maxBackSpeed.value_or(100.0f));
+    
+    Serial.println(F("  ---"));
+    Serial.flush();
+    delay(10);
   }
+}
 
   // --- SERVO DEVICES DEBUG ---
   if (machine.srvDev != nullptr && machine.srvDevCount > 0) {
@@ -92,36 +115,43 @@ void debugVehicleConfig() {
       
       Serial.printf("[SRV DEV #%d] %s\n", s->ID, s->infoName);
       
-      // Hardware Mapping (from drvPort)
+      // Hardware Mapping (from srvPort)
       if (s->srvPort != nullptr) {
-        Serial.printf("  > Board Port: %s | Pin: %d\n", s->srvPort->infoName, s->srvPort->pwmPin);
+        // Using value_or(-1) for the optional pwmPin in ServoPort structure
+        Serial.printf("  > Board Port: %s | Pin: %d\n", 
+                      s->srvPort->infoName, 
+                      s->srvPort->pwmPin.value_or(-1));
       } else {
         Serial.println(F("  > Hardware: NOT MAPPED"));
       }
 
       // Settings & Limits
-      Serial.printf("  > Com Ch: %d | PolInv: %s\n", s->comChannel, s->isInverted ? "YES" : "NO");
+      // comChannel is now an optional, we show -1 or use value_or if it's unset
+      Serial.printf("  > Com Ch: %d | PolInv: %s\n", 
+                    s->comChannel.value_or(-1), 
+                    s->isInverted ? "YES" : "NO");
       
-      if (s->minAngleLimit != NOT_SET) Serial.printf("  > Angle: Min %.1f", s->minAngleLimit); else Serial.print(F("  > Angle: Min NOT SET"));
-      if (s->maxAngleLimit != NOT_SET) Serial.printf(" | Max %.1f", s->maxAngleLimit); else Serial.print(F(" | Max NOT SET"));
-      Serial.printf(" | Zero Hardware: %.1f\n", s->zeroAtHwAngle);
+      if (s->minAngleLimit) Serial.printf("  > Angle: Min %.1f", *s->minAngleLimit); else Serial.print(F("  > Angle: Min NOT SET"));
+      if (s->maxAngleLimit) Serial.printf(" | Max %.1f", *s->maxAngleLimit); else Serial.print(F(" | Max NOT SET"));
+      
+      // zeroAtHwAngle is optional, default to 0.0 if not set
+      Serial.printf(" | Zero Hardware: %.1f\n", s->zeroAtHwAngle.value_or(0.0f));
 
       // Dynamics & Hierarchy
-      if (s->maxSpeed != NOT_SET) Serial.printf("  > Dynamics: Speed %.1f", s->maxSpeed); else Serial.print(F("  > Dynamics: Speed NOT SET"));
-      if (s->maxAccel != NOT_SET) Serial.printf(" | Accel %.1f", s->maxAccel); else Serial.print(F(" | Accel NOT SET"));
+      if (s->maxSpeed) Serial.printf("  > Dynamics: Speed %.1f", *s->maxSpeed); else Serial.print(F("  > Dynamics: Speed NOT SET"));
+      if (s->maxAccel) Serial.printf(" | Accel %.1f", *s->maxAccel); else Serial.print(F(" | Accel NOT SET"));
       
-      if (s->parentID != NOT_SET) Serial.printf("\n  > Parent: %d (CLONE)", s->parentID);
+      if (s->parentID) {
+        Serial.printf("\n  > Parent: %d (CLONE)", *s->parentID);
+      }
       
       Serial.println(F("\n  ---"));
       Serial.flush();
       delay(10);
     }
   }
-
   Serial.println(F("========================================\n"));
 }
-
-
 
 
 
@@ -137,9 +167,6 @@ void checkHwConfig() {
                     i, machine.dcDev[i].ID);
       configError = true;
     }
-    /* from hw init.h-> dcDriverInit
-      put section // Security: ensure parent ID is within valid array bounds
-      +++ check that parent is not a chilf of another driver*/
   }
 
 if (configError) {

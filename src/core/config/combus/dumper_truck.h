@@ -29,7 +29,7 @@ enum AnalogComCh {
 };
 
   /** @brief analog channels configuration array declaration */
-extern AnalogBus analogBusArray[];
+extern AnalogBus analogBusArray[COMBUS_ANALOG_CH_COUNT];
 
 
 
@@ -41,7 +41,7 @@ enum DigitComCh {
 };
 
   /** @brief digital channels configuration array declaration */
-extern DigitalBus digitalBusArray[];
+extern DigitalBus digitalBusArray[COMBUS_DIGITAL_CH_COUNT];
 
 
 
