@@ -42,7 +42,7 @@ typedef struct {
   const int32_t minVal = 0;                   // minimum value return by analog device decoder module at lower state
   const int32_t maxVal = 0;                   // maximum value return by analog device decoder module at higher state
   const bool isInverted = false;              // true if analog device axe is inverted
-} AnalogDev;
+} AnalogInputDev;
 
   // digital devices (pushbuttons, switches)
 typedef struct {
@@ -50,16 +50,16 @@ typedef struct {
   RemoteComp type = RemoteComp::UNDEFINED;    // switch device type
   bool val;                                   // digital device value
   const bool isInverted = false;              // true if switch logic is inverted
-} DigitalDev;
+} DigitalInputDev;
 
   // remote data structure
 typedef struct {
   const char* infoName;                                 // remote short description
   RemoteProtocol protocol = RemoteProtocol::UNDEFINED;  // Remote protocol definition{
-  AnalogDev* analogDev;                                 // pointer to external AnalogDev structure
-  DigitalDev* digitalDev;                               // pointer to external DigitalgDev structure
-  uint8_t analogDevCount;                               // number of input analog channel
-  uint8_t digitalDevCount;                              // number of input digital channel
-} Remote;
+  AnalogInputDev* analogInputDev;                       // pointer to external AnalogDev structure
+  DigitalInputDev* digitalInputDev;                     // pointer to external DigitalgDev structure
+  uint8_t analogInputDevCount;                          // number of input analog channel
+  uint8_t digitalInputDevCount;                         // number of input digital channel
+} InputDev;
 
 // EOF remotes_struct.h

@@ -39,56 +39,62 @@
 /** @brief Remote analog config structure definition */
 
   // remote analog device index
-enum AnalogDevID { LX_STICK = 0,
-                   LY_STICK,
-                   RX_STICK,
-                   RY_STICK,
-                   L2_BUTTON,
-                   R2_BUTTON,
-                   ANALOG_DEV_COUNT};
+
+enum class AnalogInputDevID : uint8_t {
+  LX_STICK = 0,
+  LY_STICK,
+  RX_STICK,
+  RY_STICK,
+  L2_BUTTON,
+  R2_BUTTON,
+  ANALOG_DEV_COUNT
+};
 
   // remote analog device config structure array
-extern AnalogDev analogDevArray[ANALOG_DEV_COUNT];
+extern AnalogInputDev AnalogInputDevArray[static_cast<uint8_t>(AnalogInputDevID::ANALOG_DEV_COUNT)];
 
 
 
 /** @brief Remote digital config structure definition */
 
   // remote digital device index
-enum DigitalDevID { SQUARE_BTN = 0,
-                    CROSS_BTN,
-                    CIRCLE_BTN,
-                    TRIANGLE_BTN,
-                    L1_BTN,
-                    R1_BTN,
-                    L2_BTN,
-                    R2_BTN,
-                    LEFT_STICK_BTN,
-                    RIGHT_STICK_BTN,
-                    SHARE_BTN,
-                    UP_ARROW,
-                    RIGHT_ARROW,
-                    DOWN_ARROW,
-                    LEFT_ARROW,
-                    TOUCHPAD_BTN,
-                    PS_BTN,
-                    DIGITAL_DEV_COUNT};
+enum class DigitalInputDevID : uint8_t {
+  SQUARE_BTN = 0,
+  CROSS_BTN,
+  CIRCLE_BTN,
+  TRIANGLE_BTN,
+  L1_BTN,
+  R1_BTN,
+  L2_BTN,
+  R2_BTN,
+  UP_ARROW,
+  RIGHT_ARROW,
+  DOWN_ARROW,
+  LEFT_ARROW,
+  SHARE_BTN,
+  OPTIONS_BTN,
+  PS_BTN,
+  TOUCHPAD_BTN,
+  L_STICK_BTN,
+  R_STICK_BTN,
+  DIGITAL_DEV_COUNT
+};
 
   // remote digital device config structure array
-extern DigitalDev digitalDevArray[DIGITAL_DEV_COUNT];
+extern DigitalInputDev digitalInputDevArray[static_cast<uint8_t>(DigitalInputDevID::DIGITAL_DEV_COUNT)];
 
 
 
 /** @brief Remote config structure definition */
 //  ADD TO STRUCT IF NEED     #define REMOTE_ID          "PS4_DS4_BT"
 
-inline constexpr Remote remote {
-  .infoName = "PS4 dualshock controller",     // remote short description
-  .protocol = RemoteProtocol::PS4_BLUETOOTH,  // Remote protocol definition
-  .analogDev = analogDevArray,                // pointer to external AnalogDev structure
-  .digitalDev = digitalDevArray,              // pointer to external DigitalgDev structure
-  .analogDevCount = ANALOG_DEV_COUNT,         // number of input analog channel
-  .digitalDevCount = DIGITAL_DEV_COUNT        // number of input digital channel
+inline constexpr InputDev inputDev {
+  .infoName = "PS4 dualshock controller",                                             // remote short description
+  .protocol = RemoteProtocol::PS4_BLUETOOTH,                                          // Remote protocol definition
+  .analogInputDev = AnalogInputDevArray,                                              // pointer to external AnalogInputDev structure
+  .digitalInputDev = digitalInputDevArray,                                            // pointer to external DigitalgDev structure
+  .analogInputDevCount = static_cast<uint8_t>(AnalogInputDevID::ANALOG_DEV_COUNT),    // number of input analog channel
+  .digitalInputDevCount = static_cast<uint8_t>(DigitalInputDevID::DIGITAL_DEV_COUNT)  // number of input digital channel
 };
 
 // EOF PS4_dualshock4.h

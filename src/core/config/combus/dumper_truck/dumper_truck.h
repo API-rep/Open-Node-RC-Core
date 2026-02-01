@@ -6,7 +6,7 @@
  * - Digital channel configuration
  * 
  * NOTE:
- * - enum entry and analogBusArray/digitalBusArray MUST have the same order
+ * - enum entry and AnalogComBusArray/DigitalComBusArray MUST have the same order
  * - if a entry is not used, set  .analogBus = nullptr  and/or  .srvDev = digitalBus
  * 
  * See com-bus structure definition /include/struct/core_struct.h for more info
@@ -15,37 +15,23 @@
 
 #include <cstdint>
 
-#include <const.h>
-#include <struct/struct.h>
-#include <defs/defs.h>
+#include <struct/combus_struct.h>
+#include "dumper_truck_types.h"
 
 
-  /** @brief Com-bus analog channels */
-enum AnalogComCh {
-  STEERING_BUS = 0,
-  DRIVE_SPEED_BUS,
-  DUMP_BUS,
-  COMBUS_ANALOG_CH_COUNT
-};
-
-  /** @brief analog channels configuration array declaration */
-extern AnalogBus analogBusArray[COMBUS_ANALOG_CH_COUNT];
+  /** @brief Com-bus analog channels configuration array */
+extern AnalogComBus AnalogComBusArray[static_cast<uint8_t>(AnalogComBusID::CH_COUNT)];
 
 
-
-  /** @brief Com-bus digital channels */
-enum DigitComCh {
-  HORN = 0,
-  LIGHTS,
-  COMBUS_DIGITAL_CH_COUNT
-};
-
-  /** @brief digital channels configuration array declaration */
-extern DigitalBus digitalBusArray[COMBUS_DIGITAL_CH_COUNT];
-
+  /** @brief Com-bus digital channels configuration array */
+extern DigitalComBus DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::CH_COUNT)];
 
 
   /** @brief Communication bus structure definition */
 extern ComBus comBus;
+
+
+  // include automatically the correct input mapping file according for this combus type
+#include "inputs_map/inputs_map.h"
 
 // EOF dumper_truck.h

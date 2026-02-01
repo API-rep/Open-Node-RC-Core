@@ -18,8 +18,6 @@ RunLevel lastRunLevel = RunLevel::NOT_YET_SET ;
 void setup() {
 
   Serial.begin(115200);
-
-  PS4.begin(PS4_BLUETOOTH_ADDRESS);
   
     // enable V-BAT readout on sense pin
   #ifdef VBAT_SENSING
@@ -53,18 +51,18 @@ void loop() {
 
       // update LStickX internal channel value
     if (PS4.LStickX()) {
-      comBus.analogBus[STEERING_BUS].value = map(PS4.LStickX(), DEF_STICK_MIN_VAL, DEF_STICK_MAX_VAL, 0, comBus.analogBusMaxVal);
-      comBus.analogBus[STEERING_BUS].isDrived = true;
+      comBus.analogBus[static_cast<uint8_t>(AnalogComBusID::STEERING_BUS)].value = map(PS4.LStickX(), DEF_STICK_MIN_VAL, DEF_STICK_MAX_VAL, 0, comBus.analogBusMaxVal);
+      comBus.analogBus[static_cast<uint8_t>(AnalogComBusID::STEERING_BUS)].isDrived = true;
     }
       // update LStickY internal channel value
     if (PS4.LStickY()) {
-      comBus.analogBus[DRIVE_SPEED_BUS].value = map(PS4.LStickY(), DEF_STICK_MIN_VAL, DEF_STICK_MAX_VAL, 0, comBus.analogBusMaxVal);
-      comBus.analogBus[DRIVE_SPEED_BUS].isDrived = true;
+      comBus.analogBus[static_cast<uint8_t>(AnalogComBusID::DRIVE_SPEED_BUS)].value = map(PS4.LStickY(), DEF_STICK_MIN_VAL, DEF_STICK_MAX_VAL, 0, comBus.analogBusMaxVal);
+      comBus.analogBus[static_cast<uint8_t>(AnalogComBusID::DRIVE_SPEED_BUS)].isDrived = true;
     }
       // update RStickY internal channel value
     if (PS4.RStickY()) {
-      comBus.analogBus[DUMP_BUS].value = map(PS4.RStickY(), DEF_STICK_MIN_VAL, DEF_STICK_MAX_VAL, 0, comBus.analogBusMaxVal);
-      comBus.analogBus[DUMP_BUS].isDrived = true;     
+      comBus.analogBus[static_cast<uint8_t>(AnalogComBusID::DUMP_BUS)].value = map(PS4.RStickY(), DEF_STICK_MIN_VAL, DEF_STICK_MAX_VAL, 0, comBus.analogBusMaxVal);
+      comBus.analogBus[static_cast<uint8_t>(AnalogComBusID::DUMP_BUS)].isDrived = true;     
     }
   }
 
@@ -108,12 +106,13 @@ void loop() {
         // update all configured DC drivers speed from comBus
       for (int i = 0; i < machine.dcDevCount; i++) {
           // raw analog bus value readed
-        uint16_t rawValue = comBus.analogBus[*machine.dcDev[i].comChannel].value;
+        uint8_t chIdx = static_cast<uint8_t>(machine.dcDev[i].comChannel.value());
+        uint16_t rawValue = comBus.analogBus[chIdx].value;
 
           // set DC driver in safe mode if comBus is not drived 
 
           // attention, à relire //
-        if (!comBus.analogBus[*machine.dcDev[i].comChannel].value) {
+        if (!comBus.analogBus[chIdx].value) {
           switch (machine.dcDev[i].mode)
           {
           case DcDrvMode::ONE_WAY:

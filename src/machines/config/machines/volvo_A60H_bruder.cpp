@@ -10,7 +10,7 @@ DcDevice dcDevArray[DC_DRV_COUNT] = {
     .DevType = DcDevType::DC_MOTOR,
     .usage = DevUsage::GEN_ACTUATOR,
     .mode = DcDrvMode::TWO_WAY_NEUTRAL_CENTER,
-    .comChannel = STEERING_BUS, // naming from enum in core/config/combus.h
+    .comChannel = AnalogComBusID::STEERING_BUS, // naming from enum in core/config/combus.h
     .pwmFreq = M_DEF_PWM_FREQ, 
     .polInv = true
   },
@@ -22,7 +22,7 @@ DcDevice dcDevArray[DC_DRV_COUNT] = {
     .DevType = DcDevType::DC_MOTOR,
     .usage = DevUsage::GEN_WHEEL,
     .mode = DcDrvMode::TWO_WAY_NEUTRAL_CENTER,
-    .comChannel = DRIVE_SPEED_BUS,
+    .comChannel = AnalogComBusID::DRIVE_SPEED_BUS,
     .pwmFreq = M_DEF_PWM_FREQ, 
     .polInv = true
   },
@@ -71,7 +71,7 @@ DcDevice dcDevArray[DC_DRV_COUNT] = {
     .ID =DUMP_ACTUATOR,
     .infoName = "dump actuators L+R",
     .drvPort = &drvPortArray[DRV_PORT_2A],
-    .comChannel = DUMP_BUS,
+    .comChannel = AnalogComBusID::DUMP_BUS,
     .polInv = false,
     .parentID = STEERING
   },

@@ -84,8 +84,8 @@ if (machine.dcDev != nullptr && machine.dcDevCount > 0) {
     Serial.printf(" | PolInv:%s | Mode:%d\n", d->polInv ? "YES" : "NO", d->mode);
 
     // Routing & Limits
-    if (d->comChannel) {
-      Serial.printf("  > Com Ch: %d", *d->comChannel); 
+    if (d->comChannel.has_value()) {
+      Serial.printf("  > Com Ch: %d", static_cast<int>(d->comChannel.value())); 
     } else {
       Serial.print(F("  > Com Ch: NOT SET"));
     }
@@ -128,7 +128,7 @@ if (machine.dcDev != nullptr && machine.dcDevCount > 0) {
       // Settings & Limits
       // comChannel is now an optional, we show -1 or use value_or if it's unset
       Serial.printf("  > Com Ch: %d | PolInv: %s\n", 
-                    s->comChannel.value_or(-1), 
+                    s->comChannel.has_value() ? static_cast<int>(s->comChannel.value()) : -1, 
                     s->isInverted ? "YES" : "NO");
       
       if (s->minAngleLimit) Serial.printf("  > Angle: Min %.1f", *s->minAngleLimit); else Serial.print(F("  > Angle: Min NOT SET"));

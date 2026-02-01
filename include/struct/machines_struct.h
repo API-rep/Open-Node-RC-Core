@@ -9,8 +9,9 @@
 #include <optional>
 
 #include <const.h>
-#include <struct/struct.h>
 #include <defs/defs.h>
+
+#include <core/config/combus/combus_types.h>
 
 /**
  * @brief DC driver module structure
@@ -95,7 +96,7 @@ typedef struct {
   DcDevType DevType = DcDevType::UNDEFINED;   // attached device type
   DevUsage usage = DevUsage::UNDEFINED;       // attached device usage in the vehicle
   DcDrvMode mode = DcDrvMode::UNDEFINED;      // DC device configuration
-  std::optional<uint8_t> comChannel;          // internal com-bus channel used to set the driver speed
+  std::optional<AnalogComBusID> comChannel;   // internal com-bus channel used to set the driver speed
   std::optional<uint32_t> pwmFreq;            // driver PWM frequency (in hz)
   bool polInv = false;                        // driver polarity inversion (true = inverted)
   std::optional<float> maxFwSpeed;            // maximum forward speed (0 to 100% - Defaut 100%)
@@ -113,21 +114,21 @@ typedef struct {
  */
 
 typedef struct {
-  const int8_t ID;                          // servo ID
-  const char* infoName;                     // device short description
-  const ServoPort* srvPort;                 // DC device board driver port
-  SrvDevType type = SrvDevType::UNDEFINED;  // device wired to servo output
-  std::optional<uint8_t> usage;             // device usage in the vehicle
-  std::optional<uint8_t> mode;              // servo configuration
-  std::optional<uint8_t> comChannel;        // internal com-bus used to set the servo angle
-  std::optional<uint32_t> pwmFreq;          // output PWM frequency (in hz)
-  bool isInverted = false;                  // servo sense inversion (true = inverted)
-  std::optional<float> minAngleLimit;       // servo minimun angle limit (0 to min HW angle)
-  std::optional<float> maxAngleLimit;       // servo maximum angle limit (0 to max HW angle)
-  std::optional<float> zeroAtHwAngle;       // servo zero at hardware angle (min HW angle to max HW angle, typ. 0)
-  std::optional<float> maxSpeed;            // servo maximum speed
-  std::optional<float> maxAccel;            // servo maximum acceleration
-  const std::optional<uint8_t> parentID;    // parent identifier (used in clone mode)
+  const int8_t ID;                           // servo ID
+  const char* infoName;                      // device short description
+  const ServoPort* srvPort;                  // DC device board driver port
+  SrvDevType type = SrvDevType::UNDEFINED;   // device wired to servo output
+  std::optional<uint8_t> usage;              // device usage in the vehicle
+  std::optional<uint8_t> mode;               // servo configuration
+  std::optional<AnalogComBusID> comChannel;  // internal com-bus used to set the servo angle
+  std::optional<uint32_t> pwmFreq;           // output PWM frequency (in hz)
+  bool isInverted = false;                   // servo sense inversion (true = inverted)
+  std::optional<float> minAngleLimit;        // servo minimun angle limit (0 to min HW angle)
+  std::optional<float> maxAngleLimit;        // servo maximum angle limit (0 to max HW angle)
+  std::optional<float> zeroAtHwAngle;        // servo zero at hardware angle (min HW angle to max HW angle, typ. 0)
+  std::optional<float> maxSpeed;             // servo maximum speed
+  std::optional<float> maxAccel;             // servo maximum acceleration
+  const std::optional<uint8_t> parentID;     // parent identifier (used in clone mode)
 } SrvDevice;
 
 

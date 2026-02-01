@@ -15,7 +15,7 @@
 
   //Devices decoded directly by the onboard controller
 #if INPUT_MODULE == PS4_DS4_BT    // PS4 Dualshock 4 controller 
-  #include "PS4_dualshock4.h"
+  #include "PS4_dualshock.h"
 #endif
 
 #ifndef INPUT_MODULE

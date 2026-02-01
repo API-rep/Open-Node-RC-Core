@@ -10,7 +10,7 @@
  * 
  * 
  * NOTE:
- * - do not change uint16_t size for AnalogBus. Some system sub value depend of this size
+ * - do not change uint16_t size for AnalogComBus. Some system sub value depend of this size
  * - "isDrived" flag have to be set true if its channel is perodicaly update.
  *   For safety, a watchdog should manage a disconnect timout an set "isDrived" false after a delay.
  * - All input/output modules had to write/read this struct to share data
@@ -19,29 +19,27 @@
 
 #include <stdint.h>
 
-#include <const.h>
-#include <defs/defs.h>
-
+#include <defs/machines_defs.h>
 
   // analogic bus data structure
  typedef struct {
   const char* infoName;                         // analog bus short description
   uint16_t value;                               // analog bus current value
-  bool isDrived = false;                        // true if the AnalogBus have a driving source
-} AnalogBus;
+  bool isDrived = false;                        // true if the AnalogComBus have a driving source
+} AnalogComBus;
 
   // digital bus data structure (two state)
  typedef struct {
   const char* infoName;                         // digital bus short description
   bool value;                                   // digital bus current value (true of false)
-  bool isDrived = false;                        // true if the DigitalBus have a driving source
-} DigitalBus;
+  bool isDrived = false;                        // true if the DigitalComBus have a driving source
+} DigitalComBus;
 
   // Main communication bus structure
 typedef struct {
   RunLevel runLevel;                            // runlevel state
-  AnalogBus* analogBus;                         // analogic bus channels
-  DigitalBus* digitalBus;                       // digital bus channels
+  AnalogComBus* analogBus;                      // analogic bus channels
+  DigitalComBus* digitalBus;                    // digital bus channels
   uint32_t analogBusMaxVal;                     // Com-bus analog channel maximum value
 } ComBus;
 

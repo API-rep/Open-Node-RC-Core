@@ -6,10 +6,5 @@
  *******************************************************************************/// 
 #pragma once
 
-#include <stdint.h>
-
-#include <const.h>
-#include <defs/defs.h>
-#include <struct.h>
 
 // EOF core_struct.h

@@ -19,11 +19,11 @@
 #include <struct/struct.h>  // STAGE 1 :
 #include <defs/defs.h>
 
-// 2. ENSUITE, on inclut le sélecteur de machine qui définit les enums (AnalogComCh)
+// 2. ENSUITE, on inclut le sélecteur de machine qui définit les enums (AnalogComBusID)
 // C'est ici que combus.h intervient.
 #include <core/config/combus/combus.h>
 
-// 3. ENFIN, on peut inclure le mapping, car AnalogComCh est maintenant connu
+// 3. ENFIN, on peut inclure le mapping, car AnalogComBusID est maintenant connu
 #include <struct/remotes_map_struct.h>
 
 

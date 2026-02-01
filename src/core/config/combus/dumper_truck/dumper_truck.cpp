@@ -1,7 +1,7 @@
 
 #include "dumper_truck.h"
 
-AnalogBus analogBusArray[COMBUS_ANALOG_CH_COUNT] = {
+AnalogComBus AnalogComBusArray[static_cast<uint8_t>(AnalogComBusID::CH_COUNT)] = {
   { .infoName = "steering channel" },
   { .infoName = "driving speed channel" },
   { .infoName = "dump actuators channel" },
@@ -9,7 +9,7 @@ AnalogBus analogBusArray[COMBUS_ANALOG_CH_COUNT] = {
 
 
 
-DigitalBus digitalBusArray[COMBUS_DIGITAL_CH_COUNT] = {
+DigitalComBus DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::CH_COUNT)] = {
   
   { .infoName = "horn channel" },
   { .infoName = "lights channel" },
@@ -23,7 +23,7 @@ DigitalBus digitalBusArray[COMBUS_DIGITAL_CH_COUNT] = {
 
 ComBus comBus {
   .runLevel = RunLevel::NOT_YET_SET,
-  .analogBus = analogBusArray,
-  .digitalBus = digitalBusArray,
-  .analogBusMaxVal = (1UL << (sizeof(decltype(AnalogBus::value)) * 8)) - 1
+  .analogBus = AnalogComBusArray,
+  .digitalBus = DigitalComBusArray,
+  .analogBusMaxVal = (1UL << (sizeof(decltype(AnalogComBus::value)) * 8)) - 1
 };

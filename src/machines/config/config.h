@@ -24,12 +24,6 @@
  * specify a -DREMOTE=... parameter in compiler command line.
  */
 
-#if INPUT_MODULE == PS4_DS4_BT
-  #ifndef PS4_BLUETOOTH_ADDRESS
-    #define PS4_BLUETOOTH_ADDRESS "28:3a:4d:14:e6:e7"
-  #endif
-#endif
-
 
  // default runlevels at power on (see available mode in "runlevel.h")
 #define DEF_RUNLEVEL    RunLevel::RUNNING
