@@ -1,53 +1,66 @@
-#include "drv_control.h"
+/*****************************************************************************
+ * @file drv_control.cpp
+ * @brief Implementation of DC drivers batch control functions
+ *****************************************************************************/
 
+#include "drv_control.h"
+#include <init/hw_init_drv.h> // Required for dcDevObj access
 #include <Arduino.h>
 
+// =============================================================================
+// 1. DRIVER STATE LOGIC
+// =============================================================================
+
+/**
+ * @brief Put all DC drivers into sleep mode
+ */
 void sleepAllDcDrivers(const Machine &config) {
-          // Check if there are any drivers to initialize
-    if (config.dcDev == nullptr || config.dcDevCount <= 0) {
-        Serial.println(F("[DRV] No DC drivers to initialize."));
-        return;
+  if (config.dcDev == nullptr || config.dcDevCount <= 0) return;
+
+  for (int i = 0; i < config.dcDevCount; i++) {
+    const DcDevice* d = &config.dcDev[i];
+
+	    // --- Accessing hardware Sleep pin via library ---
+    if (d->drvPort->slpPin) {
+      dcDevObj[i].sleep();
+      Serial.printf("[DRV] ID:%d put to SLEEP\n", d->ID);
     }
-
-    for (int i = 0; i < config.dcDevCount; i++) {
-        const DcDevice* currentDcDev = &config.dcDev[i];
-
-            // write sleep pin on
-        if (currentDcDev->drvPort->slpPin) {
-            dcDevObj[i].sleep();
-                
-            Serial.printf("[DRV] DC driver ID %d put in sleep mode\n", currentDcDev->ID);
-        }
-
-        else {
-            Serial.printf("[DRV] Driver ID %d has no sleep pin configured\n", currentDcDev->ID);
-            
-        }
-    }
+  }
 }
 
+/**
+ * @brief Wake up all DC drivers
+ */
+void wakeupAllDcDrivers(const Machine &config) {
+  if (config.dcDev == nullptr || config.dcDevCount <= 0) return;
 
+  for (int i = 0; i < config.dcDevCount; i++) {
+    const DcDevice* d = &config.dcDev[i];
 
-void wakeupDcDrivers(const Machine &config) {
-          // Check if there are any drivers to initialize
-    if (config.dcDev == nullptr || config.dcDevCount <= 0) {
-        Serial.println(F("[DRV] No DC drivers to initialize."));
-        return;
+	    // --- Accessing hardware Sleep pin via library ---
+    if (d->drvPort->slpPin) {
+      dcDevObj[i].wakeup();
+      Serial.printf("[DRV] ID:%d WOKEN UP\n", d->ID);
     }
-
-    for (int i = 0; i < config.dcDevCount; i++) {
-        const DcDevice* currentDcDev = &config.dcDev[i];
-
-            // write sleep pin off
-        if (currentDcDev->drvPort->slpPin) {
-            dcDevObj[i].wakeup();
-                
-            Serial.printf("[DRV] DC driver ID %d wake up\n", currentDcDev->ID);
-        }
-
-        else {
-            Serial.printf("[DRV] No valid DC driver to wake up");
-            
-        }
-    }
+  }
 }
+
+/**
+ * @brief Enable all DC drivers output bridges
+ */
+void enableAllDcDrivers(const Machine &config) {
+  if (config.dcDev == nullptr || config.dcDevCount <= 0) return;
+
+  for (int i = 0; i < config.dcDevCount; i++) {
+    const DcDevice* d = &config.dcDev[i];
+
+	    // --- Direct GPIO control for Enable pin ---
+    if (d->drvPort->enPin) {
+      pinMode(*d->drvPort->enPin, OUTPUT);
+      digitalWrite(*d->drvPort->enPin, HIGH);
+      Serial.printf("[DRV] ID:%d ENABLED\n", d->ID);
+    }
+  }
+}
+
+// EOF drv_control.cpp

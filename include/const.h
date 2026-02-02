@@ -15,10 +15,10 @@
  */
 
 enum class InputPinMode : uint8_t {
-    UNDEFINED        =  0,
-    ACTIVE_LOW       =  1,
-    ACTIVE_HIGH      =  2,
-    OPEN_DRAIN_MODE  =  3,
+    ACTIVE_LOW       =  0,
+    ACTIVE_HIGH      =  1,
+    OPEN_DRAIN_MODE  =  2,
+    UNDEFINED        =  3,
 };
 
 // EOF const.h

@@ -1,63 +1,44 @@
-/*!****************************************************************************
+/*****************************************************************************
  * @file hw_init_drv.h
- * @brief DC drivers initialisation script
- * This section contain scripts an routines used to parse DC drivers config file and
- * initialize devices.
- * By this it :
- * - Initialize and allocate DC drivers ojects pointer
- * - Parse config file and fill child's unset value from parent's one
- * - Create harware device object and initalize them with config file value
- * - Initialize DC drivers defined for the machine configuration
- * 
-* This script MUST be include in hw_init.h top file
- *******************************************************************************/// 
+ * @brief DC drivers hardware initialization and memory allocation
+ ***************************************************************************/
 #pragma once
 
-#include <const.h>
-#include <struct/struct.h>
-#include <defs/defs.h>
-
-#include <config/config.h>
-
 #include <ESP32_PWM_Motor.h>
+#include <core/config/combus/combus.h>
 
+// =============================================================================
+// 1. OBJECT ALLOCATION & POINTERS
+// =============================================================================
 
-/**
- * @brief Initialize and allocate DC drivers pointer
- * @param count Number of DC driver to create
- */
-
+	// --- Global pointer to DC motor object array ---
 extern ESP32_PWM_Motor* dcDevObj;
 
+/**
+ * @brief Initialize and allocate DC driver objects in RAM
+ */
 void allocateDrivers(int8_t count);
 
 
 
+// =============================================================================
+// 2. CONFIGURATION INHERITANCE
+// =============================================================================
+
 /**
- * @brief Apply DC driver parent's configutation to child
- * If parentID is set for a driver, unset child's entry will be fill with parent value
- * 
- * @param count Number of DC driver to create
+ * @brief Apply parent's configuration to child drivers
  */
+void applyParentConfig(const Machine &config);
 
-void applyParentConfig(Machine &config);
 
 
-//          /**
-//           * @brief Initialize DC drivers defined for the machine configuration
-//           * Parse the DC drivers config structure and initialize DC driver objects.
-//           * 
-//           * @param config Reference to the machine configuration structure
-//           */
-//          
-//          void dcDriverPortInit(DriverPort& port);
-
+// =============================================================================
+// 3. HARDWARE INITIALIZATION
+// =============================================================================
 
 /**
  * @brief Initialize DC drivers defined for the machine configuration
- * Parse the DC drivers config structure and initialize DC driver objects.
- * 
- * @param config Reference to the machine configuration structure
  */
-
 void dcDriverInit(const Machine &config);
+
+// EOF hw_init_drv.h

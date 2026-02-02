@@ -1,41 +1,31 @@
-/*!****************************************************************************
+/*****************************************************************************
  * @file hw_init_srv.h
- * @brief Servos initialisation script
- * This section contain scripts an routines used to parse servo config file and
- * initialize devices.
- * By this it :
- * - Initialize and allocate servlos ojects pointer
- * - Parse config file and fill child's unset value from parent's one
- * - Create harware device object and initalize them with config file value
- * - Initialize servos defined for the machine configuration
- * 
-* This script MUST be include in hw_init.h top file
- *******************************************************************************/// 
- #pragma once
-
-#include <const.h>
-#include <struct/struct.h>
-#include <defs/defs.h>
-
-#include <config/config.h>
+ * @brief Servo hardware initialization and configuration
+ ***************************************************************************/
+#pragma once
 
 #include <ESP32_PWM_Servo.h>
+#include <core/config/combus/combus.h>
+
+// =============================================================================
+// 1. OBJECT ALLOCATION & POINTERS
+// =============================================================================
+
+	// --- Global pointer to Servo object array ---
+extern ESP32_PWM_Servo* srvDevObj;
 
 /**
- * @brief Servo input devices configuration
- * - Build coherent naming access to board servo device structure 
- * - Instance DC-driver devices structure
- * - Execute some sanitary checks 
- * - Create an array of DC driver devices objects
+ * @brief Initialize and allocate Servo objects in RAM
  */
+void allocateServos(int8_t count);
 
-  // 3. Check motherboard servo outputs capacity -> change with serial.print + boardCfg.srvCount
-// static_assert (NUM_OF_SRV_DEV <= MAX_ONBOARD_SRV_OUT, "Too much servo outputs configured for the motherboard. Check board.h and machines.h to fix the problem.");
+// =============================================================================
+// 2. HARDWARE INITIALIZATION
+// =============================================================================
 
-  // 4. Create an array of DC driver devices objects (at least one undefined object)
-  //inline ESP32_PWM_Servo srv[NUM_OF_SRV_DEV];
+/**
+ * @brief Initialize all servos defined for the machine configuration
+ */
+void servoInit(const Machine &config);
 
-  // 5. DC driver initialisation fuction prototype
-
-
-void servoInit();
+// EOF hw_init_srv.h

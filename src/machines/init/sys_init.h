@@ -1,24 +1,16 @@
-/*!****************************************************************************
+/*****************************************************************************
  * @file sys_init.h
- * @brief System config initialisation script
- * This section contain scripts an routines used to parse system config file and create
- * the environement data structure.
- * By this it :
- * - Parse config file to rich C code (const, var, struct)
- * - Do some sanitary check
- * - Compute system related environement value
- * - Create harware device object
+ * @brief System configuration and environment initialization
  * 
- * This script MUST be include in init.h top file
- *******************************************************************************/// 
+ * This script MUST be included via the init.h umbrella file.
+ * ***************************************************************************/
 #pragma once
 
-#include <const.h>
-#include <struct/struct.h>
-#include <defs/defs.h>
+// =============================================================================
+// 1. SYSTEM INITIALIZATION FUNCTIONS
+// =============================================================================
 
-
-  // system configuration function
+	// --- Global system setup and data structure parsing ---
 void sys_init_setup();
 
 // EOF sys_init.h

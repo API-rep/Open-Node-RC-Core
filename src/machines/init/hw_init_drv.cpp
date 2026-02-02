@@ -1,42 +1,51 @@
+/*****************************************************************************
+ * @file hw_init_drv.cpp
+ * @brief Implementation of DC drivers allocation and hardware setup
+ *****************************************************************************/
+
+#include <core/config/combus/combus.h>
+#include <struct/struct.h>
+
 #include "hw_init_drv.h"
 
-/**
- * Initialize and allocate DC drivers pointer
- */
+// =============================================================================
+// 1. OBJECT ALLOCATION & POINTERS
+// =============================================================================
 
-  // Empty DC driver pointer initialization
+	// --- Global pointer to DC motor object array ---
 ESP32_PWM_Motor* dcDevObj = nullptr;
 
-  // DC driver pointer allocation
+/**
+ * @brief Initialize and allocate DC driver objects in RAM
+ */
 void allocateDrivers(int8_t count) {
-    if (count <= 0) return;
+  if (count <= 0) return;
 
-      // dynamic allocation of a DC driver object array[]
-    dcDevObj = new ESP32_PWM_Motor[count];
-    
-    Serial.printf("[SYSTEM] Allocated memory for %d DC drivers\n", count);
+	// --- Dynamic allocation of the motor controller array ---
+  dcDevObj = new ESP32_PWM_Motor[count];
+  Serial.printf("[SYSTEM] Allocated memory for %d DC drivers\n", count);
 }
 
-
+// =============================================================================
+// 2. CONFIGURATION INHERITANCE
+// =============================================================================
 
 /**
- * Apply DC driver parent's configutation to child
+ * @brief Apply parent's configuration to child drivers (Cloning logic)
  */
-
-void applyParentConfig(Machine &config) {
+void applyParentConfig(const Machine &config) {
   for (int i = 0; i < config.dcDevCount; i++) {
-      // get current element address
     DcDevice* child = &config.dcDev[i];
 
     if (child->parentID) {
       bool parentIsFound = false;
 
-        // look for matching parent ID
+	// --- Search for matching parent ID in the device list ---
       for (int j = 0; j < config.dcDevCount; j++) {
         const DcDevice* parent = &config.dcDev[j];
 
         if (parent->ID == *child->parentID) {
-            // Copy unset field
+		// --- Copy missing fields from parent to child ---
           if (child->DevType == DcDevType::UNDEFINED)    child->DevType      = parent->DevType;
           if (child->usage == DevUsage::UNDEFINED)       child->usage        = parent->usage;
           if (child->mode == DcDrvMode::UNDEFINED)       child->mode         = parent->mode;
@@ -46,104 +55,78 @@ void applyParentConfig(Machine &config) {
           if (!child->maxBackSpeed)                      child->maxBackSpeed = parent->maxBackSpeed;
 
           parentIsFound = true;
-          
           break; 
         }
       }
 
       if (!parentIsFound) {
-        Serial.printf(PSTR("SYSTEM HALTED : No matching parent ID %d found for driver %s\n"), *child->parentID, child->infoName);
-        
-      while(1);
+        Serial.printf(PSTR("FATAL: Parent ID %d not found for driver %s\n"), *child->parentID, child->infoName);
+        while(1);
       }
     }
   }
 }
 
-
-
-//      /**
-//       * Initialize DC drivers module type
-//       */
-//      
-//      void dcDriverPortInit(const_cast<DriverPort&>(machine.dcDev->drvPort[i])) {
-//          
-//          // 1. Maximum priority to compile flag -D, then DC_DRIVER_MODEL #defined in config.h
-//          #ifdef DC_DRIVER_MODEL
-//            if (port.driverModel == nullptr) {
-//              port.driverModel = &DC_DRIVER_MODEL;
-//            }
-//          // 2. Error if no DC_DRIVER_MODEl specified and no port.driverModel set in hw config file)
-//          #elif
-//              if (port.driverModel == nullptr) {
-//                Serial.printf("Warning: Port %d n'a pas de driver configuré !\n", port.ID);
-//              }
-//          #endif
-//      }
-
-
+// =============================================================================
+// 3. HARDWARE INITIALIZATION
+// =============================================================================
 
 /**
- * Initialize DC drivers defined for the machine configuration
+ * @brief Initialize DC drivers hardware from machine configuration
  */
-
 void dcDriverInit(const Machine &config) {
-    // 1. Safety check: ensure drivers are configured
+	  // --- Safety check: ensure drivers are configured ---
   if (config.dcDev == nullptr || config.dcDevCount <= 0) {
-      Serial.println(F("[DRV] No DC devices to initialize."));
-      return;
+    Serial.println(F("[DRV] No DC devices to initialize."));
+    return;
   }
 
-    // 2. Initialize each DC driver according to its configuration
+	  // --- Initialize each DC driver from config ---
   for (int i = 0; i < config.dcDevCount; i++) {
     const DcDevice* currentDev = &config.dcDev[i];
 
-      // Critical Check: Ensure the device has a valid hardware port mapping and skip if not
+	    // --- Skip if device has no hardware port mapping ---
     if (currentDev->drvPort == nullptr || !currentDev->drvPort->pwmPin) {
-      Serial.printf("[DRV] FATAL: Device '%s' (ID:%d) has no hardware port mapping or invalid pin definition!\n", currentDev->infoName, currentDev->ID);
+      Serial.printf("[DRV] FATAL: Device '%s' has no port mapping!\n", currentDev->infoName);
       continue;
     }
 
-    // Get the physical PWM pin from the mapped board port
     uint8_t hwPin = *currentDev->drvPort->pwmPin;
 
-    // 3. (case 1) CLONE MODE (Uses parent's PWM timer to ensure sync)
+	    // --- CLONE MODE: Synchronize PWM timer with parent ---
     if (currentDev->parentID) {
       uint8_t pID = *currentDev->parentID;
-
-        // Security: ensure parent ID is within valid array bounds
-      if (pID >= 0 && pID < config.dcDevCount) {
-          // Attach physical pin and synchronize timer with parent object
+      if (pID < config.dcDevCount) {
         dcDevObj[i].useTimer(dcDevObj[pID].getPwmTimer());
         dcDevObj[i].attach(hwPin);
-        
-        Serial.printf("[DRV] ID:%d (Clone) attached to Port:%s (Pin:%d) - Linked to Parent:%d\n", currentDev->ID, currentDev->drvPort->infoName, hwPin, pID);
-      }
-      
-      else {
-          Serial.printf("[DRV] ERROR: Invalid Parent ID %d for Device %d\n", pID, i);
+        Serial.printf("[DRV] ID:%d (Clone) attached to Pin:%d (Sync with Parent:%d)\n", currentDev->ID, hwPin, pID);
       }
     }
 
-    // 3. (case 2) MASTER MODE (Independent settings)
+	    // --- MASTER MODE: Independent setup ---
     else {
       if (currentDev->pwmFreq) {
-          // Attach pin with the device-specific frequency
         dcDevObj[i].attach(hwPin, -1, *currentDev->pwmFreq);
-
-        Serial.printf("[DRV] ID:%d (Master) attached to Port:%s (Pin:%d) at %u Hz\n", currentDev->ID, currentDev->drvPort->infoName, hwPin, currentDev->pwmFreq);
-      }
-      else {
-          // Attach pin with default frequency
+        Serial.printf("[DRV] ID:%d (Master) attached to Pin:%d at %u Hz\n", currentDev->ID, hwPin, *currentDev->pwmFreq);
+      } else {
         dcDevObj[i].attach(hwPin);
-
-        Serial.printf("[DRV] ID:%d (Master) attached to Port:%s (Pin:%d) at DEFAULT Freq\n", currentDev->ID, currentDev->drvPort->infoName, hwPin);
+        Serial.printf("[DRV] ID:%d (Master) attached to Pin:%d (Default Freq)\n", currentDev->ID, hwPin);
       }
-
-      
     }
 
-    // 5. Safety: ensure driver starts in a stopped state
+	    // --- HARDWARE WAKE-UP (DRV8801 specific) ---
+	    // Sets Sleep and Enable pins to wake up the physical bridge
+    if (currentDev->drvPort->slpPin) {
+      pinMode(*currentDev->drvPort->slpPin, OUTPUT);
+      digitalWrite(*currentDev->drvPort->slpPin, HIGH); // Wake up from sleep
+    }
+    if (currentDev->drvPort->enPin) {
+      pinMode(*currentDev->drvPort->enPin, OUTPUT);
+      digitalWrite(*currentDev->drvPort->enPin, HIGH); // Enable driver
+    }
+
     dcDevObj[i].stop();
   }
 }
+
+// EOF hw_init_drv.cpp

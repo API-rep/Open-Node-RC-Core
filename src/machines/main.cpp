@@ -2,11 +2,7 @@
 #include "init/init.h"
 #include "utils/utils.h"
 
-#include <PS4Controller.h>
-
-  // for PS4 controller disconect timeout
-bool PS4isDisconnected = false;
-unsigned long PS4_lastUpdateTM = 0;
+#include <core/funct/input/input_manager.h> // <remote input
 
   // for battery voltage monitoring
 bool vBatIsLow = false;
@@ -19,6 +15,12 @@ void setup() {
 
   Serial.begin(115200);
   
+    // machine hardware initialisation
+   machine_hardware_setup();
+
+    // input module setup
+  input_setup();
+
     // enable V-BAT readout on sense pin
   #ifdef VBAT_SENSING
     pinMode(VBAT_SENSE_PIN, INPUT);
@@ -32,8 +34,8 @@ void setup() {
   pinMode(DRV_SLP_PIN, OUTPUT);
   digitalWrite(DRV_SLP_PIN, HIGH);
   
-    // machine hardware initialisation
-   machine_hardware_setup();
+
+
 }
 
 void loop() {
@@ -44,29 +46,9 @@ void loop() {
  * - Put the following code into library if it grow to much
  */
 
-  if (PS4.isConnected()) {
-      // update connection time mark and status flag
-    PS4isDisconnected = false;
-    PS4_lastUpdateTM = millis();
 
-      // update LStickX internal channel value
-    if (PS4.LStickX()) {
-      comBus.analogBus[static_cast<uint8_t>(AnalogComBusID::STEERING_BUS)].value = map(PS4.LStickX(), DEF_STICK_MIN_VAL, DEF_STICK_MAX_VAL, 0, comBus.analogBusMaxVal);
-      comBus.analogBus[static_cast<uint8_t>(AnalogComBusID::STEERING_BUS)].isDrived = true;
-    }
-      // update LStickY internal channel value
-    if (PS4.LStickY()) {
-      comBus.analogBus[static_cast<uint8_t>(AnalogComBusID::DRIVE_SPEED_BUS)].value = map(PS4.LStickY(), DEF_STICK_MIN_VAL, DEF_STICK_MAX_VAL, 0, comBus.analogBusMaxVal);
-      comBus.analogBus[static_cast<uint8_t>(AnalogComBusID::DRIVE_SPEED_BUS)].isDrived = true;
-    }
-      // update RStickY internal channel value
-    if (PS4.RStickY()) {
-      comBus.analogBus[static_cast<uint8_t>(AnalogComBusID::DUMP_BUS)].value = map(PS4.RStickY(), DEF_STICK_MIN_VAL, DEF_STICK_MAX_VAL, 0, comBus.analogBusMaxVal);
-      comBus.analogBus[static_cast<uint8_t>(AnalogComBusID::DUMP_BUS)].isDrived = true;     
-    }
-  }
-
-
+    // 1. MISE À JOUR DES ENTRÉES (PS4 -> ComBus via Mapping)
+  input_update(comBus);
 
 /**
  * Main loop is split into différents runlevels. To switch from one to another, edit "runLevel" variable
