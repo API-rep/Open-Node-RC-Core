@@ -1,0 +1,46 @@
+/******************************************************************************
+ * @file [FILE_NAME].cpp or .h
+ * @brief [SHORT_DESCRIPTION]
+ * 
+ * [DETAILED_DESCRIPTION_OPTIONAL]
+ * 
+ * ****************************************************************************/
+
+#pragma once // If Header
+
+// =============================================================================
+// 1. SECTION TITLE (Retrait d'une tabulation)
+// =============================================================================
+
+	// --- 1. Sub-section or block description (Tabulation, numéroté si nécessaire) ---
+	// Block or instruction minor comment (Tabulation, optionnel)
+[YOUR_CODE_HERE]
+
+// =============================================================================
+// 2. SECTION TITLE
+// =============================================================================
+
+	/**
+	 * @brief Doxygen style for functions
+	 */
+void functionName() {
+  
+	// --- 1. Internal logic step (Tabulation, numéroté si plusieurs étapes) ---
+	// Minor detail or specific instruction (Tabulation)
+  [LOGIC_HERE]
+
+}
+
+// EOF [FILE_NAME]
+
+
+
+Instrution IA :
+
+Rappels des nuances de style :
+
+    En-tête : Bloc de commentaires /* ... */ avec ligne d'astérisques finale à 80 caractères.
+    Sections : Lignes // === à 80 caractères, titre en MAJUSCULES (retrait d'une tabulation).
+    Sous-sections : Préfixe // --- avec numérotation uniquement si la logique comporte plusieurs étapes (une tabulation).
+    Commentaires mineurs : Toujours précédés d'une tabulation, utilisés uniquement si nécessaire pour clarifier une instruction.
+    Langue : Documentation et commentaires exclusivement en anglais.

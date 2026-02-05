@@ -28,4 +28,14 @@ void wakeupAllDcDrivers(const Machine &config);
  */
 void enableAllDcDrivers(const Machine &config);
 
+/**
+ * @brief Disable all DC drivers output bridges
+ */
+void disableAllDcDrivers(const Machine &config);
+
+/**
+ * @brief Stop all DC drivers outputs
+ */
+void stopAllDcDrivers(const Machine &config);
+
 // EOF drv_control.h

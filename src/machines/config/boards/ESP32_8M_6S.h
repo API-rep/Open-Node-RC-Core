@@ -54,10 +54,10 @@ enum DrvPort { DRV_PORT_1A = 0,
 extern DriverPort drvPortArray[DRV_PORT_COUNT];
 
   // DC drivers break channel index  
-enum DrvPortbreakCh { CH_A = 0, CH_B, CH_COUNT };
+enum DrvPortDecayCh { CH_A = 0, CH_B, CH_COUNT };
   
   // DC drivers break channel
-static constexpr int8_t BRK_PIN[CH_COUNT] = { 26, 15 };  // CH_A, CH_B ... break channel pin
+static constexpr int8_t DECAY_PIN[CH_COUNT] = { 26, 15 };  // CH_A, CH_B ... break channel pin
                                             
   // DC drivers control pin
 static constexpr int8_t DRV_EN_PIN = 33;

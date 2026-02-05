@@ -1,31 +1,38 @@
-/*!****************************************************************************
+/******************************************************************************
  * @file input_init.h
  * @brief Input system initialisation script
- * This section contain scripts an routines used to initialize the input system.
- * By this it :
- * - Parse remote config file to rich C code (const, var, struct)
- * - Parse input config file to rich C code (const, var, struct)
- * - Do some sanitary check
- * - Compute hardware related environement value
- * - Create harware device object
  * 
- * This script MUST be include in init.h top file
- *******************************************************************************/// 
+ * This module handles the initialization of the input system, including
+ * remote and mapping configuration parsing, sanity checks, and hardware
+ * object creation.
+ * 
+ * This script MUST be included via the init.h umbrella file.
+ * 
+ * ****************************************************************************/
 #pragma once
 
-#include "config.h"
 
+// =============================================================================
+// 1. CORE DEFINITIONS & STRUCTURES
+// =============================================================================
+
+	// Base structures and constants
 #include <const.h>
-#include <struct/struct.h>  // STAGE 1 :
+#include <struct/struct.h>
 #include <defs/defs.h>
 
-// 2. ENSUITE, on inclut le sélecteur de machine qui définit les enums (AnalogComBusID)
-// C'est ici que combus.h intervient.
+// =============================================================================
+// 2. MACHINE & BUS CONFIGURATION
+// =============================================================================
+
+	// Machine selector and bus enums
 #include <core/config/combus/combus.h>
 
-// 3. ENFIN, on peut inclure le mapping, car AnalogComBusID est maintenant connu
+// =============================================================================
+// 3. REMOTE MAPPING STRUCTURES
+// =============================================================================
+
+	// Input mapping definitions
 #include <struct/remotes_map_struct.h>
-
-
 
 // EOF input_init.h

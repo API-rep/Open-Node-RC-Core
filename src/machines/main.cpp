@@ -1,185 +1,171 @@
+/******************************************************************************
+ * @file main.cpp
+ * @brief Main execution loop with RunLevel State Machine
+ ****************************************************************************/
+
 #include "config/config.h"
 #include "init/init.h"
 #include "utils/utils.h"
+#include <core/funct/input/input_manager.h>
 
-#include <core/funct/input/input_manager.h> // <remote input
-
-  // for battery voltage monitoring
+	// --- 1. Battery and state variables ---
 bool vBatIsLow = false;
 unsigned long vBatSenseTM = 0;
 
-  // runlevel tracking variable
-RunLevel lastRunLevel = RunLevel::NOT_YET_SET ; 
-
+/**
+ * @brief Main Setup
+ */
 void setup() {
-
   Serial.begin(115200);
-  
-    // machine hardware initialisation
-   machine_hardware_setup();
 
-    // input module setup
+	// --- 1. Hardware and Input initialization ---
+  machine_hardware_setup();
   input_setup();
 
-    // enable V-BAT readout on sense pin
-  #ifdef VBAT_SENSING
-    pinMode(VBAT_SENSE_PIN, INPUT);
-  #endif 
+	// --- 2. Safety pin configuration ---
+#ifdef VBAT_SENSING
+  pinMode(VBAT_SENSE_PIN, INPUT);
+#endif 
 
-    // motor configuation and set to disable durring setup for safety reason
+	// Boot safety: ensure drivers are locked
   pinMode(DRV_EN_PIN, OUTPUT);
   digitalWrite(DRV_EN_PIN, LOW);
-  
-    // wake up DC driver
   pinMode(DRV_SLP_PIN, OUTPUT);
   digitalWrite(DRV_SLP_PIN, HIGH);
-  
-
-
 }
 
+/**
+ * @brief Main Loop
+ */
 void loop() {
 
-/**
- * Read PS4 controller inputs and store them into internal channels structure
- * NOTE:
- * - Put the following code into library if it grow to much
- */
+// =============================================================================
+// 1. INPUTS UPDATE TO COMBUS
+// =============================================================================
 
-
-    // 1. MISE À JOUR DES ENTRÉES (PS4 -> ComBus via Mapping)
+	// --- 1. Sync remote inputs with bus ---
   input_update(comBus);
 
-/**
- * Main loop is split into différents runlevels. To switch from one to another, edit "runLevel" variable
- * with the target runlevel. See const.h for a list of available runlevels.
- * Runlevel is also an easy way to share machine state with others deveices (trailer, sound module, ...).
- * Place time crytical or common task outside of switch statement
- */
+// =============================================================================
+// 2. RUNLEVEL STATE MACHINE
+// =============================================================================
 
-  // check runlevel tracking variable
- bool isNewRunLevel = (comBus.runLevel != lastRunLevel);
+	// --- 1. RunLevel tracking and timing tokens ---
+  static RunLevel lastRunLevel = RunLevel::NOT_YET_SET;
+  static uint32_t stateTM      = 0;
 
+	// --- 2. RunLevel change detection ---
+  bool isNewRunLevel = (comBus.runLevel != lastRunLevel);
 
+	// --- 3. RunLevel Execution ---
   switch (comBus.runLevel) {
 
-    case RunLevel::IDLE :
-      Serial.println("Entering in IDDLE mode");
-
-      break;
-
-    case RunLevel::STARTING :
-      Serial.println("Entering in RunLevel::STARTING mode");
-
-      break;
-
-    case RunLevel::RUNNING :
-        // run once on runlevel change
+    // ---------------------------------------------------------
+    case RunLevel::IDLE : {
+    // ---------------------------------------------------------
       if (isNewRunLevel) {
-        Serial.println("Entering in RUNNING mode");
-        
-        // Wake up and enable motors (une seule fois à l'entrée)
-        digitalWrite(DRV_EN_PIN, HIGH);
-        digitalWrite(DRV_SLP_PIN, HIGH);
-        
-        // Vous pouvez ajouter ici d'autres inits (sons, lumières...)
+          // --- 1. Run once at startup ---
+        Serial.println(F("[STATE] IDLE: System locked. Press TRIANGLE to start."));
+        stateTM = millis();
+        stopAllDcDrivers(machine);
+        wakeupAllDcDrivers(machine);
+        disableAllDcDrivers(machine);
       }
 
-        // update all configured DC drivers speed from comBus
+        // --- 2. Transition trigger check ---
+      uint8_t triangleCh = static_cast<uint8_t>(DigitalComBusID::LIGHTS);
+      if (comBus.digitalBus[triangleCh].isDrived && comBus.digitalBus[triangleCh].value) {
+        Serial.println(F("[EVENT] Triangle pressed: Engaging STARTING sequence"));
+        comBus.runLevel = RunLevel::STARTING;
+      }
+      break;
+    }
+
+    // ---------------------------------------------------------
+    case RunLevel::STARTING : {
+    // ---------------------------------------------------------
+      if (isNewRunLevel) {
+        Serial.println(F("[STATE] Entering in STARTING mode"));
+        stateTM = millis();
+        stopAllDcDrivers(machine);
+        wakeupAllDcDrivers(machine);
+        enableAllDcDrivers(machine);
+      }
+
+        // --- 1. Auto-transition to RUNNING ---
+      comBus.runLevel = RunLevel::RUNNING;
+      break;
+    }
+
+    // ---------------------------------------------------------
+    case RunLevel::RUNNING : {
+    // ---------------------------------------------------------
+      if (isNewRunLevel) {
+        Serial.println(F("[STATE] System RUNNING"));
+        stateTM = millis();
+        stopAllDcDrivers(machine);
+        wakeupAllDcDrivers(machine);
+        enableAllDcDrivers(machine);       
+      }
+
+        // --- 1. Process DC Drivers ---
       for (int i = 0; i < machine.dcDevCount; i++) {
-          // raw analog bus value readed
         uint8_t chIdx = static_cast<uint8_t>(machine.dcDev[i].comChannel.value());
         uint16_t rawValue = comBus.analogBus[chIdx].value;
 
-          // set DC driver in safe mode if comBus is not drived 
-
-          // attention, à relire //
-        if (!comBus.analogBus[chIdx].value) {
-          switch (machine.dcDev[i].mode)
-          {
-          case DcDrvMode::ONE_WAY:
-            rawValue = 0;
-            break;
-
-          case DcDrvMode::TWO_WAY_NEUTRAL_CENTER:
-            rawValue = comBus.analogBusMaxVal / 2;  // 50% duty cycle
-            break;
-          
-          default:
-            break;
-          }
+        if (!comBus.analogBus[chIdx].isDrived) {
+          rawValue = (machine.dcDev[i].mode == DcDrvMode::TWO_WAY_NEUTRAL_CENTER) ? (comBus.analogBusMaxVal / 2) : 0;
         }
 
-          // speed converted from raw analog bus value to percent
         float speed = (float)map(rawValue, 0, comBus.analogBusMaxVal, -PERCENT_MAX, PERCENT_MAX);
-
-          // final speed to write to the driver
-        float finalSpeed = machine.dcDev[i].polInv ? -speed : speed;  // invert speed if drvConfigs[i].polInv is true
-
-          // motor speed update 
+        float finalSpeed = machine.dcDev[i].polInv ? -speed : speed;
         dcDevObj[i].runAtSpeed(finalSpeed);
       }
-
       break;
+    }
 
-    case RunLevel::TURNING_OFF :
-      Serial.println("Entering in TUNING_OFF mode");
-      // do something
-
-      break;
-
-    case RunLevel::SLEEPING :
-      Serial.println("Entering in RunLevel::SLEEPING mode");
-
-        // think to do if low bat detection
-      if (vBatIsLow) {
-        Serial.println("Battery low, switch to sleeping mode");
-          // disable motors
-        digitalWrite(DRV_EN_PIN, LOW);
-        digitalWrite(DRV_SLP_PIN, LOW);
-          // disable servo
-          // -> macro to write to disable servo 
-      
-        while(true) {
-          // loop untill reboot
-        }
+    // ---------------------------------------------------------
+    case RunLevel::SLEEPING : {
+    // ---------------------------------------------------------
+      if (isNewRunLevel) {
+        Serial.println(F("[STATE] Entering in SLEEPING mode"));
+        stateTM = millis();
+        stopAllDcDrivers(machine);
+        sleepAllDcDrivers(machine);
+        disableAllDcDrivers(machine);     
       }
 
+      if (vBatIsLow) {
+        Serial.println(F("Battery low, system halted"));
+        while(true) { /* Wait for reboot */ }
+      }
       break;
-
-    case RunLevel::RESET :
-          // code use to reset the controler
-      break;
+    }
 
     default:
-      // if nothing else matches, do the default
       break;
-
   }
+  
+	// --- 4. Sync lastRunLevel ---
+  lastRunLevel = comBus.runLevel;
 
-  // update runlevel tracking varibale
-lastRunLevel = comBus.runLevel;
+// =============================================================================
+// 3. SYSTEM TASKS (Battery, etc.)
+// =============================================================================
 
-  #ifdef VBAT_SENSING
-
-    /**
-      *  Battery monitoring
-      *  Check battery voltage an switch to RunLevel::SLEEPING runLevel if low voltage is detected
-    */
-
-      // sense battery at each VBAT_SENSE_INTERVAL 
-    if ((vBatSenseTM + VBAT_SENSE_INTERVAL) <= millis()) {
-        // V-BAT sensing and sampling
-      float vBatSense = analogRead(VBAT_SENSE_PIN) * 3.3 / 4095;
-      vBatSenseTM = millis();
-      
-      vBatSense = ((vBatSense * VBAT_SENSE_SAMPLING) + (analogRead(VBAT_SENSE_PIN) * 3.3 / 4095)) / (VBAT_SENSE_SAMPLING + 1);
-      
-      if (vBatSense <= MIN_VBAT_SENSE) {
-          // enable low battery voltage flag and switch to SLEEP runlevel
-        vBatIsLow = true;
-        comBus.runLevel = RunLevel::SLEEPING;
-      }
+#ifdef VBAT_SENSING
+	// --- 1. Battery monitoring ---
+  if ((vBatSenseTM + VBAT_SENSE_INTERVAL) <= millis()) {
+    float vBatSense = analogRead(VBAT_SENSE_PIN) * 3.3 / 4095;
+    vBatSenseTM = millis();
+    // Logic continue...
+    if (vBatSense <= MIN_VBAT_SENSE) {
+      vBatIsLow = true;
+      comBus.runLevel = RunLevel::SLEEPING;
     }
-  #endif 
-}
+  }
+#endif 
+
+} // END OF LOOP
+
+// EOF main.cpp

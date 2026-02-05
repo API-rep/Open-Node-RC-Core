@@ -51,8 +51,8 @@ class ESP32_PWM_Servo
 	bool		setLimits(int16_t minAngle, int16_t maxAngle);	// set min/max angle limits
 
 	uint32_t	writeMicroseconds(uint16_t us);				// write a PWM tick duration. Usefull to get calibration values for setTickDuration()
-	bool		goToAngle(float angle);		 				// set servo angle (into "minAngle" - "maxAngle" range)
-	bool		goToAtSpeed(float angle, uint16_t speed);	// set servo angle to reach at speed (in ms/deg)
+	bool		  goToAngle(float angle);		 				// set servo angle (into "minAngle" - "maxAngle" range)
+	bool		  goToAtSpeed(float angle, uint16_t speed);	// set servo angle to reach at speed (in ms/deg)
 //	void		stop();										// stop servo rotation (only available in controled speed mode)
 //	float		getSpeed();									// get servo speed (only available in controled speed mode. positive = clockwise, negative = counterclockwise)
 	int8_t		getPwmTimer();								// Return the timer used for the PWM signal (0-3; -1 if not set)

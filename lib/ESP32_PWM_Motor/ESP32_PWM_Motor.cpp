@@ -227,7 +227,7 @@ bool ESP32_PWM_Motor::attach(uint8_t pwmPin, int8_t dirPin, uint32_t pwmFreq)
 /////////////////////////////////////////////////////////////////////////////////////
 bool ESP32_PWM_Motor::setBreakPin(uint8_t breakPin, uint8_t mode)
 {																												DPRINTLN("Break pin configuration:");
-	if (mode == ACTIVE_LOW || mode == ACTIVE_HIGH) {
+	if (mode == ESP32_PWM_MOTOR_ACTIVE_LOW || mode == ESP32_PWM_MOTOR_ACTIVE_HIGH) {
 		_breakPin = breakPin;																					DPRINT("  Break pin attached to pin "); DPRINTLN(_breakPin);
 		_breakPinMode = mode;																					DPRINTLN("  Break pin mode correctly set");
 		
@@ -246,7 +246,7 @@ bool ESP32_PWM_Motor::setBreakPin(uint8_t breakPin, uint8_t mode)
 /////////////////////////////////////////////////////////////////////////////////////
 bool ESP32_PWM_Motor::setSleepPin(uint8_t sleepPin, uint8_t mode)
 {																												DPRINTLN("Sleep pin configuration:");
-	if (mode == ACTIVE_LOW || mode == ACTIVE_HIGH) {
+	if (mode == ESP32_PWM_MOTOR_ACTIVE_LOW || mode == ESP32_PWM_MOTOR_ACTIVE_HIGH) {
 		_sleepPin = sleepPin;																					DPRINT("  Sleep pin attached to pin "); DPRINTLN(_sleepPin);
 		_sleepPinMode = mode;																					DPRINTLN("  Sleep pin mode correctly set");
 		
@@ -363,7 +363,7 @@ bool ESP32_PWM_Motor::doBreak()
 {	
 	if (_breakPin != NOT_SET) {																					DPRINTLN("Motor driver break mode enable");
 			// set break pin direction in regard of break pin mode
-		if (_breakPinMode == ACTIVE_LOW) {
+		if (_breakPinMode == ESP32_PWM_MOTOR_ACTIVE_LOW) {
 			digitalWrite(_breakPin, LOW);
 		}
 
@@ -384,7 +384,7 @@ bool ESP32_PWM_Motor::doNotBreak()
 {	
 	if (_breakPin != NOT_SET) {																					DPRINTLN("Motor driver break mode disable");
 			// set break pin direction in regard of break pin mode
-		if (_breakPinMode == ACTIVE_LOW) {
+		if (_breakPinMode == ESP32_PWM_MOTOR_ACTIVE_LOW) {
 			digitalWrite(_breakPin, HIGH);
 		}
 
@@ -405,7 +405,7 @@ bool ESP32_PWM_Motor::sleep()
 {	
 	if (_sleepPin != NOT_SET) {																					DPRINTLN("Motor driver put into sleep mode");
 			// set sleep pin direction in regard of sleep pin mode
-		if (_sleepPinMode == ACTIVE_LOW) {
+		if (_sleepPinMode == ESP32_PWM_MOTOR_ACTIVE_LOW) {
 			digitalWrite(_sleepPin, LOW);
 		}
 
@@ -426,7 +426,7 @@ bool ESP32_PWM_Motor::doNotSleep()
 {	
 	if (_sleepPin != NOT_SET) {																					DPRINTLN("Motor driver put into active mode");
 			// set sleep pin direction in regard of sleep pin mode
-		if (_sleepPinMode == ACTIVE_LOW) {
+		if (_sleepPinMode == ESP32_PWM_MOTOR_ACTIVE_LOW) {
 			digitalWrite(_sleepPin, HIGH);
 		}
 
@@ -489,8 +489,8 @@ bool ESP32_PWM_Motor::isMoving()
 /////////////////////////////////////////////////////////////////////////////////////
 bool ESP32_PWM_Motor::isBreaking()
 {		// check if motor driver is in break mode ...
-	if (((digitalRead(_breakPin) == 1) && (_breakPinMode == ACTIVE_HIGH)) || 
-	    ((digitalRead(_breakPin) == 0) && (_breakPinMode == ACTIVE_LOW))) {
+	if (((digitalRead(_breakPin) == 1) && (_breakPinMode == ESP32_PWM_MOTOR_ACTIVE_HIGH)) || 
+	    ((digitalRead(_breakPin) == 0) && (_breakPinMode == ESP32_PWM_MOTOR_ACTIVE_LOW))) {
 
 		return true;
 	}
@@ -503,8 +503,8 @@ bool ESP32_PWM_Motor::isBreaking()
 /////////////////////////////////////////////////////////////////////////////////////
 bool ESP32_PWM_Motor::isSleeping()
 {		// check if motor driver is in sleep mode ...
-	if (((digitalRead(_sleepPin) == 1) && (_sleepPinMode == ACTIVE_HIGH)) || 
-	    ((digitalRead(_sleepPin) == 0) && (_sleepPinMode == ACTIVE_LOW))) {
+	if (((digitalRead(_sleepPin) == 1) && (_sleepPinMode == ESP32_PWM_MOTOR_ACTIVE_HIGH)) || 
+	    ((digitalRead(_sleepPin) == 0) && (_sleepPinMode == ESP32_PWM_MOTOR_ACTIVE_LOW))) {
 
 		return true;
 	}

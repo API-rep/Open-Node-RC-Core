@@ -22,7 +22,7 @@ void debugVehicleConfig() {
   Serial.println(F("----------------------------------------"));
   Serial.flush();
 
-	// --- DC Devices Debug Section ---
+	  // --- DC Devices Debug Section ---
   if (machine.dcDev != nullptr && machine.dcDevCount > 0) {
     for (int i = 0; i < machine.dcDevCount; i++) {
       const DcDevice* d = &machine.dcDev[i];
@@ -52,7 +52,7 @@ void debugVehicleConfig() {
     }
   }
 
-	// --- Servo Devices Debug Section ---
+	  // --- Servo Devices Debug Section ---
   if (machine.srvDev != nullptr && machine.srvDevCount > 0) {
     Serial.println(F("SERVO DEVICES DETAILS:"));
     for (int i = 0; i < machine.srvDevCount; i++) {

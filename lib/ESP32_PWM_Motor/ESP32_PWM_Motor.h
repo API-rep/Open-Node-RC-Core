@@ -29,8 +29,8 @@
 #define MIN_SPEED        0.00
 #define MAX_SPEED      100.00
 
-#define ACTIVE_LOW	0
-#define ACTIVE_HIGH	1
+#define ESP32_PWM_MOTOR_ACTIVE_LOW	0
+#define ESP32_PWM_MOTOR_ACTIVE_HIGH	1
 
 class ESP32_PWM_Motor
 {
@@ -49,6 +49,7 @@ class ESP32_PWM_Motor
 	bool		runAtSpeed(float speed);		 				// set motor speed in % (0-100%, positive = clockwise, negative = counterclockwise)
 	bool		accelToSpeed(float speed, uint32_t accel);		// set motor speed in % (0-100%, positive = clockwise, negative = counterclockwise) with acceleration
 	void		stop();											// stop motor rotatation
+	// rename break by decay +++ decay mode setting
 	bool		doBreak();										// enable motor driver break mode
 	bool		doNotBreak();									// disable motor driver break mode
 	bool		sleep();										// set motor driver into sleep mode
@@ -75,9 +76,9 @@ class ESP32_PWM_Motor
 	
 	int8_t 		_dirPin;			// pin connected to motor driver direction pin
 	int8_t 		_breakPin;			// pin connected to motor driver break pin
-	int8_t 		_breakPinMode;		// mode of motor driver break pin (ACTIVE_LOW/ACTIVE_HIGH)
+	int8_t 		_breakPinMode;		// mode of motor driver break pin (ESP32_PWM_MOTOR_ACTIVE_LOW/ESP32_PWM_MOTOR_ACTIVE_HIGH)
 	int8_t 		_sleepPin;			// pin connected to motor driver sleep pin
-	int8_t 		_sleepPinMode;		// mode of motor driver sleep pin (ACTIVE_LOW/ACTIVE_HIGH)
+	int8_t 		_sleepPinMode;		// mode of motor driver sleep pin (ESP32_PWM_MOTOR_ACTIVE_LOW/ESP32_PWM_MOTOR_ACTIVE_HIGH)
 
 	uint8_t		_minMargin;			// minimum (startup) speed of the motor (0-100%)
 	uint8_t		_maxMargin;			// maximum (limit) speed of the motor (0-100%)

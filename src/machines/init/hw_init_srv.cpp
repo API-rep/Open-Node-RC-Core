@@ -13,8 +13,6 @@
 
 /**
  * @brief Main servo initialization function
- * 
- * *****************************************************************************
  */
 void servoInit() {
   
