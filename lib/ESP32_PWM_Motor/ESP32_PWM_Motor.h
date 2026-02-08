@@ -32,6 +32,9 @@
 #define ESP32_PWM_MOTOR_ACTIVE_LOW	0
 #define ESP32_PWM_MOTOR_ACTIVE_HIGH	1
 
+#define ESP32_PWM_MOTOR_SPEED_DIR_MODE	0
+#define ESP32_PWM_MOTOR_PH_EN_MODE	1
+
 class ESP32_PWM_Motor
 {
   public:
@@ -42,6 +45,7 @@ class ESP32_PWM_Motor
 
 	bool		attach(uint8_t pwmPin, int8_t dirPin = NOT_SET, uint32_t pwmFreq = 0);
 
+	bool		setDirMode(uint8_t dirMode);						  	              	// set motor driver dir mode dir (speed/dir or phase/enable)
 	bool		setBreakPin(uint8_t breakPin, uint8_t mode);								// set motor driver break pin and its active mode
 	bool		setSleepPin(uint8_t sleepPin, uint8_t mode);								// set motor driver sleep pin and its active mode
 	bool		setMargin(uint8_t minMargin = MIN_SPEED, uint8_t maxMargin = MAX_SPEED);	// set motor min/max margin to remove dead zone and/or limit speed
@@ -50,6 +54,8 @@ class ESP32_PWM_Motor
 	bool		accelToSpeed(float speed, uint32_t accel);		// set motor speed in % (0-100%, positive = clockwise, negative = counterclockwise) with acceleration
 	void		stop();											// stop motor rotatation
 	// rename break by decay +++ decay mode setting
+	bool		enable();                   // enable motor driver rotation
+	bool		disable();                  // disable motor driver rotation
 	bool		doBreak();										// enable motor driver break mode
 	bool		doNotBreak();									// disable motor driver break mode
 	bool		sleep();										// set motor driver into sleep mode
@@ -73,30 +79,32 @@ class ESP32_PWM_Motor
 	static bool					_pwm_channel_used[LEDC_CHANNEL_MAX];	// PWM channels used by all classes
 	ledc_channel_config_t 		*_ledc_channel_config = NULL;			// PWM channel config structure
 	
-	
-	int8_t 		_dirPin;			// pin connected to motor driver direction pin
-	int8_t 		_breakPin;			// pin connected to motor driver break pin
+
+	int8_t		_dirMode;         // dir mode (speed/dir, phase/enable)
+
+	int8_t 		_dirPin;			    // pin connected to motor driver direction pin (enable pin for phase/enable motor)
+	int8_t 		_breakPin;			  // pin connected to motor driver break pin
 	int8_t 		_breakPinMode;		// mode of motor driver break pin (ESP32_PWM_MOTOR_ACTIVE_LOW/ESP32_PWM_MOTOR_ACTIVE_HIGH)
-	int8_t 		_sleepPin;			// pin connected to motor driver sleep pin
+	int8_t 		_sleepPin;			  // pin connected to motor driver sleep pin
 	int8_t 		_sleepPinMode;		// mode of motor driver sleep pin (ESP32_PWM_MOTOR_ACTIVE_LOW/ESP32_PWM_MOTOR_ACTIVE_HIGH)
 
-	uint8_t		_minMargin;			// minimum (startup) speed of the motor (0-100%)
-	uint8_t		_maxMargin;			// maximum (limit) speed of the motor (0-100%)
-	bool		_marginAreSet;		// flag use to check if custom margin are set or no 
+	uint8_t		_minMargin;			  // minimum (startup) speed of the motor (0-100%)
+	uint8_t		_maxMargin;			  // maximum (limit) speed of the motor (0-100%)
+	bool		  _marginAreSet;	  // flag use to check if custom margin are set or no 
 
-	int8_t 		_pwmTimer;		// timer use for PWM clock
-	int8_t 		_pwmChannel;	// channel use for pwm clock
-	uint32_t	_pwmMaxDuty;	// maximum value of PWM duty cycle. (0 to (2^20_bit_duty_resolution); -1 for error)
-	uint32_t	_accel_factor;	// acceleration factor in ms per speed %
+	int8_t 		_pwmTimer;		    // timer use for PWM clock
+	int8_t 		_pwmChannel;	    // channel use for pwm clock
+	uint32_t	_pwmMaxDuty;	    // maximum value of PWM duty cycle. (0 to (2^20_bit_duty_resolution); -1 for error)
+	uint32_t	_accel_factor;	  // acceleration factor in ms per speed %
 
-	bool		accelIsValid(uint32_t accel);		// check if acceleration factor is valid
-	bool		speedIsValid(float speed);		    // check if speed is in MIN_SPEED-MAX_SPEED range
+	bool		accelIsValid(uint32_t accel);		   // check if acceleration factor is valid
+	bool		speedIsValid(float speed);		     // check if speed is in MIN_SPEED-MAX_SPEED range
 
-	uint32_t	speedToDuty(float speed);			// convert speed in PWM duty cycle value
-	float		dutyToSpeed(uint32_t duty);			// raw convert duty cycle to speed, with no direction
-	float		speedInMargin(float speed);			// map speed into min/max margin range (c.f. setMotorMargin() )
-	float		revertMargedSpeed(float speed);		// revert a speed mapped into margin to it's base value
-	bool		dirPinFromSpeed(float speed);		// set dirPin direction from speed value
+	uint32_t	speedToDuty(float speed);			   // convert speed in PWM duty cycle value
+	float		  dutyToSpeed(uint32_t duty);		   // raw convert duty cycle to speed, with no direction
+	float		  speedInMargin(float speed);			 // map speed into min/max margin range (c.f. setMotorMargin() )
+	float		  revertMargedSpeed(float speed);	 // revert a speed mapped into margin to it's base value
+	bool		  dirPinFromSpeed(float speed);		 // set dirPin direction from speed value
 
 	static int	espSilentLog(const char* string, va_list args);	// (catch esp log output) and return number of char print
 	static int	_logHasOccure;	// true (not null) if an esp log has occure in silent mode (catch by espSilentLog)
