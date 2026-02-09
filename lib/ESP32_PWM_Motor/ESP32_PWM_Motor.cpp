@@ -20,6 +20,8 @@ int		ESP32_PWM_Motor::_logHasOccure = NOT_SET;					// init espErr char counter a
 ESP32_PWM_Motor::ESP32_PWM_Motor()
 {
 	_dirPin			   = NOT_SET;
+	_enablePin     = NOT_SET;
+	_enablePinMode = NOT_SET;
 	_breakPin		   = NOT_SET;
 	_breakPinMode	 = NOT_SET;
 	_sleepPin		   = NOT_SET;
@@ -29,7 +31,7 @@ ESP32_PWM_Motor::ESP32_PWM_Motor()
 	_pwmChannel		 = NOT_SET;
 	_pwmMaxDuty		 = NOT_SET;
 
-	_dirMode       = NOT_SET;
+
 
 	_minMargin		 = MIN_SPEED;
 	_maxMargin		 = MAX_SPEED;
@@ -212,7 +214,7 @@ bool ESP32_PWM_Motor::attach(uint8_t pwmPin, int8_t dirPin, uint32_t pwmFreq)
 		pinMode(_dirPin, OUTPUT);
 	}
 
-	else {																										DPRINTLN("No DIR pin provided. Motor direction set by pus/minus speed."); DPRINTLN();
+	else {																										DPRINTLN("No DIR pin provided."); DPRINTLN();
 		// direction pin not set. Direction set by pus/minus speed.
 	}
 

@@ -35,6 +35,7 @@ void machine_hardware_setup() {
   allocateDrivers(machine.dcDevCount);
 
 	// --- 4. Initialize driver hardware ---
+  note pour demain : initialiser tout les modes possible pour les drivers (sleep, enable ... d'après la config des drivers à la place des pinmode en 1.)
   dcDriverInit(machine);
 
 	// --- 5. Optional verbose debug output ---

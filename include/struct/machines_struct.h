@@ -41,6 +41,7 @@ typedef struct {
   const char* infoName;
   const DriverModel* driverModel = nullptr;
   std::optional<uint8_t> pwmPin;
+  std::optional<uint8_t> dirPin;
   std::optional<uint8_t> brkPin;
   std::optional<uint8_t> enPin;
   std::optional<uint8_t> slpPin;

@@ -91,26 +91,26 @@ void dcDriverInit(const Machine &config) {
       continue;
     }
 
-    uint8_t hwPin = *currentDev->drvPort->pwmPin;
+    uint8_t pwmPin = *currentDev->drvPort->pwmPin;
 
 	    // CLONE MODE: Synchronize PWM timer with parent
     if (currentDev->parentID) {
       uint8_t pID = *currentDev->parentID;
       if (pID < config.dcDevCount) {
         dcDevObj[i].useTimer(dcDevObj[pID].getPwmTimer());
-        dcDevObj[i].attach(hwPin);
-        Serial.printf("[DRV] ID:%d (Clone) attached to Pin:%d (Sync with Parent:%d)\n", currentDev->ID, hwPin, pID);
+        dcDevObj[i].attach(pwmPin);
+        Serial.printf("[DRV] ID:%d (Clone) attached to Pin:%d (Sync with Parent:%d)\n", currentDev->ID, pwmPin, pID);
       }
     }
 
 	    // MASTER MODE: Independent setup
     else {
       if (currentDev->pwmFreq) {
-        dcDevObj[i].attach(hwPin, -1, *currentDev->pwmFreq);
-        Serial.printf("[DRV] ID:%d (Master) attached to Pin:%d at %u Hz\n", currentDev->ID, hwPin, *currentDev->pwmFreq);
+        dcDevObj[i].attach(pwmPin, -1, *currentDev->pwmFreq);
+        Serial.printf("[DRV] ID:%d (Master) attached to Pin:%d at %u Hz\n", currentDev->ID, pwmPin, *currentDev->pwmFreq);
       } else {
-        dcDevObj[i].attach(hwPin);
-        Serial.printf("[DRV] ID:%d (Master) attached to Pin:%d (Default Freq)\n", currentDev->ID, hwPin);
+        dcDevObj[i].attach(pwmPin);
+        Serial.printf("[DRV] ID:%d (Master) attached to Pin:%d (Default Freq)\n", currentDev->ID, pwmPin);
       }
     }
 
