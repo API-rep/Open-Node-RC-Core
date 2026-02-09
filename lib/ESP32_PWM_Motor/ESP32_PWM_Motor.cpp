@@ -29,7 +29,7 @@ ESP32_PWM_Motor::ESP32_PWM_Motor()
 	_pwmChannel		 = NOT_SET;
 	_pwmMaxDuty		 = NOT_SET;
 
-	_dirMode;      = NOT_SET;
+	_dirMode       = NOT_SET;
 
 	_minMargin		 = MIN_SPEED;
 	_maxMargin		 = MAX_SPEED;
@@ -645,14 +645,10 @@ uint32_t ESP32_PWM_Motor::speedToDuty(float speed)
 		return round(_pwmMaxDuty * ((speed + MAX_SPEED) / (MAX_SPEED * 2)));
 	}
 
-	else if (_dirMode == ESP32_PWM_MOTOR_SPEED_DIR_MODE) {
+	else {
 			// dir pin set, duty set in 0 <-> 100% range
 				DPRINT("  Dir Speed convert to duty value "); DPRINTLN(round(_pwmMaxDuty * (abs(speed) / MAX_SPEED))); 
 		return round(_pwmMaxDuty * (abs(speed) / MAX_SPEED));
-	}
-
-	else {
-		DPRINTLN("  No suitable dir mode provided for speed conversion ");
 	}
 }
 
