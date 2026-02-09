@@ -212,7 +212,7 @@ bool ESP32_PWM_Motor::attach(uint8_t pwmPin, int8_t dirPin, uint32_t pwmFreq)
 		pinMode(_dirPin, OUTPUT);
 	}
 
-	else {																										DPRINTLN("No DIR pin provided. Motor direction set by hardware pullup/down resistor."); DPRINTLN();
+	else {																										DPRINTLN("No DIR pin provided. Motor direction set by pus/minus speed."); DPRINTLN();
 		// direction pin not set. Direction set by pus/minus speed.
 	}
 
@@ -224,12 +224,11 @@ bool ESP32_PWM_Motor::attach(uint8_t pwmPin, int8_t dirPin, uint32_t pwmFreq)
 
 /////////////////////////////////////////////////////////////////////////////////////
 /*	setDirMode(dirMode) - set motor driver dir mode (speed/dir or phase/enable)
-/		uint8_t dirMode: dir pin mode (speed/dir or phase/enable)
-/		TODO : implement a lock flag to avoid setDirMode call after atttach()          */
+/		uint8_t dirMode: dir pin mode (speed/dir or phase/enable)                      */
 /////////////////////////////////////////////////////////////////////////////////////
 bool ESP32_PWM_Motor::setDirMode(uint8_t dirMode)
 {
-    // Case 1 : No pin set, SPEED_DIR_MODE set by default
+    // Case 1 : No pin set, SPEED_DIR_MOdE set by default
   if (_dirPin == NOT_SET) {
    _dirMode = ESP32_PWM_MOTOR_SPEED_DIR_MODE
 ;
