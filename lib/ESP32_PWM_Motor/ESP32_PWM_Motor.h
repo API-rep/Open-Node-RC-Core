@@ -45,7 +45,7 @@ class ESP32_PWM_Motor
 
 	bool		attach(uint8_t pwmPin, int8_t dirPin = NOT_SET, uint32_t pwmFreq = 0);
 
-	bool		setDirMode(uint8_t dirMode);						  	              	// set motor driver dir mode dir (speed/dir or phase/enable)
+	bool		setEnablePin(uint8_t enablePin, uint8_t mode);            	// set motor driver dir mode dir (speed/dir or phase/enable)
 	bool		setBreakPin(uint8_t breakPin, uint8_t mode);								// set motor driver break pin and its active mode
 	bool		setSleepPin(uint8_t sleepPin, uint8_t mode);								// set motor driver sleep pin and its active mode
 	bool		setMargin(uint8_t minMargin = MIN_SPEED, uint8_t maxMargin = MAX_SPEED);	// set motor min/max margin to remove dead zone and/or limit speed
@@ -80,9 +80,9 @@ class ESP32_PWM_Motor
 	ledc_channel_config_t 		*_ledc_channel_config = NULL;			// PWM channel config structure
 	
 
-	int8_t		_dirMode;         // dir mode (speed/dir, phase/enable)
-
-	int8_t 		_dirPin;			    // pin connected to motor driver direction pin (enable pin for phase/enable motor)
+	int8_t 		_dirPin;			    // pin connected to motor driver direction pin
+	int8_t		_enablePin;				// pin connected to motor driver enable pin
+	int8_t		_enablePinMode;   // mode of motor driver enable pin (ESP32_PWM_MOTOR_ACTIVE_LOW/ESP32_PWM_MOTOR_ACTIVE_HIGH)
 	int8_t 		_breakPin;			  // pin connected to motor driver break pin
 	int8_t 		_breakPinMode;		// mode of motor driver break pin (ESP32_PWM_MOTOR_ACTIVE_LOW/ESP32_PWM_MOTOR_ACTIVE_HIGH)
 	int8_t 		_sleepPin;			  // pin connected to motor driver sleep pin

@@ -226,22 +226,18 @@ bool ESP32_PWM_Motor::attach(uint8_t pwmPin, int8_t dirPin, uint32_t pwmFreq)
 /*	setDirMode(dirMode) - set motor driver dir mode (speed/dir or phase/enable)
 /		uint8_t dirMode: dir pin mode (speed/dir or phase/enable)                      */
 /////////////////////////////////////////////////////////////////////////////////////
-bool ESP32_PWM_Motor::setDirMode(uint8_t dirMode)
-{
-    // Case 1 : No pin set, SPEED_DIR_MOdE set by default
-  if (_dirPin == NOT_SET) {
-   _dirMode = ESP32_PWM_MOTOR_SPEED_DIR_MODE
-;
-  return EXIT_SUCCESS; 
-  }
-
-  // Case 2 & 3 : Check mode and set _dirMode flag
-  if (dirMode == ESP32_PWM_MOTOR_SPEED_DIR_MODE	|| dirMode == ESP32_PWM_MOTOR_PH_EN_MODE) {
-    _dirMode = dirMode;
-    return EXIT_SUCCESS;
-  }
-
-  return EXIT_FAILURE;
+bool ESP32_PWM_Motor::setEnablePin(uint8_t enablePin, uint8_t mode)
+{																												DPRINTLN("Enable pin configuration:");
+	if (mode == ESP32_PWM_MOTOR_ACTIVE_LOW || mode == ESP32_PWM_MOTOR_ACTIVE_HIGH) {
+		_enablePin = enablePin;																					DPRINT("  Enable pin attached to pin "); DPRINTLN(_enablePin);
+		_enablePinMode = mode;																					DPRINTLN("  Enable pin mode correctly set");
+		
+		pinMode(_enablePin, OUTPUT);
+		
+		return EXIT_SUCCESS;
+	}
+																												DPRINTLN("  Bad Enable pin mode provided. Configuration aborded");
+	return EXIT_FAILURE;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////
@@ -382,30 +378,44 @@ void ESP32_PWM_Motor::stop()
 }
 
 /////////////////////////////////////////////////////////////////////////////////////
-/*	enable() -  enable motor driver power                                          */
+/*	enable() -  enable motor driver                                                */
 /////////////////////////////////////////////////////////////////////////////////////
 bool ESP32_PWM_Motor::enable() 
-{
-      // phase/enable mode, set dirPin HIGH
-    if (_dirPin != NOT_SET) {
-      digitalWrite(_dirPin, HIGH);
-      return EXIT_SUCCESS;
-    }
+{	
+	if (_enablePin != NOT_SET) {																					DPRINTLN("Motor driver enable");
+			// set enable pin direction in regard of enable pin mode
+		if (_enablePinMode == ESP32_PWM_MOTOR_ACTIVE_LOW) {
+			digitalWrite(_enablePin, LOW);
+		}
 
+		else {
+			digitalWrite(_enablePin, HIGH);
+		}
+		
+		return EXIT_SUCCESS;
+	}
+																												DPRINT("Enable configuation aborded. No enable pin configured.");
 	return EXIT_FAILURE;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////
-/*	enable() -  disable motor driver power                                         */
+/*	enable() -  disable motor driver                                               */
 /////////////////////////////////////////////////////////////////////////////////////
 bool ESP32_PWM_Motor::disable()
-{
-      // phase/enable mode, set dirPin HIGH
-    if (_dirPin != NOT_SET) {
-      digitalWrite(_dirPin, LOW);
-      return EXIT_SUCCESS;
-    }
+{	
+	if (_enablePin != NOT_SET) {																					DPRINTLN("Motor driver enable");
+			// set enable pin direction in regard of enable pin mode
+		if (_enablePinMode == ESP32_PWM_MOTOR_ACTIVE_LOW) {
+			digitalWrite(_enablePin, HIGH);
+		}
 
+		else {
+			digitalWrite(_enablePin, LOW);
+		}
+		
+		return EXIT_SUCCESS;
+	}
+																												DPRINT("Enable configuation aborded. No enable pin configured.");
 	return EXIT_FAILURE;
 }
 
@@ -639,7 +649,7 @@ bool ESP32_PWM_Motor::speedIsValid(float speed)
 /////////////////////////////////////////////////////////////////////////////////////
 uint32_t ESP32_PWM_Motor::speedToDuty(float speed)
 {
-	if (_dirMode == ESP32_PWM_MOTOR_PH_EN_MODE) {
+	if (_dirPin == NOT_SET) {
 			// dir pin not set, duty set in 0 <- 50(neutral) -> 100% range
 			DPRINT("  No dir speed convert to duty value "); DPRINT(round(_pwmMaxDuty * ((speed + MAX_SPEED) / (MAX_SPEED * 2))));
 		return round(_pwmMaxDuty * ((speed + MAX_SPEED) / (MAX_SPEED * 2)));
@@ -716,7 +726,7 @@ float ESP32_PWM_Motor::revertMargedSpeed(float speed)
 /////////////////////////////////////////////////////////////////////////////////////
 bool ESP32_PWM_Motor::dirPinFromSpeed(float speed)
 {		// set direction pin if defined
-	if ((_dirPin != NOT_SET) && (_dirMode == ESP32_PWM_MOTOR_SPEED_DIR_MODE)) {
+	if (_dirPin != NOT_SET) {
 			// clockwise for positive and zero speed value
 		if (speed >= 0) {
 			digitalWrite(_dirPin, CLOCKWISE);																	DPRINTLN("Direction pin direction set clockwise");
