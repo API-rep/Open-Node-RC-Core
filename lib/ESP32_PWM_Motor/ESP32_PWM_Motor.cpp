@@ -321,8 +321,6 @@ bool ESP32_PWM_Motor::runAtSpeed(float speed)
 			speed = speedInMargin(speed);
 		}
 
-		note pour demain :
-		-Ajouter une condition de test à la fonction dirPinFromSpeed pour vérifier le mode de fonctionnement (OK si SPEED/DIR)
 			// set _dirPin direction (if defined) from speed
 		dirPinFromSpeed(speed);
 
@@ -641,16 +639,20 @@ bool ESP32_PWM_Motor::speedIsValid(float speed)
 /////////////////////////////////////////////////////////////////////////////////////
 uint32_t ESP32_PWM_Motor::speedToDuty(float speed)
 {
-	if (_dirPin == NOT_SET) {
+	if (_dirMode == ESP32_PWM_MOTOR_PH_EN_MODE) {
 			// dir pin not set, duty set in 0 <- 50(neutral) -> 100% range
 			DPRINT("  No dir speed convert to duty value "); DPRINT(round(_pwmMaxDuty * ((speed + MAX_SPEED) / (MAX_SPEED * 2))));
 		return round(_pwmMaxDuty * ((speed + MAX_SPEED) / (MAX_SPEED * 2)));
 	}
 
-	else {
+	else if (_dirMode == ESP32_PWM_MOTOR_SPEED_DIR_MODE) {
 			// dir pin set, duty set in 0 <-> 100% range
 				DPRINT("  Dir Speed convert to duty value "); DPRINTLN(round(_pwmMaxDuty * (abs(speed) / MAX_SPEED))); 
 		return round(_pwmMaxDuty * (abs(speed) / MAX_SPEED));
+	}
+
+	else {
+		DPRINTLN("  No suitable dir mode provided for speed conversion ");
 	}
 }
 
@@ -714,11 +716,11 @@ float ESP32_PWM_Motor::revertMargedSpeed(float speed)
 }
 
 /////////////////////////////////////////////////////////////////////////////////////
-/*	dirPinFromSpeed() - set dirPin direction from speed value for PH               */
+/*	dirPinFromSpeed() - set dirPin direction from speed value for speed/dir mode   */
 /////////////////////////////////////////////////////////////////////////////////////
 bool ESP32_PWM_Motor::dirPinFromSpeed(float speed)
 {		// set direction pin if defined
-	if (_dirPin != NOT_SET) {
+	if ((_dirPin != NOT_SET) && (_dirMode == ESP32_PWM_MOTOR_SPEED_DIR_MODE)) {
 			// clockwise for positive and zero speed value
 		if (speed >= 0) {
 			digitalWrite(_dirPin, CLOCKWISE);																	DPRINTLN("Direction pin direction set clockwise");
@@ -730,7 +732,7 @@ bool ESP32_PWM_Motor::dirPinFromSpeed(float speed)
 
 		return EXIT_SUCCESS;
 	}
-																												DPRINTLN("No direction pin defined. Can't write it");
+																												DPRINTLN("No direction pin defined or function not available for current dir mode.");
 	return EXIT_FAILURE;
 }
 
