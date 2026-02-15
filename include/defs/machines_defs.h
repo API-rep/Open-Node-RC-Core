@@ -70,4 +70,18 @@ enum class SrvDevType : uint8_t {
     // GPIO   = 2    // GPIO on servo port
 };
 
+
+// =============================================================================
+// 1. DC DRIVER SPECIFIC ENUMS
+// =============================================================================
+
+	/**
+	 * @brief Current decay modes for the H-Bridge
+	 */
+
+enum class DecayMode : uint8_t {
+	Unset = 0,        // Not configured or pin not used
+	FastDecay,        // Coasting / Freewheel, pin LOW
+	SlowDecay         // Braking (Standard), pin HIGH
+};
 // EOF machine_defs.h

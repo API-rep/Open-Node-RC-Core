@@ -8,6 +8,8 @@
 #include <stdint.h>
 #include <optional>
 
+#include <pin_defs.h>
+
 #include <const.h>
 #include <defs/defs.h>
 
@@ -20,9 +22,10 @@
 
 typedef struct {
   const char* infoName;
-  const InputPinMode sleepPinMode = InputPinMode::UNDEFINED;  // driver sleep mode (ACTIVE_LOW/HIGH, UNDEFINED if not available)
-  const InputPinMode brakePinMode = InputPinMode::UNDEFINED;  // driver brake mode (ACTIVE_LOW/HIGH, UNDEFINED if not available)
-  const InputPinMode faultPinMode = InputPinMode::UNDEFINED;  // driver fault mode (ACTIVE_LOW/HIGH, OPEN_DRAIN, UNDEFINED if not available)
+  const ActiveLevel sleepActiveLevel;  // driver sleep mode (Unset by default)
+  const DecayMode DecayPinHighState;   /// decay mode when decay pin is high (Unset by default)
+  const DecayMode defaultdDecayMode;  // driver decay mode (Unset by default)
+  const PinMode faultMode;  // driver fault mode (unset by default)
 } DriverModel;
 
 

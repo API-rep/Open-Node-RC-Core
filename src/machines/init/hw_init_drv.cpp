@@ -85,9 +85,9 @@ void dcDriverInit(const Machine &config) {
   for (int i = 0; i < config.dcDevCount; i++) {
     const DcDevice* currentDev = &config.dcDev[i];
 
-	    // Skip if device has no hardware port mapping
+	    // Skip if device has no DC driver port mapping
     if (currentDev->drvPort == nullptr || !currentDev->drvPort->pwmPin) {
-      Serial.printf("[DRV] FATAL: Device '%s' has no port mapping!\n", currentDev->infoName);
+      Serial.printf("[DRV] FATAL: Device '%s' has no DC driver port mapping!\n", currentDev->infoName);
       continue;
     }
 
@@ -108,7 +108,9 @@ void dcDriverInit(const Machine &config) {
       if (currentDev->pwmFreq) {
         dcDevObj[i].attach(pwmPin, -1, *currentDev->pwmFreq);
         Serial.printf("[DRV] ID:%d (Master) attached to Pin:%d at %u Hz\n", currentDev->ID, pwmPin, *currentDev->pwmFreq);
-      } else {
+      } 
+      
+      else {
         dcDevObj[i].attach(pwmPin);
         Serial.printf("[DRV] ID:%d (Master) attached to Pin:%d (Default Freq)\n", currentDev->ID, pwmPin);
       }
