@@ -22,16 +22,16 @@ void setup() {
   machine_hardware_setup();
   input_setup();
 
-	// --- 2. Safety pin configuration ---
+	// --- 2. Boot-safe runlevel ---
+  comBus.runLevel = DEF_RUNLEVEL;
+  stopAllDcDrivers(machine);
+  sleepAllDcDrivers(machine);
+  disableAllDcDrivers(machine);
+
+	// --- 3. Safety pin configuration ---
 #ifdef VBAT_SENSING
   pinMode(VBAT_SENSE_PIN, INPUT);
 #endif 
-
-	// Boot safety: ensure drivers are locked
-  pinMode(DRV_EN_PIN, OUTPUT);
-  digitalWrite(DRV_EN_PIN, LOW);
-  pinMode(DRV_SLP_PIN, OUTPUT);
-  digitalWrite(DRV_SLP_PIN, HIGH);
 }
 
 /**
@@ -45,6 +45,37 @@ void loop() {
 
 	// --- 1. Sync remote inputs with bus ---
   input_update(comBus);
+
+	// --- 2. Input watchdog/failsafe ---
+  bool inputIsDrived = false;
+  for (uint8_t i = 0; i < static_cast<uint8_t>(AnalogComBusID::CH_COUNT); i++) {
+    if (comBus.analogBus[i].isDrived) {
+      inputIsDrived = true;
+      break;
+    }
+  }
+  if (!inputIsDrived) {
+    for (uint8_t i = 0; i < static_cast<uint8_t>(DigitalComBusID::CH_COUNT); i++) {
+      if (comBus.digitalBus[i].isDrived) {
+        inputIsDrived = true;
+        break;
+      }
+    }
+  }
+
+  static bool failsafeActive = false;
+  if (!inputIsDrived) {
+    if (!failsafeActive) {
+      Serial.println(F("[SAFE] No input source detected: forcing IDLE + motor lock"));
+      stopAllDcDrivers(machine);
+      sleepAllDcDrivers(machine);
+      disableAllDcDrivers(machine);
+      failsafeActive = true;
+    }
+    comBus.runLevel = RunLevel::IDLE;
+    return;
+  }
+  failsafeActive = false;
 
 // =============================================================================
 // 2. RUNLEVEL STATE MACHINE

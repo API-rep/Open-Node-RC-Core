@@ -1,7 +1,7 @@
 /*!****************************************************************************
  * @file  combus_struct.h
  * @brief Internal communication bus structure definition
- * This structure is used to standardized communication into main code. It act as a harware
+ * This structure is used to standardized communication into nodes. It act as a harware
  * abstraction layer between different input modules (RC protocol, bluetooth, wifi ...), the main code 
  * and output modules (IO expander, sound module). Its data structure is devided in channels :
  * - Digital channel to store two state date

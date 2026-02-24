@@ -18,6 +18,7 @@
 #include <const.h>
 #include <struct/struct.h>
 #include <defs/defs.h>
+#include <machines/config/boards/drivers/drivers.h>
 
 /**
  * Board devices definition

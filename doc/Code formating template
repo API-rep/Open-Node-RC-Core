@@ -44,3 +44,35 @@ Rappels des nuances de style :
     Sous-sections : Préfixe // --- avec numérotation uniquement si la logique comporte plusieurs étapes (une tabulation).
     Commentaires mineurs : Toujours précédés d'une tabulation, utilisés uniquement si nécessaire pour clarifier une instruction.
     Langue : Documentation et commentaires exclusivement en anglais.
+	
+	
+	Au niveau do doxygen :
+	
+	Dans le .h : Utilise /// pour tes descriptions d'une ligne. C'est le compromis parfait entre "code propre" et "doc fonctionnelle".
+                 En fin de ligne : Utilise ///< pour tes attributs (variables).
+	Dans le .cpp : Utilise le gros bloc /** ... */ pour expliquer la cuisine interne.
+	
+	exemple : .h
+	class PwmControl {
+public:
+		/// Set the duty cycle value (0 to MaxDuty).
+	virtual bool setDuty(uint32_t value) = 0;
+
+		/// Change the PWM frequency in Hz.
+	virtual bool setFrequency(uint32_t hz) = 0;
+
+private:
+	uint32_t _frequency;    ///< Current frequency in Hz.
+	uint32_t _maxDuty;       ///< Maximum duty cycle value.
+};
+
+Dans le cpp
+/**
+ * @details Implements the duty cycle update using the ESP32 LEDC driver.
+ * The update is synchronous: it waits for the next PWM cycle to apply 
+ * to avoid signal glitches.
+ * Formula: hardware_register = value & _maxDuty;
+ */
+bool Esp32PwmControl::setDuty(uint32_t value) {
+		// Code...
+}

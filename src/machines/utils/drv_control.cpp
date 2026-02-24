@@ -49,7 +49,6 @@ void wakeupAllDcDrivers(const Machine &config) {
 
 /**
  * @brief Enable all DC drivers output bridges
- * TODO: Implement motor.enable() function in ESP32_PWM_DRIVER lib with active high/LOW strate selection
  */
 void enableAllDcDrivers(const Machine &config) {
   if (config.dcDev == nullptr || config.dcDevCount <= 0) return;
@@ -57,9 +56,9 @@ void enableAllDcDrivers(const Machine &config) {
   for (int i = 0; i < config.dcDevCount; i++) {
     const DcDevice* d = &config.dcDev[i];
 
-	    // --- Direct GPIO control for Enable pin ---
+	    // --- Accessing hardware Enable pin via library ---
     if (d->drvPort->enPin) {
-      digitalWrite(*d->drvPort->enPin, HIGH);
+      dcDevObj[i].enable();
       Serial.printf("[DRV] ID:%d ENABLED\n", d->ID);
     }
   }
@@ -77,7 +76,7 @@ void disableAllDcDrivers(const Machine &config) {
 
 	// --- 1. Cut off physical bridge power via Enable pin ---
     if (d->drvPort->enPin) {
-      digitalWrite(*d->drvPort->enPin, LOW);
+      dcDevObj[i].disable();
       Serial.printf("[DRV] ID:%d DISABLED\n", d->ID);
     }
   }

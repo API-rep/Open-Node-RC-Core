@@ -6,6 +6,7 @@ DriverPort drvPortArray[DRV_PORT_COUNT] = {
   { 
     .ID = DRV_PORT_1A,
     .infoName = "M-1A", 
+    .driverModel = &DC_DRIVER_MODEL,
     .pwmPin = 32,
     .brkPin = DECAY_PIN[CH_A],
     .enPin  = DRV_EN_PIN,
@@ -16,6 +17,7 @@ DriverPort drvPortArray[DRV_PORT_COUNT] = {
   { 
     .ID = DRV_PORT_2A,
     .infoName = "M-2A", 
+    .driverModel = &DC_DRIVER_MODEL,
     .pwmPin = 27,
     .brkPin = DECAY_PIN[CH_A],
     .enPin  = DRV_EN_PIN,
@@ -26,6 +28,7 @@ DriverPort drvPortArray[DRV_PORT_COUNT] = {
   { 
     .ID = DRV_PORT_3A,
     .infoName = "M-3A", 
+    .driverModel = &DC_DRIVER_MODEL,
     .pwmPin = 14,
     .brkPin = DECAY_PIN[CH_A],
     .enPin  = DRV_EN_PIN,
@@ -36,6 +39,7 @@ DriverPort drvPortArray[DRV_PORT_COUNT] = {
   { 
     .ID = DRV_PORT_4A,
     .infoName = "M-4A", 
+    .driverModel = &DC_DRIVER_MODEL,
     .pwmPin = 12,
     .brkPin = DECAY_PIN[CH_A],
     .enPin  = DRV_EN_PIN,
@@ -46,6 +50,7 @@ DriverPort drvPortArray[DRV_PORT_COUNT] = {
   { 
     .ID = DRV_PORT_1B,
     .infoName = "M-1B", 
+    .driverModel = &DC_DRIVER_MODEL,
     .pwmPin = 21,
     .brkPin = DECAY_PIN[CH_B],
     .enPin  = DRV_EN_PIN,
@@ -56,6 +61,7 @@ DriverPort drvPortArray[DRV_PORT_COUNT] = {
   { 
     .ID = DRV_PORT_2B,
     .infoName = "M-2B", 
+    .driverModel = &DC_DRIVER_MODEL,
     .pwmPin = 5,
     .brkPin = DECAY_PIN[CH_B],
     .enPin  = DRV_EN_PIN,
@@ -66,6 +72,7 @@ DriverPort drvPortArray[DRV_PORT_COUNT] = {
   { 
     .ID = DRV_PORT_3B,
     .infoName = "M-3B", 
+    .driverModel = &DC_DRIVER_MODEL,
     .pwmPin = 0,
     .brkPin = DECAY_PIN[CH_B],
     .enPin  = DRV_EN_PIN,
@@ -76,6 +83,7 @@ DriverPort drvPortArray[DRV_PORT_COUNT] = {
   { 
     .ID = DRV_PORT_4B,
     .infoName = "M-4B", 
+    .driverModel = &DC_DRIVER_MODEL,
     .pwmPin = 2,
     .brkPin = DECAY_PIN[CH_B],
     .enPin  = DRV_EN_PIN,

@@ -22,10 +22,11 @@
 
 typedef struct {
   const char* infoName;
-  const ActiveLevel sleepActiveLevel;  // driver sleep mode (Unset by default)
-  const DecayMode DecayPinHighState;   /// decay mode when decay pin is high (Unset by default)
-  const DecayMode defaultdDecayMode;  // driver decay mode (Unset by default)
-  const PinMode faultMode;  // driver fault mode (unset by default)
+  const ActiveLevel sleepActiveLevel;   // driver sleep mode (Unset by default)
+  const ActiveLevel enableActiveLevel;  // driver enable mode (Unset by default)
+  const DecayMode   DecayPinHighState;  // decay mode when decay pin is high (Unset by default)
+  const DecayMode   defaultdDecayMode;  // driver decay mode (Unset by default)
+  const PinMode     faultMode;          // driver fault mode (unset by default)
 } DriverModel;
 
 

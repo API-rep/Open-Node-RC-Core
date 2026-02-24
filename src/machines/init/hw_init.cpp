@@ -15,27 +15,17 @@
  */
 void machine_hardware_setup() {
 
-	// --- 1. Board level security (Boot state) ---
-	// Force global driver pins to safe state before any other init
-  // TODO: Implement independent pin geture for each driver. see decay mode config example
-  pinMode(DRV_EN_PIN, OUTPUT);
-  digitalWrite(DRV_EN_PIN, LOW);    // Bridge disabled for safety
-  
-  pinMode(DRV_SLP_PIN, OUTPUT);
-  digitalWrite(DRV_SLP_PIN, HIGH);   // Wake up logic supply
-  
-	// TODO: Implement motor DECAY mode configuration (Slow/Fast/Mixed)
+	// --- 1. Start initialization pipeline ---
 
   Serial.println(F("[INIT] Starting Hardware Setup..."));
 
 	// --- 2. Prepare data (Inheritance) ---
-  applyParentConfig(const_cast<Machine&>(machine));
+  applyParentConfig(machine);
 
 	// --- 3. Allocate motor objects in RAM ---
   allocateDrivers(machine.dcDevCount);
 
 	// --- 4. Initialize driver hardware ---
-  note pour demain : initialiser tout les modes possible pour les drivers (sleep, enable ... d'après la config des drivers à la place des pinmode en 1.)
   dcDriverInit(machine);
 
 	// --- 5. Optional verbose debug output ---

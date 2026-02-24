@@ -4,7 +4,7 @@
  ***************************************************************************/
 #pragma once
 
-#include <ESP32_PWM_Motor.h>
+#include <DcMotorCore.h>
 #include <core/config/combus/combus.h>
 
 // =============================================================================
@@ -12,7 +12,7 @@
 // =============================================================================
 
 	// --- Global pointer to DC motor object array ---
-extern ESP32_PWM_Motor* dcDevObj;
+extern DcMotorCore* dcDevObj;
 
 /**
  * @brief Initialize and allocate DC driver objects in RAM

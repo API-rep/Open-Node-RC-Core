@@ -26,6 +26,7 @@ inline constexpr DriverModel DRV8801 {
 	
 	  // Default electrical levels and modes
 	.sleepActiveLevel  = ActiveLevel::ActiveLow,
+  .enableActiveLevel = ActiveLevel::ActiveHigh,
   .DecayPinHighState = DecayMode::SlowDecay,
 	.defaultdDecayMode = DecayMode::Unset,
 	.faultMode         = PinMode::OutputOpenDrain

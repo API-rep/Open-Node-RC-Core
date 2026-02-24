@@ -13,7 +13,7 @@
 // =============================================================================
 
 	// --- Global pointer to DC motor object array ---
-ESP32_PWM_Motor* dcDevObj = nullptr;
+DcMotorCore* dcDevObj = nullptr;
 
 /**
  * @brief Initialize and allocate DC driver objects in RAM
@@ -22,7 +22,7 @@ void allocateDrivers(int8_t count) {
   if (count <= 0) return;
 
 	// --- Dynamic allocation of the motor controller array ---
-  dcDevObj = new ESP32_PWM_Motor[count];
+  dcDevObj = new DcMotorCore[count];
   Serial.printf("[SYSTEM] Allocated memory for %d DC drivers\n", count);
 }
 
@@ -92,54 +92,74 @@ void dcDriverInit(const Machine &config) {
     }
 
     uint8_t pwmPin = *currentDev->drvPort->pwmPin;
+    std::optional<int8_t> dirPin = std::nullopt;
+    const DriverModel* model = currentDev->drvPort->driverModel;
+
+    if (currentDev->drvPort->dirPin) {
+      dirPin = (int8_t)(*currentDev->drvPort->dirPin);
+    }
+    else if (currentDev->mode == DcDrvMode::ONE_WAY) {
+      dirPin = -1;
+    }
+
+	    // --- 2.1 Configure driver-side safety pins BEFORE attach() ---
+    if (currentDev->drvPort->slpPin) {
+      ActiveLevel sleepMode = (model) ? model->sleepActiveLevel : ActiveLevel::ActiveHigh;
+      dcDevObj[i].setSleepPin(*currentDev->drvPort->slpPin, sleepMode);
+      dcDevObj[i].sleep();
+    }
+
+    if (currentDev->drvPort->enPin) {
+      ActiveLevel enableMode = (model) ? model->enableActiveLevel : ActiveLevel::ActiveHigh;
+      dcDevObj[i].setEnablePin(*currentDev->drvPort->enPin, enableMode);
+      dcDevObj[i].disable();
+    }
+
+    if (currentDev->drvPort->brkPin && model &&
+        (model->DecayPinHighState == DecayMode::SlowDecay || model->DecayPinHighState == DecayMode::FastDecay)) {
+      DecayMode highState = model->DecayPinHighState;
+      DecayMode lowState = (highState == DecayMode::SlowDecay) ? DecayMode::FastDecay : DecayMode::SlowDecay;
+      dcDevObj[i].setDecayPin(*currentDev->drvPort->brkPin, lowState, highState);
+
+      if (model->defaultdDecayMode != DecayMode::Unset) {
+        dcDevObj[i].decayMode(model->defaultdDecayMode);
+      }
+    }
+
+    if (currentDev->pwmFreq) {
+      dcDevObj[i].setPwmFreq(*currentDev->pwmFreq);
+    }
 
 	    // CLONE MODE: Synchronize PWM timer with parent
     if (currentDev->parentID) {
       uint8_t pID = *currentDev->parentID;
       if (pID < config.dcDevCount) {
         dcDevObj[i].useTimer(dcDevObj[pID].getPwmTimer());
-        dcDevObj[i].attach(pwmPin);
+        dcDevObj[i].attach(pwmPin, dirPin);
         Serial.printf("[DRV] ID:%d (Clone) attached to Pin:%d (Sync with Parent:%d)\n", currentDev->ID, pwmPin, pID);
       }
     }
 
 	    // MASTER MODE: Independent setup
     else {
+      dcDevObj[i].attach(pwmPin, dirPin);
       if (currentDev->pwmFreq) {
-        dcDevObj[i].attach(pwmPin, -1, *currentDev->pwmFreq);
         Serial.printf("[DRV] ID:%d (Master) attached to Pin:%d at %u Hz\n", currentDev->ID, pwmPin, *currentDev->pwmFreq);
-      } 
-      
+      }
       else {
-        dcDevObj[i].attach(pwmPin);
         Serial.printf("[DRV] ID:%d (Master) attached to Pin:%d (Default Freq)\n", currentDev->ID, pwmPin);
       }
     }
 
-	    // --- 3. HARDWARE SECURITY (SLEEP & ENABLE) ---
-    if (currentDev->drvPort->slpPin && currentDev->drvPort->driverModel) {
-        // Bridge between custom InputPinMode enum and Library defines
-      uint8_t libSleepMode;
-
-        // TODO: Refactor library to use InputPinMode enum directly
-      if (currentDev->drvPort->driverModel->sleepPinMode == InputPinMode::ACTIVE_LOW) {
-        libSleepMode = ESP32_PWM_MOTOR_ACTIVE_LOW; // Library ACTIVE_LOW
-      } 
-      else {
-        libSleepMode = ESP32_PWM_MOTOR_ACTIVE_HIGH; // Library ACTIVE_HIGH
-      }
-
-        // Configure pin and force SLEEP state immediately for boot safety
-        // We use * to get the value from the optional slpPin
-      dcDevObj[i].setSleepPin(*currentDev->drvPort->slpPin, libSleepMode);
-      dcDevObj[i].sleep(); 
-
-      Serial.printf("[DRV] ID:%d | Sleep Pin:%d | Mode:%d | State: LOCKED\n", 
-                    currentDev->ID, *currentDev->drvPort->slpPin, libSleepMode);
-    }
-
-      // Initial STOP command to ensure driver is idle
+      // --- 3. Final safety lock after attach() ---
     dcDevObj[i].stop();
+    if (currentDev->drvPort->slpPin) {
+      dcDevObj[i].sleep();
+      Serial.printf("[DRV] ID:%d | Sleep Pin:%d | State: LOCKED\n", currentDev->ID, *currentDev->drvPort->slpPin);
+    }
+    if (currentDev->drvPort->enPin) {
+      dcDevObj[i].disable();
+    }
   }
 }
 

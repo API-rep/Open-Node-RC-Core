@@ -22,9 +22,11 @@
 
 inline constexpr DriverModel DRV8874 {
   .infoName = "DRV8874",  
-  .sleepPinMode = InputPinMode::ACTIVE_LOW,
-  .brakePinMode = InputPinMode::UNDEFINED,
-  .faultPinMode = InputPinMode::OPEN_DRAIN_MODE
+  .sleepActiveLevel  = ActiveLevel::ActiveLow,
+  .enableActiveLevel = ActiveLevel::ActiveHigh,
+  .DecayPinHighState = DecayMode::Unset,
+  .defaultdDecayMode = DecayMode::Unset,
+  .faultMode         = PinMode::OutputOpenDrain
 };
 
 // EOF DRV8801.h

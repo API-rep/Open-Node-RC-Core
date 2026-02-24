@@ -26,7 +26,7 @@
 
 
  // default runlevels at power on (see available mode in "runlevel.h")
-#define DEF_RUNLEVEL    RunLevel::RUNNING
+#define DEF_RUNLEVEL    RunLevel::IDLE
 
   // main battery voltage monitoring
 // #define VBAT_SENSING
