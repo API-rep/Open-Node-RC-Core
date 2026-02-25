@@ -5,7 +5,7 @@
 
 #include "hw_init.h"
 
-#ifdef DEBUG_HW_INIT
+#if HW_INIT_DEBUG_ENABLED
 
 /**
  * @brief Print hardware configuration for debugging
@@ -83,6 +83,6 @@ void debugVehicleConfig() {
   Serial.println(F("========================================\n"));
 }
 
-#endif // DEBUG_HW_INIT
+#endif // HW_INIT_DEBUG_ENABLED
 
 // EOF hw_init_debug.cpp

@@ -6,7 +6,7 @@
 #include "config/config.h"
 #include "init/init.h"
 #include "utils/utils.h"
-#include <core/funct/input/input_manager.h>
+#include <core/utils/input/input_manager.h>
 
 	// --- 1. Battery and state variables ---
 bool vBatIsLow = false;

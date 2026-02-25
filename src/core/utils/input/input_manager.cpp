@@ -5,6 +5,7 @@
 
 #include "input_manager.h"
 #include <core/config/combus/combus.h>
+#include <core/utils/combus/combus_manager.h>
 #include <PS4Controller.h>
 
 
@@ -32,17 +33,7 @@ void input_update(ComBus &bus) {
 // ==========================================================
 
   if (!PS4.isConnected()) {
-      // Reset analog channels drive status
-    for (uint8_t i = 0; i < InputAnalogMapCount; i++) {
-      uint8_t ch = static_cast<uint8_t>(InputAnalogMapArray[i].busChannel);
-      bus.analogBus[ch].isDrived = false;
-    }
-
-      // Reset digital channels drive status
-    for (uint8_t i = 0; i < InputDigitalMapCount; i++) {
-      uint8_t ch = static_cast<uint8_t>(InputDigitalMapArray[i].busChannel);
-      bus.digitalBus[ch].isDrived = false;
-    }
+    resetComBusDriveFlags(bus);
     return;
   }
 
@@ -129,6 +120,7 @@ void input_update(ComBus &bus) {
   static unsigned long lastDebugTM = 0;
   if (millis() - lastDebugTM > 1000) {
     LOG_INPUT_DEBUG(bus);
+    LOG_COMBUS_DEBUG(bus);
     lastDebugTM = millis();
   }
 
