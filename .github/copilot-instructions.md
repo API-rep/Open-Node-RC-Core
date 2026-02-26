@@ -25,13 +25,14 @@ Add new persistent workflow rules here over time, for example:
 - release checklist
 
 ### Debug flag policy
-- New debug points must use `DEBUG_THEME_*` flags only.
-- Do not introduce or reintroduce legacy per-module flags (for example `DEBUG_INPUT`, `DEBUG_HW_INIT`).
+- New debug points must use shared `DEBUG_*` flags only (`DEBUG_INPUT`, `DEBUG_HW`, `DEBUG_SYSTEM`, `DEBUG_COMBUS`, `DEBUG_ALL`).
+- Do not introduce or reintroduce ad-hoc per-module flags (for example `DEBUG_HW_INIT`).
 - Shared activation logic must stay centralized in `src/core/utils/debug/debug_core.h`.
 
 ### Periodic reminder note
 - At appropriate moments (after a stable build/upload cycle, before large refactors, or at session wrap-up), proactively suggest refining this workflow section.
 - Keep the reminder short and actionable (one concrete proposal at a time).
+- When the reminder concerns debug readability, explicitly point to `doc/code_style_synthesis.md` section `7) Debug serial output formatting (WIP)`.
 
 ## 4) Safe change policy
 - Prefer minimal, focused edits.

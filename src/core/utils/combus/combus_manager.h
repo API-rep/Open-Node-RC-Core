@@ -15,7 +15,7 @@
 void resetComBusDriveFlags(ComBus &bus);
 
 
-#if DEBUG_THEME_COMBUS_ENABLED
+#if DEBUG_COMBUS_ENABLED
   #define COMBUS_DEBUG_ENABLED 1
 #else
   #define COMBUS_DEBUG_ENABLED 0

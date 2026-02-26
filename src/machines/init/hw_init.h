@@ -33,7 +33,7 @@ void machine_hardware_setup();
 // 3. DEBUG & MONITORING
 // =============================================================================
 
-#if DEBUG_THEME_HW_ENABLED
+#if DEBUG_HW_ENABLED
   #define HW_INIT_DEBUG_ENABLED 1
 #else
   #define HW_INIT_DEBUG_ENABLED 0

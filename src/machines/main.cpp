@@ -6,6 +6,7 @@
 #include "config/config.h"
 #include "init/init.h"
 #include "utils/utils.h"
+#include <core/utils/debug/debug_core.h>
 #include <core/utils/input/input_manager.h>
 
 	// --- 1. Battery and state variables ---
@@ -16,7 +17,7 @@ unsigned long vBatSenseTM = 0;
  * @brief Main Setup
  */
 void setup() {
-  Serial.begin(115200);
+  debugCoreInit();
 
 	// --- 1. Hardware and Input initialization ---
   machine_hardware_setup();

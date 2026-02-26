@@ -34,6 +34,9 @@ The objective is a clean, stable, educational style for both app code and reusab
 - One sub-step depth is allowed for long logic:
   - `// --- 1. First step description ---`
   - `// --- 1.1 First sub-step description ---`
+- For local step comments (`// --- ... ---`), always apply one additional indentation level relative to the next code line.
+  - Example: if the next code line starts at 2 tabs, the step comment starts at 3 tabs.
+  - This rule is mandatory for all local step comments in `.cpp` files.
 
 ### Language
 - All comments and docs in English.
@@ -63,6 +66,10 @@ The objective is a clean, stable, educational style for both app code and reusab
 - For regular comment lines (`//`, `///`) placed before declarations/steps, use one additional tab relative to the code block below:
   - `/// ...` before enum/struct/method declarations
   - `// --- ... ---` before local logic steps
+- For local step comments specifically, this means:
+  - code line at indentation `N`
+  - `// --- ... ---` comment at indentation `N + 1`
+  - never keep `// --- ... ---` at the same indentation as the code line it describes
 - Relative indentation rule:
   - if next code line starts at `N` tabs, comment line starts at `N + 1` tabs
   - example: code at `2` tabs -> comment at `3` tabs
@@ -125,3 +132,71 @@ The objective is a clean, stable, educational style for both app code and reusab
 Use:
 - `doc/template_module.h`
 - `doc/template_module.cpp`
+
+---
+
+## 7) Debug serial output formatting (WIP)
+- This section defines the shared formatting rules for runtime debug serial output.
+- Scope includes `config`, `init`, and `runtime` debug stages.
+- Keep outputs human-readable first, then machine-grep friendly when practical.
+- Keep this section evolutive: add concrete formatting rules as debug modules converge.
+
+### 7.1 Line prefix convention (first concrete rule)
+- Every debug line should start with a fixed module prefix:
+  - `[<MODULE>] <message>`
+- `<MODULE>`: short uppercase module identifier (examples: `INPUT`, `COMBUS`, `HW`, `SYSTEM`).
+- Optional sub-module tagging is allowed for finer ownership:
+  - preferred: `[<MODULE>][<SUBMODULE>] <message>`
+  - accepted: `[<MODULE> - <SUBMODULE>] <message>`
+- Keep one project-wide style when possible (prefer `[<MODULE>][<SUBMODULE>]`).
+- Do not include `<STAGE>` in each line; stage context is provided by the sequence intro/header.
+- Severity (`INFO` / `WARN` / `ERROR`) should be conveyed by module tag color when color output is available.
+  - Suggested mapping:
+    - normal/default color: `INFO`
+    - yellow: `WARN`
+    - red: `ERROR`
+- If terminal color is unavailable, use explicit fallback tags in message body (`[WARN]`, `[ERROR]`).
+- Keep module tags stable and uppercase to simplify serial filtering and grep.
+
+Examples:
+- `[INPUT] PS4 controller setup started`
+- `[HW][DRV] Driver wakeup sequence started`
+- `[HW - DRV] Driver wakeup sequence started`
+- `[HW] Servo count exceeds recommended limit` (yellow module tag)
+- `[COMBUS] Invalid channel index` (red module tag)
+
+### 7.2 Recommended sub-module map (first draft)
+- Use these tags as default references when available in the codebase.
+
+| Module | Recommended sub-modules | Typical usage |
+|---|---|---|
+| `INPUT` | `PS4`, `MAP`, `WATCHDOG` | device read, input mapping, input loss/failsafe |
+| `COMBUS` | `AN`, `DG`, `SYNC` | analog bus, digital bus, sync/reset paths |
+| `HW` | `DRV`, `SRV`, `CFG` | DC drivers, servos, hardware config checks |
+| `SYSTEM` | `BOOT`, `STATE`, `LOOP` | startup sequence, runlevel transitions, runtime snapshots |
+
+- Keep sub-module tags short, uppercase, and stable over time.
+- If a new sub-module is introduced, add it here to keep naming consistent across modules.
+
+### 7.3 Hybrid output (normal mode only)
+- For now, only define the normal mode output format.
+- Defer super-verbose formatting rules to a later iteration.
+- Keep field order stable for readability:
+  1. title line
+  2. board/parent
+  3. config
+  4. pins
+  5. max speed
+  6. Com channel
+- `Mode` must include a readable name plus numeric value (example: `TWO_WAY_NEUTRAL_CENTER (1)`).
+- `Parent` is optional and printed only when present.
+- Inherited values should be marked with ` [INHERITED]` (and may be gray when color output is available).
+
+Example (normal mode):
+
+`[HW][DRV] DC_DEV #6 - trailer rear left motor`
+`  > Board Port: M-3B (ID:6) | Parent: DC_DEV #1 (CLONE)`
+`  > Config: Freq:16000 Hz [INHERITED] | PolInv:YES [INHERITED] | Mode:TWO_WAY_NEUTRAL_CENTER (1)`
+`  > Pins: PWM:0 BRK:15 EN:33 SLP:25 FLT:34`
+`  > Max Speed FW: 100.0% | BK: 100.0%`
+`  > Com Ch: THROTTLE (ID:1)`

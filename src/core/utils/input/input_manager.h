@@ -27,7 +27,7 @@ void input_update(ComBus &bus);
  * @param bus Reference to the main communication bus structure
  */
 
-#if DEBUG_THEME_INPUT_ENABLED
+#if DEBUG_INPUT_ENABLED
   #define INPUT_DEBUG_ENABLED 1
 #else
   #define INPUT_DEBUG_ENABLED 0
