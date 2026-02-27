@@ -5,7 +5,7 @@
 #pragma once
 
 #include <core/config/combus/combus.h>
-#include <core/utils/debug/debug_core.h>
+#include <core/utils/debug/debug.h>
 
 #include "hw_init_drv.h"
 #include "hw_init_srv.h"
@@ -33,16 +33,8 @@ void machine_hardware_setup();
 // 3. DEBUG & MONITORING
 // =============================================================================
 
-#if DEBUG_HW_ENABLED
-  #define HW_INIT_DEBUG_ENABLED 1
-#else
-  #define HW_INIT_DEBUG_ENABLED 0
-#endif
-
-#if HW_INIT_DEBUG_ENABLED
-  /**
-   * @brief Print hardware configuration for debugging
-   */
+#if defined(DEBUG_HW) || defined(DEBUG_ALL)
+    /// Print machine hardware configuration for debugging.
   void debugVehicleConfig();
   #define LOG_HW_CONFIG() debugVehicleConfig()
 #else

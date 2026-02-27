@@ -5,7 +5,7 @@
 
 #include "drv_control.h"
 #include <init/hw_init_drv.h> // Required for dcDevObj access
-#include <Arduino.h>
+#include <core/utils/debug/debug.h>
 
 // =============================================================================
 // 1. DRIVER STATE LOGIC
@@ -23,7 +23,7 @@ void sleepAllDcDrivers(const Machine &config) {
 	    // --- Accessing hardware Sleep pin via library ---
     if (d->drvPort->slpPin) {
       dcDevObj[i].sleep();
-      Serial.printf("[DRV] ID:%d put to SLEEP\n", d->ID);
+      hw_log_dbg("[DRV] ID:%d put to SLEEP\n", d->ID);
     }
   }
 }
@@ -41,7 +41,7 @@ void wakeupAllDcDrivers(const Machine &config) {
 	    // --- Accessing hardware Sleep pin via library ---
     if (d->drvPort->slpPin) {
       dcDevObj[i].wakeup();
-      Serial.printf("[DRV] ID:%d WOKEN UP\n", d->ID);
+      hw_log_dbg("[DRV] ID:%d WOKEN UP\n", d->ID);
     }
   }
 }
@@ -59,7 +59,7 @@ void enableAllDcDrivers(const Machine &config) {
 	    // --- Accessing hardware Enable pin via library ---
     if (d->drvPort->enPin) {
       dcDevObj[i].enable();
-      Serial.printf("[DRV] ID:%d ENABLED\n", d->ID);
+      hw_log_dbg("[DRV] ID:%d ENABLED\n", d->ID);
     }
   }
 }
@@ -77,7 +77,7 @@ void disableAllDcDrivers(const Machine &config) {
 	// --- 1. Cut off physical bridge power via Enable pin ---
     if (d->drvPort->enPin) {
       dcDevObj[i].disable();
-      Serial.printf("[DRV] ID:%d DISABLED\n", d->ID);
+      hw_log_dbg("[DRV] ID:%d DISABLED\n", d->ID);
     }
   }
 }
@@ -94,7 +94,7 @@ void stopAllDcDrivers(const Machine &config) {
 
       // --- Sets motor speed to 0 via library and handles bridge brake/coast ---
     dcDevObj[i].stop();
-    Serial.printf("[DRV] ID:%d STOPPED\n", i);
+    hw_log_dbg("[DRV] ID:%d STOPPED\n", i);
   }
 }
 

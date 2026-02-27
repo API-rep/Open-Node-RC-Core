@@ -8,7 +8,7 @@
 #include <core/config/combus/combus.h>
 
 
-#if COMBUS_DEBUG_ENABLED
+#if defined(DEBUG_COMBUS) || defined(DEBUG_ALL)
 
 /**
  * @brief Compact ComBus runtime snapshot

@@ -8,7 +8,7 @@
 #include <core/config/combus/combus.h>
 
 
-#if INPUT_DEBUG_ENABLED
+#if defined(DEBUG_INPUT) || defined(DEBUG_ALL)
 
 /**
  * @brief Verbose debug output for input mapping

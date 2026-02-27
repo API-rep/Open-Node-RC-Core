@@ -5,6 +5,7 @@
 
 #include <core/config/combus/combus.h>
 #include <struct/struct.h>
+#include <core/utils/debug/debug.h>
 
 #include "hw_init_drv.h"
 
@@ -23,7 +24,7 @@ void allocateDrivers(int8_t count) {
 
 	// --- Dynamic allocation of the motor controller array ---
   dcDevObj = new DcMotorCore[count];
-  Serial.printf("[SYSTEM] Allocated memory for %d DC drivers\n", count);
+  hw_log_info("  [DRV] Allocated memory for count=%d DC drivers\n", count);
 }
 
 // =============================================================================
@@ -60,7 +61,7 @@ void applyParentConfig(const Machine &config) {
       }
 
       if (!parentIsFound) {
-        Serial.printf(PSTR("FATAL: Parent ID %d not found for driver %s\n"), *child->parentID, child->infoName);
+        hw_log_err("FATAL: Parent ID %d not found for driver %s\n", *child->parentID, child->infoName);
         while(1);
       }
     }
@@ -75,9 +76,11 @@ void applyParentConfig(const Machine &config) {
  * @brief Initialize DC drivers hardware from machine configuration
  */
 void dcDriverInit(const Machine &config) {
+	hw_log_info("  [DRV] Initializing DC drivers...\n");
+
 	  // --- 1. Safety check: ensure drivers are configured ---
   if (config.dcDev == nullptr || config.dcDevCount <= 0) {
-    Serial.println(F("[DRV] No DC devices to initialize."));
+    hw_log_info("  [DRV] No DC devices to initialize.\n");
     return;
   }
 
@@ -87,7 +90,7 @@ void dcDriverInit(const Machine &config) {
 
 	    // Skip if device has no DC driver port mapping
     if (currentDev->drvPort == nullptr || !currentDev->drvPort->pwmPin) {
-      Serial.printf("[DRV] FATAL: Device '%s' has no DC driver port mapping!\n", currentDev->infoName);
+        hw_log_err("    - ERROR: DRV_%d has no DC driver port mapping\n", currentDev->ID);
       continue;
     }
 
@@ -136,7 +139,21 @@ void dcDriverInit(const Machine &config) {
       if (pID < config.dcDevCount) {
         dcDevObj[i].useTimer(dcDevObj[pID].getPwmTimer());
         dcDevObj[i].attach(pwmPin, dirPin);
-        Serial.printf("[DRV] ID:%d (Clone) attached to Pin:%d (Sync with Parent:%d)\n", currentDev->ID, pwmPin, pID);
+        if (currentDev->pwmFreq) {
+          hw_log_info("    > DRV_%d attached to pin %d at %uHz frequency (clone mode)\n",
+                  currentDev->ID,
+                  pwmPin,
+                  *currentDev->pwmFreq);
+        }
+        else {
+          hw_log_info("    > DRV_%d attached to pin %d (clone mode)\n",
+                  currentDev->ID,
+                  pwmPin);
+          hw_log_warn("    - WARNING: DRV_%d uses default PWM frequency\n", currentDev->ID);
+        }
+      } else {
+        hw_log_err("    - ERROR: DRV_%d clone parent ID=%d is out of range\n", currentDev->ID, pID);
+        continue;
       }
     }
 
@@ -144,10 +161,16 @@ void dcDriverInit(const Machine &config) {
     else {
       dcDevObj[i].attach(pwmPin, dirPin);
       if (currentDev->pwmFreq) {
-        Serial.printf("[DRV] ID:%d (Master) attached to Pin:%d at %u Hz\n", currentDev->ID, pwmPin, *currentDev->pwmFreq);
+        hw_log_info("    > DRV_%d attached to pin %d at %uHz frequency\n",
+                currentDev->ID,
+                pwmPin,
+                *currentDev->pwmFreq);
       }
       else {
-        Serial.printf("[DRV] ID:%d (Master) attached to Pin:%d (Default Freq)\n", currentDev->ID, pwmPin);
+        hw_log_info("    > DRV_%d attached to pin %d\n",
+                currentDev->ID,
+                pwmPin);
+        hw_log_warn("    - WARNING: DRV_%d uses default PWM frequency\n", currentDev->ID);
       }
     }
 
@@ -155,12 +178,14 @@ void dcDriverInit(const Machine &config) {
     dcDevObj[i].stop();
     if (currentDev->drvPort->slpPin) {
       dcDevObj[i].sleep();
-      Serial.printf("[DRV] ID:%d | Sleep Pin:%d | State: LOCKED\n", currentDev->ID, *currentDev->drvPort->slpPin);
     }
     if (currentDev->drvPort->enPin) {
       dcDevObj[i].disable();
     }
   }
+
+  hw_log_info("  [DRV] DC drivers successfully initialized\n");
+  hw_log_info("\n");
 }
 
 // EOF hw_init_drv.cpp

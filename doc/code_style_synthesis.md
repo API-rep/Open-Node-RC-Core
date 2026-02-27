@@ -63,6 +63,7 @@ The objective is a clean, stable, educational style for both app code and reusab
 
 ### Spacing and indentation
 - Use tabs for block indentation in templates and reference code.
+- Apply the same regular indentation rules inside preprocessor blocks (`#if`, `#elif`, `#else`, `#endif`) as in normal function/code blocks.
 - For regular comment lines (`//`, `///`) placed before declarations/steps, use one additional tab relative to the code block below:
   - `/// ...` before enum/struct/method declarations
   - `// --- ... ---` before local logic steps
@@ -73,6 +74,12 @@ The objective is a clean, stable, educational style for both app code and reusab
 - Relative indentation rule:
   - if next code line starts at `N` tabs, comment line starts at `N + 1` tabs
   - example: code at `2` tabs -> comment at `3` tabs
+  - **edge case `N=0`**: file-scope declarations (free functions, template functions) are at 0 tabs, so their `///` doc comment is at 1 tab:
+    ```cpp
+    	/// This comment is at 1 tab — the template below is at 0 tabs.
+    template<typename... Args>
+    inline void my_func(const char* fmt, Args... args) { ... }
+    ```
 - Keep major section separators unindented at file scope:
   - `// =============================================================================`
   - `// X. SECTION TITLE`
@@ -135,9 +142,29 @@ Use:
 
 ---
 
-## 7) Debug serial output formatting (WIP)
-- This section defines the shared formatting rules for runtime debug serial output.
-- Scope includes `config`, `init`, and `runtime` debug stages.
+## 7) Debug serial output formatting
+
+### 7.0 Log system API (`debug.h`)
+
+The active log system is template-based (`log_impl<Level, ModuleEnabled>`). No preprocessor guards around code — all dead branches are removed at compile time via `if constexpr`.
+
+**Generic wrappers** (always active, level-filtered only):
+```cpp
+log_err(fmt, ...);   log_warn(fmt, ...);   log_info(fmt, ...);   log_dbg(fmt, ...);
+```
+
+**Module-gated wrappers** (also filtered by module flag, stripped from binary when flag not set):
+```
+hw_log_*(...)      → active when -D DEBUG_HW     (or DEBUG_ALL)
+input_log_*(...)   → active when -D DEBUG_INPUT  (or DEBUG_ALL)
+sys_log_*(...)     → active when -D DEBUG_SYSTEM (or DEBUG_ALL)
+combus_log_(*)...  → active when -D DEBUG_COMBUS (or DEBUG_ALL)
+```
+
+**Level constants** (`LogNone=0`, `LogError=1`, `LogWarn=2`, `LogInfo=3`, `LogDebug=4`). Active threshold via `-D LOG_LEVEL=3` (default = 3 = info).
+
+- Use `hw_log_*` / `sys_log_*` etc. for all module-scoped traces.
+- Use generic `log_err` / `log_info` etc. only for outputs not tied to a module.
 - Keep outputs human-readable first, then machine-grep friendly when practical.
 - Keep this section evolutive: add concrete formatting rules as debug modules converge.
 
@@ -191,6 +218,11 @@ Examples:
 - `Mode` must include a readable name plus numeric value (example: `TWO_WAY_NEUTRAL_CENTER (1)`).
 - `Parent` is optional and printed only when present.
 - Inherited values should be marked with ` [INHERITED]` (and may be gray when color output is available).
+- For DRV init attach lines, prefer human-readable sentence format over compact key/value blocks.
+  - Preferred: `[DRV] DRV_0 attached to pin 32 at 16000Hz frequency`
+  - Clone-specific suffix: append only ` (clone mode)`
+  - Keep optional hardware detail lines (enable/sleep pin states) out of init flow; reserve them for final summary/verbose blocks.
+- For LEDC fade helper setup (`ledc_fade_func_install`), install once per runtime (guarded static state) to avoid repeated `fade function already installed` error spam.
 
 Example (normal mode):
 

@@ -5,6 +5,7 @@
 
 #include "hw_init.h"
 #include <core/config/combus/combus.h>
+#include <core/utils/debug/debug.h>
 
 // =============================================================================
 // 1. MAIN HARDWARE CONFIGURATION ROUTINE
@@ -15,9 +16,12 @@
  */
 void machine_hardware_setup() {
 
-	// --- 1. Start initialization pipeline ---
+  hw_log_info("\n========================================\n");
+  hw_log_info("      INITIALIZATION SEQUENCE\n");
+  hw_log_info("========================================\n");
+  hw_log_info("[HW] Starting hardware setup...\n");
 
-  Serial.println(F("[INIT] Starting Hardware Setup..."));
+	// --- 1. Start initialization pipeline ---
 
 	// --- 2. Prepare data (Inheritance) ---
   applyParentConfig(machine);
@@ -28,10 +32,14 @@ void machine_hardware_setup() {
 	// --- 4. Initialize driver hardware ---
   dcDriverInit(machine);
 
-	// --- 5. Optional verbose debug output ---
+	// --- 5. Initialize servo hardware ---
+  servoInit(machine);
+
+	// --- 6. Optional verbose debug output ---
   LOG_HW_CONFIG();
 
-  Serial.println(F("[INIT] Hardware Setup Complete."));
+  hw_log_info("[HW] Hardware setup complete.\n");
+  hw_log_info("========================================\n\n");
 }
 
 // =============================================================================
@@ -47,14 +55,14 @@ void checkHwConfig() {
 	// --- Validate DC driver indexing ---
   for (int i = 0; i < machine.dcDevCount; i++) {
     if (machine.dcDev[i].ID != i) {
-      Serial.printf("!!! CONFIG ERROR : Driver index [%d] mismatch with driverID (%d)\n", 
-                    i, machine.dcDev[i].ID);
+      hw_log_err("!!! CONFIG ERROR : Driver index [%d] mismatch with driverID (%d)\n",
+                 i, machine.dcDev[i].ID);
       configError = true;
     }
   }
 
   if (configError) {
-    Serial.printf(PSTR("SYSTEM HALTED : Critical config error for %s\n"), machine.infoName);
+    hw_log_err("SYSTEM HALTED : Critical config error for %s\n", machine.infoName);
     while(1);
   }
 }

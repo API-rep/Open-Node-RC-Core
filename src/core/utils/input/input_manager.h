@@ -6,7 +6,7 @@
 #pragma once
 
 #include <struct/combus_struct.h>
-#include <core/utils/debug/debug_core.h>
+#include <core/utils/debug/debug.h>
 
 /** @brief Initialize the selected input module */
 
@@ -27,16 +27,9 @@ void input_update(ComBus &bus);
  * @param bus Reference to the main communication bus structure
  */
 
-#if DEBUG_INPUT_ENABLED
-  #define INPUT_DEBUG_ENABLED 1
-#else
-  #define INPUT_DEBUG_ENABLED 0
-#endif
-
-#if INPUT_DEBUG_ENABLED
+#if defined(DEBUG_INPUT) || defined(DEBUG_ALL)
   void debugInputMapping(ComBus &bus);
   #define LOG_INPUT_DEBUG(b) debugInputMapping(b)
-
 #else
   #define LOG_INPUT_DEBUG(b)
 #endif

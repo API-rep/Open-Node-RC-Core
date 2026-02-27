@@ -27,7 +27,7 @@ Add new persistent workflow rules here over time, for example:
 ### Debug flag policy
 - New debug points must use shared `DEBUG_*` flags only (`DEBUG_INPUT`, `DEBUG_HW`, `DEBUG_SYSTEM`, `DEBUG_COMBUS`, `DEBUG_ALL`).
 - Do not introduce or reintroduce ad-hoc per-module flags (for example `DEBUG_HW_INIT`).
-- Shared activation logic must stay centralized in `src/core/utils/debug/debug_core.h`.
+- Shared activation logic must stay centralized in `src/core/utils/debug/debug.h`.
 
 ### Periodic reminder note
 - At appropriate moments (after a stable build/upload cycle, before large refactors, or at session wrap-up), proactively suggest refining this workflow section.

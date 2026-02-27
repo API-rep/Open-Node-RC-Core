@@ -6,7 +6,7 @@
 #pragma once
 
 #include <struct/combus_struct.h>
-#include <core/utils/debug/debug_core.h>
+#include <core/utils/debug/debug.h>
 
 /**
  * @brief Reset ComBus drive flags according to active input mapping
@@ -15,13 +15,7 @@
 void resetComBusDriveFlags(ComBus &bus);
 
 
-#if DEBUG_COMBUS_ENABLED
-  #define COMBUS_DEBUG_ENABLED 1
-#else
-  #define COMBUS_DEBUG_ENABLED 0
-#endif
-
-#if COMBUS_DEBUG_ENABLED
+#if defined(DEBUG_COMBUS) || defined(DEBUG_ALL)
   void debugComBusSnapshot(ComBus &bus);
   #define LOG_COMBUS_DEBUG(b) debugComBusSnapshot(b)
 #else

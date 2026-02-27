@@ -6,7 +6,7 @@
 #include "config/config.h"
 #include "init/init.h"
 #include "utils/utils.h"
-#include <core/utils/debug/debug_core.h>
+#include <core/utils/debug/debug.h>
 #include <core/utils/input/input_manager.h>
 
 	// --- 1. Battery and state variables ---
@@ -17,7 +17,7 @@ unsigned long vBatSenseTM = 0;
  * @brief Main Setup
  */
 void setup() {
-  debugCoreInit();
+  debugInit();
 
 	// --- 1. Hardware and Input initialization ---
   machine_hardware_setup();
@@ -67,7 +67,7 @@ void loop() {
   static bool failsafeActive = false;
   if (!inputIsDrived) {
     if (!failsafeActive) {
-      Serial.println(F("[SAFE] No input source detected: forcing IDLE + motor lock"));
+      sys_log_warn("[SYSTEM][SAFE] reason=no_input_source action=force_idle_and_lock\n");
       stopAllDcDrivers(machine);
       sleepAllDcDrivers(machine);
       disableAllDcDrivers(machine);
@@ -97,7 +97,7 @@ void loop() {
     // ---------------------------------------------------------
       if (isNewRunLevel) {
           // --- 1. Run once at startup ---
-        Serial.println(F("[STATE] IDLE: System locked. Press TRIANGLE to start."));
+        sys_log_info("[SYSTEM][STATE] runlevel=IDLE msg=system_locked_press_TRIANGLE_to_start\n");
         stateTM = millis();
         stopAllDcDrivers(machine);
         wakeupAllDcDrivers(machine);
@@ -107,7 +107,7 @@ void loop() {
         // --- 2. Transition trigger check ---
       uint8_t triangleCh = static_cast<uint8_t>(DigitalComBusID::LIGHTS);
       if (comBus.digitalBus[triangleCh].isDrived && comBus.digitalBus[triangleCh].value) {
-        Serial.println(F("[EVENT] Triangle pressed: Engaging STARTING sequence"));
+        sys_log_info("[SYSTEM][EVENT] input=TRIANGLE action=enter_STARTING\n");
         comBus.runLevel = RunLevel::STARTING;
       }
       break;
@@ -117,7 +117,7 @@ void loop() {
     case RunLevel::STARTING : {
     // ---------------------------------------------------------
       if (isNewRunLevel) {
-        Serial.println(F("[STATE] Entering in STARTING mode"));
+        sys_log_info("[SYSTEM][STATE] runlevel=STARTING\n");
         stateTM = millis();
         stopAllDcDrivers(machine);
         wakeupAllDcDrivers(machine);
@@ -133,7 +133,7 @@ void loop() {
     case RunLevel::RUNNING : {
     // ---------------------------------------------------------
       if (isNewRunLevel) {
-        Serial.println(F("[STATE] System RUNNING"));
+        sys_log_info("[SYSTEM][STATE] runlevel=RUNNING\n");
         stateTM = millis();
         stopAllDcDrivers(machine);
         wakeupAllDcDrivers(machine);
@@ -160,7 +160,7 @@ void loop() {
     case RunLevel::SLEEPING : {
     // ---------------------------------------------------------
       if (isNewRunLevel) {
-        Serial.println(F("[STATE] Entering in SLEEPING mode"));
+        sys_log_info("[SYSTEM][STATE] runlevel=SLEEPING\n");
         stateTM = millis();
         stopAllDcDrivers(machine);
         sleepAllDcDrivers(machine);
@@ -168,7 +168,7 @@ void loop() {
       }
 
       if (vBatIsLow) {
-        Serial.println(F("Battery low, system halted"));
+        sys_log_warn("[SYSTEM][SAFE] reason=low_battery action=halt\n");
         while(true) { /* Wait for reboot */ }
       }
       break;
