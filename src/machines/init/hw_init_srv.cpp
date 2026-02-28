@@ -62,4 +62,36 @@ void servoInit(const Machine &config) {
   hw_log_info("\n");
 }
 
+
+// =============================================================================
+// 2. CONFIGURATION CHECK
+// =============================================================================
+
+/**
+ * @brief Verify servo configuration coherence.
+ *
+ * @details Checks that each servo array index matches its declared ID.
+ *   Returns true when at least one error is detected \u2014 halting is the
+ *   caller's responsibility.
+ */
+bool checkSrvHwConfig(const Machine &config) {
+  hw_log_info("    [HW][SRV] Config check...\n");
+  bool hasError = false;
+
+	// --- Validate servo index vs declared ID ---
+  for (int i = 0; i < config.srvDevCount; i++) {
+    if (config.srvDev[i].ID != i) {
+      hw_log_err("    [HW][SRV] CONFIG ERROR: Servo index [%d] mismatch with srvID (%d)\n",
+                 i, config.srvDev[i].ID);
+      hasError = true;
+    }
+  }
+
+  if (!hasError) {
+    hw_log_info("    [HW][SRV] Config check passed\n");
+  }
+
+  return hasError;
+}
+
 // EOF hw_init_srv.cpp

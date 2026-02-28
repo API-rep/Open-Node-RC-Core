@@ -41,4 +41,15 @@ void applyParentConfig(const Machine &config);
  */
 void dcDriverInit(const Machine &config);
 
+
+// =============================================================================
+// 4. CONFIGURATION CHECK
+// =============================================================================
+
+/**
+ * @brief Verify DC driver configuration coherence.
+ * @return true when at least one error is detected.
+ */
+bool checkDrvHwConfig(const Machine &config);
+
 // EOF hw_init_drv.h

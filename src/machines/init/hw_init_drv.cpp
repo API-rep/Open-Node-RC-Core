@@ -188,4 +188,36 @@ void dcDriverInit(const Machine &config) {
   hw_log_info("\n");
 }
 
+
+// =============================================================================
+// 4. CONFIGURATION CHECK
+// =============================================================================
+
+/**
+ * @brief Verify DC driver configuration coherence.
+ *
+ * @details Checks that each driver array index matches its declared ID.
+ *   Returns true when at least one error is detected \u2014 halting is the
+ *   caller's responsibility.
+ */
+bool checkDrvHwConfig(const Machine &config) {
+  hw_log_info("    [HW][DRV] Config check...\n");
+  bool hasError = false;
+
+	// --- Validate driver index vs declared ID ---
+  for (int i = 0; i < config.dcDevCount; i++) {
+    if (config.dcDev[i].ID != i) {
+      hw_log_err("    [HW][DRV] CONFIG ERROR: Driver index [%d] mismatch with driverID (%d)\n",
+                 i, config.dcDev[i].ID);
+      hasError = true;
+    }
+  }
+
+  if (!hasError) {
+    hw_log_info("    [HW][DRV] Config check passed\n");
+  }
+
+  return hasError;
+}
+
 // EOF hw_init_drv.cpp

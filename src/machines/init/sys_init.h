@@ -7,10 +7,10 @@
 #pragma once
 
 // =============================================================================
-// 1. SYSTEM INITIALIZATION FUNCTIONS
+// 1. SYSTEM INITIALIZATION
 // =============================================================================
 
-	// --- Global system setup and data structure parsing ---
-void sys_init_setup();
+	/// System-level init — environment parsing, bus limits, sanity checks.
+void sys_init();
 
 // EOF sys_init.h

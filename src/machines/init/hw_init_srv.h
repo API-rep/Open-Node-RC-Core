@@ -28,4 +28,15 @@ void allocateServos(int8_t count);
  */
 void servoInit(const Machine &config);
 
+
+// =============================================================================
+// 3. CONFIGURATION CHECK
+// =============================================================================
+
+/**
+ * @brief Verify servo configuration coherence.
+ * @return true when at least one error is detected.
+ */
+bool checkSrvHwConfig(const Machine &config);
+
 // EOF hw_init_srv.h

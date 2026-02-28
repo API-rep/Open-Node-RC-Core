@@ -35,4 +35,12 @@
 	// Input mapping definitions
 #include <struct/remotes_map_struct.h>
 
+
+// =============================================================================
+// 4. INPUT INITIALIZATION
+// =============================================================================
+
+	/// Input system init — input_setup() wrapper with init-sequence log output.
+void input_init();
+
 // EOF input_init.h

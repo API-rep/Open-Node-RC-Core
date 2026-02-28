@@ -12,25 +12,14 @@
 
 
 // =============================================================================
-// 1. HARDWARE SANITY CHECKS
+// 1. MAIN INITIALIZATION ROUTINE
 // =============================================================================
 
-/**
- * @brief Verify hardware configuration coherence
- */
-void checkHwConfig();
+	/// Hardware initialization — config check then driver and servo setup.
+void hw_init();
 
 // =============================================================================
-// 2. MAIN INITIALIZATION ROUTINE
-// =============================================================================
-
-/**
- * @brief Main hardware configuration routine
- */
-void machine_hardware_setup();
-
-// =============================================================================
-// 3. DEBUG & MONITORING
+// 2. DEBUG & MONITORING
 // =============================================================================
 
 #if defined(DEBUG_HW) || defined(DEBUG_ALL)

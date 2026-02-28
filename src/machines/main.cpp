@@ -13,26 +13,12 @@
 bool vBatIsLow = false;
 unsigned long vBatSenseTM = 0;
 
+
 /**
  * @brief Main Setup
  */
 void setup() {
-  debugInit();
-
-	// --- 1. Hardware and Input initialization ---
-  machine_hardware_setup();
-  input_setup();
-
-	// --- 2. Boot-safe runlevel ---
-  comBus.runLevel = DEF_RUNLEVEL;
-  stopAllDcDrivers(machine);
-  sleepAllDcDrivers(machine);
-  disableAllDcDrivers(machine);
-
-	// --- 3. Safety pin configuration ---
-#ifdef VBAT_SENSING
-  pinMode(VBAT_SENSE_PIN, INPUT);
-#endif 
+  machine_init();
 }
 
 /**

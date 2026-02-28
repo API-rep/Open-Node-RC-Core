@@ -38,4 +38,12 @@
 	// --- Input device setup ---
 #include "input_init.h"
 
+
+// =============================================================================
+// 4. INIT ORCHESTRATOR
+// =============================================================================
+
+	/// Full initialization sequence — single entry point from setup().
+void machine_init();
+
 // EOF init.h

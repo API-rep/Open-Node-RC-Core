@@ -106,19 +106,27 @@ constexpr bool SerialClearOnInit = (bool)(DEBUG_SERIAL_CLEAR_ON_INIT);
 // =============================================================================
 
 /**
- * @brief Core log writer — not intended for direct call-site use.
+ * @brief Core log writer
  *
  * @details The if constexpr condition is evaluated at compile time.
  *   When false, the entire function body is physically removed from the binary.
+ *   When SerialAnsi is true, error lines are colored red (\033[31m) and
+ *   warning lines yellow (\033[33m), with reset (\033[0m) appended.
  *
- * @tparam Level         Severity level of this call (LogError … LogDebug)
- * @tparam ModuleEnabled Per-module gate (DbgHw, DbgInput, etc.) — false
- *                       strips the call regardless of LogLevel
+ * @tparam Level         Severity level of this call (LogError, LogWarn, LogInfo, LogDebug)
+ * @tparam ModuleEnabled Per-module output enable flag (DbgHw, DbgInput, etc.)
  */
 template<uint8_t Level, bool ModuleEnabled, typename... Args>
 inline void log_impl(const char* fmt, Args... args) {
   if constexpr (Level <= LogLevel && ModuleEnabled) {
+    if constexpr (SerialAnsi) {
+      if constexpr (Level == LogError)     Serial.print("\033[31m");
+      else if constexpr (Level == LogWarn) Serial.print("\033[33m");
+    }
     Serial.printf(fmt, args...);
+    if constexpr (SerialAnsi && (Level == LogError || Level == LogWarn)) {
+      Serial.print("\033[0m");
+    }
   }
 }
 
@@ -275,10 +283,12 @@ inline void combus_log_dbg(const char* fmt, Args... args) {
 // =============================================================================
 
 /**
- * @brief Initialize debug serial monitor — safe to call multiple times.
+ * @brief Initialize debug serial monitor.
  *
- * @details Uses if constexpr so the body is physically stripped when
- *   LogLevel == LogNone. No preprocessor guards required — pure C++17.
+ * @details Called automatically before setup() via a static constructor in
+ *   debug.cpp. Safe to call manually — an internal guard prevents double init.
+ *   Uses if constexpr so the Serial.begin body is physically stripped when
+ *   LogLevel == LogNone.
  */
 void debugInit();
 
