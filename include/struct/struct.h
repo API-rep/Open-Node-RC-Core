@@ -8,5 +8,6 @@
 #include "machines_struct.h"
 #include "remotes_struct.h"
 #include "combus_struct.h"
+#include "vbat_struct.h"
 
 // EOF struct.h

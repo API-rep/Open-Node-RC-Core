@@ -25,6 +25,7 @@ enum class AnalogComBusID : uint8_t {
 enum class DigitalComBusID : uint8_t {
   HORN = 0,
   LIGHTS,
+  KEY,        ///< Ignition key. Set  to start/rearm the machine.
   CH_COUNT
 };
 

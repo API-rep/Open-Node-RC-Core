@@ -13,6 +13,7 @@ DigitalComBus DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::CH_COUNT)
   
   { .infoName = "horn channel" },
   { .infoName = "lights channel" },
+  { .infoName = "key channel" },
 };
 
 

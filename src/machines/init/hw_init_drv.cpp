@@ -24,7 +24,7 @@ void allocateDrivers(int8_t count) {
 
 	// --- Dynamic allocation of the motor controller array ---
   dcDevObj = new DcMotorCore[count];
-  hw_log_info("  [DRV] Allocated memory for count=%d DC drivers\n", count);
+  hw_log_info("    [DRV] Allocated memory for %d DC drivers\n", count);
 }
 
 // =============================================================================
@@ -76,11 +76,11 @@ void applyParentConfig(const Machine &config) {
  * @brief Initialize DC drivers hardware from machine configuration
  */
 void dcDriverInit(const Machine &config) {
-	hw_log_info("  [DRV] Initializing DC drivers...\n");
+	hw_log_info("    [DRV] Initializing DC drivers...\n");
 
 	  // --- 1. Safety check: ensure drivers are configured ---
   if (config.dcDev == nullptr || config.dcDevCount <= 0) {
-    hw_log_info("  [DRV] No DC devices to initialize.\n");
+    hw_log_info("    [DRV] No DC devices to initialize.\n");
     return;
   }
 
@@ -90,7 +90,7 @@ void dcDriverInit(const Machine &config) {
 
 	    // Skip if device has no DC driver port mapping
     if (currentDev->drvPort == nullptr || !currentDev->drvPort->pwmPin) {
-        hw_log_err("    - ERROR: DRV_%d has no DC driver port mapping\n", currentDev->ID);
+        hw_log_err("        [DRV] ERROR: DRV_%d has no DC driver port mapping\n", currentDev->ID);
       continue;
     }
 
@@ -140,19 +140,19 @@ void dcDriverInit(const Machine &config) {
         dcDevObj[i].useTimer(dcDevObj[pID].getPwmTimer());
         dcDevObj[i].attach(pwmPin, dirPin);
         if (currentDev->pwmFreq) {
-          hw_log_info("    > DRV_%d attached to pin %d at %uHz frequency (clone mode)\n",
+          hw_log_info("      > DRV_%d attached to pin %d at %uHz frequency (clone mode)\n",
                   currentDev->ID,
                   pwmPin,
                   *currentDev->pwmFreq);
         }
         else {
-          hw_log_info("    > DRV_%d attached to pin %d (clone mode)\n",
+          hw_log_info("      > DRV_%d attached to pin %d (clone mode)\n",
                   currentDev->ID,
                   pwmPin);
-          hw_log_warn("    - WARNING: DRV_%d uses default PWM frequency\n", currentDev->ID);
+          hw_log_warn("      [DRV] WARNING: DRV_%d uses default PWM frequency\n", currentDev->ID);
         }
       } else {
-        hw_log_err("    - ERROR: DRV_%d clone parent ID=%d is out of range\n", currentDev->ID, pID);
+        hw_log_err("      [DRV] ERROR: DRV_%d clone parent ID=%d is out of range\n", currentDev->ID, pID);
         continue;
       }
     }
@@ -161,16 +161,16 @@ void dcDriverInit(const Machine &config) {
     else {
       dcDevObj[i].attach(pwmPin, dirPin);
       if (currentDev->pwmFreq) {
-        hw_log_info("    > DRV_%d attached to pin %d at %uHz frequency\n",
+        hw_log_info("      > DRV_%d attached to pin %d at %uHz frequency\n",
                 currentDev->ID,
                 pwmPin,
                 *currentDev->pwmFreq);
       }
       else {
-        hw_log_info("    > DRV_%d attached to pin %d\n",
+        hw_log_info("      > DRV_%d attached to pin %d\n",
                 currentDev->ID,
                 pwmPin);
-        hw_log_warn("    - WARNING: DRV_%d uses default PWM frequency\n", currentDev->ID);
+        hw_log_warn("      [DRV] WARNING: DRV_%d uses default PWM frequency\n", currentDev->ID);
       }
     }
 
@@ -184,7 +184,7 @@ void dcDriverInit(const Machine &config) {
     }
   }
 
-  hw_log_info("  [DRV] DC drivers successfully initialized\n");
+  hw_log_info("    [DRV] DC drivers successfully initialized\n");
   hw_log_info("\n");
 }
 
@@ -201,20 +201,20 @@ void dcDriverInit(const Machine &config) {
  *   caller's responsibility.
  */
 bool checkDrvHwConfig(const Machine &config) {
-  hw_log_info("    [HW][DRV] Config check...\n");
+  hw_log_info("      [DRV] DC drivers config check...");
   bool hasError = false;
 
 	// --- Validate driver index vs declared ID ---
   for (int i = 0; i < config.dcDevCount; i++) {
     if (config.dcDev[i].ID != i) {
-      hw_log_err("    [HW][DRV] CONFIG ERROR: Driver index [%d] mismatch with driverID (%d)\n",
+      hw_log_err("\n      [DRV] CONFIG ERROR: Driver index [%d] mismatch with driverID (%d)\n",
                  i, config.dcDev[i].ID);
       hasError = true;
     }
   }
 
   if (!hasError) {
-    hw_log_info("    [HW][DRV] Config check passed\n");
+    hw_log_info(" OK\n");
   }
 
   return hasError;

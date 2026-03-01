@@ -1,0 +1,16 @@
+{
+  // ============================================================
+  // Inline Fold — collapse log wrapper calls in C/C++ files
+  // Extension: moalamri.inline-fold
+  // Folds lines matching the pattern to a single "…" marker.
+  // Click the "…" or select the line to unfold temporarily.
+  // ============================================================
+  "inlineFold.regex": "(hw_log_\\w+|sys_log_\\w+|input_log_\\w+|combus_log_\\w+|log_err|log_warn|log_info|log_dbg)\\([^;]*\\);",
+  "inlineFold.regexFlags": "g",
+  "inlineFold.regexGroup": 0,
+  "inlineFold.unfoldOnLineSelect": true,
+  "inlineFold.maskChar": "⊟ log",
+  "inlineFold.maskColor": "#606060",
+  "inlineFold.supportedLanguages": ["cpp", "c"],
+  "inlineFold.unfoldedOpacity": 0.7
+}

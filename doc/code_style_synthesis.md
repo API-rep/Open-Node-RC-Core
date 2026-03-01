@@ -57,16 +57,36 @@ The objective is a clean, stable, educational style for both app code and reusab
 
 ### Naming and layout
 - Class/type names: PascalCase
+- Enum type names: PascalCase
+- Enum values: UPPER_SNAKE_CASE
 - Methods/functions: lowerCamelCase
-- Constants/macros: UPPER_SNAKE_CASE
+- `#define` preprocessor macros: UPPER_SNAKE_CASE
+- `constexpr` compile-time constants: PascalCase
 - Variable names: explicit and readable (except short loop indices)
 
 ### Spacing and indentation
 - Use tabs for block indentation in templates and reference code.
 - Apply the same regular indentation rules inside preprocessor blocks (`#if`, `#elif`, `#else`, `#endif`) as in normal function/code blocks.
+- Indent the preprocessor directives themselves (`#if`, `#elif`, `#else`, `#endif`) relative to their nesting level — the whole directive including `#` is indented with tabs, exactly like regular `if`/`else` keywords:
+  ```cpp
+  #ifdef OUTER
+  	#if INNER == VALUE
+  		#include "something.h"
+  	#else
+  		#error "Unknown value."
+  	#endif
+  #endif // OUTER
+  ```
 - For regular comment lines (`//`, `///`) placed before declarations/steps, use one additional tab relative to the code block below:
   - `/// ...` before enum/struct/method declarations
   - `// --- ... ---` before local logic steps
+- For inline end-of-line comments (`//`, `///<`) placed after code on the same line:
+  - always leave **at least 2 spaces** between the end of the code and the `//` or `///<`:
+    ```cpp
+    float vPin = ...;  // voltage at GPIO pin (V)        ✓
+    bool  isLow;       ///< True when voltage is low.    ✓
+    float vPin = ...;// wrong — no space                ✗
+    ```
 - For local step comments specifically, this means:
   - code line at indentation `N`
   - `// --- ... ---` comment at indentation `N + 1`
@@ -172,17 +192,17 @@ combus_log_(*)...  → active when -D DEBUG_COMBUS (or DEBUG_ALL)
 - Every debug line should start with a fixed module prefix:
   - `[<MODULE>] <message>`
 - `<MODULE>`: short uppercase module identifier (examples: `INPUT`, `COMBUS`, `HW`, `SYSTEM`).
-- Optional sub-module tagging is allowed for finer ownership:
-  - preferred: `[<MODULE>][<SUBMODULE>] <message>`
-  - accepted: `[<MODULE> - <SUBMODULE>] <message>`
-- Keep one project-wide style when possible (prefer `[<MODULE>][<SUBMODULE>]`).
+- Sub-module tagging drops the outer module bracket when the context is already established by indentation or a parent header line:
+  - top-level line: `[HW] Hardware init start`
+  - sub-level line (indented): `[DRV] DC drivers config check ... OK`  (no `[HW]` repetition)
+  - use `[MODULE][SUBMODULE]` only when the line appears standalone without a parent context (e.g. error lines that may be grepped out of context)
+- Keep one project-wide style when possible (prefer `[MODULE][SUBMODULE]` for standalone lines).
 - Do not include `<STAGE>` in each line; stage context is provided by the sequence intro/header.
-- Severity (`INFO` / `WARN` / `ERROR`) should be conveyed by module tag color when color output is available.
-  - Suggested mapping:
-    - normal/default color: `INFO`
-    - yellow: `WARN`
-    - red: `ERROR`
-- If terminal color is unavailable, use explicit fallback tags in message body (`[WARN]`, `[ERROR]`).
+- Severity (`INFO` / `WARN` / `ERROR`) is conveyed by ANSI color when `SerialAnsi` is enabled:
+  - normal/default color: `INFO`
+  - yellow (`\033[33m`): `WARN`
+  - red (`\033[31m`): `ERROR`
+- If terminal color is unavailable (`SerialAnsi=0`), use explicit fallback tags in message body (`[WARN]`, `[ERROR]`).
 - Keep module tags stable and uppercase to simplify serial filtering and grep.
 
 Examples:
@@ -192,7 +212,20 @@ Examples:
 - `[HW] Servo count exceeds recommended limit` (yellow module tag)
 - `[COMBUS] Invalid channel index` (red module tag)
 
-### 7.2 Recommended sub-module map (first draft)
+### 7.2 Log call formatting
+- Every log call must fit on a **single line** — never split format string and arguments across lines.
+- Applies regardless of line length; readability of the log call takes precedence over column limits.
+
+```cpp
+// correct
+sys_log_warn("[VBAT] \"%s\" low! %.2f V < %.2f V\n", vBatSense->cfg[idx].infoName, vBatSense->state[idx].voltage, cutoff);
+
+// wrong — split across lines
+sys_log_warn("[VBAT] \"%s\" low! %.2f V < %.2f V\n",
+  vBatSense->cfg[idx].infoName, vBatSense->state[idx].voltage, cutoff);
+```
+
+### 7.3 Recommended sub-module map (first draft)
 - Use these tags as default references when available in the codebase.
 
 | Module | Recommended sub-modules | Typical usage |

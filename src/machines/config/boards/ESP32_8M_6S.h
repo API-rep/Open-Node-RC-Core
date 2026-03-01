@@ -11,7 +11,7 @@
  * 
  * TODO:
  * - Create array + enum of com + ext port and put them in boardCfg
- * - Create VBAT sesing structure (boardCfg sub section)
+ * - Add SRV_A and SRV_B VBatSenseConfig instances once servo sensing is wired
  *******************************************************************************/// 
 #pragma once
 
@@ -33,6 +33,8 @@
  *   -> set  .devicePtr = nullptr
  */
 
+ 	/// Onboard logic voltage reference (V)
+static constexpr float AdcRefVoltage = 3.3f;
 
 /**
  * DC drivers configuration section
@@ -58,12 +60,12 @@ extern DriverPort drvPortArray[DRV_PORT_COUNT];
 enum DrvPortDecayCh { CH_A = 0, CH_B, CH_COUNT };
   
   // DC drivers break channel
-static constexpr int8_t DECAY_PIN[CH_COUNT] = { 26, 15 };  // CH_A, CH_B ... break channel pin
-                                            
-  // DC drivers control pin
-static constexpr int8_t DRV_EN_PIN = 33;
-static constexpr int8_t DRV_SLP_PIN = 25;
-static constexpr int8_t DRV_FLT_PIN = 34;
+static constexpr int8_t DecayPin[CH_COUNT] = { 26, 15 };  // CH_A, CH_B — brake channel pin
+
+  // DC drivers control pins
+static constexpr int8_t DrvEnPin  = 33;
+static constexpr int8_t DrvSlpPin = 25;
+static constexpr int8_t DrvFltPin = 34;
 
 
 
@@ -92,13 +94,17 @@ extern ServoPort srvPortArray[SRV_PORT_COUNT];
  */
 
   // extension ports
-static constexpr int8_t EXT1_PIN = 18;   // extension port 1
-static constexpr int8_t EXT2_PIN = 13;   // extension port 2
+static constexpr int8_t Ext1Pin = 18;   // extension port 1
+static constexpr int8_t Ext2Pin = 13;   // extension port 2
 
-  // built-in ESP32 ESP32-DevKitC V4 built-in serial port (connected to USB port). 
+  // built-in ESP32 ESP32-DevKitC V4 built-in serial port (connected to USB port).
+static constexpr int8_t Txd0Pin = 1;    // ESP32 built-in TX pin
+static constexpr int8_t Rxd0Pin = 3;    // ESP32 built-in RX pin
 
-static constexpr int8_t TXD0_PIN = 1;    // ESP32 built-in TX pin
-static constexpr int8_t RXD0_PIN = 3;    // ESP32 built-in RX pin
+  // servo power sensing pins (also used by VBatSrvACfg / VBatSrvBCfg)
+static constexpr uint8_t SrvASensePin  = 39;  // SRV-A power rail ADC sense pin
+static constexpr uint8_t SrvBSensePin  = 35;  // SRV-B power rail ADC sense pin
+static constexpr uint8_t VBatSensePin  = 36;  // V-BAT main battery ADC sense pin
 
 
 
@@ -119,23 +125,40 @@ inline constexpr Board boardCfg {
 
 
 
-
-#define SRV_A_SENSE_PIN        39      // SRV_A battery/regulator voltage sensing pin
-#define SRV_A_SENSE_HS_RES  10000      // SRV_A sensing circuit high side resistor value (in ohms)
-#define SRV_A_SENSE_LS_RES   1500      // SRV_A sensing circuit lox side resistor value (in ohms)
-
-#define SRV_B_SENSE_PIN        35      // SRV_B battery/regulator voltage sensing pin
-#define SRV_B_SENSE_HS_RES  10000      // SRV_B sensing circuit high side resistor value (in ohms)
-#define SRV_B_SENSE_LS_RES   1500      // SRV_B sensing circuit lox side resistor value (in ohms)
-
 /**
- * Main Battery voltage monitoring
- * Used for LIPO battery under voltage protection
+ * @brief Voltage sensing hardware configuration for this board.
+ *
+ * @details Each VBatSenseConfig instance groups all hardware parameters for
+ *   one sensing channel (pin, resistor divider, diode drop, logic reference).
+ *   Threshold fields (cutoff, hysteresis, interval) are filled with module
+ *   defaults — overridable from platformio.ini build flags.
+ *
+ * NOTE: SRV_A and SRV_B instances are prepared below for future use.
+ *   Their threshold parameters may differ from main battery sensing (single
+ *   cell / regulator monitoring, no per-cell logic needed).
  */
 
-#define VBAT_SENSE_PIN         36      // V-BAT voltage sensing pin
-#define VBAT_SENSE_HS_RES   10000      // V-BAT sensing circuit high side resistor value (in ohms)
-#define VBAT_SENSE_LS_RES    1500      // V-BAT sensing circuit low side resistor value (in ohms)
-#define VBAT_DIODE_DROP      0.00      // V-BAT input diode voltage drop (in Volt)
+#ifdef VBAT_SENSING
+#include <core/utils/vbat/vbat_sense.h>
+
+// --- Active sensing channels ---
+// Add or comment entries to enable/disable channels. Keep VBAT_CH_COUNT last and active.
+enum VBatChannel {
+  VBAT_MAIN  = 0,
+  VBAT_SRV_A,
+  VBAT_SRV_B,
+  VBAT_CH_COUNT
+};
+
+	/// Board sensing channel config array — defined in .cpp, indexed by VBatChannel.
+extern const VBatSenseConfig vBatSenseConfigArray[VBAT_CH_COUNT];
+	/// Board sensing channel state array — defined in .cpp, zero-initialized.
+extern VBatSenseState        vBatSenseStateArray[VBAT_CH_COUNT];
+	/// Top-level sensing container — pre-wired at startup, passed to vbat_init().
+extern VBatSense             vBatSense;
+
+
+
+#endif // VBAT_SENSING
 
 // EOF ESP32_8M_6S.h

@@ -15,7 +15,9 @@
 
 void input_setup() {
 #if INPUT_MODULE == PS4_DS4_BT
+  sys_log_info("[INPUT] BT stack init...\n");
   PS4.begin(PS4_BLUETOOTH_ADDRESS);
+  sys_log_info("[INPUT] BT stack init complete — waiting for controller (%s)\n", PS4_BLUETOOTH_ADDRESS);
 #endif
 }
 

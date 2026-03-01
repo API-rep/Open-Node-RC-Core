@@ -8,10 +8,7 @@
 #include "utils/utils.h"
 #include <core/utils/debug/debug.h>
 #include <core/utils/input/input_manager.h>
-
-	// --- 1. Battery and state variables ---
-bool vBatIsLow = false;
-unsigned long vBatSenseTM = 0;
+#include <core/utils/vbat/vbat_sense.h>
 
 
 /**
@@ -64,6 +61,10 @@ void loop() {
   }
   failsafeActive = false;
 
+	// --- 3. Ignition key derivation ---
+  uint8_t keyCh = static_cast<uint8_t>(DigitalComBusID::KEY); // dedicated ignition channel
+  comBus.keyOn = comBus.digitalBus[keyCh].isDrived && comBus.digitalBus[keyCh].value;
+
 // =============================================================================
 // 2. RUNLEVEL STATE MACHINE
 // =============================================================================
@@ -91,9 +92,8 @@ void loop() {
       }
 
         // --- 2. Transition trigger check ---
-      uint8_t triangleCh = static_cast<uint8_t>(DigitalComBusID::LIGHTS);
-      if (comBus.digitalBus[triangleCh].isDrived && comBus.digitalBus[triangleCh].value) {
-        sys_log_info("[SYSTEM][EVENT] input=TRIANGLE action=enter_STARTING\n");
+      if (comBus.keyOn) {
+        sys_log_info("[SYSTEM][EVENT] input=KEY_ON action=enter_STARTING\n");
         comBus.runLevel = RunLevel::STARTING;
       }
       break;
@@ -153,9 +153,9 @@ void loop() {
         disableAllDcDrivers(machine);     
       }
 
-      if (vBatIsLow) {
-        sys_log_warn("[SYSTEM][SAFE] reason=low_battery action=halt\n");
-        while(true) { /* Wait for reboot */ }
+      if (comBus.keyOn) {
+        sys_log_info("[SYSTEM][EVENT] input=KEY_ON action=rearm_from_SLEEPING\n");
+        comBus.runLevel = RunLevel::STARTING;
       }
       break;
     }
@@ -171,18 +171,18 @@ void loop() {
 // 3. SYSTEM TASKS (Battery, etc.)
 // =============================================================================
 
-#ifdef VBAT_SENSING
 	// --- 1. Battery monitoring ---
-  if ((vBatSenseTM + VBAT_SENSE_INTERVAL) <= millis()) {
-    float vBatSense = analogRead(VBAT_SENSE_PIN) * 3.3 / 4095;
-    vBatSenseTM = millis();
-    // Logic continue...
-    if (vBatSense <= MIN_VBAT_SENSE) {
-      vBatIsLow = true;
-      comBus.runLevel = RunLevel::SLEEPING;
+  if (vbat_tick()) {
+    for (uint8_t i = 0; i < vbat_channel_count(); i++) {
+      if (vbat_is_low(i)) { 
+        comBus.batteryIsLow = true; break;
+      }
     }
+
+    if (comBus.batteryIsLow) {
+      comBus.runLevel = RunLevel::SLEEPING;
+      sys_log_warn("[SYSTEM][SAFE] reason=low_battery action=enter_SLEEPING\n");}
   }
-#endif 
 
 } // END OF LOOP
 

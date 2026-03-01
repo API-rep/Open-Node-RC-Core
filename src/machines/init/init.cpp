@@ -42,10 +42,6 @@ void machine_init() {
   sleepAllDcDrivers(machine);
   disableAllDcDrivers(machine);
 
-#ifdef VBAT_SENSING
-  pinMode(VBAT_SENSE_PIN, INPUT);
-#endif
-
   sys_log_info("\n========================================\n");
   sys_log_info("  INIT COMPLETE — machine=%s\n", machine.infoName);
   sys_log_info("========================================\n\n");

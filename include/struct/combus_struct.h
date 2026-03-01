@@ -38,6 +38,8 @@
   // Main communication bus structure
 typedef struct {
   RunLevel runLevel;                            // runlevel state
+  bool batteryIsLow = false;                    // true when any vbat channel reports low — written by vbat module, read by all
+  bool keyOn        = false;                    // operator ignition consent — derived from input, used by state machine transitions
   AnalogComBus* analogBus;                      // analogic bus channels
   DigitalComBus* digitalBus;                    // digital bus channels
   uint32_t analogBusMaxVal;                     // Com-bus analog channel maximum value

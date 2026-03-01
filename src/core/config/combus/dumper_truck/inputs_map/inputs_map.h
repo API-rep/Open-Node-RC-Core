@@ -7,12 +7,12 @@
  *******************************************************************************/// 
 #pragma once
 
-/** @brief Aiguillage automatique du mapping selon l'INPUT_MODULE */
+
 #if INPUT_MODULE == PS4_DS4_BT
   #include "PS4_dualshock_map.h"
 
-#elif INPUT_MODULE == ANOTHER_INPUT_DEVICE
-  #include "another_input_map.h"
+// #elif INPUT_MODULE == ANOTHER_INPUT_DEVICE
+//   #include "another_input_map.h"
 
 #else
     #error "No input mapping found for this input module. Check input module compatibility and platformio.ini file to fix the problem."

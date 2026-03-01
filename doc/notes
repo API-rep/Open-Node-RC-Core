@@ -23,3 +23,23 @@ Sa proposition :
 Architecture ComBus : Rappelle que le système repose sur une structure extern ComBus partagée, avec des tableaux AnalogBus et DigitalBus.
 Objectif Esclave : Note que la carte Son/Lumière doit agir comme un module "ComBus passif" recevant ses données via Serial/ESP-NOW.
 Lien GitHub : Garde l'URL du projet de TheDIYGuy999 sous le coude.
+
+
+---
+
+## VS Code workspace extensions
+
+### moalamri.inline-fold — Log line folding ⚠️ DEPRECATED
+
+> **Extension marked as deprecated** as of 2026. Still functional but no longer maintained.
+> Alternatives identified if a migration becomes necessary:
+> - `ilverism.inline-tag-context-hider-vsc` — same inline-fold concept, regex-based
+> - `ldlework.matched-line-dimmer` — dims full lines matching a regex (tag: "log dimmer")
+
+- Install: Extensions panel → search "Inline Fold" by Mohamad Al Amri, or `ext install moalamri.inline-fold`
+- Config: `.vscode/settings.json` (already committed in this repo)
+- Effect: all `hw_log_*`, `sys_log_*`, `input_log_*`, `combus_log_*`, `log_err/warn/info/dbg`
+  calls are folded to a `⊟ log` marker in C/C++ files.
+- Click the marker or select the line to unfold temporarily.
+- `"unfoldedOpacity": 0.7` keeps unfolded log lines visually dimmed vs logic code.
+- To disable temporarily: comment out `"inlineFold.regex"` in settings.json.

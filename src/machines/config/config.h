@@ -25,16 +25,8 @@
  */
 
 
- // default runlevels at power on (see available mode in "runlevel.h")
+	// Default runlevel at power-on (see available modes in runlevel.h).
 #define DEF_RUNLEVEL    RunLevel::IDLE
-
-  // main battery voltage monitoring
-// #define VBAT_SENSING
-  #ifdef VBAT_SENSING
-    #define MIN_VBAT_SENSE           1.2     // voltage on BAT_SENSE_PIN for 9.5V
-    #define VBAT_SENSE_INTERVAL      100     // delay between VBAT sensing in ms
-    #define VBAT_SENSE_SAMPLING       10     // number of VBAT measure used to compute average value
-  #endif
 
 
 #include "machines/machines.h"

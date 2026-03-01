@@ -66,6 +66,7 @@ typedef struct {
 } ServoPort;
 
 
+
 /**
  * @brief Board main structure
  * NOTE:
@@ -81,7 +82,6 @@ typedef struct {
   ServoPort* srvPort;                           // DC driver device config structure
   uint8_t srvPortCount;                         // number of servo device configured
 } Board;
-
 
 
 
