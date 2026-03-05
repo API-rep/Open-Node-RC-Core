@@ -15,11 +15,4 @@
 void resetComBusDriveFlags(ComBus &bus);
 
 
-#if defined(DEBUG_COMBUS) || defined(DEBUG_ALL)
-  void debugComBusSnapshot(ComBus &bus);
-  #define LOG_COMBUS_DEBUG(b) debugComBusSnapshot(b)
-#else
-  #define LOG_COMBUS_DEBUG(b)
-#endif
-
 // EOF combus_manager.h

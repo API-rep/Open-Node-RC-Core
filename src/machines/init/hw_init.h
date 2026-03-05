@@ -18,16 +18,4 @@
 	/// Hardware initialization — config check then driver and servo setup.
 void hw_init();
 
-// =============================================================================
-// 2. DEBUG & MONITORING
-// =============================================================================
-
-#if defined(DEBUG_HW) || defined(DEBUG_ALL)
-    /// Print machine hardware configuration for debugging.
-  void debugVehicleConfig();
-  #define LOG_HW_CONFIG() debugVehicleConfig()
-#else
-  #define LOG_HW_CONFIG()
-#endif
-
 // EOF hw_init.h

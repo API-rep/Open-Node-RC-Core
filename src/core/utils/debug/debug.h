@@ -76,6 +76,13 @@ constexpr uint8_t LogLevel = (uint8_t)(LOG_LEVEL);
   constexpr bool DbgCombus = false;
 #endif
 
+  // Dashboard is a standalone feature flag — not activated by DEBUG_ALL.
+#ifdef DEBUG_DASHBOARD
+  constexpr bool DbgDashboard = true;
+#else
+  constexpr bool DbgDashboard = false;
+#endif
+
 
 // --- 1.3 Serial configuration ---
 
@@ -99,6 +106,18 @@ constexpr bool SerialAnsi = (bool)(DEBUG_SERIAL_ANSI);
   #define DEBUG_SERIAL_CLEAR_ON_INIT 1
 #endif
 constexpr bool SerialClearOnInit = (bool)(DEBUG_SERIAL_CLEAR_ON_INIT);
+
+
+// --- 1.4 Post-init pause ---
+
+  // When set, the boot sequence pauses after INIT COMPLETE and waits for
+  // either a serial key press or the remote KEY button (combus) to continue.
+  // Inject via: -D PAUSE_LOG_AFTER_INIT
+#ifdef PAUSE_LOG_AFTER_INIT
+  constexpr bool PauseAfterInit = true;
+#else
+  constexpr bool PauseAfterInit = false;
+#endif
 
 
 // =============================================================================

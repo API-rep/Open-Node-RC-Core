@@ -115,16 +115,5 @@ void input_update(ComBus &bus) {
     bus.digitalBus[ch].isDrived = true;
   }
 
-// ==========================================================
-// 4. PERIODIC DEBUG
-// ==========================================================
-
-  static unsigned long lastDebugTM = 0;
-  if (millis() - lastDebugTM > 1000) {
-    LOG_INPUT_DEBUG(bus);
-    LOG_COMBUS_DEBUG(bus);
-    lastDebugTM = millis();
-  }
-
 #endif
 }

@@ -7,6 +7,7 @@
 #include "init/init.h"
 #include "utils/utils.h"
 #include <core/utils/debug/debug.h>
+#include <core/utils/debug/dashboard.h>
 #include <core/utils/input/input_manager.h>
 #include <core/utils/vbat/vbat_sense.h>
 
@@ -57,6 +58,7 @@ void loop() {
       failsafeActive = true;
     }
     comBus.runLevel = RunLevel::IDLE;
+    dashboard_update();
     return;
   }
   failsafeActive = false;
@@ -183,6 +185,9 @@ void loop() {
       comBus.runLevel = RunLevel::SLEEPING;
       sys_log_warn("[SYSTEM][SAFE] reason=low_battery action=enter_SLEEPING\n");}
   }
+
+	// --- 2. Dashboard update ---
+  dashboard_update();
 
 } // END OF LOOP
 

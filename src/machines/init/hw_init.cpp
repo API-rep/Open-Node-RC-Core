@@ -69,8 +69,6 @@ void hw_init() {
   hw_log_info("  [HW] Hardware setup complete\n");
 
   hw_log_info("[HW] Hardware init complete\n");
-
-  LOG_HW_CONFIG();
 }
 
 // EOF hw_init.cpp

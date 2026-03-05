@@ -22,16 +22,4 @@ void input_setup();
 void input_update(ComBus &bus);
 
 
-/**
- * @brief Verbose debug output for input mapping
- * @param bus Reference to the main communication bus structure
- */
-
-#if defined(DEBUG_INPUT) || defined(DEBUG_ALL)
-  void debugInputMapping(ComBus &bus);
-  #define LOG_INPUT_DEBUG(b) debugInputMapping(b)
-#else
-  #define LOG_INPUT_DEBUG(b)
-#endif
-
 // EOF input_manager.h
