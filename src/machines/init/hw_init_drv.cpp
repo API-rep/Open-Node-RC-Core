@@ -185,7 +185,6 @@ void dcDriverInit(const Machine &config) {
   }
 
   hw_log_info("    [DRV] DC drivers successfully initialized\n");
-  hw_log_info("\n");
 }
 
 
@@ -201,7 +200,7 @@ void dcDriverInit(const Machine &config) {
  *   caller's responsibility.
  */
 bool checkDrvHwConfig(const Machine &config) {
-  hw_log_info("      [DRV] DC drivers config check...");
+  hw_log_info("  [DRV] DC drivers config check...");
   bool hasError = false;
 
 	// --- Validate driver index vs declared ID ---

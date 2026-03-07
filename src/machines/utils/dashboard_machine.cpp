@@ -34,15 +34,6 @@ static uint8_t        s_digitalCh = 0;
 // 2. PRIVATE HELPERS
 // =============================================================================
 
-/** @brief Map a CombusLayout to a human-readable string. */
-static const char* combusLayoutStr(CombusLayout layout) {
-	switch (layout) {
-		case CombusLayout::DUMPER_TRUCK: return "DUMPER_TRUCK";
-		case CombusLayout::UNDEFINED:    return "UNDEFINED";
-		default:                         return "---";
-	}
-}
-
 
 // =============================================================================
 // 3. OVERVIEW VIEW
@@ -62,9 +53,14 @@ static void render_overview() {
 	fmtUptime(upt, sizeof(upt));
 
 		// --- 1. Header ---
+	dPre();
 	dTop();
-	dLine("  %-38s %-12s %s",
-		s_mach->infoName, dashRunLevelStr(s_bus->runLevel), upt);
+	{
+		char left[56], right[36];
+		int lLen = snprintf(left,  sizeof(left),  "  [ OVERVIEW ]  %s", s_mach->infoName);
+		int rLen = snprintf(right, sizeof(right), "%-12s  uptime: %s  ", dashRunLevelStr(s_bus->runLevel), upt);
+		dLine("%s%*s%s", left, (int)DashInnerW - lLen - rLen, "", right);
+	}
 
 		// --- 2. Status bar ---
 	dMid();
@@ -78,44 +74,45 @@ static void render_overview() {
 	}
 
 	bool ctrlConn = false;
-	for (uint8_t i = 0; i < s_analogCh; i++) {
-		if (s_bus->analogBus[i].isDrived) { ctrlConn = true; break; }
+	for (uint8_t i = 0; i < s_analogCh && !ctrlConn; i++) {
+		if (s_bus->analogBus[i].isDrived)  ctrlConn = true;
+	}
+	for (uint8_t i = 0; i < s_digitalCh && !ctrlConn; i++) {
+		if (s_bus->digitalBus[i].isDrived) ctrlConn = true;
 	}
 
 	bool drvEnabled = (s_bus->runLevel == RunLevel::RUNNING ||
 	                   s_bus->runLevel == RunLevel::STARTING);
 
-	dLine("  BAT: %-8s  CTRL: %-4s  DRV: %d/%d %-3s  KEY: %-3s",
+	dLine("  BAT: %-8s  CTRL: %-4s  DRV: %-3s (%u dev)  KEY: %-3s",
 		batStr,
 		ctrlConn ? "CONN" : "DISC",
-		s_mach->dcDevCount, s_mach->dcDevCount, drvEnabled ? "ENB" : "DIS",
+		drvEnabled ? "ENB" : "DIS", s_mach->dcDevCount,
 		s_bus->keyOn ? "ON" : "OFF"
 	);
 
 		// --- 3. Channel summary ---
 	dMid();
 	for (uint8_t i = 0; i < s_analogCh; i++) {
-		uint16_t raw = s_bus->analogBus[i].value;
-		int16_t  pct = dashPctBipolar(raw, s_bus->analogBusMaxVal);
-		bool     drv = s_bus->analogBus[i].isDrived;
-		dLine("  %-24.24s  %5u  %+4d%%  %s",
-			s_bus->analogBus[i].infoName, raw, pct,
-			drv ? "DRV" : "---"
-		);
+		uint16_t    raw  = s_bus->analogBus[i].value;
+		int16_t     pct  = dashPctBipolar(raw, s_bus->analogBusMaxVal);
+		bool        drv  = s_bus->analogBus[i].isDrived;
+		const char* name = s_bus->analogBus[i].infoName ? s_bus->analogBus[i].infoName : "?";
+		dLine("  %2u  %-44.44s  %5u  %+4d%%  %s",
+			i, name, raw, pct, drv ? "DRV" : "---");
 	}
 	for (uint8_t i = 0; i < s_digitalCh; i++) {
-		bool val = s_bus->digitalBus[i].value;
-		bool drv = s_bus->digitalBus[i].isDrived;
-		dLine("  %-24.24s  %-4s          %s",
-			s_bus->digitalBus[i].infoName,
-			val ? "ON" : "OFF",
-			drv ? "DRV" : "---"
-		);
+		bool        val  = s_bus->digitalBus[i].value;
+		bool        drv  = s_bus->digitalBus[i].isDrived;
+		const char* name = s_bus->digitalBus[i].infoName ? s_bus->digitalBus[i].infoName : "?";
+		dLine("  %2u  %-44.44s  %-5s      %s",
+			i, name, val ? "ON" : "OFF", drv ? "DRV" : "---");
 	}
 
-		// --- 4. Event log ---
+		// --- 4. Serial log tail ---
 	dMid();
-	dashboard_render_events();
+	dLine("  recent log :");
+	dashboard_render_log();
 
 	dBot();
 }
@@ -147,16 +144,14 @@ void dashboard_machine_setup(const ComBus* bus, const Machine* mach,
 		// --- 2. Reset core dashboard state ---
 	dashboard_setup();
 
-		// --- 3. Register overview slot (always key '0', always first) ---
-	dashboard_register_slot('0', "overview", render_overview);
+		// --- 3. Register overview slot (always key '1', always first) ---
+	dashboard_register_slot('1', "overview", render_overview);
 
 		// --- 4. Register module slots ---
 	dashboard_input_register(bus, analogCh, digitalCh);
 	dashboard_drv_register(bus, mach);
 	dashboard_vbat_register();
 
-		// --- 5. Initial event marker ---
-	dashboard_push_event("dashboard ready");
 }
 
 

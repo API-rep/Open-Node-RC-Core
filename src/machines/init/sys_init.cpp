@@ -25,7 +25,7 @@ void sys_init() {
 	// --- 2. System sanity checks ---
 	// Placeholder for configuration validation
 
-  sys_log_info("[SYSTEM] System initialisation complete\n");
+  sys_log_info("[SYSTEM] System initialisation complete\n\n");
 }
 
 // EOF sys_init.cpp

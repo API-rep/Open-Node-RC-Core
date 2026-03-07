@@ -121,6 +121,17 @@ constexpr bool SerialClearOnInit = (bool)(DEBUG_SERIAL_CLEAR_ON_INIT);
 
 
 // =============================================================================
+// 1.5 DASHBOARD LOG FORWARD DECLARATION
+// =============================================================================
+
+// Forward-declare dashboard_push_log so log_impl can feed the log tail panel.
+// Defined in dashboard.cpp — compiled only when DEBUG_DASHBOARD is set.
+#ifdef DEBUG_DASHBOARD
+  void dashboard_push_log(const char* msg);
+#endif
+
+
+// =============================================================================
 // 2. CORE LOG TEMPLATE
 // =============================================================================
 
@@ -145,6 +156,11 @@ inline void log_impl(const char* fmt, Args... args) {
     Serial.printf(fmt, args...);
     if constexpr (SerialAnsi && (Level == LogError || Level == LogWarn)) {
       Serial.print("\033[0m");
+    }
+    if constexpr (DbgDashboard) {
+      char _lb[72];
+      snprintf(_lb, sizeof(_lb), fmt, args...);
+      dashboard_push_log(_lb);
     }
   }
 }

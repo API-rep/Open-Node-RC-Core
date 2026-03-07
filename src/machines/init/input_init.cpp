@@ -18,7 +18,7 @@
 void input_init() {
   sys_log_info("[INPUT] Input init...\n");
   input_setup();
-  sys_log_info("[INPUT] Input init complete\n");
+  sys_log_info("[INPUT] Input init complete\n\n");
 }
 
 // EOF input_init.cpp

@@ -110,7 +110,7 @@ void vbat_init(VBatSense& sense) {
 
 	    // --- 1. Validate board logic voltage reference ---
     if (vBatSense->cfg[idx].adcRefVoltage <= 0.0f) {
-      hw_log_err("[HW][BAT] FATAL: \"%s\" adcRefVoltage not set in board config — system halted.\n", vBatSense->cfg[idx].infoName);
+      hw_log_err("    [BAT] FATAL: \"%s\" adcRefVoltage not set — system halted.\n", vBatSense->cfg[idx].infoName);
       while(1);
     }
 
@@ -120,7 +120,7 @@ void vbat_init(VBatSense& sense) {
 	    // --- 2.5. Disable check — pull-down (~0 V) means channel not wired ---
     if (readInstantVoltage(idx) < 0.5f) {
       vBatSense->state[idx].disabled = true;
-      hw_log_info("[HW][BAT] \"%s\" — no voltage detected, sensing disabled.\n", vBatSense->cfg[idx].infoName);
+      hw_log_info("    [BAT] \"%s\" — no voltage detected, sensing disabled.\n", vBatSense->cfg[idx].infoName);
       continue;
     }
 
@@ -129,7 +129,8 @@ void vbat_init(VBatSense& sense) {
       vBatSense->state[idx].rawVals[s] = readInstantVoltage(idx);
     }
 
-    vBatSense->state[idx].voltage = updateAverage(idx);
+    vBatSense->state[idx].voltage        = updateAverage(idx);
+    vBatSense->state[idx].voltageAtInit   = vBatSense->state[idx].voltage;
 
 	    // --- 4. Cell count detection (1S–6S) ---
     uint8_t n = 1; // cell count candidate, incremented until voltage fits
@@ -140,7 +141,7 @@ void vbat_init(VBatSense& sense) {
     }
       // set detected cell count in idx state register
     vBatSense->state[idx].cells = n;
-    hw_log_info("[HW][BAT] \"%s\" init: %dS detected — %.2f V\n", vBatSense->cfg[idx].infoName, vBatSense->state[idx].cells, vBatSense->state[idx].voltage);
+    hw_log_info("    [BAT] \"%s\" init: %dS detected — %.2f V\n", vBatSense->cfg[idx].infoName, vBatSense->state[idx].cells, vBatSense->state[idx].voltage);
 
     vBatSense->state[idx].lastTickMs = millis();
   }
@@ -224,6 +225,19 @@ bool vbat_tick() {
 
 uint8_t vbat_channel_count() { return vBatSense ? vBatSense->count : 0; }
 
+/**
+ * @brief Return the battery chemistry type name (compile-time string from profile).
+ */
+const char* vbat_tech_name() { return VBatTechName; }
+
+/**
+ * @brief Return the channel name from board config.
+ */
+const char* vbat_name(uint8_t idx) {
+  return (vBatSense && idx < vBatSense->count && vBatSense->cfg[idx].infoName)
+         ? vBatSense->cfg[idx].infoName : "---";
+}
+
 
 
 /**
@@ -277,6 +291,27 @@ uint8_t vbat_cells(uint8_t idx) {
 
 bool vbat_is_low(uint8_t idx) {
   return (vBatSense && idx < vBatSense->count) ? vBatSense->state[idx].isLow : false;
+}
+
+bool vbat_is_disabled(uint8_t idx) {
+  return (vBatSense && idx < vBatSense->count) ? vBatSense->state[idx].disabled : true;
+}
+
+/**
+ * @brief Return the battery voltage captured at init for channel idx (V).
+ *
+ * @details Stored once by vbat_init() right after the initial sliding-average
+ *   seed. Used by the dashboard detail view to show voltage drift vs boot.
+ *
+ * @param idx  Channel index (0-based). Defaults to 0.
+ * @return Init voltage in volts, or 0.0 if idx is out of range.
+ */
+float vbat_voltage_at_init(uint8_t idx) {
+  return (vBatSense && idx < vBatSense->count) ? vBatSense->state[idx].voltageAtInit : 0.0f;
+}
+
+const VBatSenseConfig* vbat_cfg(uint8_t idx) {
+  return (vBatSense && idx < vBatSense->count) ? &vBatSense->cfg[idx] : nullptr;
 }
 
 #endif // VBAT_SENSING

@@ -21,5 +21,10 @@ void input_setup();
 
 void input_update(ComBus &bus);
 
+/**
+ * @brief Return the configured input device name (from input config infoName).
+ */
+const char* input_get_name();
+
 
 // EOF input_manager.h

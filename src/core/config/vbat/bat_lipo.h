@@ -28,4 +28,7 @@ inline constexpr float    VBatChargedVoltage = 4.2f;
 	/// Re-arm margin above cutoff (V). Prevents rapid toggling at threshold.
 inline constexpr float    VBatHysteresis     = 0.2f;
 
+	/// Human-readable chemistry type name for display (used by dashboard).
+inline constexpr const char* VBatTechName = "LiPo";
+
 // EOF bat_lipo.h

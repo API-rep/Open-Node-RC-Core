@@ -59,6 +59,15 @@ deps (chore): pin PS4_Controller_Host to API-rep fork commit b58a05d
 - Keep the short description under 72 characters, lowercase, no period.
 - Body is optional but recommended for `fix` and `refactor` involving non-obvious reasoning.
 
+### Session wrap-up checklist
+At the end of every session that includes a successful build/upload cycle, run through these steps in order:
+
+1. **Commit staged work** — propose a commit message following the convention above (scope + type + short description).
+2. **PS4 lib check** — see the *PS4_Controller_Host lib — periodic portability check* section below.
+3. **Workflow update** — if any new convention or architecture rule was agreed during the session, propose the minimal addition to this file.
+
+The checklist reminder should be triggered once, briefly, at the first natural wrap-up point (stable build after a feature or fix block). Do not repeat it within the same session.
+
 ### Periodic reminder note
 - At appropriate moments (after a stable build/upload cycle, before large refactors, or at session wrap-up), proactively suggest refining this workflow section.
 - Keep the reminder short and actionable (one concrete proposal at a time).
@@ -137,51 +146,114 @@ Layer 4 — Serial init log  (transitional, destined to disappear)
 #### Render-slot registration
 Core declares a fixed-size slot table of function pointers:
 ```cpp
-using DashRenderFn = void (*)(void);
+using DashRenderFn    = void (*)(void);
+using DashDetailFn    = void (*)(void);
+using DashDetailCount = uint8_t (*)(void);
 void dashboard_register_slot(uint8_t key, const char* label, DashRenderFn fn);
+void dashboard_register_detail(uint8_t slotKey, DashDetailCount countFn, DashDetailFn renderFn);
+uint8_t dashboard_detail_index();
 ```
 - `key`   — keyboard character that selects this view (`'1'`, `'2'`, …).
 - `label` — short string shown in the nav bar (`"drivers"`, `"battery"`, …).
 - `fn`    — render function provided by the module.
+- `countFn` — returns the number of detail sub-items at runtime (0 = no detail).
+- `DashDetailFn` — renders one sub-item; call `dashboard_detail_index()` inside.
 The env dashboard (`dashboard_machine_setup()`) calls `dashboard_register_slot()`
 for each module that is present and configured. Slots not registered are
 invisible — they do not appear in the nav bar and their key does nothing.
 
-Core always owns slot `'0'` (overview) and `'Q'` (quit/suspend) — these are
+Core always owns slot `'1'` (overview) and `'Q'` (quit/suspend) — these are
 never overridable by env or module layers.
 
 #### Module view layout (Layer 3)
-Each module view renders two sections inside the same frame:
+
+**Main slot view** — live data table only, no config section:
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│  <MODULE NAME>   live                              uptime: MM:SS.t  │
-├──────────────────────────────────────────────────────────────────────┤
-│  ... live state rows ...                                             │
-├──────────────────────────────────────────────────────────────────────┤
-│  config (at init)                                                    │
-├──────────────────────────────────────────────────────────────────────┤
-│  ... static init-config rows ...                                     │
-└──────────────────────────────────────────────────────────────────────┘
-  0:overview  1:drivers  2:inputs  3:battery  Q:quit
+┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│  [ MODULE ]  <descriptor>                                         uptime: HH:MM:SS  │
+├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  Col1  Col2  Col3  ...                                                              │
+├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  row1 data ...                                                                       │
+│  row2 data ...                                                                       │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+  1 : OVERVIEW    2 : INPUTS    3 : DRIVERS    4 : BATTERY    Q : QUIT    RETURN : DETAIL
+```
+
+**Detail sub-view (per item, reached via Enter):**
+```
+┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│  [ MODULE ]  #N - <item name> detail                              uptime: HH:MM:SS  │
+├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  FieldA :  valueA  |  FieldB :  valueB  |  FieldC :  valueC               (live)   │
+├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  Config line 1 :  value                                                              │
+│  Config line 2 :  value                                                              │
+│  ...                                                                                 │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+  - Item 1/3 + (- +)    MODULE detail    Q : back
 ```
 - Live section refreshes every `DashRefreshMs` (200 ms default).
-- Config section is written once at `dashboard_machine_setup()` and cached — no
-  repeated reads of const config structs during runtime.
+- Config-at-init in the **detail view only** — not in the main slot view.
+- Live row in detail: pipe-separated `Field :  value  |  Field :  value` format.
+- Config lines in detail: `  Label :  value` (two-space indent, label, space, colon, two spaces, value).
 
 #### Frame and layout rules
 - Frame style: **full single-line** box drawing (`┌─┐│└─┘├─┤`) — no double borders.
-- Inner content width: **70 characters** (`DashInnerW = 70`), outer frame = 72.
-- One header row per view (module name + mode tag + uptime on the same line).
+- Inner content width: **120 characters** (`DashInnerW = 120`), outer frame = 122.
+- One header row per view (module name + descriptor + uptime on the same line).
 - Column separators inside dense tables: `│` (U+2502).
-- Navigation bar is printed **outside** the bottom border, left-aligned, 2-space indent.
-- Nav bar format: `  0:overview  1:<label>  2:<label>  ...  Q:quit`
+- Navigation bar is printed **outside** the bottom border, centered within frame width.
+- Nav bar format: `  X : LABEL    Y : LABEL  ...  Q : QUIT`  (1-based keys, uppercase labels, spaced colons).
 - Only registered slots appear in the nav bar.
+- **Uniform row height** — all conditional states of a content section (e.g. connected vs disabled channel, populated vs empty slot) must produce the **same number of content rows**. Varying row counts cause visual layout shift when navigating between detail sub-items. Use fixed-width placeholder fields (`---`, `N/C`) instead of `dEmpty()` padding to fill missing data.
 
 #### Refresh and keyboard
 - Default refresh interval: `DashRefreshMs = 200` ms (configurable via constant).
-- Keyboard handling: single character, non-blocking (`Serial.available()` check).
+- Keyboard handling: non-blocking `Serial.available()` check; ESC sequences polled with 10 ms timeout.
 - View change forces an immediate redraw (reset `s_lastRefresh = 0`).
-- `Q` / `q` suspends the dashboard (prints a one-line notice, no redraw until next key).
+- `Q` / `q` at top level: suspends the dashboard (one-line notice, no redraw until next key).
+- `Q` / `q` in detail mode: exits detail mode and returns to the parent slot.
+- `Enter` (`\r`/`\n`): if the current slot has a registered detail sub-view and count > 0,
+  enters detail mode at sub-item 0.
+- `←` arrow (`\x1B[D`) in detail mode: navigate to previous sub-item (wraps).
+- `→` arrow (`\x1B[C`) in detail mode: navigate to next sub-item (wraps).
+- `<` key in detail mode: same as `←` — fallback for serial monitors that don’t transmit ANSI sequences.
+- `>` key in detail mode: same as `→` — fallback for serial monitors that don’t transmit ANSI sequences.
+- Slot selection keys (`1`–`9`) are **ignored** while in detail mode.
+- Normal nav bar appends `RETURN : DETAIL` when the current slot has a registered detail sub-view with at least one item.
+
+#### Detail sub-view system
+Any slot can optionally register a **detail sub-view** providing per-item drill-down screens
+(e.g. one screen per battery channel, one per driver, etc.).
+
+```
+Top-level view (slot)            →  Enter  →  Detail sub-view (item 0)
+  ← / → arrows                               navigate items (wraps)
+  Q                                           back to parent slot
+```
+
+**Registration** (called alongside `dashboard_register_slot`):
+```cpp
+dashboard_register_detail('4', vbat_channel_count, render_vbat_detail);
+//                         ^    ^                   ^
+//                         key  countFn             renderFn
+```
+- `slotKey`  — must match the parent slot key.
+- `countFn`  — `uint8_t (*)(void)`, queried at runtime; 0 disables detail entry.
+- `renderFn` — `void (*)(void)`, calls `dashboard_detail_index()` to get current item.
+
+**Nav bar in detail mode** (replaces normal slot bar):
+```
+  - Ch 1/2 +  (- +)      BATTERY detail      Q : back
+```
+
+**Rules:**
+- Detail view owns the full frame — it renders `dPre()` / `dTop()` / `dBot()` itself.
+- Detail render fn must display both live state and config-at-init in the same frame.
+- `dashboard_detail_index()` is 0-based; display as 1-based (`idx + 1`) in titles.
+- Slot selection keys (`1`–9`) do nothing while in detail mode; only `←`, `→`, `Q` are active.
+- Never add detail logic to app code — register from the module's `*_register()` function only.
 
 #### Event ring buffer
 - Depth: `DashEventCount = 6` visible lines.
@@ -194,14 +266,16 @@ Each module view renders two sections inside the same frame:
 #### File map
 ```
 src/core/utils/debug/
-  dashboard.h      ← public API: setup, push_event, update, register_slot
-  dashboard.cpp    ← frame primitives, slot table, nav bar, keyboard, event buffer
+  dashboard.h      ← public API: setup, push_event, update, register_slot,
+                                register_detail, detail_index
+  dashboard.cpp    ← frame primitives, slot table, detail table, nav bars,
+                     keyboard (incl. ESC arrow sequences), event buffer
 
 src/machines/utils/
   dashboard_machine.h / .cpp   ← env layer: overview view, auto-detect, slot registration
-  dashboard_drv.h / .cpp        ← module view: DC drivers (live state + init config)
+  dashboard_drv.h / .cpp        ← module view: DC drivers (live table + detail per driver)
   dashboard_input.h / .cpp      ← module view: inputs / combus
-  dashboard_vbat.h / .cpp       ← module view: battery sensing
+  dashboard_vbat.h / .cpp       ← module view: battery sensing + detail per channel
 ```
 Remote equivalent (future): `src/remotes/utils/dashboard_remote.h/.cpp`
 

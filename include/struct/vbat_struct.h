@@ -56,6 +56,7 @@ struct VBatSenseConfig {
  */
 struct VBatSenseState {
   float         voltage;                ///< Last averaged battery voltage (V).
+  float         voltageAtInit;          ///< Voltage (V) captured at init — baseline for drift detection.
   uint8_t       cells;                  ///< Detected number of series cells (0 = unknown).
   bool          isLow;                  ///< True when voltage is below cutoff.
   bool          disabled;               ///< True when channel was found unpowered at init (auto-detected).

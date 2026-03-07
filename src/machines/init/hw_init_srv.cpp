@@ -58,8 +58,6 @@ void servoInit(const Machine &config) {
   else {
     hw_log_info("    [SRV] No servo devices to initialize.\n");
   }
-
-  hw_log_info("\n");
 }
 
 
@@ -75,7 +73,7 @@ void servoInit(const Machine &config) {
  *   caller's responsibility.
  */
 bool checkSrvHwConfig(const Machine &config) {
-  hw_log_info("      [SRV] Servos config check...");
+  hw_log_info("  [SRV] Servos config check...");
   bool hasError = false;
 
 	// --- Validate servo index vs declared ID ---

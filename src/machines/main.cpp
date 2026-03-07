@@ -11,12 +11,29 @@
 #include <core/utils/input/input_manager.h>
 #include <core/utils/vbat/vbat_sense.h>
 
+#ifdef SOUND_NODE_UART
+#include "utils/sound_uart_tx.h"
+#endif
+
 
 /**
  * @brief Main Setup
  */
 void setup() {
   machine_init();
+
+#ifdef SOUND_NODE_UART
+    // Sound node UART TX — adjust GPIO pins to match board wiring.
+    // Default: TX=17 (Serial2 TX on ESP32), RX=-1 (TX-only link).
+    // Override via -D SOUND_TX_PIN=xx  -D SOUND_RX_PIN=xx in platformio.ini.
+  #ifndef SOUND_TX_PIN
+    #define SOUND_TX_PIN 17
+  #endif
+  #ifndef SOUND_RX_PIN
+    #define SOUND_RX_PIN -1
+  #endif
+  sound_uart_tx_init(SOUND_TX_PIN, SOUND_RX_PIN);
+#endif
 }
 
 /**
@@ -186,7 +203,12 @@ void loop() {
       sys_log_warn("[SYSTEM][SAFE] reason=low_battery action=enter_SLEEPING\n");}
   }
 
-	// --- 2. Dashboard update ---
+	// --- 2. Sound node UART transmit (optional, requires -D SOUND_NODE_UART) ---
+#ifdef SOUND_NODE_UART
+  sound_uart_tx_update(comBus, failsafeActive);
+#endif
+
+	// --- 3. Dashboard update ---
   dashboard_update();
 
 } // END OF LOOP

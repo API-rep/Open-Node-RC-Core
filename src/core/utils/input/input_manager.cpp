@@ -117,3 +117,12 @@ void input_update(ComBus &bus) {
 
 #endif
 }
+
+
+const char* input_get_name() {
+#if INPUT_MODULE == PS4_DS4_BT
+  return inputDev.infoName;
+#else
+  return "---";
+#endif
+}

@@ -19,7 +19,7 @@
  *   Halts the system when a critical error is detected.
  */
 static void checkHwConfig() {
-  hw_log_info("  [HW] Configuration files check...\n");
+  hw_log_info("[HW] Configuration files check...\n");
   bool hasError = false;
 
   hasError |= checkDrvHwConfig(machine);
@@ -30,7 +30,7 @@ static void checkHwConfig() {
     while(1);
   }
 
-  hw_log_info("  -> Configuration files check successfully\n");
+  hw_log_info("[HW] Configuration files check successfully\n");
   hw_log_info("\n");
 }
 
@@ -48,27 +48,31 @@ void hw_init() {
 	// --- 1. Config check ---
   checkHwConfig();
 
-	// --- 2. Hardware setup ---
-  hw_log_info("  [HW] Hardware setup...\n");
+	// --- 2. Driver init ---
+  hw_log_info("  [HW] Driver init\n");
   applyParentConfig(machine);
   allocateDrivers(machine.dcDevCount);
   dcDriverInit(machine);
-  servoInit(machine);
+  hw_log_info("  [HW] Driver init complete\n\n");
 
-	// --- 3. Battery sensing init ---
-  hw_log_info("  [HW][BAT] Battery sensing init: %d channel(s) configured\n", vBatSense.count);
+	// --- 3. Servo init ---
+  hw_log_info("  [HW] Servo init\n");
+  servoInit(machine);
+  hw_log_info("  [HW] Servo init complete\n\n");
+
+	// --- 4. Battery init ---
+  hw_log_info("  [HW] Battery init\n");
+  hw_log_info("    [BAT] Battery sensing init: %d channel(s) configured\n", vBatSense.count);
   vbat_init(vBatSense);
 
-	// --- 4. Battery sensing init summary ---
   uint8_t batActive = 0;
   for (uint8_t i = 0; i < vBatSense.count; i++) {
     if (!vBatSense.state[i].disabled) batActive++;
   }
-  hw_log_info("  [HW][BAT] %d/%d channel(s) active\n", batActive, vBatSense.count);
+  hw_log_info("    [BAT] %d/%d channel(s) active\n", batActive, vBatSense.count);
+  hw_log_info("  [HW] Battery init complete\n\n");
 
-  hw_log_info("  [HW] Hardware setup complete\n");
-
-  hw_log_info("[HW] Hardware init complete\n");
+  hw_log_info("[HW] Hardware init complete\n\n");
 }
 
 // EOF hw_init.cpp
