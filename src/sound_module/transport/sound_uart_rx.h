@@ -16,7 +16,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include <core/transport/combus_transport.h>
+#include <core/utils/combus/combus_frame.h>
 
 
 // =============================================================================
@@ -46,9 +46,9 @@ void sound_uart_rx_update();
  * @details Returns nullptr until at least one valid frame has been received.
  * The returned pointer is stable until the next valid frame arrives.
  *
- * @return Const pointer to the latest ComBusSnapshot, or nullptr.
+ * @return Const pointer to the latest ComBusFrame, or nullptr.
  */
-const ComBusSnapshot* sound_uart_rx_snapshot();
+const ComBusFrame* sound_uart_rx_snapshot();
 
 /**
  * @brief Milliseconds since the last valid frame was received.

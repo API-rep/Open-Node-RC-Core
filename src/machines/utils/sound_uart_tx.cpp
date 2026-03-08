@@ -7,23 +7,17 @@
 
 #include <Arduino.h>
 
-#include <core/transport/combus_transport.h>
-#include <core/config/combus/combus_types.h>
+#include <defs/defs.h>
+#include <core/utils/combus/combus_frame.h>
+#include <core/config/outputs/outputs.h>
 #include <core/utils/debug/debug.h>
 
-// --- TX configuration (override via build flags in platformio.ini) ---
-#ifndef SOUND_UART_BAUD
-  #define SOUND_UART_BAUD  115200u
-#endif
-#ifndef SOUND_TRANSPORT_TX_HZ
-  #define SOUND_TRANSPORT_TX_HZ  50u
-#endif
-#ifndef SOUND_ENV_ID
-  #define SOUND_ENV_ID  1u   // CombusLayout::DUMPER_TRUCK
-#endif
-#define SOUND_TRANSPORT_ENV_ID    ((uint8_t)(SOUND_ENV_ID))
-#define SOUND_TRANSPORT_N_ANALOG  (static_cast<uint8_t>(AnalogComBusID::CH_COUNT))
-#define SOUND_TRANSPORT_N_DIGITAL (static_cast<uint8_t>(DigitalComBusID::CH_COUNT))
+#ifdef SOUND_OUTPUT_UART
+
+// Env id embedded in the frame header: derived directly from MACHINE_TYPE (CombusLayout enum).
+// MACHINE_TYPE is always defined at compile time by the machine platformio env — no fallback needed.
+#define SOUND_TRANSPORT_ENV_ID  static_cast<uint8_t>(CombusLayout::MACHINE_TYPE)
+// SoundTransportNAnalog, SoundTransportNDigital, SoundTransportFrameSize — from outputs/sound_uart.h.
 
 
 // =============================================================================
@@ -39,8 +33,9 @@ static uint8_t s_seq = 0u;
 /// Timestamp of last transmitted frame (ms).
 static uint32_t s_lastTxMs = 0u;
 
-/// Transmit period in milliseconds derived from configured TX rate.
-static constexpr uint32_t TX_PERIOD_MS = 1000u / SOUND_TRANSPORT_TX_HZ;
+/// Transmit period in milliseconds — computed in sound_uart_tx_init() from board SoundTransportTxHz.
+/// Zero until init is called; update() is a no-op while it remains 0.
+static uint32_t s_txPeriodMs = 0u;
 
 
 // =============================================================================
@@ -50,12 +45,13 @@ static constexpr uint32_t TX_PERIOD_MS = 1000u / SOUND_TRANSPORT_TX_HZ;
 /**
  * Initialize the HardwareSerial port for the sound UART link.
  */
-void sound_uart_tx_init(int txPin, int rxPin) {
-    s_serial->begin(SOUND_UART_BAUD, SERIAL_8N1, rxPin, txPin);
+void sound_uart_tx_init(int txPin, int rxPin, uint32_t baud, uint32_t txHz) {
+    s_txPeriodMs = 1000u / txHz;   // txHz validity guaranteed by board static_assert
+    s_serial->begin(baud, SERIAL_8N1, rxPin, txPin);
 
 #ifdef DEBUG_SYSTEM
     sys_log_info("[SOUND_TX] init — baud=%u  tx=%d  rx=%d  rate=%uHz\n",
-                 SOUND_UART_BAUD, txPin, rxPin, SOUND_TRANSPORT_TX_HZ);
+                 baud, txPin, rxPin, txHz);
 #endif
 }
 
@@ -68,19 +64,24 @@ void sound_uart_tx_init(int txPin, int rxPin) {
  * Timer-gated transmit — sends one frame per TX_PERIOD_MS.
  */
 void sound_uart_tx_update(const ComBus& bus, bool failSafe) {
+    if (s_txPeriodMs == 0u) {
+      return;   // guard: init not called yet, or called with invalid txHz = 0 (should be caught by static_assert)
+    }
+
     uint32_t now = millis();
-    if ((now - s_lastTxMs) < TX_PERIOD_MS) {
+    if ((now - s_lastTxMs) < s_txPeriodMs) {
         return;
     }
+
     s_lastTxMs = now;
 
       // --- Encode frame ---
-    uint8_t frame[COMBUS_TRANSPORT_MAX_FRAME];
-    uint8_t frameLen = combus_transport_encode(
+    uint8_t frame[SoundTransportFrameSize];
+    uint8_t frameLen = combus_frame_encode(
         frame,
         &bus,
-        SOUND_TRANSPORT_N_ANALOG,
-        SOUND_TRANSPORT_N_DIGITAL,
+        SoundTransportNAnalog,
+        SoundTransportNDigital,
         SOUND_TRANSPORT_ENV_ID,
         s_seq,
         failSafe
@@ -94,15 +95,13 @@ void sound_uart_tx_update(const ComBus& bus, bool failSafe) {
     s_serial->write(frame, frameLen);
     s_seq++;
 
-#if defined(DEBUG_COMBUS) && defined(DEBUG_SYSTEM)
-    sys_log_debug("[SOUND_TX] seq=%u  len=%u  rl=%d  flags=0x%02X\n",
-                  (unsigned)(s_seq - 1u),
-                  (unsigned)frameLen,
-                  (int)bus.runLevel,
-                  (unsigned)( (bus.batteryIsLow ? COMBUS_FLAG_BATTERY_LOW : 0u)
-                             | (bus.keyOn        ? COMBUS_FLAG_KEY_ON      : 0u)
-                             | (failSafe         ? COMBUS_FLAG_FAILSAFE    : 0u) ));
-#endif
+    output_log_dbg("[SOUND_TX] seq=%u  len=%u  rl=%d  flags=0x%02X\n",
+                   (unsigned)(s_seq - 1u),
+                   (unsigned)frameLen,
+                   (int)bus.runLevel,
+                   (unsigned)(failSafe ? COMBUS_FLAG_FAILSAFE : 0u) );
 }
+
+#endif // SOUND_OUTPUT_UART
 
 // EOF sound_uart_tx.cpp

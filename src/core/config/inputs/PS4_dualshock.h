@@ -97,4 +97,15 @@ inline constexpr InputDev inputDev {
   .digitalInputDevCount = static_cast<uint8_t>(DigitalInputDevID::DIGITAL_DEV_COUNT)  // number of input digital channel
 };
 
+
+// =============================================================================
+// Hardware cap checks (PS4 DualShock 4 physical limits)
+// =============================================================================
+
+  // PS4 DS4 hardware: 6 analog axes (LX, LY, RX, RY, L2, R2), 18 digital buttons.
+static_assert(static_cast<uint8_t>(AnalogInputDevID::ANALOG_DEV_COUNT)  <= 6u,
+              "PS4_dualshock: ANALOG_DEV_COUNT exceeds PS4 DS4 analog axis count (6)");
+static_assert(static_cast<uint8_t>(DigitalInputDevID::DIGITAL_DEV_COUNT) <= 18u,
+              "PS4_dualshock: DIGITAL_DEV_COUNT exceeds PS4 DS4 button count (18)");
+
 // EOF PS4_dualshock4.h

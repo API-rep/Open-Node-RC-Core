@@ -1,0 +1,59 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "PIO Build volvo_A60H_bruder",
+			"type": "shell",
+			"command": "${userHome}\\.platformio\\penv\\Scripts\\pio.exe run -e volvo_A60H_bruder",
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "PIO Build volvo_A60H_bruder",
+			"type": "shell",
+			"command": "${userHome}\\.platformio\\penv\\Scripts\\pio.exe run -e volvo_A60H_bruder",
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "PIO Build volvo_A60H_bruder",
+			"type": "shell",
+			"command": "${userHome}\\.platformio\\penv\\Scripts\\pio.exe run -e volvo_A60H_bruder",
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "PIO Build volvo_A60H_bruder",
+			"type": "shell",
+			"command": "${userHome}\\.platformio\\penv\\Scripts\\pio.exe run -e volvo_A60H_bruder",
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "PIO Build volvo_A60H_bruder",
+			"type": "shell",
+			"command": "${userHome}\\.platformio\\penv\\Scripts\\pio.exe run -e volvo_A60H_bruder",
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "PIO Build volvo_A60H_bruder",
+			"type": "shell",
+			"command": "${userHome}\\.platformio\\penv\\Scripts\\pio.exe run -e volvo_A60H_bruder",
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": "build"
+		}
+	]
+}

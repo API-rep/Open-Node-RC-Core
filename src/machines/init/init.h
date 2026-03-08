@@ -38,6 +38,9 @@
 	// --- Input device setup ---
 #include "input_init.h"
 
+	// --- Output peripherals setup ---
+#include "output_init.h"
+
 
 // =============================================================================
 // 4. INIT ORCHESTRATOR

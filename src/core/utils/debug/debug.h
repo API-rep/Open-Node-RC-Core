@@ -13,6 +13,7 @@
  *     -D DEBUG_SYSTEM         ; enable system log wrappers
  *     -D DEBUG_INPUT          ; enable input log wrappers
  *     -D DEBUG_COMBUS         ; enable combus log wrappers
+ *     -D DEBUG_OUTPUT         ; enable output transport log wrappers
  *     -D DEBUG_ALL            ; shortcut — enables all module wrappers
  *****************************************************************************/
 #pragma once
@@ -74,6 +75,12 @@ constexpr uint8_t LogLevel = (uint8_t)(LOG_LEVEL);
   constexpr bool DbgCombus = true;
 #else
   constexpr bool DbgCombus = false;
+#endif
+
+#if defined(DEBUG_ALL) || defined(DEBUG_OUTPUT)
+  constexpr bool DbgOutput = true;
+#else
+  constexpr bool DbgOutput = false;
 #endif
 
   // Dashboard is a standalone feature flag — not activated by DEBUG_ALL.
@@ -314,7 +321,36 @@ inline void combus_log_dbg(const char* fmt, Args... args) {
 
 
 // =============================================================================
-// 8. SERIAL BOOTSTRAP
+// 8. OUTPUT LOG WRAPPERS  (gated by DEBUG_OUTPUT)
+// =============================================================================
+
+  /// Print an output error-log-level message while DEBUG_OUTPUT is set.
+template<typename... Args>
+inline void output_log_err(const char* fmt, Args... args) {
+  log_impl<LogError, DbgOutput>(fmt, args...);
+}
+
+	/// Print an output warning-log-level message while DEBUG_OUTPUT is set.
+template<typename... Args>
+inline void output_log_warn(const char* fmt, Args... args) {
+  log_impl<LogWarn, DbgOutput>(fmt, args...);
+}
+
+	/// Print an output info-log-level message while DEBUG_OUTPUT is set.
+template<typename... Args>
+inline void output_log_info(const char* fmt, Args... args) {
+  log_impl<LogInfo, DbgOutput>(fmt, args...);
+}
+
+	/// Print an output debug-log-level message while DEBUG_OUTPUT is set.
+template<typename... Args>
+inline void output_log_dbg(const char* fmt, Args... args) {
+  log_impl<LogDebug, DbgOutput>(fmt, args...);
+}
+
+
+// =============================================================================
+// 9. SERIAL BOOTSTRAP
 // =============================================================================
 
 /**

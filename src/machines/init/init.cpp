@@ -47,7 +47,10 @@ void machine_init() {
 	  // --- 3. Input init ---
   input_init();
 
-	  // --- 4. Boot-safe runlevel ---
+	  // --- 4. Output init ---
+  output_init();
+
+	  // --- 5. Boot-safe runlevel ---
   sys_log_info("[SYSTEM] Applying boot-safe runlevel...\n");
   comBus.runLevel = DEF_RUNLEVEL;
   stopAllDcDrivers(machine);
@@ -58,13 +61,11 @@ void machine_init() {
   sys_log_info("  INIT COMPLETE — machine=%s\n", machine.infoName);
   sys_log_info("========================================\n\n");
 
-	  // --- 5. Dashboard setup ---
-  dashboard_machine_setup(&comBus, &machine,
-    static_cast<uint8_t>(AnalogComBusID::CH_COUNT),
-    static_cast<uint8_t>(DigitalComBusID::CH_COUNT));
+	  // --- 6. Dashboard setup ---
+  dashboard_machine_setup(&comBus, &machine, static_cast<uint8_t>(AnalogComBusID::CH_COUNT), static_cast<uint8_t>(DigitalComBusID::CH_COUNT));
 
   
-	  // --- 6. Post-init pause (compiled in only when -D PAUSE_LOG_AFTER_INIT is set) ---
+	  // --- 7. Post-init pause (compiled in only when -D PAUSE_LOG_AFTER_INIT is set) ---
   if constexpr (PauseAfterInit) {
       // KEY channel index in the digital bus (TRIANGLE on PS4 in dumper-truck layout)
     uint8_t keyCh = static_cast<uint8_t>(DigitalComBusID::KEY);

@@ -11,13 +11,13 @@ ComBus snapshot on a serial port.
 ## 1. Architecture overview
 
 ```
-┌─────────────────────────────┐      UART 115200       ┌─────────────────────────────┐
-│      Machine ESP32          │  ─────────────────────► │       Sound ESP32           │
-│  (volvo_A60H_bruder env)    │   13 bytes @ 50 Hz      │  (sound_node_volvo env)     │
+┌─────────────────────────────┐      UART 115200         ┌─────────────────────────────┐
+│      Machine ESP32          │  ─────────────────────►  │       Sound ESP32           │
+│  (volvo_A60H_bruder env)    │   13 bytes @ 50 Hz       │  (sound_node_volvo env)     │
 │                             │                          │                             │
 │  ComBus (analog + digital)  │                          │  sound_uart_rx_update()     │
-│  sound_uart_tx_update()     │                          │  → ComBusSnapshot           │
-│  └─ combus_transport_encode │                          │  sound_hal_update()         │
+│  sound_uart_tx_update()     │                          │  → ComBusFrame              │
+│  └─ combus_frame_encode │                          │  sound_hal_update()         │
 │                             │                          │  └─ pulseWidth[] globals    │
 │                             │                          │  rc_engine_sound engine     │
 └─────────────────────────────┘                          └─────────────────────────────┘
@@ -30,7 +30,7 @@ Key design decisions:
   the existing `pulseWidth[]` globals that rc_engine_sound already reads.
 - **No RC hardware on the sound node** — no SBUS, no PWM input decoder; the UART
   link replaces all RC hardware abstraction.
-- **Generic transport** — `src/core/transport/combus_transport.h` is
+- **Generic transport** — `src/core/utils/combus/combus_frame.h` is
   platform-independent. The same framing can be reused for an ESP-Now RF link.
 
 ---
@@ -56,7 +56,7 @@ SOUND_RX_PIN   16    (sound side,  defined in main.cpp)
 
 ## 3. Binary frame format
 
-Produced by `combus_transport_encode()`, consumed by `combus_transport_decode()`.
+Produced by `combus_frame_encode()`, consumed by `combus_frame_decode()`.
 
 ```
 Offset  Size   Field
@@ -113,8 +113,8 @@ src/sound_module/
 Companion file in core (machine-independent, reusable):
 ```
 src/core/transport/
-├── combus_transport.h    ← encode / decode / apply / CRC-8 — no Arduino deps
-└── combus_transport.cpp
+├── combus_frame.h    ← encode / decode / apply / CRC-8 — no Arduino deps
+└── combus_frame.cpp
 ```
 
 Machine-side hook (non-breaking, conditional):
@@ -235,7 +235,7 @@ UART link instead of hardware RC inputs.
   The binary frame on UART is the only interface.
 - **Incremental build**: the scaffold compiles without the engine sources,
   allowing CI and code review before the audio library is integrated.
-- **Generic framing**: `combus_transport` encodes any ComBus snapshot regardless
+- **Generic framing**: `combus_frame` encodes any ComBus snapshot regardless
   of the machine type. Adding a new channel only changes `sound_config.h` mapping.
 - **Failsafe is clean**: a single 500 ms link-alive check drives all safety
   channels; no partial state is possible.

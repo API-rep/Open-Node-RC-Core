@@ -78,7 +78,7 @@ void sound_hal_init();
  *   - pulseWidth[GEARBOX]    ← analogBus[DUMP_BUS]
  *   - pulseWidth[HORN]       ← digitalBus[HORN]
  *   - pulseWidth[FUNCTION_R] ← digitalBus[LIGHTS]
- *   - failSafe               ← COMBUS_FLAG_FAILSAFE or link timeout
+ *   - failSafe               ← COMBUS_FLAG_FAILSAFE (transport flag) or link timeout
  */
 void sound_hal_update();
 

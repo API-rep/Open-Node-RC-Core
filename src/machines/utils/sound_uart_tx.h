@@ -30,8 +30,14 @@
  *
  * @param txPin  ESP32 GPIO pin for UART TX (connects to sound ESP32 RX).
  * @param rxPin  ESP32 GPIO pin for UART RX (-1 if not used / TX-only link).
+ * @param baud   UART baud rate (from board SoundUartBaud).
+ * @param txHz   Frame transmit rate in Hz (from board SoundTransportTxHz).
  */
-void sound_uart_tx_init(int txPin, int rxPin = -1);
+
+void sound_uart_tx_init(int txPin, int rxPin = -1, uint32_t baud = 115200u, uint32_t txHz = 50u);
+
+
+
 
 /**
  * @brief Periodic transmit update — call from main loop.
@@ -42,6 +48,7 @@ void sound_uart_tx_init(int txPin, int rxPin = -1);
  * @param bus       Current ComBus state to serialize.
  * @param failSafe  True when the machine-side failsafe is active.
  */
+
 void sound_uart_tx_update(const ComBus& bus, bool failSafe = false);
 
 // EOF sound_uart_tx.h

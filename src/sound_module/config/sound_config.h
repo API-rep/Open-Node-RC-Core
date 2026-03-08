@@ -25,12 +25,9 @@
 // =============================================================================
 
 /// Machine type identifier embedded in every frame header.
-/// Must be set via -D SOUND_ENV_ID=<value> in the platformio env.
-/// Values follow CombusLayout enum (core_defs.h): DUMPER_TRUCK=1
-#ifndef SOUND_ENV_ID
-  #define SOUND_ENV_ID  1u   // default: DUMPER_TRUCK
-#endif
-#define SOUND_TRANSPORT_ENV_ID  ((uint8_t)(SOUND_ENV_ID))
+/// Derived from MACHINE_TYPE (CombusLayout enum, core_defs.h) — must be defined
+/// in the platformio env. Example: -D MACHINE_TYPE=DUMPER_TRUCK (value = 1).
+#define SOUND_TRANSPORT_ENV_ID  static_cast<uint8_t>(CombusLayout::MACHINE_TYPE)
 
 /// Number of analog ComBus channels included in the transport frame.
 /// Keep this ≤ total AnalogComBusID::CH_COUNT to avoid out-of-bounds.
@@ -74,7 +71,9 @@
 #define SOUND_CB_LIGHTS     DigitalComBusID::LIGHTS
 
 /// ComBus digital channel → rc_engine_sound engine on/off (KEY).
-/// @note  This channel supplements ComBus.keyOn — both are checked.
+/// This is the authoritative source for keyOn — the transport flags byte
+/// carries only transport-level status (failSafe); application state like
+/// keyOn is transmitted as a normal digital channel.
 #define SOUND_CB_KEY        DigitalComBusID::KEY
 
 

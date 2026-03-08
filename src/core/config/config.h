@@ -13,6 +13,7 @@
 
 #include "combus/combus.h"
 #include "inputs/inputs.h"
+#include "outputs/outputs.h"
 
 /**
 * Environement variable

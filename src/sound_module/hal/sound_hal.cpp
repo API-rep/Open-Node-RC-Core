@@ -25,7 +25,7 @@
 
 #include "../transport/sound_uart_rx.h"
 #include "../config/sound_config.h"
-#include <core/transport/combus_transport.h>
+#include <core/utils/combus/combus_frame.h>
 
 
 // =============================================================================
@@ -117,7 +117,7 @@ void sound_hal_init() {
  * Update pulseWidth[] from latest ComBus snapshot.
  */
 void sound_hal_update() {
-    const ComBusSnapshot* snap = sound_uart_rx_snapshot();
+    const ComBusFrame* snap = sound_uart_rx_snapshot();
 
       // --- Link-loss failsafe ---
     if (!snap || !sound_uart_rx_is_alive(SOUND_HAL_FAILSAFE_TIMEOUT_MS)) {
@@ -165,11 +165,12 @@ void sound_hal_update() {
                                           : SOUND_HAL_DIGITAL_OFF_US;
     }
 
-      // --- ENGINE ON via RunLevel + keyOn flag ---
+      // --- ENGINE ON via RunLevel + KEY digital channel ---
     //  The rc_engine_sound engine-on state is driven by pulseWidth[FUNCTION_R].
     //  RunLevel RUNNING is additionally used to ensure the engine is requested.
-    //  keyOn propagates through the COMBUS_FLAG_KEY_ON bit in flags.
-    bool keyOn = (snap->flags & COMBUS_FLAG_KEY_ON) != 0u;
+    //  keyOn is transmitted as the KEY digital channel (SOUND_CB_KEY).
+    uint8_t chKey = static_cast<uint8_t>(SOUND_CB_KEY);
+    bool keyOn = (chKey < snap->nDigital) && snap->digital[chKey];
     bool running = ((RunLevel)snap->runLevel == RunLevel::RUNNING ||
                     (RunLevel)snap->runLevel == RunLevel::STARTING);
 

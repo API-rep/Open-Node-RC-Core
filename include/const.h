@@ -27,20 +27,4 @@
   #error "ADC_MAX_COUNT: unknown CPU — define ADC resolution in const.h for this target."
 #endif
 
-
-// =============================================================================
-// PIN MODES
-// =============================================================================
-
-/**
- * @brief Input pin state definition 
- */
-
-enum class InputPinMode : uint8_t {
-    ACTIVE_LOW       =  0,
-    ACTIVE_HIGH      =  1,
-    OPEN_DRAIN_MODE  =  2,
-    UNDEFINED        =  3,
-};
-
 // EOF const.h

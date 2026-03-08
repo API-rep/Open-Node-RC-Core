@@ -287,3 +287,44 @@ All public API degrades to inline no-ops when the flag is absent — zero overhe
 - Prefer minimal, focused edits.
 - Do not reformat unrelated code.
 - Keep changes consistent with existing project style.
+
+## 5) Deferred feature ideas
+
+Re-read this section periodically and propose one item when the project is stable
+enough to absorb it. Never propose more than one at a time.
+
+### ExtPort conflict detection (board-level)
+**Context:** Extension/communication pins (`Txd1Pin`, `Rxd1Pin`, …) in board headers
+are bare `constexpr` pin numbers. Nothing prevents two modules activated by separate
+build flags from both claiming the same pin — the conflict is silent until hardware misbehaves.
+
+**Proposed feature:** Add a lightweight `ExtPort` registry in the board header:
+- A `constexpr` array of `{ int8_t pin; const char* owner; }` entries, one per
+  assignable port.
+- `output_init()` (and any future init using a port) calls a compile-time or
+  early-runtime `port_claim(pin, "module_name")` that `static_assert`s / logs a
+  fatal error on duplicate.
+- Zero RAM overhead when only one claimant exists; small ROM cost otherwise.
+
+**Prerequisite:** Project is stable with ≥ 2 independent output modules active
+simultaneously — only then does the risk justify the added infrastructure.
+### Sound transport cap cross-check (controller ↔ sound module)
+**Context:** `output_init.h` defines `SoundTransportMaxTxHz = 200u` as the
+controller-side ceiling. `ESP32_8M_6S.h` has a matching TODO comment. The sound
+module side has no equivalent `constexpr` yet — the cross-check is therefore
+one-sided and the 200 Hz cap is an arbitrary placeholder.
+
+**Proposed feature:** Once `sound_config.h` (sound node side) exposes:
+```cpp
+static constexpr uint32_t SoundRxMaxHz  = ...;   // max frame rate the node can process
+static constexpr uint32_t SoundRxMaxBaud = ...;  // max supported baud
+```
+Add to `output_init.h` (under `#ifdef SOUND_OUTPUT_UART`):
+```cpp
+static_assert(SoundTransportTxHz  <= SoundRxMaxHz,   "TX rate exceeds sound node capability");
+static_assert(SoundUartBaud       <= SoundRxMaxBaud,  "Baud exceeds sound node capability");
+```
+Replace the `200u` magic number with `SoundRxMaxHz` and remove the `// TODO` comment from the board header.
+
+**Prerequisite:** Sound node firmware is stable enough to characterise its real
+receive throughput and commit it as a `constexpr` in `sound_config.h`.
