@@ -17,7 +17,7 @@
 #pragma once
 
 #include <stdint.h>
-#include <core/config/combus/combus_types.h>
+#include <core/config/combus/combus.h>    // AnalogComBusID, DigitalComBusID (IS_MACHINE absent → enums only)
 
 
 // =============================================================================

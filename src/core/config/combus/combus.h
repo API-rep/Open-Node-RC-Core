@@ -5,12 +5,12 @@
  * Dispatches to the machine-specific com-bus file which, when IS_MACHINE is
  * defined, exposes enum IDs, array externs, comBus extern and input mapping.
  *
- * Cross-boundary consumers that need only the enum IDs (sound node, etc.)
- * should include combus_types.h instead — it dispatches to the same files
- * but the IS_MACHINE guard keeps structs and input headers out.
+ * All consumers (machine node, sound node, remote node) include this file.
+ * The IS_MACHINE guard inside each machine file controls what is exposed:
+ *   - IS_MACHINE absent  → enum IDs only (AnalogComBusID, DigitalComBusID)
+ *   - IS_MACHINE defined → enum IDs + externs + inputs_map
  *
- * NOTE: when adding a new machine type, add one #elif branch below AND the
- * matching branch in combus_types.h.
+ * NOTE: when adding a new machine type, add one #elif branch below.
  *******************************************************************************/// 
 #pragma once
 
