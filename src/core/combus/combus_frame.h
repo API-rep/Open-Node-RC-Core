@@ -52,10 +52,32 @@
 // =============================================================================
 
 /// Start-of-frame sentinel byte.
-#define COMBUS_FRAME_SOF         0xAAu
+#define COMBUS_FRAME_SOF  0xAAu
 
-/// Minimum valid frame size (7-byte header + CRC, zero channels).
-#define COMBUS_FRAME_MIN_LEN     8u
+/**
+ * @brief Binary layout of the fixed frame header (7 × uint8_t, no padding).
+ * Used as a sizeof/offsetof source — never instantiated at runtime.
+ */
+
+struct CombusFrameHeader {
+    uint8_t sof;        ///< 0xAA
+    uint8_t envId;      ///< MACHINE_TYPE numeric value
+    uint8_t seq;        ///< rolling counter 0–255
+    uint8_t runLevel;   ///< RunLevel cast to uint8_t
+    uint8_t flags;      ///< bit0 = failSafe
+    uint8_t nAnalog;    ///< number of analog channels
+    uint8_t nDigBytes;  ///< ceil(n_digital / 8)
+};
+
+
+static_assert(sizeof(CombusFrameHeader) == 7u, "CombusFrameHeader must be exactly 7 bytes — check for unexpected padding");
+
+/// Fixed header size in bytes — derived from the struct layout.
+static constexpr uint8_t CombusFrameHeaderLen = sizeof(CombusFrameHeader);
+
+/// Minimum valid frame size: fixed header + CRC byte (zero channels).
+static constexpr uint8_t CombusFrameMinLen = CombusFrameHeaderLen + sizeof(uint8_t);
+
 
 
 // =============================================================================
@@ -63,46 +85,45 @@
 // =============================================================================
 
 /// Frame flags field — bit positions.
-/// Only transport-level status lives here; application state (batteryIsLow,
-/// keyOn) is carried as normal digital channels.
+/// Only transport-level status lives here; do not overload with application-level state.
 #define COMBUS_FLAG_FAILSAFE     (1u << 0)  ///< upstream failsafe active (link-loss or remote disconnect)
+
 
 
 // =============================================================================
 // 3. PUBLIC API
 // =============================================================================
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /**
  * @brief Encode a ComBus state into a binary frame.
  *
  * @details Serializes runLevel, flags, all analog and digital channels into
- * the compact frame format. CRC8 is appended automatically.
+ * the compact frame format with an autmatic CRC8 check.
+ * 
  * Returns 0 if buf/bus are null or if the computed frame length would
  * overflow a uint8_t (i.e. caller requested more data than the protocol
  * can address with a single-byte length field).
  *
- * @param[out] buf        Output buffer — must be sized by the caller to fit
- *                        the expected frame (use SoundTransportFrameSize or
- *                        the equivalent for the active transport).
- * @param[in]  bus        Source ComBus to encode.
- * @param[in]  nAnalog    Number of analog bus channels to include.
- * @param[in]  nDigital   Number of digital bus channels to include.
+ * @param[out] buf        Output buffer pointer (sized by the caller)
+ * @param[in]  bus        Source of ComBus instance to encode.
+ * @param[in]  nAnalog    Number of analog bus channels to include (c.f. combus config enum).
+ * @param[in]  nDigital   Number of digital bus channels to include (c.f. combus config enum).
  * @param[in]  envId      Machine type identifier (MACHINE_TYPE build value).
  * @param[in]  seq        Sequence counter (caller increments).
  * @param[in]  failSafe   Upstream failsafe flag.
+ * 
  * @return Number of bytes written into buf, 0 on error.
  */
-uint8_t combus_frame_encode(uint8_t*       buf,
+
+uint8_t combus_frame_encode( uint8_t*       buf,
                              const ComBus*  bus,
                              uint8_t        nAnalog,
                              uint8_t        nDigital,
                              uint8_t        envId,
                              uint8_t        seq,
                              bool           failSafe);
+
+
 
 /**
  * @brief Decode a binary frame into a ComBusFrame.
@@ -118,11 +139,15 @@ uint8_t combus_frame_encode(uint8_t*       buf,
  * @param[in]  maxDigital Capacity of frame->digital[] (caller's buffer size).
  * @return true if frame is valid and was populated, false otherwise.
  */
+
 bool combus_frame_decode(ComBusFrame*    frame,
                           const uint8_t*  buf,
                           uint8_t         len,
                           uint8_t         maxAnalog,
                           uint8_t         maxDigital);
+
+
+
 
 /**
  * @brief Apply a decoded frame onto a live ComBus.
@@ -136,10 +161,14 @@ bool combus_frame_decode(ComBusFrame*    frame,
  * @param[in]  nAnalog Maximum analog channels to update (safety clamp).
  * @param[in]  nDig    Maximum digital channels to update (safety clamp).
  */
-void combus_frame_apply(ComBus*            bus,
+
+void combus_frame_apply(ComBus*             bus,
                          const ComBusFrame* frame,
                          uint8_t            nAnalog,
                          uint8_t            nDig);
+
+
+
 
 /**
  * @brief Compute CRC-8/MAXIM over a byte buffer.
@@ -148,10 +177,7 @@ void combus_frame_apply(ComBus*            bus,
  * @param[in] len   Number of bytes.
  * @return CRC8 value.
  */
-uint8_t combus_frame_crc8(const uint8_t* data, uint8_t len);
 
-#ifdef __cplusplus
-}
-#endif
+uint8_t combus_frame_crc8(const uint8_t* data, uint8_t len);
 
 // EOF combus_frame.h

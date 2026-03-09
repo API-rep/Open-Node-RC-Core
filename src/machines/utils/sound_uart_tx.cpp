@@ -8,7 +8,7 @@
 #include <Arduino.h>
 
 #include <defs/defs.h>
-#include <core/utils/combus/combus_frame.h>
+#include <core/combus/combus_frame.h>
 #include <core/config/outputs/outputs.h>
 #include <core/utils/debug/debug.h>
 

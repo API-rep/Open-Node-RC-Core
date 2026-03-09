@@ -19,9 +19,20 @@
 /**
  * CRC-8/MAXIM (Dallas 1-Wire) — polynomial 0x31, init 0x00, reflect in/out.
  *
- * @details Iterative byte-by-byte computation — no lookup table needed at
- * the frame sizes used here. Safe to call from any context.
+ * @details A CRC (Cyclic Redundancy Check) is a short fingerprint computed
+ * over a byte sequence. The emitter appends it to the frame; the receiver
+ * recomputes it over the same bytes and compares — any bit flip or truncation
+ * in transit produces a mismatch and the frame is discarded.
+ *
+ * The MAXIM/Dallas variant (used in 1-Wire sensors) was chosen for its wide
+ * hardware support and minimal false-positive rate at these frame sizes.
+ * Iterative bit-by-bit computation — no lookup table, negligible ROM cost.
+ *
+ * @param[in] data  Input byte buffer.
+ * @param[in] len   Number of bytes to process.
+ * @return CRC-8 value over the input buffer.
  */
+
 uint8_t combus_frame_crc8(const uint8_t* data, uint8_t len) {
     uint8_t crc = 0x00u;
     for (uint8_t i = 0; i < len; ++i) {
@@ -37,6 +48,7 @@ uint8_t combus_frame_crc8(const uint8_t* data, uint8_t len) {
     }
     return crc;
 }
+
 
 
 // =============================================================================
@@ -66,7 +78,7 @@ uint8_t combus_frame_encode(uint8_t*       buf,
       // Protocol invariant: the frame length field is uint8_t — reject if it would overflow.
       // Physical transport caps (CombusPhysUartMax, CombusPhysEspNowMax) are enforced
       // at the call site via static_assert in the relevant output config header.
-    if ((7u + (uint16_t)nDigBytes + (uint16_t)nAnalog * 2u + 1u) > 255u) {
+    if ((CombusFrameHeaderLen + (uint16_t)nDigBytes + (uint16_t)nAnalog * 2u + 1u) > 255u) {
         return 0u;
     }
 
@@ -127,7 +139,7 @@ bool combus_frame_decode(ComBusFrame*    frame,
                           uint8_t         maxAnalog,
                           uint8_t         maxDigital) {
       // --- 1. Minimum length and SOF guard ---
-    if (!frame || !buf || len < COMBUS_FRAME_MIN_LEN) {
+    if (!frame || !buf || len < CombusFrameMinLen) {
         return false;
     }
     if (buf[0] != COMBUS_FRAME_SOF) {
@@ -135,18 +147,20 @@ bool combus_frame_decode(ComBusFrame*    frame,
     }
 
       // --- 2. Parse header fields ---
-    uint8_t envId     = buf[1];
-    uint8_t seq       = buf[2];
-    uint8_t runLevel  = buf[3];
-    uint8_t flags     = buf[4];
-    uint8_t nAnalog   = buf[5];
-    uint8_t nDigBytes = buf[6];
+    CombusFrameHeader hdr;
+    memcpy(&hdr, buf, sizeof(hdr));
+    uint8_t envId     = hdr.envId;
+    uint8_t seq       = hdr.seq;
+    uint8_t runLevel  = hdr.runLevel;
+    uint8_t flags     = hdr.flags;
+    uint8_t nAnalog   = hdr.nAnalog;
+    uint8_t nDigBytes = hdr.nDigBytes;
 
       // --- 3. Sanity-check declared sizes ---
     if (!frame->analog || !frame->digital)  { return false; }
 
       // Protocol invariant: reject if computed frame length overflows uint8_t.
-    uint16_t expectedLenW = 7u + (uint16_t)nDigBytes + (uint16_t)nAnalog * 2u + 1u;
+    uint16_t expectedLenW = CombusFrameHeaderLen + (uint16_t)nDigBytes + (uint16_t)nAnalog * 2u + 1u;
     if (expectedLenW > 255u)                { return false; }
 
       // Reject if analog payload would overflow caller's buffer.
@@ -165,7 +179,7 @@ bool combus_frame_decode(ComBusFrame*    frame,
     uint8_t nDigital = (uint8_t)(nDigBytes * 8u);
     if (nDigital > maxDigital) { nDigital = maxDigital; }  // clamp to caller's buffer
 
-    uint8_t idx = 7u;
+    uint8_t idx = CombusFrameHeaderLen;
     for (uint8_t b = 0u; b < nDigBytes; ++b) {
         uint8_t packed = buf[idx++];
         for (uint8_t bit = 0u; bit < 8u; ++bit) {

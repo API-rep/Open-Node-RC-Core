@@ -25,7 +25,7 @@
 
 #include "../transport/sound_uart_rx.h"
 #include "../config/sound_config.h"
-#include <core/utils/combus/combus_frame.h>
+#include <core/combus/combus_frame.h>
 
 
 // =============================================================================

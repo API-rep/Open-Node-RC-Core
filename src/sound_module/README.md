@@ -30,7 +30,7 @@ Key design decisions:
   the existing `pulseWidth[]` globals that rc_engine_sound already reads.
 - **No RC hardware on the sound node** — no SBUS, no PWM input decoder; the UART
   link replaces all RC hardware abstraction.
-- **Generic transport** — `src/core/utils/combus/combus_frame.h` is
+- **Generic transport** — `src/core/combus/combus_frame.h` is
   platform-independent. The same framing can be reused for an ESP-Now RF link.
 
 ---

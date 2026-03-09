@@ -5,9 +5,10 @@
 
 #include "sound_uart_rx.h"
 
+#include <stddef.h>
 #include <Arduino.h>
 
-#include <core/utils/combus/combus_frame.h>
+#include <core/combus/combus_frame.h>
 #include "../config/sound_config.h"
 
 
@@ -80,19 +81,19 @@ static uint8_t tryDecode() {
         rxBufConsume(1u);
     }
 
-    if (s_rxCount < COMBUS_FRAME_MIN_LEN) {
+    if (s_rxCount < CombusFrameMinLen) {
         return 0u;  // not enough bytes yet
     }
 
       // --- 2. Peek header to determine expected frame size ---
-    //  buf[5] = nAnalog, buf[6] = nDigBytes
-    if (s_rxCount < 7u) {
+    //  buf[nAnalog offset] = nAnalog, buf[nDigBytes offset] = nDigBytes
+    if (s_rxCount < CombusFrameHeaderLen) {
         return 0u;
     }
-    uint8_t nAnalog   = rxBufAt(5u);
-    uint8_t nDigBytes = rxBufAt(6u);
+    uint8_t nAnalog   = rxBufAt(offsetof(CombusFrameHeader, nAnalog));
+    uint8_t nDigBytes = rxBufAt(offsetof(CombusFrameHeader, nDigBytes));
 
-    uint16_t expectedLenW = 7u + (uint16_t)nDigBytes + (uint16_t)nAnalog * 2u + 1u;
+    uint16_t expectedLenW = CombusFrameHeaderLen + (uint16_t)nDigBytes + (uint16_t)nAnalog * 2u + 1u;
     if (expectedLenW > kUartFrameMaxLen) {
           // Impossible frame size — discard SOF and re-sync
         rxBufConsume(1u);
@@ -154,7 +155,7 @@ void sound_uart_rx_update() {
     }
 
       // --- Try to decode frames (may process multiple back-to-back frames) ---
-    while (s_rxCount >= COMBUS_FRAME_MIN_LEN) {
+    while (s_rxCount >= CombusFrameMinLen) {
         if (tryDecode() == 0u) {
             break;
         }

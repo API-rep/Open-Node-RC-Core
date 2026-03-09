@@ -16,7 +16,7 @@
 #pragma once
 
 #include <stdint.h>
-#include <core/utils/combus/combus_frame.h>
+#include <core/combus/combus_frame.h>
 #include <core/config/combus/combus.h>           // AnalogComBusID, DigitalComBusID (IS_MACHINE absent → enums only)
 // Board constants (SoundUartBaud, SoundTransportTxHz) available via outputs/outputs.h → boards/boards.h.
 
