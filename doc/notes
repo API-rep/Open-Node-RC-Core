@@ -1,4 +1,4 @@
-Note about project
+﻿Note about project
 
 This project intent du design a framework for RC vehicle with DIY harware.
 Years afer years, our (me and my son) RC vehicle squad grow up and code maintenance become harder to maintain.
@@ -43,3 +43,53 @@ Lien GitHub : Garde l'URL du projet de TheDIYGuy999 sous le coude.
 - Click the marker or select the line to unfold temporarily.
 - `"unfoldedOpacity": 0.7` keeps unfolded log lines visually dimmed vs logic code.
 - To disable temporarily: comment out `"inlineFold.regex"` in settings.json.
+
+
+---
+
+## ComBus header architecture — IS_MACHINE guard pattern (2026-03-09)
+
+### Problem solved
+The project had two parallel umbrella files (combus.h + combus_types.h) and two
+parallel leaf files (dumper_truck.h + dumper_truck_types.h). Adding a new machine
+required updating four files. The split existed because machines_struct.h needed
+the enum IDs (AnalogComBusID, DigitalComBusID) but could not include the full
+dumper_truck.h without creating an include cycle.
+
+### Root cause
+machines_struct.h used std::optional<AnalogComBusID> as a field type.
+The compiler only needs the *size* of the enum for that — not the enumerator values.
+C++11 allows forward-declaring a scoped enum with its underlying type:
+
+    enum class AnalogComBusID  : uint8_t;   // forward — no values, size is known
+    enum class DigitalComBusID : uint8_t;
+
+Placing these two lines in machines_struct.h (instead of #include <combus_types.h>)
+breaks the cycle permanently and structurally — no umbrella trick needed.
+
+### Resulting architecture
+
+    combus.h  — sole umbrella, all consumers include this
+      └─ dumper_truck.h
+           ├── Section 1 (always): AnalogComBusID / DigitalComBusID enum definitions
+           └── Section 2 (#ifdef IS_MACHINE only):
+                 - #include <struct/combus_struct.h>
+                 - extern AnalogComBusArray / DigitalComBusArray / comBus
+                 - #include includes_map/inputs_map.h
+
+IS_MACHINE is defined via -D IS_MACHINE in [env:machines] in platformio.ini.
+It is absent for the sound node and remote node environments.
+Do NOT remove or rename IS_MACHINE — the split between section 1 and section 2
+of every machine combus file depends on it.
+
+### Adding a new machine
+1. Create src/core/config/combus/new_machine/new_machine.h following the two-section
+   pattern of dumper_truck.h.
+2. Add one #elif branch in combus.h.
+That is all — no second file, no second umbrella.
+
+### VSCode explorer note
+After deleting files from the terminal (e.g. Remove-Item), VSCode's file explorer
+may still show the deleted entries until manually refreshed.
+Fix: right-click the parent folder in the Explorer panel -> Refresh, or
+Ctrl+Shift+P -> File: Refresh Explorer.
