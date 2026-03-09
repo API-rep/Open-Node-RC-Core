@@ -1,13 +1,16 @@
 /*!****************************************************************************
  * @file  combus.h
- * @brief Com-bus structure top file
- This file is the umbrella for com-bus structure types definition. From -DMACHINE flag, it
- * includes the correct structure types definition file into the project.
- * NOTE:
- * - This file is paired with combus_types.h file which define the com-bus enums.
- *   Splitting enum and structure definition avoid include loop issues.
- *   So, don't forget to update both files when a new machine/combus type is added
- *   to the project. Une -D MACHINE compilation flag as test argument for each file.
+ * @brief Com-bus full umbrella (machine builds)
+ *
+ * Dispatches to the machine-specific com-bus file which, when IS_MACHINE is
+ * defined, exposes enum IDs, array externs, comBus extern and input mapping.
+ *
+ * Cross-boundary consumers that need only the enum IDs (sound node, etc.)
+ * should include combus_types.h instead — it dispatches to the same files
+ * but the IS_MACHINE guard keeps structs and input headers out.
+ *
+ * NOTE: when adding a new machine type, add one #elif branch below AND the
+ * matching branch in combus_types.h.
  *******************************************************************************/// 
 #pragma once
 
@@ -16,7 +19,6 @@
 #include <defs/defs.h>
 
 
-  /* TP dumper trucks */
 #if defined(MACHINE_TYPE) && (MACHINE_TYPE == DUMPER_TRUCK)
   #include "dumper_truck/dumper_truck.h"
 
