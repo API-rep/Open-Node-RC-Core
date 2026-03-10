@@ -5,7 +5,7 @@
 #pragma once
 
 #include <ESP32_PWM_Servo.h>
-#include <core/config/combus/combus.h>
+#include <core/config/combus/combus_types.h>
 
 // =============================================================================
 // 1. OBJECT ALLOCATION & POINTERS

@@ -17,7 +17,7 @@
 
 #include <stdint.h>
 #include <core/combus/combus_frame.h>
-#include <core/config/combus/combus.h>           // AnalogComBusID, DigitalComBusID (IS_MACHINE absent → enums only)
+#include <core/config/combus/combus_types.h>           // AnalogComBusID, DigitalComBusID (IS_MACHINE absent → enums only)
 // Board constants (SoundUartBaud, SoundTransportTxHz) available via outputs/outputs.h → boards/boards.h.
 
 /// UART transport physical cap — chosen as uint8_t safety ceiling (no hardware limit).

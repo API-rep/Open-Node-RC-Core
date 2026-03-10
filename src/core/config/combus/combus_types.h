@@ -1,5 +1,5 @@
 /*!****************************************************************************
- * @file  combus.h
+ * @file  combus_types.h
  * @brief Com-bus full umbrella (machine builds)
  *
  * Dispatches to the machine-specific com-bus file which, when IS_MACHINE is
@@ -30,4 +30,4 @@
 #endif
 
 
-// EOF combus.h
+// EOF combus_types.h

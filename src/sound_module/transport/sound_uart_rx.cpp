@@ -33,7 +33,7 @@ static uint16_t       s_snapAnalog[SOUND_TRANSPORT_N_ANALOG];
 static bool           s_snapDigital[SOUND_TRANSPORT_N_DIGITAL];
 
 /// Latest decoded snapshot.
-static ComBusFrame    s_snap = { .analog = s_snapAnalog, .digital = s_snapDigital };
+static ComBusFrame    s_snap = { .header = {}, .analog = s_snapAnalog, .digital = s_snapDigital };
 static bool           s_snapValid = false;
 
 /// Timestamp of last valid frame reception.
@@ -77,7 +77,7 @@ static void rxBufConsume(uint8_t n) {
  */
 static uint8_t tryDecode() {
       // --- 1. Scan for SOF ---
-    while (s_rxCount > 0u && rxBufAt(0u) != COMBUS_FRAME_SOF) {
+    while (s_rxCount > 0u && rxBufAt(0u) != CombusFrameSof) {
         rxBufConsume(1u);
     }
 
@@ -90,8 +90,9 @@ static uint8_t tryDecode() {
     if (s_rxCount < CombusFrameHeaderLen) {
         return 0u;
     }
-    uint8_t nAnalog   = rxBufAt(offsetof(CombusFrameHeader, nAnalog));
-    uint8_t nDigBytes = rxBufAt(offsetof(CombusFrameHeader, nDigBytes));
+    uint8_t nAnalog   = rxBufAt(1u + offsetof(CombusFrameHeader, nAnalog));
+    uint8_t nDigital  = rxBufAt(1u + offsetof(CombusFrameHeader, nDigital));
+    uint8_t nDigBytes = (nDigital + 7u) / 8u;
 
     uint16_t expectedLenW = CombusFrameHeaderLen + (uint16_t)nDigBytes + (uint16_t)nAnalog * 2u + 1u;
     if (expectedLenW > kUartFrameMaxLen) {

@@ -12,7 +12,7 @@
 #include <struct/struct.h>
 #include <defs/defs.h>
 
-#include <core/config/combus/combus.h>
+#include <core/config/combus/combus_types.h>
 
 /**
  * @brief Vehicle configuration

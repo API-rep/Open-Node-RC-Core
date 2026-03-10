@@ -127,7 +127,7 @@ void sound_hal_update() {
     }
 
       // --- Machine-side failsafe propagation ---
-    bool machineFail = (snap->flags & COMBUS_FLAG_FAILSAFE) != 0u;
+    bool machineFail = (snap->header.flags & COMBUS_FLAG_FAILSAFE) != 0u;
     failSafe = machineFail;
 
     if (machineFail) {
@@ -140,13 +140,13 @@ void sound_hal_update() {
     uint8_t chSteering = static_cast<uint8_t>(SOUND_CB_STEERING);
     uint8_t chGearbox  = static_cast<uint8_t>(SOUND_CB_GEARBOX);
 
-    if (chThrottle < snap->nAnalog) {
+    if (chThrottle < snap->header.nAnalog) {
         pulseWidth[SOUND_CH_THROTTLE]   = cbValToPulse(snap->analog[chThrottle]);
     }
-    if (chSteering < snap->nAnalog) {
+    if (chSteering < snap->header.nAnalog) {
         pulseWidth[SOUND_CH_STEERING]   = cbValToPulse(snap->analog[chSteering]);
     }
-    if (chGearbox < snap->nAnalog) {
+    if (chGearbox < snap->header.nAnalog) {
         pulseWidth[SOUND_CH_GEARBOX]    = cbValToPulse(snap->analog[chGearbox]);
     }
 
@@ -154,12 +154,12 @@ void sound_hal_update() {
     uint8_t chHorn   = static_cast<uint8_t>(SOUND_CB_HORN);
     uint8_t chLights = static_cast<uint8_t>(SOUND_CB_LIGHTS);
 
-    if (chHorn < snap->nDigital) {
+    if (chHorn < snap->header.nDigital) {
         pulseWidth[SOUND_CH_HORN]       = snap->digital[chHorn]
                                           ? SOUND_HAL_DIGITAL_ON_US
                                           : SOUND_HAL_DIGITAL_OFF_US;
     }
-    if (chLights < snap->nDigital) {
+    if (chLights < snap->header.nDigital) {
         pulseWidth[SOUND_CH_FUNCTION_R] = snap->digital[chLights]
                                           ? SOUND_HAL_DIGITAL_ON_US
                                           : SOUND_HAL_DIGITAL_OFF_US;
@@ -170,9 +170,9 @@ void sound_hal_update() {
     //  RunLevel RUNNING is additionally used to ensure the engine is requested.
     //  keyOn is transmitted as the KEY digital channel (SOUND_CB_KEY).
     uint8_t chKey = static_cast<uint8_t>(SOUND_CB_KEY);
-    bool keyOn = (chKey < snap->nDigital) && snap->digital[chKey];
-    bool running = ((RunLevel)snap->runLevel == RunLevel::RUNNING ||
-                    (RunLevel)snap->runLevel == RunLevel::STARTING);
+    bool keyOn = (chKey < snap->header.nDigital) && snap->digital[chKey];
+    bool running = ((RunLevel)snap->header.runLevel == RunLevel::RUNNING ||
+                    (RunLevel)snap->header.runLevel == RunLevel::STARTING);
 
     if (!keyOn && !running) {
           // Force engine off when key is removed

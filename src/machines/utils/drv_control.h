@@ -7,7 +7,7 @@
  *****************************************************************************/
 #pragma once
 
-#include <core/config/combus/combus.h>
+#include <core/config/combus/combus_types.h>
 
 // =============================================================================
 // 1. DRIVER STATE MANAGEMENT

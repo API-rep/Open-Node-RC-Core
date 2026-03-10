@@ -26,7 +26,7 @@
 // =============================================================================
 
 	// Machine selector and bus enums
-#include <core/config/combus/combus.h>
+#include <core/config/combus/combus_types.h>
 
 // =============================================================================
 // 3. REMOTE MAPPING STRUCTURES

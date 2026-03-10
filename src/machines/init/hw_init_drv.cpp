@@ -3,7 +3,7 @@
  * @brief Implementation of DC drivers allocation and hardware setup
  *****************************************************************************/
 
-#include <core/config/combus/combus.h>
+#include <core/config/combus/combus_types.h>
 #include <struct/struct.h>
 #include <core/utils/debug/debug.h>
 

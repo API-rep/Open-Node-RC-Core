@@ -28,50 +28,50 @@
 struct OutputUartConfig {
   int8_t   txPin;   ///< ESP32 GPIO TX pin.
   int8_t   rxPin;   ///< ESP32 GPIO RX pin (-1 = TX-only link).
-  uint32_t baud;    ///< UART baud rate (Hz).
+  uint32_t baud;    ///(<  to UART baud rate (Hz).
   uint32_t txHz;    ///< Frame transmit rate (Hz).
 };
+
+
 
 // =============================================================================
 // 2. COMBUS TRANSPORT FRAME STRUCTURE
 // =============================================================================
 
 /**
- * @brief Decoded ComBus frame — lightweight value-only representation.
+ * @brief Combus transmission frame header fields shared with the decoded frame.
  *
- * @details Used by the receiver side after decoding a transport frame.
- * The receiver maps these values back onto its local ComBus arrays.
- *
- * `analog` and `digital` are caller-owned pointers — the caller allocates
- * backing arrays (static or module-level) before passing the snapshot to
- * combus_transport_decode(). This mirrors the ComBus pattern and avoids
- * over-allocating fixed-size buffers when the machine uses fewer channels.
- *
- * Buffer capacity is passed directly to `combus_frame_decode()` as explicit
- * parameters — no need to embed compile-time constants into the struct.
- *
- * There are no per-type protocol caps — the only constraint is that the
- * total serialized frame fits within the active physical transport
- * (see src/core/config/outputs/ for per-transport caps).
- *
- * Typical setup (receiver module init):
- * @code
- *   static uint16_t analogBuf[N_ANA];
- *   static bool     digitalBuf[N_DIG];
- *   snap.analog  = analogBuf;
- *   snap.digital = digitalBuf;
- *   combus_frame_decode(&snap, buf, len, N_ANA, N_DIG);
- * @endcode
+ * @details These fields are transmitted in the transmission frame immediately
+ * after the SOF byte (offset 0). The same struct is embedded in ComBusFrame,
+ * giving a single source of truth for both wire layout and decoded representation.
  */
-typedef struct {
-    uint8_t   envId;      ///< Machine type ID (matches sender's MACHINE_TYPE)
-    uint8_t   seq;        ///< Sequence number
-    uint8_t   runLevel;   ///< RunLevel as uint8_t
-    uint8_t   flags;      ///< COMBUS_FLAG_* bits
-    uint8_t   nAnalog;    ///< Number of analog values written into analog[]
-    uint8_t   nDigital;   ///< Number of digital values written into digital[]
-    uint16_t* analog;     ///< Caller-provided buffer (≥ nAnalog entries)
-    bool*     digital;    ///< Caller-provided buffer (≥ nDigital entries)
-} ComBusFrame;
+
+struct CombusFrameHeader {
+    uint8_t envId;      ///< MACHINE_TYPE numeric value (see combus_types.h layout)
+    uint8_t seq;        ///< Rolling frame counter (0 to 255
+    uint8_t runLevel;   ///< Combus RunLevel cast to uint8_t
+    uint8_t flags;      ///< COMBUS_FLAG_* bits (transport status only)
+    uint8_t nAnalog;    ///< Number of analog channels transmitted
+    uint8_t nDigital;   ///< Number of digital channels transmitted
+};
+
+
+
+/**
+ * @brief Decoded ComBus frame — header fields + pointers to the decoded payload.
+ *
+ * @details `analog` and `digital` point to the decoded analog and digital data.
+ * Their effective sizes are `header.nAnalog` and `header.nDigital`, which are
+ * themselves derived from `AnalogComBusID::CH_COUNT` / `DigitalComBusID::CH_COUNT`
+ * defined in the machine's combus layout (combus_types.h).
+ *
+ * Correct decoding and application of the ComBus state is guaranteed by the
+ * fact that both nodes (machine and receiver) share the same combus_types.h.
+ */
+struct ComBusFrame {
+    CombusFrameHeader header;   ///< Wire header fields (offsets 1–6 of the frame).
+    uint16_t*         analog;   ///< Caller-provided buffer (≥ header.nAnalog entries)
+    bool*             digital;  ///< Caller-provided buffer (≥ header.nDigital entries)
+};
 
 // EOF outputs_struct.h
