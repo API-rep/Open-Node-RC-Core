@@ -19,22 +19,17 @@
 /**
  * CRC-8/MAXIM (Dallas 1-Wire) — polynomial 0x31, init 0x00, reflect in/out.
  *
- * @details A CRC (Cyclic Redundancy Check) is a short fingerprint computed
- * over a byte sequence. The emitter appends it to the frame; the receiver
- * recomputes it over the same bytes and compares — any bit flip or truncation
- * in transit produces a mismatch and the frame is discarded.
- *
- * The MAXIM/Dallas variant (used in 1-Wire sensors) was chosen for its wide
- * hardware support and minimal false-positive rate at these frame sizes.
- * Iterative bit-by-bit computation — no lookup table, negligible ROM cost.
+ * @details Iterative byte-by-byte computation — no lookup table needed at
+ * the frame sizes used here. Safe to call from any context.
  *
  * @param[in] data  Input byte buffer.
  * @param[in] len   Number of bytes to process.
+ * 
  * @return CRC-8 value over the input buffer.
  */
 
 uint8_t combus_frame_crc8(const uint8_t* data, uint8_t len) {
-    uint8_t crc = 0x00u;
+    uint8_t crc = 0x00;
     for (uint8_t i = 0; i < len; ++i) {
         uint8_t byte = data[i];
         for (uint8_t b = 0; b < 8u; ++b) {
@@ -56,72 +51,96 @@ uint8_t combus_frame_crc8(const uint8_t* data, uint8_t len) {
 // =============================================================================
 
 /**
- * Encode a ComBus state into a binary frame.
+ * Encode a ComBus state into a binary frame written into outputBuffer.
  *
- * @details Frame layout — see combus_frame.h for full spec.
+ * @details Serialization sequence:
+ *   1. Null pointer and frame size overflow guard (returns 0 on failure).
+ *   2. Build flags byte from transport-level inputs (failSafe, ...).
+ *   3. Write fixed 7-byte header: SOF, envId, seq, runLevel, flags, nAnalog, nDigital.
+ *   4. Pack digital channel values as bits, LSB-first, ceil(nDigital/8) bytes.
+ *   5. Write analog channel values as uint16_t little-endian, nAnalog entries.
+ *   6. Append CRC-8/MAXIM over all preceding bytes.
  *
- * @return Number of bytes written, 0 on parameter error or uint8_t overflow.
+ * The caller is responsible for sizing outputBuffer to at least
+ * CombusFrameHeaderLen + ceil(nDigital/8) + nAnalog*2 + 1 bytes.
+ *
+ * @param[out] outputBuffer  Destination buffer (sized by caller).
+ * @param[in]  combus        Source ComBus instance to encode.
+ * @param[in]  nAnalog       Number of analog channels to include.
+ * @param[in]  nDigital      Number of digital channels to include.
+ * @param[in]  envId         Machine type identifier (MACHINE_TYPE build value).
+ * @param[in]  seq           Rolling sequence counter (caller increments).
+ * @param[in]  failSafe      Upstream failsafe flag (sets COMBUS_FLAG_FAILSAFE).
+ *
+ * @return Number of bytes written into outputBuffer, 0 on error.
  */
-uint8_t combus_frame_encode(uint8_t*       buf,
-                             const ComBus*  bus,
+
+uint8_t combus_frame_encode( uint8_t*       outputBuffer,
+                             const ComBus*  combus,
                              uint8_t        nAnalog,
                              uint8_t        nDigital,
                              uint8_t        envId,
                              uint8_t        seq,
                              bool           failSafe) {
-      // --- 1. Guard conditions ---
-    if (!buf || !bus) {
-        return 0u;
+                               
+      // --- 1. Guard conditions — null pointer + frame size overflow ---
+    if (!outputBuffer || !combus) {
+        return 0;
     }
+      // Reject frame size over max uint8_t size (255u) to avoid overflow
     uint8_t nDigBytes = (nDigital + 7u) / 8u;   // ceil(nDigital / 8)
 
-      // Protocol invariant: the frame length field is uint8_t — reject if it would overflow.
-      // Physical transport caps (CombusPhysUartMax, CombusPhysEspNowMax) are enforced
-      // at the call site via static_assert in the relevant output config header.
     if ((CombusFrameHeaderLen + (uint16_t)nDigBytes + (uint16_t)nAnalog * 2u + 1u) > 255u) {
-        return 0u;
+        return 0;
     }
 
-      // --- 2. Build flags byte (transport status only) ---
-    // batteryIsLow and keyOn are transmitted as regular digital channels.
-    uint8_t flags = 0u;
+      // --- 2. Build flags byte ---
+    uint8_t flags = 0;   // transport-level status bits (COMBUS_FLAG_*)
+
     if (failSafe) { flags |= COMBUS_FLAG_FAILSAFE; }
+    //if (...)     { flags |= COMBUS_FLAG_... ; }       // next flag — bit 1
+    //if (...)     { flags |= COMBUS_FLAG_... ; }       // next flag — bit 2
 
       // --- 3. Write fixed header ---
-    uint8_t idx = 0u;
-    buf[idx++] = COMBUS_FRAME_SOF;
-    buf[idx++] = envId;
-    buf[idx++] = seq;
-    buf[idx++] = (uint8_t)bus->runLevel;
-    buf[idx++] = flags;
-    buf[idx++] = nAnalog;
-    buf[idx++] = nDigBytes;
+    uint8_t pos = 0;   // write position in outputBuffer
+    
+    outputBuffer[pos++] = CombusFrameSof;
+    outputBuffer[pos++] = envId;
+    outputBuffer[pos++] = seq;
+    outputBuffer[pos++] = (uint8_t)combus->runLevel;
+    outputBuffer[pos++] = flags;
+    outputBuffer[pos++] = nAnalog;
+    outputBuffer[pos++] = nDigital;
 
-      // --- 4. Pack digital bits (LSB = channel 0) ---
-    for (uint8_t b = 0u; b < nDigBytes; ++b) {
-        uint8_t packed = 0u;
-        for (uint8_t bit = 0u; bit < 8u; ++bit) {
+      // --- 4. Pack digital bits values into bytes (bitbool lsb mode) ---
+    for (uint8_t b = 0; b < nDigBytes; ++b) {
+        uint8_t packed = 0;
+      
+        for (uint8_t bit = 0; bit < 8u; ++bit) {
             uint8_t ch = (uint8_t)(b * 8u + bit);
-            if (ch < nDigital && bus->digitalBus && bus->digitalBus[ch].value) {
+
+            if (ch < nDigital && combus->digitalBus && combus->digitalBus[ch].value) {
                 packed |= (uint8_t)(1u << bit);
             }
         }
-        buf[idx++] = packed;
+
+        outputBuffer[pos++] = packed;
     }
 
       // --- 5. Write analog values (uint16_t little-endian) ---
-    for (uint8_t a = 0u; a < nAnalog; ++a) {
-        uint16_t val = bus->analogBus ? bus->analogBus[a].value : 0u;
-        buf[idx++] = (uint8_t)(val & 0xFFu);
-        buf[idx++] = (uint8_t)((val >> 8u) & 0xFFu);
+    for (uint8_t a = 0; a < nAnalog; ++a) {
+        uint16_t val = combus->analogBus ? combus->analogBus[a].value : 0;
+        outputBuffer[pos++] = (uint8_t)(val & 0xFFu);
+        outputBuffer[pos++] = (uint8_t)((val >> 8u) & 0xFFu);
     }
 
       // --- 6. Append CRC8 ---
-    buf[idx] = combus_frame_crc8(buf, idx);
-    idx++;
+    outputBuffer[pos] = combus_frame_crc8(outputBuffer, pos);
+    pos++;
 
-    return idx;
+    return pos;
 }
+
 
 
 // =============================================================================
@@ -129,81 +148,96 @@ uint8_t combus_frame_encode(uint8_t*       buf,
 // =============================================================================
 
 /**
- * Decode and validate a binary frame into a ComBusFrame.
+ * Decode and validate a binary frame from inputBuffer into outputFrame.
  *
- * @return true if SOF, length, and CRC are valid.
+ * @details Validation sequence (any failure returns false):
+ *   1. Null pointer and minimum length check (>= CombusFrameMinLen).
+ *   2. SOF sentinel check (inputBuffer[0] == CombusFrameSof).
+ *   3. Output buffer pointer check (outputFrame->analog and ->digital must be set by caller).
+ *   4. Declared payload size sanity (computed frame length must fit in uint8_t).
+ *   5. Analog overflow check (header.nAnalog <= maxAnalog).
+ *   6. Received length check (len >= computed expected length).
+ *   7. CRC-8/MAXIM check over bytes [0 ... expectedLen-2].
+ *
+ * On success, unpacks digital bits (LSB-first) and analog uint16_t LE values
+ * into the caller-provided arrays, then copies the header into outputFrame.
+ *
+ * Digital channels exceeding digitalBufSize are silently dropped (not an error).
+ * outputFrame->header.nDigital reflects the clamped count after decoding.
+ *
+ * @param[out] outputFrame     Destination frame — analog/digital pointers must be
+ *                              pre-set by the caller to buffers of at least
+ *                              analogBufSize / digitalBufSize entries.
+ * @param[in]  inputBuffer     Raw received bytes.
+ * @param[in]  len             Number of valid bytes in inputBuffer.
+ * @param[in]  analogBufSize   Capacity of outputFrame->analog[]  (caller's buffer size).
+ * @param[in]  digitalBufSize  Capacity of outputFrame->digital[] (caller's buffer size).
+ *
+ * @return true if frame is valid and outputFrame was fully populated, false otherwise.
  */
-bool combus_frame_decode(ComBusFrame*    frame,
-                          const uint8_t*  buf,
+
+bool combus_frame_decode(ComBusFrame*     outputFrame,
+                          const uint8_t*  inputBuffer,
                           uint8_t         len,
-                          uint8_t         maxAnalog,
-                          uint8_t         maxDigital) {
-      // --- 1. Minimum length and SOF guard ---
-    if (!frame || !buf || len < CombusFrameMinLen) {
-        return false;
-    }
-    if (buf[0] != COMBUS_FRAME_SOF) {
-        return false;
-    }
+                          uint8_t         analogBufSize,
+                          uint8_t         digitalBufSize) {
+
+      // --- 1. Minimum length and SOF guard check ---
+    if (!outputFrame || !inputBuffer || len < CombusFrameMinLen) {return false;}
+    if (inputBuffer[0] != CombusFrameSof) {return false;}
 
       // --- 2. Parse header fields ---
-    CombusFrameHeader hdr;
-    memcpy(&hdr, buf, sizeof(hdr));
-    uint8_t envId     = hdr.envId;
-    uint8_t seq       = hdr.seq;
-    uint8_t runLevel  = hdr.runLevel;
-    uint8_t flags     = hdr.flags;
-    uint8_t nAnalog   = hdr.nAnalog;
-    uint8_t nDigBytes = hdr.nDigBytes;
+    CombusFrameHeader header;
+
+    memcpy(&header, inputBuffer + 1u, sizeof(header));   // skip SOF byte at offset 0
+
+    uint8_t nDigBytes = (header.nDigital + 7u) / 8u;   // derive packed byte count locally
 
       // --- 3. Sanity-check declared sizes ---
-    if (!frame->analog || !frame->digital)  { return false; }
+    if (!outputFrame->analog || !outputFrame->digital)  { return false; }
 
-      // Protocol invariant: reject if computed frame length overflows uint8_t.
-    uint16_t expectedLenW = CombusFrameHeaderLen + (uint16_t)nDigBytes + (uint16_t)nAnalog * 2u + 1u;
+      // Reject if computed frame length overflows uint8_t.
+    uint16_t expectedLenW = CombusFrameHeaderLen + (uint16_t)nDigBytes + (uint16_t)header.nAnalog * 2u + 1u;
     if (expectedLenW > 255u)                { return false; }
 
       // Reject if analog payload would overflow caller's buffer.
-    if (nAnalog > maxAnalog)                { return false; }
+    if (header.nAnalog > analogBufSize)     { return false; }
       // Digital excess bits are silently truncated in the unpack loop below.
 
     uint8_t expectedLen = (uint8_t)expectedLenW;
     if (len < expectedLen)                  { return false; }
 
       // --- 4. Validate CRC ---
-    uint8_t crcExpected = buf[expectedLen - 1u];
-    uint8_t crcActual   = combus_frame_crc8(buf, (uint8_t)(expectedLen - 1u));
+    uint8_t crcExpected = inputBuffer[expectedLen - 1u];
+    uint8_t crcActual   = combus_frame_crc8(inputBuffer, (uint8_t)(expectedLen - 1u));
     if (crcActual != crcExpected)           { return false; }
 
       // --- 5. Unpack digital bits ---
-    uint8_t nDigital = (uint8_t)(nDigBytes * 8u);
-    if (nDigital > maxDigital) { nDigital = maxDigital; }  // clamp to caller's buffer
+    uint8_t nDigital = header.nDigital;
 
-    uint8_t idx = CombusFrameHeaderLen;
-    for (uint8_t b = 0u; b < nDigBytes; ++b) {
-        uint8_t packed = buf[idx++];
-        for (uint8_t bit = 0u; bit < 8u; ++bit) {
+    if (nDigital > digitalBufSize) { nDigital = digitalBufSize; }  // clamp to caller's buffer
+
+    uint8_t pos = CombusFrameHeaderLen;
+    for (uint8_t b = 0; b < nDigBytes; ++b) {
+        uint8_t packed = inputBuffer[pos++];
+        for (uint8_t bit = 0; bit < 8u; ++bit) {
             uint8_t ch = (uint8_t)(b * 8u + bit);
-            if (ch < maxDigital) {
-                frame->digital[ch] = (packed >> bit) & 0x01u;
+            if (ch < digitalBufSize) {
+                outputFrame->digital[ch] = (packed >> bit) & 0x01u;
             }
         }
     }
 
       // --- 6. Unpack analog values (uint16_t LE) ---
-    for (uint8_t a = 0u; a < nAnalog; ++a) {
-        uint16_t lo  = buf[idx++];
-        uint16_t hi  = buf[idx++];
-        frame->analog[a] = (uint16_t)(lo | (hi << 8u));
+    for (uint8_t a = 0; a < header.nAnalog; ++a) {
+        uint16_t lo  = inputBuffer[pos++];
+        uint16_t hi  = inputBuffer[pos++];
+        outputFrame->analog[a] = (uint16_t)(lo | (hi << 8u));
     }
 
       // --- 7. Populate frame header ---
-    frame->envId    = envId;
-    frame->seq      = seq;
-    frame->runLevel = runLevel;
-    frame->flags    = flags;
-    frame->nAnalog  = nAnalog;
-    frame->nDigital = nDigital;
+    outputFrame->header          = header;
+    outputFrame->header.nDigital = nDigital;   // apply clamped value (may differ from wire value)
 
     return true;
 }
@@ -214,40 +248,56 @@ bool combus_frame_decode(ComBusFrame*    frame,
 // =============================================================================
 
 /**
- * Apply a decoded frame onto a live ComBus.
+ * Apply a decoded ComBusFrame onto a live ComBus instance.
  *
- * @details Updates runLevel, flags, and all channel values.
- * Caller ensures array bounds match nAnalog & nDig.
+ * @details Writes the incomming combus frame into the live bus arrays:
+ *   - combus->runLevel is updated from inputFrame->header.runLevel.
+ *   - analog channels [0 .. min(nAnalog, header.nAnalog)-1] are written
+ *     and marked isDrived = true.
+ *   - digital channels [0 .. min(nDig, header.nDigital)-1] are written
+ *     and marked isDrived = true.
+ *
+ * Channels beyond the min() clamp are left untouched in the live bus.
+ * Caller must ensure combus->analogBus and combus->digitalBus arrays are
+ * allocated and sized to at least nAnalog / nDig entries.
+ *
+ * @param[out] combus      Target ComBus instance to update.
+ * @param[in]  inputFrame  Populated frame from combus_frame_decode().
+ * @param[in]  nAnalog     Caller's analog channel count (safety clamp).
+ * @param[in]  nDig        Caller's digital channel count (safety clamp).
  */
-void combus_frame_apply(ComBus*            bus,
-                         const ComBusFrame* frame,
+void combus_frame_apply(ComBus*            combus,
+                         const ComBusFrame* inputFrame,
                          uint8_t            nAnalog,
                          uint8_t            nDig) {
-    if (!bus || !frame) {
+
+    if (!combus || !inputFrame) {
         return;
     }
 
       // --- RunLevel ---
-    bus->runLevel = (RunLevel)frame->runLevel;
+    combus->runLevel = (RunLevel)inputFrame->header.runLevel;
 
       // --- Flags (transport status only) ---
-    // batteryIsLow and keyOn come from digitalBus[] via the digital loop below.
+
 
       // --- Analog channels ---
-    uint8_t aN = (frame->nAnalog < nAnalog) ? frame->nAnalog : nAnalog;
-    if (bus->analogBus) {
-        for (uint8_t i = 0u; i < aN; ++i) {
-            bus->analogBus[i].value    = frame->analog[i];
-            bus->analogBus[i].isDrived = true;
+    uint8_t aN = (inputFrame->header.nAnalog < nAnalog) ? inputFrame->header.nAnalog : nAnalog;
+
+    if (combus->analogBus) {
+        for (uint8_t i = 0; i < aN; ++i) {
+            combus->analogBus[i].value    = inputFrame->analog[i];
+            combus->analogBus[i].isDrived = true;
         }
     }
 
       // --- Digital channels ---
-    uint8_t dN = (frame->nDigital < nDig) ? frame->nDigital : nDig;
-    if (bus->digitalBus) {
-        for (uint8_t i = 0u; i < dN; ++i) {
-            bus->digitalBus[i].value    = frame->digital[i];
-            bus->digitalBus[i].isDrived = true;
+    uint8_t dN = (inputFrame->header.nDigital < nDig) ? inputFrame->header.nDigital : nDig;
+
+    if (combus->digitalBus) {
+        for (uint8_t i = 0; i < dN; ++i) {
+            combus->digitalBus[i].value    = inputFrame->digital[i];
+            combus->digitalBus[i].isDrived = true;
         }
     }
 }
