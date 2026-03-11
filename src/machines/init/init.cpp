@@ -9,7 +9,7 @@
 #include "init.h"
 #include "../system/drv_control.h"
 #include <core/system/input/input_manager.h>
-#include <machines/system/dashboard/dashboard_machine.h>
+#include <machines/system/debug/dashboard_machine.h>
 
 
 // =============================================================================

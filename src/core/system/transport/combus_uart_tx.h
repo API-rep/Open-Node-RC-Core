@@ -33,7 +33,7 @@
 // =============================================================================
 
 /**
- * @brief Initialize the UART transmitter.
+ * @brief Initialize the combus UART transmitter.
  *
  * @param serial    HardwareSerial port to use (e.g. &Serial2).
  * @param envId     Machine-type identifier embedded in each frame header.
@@ -53,14 +53,16 @@ void combus_uart_tx_init( HardwareSerial* serial,
                            int             rxPin,
                            uint32_t        txHz );
 
+
+
 /**
- * @brief Timer-gated transmit update — call from main loop.
+ * @brief combus UART transmit update
  *
- * @details Non-blocking. Sends one frame every (1000 / txHz) ms.
- * Returns immediately if it is not yet time to transmit or if init
- * was not called.
+ * @details Non-blocking routine call from main loop. Sends one frame 
+ * every (1000 / txHz) ms. Returns immediately if it is not yet time
+ * to transmit or if init was not called.
  *
- * @param bus       ComBus state to serialize. Must not be nullptr.
+ * @param bus       ComBus instance to serialize. Must not be nullptr.
  * @param failSafe  True when the caller-side failsafe is active.
  */
 void combus_uart_tx_update(const ComBus* bus, bool failSafe = false);

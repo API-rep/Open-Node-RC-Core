@@ -99,11 +99,10 @@ static constexpr int8_t Txd0Pin = 1;    // ESP32 built-in TX pin
 static constexpr int8_t Rxd0Pin = 3;    // ESP32 built-in RX pin
 
   // Extension port — UART link to the sound node (or any future ext device).
-  // SerialExt maps to the physical UART port used for this link on this board.
-inline HardwareSerial& SerialExt = Serial2;
+inline HardwareSerial& SerialExt = Serial2;       // SerialExt maps to the physical UART port
 
-static constexpr int8_t  TxdExtPin         = 18;      // UART ext TX  →  Sound ESP32 RX
-static constexpr int8_t  RxdExtPin         = 13;      // UART ext RX  ←  Sound ESP32 TX
+static constexpr int8_t  TxdExtPin         = 18;  // UART ext TX pin
+static constexpr int8_t  RxdExtPin         = 13;  // UART ext RX pin
 
   // General UART hardware ceiling for all ext/com ports on this board.
 static constexpr uint32_t UartMaxBaud        = 115200u;  // hardware ceiling for all UART links on this board
