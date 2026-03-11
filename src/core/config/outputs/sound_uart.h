@@ -10,15 +10,15 @@
  *   Constants exported:
  *     SoundTransportNAnalog    — active analog channel count (from combus)
  *     SoundTransportNDigital   — active digital channel count (from combus)
- *     SoundTransportFrameSize  — exact frame size for this layout (bytes)
- *     SoundTransportMaxTxHz    — controller-side frame-rate ceiling (Hz)
+ *     SoundTransportFrameSize  — exact frame size for this layout (bytes) *     SoundUartBaud            — negotiated UART baud rate (≤ board SoundUartMaxBaud)
+ *     SoundTransportTxHz       — frame transmit rate in Hz *     SoundTransportMaxTxHz    — controller-side frame-rate ceiling (Hz)
  *****************************************************************************/
 #pragma once
 
 #include <stdint.h>
 #include <core/combus/combus_frame.h>
 #include <core/config/combus/combus_types.h>           // AnalogComBusID, DigitalComBusID (IS_MACHINE absent → enums only)
-// Board constants (SoundUartBaud, SoundTransportTxHz) available via outputs/outputs.h → boards/boards.h.
+// Board constant SoundUartMaxBaud available via outputs/outputs.h → boards/boards.h.
 
 /// UART transport physical cap — chosen as uint8_t safety ceiling (no hardware limit).
 static constexpr uint8_t CombusPhysUartMax = 255u;
@@ -61,12 +61,19 @@ static constexpr uint8_t SoundTransportFrameSize =
 
 
 // =============================================================================
-// 3. BOARD TRANSPORT PARAMETERS
+// 3. TRANSPORT PARAMETERS  (protocol — agreed between machine and sound node)
 // =============================================================================
 
-  // Controller-side frame-rate ceiling (Hz).
-  // TODO: replace with SoundRxMaxHz from sound_config.h once sound node
-  //       firmware exposes its real receive throughput as a constexpr.
+	/// UART baud rate for the machine → sound node link.
+	/// Must match SOUND_UART_BAUD in the sound node's sound_config.h.
+static constexpr uint32_t SoundUartBaud         = 115200u;
+
+	/// Frame transmit rate (Hz) from machine to sound node.
+static constexpr uint32_t SoundTransportTxHz    = 50u;
+
+	/// Controller-side frame-rate ceiling (Hz).
+	/// TODO: replace with SoundRxMaxHz from sound_config.h once sound node
+	///       firmware exposes its real receive throughput as a constexpr.
 static constexpr uint32_t SoundTransportMaxTxHz = 200u;
 
 
@@ -78,11 +85,12 @@ static constexpr uint32_t SoundTransportMaxTxHz = 200u;
 static_assert(SoundTransportFrameSize <= CombusPhysUartMax,
               "SoundTransportFrameSize exceeds UART practical cap (CombusPhysUartMax)");
 
-  // --- Board configuration: baud and TX rate must be valid ---
-static_assert(SoundUartBaud > 0u,
-              "SoundUartBaud must be non-zero (check board header)");
+  // --- Baud rate: desired must not exceed board hardware ceiling ---
+static_assert(SoundUartBaud <= SoundUartMaxBaud,
+              "SoundUartBaud exceeds board hardware ceiling SoundUartMaxBaud");
 
+  // --- Frame rate: must be in valid protocol range ---
 static_assert(SoundTransportTxHz > 0u && SoundTransportTxHz <= SoundTransportMaxTxHz,
-              "SoundTransportTxHz out of range [1, SoundTransportMaxTxHz] (check board header)");
+              "SoundTransportTxHz out of range [1, SoundTransportMaxTxHz]");
 
 // EOF sound_uart.h
