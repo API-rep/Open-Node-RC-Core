@@ -19,6 +19,7 @@
 #include <struct/struct.h>
 #include <defs/defs.h>
 #include <machines/config/boards/drivers/drivers.h>
+#include <Arduino.h>
 
 /**
  * Board devices definition
@@ -99,7 +100,8 @@ static constexpr int8_t Rxd0Pin = 3;    // ESP32 built-in RX pin
 
   // Extension port — UART link to the sound node (or any future ext device).
   // SerialExt maps to the physical UART port used for this link on this board.
-#define SerialExt Serial2
+inline HardwareSerial& SerialExt = Serial2;
+
 static constexpr int8_t  TxdExtPin         = 18;      // UART ext TX  →  Sound ESP32 RX
 static constexpr int8_t  RxdExtPin         = 13;      // UART ext RX  ←  Sound ESP32 TX
 

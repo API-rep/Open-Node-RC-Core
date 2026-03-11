@@ -340,7 +340,7 @@ silenceable at build time to free UART0 for transport.
 - Makes all `sys_log_info` / `*_log_dbg` macros expand to nothing (already
   partially enabled by the existing `DEBUG_*` flag logic in `debug.h`).
 - Suppresses the `Serial.begin(115200)` in `sys_init.cpp`.
-- Allows the board header to map `#define SerialExt Serial` without conflict.
+- Allows the board header to declare `inline HardwareSerial& SerialExt = Serial;` without conflict.
 
 **Prerequisite:** A real board with only one UART available — not worth the
 complexity otherwise.
