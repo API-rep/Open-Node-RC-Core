@@ -101,11 +101,8 @@ static constexpr int8_t Rxd0Pin = 3;    // ESP32 built-in RX pin
 static constexpr int8_t  Txd1Pin           = 18;      // UART1 TX  →  Sound ESP32 RX  (ext port 1)
 static constexpr int8_t  Rxd1Pin           = 13;      // UART1 RX  ←  Sound ESP32 TX  (ext port 2)
 
-  // Sound-link board-side UART ceiling.
-  // Nominal baud and frame rate are protocol parameters — defined in core/config/outputs/sound_uart.h.
-  // TODO: cross-check at compile time against the sound node's declared caps
-  //       (max baud, max frame rate) once sound_config.h exposes them as constexpr.
-static constexpr uint32_t SoundUartMaxBaud   = 115200u;  // hardware ceiling for this board's UART link to the sound node
+  // General UART hardware ceiling for all ext/com ports on this board.
+static constexpr uint32_t UartMaxBaud        = 115200u;  // hardware ceiling for all UART links on this board
 
   // servo power sensing pins (also used by VBatSrvACfg / VBatSrvBCfg)
 static constexpr uint8_t SrvASensePin  = 39;  // SRV-A power rail ADC sense pin

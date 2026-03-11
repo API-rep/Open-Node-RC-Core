@@ -18,7 +18,7 @@
 #include <stdint.h>
 #include <core/combus/combus_frame.h>
 #include <core/config/combus/combus_types.h>           // AnalogComBusID, DigitalComBusID (IS_MACHINE absent → enums only)
-// Board constant SoundUartMaxBaud available via outputs/outputs.h → boards/boards.h.
+// Board constant UartMaxBaud available via outputs/outputs.h → boards/boards.h.
 
 /// UART transport physical cap — chosen as uint8_t safety ceiling (no hardware limit).
 static constexpr uint8_t CombusPhysUartMax = 255u;
@@ -86,8 +86,8 @@ static_assert(SoundTransportFrameSize <= CombusPhysUartMax,
               "SoundTransportFrameSize exceeds UART practical cap (CombusPhysUartMax)");
 
   // --- Baud rate: desired must not exceed board hardware ceiling ---
-static_assert(SoundUartBaud <= SoundUartMaxBaud,
-              "SoundUartBaud exceeds board hardware ceiling SoundUartMaxBaud");
+static_assert(SoundUartBaud <= UartMaxBaud,
+              "SoundUartBaud exceeds board hardware ceiling UartMaxBaud");
 
   // --- Frame rate: must be in valid protocol range ---
 static_assert(SoundTransportTxHz > 0u && SoundTransportTxHz <= SoundTransportMaxTxHz,

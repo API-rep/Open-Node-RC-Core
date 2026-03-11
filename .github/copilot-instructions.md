@@ -99,7 +99,7 @@ Layer 1 — Core shell
     render-slot registry, refresh timer). Zero knowledge of any mode or module.
 
 Layer 2 — Env dashboard  (one per execution environment)
-  src/machines/system/dashboard/dashboard_machine.h / .cpp
+  src/machines/system/debug/dashboard_machine.h / .cpp
   src/remotes/system/dashboard_remote.h / .cpp   (future)
     Owns the environment-level overview view.
     Auto-detects which sub-modules are configured (from build flags and
@@ -108,9 +108,9 @@ Layer 2 — Env dashboard  (one per execution environment)
     no dead keys, no views for absent modules.
 
 Layer 3 — Module views  (one per sub-module, optional)
-  src/machines/system/dashboard/dashboard_drv.h / .cpp     (DC drivers)
-  src/machines/system/dashboard/dashboard_input.h / .cpp   (input / combus)
-  src/machines/system/dashboard/dashboard_vbat.h / .cpp    (battery)
+  src/machines/system/debug/dashboard_drv.h / .cpp     (DC drivers)
+  src/machines/system/debug/dashboard_input.h / .cpp   (input / combus)
+  src/machines/system/debug/dashboard_vbat.h / .cpp    (battery)
   ...
     Each module view is a single self-contained screen combining:
       • Live state  — current values, runtime metrics (top section).
@@ -271,7 +271,7 @@ src/core/system/debug/
   dashboard.cpp    ← frame primitives, slot table, detail table, nav bars,
                      keyboard (incl. ESC arrow sequences), event buffer
 
-src/machines/system/dashboard/
+src/machines/system/debug/
   dashboard_machine.h / .cpp   ← env layer: overview view, auto-detect, slot registration
   dashboard_drv.h / .cpp        ← module view: DC drivers (live table + detail per driver)
   dashboard_input.h / .cpp      ← module view: inputs / combus
@@ -325,6 +325,22 @@ static_assert(SoundTransportTxHz  <= SoundRxMaxHz,   "TX rate exceeds sound node
 static_assert(SoundUartBaud       <= SoundRxMaxBaud,  "Baud exceeds sound node capability");
 ```
 Replace the `200u` magic number with `SoundRxMaxHz` and remove the `// TODO` comment from the board header.
+Also update the `static_assert` in `sound_uart.h` from `UartMaxBaud` to `SoundRxMaxBaud` once the sound node exposes it.
 
 **Prerequisite:** Sound node firmware is stable enough to characterise its real
 receive throughput and commit it as a `constexpr` in `sound_config.h`.
+### Debug serial opt-out for single-UART architectures
+**Context:** `combus_uart_tx_init` / `combus_uart_rx_init` take a `HardwareSerial*`,
+so swapping `&Serial2` → `&Serial` is a one-line change in `output_init.cpp`.
+The blocker is that `Serial` is already opened for debug output (`sys_log_info` etc.).
+If a future board has only one usable UART (no Serial2/Serial1), debug must be
+silenceable at build time to free UART0 for transport.
+
+**Proposed feature:** Add a `-D NO_DEBUG_SERIAL` build flag that:
+- Makes all `sys_log_info` / `*_log_dbg` macros expand to nothing (already
+  partially enabled by the existing `DEBUG_*` flag logic in `debug.h`).
+- Suppresses the `Serial.begin(115200)` in `sys_init.cpp`.
+- Allows `output_init.cpp` to call `combus_uart_tx_init(&Serial, ...)` without conflict.
+
+**Prerequisite:** A real board with only one UART available — not worth the
+complexity otherwise.
