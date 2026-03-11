@@ -8,10 +8,10 @@
  *   Included by outputs/outputs.h when SOUND_OUTPUT_UART is set.
  *
  *   Constants exported:
- *     SoundTransportNAnalog    — active analog channel count (from combus)
- *     SoundTransportNDigital   — active digital channel count (from combus)
- *     SoundTransportFrameSize  — exact frame size for this layout (bytes) *     SoundUartBaud            — negotiated UART baud rate (≤ board SoundUartMaxBaud)
- *     SoundTransportTxHz       — frame transmit rate in Hz *     SoundTransportMaxTxHz    — controller-side frame-rate ceiling (Hz)
+ *     SoundTransportFrameSize  — exact frame size for this layout (bytes)
+ *     SoundUartBaud            — negotiated UART baud rate (≤ board UartMaxBaud)
+ *     SoundTransportTxHz       — frame transmit rate in Hz
+ *     SoundTransportMaxTxHz    — controller-side frame-rate ceiling (Hz)
  *****************************************************************************/
 #pragma once
 
@@ -25,17 +25,7 @@ static constexpr uint8_t CombusPhysUartMax = 255u;
 
 
 // =============================================================================
-// 1. CHANNEL COUNTS  (derived from active combus config)
-// =============================================================================
 
-	/// Analog channels transmitted to the sound node — matches this machine’s ComBus layout.
-static constexpr uint8_t SoundTransportNAnalog  = static_cast<uint8_t>(AnalogComBusID::CH_COUNT);
-
-	/// Digital channels transmitted to the sound node — matches this machine’s ComBus layout.
-static constexpr uint8_t SoundTransportNDigital = static_cast<uint8_t>(DigitalComBusID::CH_COUNT);
-
-
-// =============================================================================
 // 2. EXACT FRAME SIZE FOR THIS COMBUS LAYOUT
 // =============================================================================
 
@@ -49,14 +39,14 @@ static constexpr uint8_t SoundTransportNDigital = static_cast<uint8_t>(DigitalCo
  *
  *   Frame layout:
  *     7 bytes — fixed header (SOF + env_id + seq + run_level + flags + n_analog + n_dig_bytes)
- *     ceil(SoundTransportNDigital / 8) — digital channels packed LSB-first
- *     SoundTransportNAnalog × 2       — analog channels as uint16_t LE
+ *     ceil(DigitalComBusID::CH_COUNT / 8) — digital channels packed LSB-first
+ *     AnalogComBusID::CH_COUNT × 2        — analog channels as uint16_t LE
  *     1 byte  — CRC-8
  */
 static constexpr uint8_t SoundTransportFrameSize =
     7u
-  + ((SoundTransportNDigital + 7u) / 8u)
-  +  (SoundTransportNAnalog  * 2u)
+  + ((static_cast<uint8_t>(DigitalComBusID::CH_COUNT) + 7u) / 8u)
+  +  (static_cast<uint8_t>(AnalogComBusID::CH_COUNT)  * 2u)
   + 1u;
 
 

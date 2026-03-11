@@ -17,12 +17,15 @@
 // =============================================================================
 
 /**
- * @brief Initialise output transport peripherals.
+ * @brief Initialise output transport layer.
  *
- * @details Each output module is conditionally compiled. Adding a new output
- * peripheral means adding its init call here, guarded by its own build flag.
- * Pin assignments come from the active board configuration (boards/*.h).
+ * @details Each output module is conditionally compiled by build flags.
+ * Adding a new output peripheral means adding its init call here, guarded by its
+ * own build flag. Multiple non conflictual modules can be active at the same time
+ * (ex: UART + wireless outputs).
+ * Pin assignments come from the active environment configuration (ex: boards/*.h).
  */
+
 void output_init() {
   sys_log_info("[OUTPUT] output_init ...\n");
 
@@ -31,8 +34,8 @@ void output_init() {
   combus_uart_tx_init(
       &Serial2,
       static_cast<uint8_t>(CombusLayout::MACHINE_TYPE),
-      SoundTransportNAnalog,
-      SoundTransportNDigital,
+      static_cast<uint8_t>(AnalogComBusID::CH_COUNT),
+      static_cast<uint8_t>(DigitalComBusID::CH_COUNT),
       SoundUartBaud,
       Txd1Pin,
       Rxd1Pin,
