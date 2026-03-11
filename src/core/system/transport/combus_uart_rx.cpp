@@ -16,29 +16,26 @@
 // 1. PRIVATE STATE
 // =============================================================================
 
-/// Active serial port (set at init).
-static HardwareSerial* s_serial = nullptr;
-
 /// UART transport physical cap — upper bound for any frame on this link.
 static constexpr uint8_t kUartFrameMaxLen = 255u;
 
-/// Internal receive ring buffer — large enough for several max-size frames.
-static constexpr uint8_t RX_BUF_SIZE = kUartFrameMaxLen;
-static uint8_t  s_rxBuf[RX_BUF_SIZE];
-static uint8_t  s_rxHead  = 0u;   ///< Write index (next byte goes here).
-static uint8_t  s_rxCount = 0u;   ///< Number of bytes currently in buffer.
+/// Internal receive ring buffer backing memory.
+static constexpr uint8_t kRxBufSize = kUartFrameMaxLen;
+static uint8_t s_rxBuf[kRxBufSize];
 
-/// Caller-provided buffer sizes (stored at init for decode calls).
-static uint8_t s_analogBufSize  = 0u;
-static uint8_t s_digitalBufSize = 0u;
+struct UartRxCtx {
+    HardwareSerial* port            = nullptr;  ///< active serial port
+    uint8_t         analogBufSize   = 0u;       ///< analog buffer size (from caller)
+    uint8_t         digitalBufSize  = 0u;       ///< digital buffer size (from caller)
+    uint8_t         rxHead          = 0u;       ///< ring buffer read index
+    uint8_t         rxCount         = 0u;       ///< bytes currently in ring buffer
+    ComBusFrame     snap            = {};       ///< latest decoded snapshot
+    bool            snapValid       = false;    ///< true once at least one frame decoded
+    uint32_t        lastRxMs        = 0u;       ///< millis() at last successful decode
+    bool            everReceived    = false;    ///< true after first valid frame received
+};
 
-/// Latest decoded snapshot (analog/digital pointers set at init to caller buffers).
-static ComBusFrame s_snap      = {};
-static bool        s_snapValid = false;
-
-/// Link telemetry.
-static uint32_t s_lastRxMs    = 0u;
-static bool     s_everReceived = false;
+static UartRxCtx s_rx;
 
 
 // =============================================================================
@@ -47,27 +44,27 @@ static bool     s_everReceived = false;
 
 /** Append one byte to the ring buffer. Drops oldest byte on overflow. */
 static void rxBufPush(uint8_t byte) {
-    if (s_rxCount < RX_BUF_SIZE) {
-        uint8_t idx = (uint8_t)((s_rxHead + s_rxCount) % RX_BUF_SIZE);
+    if (s_rx.rxCount < kRxBufSize) {
+        uint8_t idx = (uint8_t)((s_rx.rxHead + s_rx.rxCount) % kRxBufSize);
         s_rxBuf[idx] = byte;
-        s_rxCount++;
+        s_rx.rxCount++;
     } else {
           // Overflow: drop oldest byte by advancing head
-        s_rxBuf[s_rxHead] = byte;
-        s_rxHead = (uint8_t)((s_rxHead + 1u) % RX_BUF_SIZE);
+        s_rxBuf[s_rx.rxHead] = byte;
+        s_rx.rxHead = (uint8_t)((s_rx.rxHead + 1u) % kRxBufSize);
     }
 }
 
 /** Return byte at logical index i (0 = oldest). */
 static uint8_t rxBufAt(uint8_t i) {
-    return s_rxBuf[(s_rxHead + i) % RX_BUF_SIZE];
+    return s_rxBuf[(s_rx.rxHead + i) % kRxBufSize];
 }
 
 /** Discard the n oldest bytes. */
 static void rxBufConsume(uint8_t n) {
-    if (n > s_rxCount) { n = s_rxCount; }
-    s_rxHead  = (uint8_t)((s_rxHead + n) % RX_BUF_SIZE);
-    s_rxCount = (uint8_t)(s_rxCount - n);
+    if (n > s_rx.rxCount) { n = s_rx.rxCount; }
+    s_rx.rxHead  = (uint8_t)((s_rx.rxHead + n) % kRxBufSize);
+    s_rx.rxCount = (uint8_t)(s_rx.rxCount - n);
 }
 
 /**
@@ -78,16 +75,16 @@ static void rxBufConsume(uint8_t n) {
 static uint8_t tryDecode() {
 
       // --- 1. Scan for SOF ---
-    while (s_rxCount > 0u && rxBufAt(0u) != CombusFrameSof) {
+    while (s_rx.rxCount > 0u && rxBufAt(0u) != CombusFrameSof) {
         rxBufConsume(1u);
     }
 
-    if (s_rxCount < CombusFrameMinLen) {
+    if (s_rx.rxCount < CombusFrameMinLen) {
         return 0u;
     }
 
       // --- 2. Peek header to compute expected frame size ---
-    if (s_rxCount < CombusFrameHeaderLen) {
+    if (s_rx.rxCount < CombusFrameHeaderLen) {
         return 0u;
     }
     uint8_t nAnalog  = rxBufAt(1u + offsetof(CombusFrameHeader, nAnalog));
@@ -104,7 +101,7 @@ static uint8_t tryDecode() {
         return 0u;
     }
     uint8_t expectedLen = (uint8_t)expectedLenW;
-    if (s_rxCount < expectedLen) {
+    if (s_rx.rxCount < expectedLen) {
         return 0u;
     }
 
@@ -114,12 +111,12 @@ static uint8_t tryDecode() {
         linear[i] = rxBufAt(i);
     }
 
-      // CRC validated before any write — failed decode leaves s_snap untouched.
-    if (combus_frame_decode(&s_snap, linear, expectedLen,
-                            s_analogBufSize, s_digitalBufSize)) {
-        s_snapValid    = true;
-        s_lastRxMs     = millis();
-        s_everReceived = true;
+      // CRC validated before any write — failed decode leaves s_rx.snap untouched.
+    if (combus_frame_decode(&s_rx.snap, linear, expectedLen,
+                            s_rx.analogBufSize, s_rx.digitalBufSize)) {
+        s_rx.snapValid     = true;
+        s_rx.lastRxMs      = millis();
+        s_rx.everReceived  = true;
         rxBufConsume(expectedLen);
         return expectedLen;
     } else {
@@ -145,19 +142,19 @@ void combus_uart_rx_init( HardwareSerial* serial,
 
     if (!serial || !analogBuf || !digitalBuf) { return; }
 
-    s_serial         = serial;
-    s_analogBufSize  = analogBufSize;
-    s_digitalBufSize = digitalBufSize;
+    s_rx.port            = serial;
+    s_rx.analogBufSize   = analogBufSize;
+    s_rx.digitalBufSize  = digitalBufSize;
 
       // Wire caller-provided buffers into the snapshot struct.
-    s_snap.analog    = analogBuf;
-    s_snap.digital   = digitalBuf;
+    s_rx.snap.analog     = analogBuf;
+    s_rx.snap.digital    = digitalBuf;
 
       // Reset ring buffer and link state.
-    s_rxHead      = 0u;
-    s_rxCount     = 0u;
-    s_snapValid   = false;
-    s_everReceived = false;
+    s_rx.rxHead       = 0u;
+    s_rx.rxCount      = 0u;
+    s_rx.snapValid    = false;
+    s_rx.everReceived = false;
 
     serial->begin(baud, SERIAL_8N1, rxPin, txPin);
 
@@ -168,15 +165,15 @@ void combus_uart_rx_init( HardwareSerial* serial,
 
 
 void combus_uart_rx_update() {
-    if (!s_serial) { return; }
+    if (!s_rx.port) { return; }
 
       // --- Drain available bytes into ring buffer ---
-    while (s_serial->available() > 0) {
-        rxBufPush((uint8_t)s_serial->read());
+    while (s_rx.port->available() > 0) {
+        rxBufPush((uint8_t)s_rx.port->read());
     }
 
       // --- Try to decode (may process multiple back-to-back frames) ---
-    while (s_rxCount >= CombusFrameMinLen) {
+    while (s_rx.rxCount >= CombusFrameMinLen) {
         if (tryDecode() == 0u) {
             break;
         }
@@ -185,20 +182,20 @@ void combus_uart_rx_update() {
 
 
 const ComBusFrame* combus_uart_rx_snapshot() {
-    return s_snapValid ? &s_snap : nullptr;
+    return s_rx.snapValid ? &s_rx.snap : nullptr;
 }
 
 
 uint32_t combus_uart_rx_age_ms() {
-    if (!s_everReceived) {
+    if (!s_rx.everReceived) {
         return UINT32_MAX;
     }
-    return (uint32_t)(millis() - s_lastRxMs);
+    return (uint32_t)(millis() - s_rx.lastRxMs);
 }
 
 
 bool combus_uart_rx_is_alive(uint32_t timeoutMs) {
-    return s_everReceived && (combus_uart_rx_age_ms() < timeoutMs);
+    return s_rx.everReceived && (combus_uart_rx_age_ms() < timeoutMs);
 }
 
 // EOF combus_uart_rx.cpp

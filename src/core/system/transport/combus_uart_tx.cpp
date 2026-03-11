@@ -13,22 +13,17 @@
 // 1. PRIVATE STATE
 // =============================================================================
 
-/// Active serial port (set at init).
-static HardwareSerial* s_serial     = nullptr;
+struct UartTxCtx {
+    HardwareSerial* port     = nullptr;  ///< active serial port
+    uint8_t         envId    = 0u;       ///< env ID embedded in every frame header
+    uint8_t         nAnalog  = 0u;       ///< analog channel count per frame
+    uint8_t         nDigital = 0u;       ///< digital channel count per frame
+    uint8_t         seq      = 0u;       ///< rolling frame sequence counter (0–255)
+    uint32_t        lastTxMs = 0u;       ///< timestamp of last transmitted frame (ms)
+    uint32_t        periodMs = 0u;       ///< transmit period derived from txHz (0 = uninit)
+};
 
-/// Frame header fields fixed at init time.
-static uint8_t         s_envId      = 0u;
-static uint8_t         s_nAnalog    = 0u;
-static uint8_t         s_nDigital   = 0u;
-
-/// Rolling sequence counter (0–255, wraps).
-static uint8_t         s_seq        = 0u;
-
-/// Timestamp of last transmitted frame (ms).
-static uint32_t        s_lastTxMs   = 0u;
-
-/// Transmit period derived from txHz at init.  Zero = not initialized.
-static uint32_t        s_txPeriodMs = 0u;
+static UartTxCtx s_tx;
 
 
 // =============================================================================
@@ -36,21 +31,21 @@ static uint32_t        s_txPeriodMs = 0u;
 // =============================================================================
 
 void combus_uart_tx_init( HardwareSerial* serial,
-                           uint8_t         envId,
-                           uint8_t         nAnalog,
-                           uint8_t         nDigital,
-                           uint32_t        baud,
-                           int             txPin,
-                           int             rxPin,
-                           uint32_t        txHz ) {
+                          uint8_t         envId,
+                          uint8_t         nAnalog,
+                          uint8_t         nDigital,
+                          uint32_t        baud,
+                          int             txPin,
+                          int             rxPin,
+                          uint32_t        txHz ) {
 
     if (!serial || txHz == 0u) { return; }
 
-    s_serial     = serial;
-    s_envId      = envId;
-    s_nAnalog    = nAnalog;
-    s_nDigital   = nDigital;
-    s_txPeriodMs = 1000u / txHz;
+    s_tx.port     = serial;
+    s_tx.envId    = envId;
+    s_tx.nAnalog  = nAnalog;
+    s_tx.nDigital = nDigital;
+    s_tx.periodMs = 1000u / txHz;
 
     serial->begin(baud, SERIAL_8N1, rxPin, txPin);
 
@@ -67,33 +62,33 @@ void combus_uart_tx_init( HardwareSerial* serial,
 void combus_uart_tx_update(const ComBus* bus, bool failSafe) {
 
       // --- Guard: init not done or invalid bus ---
-    if (!s_serial || s_txPeriodMs == 0u || !bus) { return; }
+    if (!s_tx.port || s_tx.periodMs == 0u || !bus) { return; }
 
       // --- Timer gate ---
     uint32_t now = millis();
-    if ((now - s_lastTxMs) < s_txPeriodMs) { return; }
-    s_lastTxMs = now;
+    if ((now - s_tx.lastTxMs) < s_tx.periodMs) { return; }
+    s_tx.lastTxMs = now;
 
       // --- Encode ---
     static uint8_t frame[255u];
     uint8_t frameLen = combus_frame_encode(
         frame,
         bus,
-        s_nAnalog,
-        s_nDigital,
-        s_envId,
-        s_seq,
+        s_tx.nAnalog,
+        s_tx.nDigital,
+        s_tx.envId,
+        s_tx.seq,
         failSafe
     );
 
     if (frameLen == 0u) { return; }
 
       // --- Send ---
-    s_serial->write(frame, frameLen);
-    s_seq++;
+    s_tx.port->write(frame, frameLen);
+    s_tx.seq++;
 
     output_log_dbg("[UART_TX] seq=%u  len=%u  rl=%d  flags=0x%02X\n",
-                   (unsigned)(s_seq - 1u),
+                   (unsigned)(s_tx.seq - 1u),
                    (unsigned)frameLen,
                    (int)bus->runLevel,
                    (unsigned)(failSafe ? COMBUS_FLAG_FAILSAFE : 0u));
