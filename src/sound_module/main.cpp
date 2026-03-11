@@ -7,7 +7,7 @@
  * transport HAL. All sound engine logic is preserved unchanged.
  *
  * Node wiring (relative to this sound ESP32):
- *   Serial2 RX ← Machine ESP32 UART TX   (sound_uart_rx)
+ *   Serial2 RX ← Machine ESP32 UART TX   (combus_uart_rx)
  *   DAC1 (GPIO25) + DAC2 (GPIO26) → amplifier (unchanged)
  *   GPIO light outputs → unchanged from rc_engine_sound
  *
@@ -23,7 +23,8 @@
 
 // --- Sound module HAL & transport ---
 #include "hal/sound_hal.h"
-#include "transport/sound_uart_rx.h"
+#include "config/sound_config.h"
+#include <core/system/transport/combus_uart_rx.h>
 
 // --- Vehicle & sound engine includes (rc_engine_sound) ---
 // Uncomment (or set -D SOUND_ENGINE_READY) once engine sources are copied
@@ -54,6 +55,16 @@
 
 
 // =============================================================================
+// TRANSPORT BACKING BUFFERS
+// =============================================================================
+
+/// Backing arrays owned by main and passed to combus_uart_rx at init.
+/// Sized from sound_config.h transport parameters.
+static uint16_t s_analog[SOUND_TRANSPORT_N_ANALOG];
+static bool     s_digital[SOUND_TRANSPORT_N_DIGITAL];
+
+
+// =============================================================================
 // SETUP
 // =============================================================================
 
@@ -63,7 +74,9 @@ void setup() {
     Serial.println(F("[SOUND_NODE] starting up"));
 
       // --- Initialize ComBus UART receiver ---
-    sound_uart_rx_init(SOUND_RX_PIN, SOUND_TX_PIN);
+    combus_uart_rx_init(&Serial2, SOUND_UART_BAUD, SOUND_RX_PIN, SOUND_TX_PIN,
+                        s_analog,  SOUND_TRANSPORT_N_ANALOG,
+                        s_digital, SOUND_TRANSPORT_N_DIGITAL);
 
       // --- Initialize sound HAL (neutral pulses, failsafe active) ---
     sound_hal_init();
@@ -81,7 +94,7 @@ void setup() {
 
 void loop() {
       // --- 1. Receive ComBus frame from machine ESP32 ---
-    sound_uart_rx_update();
+    combus_uart_rx_update();
 
       // --- 2. Translate snapshot → pulseWidth[] ---
     sound_hal_update();

@@ -24,7 +24,7 @@
  *   sound_hal_init();
  *
  *   // In loop() (Task0 or Task1, before sound engine logic):
- *   sound_uart_rx_update();       // receive UART bytes
+ *   combus_uart_rx_update();      // receive UART bytes
  *   sound_hal_update();           // snapshot → pulseWidth[] + failSafe
  * @endcode
  *****************************************************************************/

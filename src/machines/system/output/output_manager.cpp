@@ -6,7 +6,7 @@
 #include "output_manager.h"
 
 #ifdef SOUND_OUTPUT_UART
-  #include "sound_uart_tx.h"
+  #include <core/system/transport/combus_uart_tx.h>
 #endif
 
 
@@ -21,7 +21,7 @@ void output_update(const ComBus& bus, bool failsafeActive) {
 
 	// --- Sound node UART TX (50 Hz timer-gated, non-blocking) ---
 #ifdef SOUND_OUTPUT_UART
-  sound_uart_tx_update(bus, failsafeActive);
+  combus_uart_tx_update(&bus, failsafeActive);
 #endif
 
 }

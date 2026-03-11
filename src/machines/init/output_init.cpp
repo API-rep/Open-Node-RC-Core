@@ -8,7 +8,7 @@
 #include <core/system/debug/debug.h>
 
 #ifdef SOUND_OUTPUT_UART
-  #include <machines/system/sound_uart_tx.h>
+  #include <core/system/transport/combus_uart_tx.h>
 #endif
 
 
@@ -28,10 +28,15 @@ void output_init() {
 
 	// --- Sound node UART TX ---
 #ifdef SOUND_OUTPUT_UART
-  sound_uart_tx_init(Txd1Pin, Rxd1Pin, SoundUartBaud, SoundTransportTxHz);
-  sys_log_info("[OUTPUT] Sound UART TX — tx=%d rx=%d  baud=%u  rate=%uHz\n",
-               static_cast<int>(Txd1Pin), static_cast<int>(Rxd1Pin),
-               SoundUartBaud, SoundTransportTxHz);
+  combus_uart_tx_init(
+      &Serial2,
+      static_cast<uint8_t>(CombusLayout::MACHINE_TYPE),
+      SoundTransportNAnalog,
+      SoundTransportNDigital,
+      SoundUartBaud,
+      Txd1Pin,
+      Rxd1Pin,
+      SoundTransportTxHz);
 #endif
 
   sys_log_info("[OUTPUT] output_init done\n\n");
