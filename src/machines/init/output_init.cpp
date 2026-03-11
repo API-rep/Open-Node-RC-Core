@@ -32,13 +32,13 @@ void output_init() {
 	// --- Sound node UART TX ---
 #ifdef SOUND_OUTPUT_UART
   combus_uart_tx_init(
-      &Serial2,
+      &SerialExt,
       static_cast<uint8_t>(CombusLayout::MACHINE_TYPE),
       static_cast<uint8_t>(AnalogComBusID::CH_COUNT),
       static_cast<uint8_t>(DigitalComBusID::CH_COUNT),
       SoundUartBaud,
-      Txd1Pin,
-      Rxd1Pin,
+      TxdExtPin,
+      RxdExtPin,
       SoundTransportTxHz);
 #endif
 

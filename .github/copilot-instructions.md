@@ -294,7 +294,7 @@ Re-read this section periodically and propose one item when the project is stabl
 enough to absorb it. Never propose more than one at a time.
 
 ### ExtPort conflict detection (board-level)
-**Context:** Extension/communication pins (`Txd1Pin`, `Rxd1Pin`, …) in board headers
+**Context:** Extension/communication pins (`TxdExtPin`, `RxdExtPin`, …) in board headers
 are bare `constexpr` pin numbers. Nothing prevents two modules activated by separate
 build flags from both claiming the same pin — the conflict is silent until hardware misbehaves.
 
@@ -331,7 +331,7 @@ Also update the `static_assert` in `sound_uart.h` from `UartMaxBaud` to `SoundRx
 receive throughput and commit it as a `constexpr` in `sound_config.h`.
 ### Debug serial opt-out for single-UART architectures
 **Context:** `combus_uart_tx_init` / `combus_uart_rx_init` take a `HardwareSerial*`,
-so swapping `&Serial2` → `&Serial` is a one-line change in `output_init.cpp`.
+so swapping `SerialExt` from `Serial2` → `Serial` is a one-line change in the board header.
 The blocker is that `Serial` is already opened for debug output (`sys_log_info` etc.).
 If a future board has only one usable UART (no Serial2/Serial1), debug must be
 silenceable at build time to free UART0 for transport.
@@ -340,7 +340,7 @@ silenceable at build time to free UART0 for transport.
 - Makes all `sys_log_info` / `*_log_dbg` macros expand to nothing (already
   partially enabled by the existing `DEBUG_*` flag logic in `debug.h`).
 - Suppresses the `Serial.begin(115200)` in `sys_init.cpp`.
-- Allows `output_init.cpp` to call `combus_uart_tx_init(&Serial, ...)` without conflict.
+- Allows the board header to map `#define SerialExt Serial` without conflict.
 
 **Prerequisite:** A real board with only one UART available — not worth the
 complexity otherwise.
