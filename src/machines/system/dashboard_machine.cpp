@@ -12,8 +12,8 @@
 #include "dashboard_drv.h"
 #include "dashboard_input.h"
 #include "dashboard_vbat.h"
-#include <core/utils/debug/dashboard.h>
-#include <core/utils/vbat/vbat_sense.h>
+#include <core/system/debug/dashboard.h>
+#include <core/system/vbat/vbat_sense.h>
 
 #include <Arduino.h>
 #include <stdio.h>

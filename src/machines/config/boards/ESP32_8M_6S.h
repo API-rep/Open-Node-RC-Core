@@ -145,7 +145,7 @@ inline constexpr Board boardCfg {
  */
 
 #ifdef VBAT_SENSING
-#include <core/utils/vbat/vbat_sense.h>
+#include <core/system/vbat/vbat_sense.h>
 
 // --- Active sensing channels ---
 // Add or comment entries to enable/disable channels. Keep VBAT_CH_COUNT last and active.

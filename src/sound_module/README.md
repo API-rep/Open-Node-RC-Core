@@ -119,7 +119,7 @@ src/core/transport/
 
 Machine-side hook (non-breaking, conditional):
 ```
-src/machines/utils/
+src/machines/system/
 ├── sound_uart_tx.h       ← Public API: init, update (50 Hz timer-gated)
 └── sound_uart_tx.cpp
 ```

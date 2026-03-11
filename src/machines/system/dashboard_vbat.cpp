@@ -1,13 +1,13 @@
-﻿/******************************************************************************
+/******************************************************************************
  * @file dashboard_vbat.cpp
- * @brief ANSI terminal dashboard — Layer 3 battery sensing module view.
+ * @brief ANSI terminal dashboard � Layer 3 battery sensing module view.
  *****************************************************************************/
 
 #ifdef DEBUG_DASHBOARD
 
 #include "dashboard_vbat.h"
-#include <core/utils/debug/dashboard.h>
-#include <core/utils/vbat/vbat_sense.h>
+#include <core/system/debug/dashboard.h>
+#include <core/system/vbat/vbat_sense.h>
 
 #include <Arduino.h>
 #include <stdio.h>
@@ -50,12 +50,12 @@ static void render_vbat_view() {
 			float       v     = dis ? 0.0f : vbat_voltage(i);
 			uint8_t     cells = dis ? 0    : vbat_cells(i);
 			bool        low   = !dis && vbat_is_low(i);
-				// Cells: centered in 5 chars — " nS  " (e.g. " 3S  ") or "  -  " (disabled/unknown)
-				// "Cells" header is 5 chars → automatic visual center alignment
+				// Cells: centered in 5 chars � " nS  " (e.g. " 3S  ") or "  -  " (disabled/unknown)
+				// "Cells" header is 5 chars ? automatic visual center alignment
 			char cellStr[8];
 			if (!dis && cells > 0) snprintf(cellStr, sizeof(cellStr), " %uS  ", cells);
 			else                   snprintf(cellStr, sizeof(cellStr), "  -  ");
-				// Voltage: %5.2f V (enabled) or   --- V (disabled) — V column always aligned
+				// Voltage: %5.2f V (enabled) or   --- V (disabled) � V column always aligned
 			char prefix[80];
 			int  pLen;
 			if (dis) pLen = snprintf(prefix, sizeof(prefix), "  %2u   %-24.24s  %5s V    %-5s  ", i, name, "---", cellStr);
@@ -102,7 +102,7 @@ static void render_vbat_detail() {
 	}
 	dMid();
 
-		// ── LIVE STATE ── unified row (same layout for connected and disabled channels)
+		// -- LIVE STATE -- unified row (same layout for connected and disabled channels)
 	{
 			// Voltage field
 			//   normal:           " 4.06 V"       (7 chars)
@@ -145,7 +145,7 @@ static void render_vbat_detail() {
 	}
 	dMid();
 
-		// ── CONFIG AT INIT ──
+		// -- CONFIG AT INIT --
 	const VBatSenseConfig* cfg = vbat_cfg(ch);
 	if (cfg) {
 		dLine("  Sensing pin :  GPIO %u at ADC ref. %.2f V",

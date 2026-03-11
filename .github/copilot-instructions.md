@@ -27,7 +27,7 @@ Add new persistent workflow rules here over time, for example:
 ### Debug flag policy
 - New debug points must use shared `DEBUG_*` flags only (`DEBUG_INPUT`, `DEBUG_HW`, `DEBUG_SYSTEM`, `DEBUG_COMBUS`, `DEBUG_ALL`).
 - Do not introduce or reintroduce ad-hoc per-module flags (for example `DEBUG_HW_INIT`).
-- Shared activation logic must stay centralized in `src/core/utils/debug/debug.h`.
+- Shared activation logic must stay centralized in `src/core/system/debug/debug.h`.
 
 ### Commit message convention
 Use the following format for all commits suggested or written during a session:
@@ -94,12 +94,12 @@ All dashboard logic lives in dedicated `*_dashboard` files.
 #### Four-layer architecture
 ```
 Layer 1 — Core shell
-  src/core/utils/debug/dashboard.h / .cpp
+  src/core/system/debug/dashboard.h / .cpp
     Pure rendering primitives (frame, nav bar, keyboard, event ring buffer,
     render-slot registry, refresh timer). Zero knowledge of any mode or module.
 
 Layer 2 — Env dashboard  (one per execution environment)
-  src/machines/utils/dashboard_machine.h / .cpp
+  src/machines/system/dashboard_machine.h / .cpp
   src/remotes/utils/dashboard_remote.h / .cpp   (future)
     Owns the environment-level overview view.
     Auto-detects which sub-modules are configured (from build flags and
@@ -108,9 +108,9 @@ Layer 2 — Env dashboard  (one per execution environment)
     no dead keys, no views for absent modules.
 
 Layer 3 — Module views  (one per sub-module, optional)
-  src/machines/utils/dashboard_drv.h / .cpp     (DC drivers)
-  src/machines/utils/dashboard_input.h / .cpp   (input / combus)
-  src/machines/utils/dashboard_vbat.h / .cpp    (battery)
+  src/machines/system/dashboard_drv.h / .cpp     (DC drivers)
+  src/machines/system/dashboard_input.h / .cpp   (input / combus)
+  src/machines/system/dashboard_vbat.h / .cpp    (battery)
   ...
     Each module view is a single self-contained screen combining:
       • Live state  — current values, runtime metrics (top section).
@@ -122,8 +122,8 @@ Layer 3 — Module views  (one per sub-module, optional)
     They never call into app code.
 
 Layer 4 — Serial init log  (transitional, destined to disappear)
-  src/core/utils/debug/hw_init_debug.cpp
-  src/core/utils/debug/input_manager_debug.cpp
+  src/core/system/debug/hw_init_debug.cpp
+  src/core/system/debug/input_manager_debug.cpp
   ...
     One-shot text dumps called by the init sequence. Kept as-is until the
     corresponding Layer 3 module view exists and covers the same information
@@ -265,13 +265,13 @@ dashboard_register_detail('4', vbat_channel_count, render_vbat_detail);
 
 #### File map
 ```
-src/core/utils/debug/
+src/core/system/debug/
   dashboard.h      ← public API: setup, push_event, update, register_slot,
                                 register_detail, detail_index
   dashboard.cpp    ← frame primitives, slot table, detail table, nav bars,
                      keyboard (incl. ESC arrow sequences), event buffer
 
-src/machines/utils/
+src/machines/system/
   dashboard_machine.h / .cpp   ← env layer: overview view, auto-detect, slot registration
   dashboard_drv.h / .cpp        ← module view: DC drivers (live table + detail per driver)
   dashboard_input.h / .cpp      ← module view: inputs / combus

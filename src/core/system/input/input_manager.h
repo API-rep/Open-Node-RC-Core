@@ -6,7 +6,7 @@
 #pragma once
 
 #include <struct/combus_struct.h>
-#include <core/utils/debug/debug.h>
+#include <core/system/debug/debug.h>
 
 /** @brief Initialize the selected input module */
 

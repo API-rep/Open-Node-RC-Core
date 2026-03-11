@@ -4,7 +4,7 @@
  *****************************************************************************/
 
 #include "sys_init.h"
-#include <core/utils/debug/debug.h>
+#include <core/system/debug/debug.h>
 
 // =============================================================================
 // 1. SYSTEM INITIALIZATION LOGIC

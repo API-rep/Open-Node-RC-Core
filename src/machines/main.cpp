@@ -5,11 +5,11 @@
 
 #include "config/config.h"
 #include "init/init.h"
-#include "utils/utils.h"
-#include <core/utils/debug/debug.h>
-#include <core/utils/debug/dashboard.h>
-#include <core/utils/input/input_manager.h>
-#include <core/utils/vbat/vbat_sense.h>
+#include "system/utils.h"
+#include <core/system/debug/debug.h>
+#include <core/system/debug/dashboard.h>
+#include <core/system/input/input_manager.h>
+#include <core/system/vbat/vbat_sense.h>
 
 
 /**

@@ -10,7 +10,7 @@
 #include <defs/defs.h>
 #include <core/combus/combus_frame.h>
 #include <core/config/outputs/outputs.h>
-#include <core/utils/debug/debug.h>
+#include <core/system/debug/debug.h>
 
 #ifdef SOUND_OUTPUT_UART
 

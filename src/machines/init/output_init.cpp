@@ -5,10 +5,10 @@
 
 #include "output_init.h"
 #include <machines/config/config.h>
-#include <core/utils/debug/debug.h>
+#include <core/system/debug/debug.h>
 
 #ifdef SOUND_OUTPUT_UART
-  #include <machines/utils/sound_uart_tx.h>
+  #include <machines/system/sound_uart_tx.h>
 #endif
 
 

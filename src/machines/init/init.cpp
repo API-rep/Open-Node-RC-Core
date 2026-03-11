@@ -7,9 +7,9 @@
  *****************************************************************************/
 
 #include "init.h"
-#include "../utils/drv_control.h"
-#include <core/utils/input/input_manager.h>
-#include <machines/utils/dashboard_machine.h>
+#include "../system/drv_control.h"
+#include <core/system/input/input_manager.h>
+#include <machines/system/dashboard_machine.h>
 
 
 // =============================================================================

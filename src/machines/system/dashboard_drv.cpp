@@ -1,12 +1,12 @@
-﻿/******************************************************************************
+/******************************************************************************
  * @file dashboard_drv.cpp
- * @brief ANSI terminal dashboard — Layer 3 DC-driver module view.
+ * @brief ANSI terminal dashboard � Layer 3 DC-driver module view.
  *****************************************************************************/
 
 #ifdef DEBUG_DASHBOARD
 
 #include "dashboard_drv.h"
-#include <core/utils/debug/dashboard.h>
+#include <core/system/debug/dashboard.h>
 
 #include <Arduino.h>
 #include <stdio.h>
@@ -159,7 +159,7 @@ static void render_drv_detail() {
 	}
 	dMid();
 
-		// ── LIVE STATE ── unified single row (clone and active devices same height)
+		// -- LIVE STATE -- unified single row (clone and active devices same height)
 	{
 		char cmdStr[8], rawStr[8];
 		if (d.comChannel.has_value()) {
@@ -179,7 +179,7 @@ static void render_drv_detail() {
 	}
 	dMid();
 
-		// ── CONFIG AT INIT ──
+		// -- CONFIG AT INIT --
 	{
 			// Channel + PWM on one line
 		char chStr[32];
@@ -207,7 +207,7 @@ static void render_drv_detail() {
 			snprintf(parentStr, sizeof(parentStr), "---");
 		}
 
-			// Speed limits — merged on one line, fwStr/bkStr not needed
+			// Speed limits � merged on one line, fwStr/bkStr not needed
 
 			// Port and driver model
 		const char* portName  = (d.drvPort && d.drvPort->infoName) ? d.drvPort->infoName : "---";

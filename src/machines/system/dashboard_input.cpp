@@ -1,13 +1,13 @@
-﻿/******************************************************************************
+/******************************************************************************
  * @file dashboard_input.cpp
- * @brief ANSI terminal dashboard — Layer 3 inputs/combus module view.
+ * @brief ANSI terminal dashboard � Layer 3 inputs/combus module view.
  *****************************************************************************/
 
 #ifdef DEBUG_DASHBOARD
 
 #include "dashboard_input.h"
-#include <core/utils/debug/dashboard.h>
-#include <core/utils/input/input_manager.h>
+#include <core/system/debug/dashboard.h>
+#include <core/system/input/input_manager.h>
 
 #include <Arduino.h>
 #include <stdio.h>

@@ -5,8 +5,8 @@
 
 #include "hw_init.h"
 #include <core/config/combus/combus_types.h>
-#include <core/utils/debug/debug.h>
-#include <core/utils/vbat/vbat_sense.h>
+#include <core/system/debug/debug.h>
+#include <core/system/vbat/vbat_sense.h>
 
 // =============================================================================
 // 1. HARDWARE CONFIG CHECK
