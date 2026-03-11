@@ -99,8 +99,8 @@ Layer 1 — Core shell
     render-slot registry, refresh timer). Zero knowledge of any mode or module.
 
 Layer 2 — Env dashboard  (one per execution environment)
-  src/machines/system/dashboard_machine.h / .cpp
-  src/remotes/utils/dashboard_remote.h / .cpp   (future)
+  src/machines/system/dashboard/dashboard_machine.h / .cpp
+  src/remotes/system/dashboard_remote.h / .cpp   (future)
     Owns the environment-level overview view.
     Auto-detects which sub-modules are configured (from build flags and
     runtime state) and registers them as sub-module slots into core.
@@ -108,9 +108,9 @@ Layer 2 — Env dashboard  (one per execution environment)
     no dead keys, no views for absent modules.
 
 Layer 3 — Module views  (one per sub-module, optional)
-  src/machines/system/dashboard_drv.h / .cpp     (DC drivers)
-  src/machines/system/dashboard_input.h / .cpp   (input / combus)
-  src/machines/system/dashboard_vbat.h / .cpp    (battery)
+  src/machines/system/dashboard/dashboard_drv.h / .cpp     (DC drivers)
+  src/machines/system/dashboard/dashboard_input.h / .cpp   (input / combus)
+  src/machines/system/dashboard/dashboard_vbat.h / .cpp    (battery)
   ...
     Each module view is a single self-contained screen combining:
       • Live state  — current values, runtime metrics (top section).
@@ -271,13 +271,13 @@ src/core/system/debug/
   dashboard.cpp    ← frame primitives, slot table, detail table, nav bars,
                      keyboard (incl. ESC arrow sequences), event buffer
 
-src/machines/system/
+src/machines/system/dashboard/
   dashboard_machine.h / .cpp   ← env layer: overview view, auto-detect, slot registration
   dashboard_drv.h / .cpp        ← module view: DC drivers (live table + detail per driver)
   dashboard_input.h / .cpp      ← module view: inputs / combus
   dashboard_vbat.h / .cpp       ← module view: battery sensing + detail per channel
 ```
-Remote equivalent (future): `src/remotes/utils/dashboard_remote.h/.cpp`
+Remote equivalent (future): `src/remotes/system/dashboard_remote.h/.cpp`
 
 #### Build flag
 Activated via `-D DEBUG_DASHBOARD` in `platformio.ini`.  
