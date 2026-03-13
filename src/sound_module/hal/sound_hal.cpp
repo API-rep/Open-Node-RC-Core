@@ -23,7 +23,7 @@
 
 #include <Arduino.h>
 
-#include <core/system/transport/combus_uart_rx.h>
+#include <core/system/transport/combus_rx.h>
 #include "../config/sound_config.h"
 #include <core/combus/combus_frame.h>
 
@@ -117,10 +117,10 @@ void sound_hal_init() {
  * Update pulseWidth[] from latest ComBus snapshot.
  */
 void sound_hal_update() {
-    const ComBusFrame* snap = combus_uart_rx_snapshot();
+    const ComBusFrame* snap = combus_rx_snapshot();
 
       // --- Link-loss failsafe ---
-    if (!snap || !combus_uart_rx_is_alive(SOUND_HAL_FAILSAFE_TIMEOUT_MS)) {
+    if (!snap || !combus_rx_is_alive(SOUND_HAL_FAILSAFE_TIMEOUT_MS)) {
         failSafe = true;
         applyNeutral();
         return;

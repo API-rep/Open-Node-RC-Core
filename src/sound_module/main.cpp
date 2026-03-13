@@ -24,7 +24,8 @@
 // --- Sound module HAL & transport ---
 #include "hal/sound_hal.h"
 #include "config/sound_config.h"
-#include <core/system/transport/combus_uart_rx.h>
+#include <core/system/transport/uart_transport.h>
+#include <core/system/transport/combus_rx.h>
 
 // --- Vehicle & sound engine includes (rc_engine_sound) ---
 // Uncomment (or set -D SOUND_ENGINE_READY) once engine sources are copied
@@ -58,7 +59,7 @@
 // TRANSPORT BACKING BUFFERS
 // =============================================================================
 
-/// Backing arrays owned by main and passed to combus_uart_rx at init.
+/// Backing arrays owned by main and passed to combus_rx at init.
 /// Sized from sound_config.h transport parameters.
 static uint16_t s_analog[SOUND_TRANSPORT_N_ANALOG];
 static bool     s_digital[SOUND_TRANSPORT_N_DIGITAL];
@@ -73,10 +74,13 @@ void setup() {
     Serial.begin(115200);
     Serial.println(F("[SOUND_NODE] starting up"));
 
-      // --- Initialize ComBus UART receiver ---
-    combus_uart_rx_init(&Serial2, SOUND_UART_BAUD, SOUND_RX_PIN, SOUND_TX_PIN,
-                        s_analog,  SOUND_TRANSPORT_N_ANALOG,
+      // --- Initialize ComBus receiver ---
+    {
+      TransportIface* t = uart_transport_init(
+          &Serial2, SOUND_UART_BAUD, SOUND_RX_PIN, SOUND_TX_PIN, "sound_rx");
+      combus_rx_init(t, s_analog,  SOUND_TRANSPORT_N_ANALOG,
                         s_digital, SOUND_TRANSPORT_N_DIGITAL);
+    }
 
       // --- Initialize sound HAL (neutral pulses, failsafe active) ---
     sound_hal_init();
@@ -94,7 +98,7 @@ void setup() {
 
 void loop() {
       // --- 1. Receive ComBus frame from machine ESP32 ---
-    combus_uart_rx_update();
+    combus_rx_update();
 
       // --- 2. Translate snapshot → pulseWidth[] ---
     sound_hal_update();

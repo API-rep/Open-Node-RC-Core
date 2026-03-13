@@ -8,7 +8,8 @@
 #include <core/system/debug/debug.h>
 
 #ifdef SOUND_OUTPUT_UART
-  #include <core/system/transport/combus_uart_tx.h>
+  #include <core/system/transport/uart_transport.h>
+  #include <core/system/transport/combus_tx.h>
 #endif
 
 
@@ -31,15 +32,20 @@ void output_init() {
 
 	// --- Sound node UART TX ---
 #ifdef SOUND_OUTPUT_UART
-  combus_uart_tx_init(
-      &SerialExt,
-      static_cast<uint8_t>(CombusLayout::MACHINE_TYPE),
-      static_cast<uint8_t>(AnalogComBusID::CH_COUNT),
-      static_cast<uint8_t>(DigitalComBusID::CH_COUNT),
-      SoundUartBaud,
-      TxdExtPin,
-      RxdExtPin,
-      SoundTransportTxHz);
+  {
+    TransportIface* t = uart_transport_init(
+        &SerialExt,
+        SoundUartBaud,
+        TxdExtPin,
+        RxdExtPin,
+        "sound_tx");
+    combus_tx_init(
+        t,
+        static_cast<uint8_t>(CombusLayout::MACHINE_TYPE),
+        static_cast<uint8_t>(AnalogComBusID::CH_COUNT),
+        static_cast<uint8_t>(DigitalComBusID::CH_COUNT),
+        SoundTransportTxHz);
+  }
 #endif
 
   sys_log_info("[OUTPUT] output_init done\n\n");

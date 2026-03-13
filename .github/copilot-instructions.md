@@ -19,12 +19,22 @@ If a generated file does not match these documents, fix formatting before finali
 
 ## 3) Workflow extension area
 
-#### UART guard proposal
-See [src/core/system/transport/TODO_uart_guard.md](src/core/system/transport/TODO_uart_guard.md) for the planned UART guard system:
-  - Centralized UART init module
-  - Guard to prevent multiple clients on the same port
-  - Explicit error/log if port is already claimed
-  - Extensible to multiple ports
+#### Transport layer architecture
+Implemented in `src/core/system/transport/`:
+
+```
+transport.h          — TransportIface (function-pointer table: write/readByte/available + ctx)
+uart_transport.h/.cpp — UART adapter: Serial.begin() + claim guard (3-port static pool)
+combus_tx.h/.cpp     — ComBus TX, transport-agnostic (replaces combus_uart_tx)
+combus_rx.h/.cpp     — ComBus RX, transport-agnostic (replaces combus_uart_rx)
+```
+
+**Rules:**
+- Physical transport init (`uart_transport_init`) is called **once per port** by the top-level init (output_init, sound_module/main). It returns a `TransportIface*`.
+- Protocol modules (`combus_tx_init`, `combus_rx_init`) receive a `TransportIface*` — they never call `Serial.begin()` or touch pins directly.
+- Guard: `uart_transport_init` logs a fatal error and returns `nullptr` if the serial pointer is already claimed.
+- Adding a new physical transport = new `*_transport.h/.cpp` implementing the 3 function pointers.
+- Adding a new protocol module = new module receiving `TransportIface*` — no transport-specific code inside.
 
 ### Debug flag policy
 - New debug points must use shared `DEBUG_*` flags only (`DEBUG_INPUT`, `DEBUG_HW`, `DEBUG_SYSTEM`, `DEBUG_COMBUS`, `DEBUG_ALL`).
