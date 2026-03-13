@@ -65,8 +65,9 @@ deps (chore): pin PS4_Controller_Host to API-rep fork commit b58a05d
 At the end of every session that includes a successful build/upload cycle, run through these steps in order:
 
 1. **Commit staged work** — propose a commit message following the convention above (scope + type + short description).
-2. **PS4 lib check** — see the *PS4_Controller_Host lib — periodic portability check* section below.
-3. **Workflow update** — if any new convention or architecture rule was agreed during the session, propose the minimal addition to this file.
+2. **Upload readiness** — if the session ended with a successful build, explicitly state: *"Le dernier build (Xs, exit 0) est valide — tu peux uploader directement sans recompiler."* Do not let the user relaunch a build unnecessarily.
+3. **PS4 lib check** — see the *PS4_Controller_Host lib — periodic portability check* section below.
+4. **Workflow update** — if any new convention or architecture rule was agreed during the session, propose the minimal addition to this file.
 
 The checklist reminder should be triggered once, briefly, at the first natural wrap-up point (stable build after a feature or fix block). Do not repeat it within the same session.
 
