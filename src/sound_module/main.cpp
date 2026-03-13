@@ -24,7 +24,7 @@
 // --- Sound module HAL & transport ---
 #include "hal/sound_hal.h"
 #include "config/sound_config.h"
-#include <core/system/transport/adapter/uart_link.h>
+#include <core/system/transport/adapter/uart_com.h>
 #include <core/system/transport/protocol/combus_rx.h>
 
 // --- Vehicle & sound engine includes (rc_engine_sound) ---
@@ -76,9 +76,9 @@ void setup() {
 
       // --- Initialize ComBus receiver ---
     {
-      NodeLink* link = uart_link_init(
+      NodeCom* com = uart_com_init(
           &Serial2, SOUND_UART_BAUD, SOUND_RX_PIN, SOUND_TX_PIN, "sound_rx");
-      combus_rx_init(link, s_analog,  SOUND_TRANSPORT_N_ANALOG,
+      combus_rx_init(com, s_analog,  SOUND_TRANSPORT_N_ANALOG,
                         s_digital, SOUND_TRANSPORT_N_DIGITAL);
     }
 

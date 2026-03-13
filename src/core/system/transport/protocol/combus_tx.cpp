@@ -14,7 +14,7 @@
 // =============================================================================
 
 struct CombusTxState {
-	NodeLink* link = nullptr;  ///< active transport interface
+	NodeCom* com = nullptr;  ///< active transport interface
 	uint8_t         envId     = 0u;       ///< env ID embedded in every frame header
 	uint8_t         nAnalog   = 0u;       ///< analog channel count per frame
 	uint8_t         nDigital  = 0u;       ///< digital channel count per frame
@@ -30,22 +30,22 @@ static CombusTxState s_tx;
 // 2. INITIALIZATION
 // =============================================================================
 
-void combus_tx_init( NodeLink* link,
+void combus_tx_init( NodeCom* com,
                      uint8_t         envId,
                      uint8_t         nAnalog,
                      uint8_t         nDigital,
                      uint32_t        txHz ) {
 
-	if (!link || txHz == 0u) { return; }
+	if (!com || txHz == 0u) { return; }
 
-	s_tx.link = link;
+	s_tx.com = com;
 	s_tx.envId     = envId;
 	s_tx.nAnalog   = nAnalog;
 	s_tx.nDigital  = nDigital;
 	s_tx.periodMs  = 1000u / txHz;
 
 	sys_log_info("[COMBUS_TX] init — transport='%s'  rate=%uHz  A%u+D%u\n",
-	             link->name, txHz,
+	             com->name, txHz,
 	             (unsigned)nAnalog, (unsigned)nDigital);
 }
 
@@ -57,7 +57,7 @@ void combus_tx_init( NodeLink* link,
 void combus_tx_update(const ComBus* bus, bool failSafe) {
 
 		// --- Guard: init not done or invalid bus ---
-	if (!s_tx.link || s_tx.periodMs == 0u || !bus) { return; }
+	if (!s_tx.com || s_tx.periodMs == 0u || !bus) { return; }
 
 		// --- Timer gate ---
 	uint32_t now = millis();
@@ -79,7 +79,7 @@ void combus_tx_update(const ComBus* bus, bool failSafe) {
 	if (frameLen == 0u) { return; }
 
 		// --- Send via transport ---
-	s_tx.link->write(s_tx.link->ctx, frame, frameLen);
+	s_tx.com->write(s_tx.com->ctx, frame, frameLen);
 	s_tx.seq++;
 
 	output_log_dbg("[COMBUS_TX] seq=%u  len=%u  rl=%d  flags=0x%02X\n",

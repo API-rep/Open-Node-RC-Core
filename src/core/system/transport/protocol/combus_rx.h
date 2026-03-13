@@ -17,8 +17,8 @@
  *   static bool     s_digital[N_DIGITAL];
  *
  *   // In setup():
- *   NodeLink* link = uart_link_init(&Serial2, BAUD, RX_PIN, TX_PIN, "sound_rx");
- *   combus_rx_init(link, s_analog, N_ANALOG, s_digital, N_DIGITAL);
+ *   NodeCom* com = uart_com_init(&Serial2, BAUD, RX_PIN, TX_PIN, "sound_rx");
+ *   combus_rx_init(com, s_analog, N_ANALOG, s_digital, N_DIGITAL);
  *
  *   // In loop():
  *   combus_rx_update();
@@ -41,13 +41,13 @@
 /**
  * @brief Initialize the ComBus receiver.
  *
- * @param transport       Claimed transport interface (from uart_link_init or similar).
+ * @param transport       Claimed transport interface (from uart_com_init or similar).
  * @param analogBuf       Caller-allocated array, receives analog values.
  * @param analogBufSize   Capacity of analogBuf (number of uint16_t entries).
  * @param digitalBuf      Caller-allocated array, receives digital values.
  * @param digitalBufSize  Capacity of digitalBuf (number of bool entries).
  */
-void combus_rx_init( NodeLink* link,
+void combus_rx_init( NodeCom* com,
                      uint16_t*       analogBuf,
                      uint8_t         analogBufSize,
                      bool*           digitalBuf,

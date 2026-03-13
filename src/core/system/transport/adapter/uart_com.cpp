@@ -1,9 +1,9 @@
 ﻿/******************************************************************************
- * @file uart_link.cpp
- * @brief UART adapter implementation for NodeLink.
+ * @file uart_com.cpp
+ * @brief UART adapter implementation for NodeCom.
  *****************************************************************************/
 
-#include "uart_link.h"
+#include "uart_com.h"
 
 #include <core/system/debug/debug.h>
 
@@ -13,12 +13,12 @@
 // =============================================================================
 
 /// Maximum number of simultaneously registered UART ports.
-static constexpr uint8_t UART_LINK_MAX_PORTS = 3u;
+static constexpr uint8_t UART_COM_MAX_PORTS = 3u;
 
 /**
  * @brief Per-port internal context.
  *
- * @details Each entry owns a NodeLink instance whose ctx pointer
+ * @details Each entry owns a NodeCom instance whose ctx pointer
  *   points back to this UartCtx, allowing the static adapter functions
  *   to reach the correct HardwareSerial without captured state.
  */
@@ -26,10 +26,10 @@ struct UartCtx {
 	HardwareSerial* serial   = nullptr;
 	const char*     owner    = nullptr;
 	bool            claimed  = false;
-	NodeLink  link    = {};
+	NodeCom  com    = {};
 };
 
-static UartCtx s_ports[UART_LINK_MAX_PORTS];
+static UartCtx s_ports[UART_COM_MAX_PORTS];
 static uint8_t s_portCount = 0u;
 
 
@@ -54,30 +54,30 @@ static int uart_available(void* ctx) {
 // 3. PUBLIC API
 // =============================================================================
 
-NodeLink* uart_link_init( HardwareSerial* serial,
-                                     uint32_t        baud,
-                                     int             txPin,
-                                     int             rxPin,
-                                     const char*     owner ) {
+NodeCom* uart_com_init( HardwareSerial* serial,
+                        uint32_t        baud,
+                        int             txPin,
+                        int             rxPin,
+                        const char*     owner ) {
 
 	if (!serial) {
-		sys_log_err("[UART_LINK] nullptr serial — init aborted\n");
+		sys_log_err("[UART_COM] nullptr serial — init aborted\n");
 		return nullptr;
 	}
 
 		// --- Guard: reject duplicate claim on the same port ---
 	for (uint8_t i = 0u; i < s_portCount; i++) {
 		if (s_ports[i].serial == serial) {
-			sys_log_err("[UART_LINK] FATAL: port already claimed by '%s', rejected for '%s'\n",
+			sys_log_err("[UART_COM] FATAL: port already claimed by '%s', rejected for '%s'\n",
 			            s_ports[i].owner, owner);
 			return nullptr;
 		}
 	}
 
 		// --- Guard: pool exhausted ---
-	if (s_portCount >= UART_LINK_MAX_PORTS) {
-		sys_log_err("[UART_LINK] FATAL: port pool full (%u max), rejected for '%s'\n",
-		            (unsigned)UART_LINK_MAX_PORTS, owner);
+	if (s_portCount >= UART_COM_MAX_PORTS) {
+		sys_log_err("[UART_COM] FATAL: port pool full (%u max), rejected for '%s'\n",
+		            (unsigned)UART_COM_MAX_PORTS, owner);
 		return nullptr;
 	}
 
@@ -87,20 +87,20 @@ NodeLink* uart_link_init( HardwareSerial* serial,
 	p->owner      = owner;
 	p->claimed    = true;
 
-		// --- Fill NodeLink (ctx → this slot) ---
-	p->link.ctx       = p;
-	p->link.write     = uart_write;
-	p->link.readByte  = uart_readByte;
-	p->link.available = uart_available;
-	p->link.name      = owner;
+		// --- Fill NodeCom (ctx → this slot) ---
+	p->com.ctx       = p;
+	p->com.write     = uart_write;
+	p->com.readByte  = uart_readByte;
+	p->com.available = uart_available;
+	p->com.name      = owner;
 
 		// --- Initialize hardware ---
 	serial->begin(baud, SERIAL_8N1, rxPin, txPin);
 
-	sys_log_info("[UART_LINK] '%s' — baud=%u  tx=%d  rx=%d\n",
+	sys_log_info("[UART_COM] '%s' — baud=%u  tx=%d  rx=%d\n",
 	             owner, baud, txPin, rxPin);
 
-	return &p->link;
+	return &p->com;
 }
 
-// EOF uart_link.cpp
+// EOF uart_com.cpp

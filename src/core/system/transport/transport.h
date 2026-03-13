@@ -1,19 +1,19 @@
 ﻿/******************************************************************************
  * @file transport.h
- * @brief Generic inter-node-link communication interface.
+ * @brief Generic inter-node communication interface.
  *
- * @details Defines NodeLink — a lightweight structure of functions that acts as
+ * @details Defines NodeCom — a lightweight structure of functions that acts as
  * a hardware abstraction layer between the communication modules (combus_tx/rx,
  *  ...) and the physical transport (UART, ESP-Now, …) layer.
  *
- * Communicationmodules receive a NodeLink* structure pointer at init time used  
+ * Communication modules receive a NodeCom* structure pointer at init time used
  * to call only:
- *   link->write()     — send bytes
- *   link->readByte()  — receive one byte (-1 if none)
- *   link->available() — bytes waiting in the RX buffer
+ *   com->write()     — send bytes
+ *   com->readByte()  — receive one byte (-1 if none)
+ *   com->available() — bytes waiting in the RX buffer
  *
- * Physical transport layer (uart_transport, …) implement function that returns
- * a NodeLink* pointer, usable by the communication modules.
+ * Physical transport layer (uart_com, …) implements a function that returns
+ * a NodeCom* pointer, usable by the communication modules.
  *****************************************************************************/
 #pragma once
 
@@ -33,15 +33,14 @@
  *   ctx is an opaque pointer carried through every call so the implementation
  *   can reach its own private state without globals.
  *
- * @var NodeLink::ctx        Opaque pointer use to passed argument to every function
- *                           pointer below.
- * @var NodeLink::write      Send @p len bytes from @p data via the physical transport.
- * @var NodeLink::readByte   Read one byte from the RX buffer; returns -1 if none available.
- * @var NodeLink::available  Number of bytes currently waiting in the RX buffer.
- * @var NodeLink::name       Human-readable port identifier.
+ * @var NodeCom::ctx        Opaque pointer passed through every function pointer below.
+ * @var NodeCom::write      Send @p len bytes from @p data via the physical transport.
+ * @var NodeCom::readByte   Read one byte from the RX buffer; returns -1 if none available.
+ * @var NodeCom::available  Number of bytes currently waiting in the RX buffer.
+ * @var NodeCom::name       Human-readable port identifier.
  */
 
-struct NodeLink {
+struct NodeCom {
 	void*       ctx;                                          ///< adapter private context
 	void      (*write)    (void* ctx, const uint8_t* data, size_t len); ///< send bytes
 	int       (*readByte) (void* ctx);                        ///< read one byte (-1 = empty)
@@ -50,3 +49,4 @@ struct NodeLink {
 };
 
 // EOF transport.h
+

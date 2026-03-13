@@ -3,17 +3,17 @@
  * @brief ComBus transmitter — transport-agnostic.
  *
  * @details Serializes the live ComBus into a binary frame and sends it via
- * any NodeLink*. Timer-gated, non-blocking — safe to call every loop.
+ * any NodeCom*. Timer-gated, non-blocking — safe to call every loop.
  *
  * The physical transport (UART, ESP-Now, …) is provided at init time as a
- * claimed NodeLink*. This module is completely unaware of the underlying
+ * claimed NodeCom*. This module is completely unaware of the underlying
  * medium.
  *
  * Typical integration:
  * @code
  *   // In init:
- *   NodeLink* link = uart_link_init(&Serial2, BAUD, TX_PIN, RX_PIN, "combus");
- *   combus_tx_init( link, envId, N_ANALOG, N_DIGITAL, TX_HZ);
+ *   NodeCom* com = uart_com_init(&Serial2, BAUD, TX_PIN, RX_PIN, "combus");
+ *   combus_tx_init( com, envId, N_ANALOG, N_DIGITAL, TX_HZ);
  *
  *   // In loop:
  *   combus_tx_update(&comBus, failsafeActive);
@@ -35,13 +35,13 @@
 /**
  * @brief Initialize the ComBus transmitter.
  *
- * @param transport  Claimed transport interface (from uart_link_init or similar).
+ * @param transport  Claimed transport interface (from uart_com_init or similar).
  * @param envId      Machine-type identifier embedded in each frame header.
  * @param nAnalog    Number of analog channels to encode per frame.
  * @param nDigital   Number of digital channels to encode per frame.
  * @param txHz       Frame transmit rate in Hz.
  */
-void combus_tx_init( NodeLink* link,
+void combus_tx_init( NodeCom* com,
                      uint8_t         envId,
                      uint8_t         nAnalog,
                      uint8_t         nDigital,

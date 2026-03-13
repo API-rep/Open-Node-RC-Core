@@ -8,7 +8,7 @@
 #include <core/system/debug/debug.h>
 
 #ifdef SOUND_OUTPUT_UART
-  #include <core/system/transport/adapter/uart_link.h>
+  #include <core/system/transport/adapter/uart_com.h>
   #include <core/system/transport/protocol/combus_tx.h>
 #endif
 
@@ -33,14 +33,14 @@ void output_init() {
 	// --- Sound node UART TX ---
 #ifdef SOUND_OUTPUT_UART
   {
-    NodeLink* link = uart_link_init(
+    NodeCom* com = uart_com_init(
         &SerialExt,
         SoundUartBaud,
         TxdExtPin,
         RxdExtPin,
         "sound_tx");
     combus_tx_init(
-        t,
+        com,
         static_cast<uint8_t>(CombusLayout::MACHINE_TYPE),
         static_cast<uint8_t>(AnalogComBusID::CH_COUNT),
         static_cast<uint8_t>(DigitalComBusID::CH_COUNT),
