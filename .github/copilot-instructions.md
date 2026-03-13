@@ -33,7 +33,7 @@ protocol/combus_rx.h/.cpp   — ComBus RX, transport-agnostic
 - Physical transport init (`uart_link_init`) is called **once per port** by the top-level init (output_init, sound_module/main). It returns a `NodeLink*`.
 - Protocol modules (`combus_tx_init`, `combus_rx_init`) receive a `NodeLink*` — they never call `Serial.begin()` or touch pins directly.
 - Guard: `uart_link_init` logs a fatal error and returns `nullptr` if the serial pointer is already claimed.
-- Adding a new physical transport = new `*_transport.h/.cpp` implementing the 3 function pointers.
+- Adding a new physical transport = new `adapter/*_link.h/.cpp` implementing the 3 function pointers.
 - Adding a new protocol module = new module receiving `NodeLink*` — no transport-specific code inside.
 
 ### Debug flag policy
