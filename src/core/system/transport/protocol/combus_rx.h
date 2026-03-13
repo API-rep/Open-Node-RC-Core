@@ -1,8 +1,8 @@
-/******************************************************************************
+﻿/******************************************************************************
  * @file combus_rx.h
  * @brief ComBus receiver — transport-agnostic.
  *
- * @details Receives binary ComBus frames from any TransportIface*, validates
+ * @details Receives binary ComBus frames from any NodeLink*, validates
  * SOF, length, and CRC-8/MAXIM, then exposes the latest valid snapshot via
  * combus_rx_snapshot().
  *
@@ -17,8 +17,8 @@
  *   static bool     s_digital[N_DIGITAL];
  *
  *   // In setup():
- *   TransportIface* t = uart_transport_init(&Serial2, BAUD, RX_PIN, TX_PIN, "sound_rx");
- *   combus_rx_init(t, s_analog, N_ANALOG, s_digital, N_DIGITAL);
+ *   NodeLink* link = uart_link_init(&Serial2, BAUD, RX_PIN, TX_PIN, "sound_rx");
+ *   combus_rx_init(link, s_analog, N_ANALOG, s_digital, N_DIGITAL);
  *
  *   // In loop():
  *   combus_rx_update();
@@ -30,7 +30,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "transport.h"
+#include "../transport.h"
 #include <core/combus/combus_frame.h>
 
 
@@ -41,13 +41,13 @@
 /**
  * @brief Initialize the ComBus receiver.
  *
- * @param transport       Claimed transport interface (from uart_transport_init or similar).
+ * @param transport       Claimed transport interface (from uart_link_init or similar).
  * @param analogBuf       Caller-allocated array, receives analog values.
  * @param analogBufSize   Capacity of analogBuf (number of uint16_t entries).
  * @param digitalBuf      Caller-allocated array, receives digital values.
  * @param digitalBufSize  Capacity of digitalBuf (number of bool entries).
  */
-void combus_rx_init( TransportIface* transport,
+void combus_rx_init( NodeLink* link,
                      uint16_t*       analogBuf,
                      uint8_t         analogBufSize,
                      bool*           digitalBuf,

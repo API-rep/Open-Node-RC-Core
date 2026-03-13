@@ -1,4 +1,4 @@
-/******************************************************************************
+﻿/******************************************************************************
  * @file output_init.cpp
  * @brief Implementation of output peripherals initialization.
  *****************************************************************************/
@@ -8,8 +8,8 @@
 #include <core/system/debug/debug.h>
 
 #ifdef SOUND_OUTPUT_UART
-  #include <core/system/transport/uart_transport.h>
-  #include <core/system/transport/combus_tx.h>
+  #include <core/system/transport/adapter/uart_link.h>
+  #include <core/system/transport/protocol/combus_tx.h>
 #endif
 
 
@@ -33,7 +33,7 @@ void output_init() {
 	// --- Sound node UART TX ---
 #ifdef SOUND_OUTPUT_UART
   {
-    TransportIface* t = uart_transport_init(
+    NodeLink* link = uart_link_init(
         &SerialExt,
         SoundUartBaud,
         TxdExtPin,

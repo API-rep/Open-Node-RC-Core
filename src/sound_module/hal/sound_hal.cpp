@@ -1,4 +1,4 @@
-/******************************************************************************
+﻿/******************************************************************************
  * @file sound_hal.cpp
  * Sound module — ComBus → rc_engine_sound hardware abstraction layer.
  *
@@ -23,7 +23,7 @@
 
 #include <Arduino.h>
 
-#include <core/system/transport/combus_rx.h>
+#include <core/system/transport/protocol/combus_rx.h>
 #include "../config/sound_config.h"
 #include <core/combus/combus_frame.h>
 

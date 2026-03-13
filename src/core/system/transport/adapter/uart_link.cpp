@@ -1,9 +1,9 @@
-/******************************************************************************
- * @file uart_transport.cpp
- * @brief UART adapter implementation for TransportIface.
+﻿/******************************************************************************
+ * @file uart_link.cpp
+ * @brief UART adapter implementation for NodeLink.
  *****************************************************************************/
 
-#include "uart_transport.h"
+#include "uart_link.h"
 
 #include <core/system/debug/debug.h>
 
@@ -13,12 +13,12 @@
 // =============================================================================
 
 /// Maximum number of simultaneously registered UART ports.
-static constexpr uint8_t UART_TRANSPORT_MAX_PORTS = 3u;
+static constexpr uint8_t UART_LINK_MAX_PORTS = 3u;
 
 /**
  * @brief Per-port internal context.
  *
- * @details Each entry owns a TransportIface instance whose ctx pointer
+ * @details Each entry owns a NodeLink instance whose ctx pointer
  *   points back to this UartCtx, allowing the static adapter functions
  *   to reach the correct HardwareSerial without captured state.
  */
@@ -26,10 +26,10 @@ struct UartCtx {
 	HardwareSerial* serial   = nullptr;
 	const char*     owner    = nullptr;
 	bool            claimed  = false;
-	TransportIface  iface    = {};
+	NodeLink  link    = {};
 };
 
-static UartCtx s_ports[UART_TRANSPORT_MAX_PORTS];
+static UartCtx s_ports[UART_LINK_MAX_PORTS];
 static uint8_t s_portCount = 0u;
 
 
@@ -54,30 +54,30 @@ static int uart_available(void* ctx) {
 // 3. PUBLIC API
 // =============================================================================
 
-TransportIface* uart_transport_init( HardwareSerial* serial,
+NodeLink* uart_link_init( HardwareSerial* serial,
                                      uint32_t        baud,
                                      int             txPin,
                                      int             rxPin,
                                      const char*     owner ) {
 
 	if (!serial) {
-		sys_log_err("[UART_TRANSPORT] nullptr serial — init aborted\n");
+		sys_log_err("[UART_LINK] nullptr serial — init aborted\n");
 		return nullptr;
 	}
 
 		// --- Guard: reject duplicate claim on the same port ---
 	for (uint8_t i = 0u; i < s_portCount; i++) {
 		if (s_ports[i].serial == serial) {
-			sys_log_err("[UART_TRANSPORT] FATAL: port already claimed by '%s', rejected for '%s'\n",
+			sys_log_err("[UART_LINK] FATAL: port already claimed by '%s', rejected for '%s'\n",
 			            s_ports[i].owner, owner);
 			return nullptr;
 		}
 	}
 
 		// --- Guard: pool exhausted ---
-	if (s_portCount >= UART_TRANSPORT_MAX_PORTS) {
-		sys_log_err("[UART_TRANSPORT] FATAL: port pool full (%u max), rejected for '%s'\n",
-		            (unsigned)UART_TRANSPORT_MAX_PORTS, owner);
+	if (s_portCount >= UART_LINK_MAX_PORTS) {
+		sys_log_err("[UART_LINK] FATAL: port pool full (%u max), rejected for '%s'\n",
+		            (unsigned)UART_LINK_MAX_PORTS, owner);
 		return nullptr;
 	}
 
@@ -87,20 +87,20 @@ TransportIface* uart_transport_init( HardwareSerial* serial,
 	p->owner      = owner;
 	p->claimed    = true;
 
-		// --- Fill TransportIface (ctx → this slot) ---
-	p->iface.ctx       = p;
-	p->iface.write     = uart_write;
-	p->iface.readByte  = uart_readByte;
-	p->iface.available = uart_available;
-	p->iface.name      = owner;
+		// --- Fill NodeLink (ctx → this slot) ---
+	p->link.ctx       = p;
+	p->link.write     = uart_write;
+	p->link.readByte  = uart_readByte;
+	p->link.available = uart_available;
+	p->link.name      = owner;
 
 		// --- Initialize hardware ---
 	serial->begin(baud, SERIAL_8N1, rxPin, txPin);
 
-	sys_log_info("[UART_TRANSPORT] '%s' — baud=%u  tx=%d  rx=%d\n",
+	sys_log_info("[UART_LINK] '%s' — baud=%u  tx=%d  rx=%d\n",
 	             owner, baud, txPin, rxPin);
 
-	return &p->iface;
+	return &p->link;
 }
 
-// EOF uart_transport.cpp
+// EOF uart_link.cpp

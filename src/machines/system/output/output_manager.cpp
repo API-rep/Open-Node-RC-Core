@@ -1,4 +1,4 @@
-/******************************************************************************
+﻿/******************************************************************************
  * @file output_manager.cpp
  * @brief Implementation of the output update dispatcher.
  *****************************************************************************/
@@ -6,7 +6,7 @@
 #include "output_manager.h"
 
 #ifdef SOUND_OUTPUT_UART
-  #include <core/system/transport/combus_tx.h>
+  #include <core/system/transport/protocol/combus_tx.h>
 #endif
 
 

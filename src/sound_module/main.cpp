@@ -1,4 +1,4 @@
-/******************************************************************************
+﻿/******************************************************************************
  * @file main.cpp
  * Sound module — entry point for the sound/light ESP32 node.
  *
@@ -24,8 +24,8 @@
 // --- Sound module HAL & transport ---
 #include "hal/sound_hal.h"
 #include "config/sound_config.h"
-#include <core/system/transport/uart_transport.h>
-#include <core/system/transport/combus_rx.h>
+#include <core/system/transport/adapter/uart_link.h>
+#include <core/system/transport/protocol/combus_rx.h>
 
 // --- Vehicle & sound engine includes (rc_engine_sound) ---
 // Uncomment (or set -D SOUND_ENGINE_READY) once engine sources are copied
@@ -76,9 +76,9 @@ void setup() {
 
       // --- Initialize ComBus receiver ---
     {
-      TransportIface* t = uart_transport_init(
+      NodeLink* link = uart_link_init(
           &Serial2, SOUND_UART_BAUD, SOUND_RX_PIN, SOUND_TX_PIN, "sound_rx");
-      combus_rx_init(t, s_analog,  SOUND_TRANSPORT_N_ANALOG,
+      combus_rx_init(link, s_analog,  SOUND_TRANSPORT_N_ANALOG,
                         s_digital, SOUND_TRANSPORT_N_DIGITAL);
     }
 

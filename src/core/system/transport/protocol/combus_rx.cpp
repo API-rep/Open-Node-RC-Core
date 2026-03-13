@@ -24,7 +24,7 @@ static constexpr uint8_t kRxBufSize  = kFrameMaxLen;
 static uint8_t            s_rxBuf[kRxBufSize];
 
 struct CombusRxState {
-	TransportIface* transport        = nullptr;  ///< active transport interface
+	NodeLink* link        = nullptr;  ///< active transport interface
 	uint8_t         analogBufSize    = 0u;       ///< analog buffer size (from caller)
 	uint8_t         digitalBufSize   = 0u;       ///< digital buffer size (from caller)
 	uint8_t         rxHead           = 0u;       ///< ring buffer read index
@@ -131,15 +131,15 @@ static uint8_t tryDecode() {
 // 3. PUBLIC API
 // =============================================================================
 
-void combus_rx_init( TransportIface* transport,
+void combus_rx_init( NodeLink* link,
                      uint16_t*       analogBuf,
                      uint8_t         analogBufSize,
                      bool*           digitalBuf,
                      uint8_t         digitalBufSize ) {
 
-	if (!transport || !analogBuf || !digitalBuf) { return; }
+	if (!link || !analogBuf || !digitalBuf) { return; }
 
-	s_rx.transport       = transport;
+	s_rx.link       = link;
 	s_rx.analogBufSize   = analogBufSize;
 	s_rx.digitalBufSize  = digitalBufSize;
 
@@ -154,17 +154,17 @@ void combus_rx_init( TransportIface* transport,
 	s_rx.everReceived = false;
 
 	sys_log_info("[COMBUS_RX] init — transport='%s'  A%u+D%u\n",
-	             transport->name,
+	             link->name,
 	             (unsigned)analogBufSize, (unsigned)digitalBufSize);
 }
 
 
 void combus_rx_update() {
-	if (!s_rx.transport) { return; }
+	if (!s_rx.link) { return; }
 
 		// --- Drain available bytes into ring buffer ---
-	while (s_rx.transport->available(s_rx.transport->ctx) > 0) {
-		int b = s_rx.transport->readByte(s_rx.transport->ctx);
+	while (s_rx.link->available(s_rx.link->ctx) > 0) {
+		int b = s_rx.link->readByte(s_rx.link->ctx);
 		if (b >= 0) { rxBufPush((uint8_t)b); }
 	}
 

@@ -1,4 +1,4 @@
-# Copilot Session Rules (Persistent)
+﻿# Copilot Session Rules (Persistent)
 
 These instructions are loaded for every coding session in this workspace.
 
@@ -23,18 +23,18 @@ If a generated file does not match these documents, fix formatting before finali
 Implemented in `src/core/system/transport/`:
 
 ```
-transport.h          — TransportIface (function-pointer table: write/readByte/available + ctx)
-uart_transport.h/.cpp — UART adapter: Serial.begin() + claim guard (3-port static pool)
-combus_tx.h/.cpp     — ComBus TX, transport-agnostic (replaces combus_uart_tx)
-combus_rx.h/.cpp     — ComBus RX, transport-agnostic (replaces combus_uart_rx)
+transport.h          — NodeLink (function-pointer table: write/readByte/available + ctx)
+adapter/uart_link.h/.cpp — UART adapter: Serial.begin() + claim guard (3-port static pool)
+protocol/combus_tx.h/.cpp   — ComBus TX, transport-agnostic
+protocol/combus_rx.h/.cpp   — ComBus RX, transport-agnostic
 ```
 
 **Rules:**
-- Physical transport init (`uart_transport_init`) is called **once per port** by the top-level init (output_init, sound_module/main). It returns a `TransportIface*`.
-- Protocol modules (`combus_tx_init`, `combus_rx_init`) receive a `TransportIface*` — they never call `Serial.begin()` or touch pins directly.
-- Guard: `uart_transport_init` logs a fatal error and returns `nullptr` if the serial pointer is already claimed.
+- Physical transport init (`uart_link_init`) is called **once per port** by the top-level init (output_init, sound_module/main). It returns a `NodeLink*`.
+- Protocol modules (`combus_tx_init`, `combus_rx_init`) receive a `NodeLink*` — they never call `Serial.begin()` or touch pins directly.
+- Guard: `uart_link_init` logs a fatal error and returns `nullptr` if the serial pointer is already claimed.
 - Adding a new physical transport = new `*_transport.h/.cpp` implementing the 3 function pointers.
-- Adding a new protocol module = new module receiving `TransportIface*` — no transport-specific code inside.
+- Adding a new protocol module = new module receiving `NodeLink*` — no transport-specific code inside.
 
 ### Debug flag policy
 - New debug points must use shared `DEBUG_*` flags only (`DEBUG_INPUT`, `DEBUG_HW`, `DEBUG_SYSTEM`, `DEBUG_COMBUS`, `DEBUG_ALL`).
