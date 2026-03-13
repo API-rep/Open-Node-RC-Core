@@ -45,13 +45,13 @@
  * @param txHz      Frame transmit rate in Hz.
  */
 void combus_uart_tx_init( HardwareSerial* serial,
-                           uint8_t         envId,
-                           uint8_t         nAnalog,
-                           uint8_t         nDigital,
-                           uint32_t        baud,
-                           int             txPin,
-                           int             rxPin,
-                           uint32_t        txHz );
+                          uint8_t         envId,
+                          uint8_t         nAnalog,
+                          uint8_t         nDigital,
+                          uint32_t        baud,
+                          int             txPin,
+                          int             rxPin,
+                          uint32_t        txHz );
 
 
 

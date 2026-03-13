@@ -18,11 +18,13 @@ If a generated file does not match these documents, fix formatting before finali
 - In every `.h/.cpp` file, `@file` must exactly match the real filename.
 
 ## 3) Workflow extension area
-Add new persistent workflow rules here over time, for example:
-- debug workflow presets
-- commit message conventions
-- test/build order
-- release checklist
+
+#### UART guard proposal
+See [src/core/system/transport/TODO_uart_guard.md](src/core/system/transport/TODO_uart_guard.md) for the planned UART guard system:
+  - Centralized UART init module
+  - Guard to prevent multiple clients on the same port
+  - Explicit error/log if port is already claimed
+  - Extensible to multiple ports
 
 ### Debug flag policy
 - New debug points must use shared `DEBUG_*` flags only (`DEBUG_INPUT`, `DEBUG_HW`, `DEBUG_SYSTEM`, `DEBUG_COMBUS`, `DEBUG_ALL`).

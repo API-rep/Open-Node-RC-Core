@@ -40,7 +40,7 @@
 // =============================================================================
 
 /**
- * @brief Initialize the UART receiver.
+ * @brief Initialize the combus UART receiver.
  *
  * @param serial          HardwareSerial port (e.g. &Serial2).
  * @param baud            UART baud rate.
@@ -52,13 +52,15 @@
  * @param digitalBufSize  Capacity of digitalBuf (number of bool entries).
  */
 void combus_uart_rx_init( HardwareSerial* serial,
-                           uint32_t        baud,
-                           int             rxPin,
-                           int             txPin,
-                           uint16_t*       analogBuf,
-                           uint8_t         analogBufSize,
-                           bool*           digitalBuf,
-                           uint8_t         digitalBufSize );
+                          uint32_t        baud,
+                          int             rxPin,
+                          int             txPin,
+                          uint16_t*       analogBuf,
+                          uint8_t         analogBufSize,
+                          bool*           digitalBuf,
+                          uint8_t         digitalBufSize );
+
+
 
 /**
  * @brief Poll UART and decode incoming frames — call every loop iteration.
@@ -68,6 +70,8 @@ void combus_uart_rx_init( HardwareSerial* serial,
  * frames per call. Updates the internal snapshot on each valid frame.
  */
 void combus_uart_rx_update();
+
+
 
 /**
  * @brief Return a pointer to the latest valid decoded snapshot.
@@ -79,12 +83,16 @@ void combus_uart_rx_update();
  */
 const ComBusFrame* combus_uart_rx_snapshot();
 
+
+
 /**
  * @brief Milliseconds since the last valid frame was received.
  *
  * @return Age in ms, or UINT32_MAX if no frame has ever been received.
  */
 uint32_t combus_uart_rx_age_ms();
+
+
 
 /**
  * @brief True if a valid frame was received within the last timeoutMs ms.
