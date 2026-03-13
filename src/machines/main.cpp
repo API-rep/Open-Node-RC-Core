@@ -83,6 +83,7 @@ void loop() {
 
 	// --- 2. RunLevel change detection ---
   bool isNewRunLevel = (comBus.runLevel != lastRunLevel);
+  lastRunLevel = comBus.runLevel;  // Capture BEFORE switch — prevents mid-loop transitions from masking isNewRunLevel
 
 	// --- 3. RunLevel Execution ---
   switch (comBus.runLevel) {
@@ -172,9 +173,6 @@ void loop() {
       break;
   }
   
-	// --- 4. Sync lastRunLevel ---
-  lastRunLevel = comBus.runLevel;
-
 // =============================================================================
 // 3. SYSTEM TASKS (Battery, etc.)
 // =============================================================================

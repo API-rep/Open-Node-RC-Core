@@ -319,7 +319,7 @@ static void dNav() {
 		if (s_details[i].slotKey == s_currentKey) {
 			uint8_t n = s_details[i].countFn ? s_details[i].countFn() : 0;
 			if (n > 0)
-				cpos += (size_t)snprintf(content + cpos, sizeof(content) - cpos, "RETURN : DETAIL    ");
+				cpos += (size_t)snprintf(content + cpos, sizeof(content) - cpos, "+ : DETAIL    ");
 			break;
 		}
 	}
@@ -345,10 +345,10 @@ static void dNavDetail() {
 			break;
 		}
 	}
-	// Format: "- X/N +  (- +)    Q : BACK"
+	// Format: "- X/N +    Q : BACK"
 	char content[64];
 	size_t cpos = (size_t)snprintf(content, sizeof(content),
-	             "- %u/%u +  (- +)    Q : BACK",
+	             "- %u/%u +    Q : BACK",
 	             s_detailIdx + 1, n);
 	// Center within visual frame width (1 + DashInnerW + 1)
 	int    pad = ((int)(1 + DashInnerW + 1) - (int)cpos) / 2;
@@ -671,8 +671,8 @@ void dashboard_update() {
 			return;
 		}
 
-			// Enter: open detail sub-view for current slot (if registered and non-empty)
-		if (c == '\r' || c == '\n') {
+			// +: open detail sub-view for current slot (if registered and non-empty, not already in detail)
+		if (!s_inDetail && c == '+') {
 			for (uint8_t i = 0; i < s_detailCount; i++) {
 				if (s_details[i].slotKey == s_currentKey) {
 					uint8_t n = s_details[i].countFn ? s_details[i].countFn() : 0;

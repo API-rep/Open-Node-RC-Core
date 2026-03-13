@@ -151,7 +151,7 @@ static void renderPinLine(const char*                   label,
                           ActiveLevel                   polarity,
                           const char*                   activeMeaning,
                           const char*                   inactiveMeaning) {
-	char gpioStr[8], stateStr[6], statusStr[32];
+	char gpioStr[8], stateStr[6], statusStr[12];
 	if (!pin.has_value()) {
 		snprintf(gpioStr,   sizeof(gpioStr),   "---");
 		snprintf(stateStr,  sizeof(stateStr),  "N/C");
@@ -170,7 +170,7 @@ static void renderPinLine(const char*                   label,
 			snprintf(statusStr, sizeof(statusStr), "%s", m);
 		}
 	}
-	dLine("  %-5s  %-8s  %-6s  %s", label, gpioStr, stateStr, statusStr);
+	dLine("  %-5s  %-8s  %-5s  %s", label, gpioStr, stateStr, statusStr);
 }
 
 /**
@@ -241,15 +241,15 @@ static void render_drv_detail() {
 		      d.maxFwSpeed.value_or(100.0f), d.maxBackSpeed.value_or(100.0f));
 	}
 	dMid();
-	dLine("  %-5s  %-8s  %-6s  %s", "Pin", "GPIO", "State", "Status");
+	dLine("  %-5s  %-8s  %-5s  %s", "Pin", "GPIO", "State", "Status");
 	dMid();
 	{
 		const DriverPort*  port  = d.drvPort;
 		const DriverModel* model = port ? port->driverModel : nullptr;
 		ActiveLevel enPol  = model ? model->enableActiveLevel : ActiveLevel::Unset;
 		ActiveLevel slpPol = model ? model->sleepActiveLevel  : ActiveLevel::Unset;
-		renderPinLine("EN",  port ? port->enPin  : std::optional<uint8_t>{}, enPol,  "ACTIVE",  "INACTIVE");
-		renderPinLine("SLP", port ? port->slpPin : std::optional<uint8_t>{}, slpPol, "AWAKE",   "SLEEPING");
+		renderPinLine("EN",  port ? port->enPin  : std::optional<uint8_t>{}, enPol,  "ENABLED",  "DISABLED");
+		renderPinLine("SLP", port ? port->slpPin : std::optional<uint8_t>{}, slpPol, "SLEEPING", "AWAKE");
 		renderPinLine("BRK", port ? port->brkPin : std::optional<uint8_t>{}, ActiveLevel::Unset, "", "");
 		renderPinLine("DIR", port ? port->dirPin : std::optional<uint8_t>{}, ActiveLevel::Unset, "", "");
 		renderPinLine("PWM", port ? port->pwmPin : std::optional<uint8_t>{}, ActiveLevel::Unset, "", "");
