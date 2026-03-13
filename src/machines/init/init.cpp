@@ -10,6 +10,7 @@
 #include "../system/drv_control.h"
 #include <core/system/input/input_manager.h>
 #include <machines/system/debug/dashboard_machine.h>
+#include <core/system/debug/dashboard.h>
 
 
 // =============================================================================
@@ -89,6 +90,11 @@ void machine_init() {
 
     sys_log_info("[SYSTEM] Pause released — entering main loop.\n\n");
   }
+
+	  // --- 8. Start dashboard FreeRTOS task (after pause, on Core 0) ---
+	  // Called here — and not inside dashboard_machine_setup() — so the task
+	  // does not activate during the PAUSE_LOG_AFTER_INIT wait.
+  dashboard_start_task();
 }
 
 // EOF init.cpp

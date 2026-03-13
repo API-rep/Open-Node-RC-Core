@@ -152,6 +152,10 @@ void dashboard_machine_setup(const ComBus* bus, const Machine* mach,
 	dashboard_drv_register(bus, mach);
 	dashboard_vbat_register();
 
+		// NOTE: dashboard_start_task() is NOT called here.
+		// It must be called from init.cpp *after* the PAUSE_LOG_AFTER_INIT
+		// block so the dashboard task does not activate during the pause.
+
 }
 
 

@@ -14,6 +14,8 @@
 #include "dashboard.h"
 
 #include <Arduino.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -75,6 +77,14 @@ static uint8_t   s_eventCount = 0;
 static char    s_logLines[DashLogCount][DashInnerW + 1];
 static uint8_t s_logHead  = 0;
 static uint8_t s_logCount = 0;
+
+	// --- Serial render mutex ---
+	// Taken for the entire duration of one frame render (cursor-home → dNav).
+	// dashboard_serial_trylock() in log_impl uses a non-blocking try: if the
+	// dashboard owns the mutex (rendering in progress), the log call skips
+	// the Serial write but still pushes to the ring buffer.  This eliminates
+	// the race condition between Core 0 (dashboard renders) and Core 1 (logs).
+static SemaphoreHandle_t s_renderMutex = nullptr;
 
 
 // =============================================================================
@@ -327,12 +337,7 @@ static void dNav() {
 
 /** @brief Print the detail-mode navigation bar (replaces normal slot nav while in detail). */
 static void dNavDetail() {
-		// Find parent slot label for backtrack display
-	const char* parentLabel = "back";
-	for (uint8_t i = 0; i < s_slotCount; i++) {
-		if (s_slots[i].key == s_currentKey) { parentLabel = s_slots[i].label; break; }
-	}
-		// Live sub-item count from countFn
+	// Live sub-item count from countFn
 	uint8_t n = 0;
 	for (uint8_t i = 0; i < s_detailCount; i++) {
 		if (s_details[i].slotKey == s_currentKey) {
@@ -340,19 +345,13 @@ static void dNavDetail() {
 			break;
 		}
 	}
-		// Uppercase parent label
-	char parentUpper[20];
-	uint8_t l = 0;
-	for (const char* p = parentLabel; *p && l < sizeof(parentUpper)-1; p++)
-		parentUpper[l++] = (char)toupper((unsigned char)*p);
-	parentUpper[l] = '\0';
-		// Format: "- Ch X/N +  (- +)      PARENT detail      Q : back"
-	char content[192];
+	// Format: "- X/N +  (- +)    Q : BACK"
+	char content[64];
 	size_t cpos = (size_t)snprintf(content, sizeof(content),
-	             "- Ch %u/%u +  (- +)      %s detail      Q : back",
-	             s_detailIdx + 1, n, parentUpper);
-		// Center within visual frame width (1 + DashInnerW + 1)
-	int pad = ((int)(1 + DashInnerW + 1) - (int)cpos) / 2;
+	             "- %u/%u +  (- +)    Q : BACK",
+	             s_detailIdx + 1, n);
+	// Center within visual frame width (1 + DashInnerW + 1)
+	int    pad = ((int)(1 + DashInnerW + 1) - (int)cpos) / 2;
 	if (pad < 0) pad = 0;
 	char   buf[256];
 	size_t pos = 0;
@@ -362,14 +361,23 @@ static void dNavDetail() {
 	Serial.write((const uint8_t*)buf, pos);
 }
 
-/** @brief Dispatch redraw to the currently active slot (or detail sub-view). */
-static void renderView() {
-		// --- Position: full erase on first/view-switch, home+erase otherwise ---
+/**
+ * @brief Inner render body — called exclusively from renderView() under mutex.
+ *
+ * @details Separated so the mutex is taken/given in one wrapper function with
+ *   a single exit point, regardless of which slot or detail sub-view is active.
+ */
+static void renderView_impl() {
+		// --- Position: full erase on first/view-switch, cursor-home only otherwise ---
+		// Periodic refreshes use cursor-home only (no erase) to prevent flicker:
+		// each dLine() / dPre() call writes full-width content that overwrites
+		// the previous render in-place.  Full erase is reserved for view switches
+		// and the very first render to clear any init log noise.
 	if (s_needFullClear) {
-		Serial.print("\x1B[2J\x1B[H");  // erase full screen + cursor home
+		Serial.print("\x1B[2J\x1B[H");  // full erase + cursor home (first render / view switch)
 		s_needFullClear = false;
 	} else {
-		Serial.print("\x1B[H\x1B[J");   // cursor home + erase from cursor to end of screen
+		Serial.print("\x1B[H");          // cursor home only — no erase, no flicker
 	}
 
 		// --- Detail mode: dispatch to sub-view renderer ---
@@ -400,6 +408,20 @@ static void renderView() {
 	}
 }
 
+/**
+ * @brief Dispatch redraw — acquires the render mutex for the entire frame.
+ *
+ * @details The mutex prevents log_impl (Core 1) from interleaving Serial writes
+ *   into an in-progress frame render (Core 0).  The mutex is a binary semaphore
+ *   created in dashboard_setup(); renderView() blocks until it is available
+ *   (a log call holds it for at most a few hundred microseconds).
+ */
+static void renderView() {
+	if (s_renderMutex) xSemaphoreTake(s_renderMutex, portMAX_DELAY);
+	renderView_impl();
+	if (s_renderMutex) xSemaphoreGive(s_renderMutex);
+}
+
 
 // =============================================================================
 // 5. PUBLIC API
@@ -411,6 +433,11 @@ static void renderView() {
  * @details Called by the env-layer setup (dashboard_machine_setup).
  */
 void dashboard_setup() {
+		// --- 0. Create render mutex (once) ---
+	if (!s_renderMutex) {
+		s_renderMutex = xSemaphoreCreateMutex();
+	}
+
 		// --- 1. Record start time ---
 	s_startMs      = millis();
 	s_lastRefresh  = 0;
@@ -549,6 +576,31 @@ void dashboard_push_log(const char* msg) {
 }
 
 /**
+ * @brief Try to acquire the render mutex for a Serial write from log_impl.
+ *
+ * @details Non-blocking (timeout = 0): if the dashboard is currently rendering
+ *   (mutex taken by renderView()), returns false immediately.  The caller
+ *   (log_impl) should then skip the Serial write — the message was already
+ *   pushed to the ring buffer and will appear in the dashboard log tail.
+ *
+ * @return True if the mutex was acquired (caller must call dashboard_serial_unlock).
+ *         False if the dashboard is rendering (caller should skip Serial write).
+ */
+bool dashboard_serial_trylock() {
+	if (!s_renderMutex) return true;  // mutex not yet created (pre-setup) — allow write
+	return xSemaphoreTake(s_renderMutex, 0) == pdTRUE;
+}
+
+/**
+ * @brief Release the render mutex after a Serial write from log_impl.
+ *
+ * @details Must be called only after a successful dashboard_serial_trylock().
+ */
+void dashboard_serial_unlock() {
+	if (s_renderMutex) xSemaphoreGive(s_renderMutex);
+}
+
+/**
  * @brief Render the serial log tail section.
  *
  * @details Shows the last DashLogCount lines received through log_impl,
@@ -636,8 +688,9 @@ void dashboard_update() {
 			return;
 		}
 
-			// Q/q: exit detail mode (back to parent), or suspend at top level
-		if (c == 'Q' || c == 'q') {
+			// Q/q/*: exit detail mode (back to parent), or suspend at top level (* never suspends)
+		if (c == 'Q' || c == 'q' || c == '*') {
+			if (c == '*' && !s_inDetail) return;  // * only acts inside detail mode
 			if (s_inDetail) {
 				s_inDetail      = false;
 				s_lastRefresh   = 0;
@@ -690,6 +743,48 @@ void dashboard_update() {
 	}
 }
 
+
+// =============================================================================
+// 7. FREERTOS TASK
+// =============================================================================
+
+/**
+ * @brief FreeRTOS task entry point — loops over dashboard_update().
+ *
+ * @details A 20 ms vTaskDelay() between iterations keeps keyboard
+ *   polling responsive while yielding CPU to higher-priority tasks
+ *   (BT stack, etc.).  The actual redraw rate is controlled by the
+ *   DashRefreshMs constant inside dashboard_update().
+ *
+ * @param pvParameters  Unused (required by FreeRTOS task signature).
+ */
+static void dashboard_task_fn(void* pvParameters) {
+	(void)pvParameters;
+	for (;;) {
+		dashboard_update();
+		vTaskDelay(pdMS_TO_TICKS(20));
+	}
+}
+
+/**
+ * @brief Spawn the dashboard FreeRTOS task pinned to Core 0.
+ *
+ * @details See dashboard.h for full design rationale.
+ *   Stack depth: 4096 words (~16 KB).  Priority: 1 (below BT stack, ≥5).
+ *   Task handle is discarded — the task runs for the lifetime of the
+ *   firmware and is never suspended or deleted.
+ */
+void dashboard_start_task() {
+	xTaskCreatePinnedToCore(
+		dashboard_task_fn,   // task function
+		"dash",              // name (visible in FreeRTOS debug tools)
+		4096,                // stack depth in words (16 KB)
+		nullptr,             // pvParameters — unused
+		1,                   // priority 1: below BT stack (≥5), above idle (0)
+		nullptr,             // task handle — not needed
+		0                    // Core 0: freed from loop(); BT also here but at higher prio
+	);
+}
 
 #endif // DEBUG_DASHBOARD
 

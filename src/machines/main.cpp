@@ -31,6 +31,13 @@ void loop() {
 	// --- 1. Sync remote inputs with bus ---
   input_update(comBus);
 
+	// --- 1.5. Battery tick (unconditional) ---
+	// Called before the failsafe early-return so the dashboard always shows
+	// a fresh voltage regardless of controller state or runlevel.
+	// The result (any isLow transition this tick) is stored and consumed by
+	// the battery state-machine block in section 3 to avoid calling tick twice.
+  bool vbatChanged = vbat_tick();
+
 	// --- 2. Input watchdog/failsafe ---
   bool inputIsDrived = false;
   for (uint8_t i = 0; i < static_cast<uint8_t>(AnalogComBusID::CH_COUNT); i++) {
@@ -58,8 +65,7 @@ void loop() {
       failsafeActive = true;
     }
     comBus.runLevel = RunLevel::IDLE;
-    dashboard_update();
-    return;
+    return;  // dashboard runs on its own FreeRTOS task (Core 0)
   }
   failsafeActive = false;
 
@@ -173,8 +179,8 @@ void loop() {
 // 3. SYSTEM TASKS (Battery, etc.)
 // =============================================================================
 
-	// --- 1. Battery monitoring ---
-  if (vbat_tick()) {
+	// --- 1. Battery low-state transition (tick already called above, result reused) ---
+  if (vbatChanged) {
     for (uint8_t i = 0; i < vbat_channel_count(); i++) {
       if (vbat_is_low(i)) { 
         comBus.batteryIsLow = true;
@@ -191,8 +197,8 @@ void loop() {
 	// --- 2. Output dispatch (sound TX, …) ---
   output_update(comBus, failsafeActive);
 
-	// --- 3. Dashboard update ---
-  dashboard_update();
+	// dashboard_update() removed — handled by dedicated FreeRTOS task on Core 0.
+	// See dashboard_start_task() called from dashboard_machine_setup().
 
 } // END OF LOOP
 

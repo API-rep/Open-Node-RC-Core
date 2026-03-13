@@ -131,11 +131,37 @@ constexpr bool SerialClearOnInit = (bool)(DEBUG_SERIAL_CLEAR_ON_INIT);
 // 1.5 DASHBOARD LOG FORWARD DECLARATION
 // =============================================================================
 
-// Forward-declare dashboard_push_log so log_impl can feed the log tail panel.
+// Forward-declare dashboard functions used by log_impl.
 // Defined in dashboard.cpp — compiled only when DEBUG_DASHBOARD is set.
 #ifdef DEBUG_DASHBOARD
   void dashboard_push_log(const char* msg);
+  bool dashboard_serial_trylock();  ///< Non-blocking: returns true + acquires render mutex, or false if rendering.
+  void dashboard_serial_unlock();   ///< Release the render mutex after a Serial write.
 #endif
+
+// Always-visible inline bridge functions — wraps the #ifdef so that log_impl
+// (a template) can call them as non-dependent names without two-phase lookup
+// issues across translation units that may not include dashboard.h.
+inline void _dash_push_log(const char* msg) {
+#ifdef DEBUG_DASHBOARD
+  dashboard_push_log(msg);
+#else
+  (void)msg;
+#endif
+}
+/// @return true if Serial write is safe (lock acquired), false if rendering in progress.
+inline bool _dash_serial_trylock() {
+#ifdef DEBUG_DASHBOARD
+  return dashboard_serial_trylock();
+#else
+  return true;
+#endif
+}
+inline void _dash_serial_unlock() {
+#ifdef DEBUG_DASHBOARD
+  dashboard_serial_unlock();
+#endif
+}
 
 
 // =============================================================================
@@ -156,6 +182,17 @@ constexpr bool SerialClearOnInit = (bool)(DEBUG_SERIAL_CLEAR_ON_INIT);
 template<uint8_t Level, bool ModuleEnabled, typename... Args>
 inline void log_impl(const char* fmt, Args... args) {
   if constexpr (Level <= LogLevel && ModuleEnabled) {
+    if constexpr (DbgDashboard) {
+        // Always push to the ring buffer first — message is visible in the
+        // dashboard log tail regardless of whether Serial write proceeds.
+      char _lb[72];
+      snprintf(_lb, sizeof(_lb), fmt, args...);
+      _dash_push_log(_lb);
+        // Try to acquire the render mutex (non-blocking).
+        // If the dashboard is currently rendering (Core 0), skip the Serial
+        // write to prevent frame corruption.  The message is already buffered.
+      if (!_dash_serial_trylock()) return;
+    }
     if constexpr (SerialAnsi) {
       if constexpr (Level == LogError)     Serial.print("\033[31m");
       else if constexpr (Level == LogWarn) Serial.print("\033[33m");
@@ -165,9 +202,7 @@ inline void log_impl(const char* fmt, Args... args) {
       Serial.print("\033[0m");
     }
     if constexpr (DbgDashboard) {
-      char _lb[72];
-      snprintf(_lb, sizeof(_lb), fmt, args...);
-      dashboard_push_log(_lb);
+      _dash_serial_unlock();
     }
   }
 }

@@ -1,6 +1,6 @@
 /******************************************************************************
  * @file dashboard_drv.cpp
- * @brief ANSI terminal dashboard — Layer 3 DC-driver module view.
+ * @brief ANSI terminal dashboard ï¿½ Layer 3 DC-driver module view.
  *****************************************************************************/
 
 #ifdef DEBUG_DASHBOARD
@@ -138,6 +138,42 @@ static uint8_t drv_detail_count() {
 }
 
 /**
+ * @brief Render one pin state line in the driver detail view.
+ *
+ * @param label           Pin label (e.g. "EN", "SLP") â€” 5 chars max.
+ * @param pin             Optional GPIO number from DriverPort.
+ * @param polarity        ActiveLevel polarity (Unset = no semantic meaning).
+ * @param activeMeaning   Text when pin is at its active electrical level.
+ * @param inactiveMeaning Text when pin is at its inactive electrical level.
+ */
+static void renderPinLine(const char*                   label,
+                          const std::optional<uint8_t>& pin,
+                          ActiveLevel                   polarity,
+                          const char*                   activeMeaning,
+                          const char*                   inactiveMeaning) {
+	char gpioStr[8], stateStr[6], statusStr[32];
+	if (!pin.has_value()) {
+		snprintf(gpioStr,   sizeof(gpioStr),   "---");
+		snprintf(stateStr,  sizeof(stateStr),  "N/C");
+		snprintf(statusStr, sizeof(statusStr), "---");
+	} else {
+		uint8_t gpio = pin.value();
+		uint8_t lvl  = (uint8_t)digitalRead(gpio);
+		snprintf(gpioStr,  sizeof(gpioStr),  "%u", gpio);
+		snprintf(stateStr, sizeof(stateStr), "%s", lvl ? "HIGH" : "LOW");
+		if (polarity == ActiveLevel::Unset) {
+			snprintf(statusStr, sizeof(statusStr), "---");
+		} else {
+			const char* m = (polarity == ActiveLevel::ActiveHigh)
+			                ? (lvl ? activeMeaning : inactiveMeaning)
+			                : (lvl ? inactiveMeaning : activeMeaning);
+			snprintf(statusStr, sizeof(statusStr), "%s", m);
+		}
+	}
+	dLine("  %-5s  %-8s  %-6s  %s", label, gpioStr, stateStr, statusStr);
+}
+
+/**
  * @brief Render the per-driver detail view: live state + config at init.
  */
 static void render_drv_detail() {
@@ -153,29 +189,9 @@ static void render_drv_detail() {
 	dTop();
 	{
 		char left[64], right[28];
-		int lLen = snprintf(left,  sizeof(left),  "  [ DRIVERS ]  #%d - %s detail", d.ID, name);
+		int lLen = snprintf(left,  sizeof(left),  "  [ DRIVERS DETAIL ]  #%d - %s", d.ID, name);
 		int rLen = snprintf(right, sizeof(right), "uptime: %s  ", upt);
 		dLine("%s%*s%s", left, (int)DashInnerW - lLen - rLen, "", right);
-	}
-	dMid();
-
-		// -- LIVE STATE -- unified single row (clone and active devices same height)
-	{
-		char cmdStr[8], rawStr[8];
-		if (d.comChannel.has_value()) {
-			uint8_t  chIdx = static_cast<uint8_t>(d.comChannel.value());
-			uint16_t raw   = s_bus->analogBus[chIdx].value;
-			int16_t  pct   = (d.mode == DcDrvMode::ONE_WAY)
-			                 ? dashPctOneway (raw, s_bus->analogBusMaxVal)
-			                 : dashPctBipolar(raw, s_bus->analogBusMaxVal);
-			snprintf(cmdStr, sizeof(cmdStr), "%+4d%%", pct);
-			snprintf(rawStr, sizeof(rawStr), "%5u",   raw);
-		} else {
-			snprintf(cmdStr, sizeof(cmdStr), "  --%");
-			snprintf(rawStr, sizeof(rawStr), "   --");
-		}
-		dLine("  Cmd :  %s  |  Raw :  %s  |  PolInv :  %s",
-		      cmdStr, rawStr, d.polInv ? "INV" : "---");
 	}
 	dMid();
 
@@ -207,7 +223,7 @@ static void render_drv_detail() {
 			snprintf(parentStr, sizeof(parentStr), "---");
 		}
 
-			// Speed limits — merged on one line, fwStr/bkStr not needed
+			// Speed limits ï¿½ merged on one line, fwStr/bkStr not needed
 
 			// Port and driver model
 		const char* portName  = (d.drvPort && d.drvPort->infoName) ? d.drvPort->infoName : "---";
@@ -223,6 +239,41 @@ static void render_drv_detail() {
 		dLine("  Parent :  %s",       parentStr);
 		dLine("  Max forward/back speed :  %.1f / %.1f %%",
 		      d.maxFwSpeed.value_or(100.0f), d.maxBackSpeed.value_or(100.0f));
+	}
+	dMid();
+	dLine("  %-5s  %-8s  %-6s  %s", "Pin", "GPIO", "State", "Status");
+	dMid();
+	{
+		const DriverPort*  port  = d.drvPort;
+		const DriverModel* model = port ? port->driverModel : nullptr;
+		ActiveLevel enPol  = model ? model->enableActiveLevel : ActiveLevel::Unset;
+		ActiveLevel slpPol = model ? model->sleepActiveLevel  : ActiveLevel::Unset;
+		renderPinLine("EN",  port ? port->enPin  : std::optional<uint8_t>{}, enPol,  "ACTIVE",  "INACTIVE");
+		renderPinLine("SLP", port ? port->slpPin : std::optional<uint8_t>{}, slpPol, "AWAKE",   "SLEEPING");
+		renderPinLine("BRK", port ? port->brkPin : std::optional<uint8_t>{}, ActiveLevel::Unset, "", "");
+		renderPinLine("DIR", port ? port->dirPin : std::optional<uint8_t>{}, ActiveLevel::Unset, "", "");
+		renderPinLine("PWM", port ? port->pwmPin : std::optional<uint8_t>{}, ActiveLevel::Unset, "", "");
+		renderPinLine("FLT", port ? port->fltPin : std::optional<uint8_t>{}, ActiveLevel::Unset, "", "");
+	}
+	dMid();
+
+		// -- LIVE STATE --
+	{
+		char cmdStr[8], rawStr[8];
+		if (d.comChannel.has_value()) {
+			uint8_t  chIdx = static_cast<uint8_t>(d.comChannel.value());
+			uint16_t raw   = s_bus->analogBus[chIdx].value;
+			int16_t  pct   = (d.mode == DcDrvMode::ONE_WAY)
+			                 ? dashPctOneway (raw, s_bus->analogBusMaxVal)
+			                 : dashPctBipolar(raw, s_bus->analogBusMaxVal);
+			snprintf(cmdStr, sizeof(cmdStr), "%+4d%%", pct);
+			snprintf(rawStr, sizeof(rawStr), "%5u",   raw);
+		} else {
+			snprintf(cmdStr, sizeof(cmdStr), "  --%");
+			snprintf(rawStr, sizeof(rawStr), "   --");
+		}
+		dLine("  Cmd :  %s  |  Raw :  %s  |  PolInv :  %s",
+		      cmdStr, rawStr, d.polInv ? "INV" : "---");
 	}
 
 	dBot();

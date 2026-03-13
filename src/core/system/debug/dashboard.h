@@ -255,9 +255,36 @@ void dashboard_push_event(const char* msg);
 /**
  * @brief Non-blocking update — keyboard handling + timed redraw.
  *
- * @details Must be called once per loop() iteration.
+ * @details Intended as the FreeRTOS task body.  May also be called
+ *   directly from loop() when the task is not used (e.g. bare-metal
+ *   test builds without FreeRTOS).
  */
 void dashboard_update();
+
+/**
+ * @brief Spawn the dashboard FreeRTOS task, pinned to Core 0.
+ *
+ * @details Creates a dedicated FreeRTOS task that loops over
+ *   dashboard_update() with a 20 ms yield between iterations.
+ *   Pinning to Core 0 offloads all Serial I/O away from the
+ *   application loop running on Core 1.  The BT/WiFi IDF tasks
+ *   also run on Core 0 but at much higher priority (≥5), so the
+ *   dashboard task (priority 1) fills idle time only and never
+ *   interferes with the radio stack.
+ *
+ *   Safety notes:
+ *   - Serial is IDF-protected (thread-safe) on ESP32.
+ *   - Dashboard reads bus and machine state as read-only at runtime
+ *     so no data-race risk.
+ *   - Stack depth of 4096 words leaves comfortable headroom for
+ *     snprintf rendering (worst-case ~1.5 KB).
+ *
+ *   Must be called after dashboard_setup() (i.e. from
+ *   dashboard_machine_setup(), at the very end).
+ *   dashboard_update() must NOT be called from loop() once this
+ *   task is running.
+ */
+void dashboard_start_task();
 
 
 #else // !DEBUG_DASHBOARD — empty stubs
@@ -287,6 +314,9 @@ inline void    dashboard_register_detail(uint8_t, DashDetailCount, DashDetailFn)
 inline uint8_t dashboard_detail_index()                                                  { return 0; }
 inline void    dashboard_push_event(const char*)                                         {}
 inline void    dashboard_update()                                                        {}
+inline void    dashboard_start_task()                                                    {}
+inline bool    dashboard_serial_trylock()                                                { return true; }
+inline void    dashboard_serial_unlock()                                                 {}
 
 #endif // DEBUG_DASHBOARD
 
