@@ -8,8 +8,8 @@
 #include <core/system/debug/debug.h>
 
 #ifdef SOUND_OUTPUT_UART
-  #include <core/system/transport/adapter/uart_com.h>
-  #include <core/system/transport/protocol/combus_tx.h>
+  #include <core/system/com/adapter/uart_com.h>
+  #include <core/system/com/protocol/combus_tx.h>
 #endif
 
 

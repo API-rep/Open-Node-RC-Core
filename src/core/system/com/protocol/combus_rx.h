@@ -30,7 +30,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "../transport.h"
+#include "../node_com.h"
 #include <core/combus/combus_frame.h>
 
 

@@ -24,7 +24,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "../transport.h"
+#include "../node_com.h"
 #include <struct/combus_struct.h>
 
 

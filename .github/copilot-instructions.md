@@ -20,10 +20,10 @@ If a generated file does not match these documents, fix formatting before finali
 ## 3) Workflow extension area
 
 #### Transport layer architecture
-Implemented in `src/core/system/transport/`:
+Implemented in `src/core/system/com/`:
 
 ```
-transport.h          — NodeCom (function-pointer table: write/readByte/available + ctx)
+node_com.h           — NodeCom (function-pointer table: write/readByte/available + ctx)
 adapter/uart_com.h/.cpp — UART adapter: Serial.begin() + claim guard (3-port static pool)
 protocol/combus_tx.h/.cpp   — ComBus TX, transport-agnostic
 protocol/combus_rx.h/.cpp   — ComBus RX, transport-agnostic

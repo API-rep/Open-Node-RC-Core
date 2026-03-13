@@ -23,7 +23,7 @@
 
 #include <Arduino.h>
 
-#include <core/system/transport/protocol/combus_rx.h>
+#include <core/system/com/protocol/combus_rx.h>
 #include "../config/sound_config.h"
 #include <core/combus/combus_frame.h>
 

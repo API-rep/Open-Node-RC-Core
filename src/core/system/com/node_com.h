@@ -1,5 +1,5 @@
 ﻿/******************************************************************************
- * @file transport.h
+ * @file node_com.h
  * @brief Generic inter-node communication interface.
  *
  * @details Defines NodeCom — a lightweight structure of functions that acts as
