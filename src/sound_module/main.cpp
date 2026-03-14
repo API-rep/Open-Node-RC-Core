@@ -24,8 +24,8 @@
 // --- Sound module HAL & transport ---
 #include "hal/sound_hal.h"
 #include "config/sound_config.h"
-#include <core/system/com/adapter/uart_com.h>
-#include <core/system/com/protocol/combus_rx.h>
+#include <core/system/com/ports/uart_com.h>
+#include <core/system/com/protocols/combus_rx.h>
 
 // --- Vehicle & sound engine includes (rc_engine_sound) ---
 // Uncomment (or set -D SOUND_ENGINE_READY) once engine sources are copied
@@ -78,8 +78,8 @@ void setup() {
     {
       NodeCom* com = uart_com_init(
           &Serial2, SOUND_UART_BAUD, SOUND_RX_PIN, SOUND_TX_PIN, "sound_rx");
-      combus_rx_init(com, s_analog,  SOUND_TRANSPORT_N_ANALOG,
-                        s_digital, SOUND_TRANSPORT_N_DIGITAL);
+      combus_frame_init(0u, SOUND_TRANSPORT_N_ANALOG, SOUND_TRANSPORT_N_DIGITAL);
+      combus_rx_init(com, s_analog, s_digital);
     }
 
       // --- Initialize sound HAL (neutral pulses, failsafe active) ---

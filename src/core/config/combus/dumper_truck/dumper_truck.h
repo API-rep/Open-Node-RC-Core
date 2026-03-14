@@ -19,29 +19,11 @@
  *******************************************************************************///
 #pragma once
 
-#include <cstdint>
-
-
 // =============================================================================
 // 1. COM-BUS CHANNEL IDs  (available in all build environments)
 // =============================================================================
 
-/// @brief Com-bus analog channel identifiers
-enum class AnalogComBusID : uint8_t {
-  STEERING_BUS = 0,
-  DRIVE_SPEED_BUS,
-  DUMP_BUS,
-  CH_COUNT
-};
-
-/// @brief Com-bus digital channel identifiers
-enum class DigitalComBusID : uint8_t {
-  HORN = 0,
-  LIGHTS,
-  KEY,          ///< Ignition key. Set to start/rearm the machine.
-  BATTERY_LOW,  ///< Battery low flag — written by vbat module, read by all receivers.
-  CH_COUNT
-};
+#include "dumper_truck_ids.h"   ///< AnalogComBusID / DigitalComBusID inside namespace DumperTruck
 
 
 // =============================================================================
@@ -57,10 +39,10 @@ enum class DigitalComBusID : uint8_t {
 #include <struct/combus_struct.h>
 
 /// @brief Com-bus analog channels configuration array
-extern AnalogComBus AnalogComBusArray[static_cast<uint8_t>(AnalogComBusID::CH_COUNT)];
+extern AnalogComBus  AnalogComBusArray[static_cast<uint8_t>(DumperTruck::AnalogComBusID::CH_COUNT)];
 
 /// @brief Com-bus digital channels configuration array
-extern DigitalComBus DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::CH_COUNT)];
+extern DigitalComBus DigitalComBusArray[static_cast<uint8_t>(DumperTruck::DigitalComBusID::CH_COUNT)];
 
 /// @brief Communication bus structure
 extern ComBus comBus;

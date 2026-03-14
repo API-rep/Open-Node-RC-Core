@@ -101,14 +101,14 @@ static constexpr int8_t Rxd0Pin = 3;    // ESP32 built-in RX pin
   // Extension port — UART link to the sound node (or any future ext device).
 inline HardwareSerial& SerialExt = Serial2;       // SerialExt maps to the physical UART port
 
-static constexpr int8_t  TxdExtPin         = 18;  // UART ext TX pin
-static constexpr int8_t  RxdExtPin         = 13;  // UART ext RX pin
+static constexpr int8_t  TxdExtPin = 18;  // UART ext TX pin
+static constexpr int8_t  RxdExtPin = 13;  // UART ext RX pin
 
   // General UART hardware ceiling for all ext/com ports on this board.
-static constexpr uint32_t UartMaxBaud        = 115200u;  // hardware ceiling for all UART links on this board
+static constexpr uint32_t UartMaxBaud = 115200u;  // hardware ceiling for all UART links on this board
 
-  // Maximum number of simultaneously claimable UART ports on this board.
-static constexpr uint8_t  UartComMaxPorts    = 3u;
+  // Maximum number of simultaneously UART ports on this board (including Serial0/USB).
+static constexpr uint8_t  UartComMaxPorts = 3u;
 
   // servo power sensing pins (also used by VBatSrvACfg / VBatSrvBCfg)
 static constexpr uint8_t SrvASensePin  = 39;  // SRV-A power rail ADC sense pin

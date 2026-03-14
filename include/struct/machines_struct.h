@@ -13,13 +13,11 @@
 #include <const.h>
 #include <defs/defs.h>
 
-// --- Forward declarations — breaks include cycle: machines_struct.h <-> combus/dumper_truck.h
-//     AnalogComBusID / DigitalComBusID are used here only as optional field types (std::optional<>),
-//     which requires the size of the enum but NOT its enumerators.
-//     Any TU that needs the actual values (STEERING_BUS, HORN, …) must include
-//     <core/config/combus/combus.h> or <core/config/combus/combus_types.h> directly.
-enum class AnalogComBusID  : uint8_t;
-enum class DigitalComBusID : uint8_t;
+// AnalogComBusID / DigitalComBusID are used below as std::optional<> field types.
+// combus_ids.h provides the correct namespace-scoped enum declarations + using namespace,
+// with no project dependencies that could create include cycles.
+// To add a new machine type, add one #elif branch in combus_ids.h only.
+#include <core/config/combus/combus_ids.h>
 
 /**
  * @brief DC driver module structure

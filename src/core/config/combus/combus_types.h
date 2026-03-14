@@ -19,11 +19,26 @@
 #include <defs/defs.h>
 
 
+// Each machine config wraps its channel enums (AnalogComBusID, DigitalComBusID)
+// inside a dedicated namespace (e.g. DumperTruck::, AutreMachine::).
+// This allows a remote build to include multiple machine configs simultaneously
+// without name collisions.
+//
+// On machine-side builds, `using namespace <Machine>` below re-exports the
+// enums into the global scope so all existing code continues to compile
+// unchanged (no prefix needed).
+//
+// On remote builds, the `using namespace` directive is NOT present — the
+// remote always uses the fully qualified name (DumperTruck::AnalogComBusID::...)
+// to explicitly identify which machine's channel is being accessed.
+
 #if defined(MACHINE_TYPE) && (MACHINE_TYPE == DUMPER_TRUCK)
   #include "dumper_truck/dumper_truck.h"
+  using namespace DumperTruck;
 
 #elif defined(MACHINE_TYPE) && (MACHINE_TYPE == AUTRE_MACHINE_EXEMPLE)
   #include "autre_machine/autre_machine.h"
+  // using namespace AutreMachine;   // uncomment when namespace is added
 
 #else
     #error "No machine type defined for com-bus. Check platformio.ini file and env:xxx setting to fix the problem"

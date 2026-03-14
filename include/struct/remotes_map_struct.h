@@ -10,12 +10,13 @@
 #include <stdint.h>
 #include <defs/defs.h>
 
-  // enum class forward declaration
-  // will be declared next in map config files
-enum class AnalogInputDevID : uint8_t;
-enum class AnalogComBusID : uint8_t;
-enum class DigitalInputDevID : uint8_t;
-enum class DigitalComBusID : uint8_t;
+// Input device IDs are machine-agnostic — forward declarations stay at global scope.
+enum class AnalogInputDevID  : uint8_t;   ///< Input device analog channel IDs
+enum class DigitalInputDevID : uint8_t;   ///< Input device digital channel IDs
+
+// Com-bus channel IDs live in a machine namespace — dispatched by combus_ids.h.
+// To add a new machine type, add one #elif branch in combus_ids.h only.
+#include <core/config/combus/combus_ids.h>
 
 typedef struct {
   AnalogInputDevID devID;    // L'index dans AnalogInputDevArray (ex: LY_STICK)

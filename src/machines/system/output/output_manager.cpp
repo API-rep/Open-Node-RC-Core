@@ -6,7 +6,7 @@
 #include "output_manager.h"
 
 #ifdef SOUND_OUTPUT_UART
-  #include <core/system/com/protocol/combus_tx.h>
+  #include <core/system/com/protocols/combus_tx.h>
 #endif
 
 

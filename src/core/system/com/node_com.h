@@ -2,18 +2,16 @@
  * @file node_com.h
  * @brief Generic inter-node communication interface.
  *
- * @details Defines NodeCom — a lightweight structure of functions that acts as
- * a hardware abstraction layer between the communication modules (combus_tx/rx,
- *  ...) and the physical transport (UART, ESP-Now, …) layer.
+ * @details NodeCom is a lightweight structure of functions that acts as a bridge
+ * between the communication modules (combus_tx/rx, ...) and the physical transport
+ * layer (UART, ESP-Now, …). In this way, communication modules do not need to
+ * know the details of the underlying transport implementation.
  *
- * Communication modules receive a NodeCom* structure pointer at init time used
- * to call only:
+ * Communication modules receive a NodeCom* structure pointer from the transport
+ * layer at init time and use it to call only the following functions:
  *   com->write()     — send bytes
  *   com->readByte()  — receive one byte (-1 if none)
  *   com->available() — bytes waiting in the RX buffer
- *
- * Physical transport layer (uart_com, …) implements a function that returns
- * a NodeCom* pointer, usable by the communication modules.
  *****************************************************************************/
 #pragma once
 
@@ -26,12 +24,10 @@
 // =============================================================================
 
 /**
- * @brief Generic transport structure of function pointers.
+ * @brief Generic transport structure of NodeCom function pointers.
  *
  * @details Filled by each physical transport layer adapter (uart_transport_init, …)
  * during initialization and passed to the communication modules (combus_tx/rx, …).
- *   ctx is an opaque pointer carried through every call so the implementation
- *   can reach its own private state without globals.
  *
  * @var NodeCom::ctx        Opaque pointer passed through every function pointer below.
  * @var NodeCom::write      Send @p len bytes from @p data via the physical transport.

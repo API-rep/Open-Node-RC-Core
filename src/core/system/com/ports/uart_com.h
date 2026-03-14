@@ -1,19 +1,21 @@
 ﻿/******************************************************************************
  * @file uart_com.h
- * @brief UART port module for NodeCom.
+ * @brief UART adapter — provides a NodeCom.
  *
  * @details Initializes a HardwareSerial port once and returns a claimed
- * NodeCom* pointer that encapsulates the UART read/write/available calls.
+ * NodeCom* that encapsulates the UART read/write/available calls.
  *
- * Guard: a second call with the same serial interface will return a nullptr,
- * preventing two modules from calling Serial.begin() on the same port with
- * different parameters.
+ * Guard: a second call with the same serial pointer fails loudly and returns
+ * nullptr — preventing two modules from calling Serial.begin() on the same
+ * port with different parameters.
  *
- * Available UART ports are sized via UartComMaxPorts (from boards.h, included
- * in machine.h) and is checked at compile time.
+ * Pool is sized to UartComMaxPorts (declared in the board header, included via
+ * boards.h when IS_MACHINE is defined). A static_assert validates it is >= 1;
+ * compilation fails if the board header is absent or the value is invalid.
  *
- * Serial0 is pre-claimed early in sys_init if DEBUG_* / DEBUG_DASHBOARD flags
- * are set. This ensures no accidental reuse by other modules.
+ * Serial0 pre-claim: call uart_com_init(&Serial, ...) early in sys_init
+ * (gated on DEBUG_* / DEBUG_DASHBOARD flags) so the duplicate guard blocks
+ * any accidental reuse as a transport port.
  *
  * Typical use:
  * @code
