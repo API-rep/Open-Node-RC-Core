@@ -107,6 +107,11 @@ static constexpr int8_t  RxdExtPin         = 13;  // UART ext RX pin
   // General UART hardware ceiling for all ext/com ports on this board.
 static constexpr uint32_t UartMaxBaud        = 115200u;  // hardware ceiling for all UART links on this board
 
+  // Maximum number of simultaneously claimable UART ports on this board.
+  // Must match the -D UartComMaxPorts build flag used by uart_com.cpp.
+static constexpr uint8_t  UartComMaxPorts    = 3u;
+static_assert(UartComMaxPorts == 3u, "UartComMaxPorts board value and build flag mismatch");
+
   // servo power sensing pins (also used by VBatSrvACfg / VBatSrvBCfg)
 static constexpr uint8_t SrvASensePin  = 39;  // SRV-A power rail ADC sense pin
 static constexpr uint8_t SrvBSensePin  = 35;  // SRV-B power rail ADC sense pin

@@ -13,7 +13,11 @@
 // =============================================================================
 
 /// Maximum number of simultaneously registered UART ports.
-static constexpr uint8_t UART_COM_MAX_PORTS = 3u;
+/// Override via build flag -D UartComMaxPorts=N (board header sets the reference).
+#ifndef UartComMaxPorts
+  #define UartComMaxPorts 3u
+#endif
+static constexpr uint8_t kUartComMaxPorts = UartComMaxPorts;
 
 /**
  * @brief Per-port internal context.
@@ -29,7 +33,7 @@ struct UartCtx {
 	NodeCom  com    = {};
 };
 
-static UartCtx s_ports[UART_COM_MAX_PORTS];
+static UartCtx s_ports[kUartComMaxPorts];
 static uint8_t s_portCount = 0u;
 
 
@@ -75,9 +79,9 @@ NodeCom* uart_com_init( HardwareSerial* serial,
 	}
 
 		// --- Guard: pool exhausted ---
-	if (s_portCount >= UART_COM_MAX_PORTS) {
+	if (s_portCount >= kUartComMaxPorts) {
 		sys_log_err("[UART_COM] FATAL: port pool full (%u max), rejected for '%s'\n",
-		            (unsigned)UART_COM_MAX_PORTS, owner);
+		            (unsigned)kUartComMaxPorts, owner);
 		return nullptr;
 	}
 
