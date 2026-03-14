@@ -17,7 +17,6 @@
 #ifndef UartComMaxPorts
   #define UartComMaxPorts 3u
 #endif
-static constexpr uint8_t kUartComMaxPorts = UartComMaxPorts;
 
 /**
  * @brief Per-port internal context.
@@ -33,7 +32,7 @@ struct UartCtx {
 	NodeCom  com    = {};
 };
 
-static UartCtx s_ports[kUartComMaxPorts];
+static UartCtx s_ports[UartComMaxPorts];
 static uint8_t s_portCount = 0u;
 
 
@@ -64,6 +63,22 @@ NodeCom* uart_com_init( HardwareSerial* serial,
                         int             rxPin,
                         const char*     owner ) {
 
+	static_assert(UartComMaxPorts >= 1u, "UartComMaxPorts must be >= 1; check board header or -D build flag");
+
+		// --- One-shot: pre-claim Serial0 if already opened by the debug layer ---
+	static bool preClaimDone = false;
+	if (!preClaimDone) {
+		preClaimDone = true;
+		if (Serial.baudRate() > 0 && s_portCount < UartComMaxPorts) {
+			UartCtx* p = &s_ports[s_portCount++];
+			p->serial  = &Serial;
+			p->owner   = "debug";
+			p->claimed = true;
+			// com left as {} — read-only claim, not usable as NodeCom
+			sys_log_info("[UART_COM] Serial0 pre-claimed by 'debug'\n");
+		}
+	}
+
 	if (!serial) {
 		sys_log_err("[UART_COM] nullptr serial — init aborted\n");
 		return nullptr;
@@ -79,9 +94,9 @@ NodeCom* uart_com_init( HardwareSerial* serial,
 	}
 
 		// --- Guard: pool exhausted ---
-	if (s_portCount >= kUartComMaxPorts) {
+	if (s_portCount >= UartComMaxPorts) {
 		sys_log_err("[UART_COM] FATAL: port pool full (%u max), rejected for '%s'\n",
-		            (unsigned)kUartComMaxPorts, owner);
+		            (unsigned)UartComMaxPorts, owner);
 		return nullptr;
 	}
 
