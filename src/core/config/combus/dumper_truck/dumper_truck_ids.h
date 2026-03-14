@@ -7,13 +7,13 @@
  * from any header without risk of include cycles.
  *
  * Consumers:
- *   - dumper_truck.h   — re-exports these IDs as part of the full layout
+ *   - dumper_truck.h   — include these IDs as part of the full layout
  *   - combus_ids.h     — umbrella dispatcher for struct headers
  *
- * On machine builds, combus_ids.h / combus_types.h adds:
- *   using namespace DumperTruck;
- * so all existing code uses the names unqualified.
- * Remote builds keep the explicit prefix: DumperTruck::AnalogComBusID::...
+ * On machine builds, combus_ids.h and combus_types.h adds using namespace DumperTruck;
+ * So all existing code uses the names unqualified.
+ * Remote builds will keep the explicit prefix (DumperTruck::AnalogComBusID::...) to
+ * avoid collisions with other machine configs.
  *******************************************************************************///
 #pragma once
 

@@ -1,36 +1,34 @@
 /*!****************************************************************************
  * @file  combus_types.h
- * @brief Com-bus full umbrella (machine builds)
+ * @brief Com-bus full umbrella — enum IDs
  *
- * Dispatches to the machine-specific com-bus file which, when IS_MACHINE is
- * defined, exposes enum IDs, array externs, comBus extern and input mapping.
- *
- * All consumers (machine node, sound node, remote node) include this file.
- * The IS_MACHINE guard inside each machine file controls what is exposed:
+ * Dispatches to the machine-specific com-bus file which exposes, depending on
+ * the build environment:
  *   - IS_MACHINE absent  → enum IDs only (AnalogComBusID, DigitalComBusID)
- *   - IS_MACHINE defined → enum IDs + externs + inputs_map
+ *   - IS_MACHINE defined → enum IDs + array externs + comBus extern + inputs_map
  *
- * NOTE: when adding a new machine type, add one #elif branch below.
- *******************************************************************************/// 
+ * NAMESPACE STRATEGY:
+ *   Each machine wraps its channel enums inside a dedicated namespace
+ *   (e.g. namespace DumperTruck) so that a remote build can include multiple
+ *   machine configs in the same TU without name collisions.
+ * 
+ *   - On machine-side builds, `using namespace <Machine>` re-exports the enums
+ *   into global scope. All existing code compiles unchanged, no prefix needed.
+ * 
+ *   - On remote builds the directive is absent; the remote uses the fully
+ *   qualified form (DumperTruck::AnalogComBusID::...) to distinguish machines.
+ *   The enum values themselves (IDs only, no deps) live in <name>_ids.h and are
+ *   dispatched by combus_ids.h, which struct headers include to break the
+ *   include cycle with combus_struct.h.
+ *
+ * NOTE: when adding a new machine type, add one #elif branch below AND one
+ *       matching branch in combus_ids.h.
+ *******************************************************************************///
 #pragma once
 
 #include <const.h>
 #include <struct/struct.h>
 #include <defs/defs.h>
-
-
-// Each machine config wraps its channel enums (AnalogComBusID, DigitalComBusID)
-// inside a dedicated namespace (e.g. DumperTruck::, AutreMachine::).
-// This allows a remote build to include multiple machine configs simultaneously
-// without name collisions.
-//
-// On machine-side builds, `using namespace <Machine>` below re-exports the
-// enums into the global scope so all existing code continues to compile
-// unchanged (no prefix needed).
-//
-// On remote builds, the `using namespace` directive is NOT present — the
-// remote always uses the fully qualified name (DumperTruck::AnalogComBusID::...)
-// to explicitly identify which machine's channel is being accessed.
 
 #if defined(MACHINE_TYPE) && (MACHINE_TYPE == DUMPER_TRUCK)
   #include "dumper_truck/dumper_truck.h"

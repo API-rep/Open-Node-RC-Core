@@ -18,7 +18,8 @@
  *
  *   // In setup():
  *   NodeCom* com = uart_com_init(&Serial2, BAUD, RX_PIN, TX_PIN, "sound_rx");
- *   combus_rx_init(com, s_analog, N_ANALOG, s_digital, N_DIGITAL);
+ *   constexpr ComBusFrameCfg cfg = { MACHINE_TYPE, N_ANALOG, N_DIGITAL };
+ *   combus_rx_init(com, cfg, s_analog, s_digital);
  *
  *   // In loop():
  *   combus_rx_update();
@@ -32,6 +33,7 @@
 
 #include "../node_com.h"
 #include <core/combus/combus_frame.h>
+#include <struct/outputs_struct.h>
 
 
 // =============================================================================
@@ -41,17 +43,15 @@
 /**
  * @brief Initialize the ComBus receiver.
  *
- * @param transport       Claimed transport interface (from uart_com_init or similar).
- * @param analogBuf       Caller-allocated array, receives analog values.
- * @param analogBufSize   Capacity of analogBuf (number of uint16_t entries).
- * @param digitalBuf      Caller-allocated array, receives digital values.
- * @param digitalBufSize  Capacity of digitalBuf (number of bool entries).
+ * @param com        Claimed transport interface (from uart_com_init or similar).
+ * @param cfg        Static layout descriptor — buffer sizes come from cfg.nAnalog / nDigital.
+ * @param analogBuf  Caller-allocated array of cfg.nAnalog entries, receives analog values.
+ * @param digitalBuf Caller-allocated array of cfg.nDigital entries, receives digital values.
  */
-void combus_rx_init( NodeCom* com,
-                     uint16_t*       analogBuf,
-                     uint8_t         analogBufSize,
-                     bool*           digitalBuf,
-                     uint8_t         digitalBufSize );
+void combus_rx_init( NodeCom*            com,
+                     ComBusFrameCfg      cfg,
+                     uint16_t*           analogBuf,
+                     bool*               digitalBuf );
 
 
 /**

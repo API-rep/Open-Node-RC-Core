@@ -10,8 +10,7 @@
  * port with different parameters.
  *
  * Pool is sized to UartComMaxPorts (declared in the board header, included via
- * boards.h when IS_MACHINE is defined). A static_assert validates it is >= 1;
- * compilation fails if the board header is absent or the value is invalid.
+ * config/config.h). A static_assert in uart_com.cpp validates it is >= 1.
  *
  * Serial0 pre-claim: call uart_com_init(&Serial, ...) early in sys_init
  * (gated on DEBUG_* / DEBUG_DASHBOARD flags) so the duplicate guard blocks
@@ -30,14 +29,6 @@
 #include <Arduino.h>
 
 #include "../node_com.h"
-
-
-// =============================================================================
-// 0. BOARD CONFIG VALIDATION
-// =============================================================================
-
-// Check number of UART ports available on this board (minimum 1 for Serial output).
-static_assert(UartComMaxPorts >= 1u, "UartComMaxPorts must be >= 1 (check board header)");
 
 
 // =============================================================================

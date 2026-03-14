@@ -13,7 +13,8 @@
  * @code
  *   // In init:
  *   NodeCom* com = uart_com_init(&Serial2, BAUD, TX_PIN, RX_PIN, "combus");
- *   combus_tx_init( com, envId, N_ANALOG, N_DIGITAL, TX_HZ);
+ *   constexpr ComBusFrameCfg cfg = { MACHINE_TYPE, N_ANALOG, N_DIGITAL };
+ *   combus_tx_init(com, cfg, TX_HZ);
  *
  *   // In loop:
  *   combus_tx_update(&comBus, failsafeActive);
@@ -26,6 +27,7 @@
 
 #include "../node_com.h"
 #include <struct/combus_struct.h>
+#include <struct/outputs_struct.h>
 
 
 // =============================================================================
@@ -35,17 +37,13 @@
 /**
  * @brief Initialize the ComBus transmitter.
  *
- * @param transport  Claimed transport interface (from uart_com_init or similar).
- * @param envId      Machine-type identifier embedded in each frame header.
- * @param nAnalog    Number of analog channels to encode per frame.
- * @param nDigital   Number of digital channels to encode per frame.
- * @param txHz       Frame transmit rate in Hz.
+ * @param com   Claimed transport interface (from uart_com_init or similar).
+ * @param cfg   Static layout descriptor (envId, nAnalog, nDigital).
+ * @param txHz  Frame transmit rate in Hz.
  */
-void combus_tx_init( NodeCom* com,
-                     uint8_t         envId,
-                     uint8_t         nAnalog,
-                     uint8_t         nDigital,
-                     uint32_t        txHz );
+void combus_tx_init( NodeCom*            com,
+                     ComBusFrameCfg      cfg,
+                     uint32_t            txHz );
 
 
 /**

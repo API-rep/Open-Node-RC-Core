@@ -8,6 +8,10 @@
 
 #include <core/system/debug/debug.h>
 
+// Board config validation — UartComMaxPorts is defined in the board header,
+// included above via config/config.h.
+static_assert(UartComMaxPorts >= 1u, "UartComMaxPorts must be >= 1 (check board header)");
+
 
 // =============================================================================
 // 1. PRIVATE STATE

@@ -14,13 +14,11 @@
 // =============================================================================
 
 struct CombusTxState {
-	NodeCom* com = nullptr;  ///< active transport interface
-	uint8_t         envId     = 0u;       ///< env ID embedded in every frame header
-	uint8_t         nAnalog   = 0u;       ///< analog channel count per frame
-	uint8_t         nDigital  = 0u;       ///< digital channel count per frame
-	uint8_t         seq       = 0u;       ///< rolling frame sequence counter (0–255)
-	uint32_t        lastTxMs  = 0u;       ///< timestamp of last transmitted frame (ms)
-	uint32_t        periodMs  = 0u;       ///< transmit period derived from txHz (0 = uninit)
+	NodeCom* com       = nullptr;  ///< active transport interface
+	ComBusFrameCfg  cfg       = {};        ///< static layout descriptor (envId, nAnalog, nDigital)
+	uint8_t         seq       = 0u;        ///< rolling frame sequence counter (0–255)
+	uint32_t        lastTxMs  = 0u;        ///< timestamp of last transmitted frame (ms)
+	uint32_t        periodMs  = 0u;        ///< transmit period derived from txHz (0 = uninit)
 };
 
 static CombusTxState s_tx;
@@ -30,23 +28,19 @@ static CombusTxState s_tx;
 // 2. INITIALIZATION
 // =============================================================================
 
-void combus_tx_init( NodeCom* com,
-                     uint8_t         envId,
-                     uint8_t         nAnalog,
-                     uint8_t         nDigital,
-                     uint32_t        txHz ) {
+void combus_tx_init( NodeCom*       com,
+                     ComBusFrameCfg cfg,
+                     uint32_t       txHz ) {
 
 	if (!com || txHz == 0u) { return; }
 
-	s_tx.com = com;
-	s_tx.envId     = envId;
-	s_tx.nAnalog   = nAnalog;
-	s_tx.nDigital  = nDigital;
-	s_tx.periodMs  = 1000u / txHz;
+	s_tx.com      = com;
+	s_tx.cfg      = cfg;
+	s_tx.periodMs = 1000u / txHz;
 
 	sys_log_info("[COMBUS_TX] init — transport='%s'  rate=%uHz  A%u+D%u\n",
 	             com->name, txHz,
-	             (unsigned)nAnalog, (unsigned)nDigital);
+	             (unsigned)cfg.nAnalog, (unsigned)cfg.nDigital);
 }
 
 
@@ -67,11 +61,9 @@ void combus_tx_update(const ComBus* bus, bool failSafe) {
 		// --- Encode ---
 	static uint8_t frame[255u];
 	uint8_t frameLen = combus_frame_encode(
+	    s_tx.cfg,
 	    frame,
 	    bus,
-	    s_tx.nAnalog,
-	    s_tx.nDigital,
-	    s_tx.envId,
 	    s_tx.seq,
 	    failSafe
 	);

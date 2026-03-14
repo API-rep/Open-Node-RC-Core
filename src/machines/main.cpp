@@ -9,6 +9,7 @@
 #include <core/system/debug/debug.h>
 #include <core/system/debug/dashboard.h>
 #include <core/system/input/input_manager.h>
+#include <core/system/combus/combus_manager.h>
 #include <core/system/vbat/vbat_sense.h>
 
 
@@ -39,7 +40,10 @@ void loop() {
   bool vbatChanged = vbat_tick();
 
 	// --- 2. Input watchdog/failsafe ---
+  combus_watchdog(comBus, ComBusDisconnectTimeoutMs);
+
   bool inputIsDrived = false;
+
   for (uint8_t i = 0; i < static_cast<uint8_t>(AnalogComBusID::CH_COUNT); i++) {
     if (comBus.analogBus[i].isDrived) {
       inputIsDrived = true;

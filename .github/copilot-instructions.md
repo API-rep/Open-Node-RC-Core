@@ -24,7 +24,7 @@ Implemented in `src/core/system/com/`:
 
 ```
 node_com.h           — NodeCom (function-pointer table: write/readByte/available + ctx)
-adapter/uart_com.h/.cpp — UART adapter: Serial.begin() + claim guard (3-port static pool)
+ports/uart_com.h/.cpp — UART adapter: Serial.begin() + claim guard (3-port static pool)
 protocol/combus_tx.h/.cpp   — ComBus TX, transport-agnostic
 protocol/combus_rx.h/.cpp   — ComBus RX, transport-agnostic
 ```

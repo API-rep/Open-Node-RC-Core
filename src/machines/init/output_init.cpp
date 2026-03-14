@@ -8,8 +8,8 @@
 #include <core/system/debug/debug.h>
 
 #ifdef SOUND_OUTPUT_UART
-  #include <core/system/com/adapter/uart_com.h>
-  #include <core/system/com/protocol/combus_tx.h>
+  #include <core/system/com/ports/uart_com.h>
+  #include <core/system/com/protocols/combus_tx.h>
 #endif
 
 
@@ -39,12 +39,12 @@ void output_init() {
         TxdExtPin,
         RxdExtPin,
         "sound_tx");
-    combus_tx_init(
-        com,
+    constexpr ComBusFrameCfg comBusFrameCfg = {
         static_cast<uint8_t>(CombusLayout::MACHINE_TYPE),
         static_cast<uint8_t>(AnalogComBusID::CH_COUNT),
         static_cast<uint8_t>(DigitalComBusID::CH_COUNT),
-        SoundTransportTxHz);
+    };
+    combus_tx_init(com, comBusFrameCfg, SoundTransportTxHz);
   }
 #endif
 

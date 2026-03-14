@@ -10,6 +10,7 @@
 #include "combus_frame.h"
 
 #include <string.h>
+#include <Arduino.h>
 
 
 // =============================================================================
@@ -56,7 +57,7 @@ uint8_t combus_frame_crc8(const uint8_t* data, uint8_t len) {
  * @details Serialization sequence:
  *   1. Null pointer and frame size overflow guard (returns 0 on failure).
  *   2. Build flags byte from transport-level inputs (failSafe, ...).
- *   3. Write fixed 7-byte header: SOF, envId, seq, runLevel, flags, nAnalog, nDigital.
+ *   3. Write fixed 7-byte header: SOF, envId, nAnalog, nDigital, seq, runLevel, flags.
  *   4. Pack digital channel values as bits, LSB-first, ceil(nDigital/8) bytes.
  *   5. Write analog channel values as uint16_t little-endian, nAnalog entries.
  *   6. Append CRC-8/MAXIM over all preceding bytes.
@@ -75,13 +76,15 @@ uint8_t combus_frame_crc8(const uint8_t* data, uint8_t len) {
  * @return Number of bytes written into outputBuffer, 0 on error.
  */
 
-uint8_t combus_frame_encode( uint8_t*       outputBuffer,
-                             const ComBus*  combus,
-                             uint8_t        nAnalog,
-                             uint8_t        nDigital,
-                             uint8_t        envId,
-                             uint8_t        seq,
-                             bool           failSafe) {
+uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
+                             uint8_t*              outputBuffer,
+                             const ComBus*         combus,
+                             uint8_t               seq,
+                             bool                  failSafe ) {
+
+    const uint8_t nAnalog  = cfg.nAnalog;
+    const uint8_t nDigital = cfg.nDigital;
+    const uint8_t envId    = cfg.envId;
                                
       // --- 1. Guard conditions — null pointer + frame size overflow ---
     if (!outputBuffer || !combus) {
@@ -106,11 +109,11 @@ uint8_t combus_frame_encode( uint8_t*       outputBuffer,
     
     outputBuffer[pos++] = CombusFrameSof;
     outputBuffer[pos++] = envId;
+    outputBuffer[pos++] = nAnalog;
+    outputBuffer[pos++] = nDigital;
     outputBuffer[pos++] = seq;
     outputBuffer[pos++] = (uint8_t)combus->runLevel;
     outputBuffer[pos++] = flags;
-    outputBuffer[pos++] = nAnalog;
-    outputBuffer[pos++] = nDigital;
 
       // --- 4. Pack digital bits values into bytes (bitbool lsb mode) ---
     for (uint8_t b = 0; b < nDigBytes; ++b) {
@@ -155,7 +158,7 @@ uint8_t combus_frame_encode( uint8_t*       outputBuffer,
  *   2. SOF sentinel check (inputBuffer[0] == CombusFrameSof).
  *   3. Output buffer pointer check (outputFrame->analog and ->digital must be set by caller).
  *   4. Declared payload size sanity (computed frame length must fit in uint8_t).
- *   5. Analog overflow check (header.nAnalog <= maxAnalog).
+ *   5. Analog overflow check (header.cfg.nAnalog <= maxAnalog).
  *   6. Received length check (len >= computed expected length).
  *   7. CRC-8/MAXIM check over bytes [0 ... expectedLen-2].
  *
@@ -163,7 +166,7 @@ uint8_t combus_frame_encode( uint8_t*       outputBuffer,
  * into the caller-provided arrays, then copies the header into outputFrame.
  *
  * Digital channels exceeding digitalBufSize are silently dropped (not an error).
- * outputFrame->header.nDigital reflects the clamped count after decoding.
+ * outputFrame->header.cfg.nDigital reflects the clamped count after decoding.
  *
  * @param[out] outputFrame     Destination frame — analog/digital pointers must be
  *                              pre-set by the caller to buffers of at least
@@ -176,11 +179,13 @@ uint8_t combus_frame_encode( uint8_t*       outputBuffer,
  * @return true if frame is valid and outputFrame was fully populated, false otherwise.
  */
 
-bool combus_frame_decode(ComBusFrame*     outputFrame,
-                          const uint8_t*  inputBuffer,
-                          uint8_t         len,
-                          uint8_t         analogBufSize,
-                          uint8_t         digitalBufSize) {
+bool combus_frame_decode( const ComBusFrameCfg& cfg,
+                          ComBusFrame*          outputFrame,
+                          const uint8_t*        inputBuffer,
+                          uint8_t               len ) {
+
+    const uint8_t analogBufSize  = cfg.nAnalog;
+    const uint8_t digitalBufSize = cfg.nDigital;
 
       // --- 1. Minimum length and SOF guard check ---
     if (!outputFrame || !inputBuffer || len < CombusFrameMinLen) {return false;}
@@ -191,17 +196,17 @@ bool combus_frame_decode(ComBusFrame*     outputFrame,
 
     memcpy(&header, inputBuffer + 1u, sizeof(header));   // skip SOF byte at offset 0
 
-    uint8_t nDigBytes = (header.nDigital + 7u) / 8u;   // derive packed byte count locally
+    uint8_t nDigBytes = (header.cfg.nDigital + 7u) / 8u;   // derive packed byte count locally
 
       // --- 3. Sanity-check declared sizes ---
     if (!outputFrame->analog || !outputFrame->digital)  { return false; }
 
       // Reject if computed frame length overflows uint8_t.
-    uint16_t expectedLenW = CombusFrameHeaderLen + (uint16_t)nDigBytes + (uint16_t)header.nAnalog * 2u + 1u;
+    uint16_t expectedLenW = CombusFrameHeaderLen + (uint16_t)nDigBytes + (uint16_t)header.cfg.nAnalog * 2u + 1u;
     if (expectedLenW > 255u)                { return false; }
 
       // Reject if analog payload would overflow caller's buffer.
-    if (header.nAnalog > analogBufSize)     { return false; }
+    if (header.cfg.nAnalog > analogBufSize)     { return false; }
       // Digital excess bits are silently truncated in the unpack loop below.
 
     uint8_t expectedLen = (uint8_t)expectedLenW;
@@ -213,7 +218,7 @@ bool combus_frame_decode(ComBusFrame*     outputFrame,
     if (crcActual != crcExpected)           { return false; }
 
       // --- 5. Unpack digital bits ---
-    uint8_t nDigital = header.nDigital;
+    uint8_t nDigital = header.cfg.nDigital;
 
     if (nDigital > digitalBufSize) { nDigital = digitalBufSize; }  // clamp to caller's buffer
 
@@ -229,15 +234,15 @@ bool combus_frame_decode(ComBusFrame*     outputFrame,
     }
 
       // --- 6. Unpack analog values (uint16_t LE) ---
-    for (uint8_t a = 0; a < header.nAnalog; ++a) {
+    for (uint8_t a = 0; a < header.cfg.nAnalog; ++a) {
         uint16_t lo  = inputBuffer[pos++];
         uint16_t hi  = inputBuffer[pos++];
         outputFrame->analog[a] = (uint16_t)(lo | (hi << 8u));
     }
 
       // --- 7. Populate frame header ---
-    outputFrame->header          = header;
-    outputFrame->header.nDigital = nDigital;   // apply clamped value (may differ from wire value)
+    outputFrame->header              = header;
+    outputFrame->header.cfg.nDigital = nDigital;   // apply clamped value (may differ from wire value)
 
     return true;
 }
@@ -250,52 +255,59 @@ bool combus_frame_decode(ComBusFrame*     outputFrame,
 /**
  * Apply a decoded ComBusFrame onto a live ComBus instance.
  *
- * @details Writes the incomming combus frame into the live bus arrays:
- *   - combus->runLevel is updated from inputFrame->header.runLevel.
- *   - analog channels [0 .. min(nAnalog, header.nAnalog)-1] are written
- *     and marked isDrived = true.
- *   - digital channels [0 .. min(nDig, header.nDigital)-1] are written
- *     and marked isDrived = true.
+ * @details Application sequence:
+ *   1. Null pointer guard (returns on failure).
+ *   2. Write runLevel from frame header; stamp combus->lastFrameMs = millis()
+ *      so combus_watchdog can detect frame loss and clear isDrived.
+ *   3. Reserved — transport flags (unused for now).
+ *   4. Write analog channels [0 .. min(cfg.nAnalog, header.cfg.nAnalog)-1]
+ *      and mark isDrived = true.
+ *   5. Write digital channels [0 .. min(cfg.nDigital, header.cfg.nDigital)-1]
+ *      and mark isDrived = true.
  *
- * Channels beyond the min() clamp are left untouched in the live bus.
+ * Channels beyond the effective count are left untouched in the live bus.
  * Caller must ensure combus->analogBus and combus->digitalBus arrays are
- * allocated and sized to at least nAnalog / nDig entries.
+ * allocated and sized to at least cfg.nAnalog / cfg.nDigital entries.
  *
  * @param[out] combus      Target ComBus instance to update.
  * @param[in]  inputFrame  Populated frame from combus_frame_decode().
- * @param[in]  nAnalog     Caller's analog channel count (safety clamp).
- * @param[in]  nDig        Caller's digital channel count (safety clamp).
+ * @param[in]  cfg         Layout descriptor used as upper clamp (nAnalog, nDigital).
  */
-void combus_frame_apply(ComBus*            combus,
-                         const ComBusFrame* inputFrame,
-                         uint8_t            nAnalog,
-                         uint8_t            nDig) {
+void combus_frame_apply( const ComBusFrameCfg& cfg,
+                         ComBus*               combus,
+                         const ComBusFrame*    inputFrame ) {
 
+      //  Analog and digital channels upper clamp
+    const uint8_t nAnalog  = cfg.nAnalog;    // analog channels bus capacity
+    const uint8_t nDigital = cfg.nDigital;   // digital channels bus capacity
+
+      // --- 1. Guard conditions — null pointer ---
     if (!combus || !inputFrame) {
         return;
     }
 
-      // --- RunLevel ---
-    combus->runLevel = (RunLevel)inputFrame->header.runLevel;
+      // --- 2. RunLevel + watchdog timestamp ---
+    combus->runLevel    = (RunLevel)inputFrame->header.runLevel;
+    combus->lastFrameMs = millis();   // combus_watchdog uses this to detect frame loss and clear isDrived
 
-      // --- Flags (transport status only) ---
+      // --- 3. Flags (transport status only) ---
 
 
-      // --- Analog channels ---
-    uint8_t aN = (inputFrame->header.nAnalog < nAnalog) ? inputFrame->header.nAnalog : nAnalog;
+      // --- 4. Analog channels ---
+    uint8_t nAnalogEff = (inputFrame->header.cfg.nAnalog < nAnalog) ? inputFrame->header.cfg.nAnalog : nAnalog;
 
     if (combus->analogBus) {
-        for (uint8_t i = 0; i < aN; ++i) {
+        for (uint8_t i = 0; i < nAnalogEff; ++i) {
             combus->analogBus[i].value    = inputFrame->analog[i];
             combus->analogBus[i].isDrived = true;
         }
     }
 
-      // --- Digital channels ---
-    uint8_t dN = (inputFrame->header.nDigital < nDig) ? inputFrame->header.nDigital : nDig;
+      // --- 5. Digital channels ---
+    uint8_t nDigitalEff = (inputFrame->header.cfg.nDigital < nDigital) ? inputFrame->header.cfg.nDigital : nDigital;
 
     if (combus->digitalBus) {
-        for (uint8_t i = 0; i < dN; ++i) {
+        for (uint8_t i = 0; i < nDigitalEff; ++i) {
             combus->digitalBus[i].value    = inputFrame->digital[i];
             combus->digitalBus[i].isDrived = true;
         }

@@ -19,8 +19,8 @@
 * Environement variable
 */
 
-#define DISCONECT_DELAY         000       // max delay to sleep devices when a controller not respond
-#define DEBOUNCE_MS             100       // debounce delay in ms
+static constexpr uint32_t ComBusDisconnectTimeoutMs = 500u;  // isDrived cleared after this gap without a valid frame
+static constexpr uint32_t DebounceMs               = 100u;  // digital input debounce delay
 
 
 // EOF config.h

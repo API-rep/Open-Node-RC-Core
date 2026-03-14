@@ -13,11 +13,11 @@
 #include <const.h>
 #include <defs/defs.h>
 
-// AnalogComBusID / DigitalComBusID are used below as std::optional<> field types.
-// combus_ids.h provides the correct namespace-scoped enum declarations + using namespace,
-// with no project dependencies that could create include cycles.
-// To add a new machine type, add one #elif branch in combus_ids.h only.
+// Provides the correct namespace-scoped enum declarations + using namespace for
+// AnalogComBusID/DigitalComBusID used below. This fix project dependencies that 
+// could create include cycles.
 #include <core/config/combus/combus_ids.h>
+
 
 /**
  * @brief DC driver module structure

@@ -78,8 +78,12 @@ void setup() {
     {
       NodeCom* com = uart_com_init(
           &Serial2, SOUND_UART_BAUD, SOUND_RX_PIN, SOUND_TX_PIN, "sound_rx");
-      combus_frame_init(0u, SOUND_TRANSPORT_N_ANALOG, SOUND_TRANSPORT_N_DIGITAL);
-      combus_rx_init(com, s_analog, s_digital);
+      constexpr ComBusFrameCfg kCfg = {
+          static_cast<uint8_t>(CombusLayout::MACHINE_TYPE),
+          SOUND_TRANSPORT_N_ANALOG,
+          SOUND_TRANSPORT_N_DIGITAL,
+      };
+      combus_rx_init(com, kCfg, s_analog, s_digital);
     }
 
       // --- Initialize sound HAL (neutral pulses, failsafe active) ---

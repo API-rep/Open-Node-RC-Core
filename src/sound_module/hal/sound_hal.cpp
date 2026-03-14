@@ -140,13 +140,13 @@ void sound_hal_update() {
     uint8_t chSteering = static_cast<uint8_t>(SOUND_CB_STEERING);
     uint8_t chGearbox  = static_cast<uint8_t>(SOUND_CB_GEARBOX);
 
-    if (chThrottle < snap->header.nAnalog) {
+    if (chThrottle < snap->header.cfg.nAnalog) {
         pulseWidth[SOUND_CH_THROTTLE]   = cbValToPulse(snap->analog[chThrottle]);
     }
-    if (chSteering < snap->header.nAnalog) {
+    if (chSteering < snap->header.cfg.nAnalog) {
         pulseWidth[SOUND_CH_STEERING]   = cbValToPulse(snap->analog[chSteering]);
     }
-    if (chGearbox < snap->header.nAnalog) {
+    if (chGearbox < snap->header.cfg.nAnalog) {
         pulseWidth[SOUND_CH_GEARBOX]    = cbValToPulse(snap->analog[chGearbox]);
     }
 
@@ -154,7 +154,7 @@ void sound_hal_update() {
     uint8_t chHorn   = static_cast<uint8_t>(SOUND_CB_HORN);
     uint8_t chLights = static_cast<uint8_t>(SOUND_CB_LIGHTS);
 
-    if (chHorn < snap->header.nDigital) {
+    if (chHorn < snap->header.cfg.nDigital) {
         pulseWidth[SOUND_CH_HORN]       = snap->digital[chHorn]
                                           ? SOUND_HAL_DIGITAL_ON_US
                                           : SOUND_HAL_DIGITAL_OFF_US;

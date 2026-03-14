@@ -63,54 +63,45 @@ static constexpr uint8_t CombusFrameMinLen = CombusFrameHeaderLen + sizeof(uint8
  * @brief Encode a ComBus state into a binary frame stored in the buffer.
  *
  * @details Serializes runLevel, flags, all analog and digital channels into
- * the compact frame format with an autmatic CRC8 check.
- * 
+ * the compact frame format with an automatic CRC8 check.
+ *
  * Returns 0 if buf/bus are null or if the computed frame length would
  * overflow a uint8_t (i.e. caller requested more data than the protocol
  * can address with a single-byte length field).
  *
+ * @param[in]  cfg           Static layout descriptor (envId, nAnalog, nDigital).
  * @param[out] outputBuffer  Output buffer pointer (sized by the caller).
- * @param[in]  combus         Source ComBus instance to encode.
- * @param[in]  nAnalog        Number of analog bus channels to include (c.f. combus config enum).
- * @param[in]  nDigital       Number of digital bus channels to include (c.f. combus config enum).
- * @param[in]  envId          Machine type identifier (MACHINE_TYPE build value).
- * @param[in]  seq            Sequence counter (caller increments).
- * @param[in]  failSafe       Upstream failsafe flag.
- * 
+ * @param[in]  combus        Source ComBus instance to encode.
+ * @param[in]  seq           Sequence counter (caller increments).
+ * @param[in]  failSafe      Upstream failsafe flag.
+ *
  * @return Number of bytes written into outputBuffer, 0 on error.
  */
-
-uint8_t combus_frame_encode( uint8_t*       outputBuffer,
-                             const ComBus*  combus,
-                             uint8_t        nAnalog,
-                             uint8_t        nDigital,
-                             uint8_t        envId,
-                             uint8_t        seq,
-                             bool           failSafe);
-
+uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
+                             uint8_t*              outputBuffer,
+                             const ComBus*         combus,
+                             uint8_t               seq,
+                             bool                  failSafe );
 
 
 /**
  * @brief Decode a binary frame stored in the input buffer into a ComBusFrame.
  *
  * @details Validates SOF, frame length, and CRC before unpacking.
- * Rejects frames whose analog count exceeds analogBufSize.
- * Digital bits exceeding digitalBufSize are silently truncated.
+ * Rejects frames whose analog count exceeds cfg.nAnalog.
+ * Digital bits exceeding cfg.nDigital are silently truncated.
  *
- * @param[out] outputFrame    Output frame — populated on success.
- * @param[in]  inputBuffer    Input buffer.
- * @param[in]  len            Number of bytes available in inputBuffer.
- * @param[in]  analogBufSize  Capacity of outputFrame->analog[]  (caller's buffer size).
- * @param[in]  digitalBufSize Capacity of outputFrame->digital[] (caller's buffer size).
- * 
+ * @param[in]  cfg          Static layout descriptor — buffer capacities come from cfg.nAnalog / nDigital.
+ * @param[out] outputFrame  Output frame — analog/digital pointers must be pre-set by the caller.
+ * @param[in]  inputBuffer  Input buffer.
+ * @param[in]  len          Number of bytes available in inputBuffer.
+ *
  * @return true if frame is valid and was populated, false otherwise.
  */
-
-bool combus_frame_decode( ComBusFrame*    outputFrame,
-                          const uint8_t*  inputBuffer,
-                          uint8_t         len,
-                          uint8_t         analogBufSize,
-                          uint8_t         digitalBufSize);
+bool combus_frame_decode( const ComBusFrameCfg& cfg,
+                          ComBusFrame*          outputFrame,
+                          const uint8_t*        inputBuffer,
+                          uint8_t               len );
 
 
 
@@ -122,16 +113,14 @@ bool combus_frame_decode( ComBusFrame*    outputFrame,
  * provided ComBus arrays. Caller must ensure array sizes match nAnalog
  * and nDigital in the frame.
  *
+ * @param[in]  cfg         Static layout descriptor — clamp values come from cfg.nAnalog / nDigital.
  * @param[out] combus      Target ComBus to update.
  * @param[in]  inputFrame  Source frame (from combus_frame_decode).
- * @param[in]  nAnalog     Maximum analog channels to update (safety clamp).
- * @param[in]  nDig        Maximum digital channels to update (safety clamp).
  */
 
-void combus_frame_apply(ComBus*             combus,
-                         const ComBusFrame* inputFrame,
-                         uint8_t            nAnalog,
-                         uint8_t            nDig);
+void combus_frame_apply( const ComBusFrameCfg& cfg,
+                         ComBus*               combus,
+                         const ComBusFrame*    inputFrame );
 
 
 
