@@ -34,8 +34,11 @@ enum class AnalogComBusID : uint8_t {
 enum class DigitalComBusID : uint8_t {
   HORN = 0,
   LIGHTS,
-  KEY,          ///< Ignition key. Set to start/rearm the machine.
-  BATTERY_LOW,  ///< Battery low flag — written by vbat module, read by all receivers.
+  KEY,              ///< Ignition key. Set to start/rearm the machine.
+  BATTERY_LOW,      ///< Battery low flag — written by vbat module, read by all receivers.
+  INDICATOR_LEFT,   ///< Left turn indicator — set by machine from operator input.
+  INDICATOR_RIGHT,  ///< Right turn indicator — set by machine from operator input.
+  HAZARDS,          ///< Hazard lights (both indicators) — set by machine from operator input.
   CH_COUNT
 };
 

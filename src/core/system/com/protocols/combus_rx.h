@@ -1,27 +1,28 @@
 ﻿/******************************************************************************
  * @file combus_rx.h
- * @brief ComBus receiver — transport-agnostic.
+ * @brief ComBus receiver module
  *
- * @details Receives binary ComBus frames from any NodeLink*, validates
- * SOF, length, and CRC-8/MAXIM, then exposes the latest valid snapshot via
- * combus_rx_snapshot().
+ * @details Receives binary ComBus frames from any NodeCom* transport interface
+ *   provided at init time. Validates SOF, length, and CRC-8/MAXIM, then
+ *   exposes the latest valid snapshot via `combus_rx_snapshot()`.
  *
- * The caller provides pre-allocated analog and digital backing arrays at init
- * time — the same pattern used by combus_frame_decode(). Ring-buffer framing
- * with SOF-scan re-sync on corruption or garbage.
+ *   The caller provides pre-allocated analog and digital output buffers at init
+ *   time. The module writes decoded values directly into them on each valid frame.
+ *   Incoming bytes are accumulated in an internal ring buffer.
+ *   A SOF-scan re-synchronizes framing on corruption or line garbage.
  *
  * Typical integration:
  * @code
- *   // Caller-owned backing storage:
- *   static uint16_t s_analog[N_ANALOG];
- *   static bool     s_digital[N_DIGITAL];
+ *    // Caller-owned backing storage:
+ *   static uint16_t analog[N_ANALOG];
+ *   static bool     digital[N_DIGITAL];
  *
- *   // In setup():
+ *    // In setup():
  *   NodeCom* com = uart_com_init(&Serial2, BAUD, RX_PIN, TX_PIN, "sound_rx");
  *   constexpr ComBusFrameCfg cfg = { MACHINE_TYPE, N_ANALOG, N_DIGITAL };
- *   combus_rx_init(com, cfg, s_analog, s_digital);
+ *   combus_rx_init(com, cfg, analog, digital);
  *
- *   // In loop():
+ *    // In loop():
  *   combus_rx_update();
  *   const ComBusFrame* snap = combus_rx_snapshot();
  * @endcode
@@ -43,25 +44,28 @@
 /**
  * @brief Initialize the ComBus receiver.
  *
- * @param com        Claimed transport interface (from uart_com_init or similar).
- * @param cfg        Static layout descriptor — buffer sizes come from cfg.nAnalog / nDigital.
- * @param analogBuf  Caller-allocated array of cfg.nAnalog entries, receives analog values.
- * @param digitalBuf Caller-allocated array of cfg.nDigital entries, receives digital values.
+ * @param nodeCom    NodeCom transport interface (from *_com_init).
+ * @param frameCfg   Combus frame config (buffer sizes, envID)
+ * @param analogBuf  Caller-allocated analog buffer array
+ * @param digitalBuf Caller-allocated digital buffer array
  */
-void combus_rx_init( NodeCom*            com,
-                     ComBusFrameCfg      cfg,
+void combus_rx_init( NodeCom*            nodeCom,
+                     ComBusFrameCfg      frameCfg,
                      uint16_t*           analogBuf,
                      bool*               digitalBuf );
 
 
+
 /**
- * @brief Poll transport and decode incoming frames — call every loop iteration.
+ * @brief Check input buffer and decode incoming frames.
  *
- * @details Non-blocking. Drains available bytes into a ring buffer and attempts
+ * @details Drains available bytes into a ring buffer and attempts
  * to decode complete frames. May process multiple back-to-back frames per call.
  * Updates the internal snapshot on each valid frame.
  */
+
 void combus_rx_update();
+
 
 
 /**
@@ -72,7 +76,9 @@ void combus_rx_update();
  *
  * @return Const pointer to the latest ComBusFrame, or nullptr.
  */
+
 const ComBusFrame* combus_rx_snapshot();
+
 
 
 /**
@@ -80,12 +86,15 @@ const ComBusFrame* combus_rx_snapshot();
  *
  * @return Age in ms, or UINT32_MAX if no frame has ever been received.
  */
+
 uint32_t combus_rx_age_ms();
+
 
 
 /**
  * @brief True if a valid frame was received within the last timeoutMs ms.
  */
+
 bool combus_rx_is_alive(uint32_t timeoutMs = 500u);
 
 // EOF combus_rx.h

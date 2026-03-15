@@ -7,11 +7,18 @@
  * layer (UART, ESP-Now, …). In this way, communication modules do not need to
  * know the details of the underlying transport implementation.
  *
- * Communication modules receive a NodeCom* structure pointer from the transport
- * layer at init time and use it to call only the following functions:
+ * At communication init, a transport adapter (e.g. uart_com_init) is called to
+ * initialize the physical port. The adapter init returns a NodeCom* pointer 
+ * that is passed to the protocol layer init (ex: `combus_tx_init()`) to interact
+ * with the transport layer.
+ * 
+ * @code
  *   com->write()     — send bytes
  *   com->readByte()  — receive one byte (-1 if none)
  *   com->available() — bytes waiting in the RX buffer
+ * @endcode
+ *
+ * The protocol module retains that pointer for the lifetime of the program.
  *****************************************************************************/
 #pragma once
 

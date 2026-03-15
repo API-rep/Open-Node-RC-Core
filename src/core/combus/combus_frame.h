@@ -1,6 +1,6 @@
 /******************************************************************************
  * @file combus_frame.h
- * ComBus frame codec -- encode, decode, CRC-8, and bus application.
+ * ComBus frame codec - encode, decode, CRC-8, and bus application.
  *
  * @details Binary frame format (variable length):
  * @code
@@ -13,8 +13,7 @@
  *   last    1    crc8         CRC-8/MAXIM over bytes [0 ... last-1]
  * @endcode
  *
- * Transport-agnostic. Individual machine instance discrimination (machine UID)
- * is delegated to the transport layer.
+ * Individual machine instance ( UID) is delegated to the transport layer.
  * See CombusFrameHeader in outputs_struct.h for the full wire layout.
  *****************************************************************************/
 #pragma once
@@ -33,9 +32,9 @@
   /// Start-of-frame sentinel byte.
 static constexpr uint8_t CombusFrameSof = 0xAAu;
 
-
   /// Guard: catch any unexpected padding introduced in CombusFrameHeader.
-static_assert(sizeof(CombusFrameSof) + sizeof(CombusFrameHeader) == 7u, "Wire header must be exactly 7 bytes — SOF(1) + CombusFrameHeader(6): check for unexpected padding");
+static_assert(sizeof(CombusFrameSof) + sizeof(CombusFrameHeader) == 7u,
+              "Bad CombusFrameHeader size detected: check for unexpected padding");
 
   /// Fixed combus header size in bytes
 static constexpr uint8_t CombusFrameHeaderLen = sizeof(CombusFrameSof) + sizeof(CombusFrameHeader);
@@ -77,6 +76,7 @@ static constexpr uint8_t CombusFrameMinLen = CombusFrameHeaderLen + sizeof(uint8
  *
  * @return Number of bytes written into outputBuffer, 0 on error.
  */
+
 uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
                              uint8_t*              outputBuffer,
                              const ComBus*         combus,
@@ -98,6 +98,7 @@ uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
  *
  * @return true if frame is valid and was populated, false otherwise.
  */
+
 bool combus_frame_decode( const ComBusFrameCfg& cfg,
                           ComBusFrame*          outputFrame,
                           const uint8_t*        inputBuffer,

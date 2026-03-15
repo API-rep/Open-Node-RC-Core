@@ -159,10 +159,34 @@ void sound_hal_update() {
                                           ? SOUND_HAL_DIGITAL_ON_US
                                           : SOUND_HAL_DIGITAL_OFF_US;
     }
-    if (chLights < snap->header.nDigital) {
+    if (chLights < snap->header.cfg.nDigital) {
         pulseWidth[SOUND_CH_FUNCTION_R] = snap->digital[chLights]
                                           ? SOUND_HAL_DIGITAL_ON_US
                                           : SOUND_HAL_DIGITAL_OFF_US;
+    }
+
+      // --- Indicator / hazard → FUNCTION_L pulse ---
+    //  Encoding: HAZARDS → 1500 (center, no click sound),
+    //            LEFT only → 1100, RIGHT only → 1900, neither → 1500.
+    {
+        uint8_t chIndicL  = static_cast<uint8_t>(SOUND_CB_INDICATOR_L);
+        uint8_t chIndicR  = static_cast<uint8_t>(SOUND_CB_INDICATOR_R);
+        uint8_t chHazards = static_cast<uint8_t>(SOUND_CB_HAZARDS);
+        uint8_t nDig      = snap->header.cfg.nDigital;
+
+        bool indicL  = (chIndicL  < nDig) && snap->digital[chIndicL];
+        bool indicR  = (chIndicR  < nDig) && snap->digital[chIndicR];
+        bool hazards = (chHazards < nDig) && snap->digital[chHazards];
+
+        if (hazards) {
+            pulseWidth[SOUND_CH_FUNCTION_L] = SOUND_PULSE_CTR_US;
+        } else if (indicL) {
+            pulseWidth[SOUND_CH_FUNCTION_L] = SOUND_HAL_DIGITAL_OFF_US;   // 1000 µs → left
+        } else if (indicR) {
+            pulseWidth[SOUND_CH_FUNCTION_L] = SOUND_HAL_DIGITAL_ON_US;    // 2000 µs → right
+        } else {
+            pulseWidth[SOUND_CH_FUNCTION_L] = SOUND_PULSE_CTR_US;
+        }
     }
 
       // --- ENGINE ON via RunLevel + KEY digital channel ---
@@ -170,7 +194,7 @@ void sound_hal_update() {
     //  RunLevel RUNNING is additionally used to ensure the engine is requested.
     //  keyOn is transmitted as the KEY digital channel (SOUND_CB_KEY).
     uint8_t chKey = static_cast<uint8_t>(SOUND_CB_KEY);
-    bool keyOn = (chKey < snap->header.nDigital) && snap->digital[chKey];
+    bool keyOn = (chKey < snap->header.cfg.nDigital) && snap->digital[chKey];
     bool running = ((RunLevel)snap->header.runLevel == RunLevel::RUNNING ||
                     (RunLevel)snap->header.runLevel == RunLevel::STARTING);
 

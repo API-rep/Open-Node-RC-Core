@@ -115,6 +115,9 @@ void input_update(ComBus &bus) {
     bus.digitalBus[ch].isDrived = true;
   }
 
+  // Keep combus watchdog alive
+  bus.lastFrameMs = millis();
+
 #endif
 }
 

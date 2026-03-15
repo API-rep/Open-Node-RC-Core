@@ -1,6 +1,6 @@
-﻿/******************************************************************************
+/******************************************************************************
  * @file combus_tx.cpp
- * @brief ComBus transmitter — transport-agnostic implementation.
+ * @brief ComBus transmitter � transport-agnostic implementation.
  *****************************************************************************/
 
 #include "combus_tx.h"
@@ -13,69 +13,109 @@
 // 1. PRIVATE STATE
 // =============================================================================
 
+/**
+ * @brief Persistent state of the ComBus transmitter module.
+ *
+ * @details Filled once by `combus_tx_init()` and read every cycle by
+ *   `combus_tx_update()`. Holds the transport interface, the static frame
+ *   layout, the rolling sequence counter, and the timer state needed for
+ *   the transmit rate gate.
+ *
+ *   Lifetime: static � valid for the entire program run after init.
+ */
+
 struct CombusTxState {
-	NodeCom* com       = nullptr;  ///< active transport interface
-	ComBusFrameCfg  cfg       = {};        ///< static layout descriptor (envId, nAnalog, nDigital)
-	uint8_t         seq       = 0u;        ///< rolling frame sequence counter (0–255)
-	uint32_t        lastTxMs  = 0u;        ///< timestamp of last transmitted frame (ms)
-	uint32_t        periodMs  = 0u;        ///< transmit period derived from txHz (0 = uninit)
+	NodeCom*        nodeCom  = nullptr;  ///< active transport interface
+	ComBusFrameCfg  frameCfg       = {};  ///< static layout descriptor (envId, nAnalog, nDigital)
+	uint8_t         seq       = 0u;  ///< rolling frame sequence counter (0�255)
+	uint32_t        lastTxMs  = 0u;  ///< timestamp of last transmitted frame (ms)
+	uint32_t        periodMs  = 0u;  ///< transmit period derived from txHz (0 = uninit)
 };
 
-static CombusTxState s_tx;
+static CombusTxState comBusTx;  ///< Combus transmitter instance state
+
 
 
 // =============================================================================
 // 2. INITIALIZATION
 // =============================================================================
 
-void combus_tx_init( NodeCom*       com,
-                     ComBusFrameCfg cfg,
-                     uint32_t       txHz ) {
+/**
+ * @brief Initialize the ComBus transmitter.
+ *
+ * @details Initialization sequence:
+ *   1. Guard check � null transport pointer or zero rate; returns immediately.
+ *   2. Store the transport interface and frame layout descriptor.
+ *   3. Derive the transmit period from txHz (integer division, ms).
+ *   4. Log init confirmation.
+ */
 
-	if (!com || txHz == 0u) { return; }
+void combus_tx_init(
+    NodeCom*       nodeCom,  // claimed transport interface (from uart_com_init or similar)
+    ComBusFrameCfg frameCfg, // static frame layout descriptor (envId, nAnalog, nDigital)
+    uint32_t       txHz )    // frame transmit rate in Hz
+{
+		// --- 1. Guard check ---
+	if (!nodeCom || txHz == 0u) { return; }
 
-	s_tx.com      = com;
-	s_tx.cfg      = cfg;
-	s_tx.periodMs = 1000u / txHz;
+		// --- 2. Store transport interface and frame layout ---
+	comBusTx.nodeCom = nodeCom;
+	comBusTx.frameCfg = frameCfg;
 
+		// --- 3. Derive transmit period ---
+	comBusTx.periodMs = 1000u / txHz;
+
+		// --- 4. Log init confirmation ---
 	sys_log_info("[COMBUS_TX] init — transport='%s'  rate=%uHz  A%u+D%u\n",
-	             com->name, txHz,
-	             (unsigned)cfg.nAnalog, (unsigned)cfg.nDigital);
+	             nodeCom->name, txHz, (unsigned)frameCfg.nAnalog, (unsigned)frameCfg.nDigital);
 }
+
 
 
 // =============================================================================
 // 3. TRANSMIT UPDATE
 // =============================================================================
 
-void combus_tx_update(const ComBus* bus, bool failSafe) {
+/**
+ * @brief Encode and transmit one ComBus frame if the period has elapsed.
+ *
+ * @details Timer-gated, non-blocking � safe to call every loop:
+ *   1. Guard check � returns immediately if uninit or bus pointer is null.
+ *   2. Timer gate � returns if the transmit period has not elapsed.
+ *   3. Encode the ComBus state into a binary frame via `combus_frame_encode()`.
+ *   4. Send the frame through the transport interface and advance the sequence counter.
+ */
 
-		// --- Guard: init not done or invalid bus ---
-	if (!s_tx.com || s_tx.periodMs == 0u || !bus) { return; }
+void combus_tx_update(
+    const ComBus* bus,      // live ComBus state to encode
+    bool          failSafe) // set true to flag the frame as failsafe-active
+{
+		// --- 1. Guard check ---
+	if (!comBusTx.nodeCom || comBusTx.periodMs == 0u || !bus) { return; }
 
-		// --- Timer gate ---
+		// --- 2. Timer gate ---
 	uint32_t now = millis();
-	if ((now - s_tx.lastTxMs) < s_tx.periodMs) { return; }
-	s_tx.lastTxMs = now;
+	if ((now - comBusTx.lastTxMs) < comBusTx.periodMs) { return; }
+	comBusTx.lastTxMs = now;
 
-		// --- Encode ---
+		// --- 3. Encode ---
 	static uint8_t frame[255u];
 	uint8_t frameLen = combus_frame_encode(
-	    s_tx.cfg,
+	    comBusTx.frameCfg,
 	    frame,
 	    bus,
-	    s_tx.seq,
+	    comBusTx.seq,
 	    failSafe
 	);
 
 	if (frameLen == 0u) { return; }
 
-		// --- Send via transport ---
-	s_tx.com->write(s_tx.com->ctx, frame, frameLen);
-	s_tx.seq++;
+		// --- 4. Send via transport ---
+	comBusTx.nodeCom->write(comBusTx.nodeCom->ctx, frame, frameLen);
+	comBusTx.seq++;
 
 	output_log_dbg("[COMBUS_TX] seq=%u  len=%u  rl=%d  flags=0x%02X\n",
-	               (unsigned)(s_tx.seq - 1u),
+	               (unsigned)(comBusTx.seq - 1u),
 	               (unsigned)frameLen,
 	               (int)bus->runLevel,
 	               (unsigned)(failSafe ? COMBUS_FLAG_FAILSAFE : 0u));

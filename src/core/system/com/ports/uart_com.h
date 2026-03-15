@@ -1,26 +1,27 @@
 ﻿/******************************************************************************
  * @file uart_com.h
- * @brief UART adapter — provides a NodeCom.
+ * @brief UART port initialisation
  *
  * @details Initializes a HardwareSerial port once and returns a claimed
- * NodeCom* that encapsulates the UART read/write/available calls.
+ * NodeCom* pointer that encapsulates the UART read/write/available calls.
  *
- * Guard: a second call with the same serial pointer fails loudly and returns
+ * A second call with the same serial interface fails loudly and returns
  * nullptr — preventing two modules from calling Serial.begin() on the same
  * port with different parameters.
  *
- * Pool is sized to UartComMaxPorts (declared in the board header, included via
- * config/config.h). A static_assert in uart_com.cpp validates it is >= 1.
+ * Available port pool is sized to UartComMaxPorts (declared in the board header,
+ * included via config/config.h). A static_assert in uart_com.cpp validates if this
+ * value is >= 1 (at least 1 for USB/UART debug).
  *
- * Serial0 pre-claim: call uart_com_init(&Serial, ...) early in sys_init
- * (gated on DEBUG_* / DEBUG_DASHBOARD flags) so the duplicate guard blocks
- * any accidental reuse as a transport port.
+ * Serial0 (USB/UART) is early pre-claimed via call in sys_init if DEBUG_* or 
+ * DEBUG_DASHBOARD compile flags are set. This avoids any accidental reuse
+ * of this port by an other module.
  *
- * Typical use:
+ * Typical use in a protocol layer:
  * @code
+ *     // port init and use of NodeCom return pointer in protocol init:
  *   NodeCom* com = uart_com_init(&Serial2, 115200, TX_PIN, RX_PIN, "combus");
- *   combus_tx_init(com, ...);   // protocol layer receives the same pointer
- *   combus_rx_init(com, ...);   // both share the same claimed port
+ *   combus_tx_init(com, ...);
  * @endcode
  *****************************************************************************/
 #pragma once
@@ -50,6 +51,7 @@
  *
  * @return Pointer to a ready-to-use NodeCom, or nullptr on failure.
  */
+
 NodeCom* uart_com_init( HardwareSerial* serial,
                         uint32_t        baud,
                         int             txPin,

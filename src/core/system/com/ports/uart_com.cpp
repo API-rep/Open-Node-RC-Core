@@ -1,6 +1,6 @@
 ﻿/******************************************************************************
  * @file uart_com.cpp
- * @brief UART adapter implementation for NodeCom.
+ * @brief UART port implementation for NodeCom.
  *****************************************************************************/
 
 #include <config/config.h>
@@ -8,8 +8,7 @@
 
 #include <core/system/debug/debug.h>
 
-// Board config validation — UartComMaxPorts is defined in the board header,
-// included above via config/config.h.
+// Board UartComMaxPorts config validation from config/config.h (board header)
 static_assert(UartComMaxPorts >= 1u, "UartComMaxPorts must be >= 1 (check board header)");
 
 
@@ -18,11 +17,17 @@ static_assert(UartComMaxPorts >= 1u, "UartComMaxPorts must be >= 1 (check board 
 // =============================================================================
 
 /**
- * @brief UART port internal context structure.
+ * @brief Define UART port registry entries..
  *
- * @details Each serial port owns a NodeCom instance, which embeds a ctx pointer to
- *   this UartCtx structure. This allows the static adapter functions to access
- *   the correct HardwareSerial interface for each port.
+ * @details During initialization, the `uart_com_init` function claims one entry
+ *   in the static `ports[]` registry and fills its metadata (serial pointer, owner name).
+ *
+ *   Each UART NodeCom instance is associated with a `UartCtx` entry. This lets the
+ *   three port callbacks functions(`uart_write/readByte/available`) retrieve
+ *   the correct `HardwareSerial*` at runtime.
+ *
+ *   Because the registry is statically allocated, the `NodeCom*` pointer returned to
+ *   the caller by `uart_com_init` remains valid for the lifetime of the program.
  */
 
 struct UartCtx {
@@ -39,9 +44,17 @@ static uint8_t portsCount = 0;          ///< Number of allocated UART ports
 
 
 // =============================================================================
-// 2. ADAPTER FUNCTIONS
+// 2. PORT CALLBACKS
 // =============================================================================
 
+/**
+ * Static functions linked to the `NodeCom` function-pointer interface
+ * for UART transport. They are assigned to `NodeCom.write/readByte/available`
+ *  during `uart_com_init()` (step 3).
+ *
+ * Each receives a `void* ctx` context pointer cast to `UartCtx*`, giving access
+ * to the correct `HardwareSerial*` port registry metadata.
+ */
 
 	/// @brief UART port Write function
 static void uart_write(void* ctx, const uint8_t* data, size_t len) {
@@ -67,32 +80,32 @@ static int uart_available(void* ctx) {
 /**
  * @brief Initialize a UART port and return a NodeCom pointer.
  *
- * @param serial  Pointer to the HardwareSerial instance to use
- * @param baud    Baudrate for the connection
- * @param txPin   TX pin number
- * @param rxPin   RX pin number
- * @param owner   Name of the owning module (for debug)
- * @return NodeCom* Pointer to the initialized NodeCom interface, or nullptr on error
+ * @details Initialization sequence:
+ *   1. Guard checks — null serial pointer, duplicate claim on the same
+ *      physical port, registry capacity exceeded. Returns nullptr on failure.
+ *   2. Claim a context entry from the registry and record port metadata.
+ *   3. Bind the NodeCom function pointers to this context.
+ *   4. Configure and start the hardware serial port.
  *
- * @details
- *  - Initialization is refused if the port is already allocated (multi-claim protection)
- *  - Refused if the port pool is full
- *  - Configures the HardwareSerial port and adapts it to the NodeCom API
+ * @return NodeCom* Pointer to the initialized NodeCom interface, or nullptr on error.
  */
 
-NodeCom* uart_com_init( HardwareSerial* serial,
-                        uint32_t        baud,
-                        int             txPin,
-                        int             rxPin,
-                        const char*     owner ) {
+NodeCom* uart_com_init(
+    HardwareSerial* serial, // Pointer to the HardwareSerial instance to use
+    uint32_t        baud,   // Baudrate for the connection
+    int             txPin,  // TX pin number
+    int             rxPin,  // RX pin number
+    const char*     owner ) // Name of the owning module (for debug)
+ {
 
-		// --- Step 1.1: Validate the serial pointer ---
+		// --- 1. Guard checks ---
+		// --- 1.1: Null serial pointer ---
 	if (!serial) {
 		sys_log_err("[UART_COM] nullptr serial — init aborted\n");
 		return nullptr;
 	}
 
-		// --- Step 1.2: Reject duplicate claim — one owner per physical port ---
+		// --- 1.2: Reject duplicate claim — one owner per physical port ---
 	for (uint8_t i = 0u; i < portsCount; i++) {
 		if (ports[i].serial == serial) {
 			sys_log_err("[UART_COM] FATAL: port already claimed by '%s', rejected for '%s'\n",
@@ -101,27 +114,27 @@ NodeCom* uart_com_init( HardwareSerial* serial,
 		}
 	}
 
-		// --- Step 1.3: Ensure that maximum port count is not reached ---
+		// --- 1.3: Registry capacity exceeded ---
 	if (portsCount >= UartComMaxPorts) {
 		sys_log_err("[UART_COM] FATAL: port pool full (%u max), rejected for '%s'\n",
 		            (unsigned)UartComMaxPorts, owner);
 		return nullptr;
 	}
 
-		// --- Step 2: Claim a context entry from the pool and record port metadata ---
-	UartCtx* port    = &ports[portsCount++];  ///< Next free context entry in the pool
+		// --- 2. Claim a context entry from the registry and record port metadata ---
+	UartCtx* port    = &ports[portsCount++];  // next free slot in the registry
 	port->serial     = serial;
 	port->owner      = owner;
 	port->claimed    = true;
 
-		// --- Step 3: Bind the NodeCom function pointers to this context ---
+		// --- 3. Bind the NodeCom function pointers to this context ---
 	port->com.ctx       = port;
 	port->com.write     = uart_write;
 	port->com.readByte  = uart_readByte;
 	port->com.available = uart_available;
 	port->com.name      = owner;
 
-		// --- Step 4: Configure and start the hardware serial port ---
+		// --- 4. Configure and start the hardware serial port ---
 	serial->begin(baud, SERIAL_8N1, rxPin, txPin);
 
 	sys_log_info("[UART_COM] '%s' — baud=%u  tx=%d  rx=%d\n",

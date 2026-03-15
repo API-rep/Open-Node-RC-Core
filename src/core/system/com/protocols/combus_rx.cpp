@@ -16,74 +16,125 @@
 // 1. PRIVATE STATE
 // =============================================================================
 
-/// Upper bound for any single ComBus frame (transport-independent).
-static constexpr uint8_t kFrameMaxLen = 255u;
+/**
+ * Ring buffer — raw byte accumulator between the transport ISR and the frame decoder.
+ * Sized to `UINT8_MAX` (255): the protocol length field is a `uint8_t`, so no
+ * single frame can ever exceed that. `rxBufSize` and `frameMaxLen` are kept as
+ * separate constants so each use site reads with its own intent.
+ */
 
-/// Internal receive ring buffer backing memory.
-static constexpr uint8_t kRxBufSize  = kFrameMaxLen;
-static uint8_t            s_rxBuf[kRxBufSize];
+	// buffer sizing
+static constexpr uint8_t frameMaxLen = UINT8_MAX;    ///< max encodable frame size
+static constexpr uint8_t rxBufSize   = frameMaxLen;  ///< ring buffer capacity
+
+	// ring buffer instance
+static uint8_t rxBuf[rxBufSize];  ///< raw incomming storage ring buffer
+
+
+/**
+ * @brief Persistent state of the ComBus receiver module.
+ *
+ * @details Filled once by `combus_rx_init()` and updated every cycle by
+ *   `combus_rx_update()`. Holds the transport interface, the static frame
+ *   layout, the ring buffer state (head + count), and the decoded snapshot
+ *   with its validity flags.
+ *
+ *   The analog and digital pointers inside `snap` are wired to the
+ *   caller-provided buffers at init time and never reallocated.
+ *
+ *   Lifetime: static — valid for the entire program run after init.
+ */
 
 struct CombusRxState {
-	NodeCom* com        = nullptr;  ///< active transport interface
-	ComBusFrameCfg  cfg              = {};        ///< static layout descriptor (buffer capacities)
-	uint8_t         rxHead           = 0u;        ///< ring buffer read index
-	uint8_t         rxCount          = 0u;        ///< bytes currently in ring buffer
-	ComBusFrame     snap             = {};        ///< latest decoded snapshot
-	bool            snapValid        = false;     ///< true once at least one frame decoded
-	uint32_t        lastRxMs         = 0u;        ///< millis() at last successful decode
-	bool            everReceived     = false;     ///< true after first valid frame received
+	NodeCom*        nodeCom      = nullptr;   ///< active transport interface
+	ComBusFrameCfg  frameCfg     = {};        ///< static layout descriptor (buffer capacities)
+	uint8_t         rxHead       = 0u;        ///< ring buffer read index
+	uint8_t         rxCount      = 0u;        ///< bytes currently in ring buffer
+	ComBusFrame     snap         = {};        ///< latest decoded snapshot
+	bool            snapValid    = false;     ///< true once at least one frame decoded
+	uint32_t        lastRxMs     = 0u;        ///< millis() at last successful decode
+	bool            everReceived = false;     ///< true after first valid frame received
 };
 
-static CombusRxState s_rx;
+static CombusRxState comBusRx;  ///< Single receiver instance (one ComBus RX per node)
+
 
 
 // =============================================================================
 // 2. PRIVATE HELPERS
 // =============================================================================
 
-/** Append one byte to the ring buffer. Drops oldest byte on overflow. */
+/** 
+ * @brief Append one byte to the ring buffer. Drops oldest byte on overflow.
+ */
+
 static void rxBufPush(uint8_t byte) {
-	if (s_rx.rxCount < kRxBufSize) {
-		uint8_t idx    = (uint8_t)((s_rx.rxHead + s_rx.rxCount) % kRxBufSize);
-		s_rxBuf[idx]   = byte;
-		s_rx.rxCount++;
-	} else {
+	if (comBusRx.rxCount < rxBufSize) {
+		uint8_t idx    = (uint8_t)((comBusRx.rxHead + comBusRx.rxCount) % rxBufSize);
+		rxBuf[idx]   = byte;
+		comBusRx.rxCount++;
+	}
+	
+	else {
 			// Overflow: drop oldest byte by advancing head
-		s_rxBuf[s_rx.rxHead] = byte;
-		s_rx.rxHead = (uint8_t)((s_rx.rxHead + 1u) % kRxBufSize);
+		rxBuf[comBusRx.rxHead] = byte;
+		comBusRx.rxHead = (uint8_t)((comBusRx.rxHead + 1u) % rxBufSize);
 	}
 }
 
-/** Return byte at logical index i (0 = oldest). */
+
+/** 
+ * @brief Return byte at logical index i (0 = oldest).
+ */
+
 static uint8_t rxBufAt(uint8_t i) {
-	return s_rxBuf[(s_rx.rxHead + i) % kRxBufSize];
+	return rxBuf[(comBusRx.rxHead + i) % rxBufSize];
 }
 
-/** Discard the n oldest bytes. */
+
+/** 
+ * @brief Discard the n oldest bytes from the ring buffer.
+ */
+
 static void rxBufConsume(uint8_t n) {
-	if (n > s_rx.rxCount) { n = s_rx.rxCount; }
-	s_rx.rxHead  = (uint8_t)((s_rx.rxHead + n) % kRxBufSize);
-	s_rx.rxCount = (uint8_t)(s_rx.rxCount - n);
+	if (n > comBusRx.rxCount) { n = comBusRx.rxCount; }
+	comBusRx.rxHead  = (uint8_t)((comBusRx.rxHead + n) % rxBufSize);
+	comBusRx.rxCount = (uint8_t)(comBusRx.rxCount - n);
 }
+
+
+
 
 /**
  * @brief Attempt to decode a valid frame from the head of the ring buffer.
  *
- * @return Number of bytes consumed, or 0 if no complete frame is ready.
+ * @details Decoding sequence:
+ *   1. Scan for SOF — discards leading bytes until `CombusFrameSof` is found
+ *      or the buffer is exhausted.
+ *   2. Peek header — reads `nAnalog` and `nDigital` from the wire header to
+ *      compute the expected frame length; discards SOF and re-syncs if the
+ *      size would exceed `frameMaxLen`.
+ *   3. Copy and decode — extracts the complete frame into a linear buffer and
+ *      calls `combus_frame_decode()`. On CRC success, updates the snapshot and
+ *      consumes the frame bytes. On CRC failure, discards only the SOF and
+ *      re-syncs.
+ *
+ * @return Number of bytes consumed, or 0 if no complete valid frame was found.
  */
+
 static uint8_t tryDecode() {
 
 		// --- 1. Scan for SOF ---
-	while (s_rx.rxCount > 0u && rxBufAt(0u) != CombusFrameSof) {
+	while (comBusRx.rxCount > 0u && rxBufAt(0u) != CombusFrameSof) {
 		rxBufConsume(1u);
 	}
 
-	if (s_rx.rxCount < CombusFrameMinLen) {
+	if (comBusRx.rxCount < CombusFrameMinLen) {
 		return 0u;
 	}
 
 		// --- 2. Peek header to compute expected frame size ---
-	if (s_rx.rxCount < CombusFrameHeaderLen) {
+	if (comBusRx.rxCount < CombusFrameHeaderLen) {
 		return 0u;
 	}
 	uint8_t nAnalog   = rxBufAt(1u + offsetof(CombusFrameHeader, cfg) + offsetof(ComBusFrameCfg, nAnalog));
@@ -94,27 +145,27 @@ static uint8_t tryDecode() {
 	                      + (uint16_t)nDigBytes
 	                      + (uint16_t)nAnalog * 2u
 	                      + 1u;
-	if (expectedLenW > kFrameMaxLen) {
+	if (expectedLenW > frameMaxLen) {
 			// Impossible frame size — discard SOF and re-sync
 		rxBufConsume(1u);
 		return 0u;
 	}
 	uint8_t expectedLen = (uint8_t)expectedLenW;
-	if (s_rx.rxCount < expectedLen) {
+	if (comBusRx.rxCount < expectedLen) {
 		return 0u;
 	}
 
 		// --- 3. Copy frame into a linear buffer and decode ---
-	uint8_t linear[kFrameMaxLen];
+	uint8_t linear[frameMaxLen];
 	for (uint8_t i = 0u; i < expectedLen; ++i) {
 		linear[i] = rxBufAt(i);
 	}
 
-		// CRC validated before any write — failed decode leaves s_rx.snap untouched.
-	if (combus_frame_decode(s_rx.cfg, &s_rx.snap, linear, expectedLen)) {
-		s_rx.snapValid    = true;
-		s_rx.lastRxMs     = millis();
-		s_rx.everReceived = true;
+		// CRC validated before any write — failed decode leaves comBusRx.snap untouched.
+	if (combus_frame_decode(comBusRx.frameCfg, &comBusRx.snap, linear, expectedLen)) {
+		comBusRx.snapValid    = true;
+		comBusRx.lastRxMs     = millis();
+		comBusRx.everReceived = true;
 		rxBufConsume(expectedLen);
 		return expectedLen;
 	} else {
@@ -125,47 +176,73 @@ static uint8_t tryDecode() {
 }
 
 
+
 // =============================================================================
 // 3. PUBLIC API
 // =============================================================================
 
-void combus_rx_init( NodeCom*       com,
-                     ComBusFrameCfg cfg,
-                     uint16_t*      analogBuf,
-                     bool*          digitalBuf ) {
+/**
+ * @brief Initialize the ComBus receiver.
+ *
+ * @details Initialization sequence:
+ *   1. Guard check — null transport or buffer pointer; returns immediately.
+ *   2. Store transport interface and frame layout descriptor.
+ *   3. Wire caller-provided buffers into the snapshot struct.
+ *   4. Reset ring buffer and link state.
+ */
 
-	if (!com || !analogBuf || !digitalBuf) { return; }
+void combus_rx_init(
+    NodeCom*       nodeCom,     // claimed transport interface (from uart_com_init or similar)
+    ComBusFrameCfg frameCfg,    // static frame layout descriptor (envId, nAnalog, nDigital)
+    uint16_t*      analogBuf,   // caller-allocated array of frameCfg.nAnalog entries
+    bool*          digitalBuf ) // caller-allocated array of frameCfg.nDigital entries
+{
+		// --- 1. Guard check ---
+	if (!nodeCom || !analogBuf || !digitalBuf) { return; }
 
-	s_rx.com = com;
-	s_rx.cfg = cfg;
+		// --- 2. Store transport interface and frame layout ---
+	comBusRx.nodeCom  = nodeCom;
+	comBusRx.frameCfg = frameCfg;
 
-		// Wire caller-provided buffers into the snapshot struct.
-	s_rx.snap.analog  = analogBuf;
-	s_rx.snap.digital = digitalBuf;
+		// --- 3. Wire caller-provided buffers into the snapshot struct ---
+	comBusRx.snap.analog  = analogBuf;
+	comBusRx.snap.digital = digitalBuf;
 
-		// Reset ring buffer and link state.
-	s_rx.rxHead       = 0u;
-	s_rx.rxCount      = 0u;
-	s_rx.snapValid    = false;
-	s_rx.everReceived = false;
+		// --- 4. Reset ring buffer and link state ---
+	comBusRx.rxHead       = 0u;
+	comBusRx.rxCount      = 0u;
+	comBusRx.snapValid    = false;
+	comBusRx.everReceived = false;
 
 	sys_log_info("[COMBUS_RX] init — transport='%s'  A%u+D%u\n",
-	             com->name,
-	             (unsigned)cfg.nAnalog, (unsigned)cfg.nDigital);
+	             nodeCom->name,
+	             (unsigned)frameCfg.nAnalog, (unsigned)frameCfg.nDigital);
 }
 
 
-void combus_rx_update() {
-	if (!s_rx.com) { return; }
 
-		// --- Drain available bytes into ring buffer ---
-	while (s_rx.com->available(s_rx.com->ctx) > 0) {
-		int b = s_rx.com->readByte(s_rx.com->ctx);
+/**
+ * @brief Poll transport and decode incoming frames — call every loop iteration.
+ *
+ * @details Timer-gated, non-blocking — safe to call every loop:
+ *   1. Guard check — returns immediately if uninit.
+ *   2. Drain available bytes from the transport into the ring buffer.
+ *   3. Try to decode frames until the buffer holds fewer than `CombusFrameMinLen`
+ *      bytes or `tryDecode()` finds nothing to consume.
+ */
+
+void combus_rx_update() {
+		// --- 1. Guard check ---
+	if (!comBusRx.nodeCom) { return; }
+
+		// --- 2. Drain available bytes into ring buffer ---
+	while (comBusRx.nodeCom->available(comBusRx.nodeCom->ctx) > 0) {
+		int b = comBusRx.nodeCom->readByte(comBusRx.nodeCom->ctx);
 		if (b >= 0) { rxBufPush((uint8_t)b); }
 	}
 
-		// --- Try to decode (may process multiple back-to-back frames) ---
-	while (s_rx.rxCount >= CombusFrameMinLen) {
+		// --- 3. Try to decode (may process multiple back-to-back frames) ---
+	while (comBusRx.rxCount >= CombusFrameMinLen) {
 		if (tryDecode() == 0u) {
 			break;
 		}
@@ -173,21 +250,30 @@ void combus_rx_update() {
 }
 
 
+
+/** @brief Return latest valid snapshot, or nullptr if no frame received yet. */
+
 const ComBusFrame* combus_rx_snapshot() {
-	return s_rx.snapValid ? &s_rx.snap : nullptr;
+	return comBusRx.snapValid ? &comBusRx.snap : nullptr;
 }
 
+
+
+/** @brief Milliseconds elapsed since the last valid frame, or UINT32_MAX if never received. */
 
 uint32_t combus_rx_age_ms() {
-	if (!s_rx.everReceived) {
+	if (!comBusRx.everReceived) {
 		return UINT32_MAX;
 	}
-	return (uint32_t)(millis() - s_rx.lastRxMs);
+	return (uint32_t)(millis() - comBusRx.lastRxMs);
 }
 
 
+
+/** @brief True if a valid frame was received within the last timeoutMs milliseconds. */
+
 bool combus_rx_is_alive(uint32_t timeoutMs) {
-	return s_rx.everReceived && (combus_rx_age_ms() < timeoutMs);
+	return comBusRx.everReceived && (combus_rx_age_ms() < timeoutMs);
 }
 
 // EOF combus_rx.cpp

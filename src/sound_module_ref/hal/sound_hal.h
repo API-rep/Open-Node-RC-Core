@@ -73,12 +73,19 @@ void sound_hal_init();
  * and holds pulseWidth[] at neutral.
  *
  * Updates the following rc_engine_sound global variables:
- *   - pulseWidth[THROTTLE]   ← analogBus[DRIVE_SPEED_BUS]
- *   - pulseWidth[STEERING]   ← analogBus[STEERING_BUS]
- *   - pulseWidth[GEARBOX]    ← analogBus[DUMP_BUS]
- *   - pulseWidth[HORN]       ← digitalBus[HORN]
- *   - pulseWidth[FUNCTION_R] ← digitalBus[LIGHTS]
- *   - failSafe               ← COMBUS_FLAG_FAILSAFE (transport flag) or link timeout
+ *   - pulseWidth[THROTTLE]    ← analogBus[DRIVE_SPEED_BUS]
+ *   - pulseWidth[STEERING]    ← analogBus[STEERING_BUS]
+ *   - pulseWidth[GEARBOX]     ← analogBus[DUMP_BUS]
+ *   - pulseWidth[HORN]        ← digitalBus[HORN]
+ *   - pulseWidth[FUNCTION_R]  ← digitalBus[LIGHTS]  (+ KEY engine-on override)
+ *   - pulseWidth[FUNCTION_L]  ← digitalBus[INDICATOR_LEFT/RIGHT/HAZARDS] (encoded)
+ *   - failSafe                ← COMBUS_FLAG_FAILSAFE (transport flag) or link timeout
+ *
+ * FUNCTION_L encoding:
+ *   HAZARDS active            → 1500 µs (center — no click sound, lights handled by output code)
+ *   INDICATOR_LEFT only       → 1100 µs (tick-tack left)
+ *   INDICATOR_RIGHT only      → 1900 µs (tick-tack right)
+ *   neither                   → 1500 µs
  */
 void sound_hal_update();
 

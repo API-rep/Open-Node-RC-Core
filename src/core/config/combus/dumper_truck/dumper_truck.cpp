@@ -15,6 +15,9 @@ DigitalComBus DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::CH_COUNT)
   { .infoName = "lights channel" },
   { .infoName = "key channel" },
   { .infoName = "battery low channel" },
+  { .infoName = "indicator left channel" },
+  { .infoName = "indicator right channel" },
+  { .infoName = "hazards channel" },
 };
 
 

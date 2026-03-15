@@ -255,7 +255,8 @@ bool combus_frame_decode( const ComBusFrameCfg& cfg,
 /**
  * Apply a decoded ComBusFrame onto a live ComBus instance.
  *
- * @details Application sequence:
+ * @details Write the incoming combus frame into the live combus instance.
+ * Application sequence:
  *   1. Null pointer guard (returns on failure).
  *   2. Write runLevel from frame header; stamp combus->lastFrameMs = millis()
  *      so combus_watchdog can detect frame loss and clear isDrived.

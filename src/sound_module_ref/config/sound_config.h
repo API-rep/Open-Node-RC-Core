@@ -65,16 +65,29 @@
 // =============================================================================
 
 /// ComBus digital channel → rc_engine_sound HORN / siren trigger.
-#define SOUND_CB_HORN       DigitalComBusID::HORN
+#define SOUND_CB_HORN           DigitalComBusID::HORN
 
 /// ComBus digital channel → rc_engine_sound FUNCTION_R (lights, jake brake…).
-#define SOUND_CB_LIGHTS     DigitalComBusID::LIGHTS
+#define SOUND_CB_LIGHTS         DigitalComBusID::LIGHTS
 
 /// ComBus digital channel → rc_engine_sound engine on/off (KEY).
 /// This is the authoritative source for keyOn — the transport flags byte
 /// carries only transport-level status (failSafe); application state like
 /// keyOn is transmitted as a normal digital channel.
-#define SOUND_CB_KEY        DigitalComBusID::KEY
+#define SOUND_CB_KEY            DigitalComBusID::KEY
+
+/// ComBus digital channel → left turn indicator.
+/// Encodes into pulseWidth[FUNCTION_L] at 1100 µs when active (silent when HAZARDS is also set).
+#define SOUND_CB_INDICATOR_L    DigitalComBusID::INDICATOR_LEFT
+
+/// ComBus digital channel → right turn indicator.
+/// Encodes into pulseWidth[FUNCTION_L] at 1900 µs when active (silent when HAZARDS is also set).
+#define SOUND_CB_INDICATOR_R    DigitalComBusID::INDICATOR_RIGHT
+
+/// ComBus digital channel → hazard lights (both indicators simultaneously).
+/// When active, pulseWidth[FUNCTION_L] is held at center (1500 µs) — indicator
+/// tick-tack sound is suppressed. Light flashing is handled by the machine output code.
+#define SOUND_CB_HAZARDS        DigitalComBusID::HAZARDS
 
 
 // =============================================================================

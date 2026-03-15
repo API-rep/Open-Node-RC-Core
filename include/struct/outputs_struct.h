@@ -25,6 +25,7 @@
  *   Constexpr instances are defined in the active output config sub-file
  *   (e.g. src/core/config/outputs/sound_uart.h).
  */
+
 struct OutputUartConfig {
   int8_t   txPin;   ///< ESP32 GPIO TX pin.
   int8_t   rxPin;   ///< ESP32 GPIO RX pin (-1 = TX-only link).
@@ -77,14 +78,14 @@ struct ComBusFrameCfg {
  * @brief Combus transmission frame header fields shared with the decoded frame.
  *
  * @details These fields are transmitted in the transmission frame immediately
- * after the SOF byte (offset 0). The same struct is embedded in ComBusFrame,
- * giving a single source of truth for both wire layout and decoded representation.
+ *   after the SOF byte (offset 0). The same struct is embedded in ComBusFrame,
+ *   giving a single source of truth for both wire layout and decoded representation.
  *
- * Wire byte order (offsets 1–6 after SOF):
- *   0: envId   1: nAnalog   2: nDigital   3: seq   4: runLevel   5: flags
+ *   Wire byte order (offsets 1–6 after SOF):
+ *     0: envId   1: nAnalog   2: nDigital   3: seq   4: runLevel   5: flags
  *
- * The first three bytes map directly to `ComBusFrameCfg`, enabling a
- * memcpy-based decode without manual field extraction.
+ *   The first three bytes map directly to `ComBusFrameCfg`, enabling a
+ *   memcpy-based decode without manual field extraction.
  */
 
 struct CombusFrameHeader {
@@ -100,13 +101,14 @@ struct CombusFrameHeader {
  * @brief Decoded ComBus frame — header fields + pointers to the decoded payload.
  *
  * @details `analog` and `digital` point to the decoded analog and digital data.
- * Their effective sizes are `header.nAnalog` and `header.nDigital`, which are
- * themselves derived from `AnalogComBusID::CH_COUNT` / `DigitalComBusID::CH_COUNT`
- * defined in the machine's combus layout (combus_types.h).
- *
- * Correct decoding and application of the ComBus state is guaranteed by the
- * fact that both nodes (machine and receiver) share the same combus_types.h.
+ *   Their effective sizes are `header.nAnalog` and `header.nDigital`, which are
+ *   themselves derived from `AnalogComBusID::CH_COUNT` / `DigitalComBusID::CH_COUNT`
+ *   defined in the machine's combus layout (combus_types.h).
+ *   
+ *   Correct decoding and application of the ComBus state is guaranteed by the
+ *   fact that both nodes (machine and receiver) share the same combus_types.h.
  */
+
 struct ComBusFrame {
     CombusFrameHeader header;   ///< Wire header fields (offsets 1–6 of the frame).
     uint16_t*         analog;   ///< Caller-provided buffer (≥ header.nAnalog entries)

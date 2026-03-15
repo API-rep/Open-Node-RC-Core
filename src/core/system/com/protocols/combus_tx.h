@@ -1,13 +1,11 @@
 ﻿/******************************************************************************
  * @file combus_tx.h
- * @brief ComBus transmitter — transport-agnostic.
+ * @brief ComBus transmitter module
  *
  * @details Serializes the live ComBus into a binary frame and sends it via
- * any NodeCom*. Timer-gated, non-blocking — safe to call every loop.
- *
- * The physical transport (UART, ESP-Now, …) is provided at init time as a
- * claimed NodeCom*. This module is completely unaware of the underlying
- * medium.
+ * any NodeCom* physical transport interface (UART, ESP-Now, …) provided at
+ * init time. Timer-gated and non-blocking: the update function does nothing
+ * if the transmit interval has not elapsed since the last frame.
  *
  * Typical integration:
  * @code
@@ -37,13 +35,15 @@
 /**
  * @brief Initialize the ComBus transmitter.
  *
- * @param com   Claimed transport interface (from uart_com_init or similar).
- * @param cfg   Static layout descriptor (envId, nAnalog, nDigital).
- * @param txHz  Frame transmit rate in Hz.
+ * @param nodeCom   Claimed transport interface (from *_com_init).
+ * @param frameCfg  ComBus layout descriptor (envId, nAnalog, nDigital).
+ * @param txHz      Frame transmit rate in Hz.
  */
-void combus_tx_init( NodeCom*            com,
-                     ComBusFrameCfg      cfg,
-                     uint32_t            txHz );
+
+void combus_tx_init( NodeCom*        nodeCom,
+                     ComBusFrameCfg  frameCfg,
+                     uint32_t        txHz );
+
 
 
 /**
