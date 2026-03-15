@@ -4,5 +4,5 @@
 .vscode/launch.json
 .vscode/ipch
 
-# Third-party sound engine sources (RC Engine Sound ESP32) — copyright, not for public repo
-src/sound_module/
+# src/sound_module/ is tracked as a private git submodule (sound_module_rc)
+# — DiYGuy RC Engine Sound ESP32 sources stay private, Open Node migration code is versioned there.

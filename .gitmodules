@@ -1,0 +1,3 @@
+[submodule "src/sound_module"]
+	path = src/sound_module
+	url = https://github.com/API-rep/sound_module_rc.git
