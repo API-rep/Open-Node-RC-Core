@@ -55,6 +55,34 @@ The objective is a clean, stable, educational style for both app code and reusab
     - use 2 empty lines by default
     - use 3 empty lines if the preceding code block exceeds 40 lines
 
+### Doxygen `@details` writing style — relationships over implementation
+
+The preferred `@details` style focuses on **responsibilities and relationships between components**, not on algorithmic details.
+
+Structure each `@details` as short prose paragraphs, one per concern, in natural reading order:
+
+- **Paragraph 1 — Producer:** who creates/fills this, when, and what it stores.
+- **Paragraph 2 — Consumer:** who reads it, why, and what it enables.
+- **Paragraph 3 — Lifetime / safety:** allocation scope, pointer validity guarantees, any constraints.
+
+Rules:
+- Always use `` `backticks` `` for identifiers (functions, fields, types, arrays).
+- No bullet lists in `@details` — write prose sentences.
+- Do not describe *how* the code works line by line; describe *what role it plays* and *who depends on it*.
+- For function `@details` with a numbered sequence, each step should be a brief phrase — not a re-narration of the implementation.
+
+Example (struct context):
+```
+ * @details During initialization, `uart_com_init()` claims one entry
+ *   in the static `ports[]` registry and fills its metadata.
+ *
+ *   Each `NodeCom` instance embeds a `ctx` pointer back to its `UartCtx`,
+ *   so the port callbacks can retrieve the correct `HardwareSerial*` at runtime.
+ *
+ *   Because the registry is statically allocated, the returned `NodeCom*`
+ *   remains valid for the lifetime of the program.
+```
+
 ### Naming and layout
 - Class/type names: PascalCase
 - Enum type names: PascalCase

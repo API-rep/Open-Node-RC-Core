@@ -357,3 +357,24 @@ silenceable at build time to free UART0 for transport.
 
 **Prerequisite:** A real board with only one UART available — not worth the
 complexity otherwise.
+### ComBus bidirectional convenience wrapper (`combus_link_init`)
+**Context:** `combus_tx_init()` and `combus_rx_init()` are intentionally separate.
+All current nodes are unidirectional: the machine transmits only (`output_init`),
+the sound module receives only (`sound_module/main`). Both share the same `NodeCom*`
+from `uart_com_init()` when needed — UART is full-duplex, no collision possible.
+
+**Proposed feature:** When a bidirectional node exists (e.g. a remote that both
+sends commands and returns telemetry), add a thin convenience wrapper:
+```cpp
+// combus_link.h / .cpp  —  call only when a node needs both TX and RX
+void combus_link_init( NodeCom*       com,
+                       ComBusFrameCfg txCfg,  uint32_t txHz,
+                       ComBusFrameCfg rxCfg,
+                       uint16_t*      analogBuf,
+                       bool*          digitalBuf );
+```
+The wrapper just calls `combus_tx_init()` then `combus_rx_init()` — no logic
+duplication. Unidirectional callers keep their single `_tx_init` / `_rx_init` call.
+
+**Prerequisite:** A concrete bidirectional node exists in the project — do not
+create the wrapper speculatively.

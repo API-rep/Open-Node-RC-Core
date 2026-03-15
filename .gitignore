@@ -3,3 +3,6 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+
+# Third-party sound engine sources (RC Engine Sound ESP32) — copyright, not for public repo
+src/sound_module/
