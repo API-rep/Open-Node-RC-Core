@@ -13,13 +13,13 @@
  *            Which pulseWidth[] slot each role maps to.  Tied to the
  *            FLYSKY_FS_I6X remote profile declared in 2_Remote.h.
  *            If the profile changes, update these indices accordingly and
- *            rely on the static_assert guards in sound_hal.cpp to catch
+ *            rely on the static_assert guards in sound_init.h to catch
  *            any mismatch at compile time.
  *
  *          Future fine-tuning (sound profiles, volumes, RPM curves):
  *            → sound_tune.h  (next to this file, not yet implemented)
  *
- * @note    sound_hal.cpp adds static_asserts cross-checking SOUND_CH_*
+ * @note    sound_init.h adds static_asserts cross-checking SOUND_CH_*
  *          against the 2_Remote.h defines (STEERING, THROTTLE, GEARBOX…).
  *          Those asserts cannot live here because 2_Remote.h is only
  *          available in the sound_module translation unit.
@@ -67,7 +67,7 @@
 // 2. RC_ENGINE_SOUND DESTINATION  (pulseWidth[] slot indices)
 //
 //    Profile: FLYSKY_FS_I6X  (2_Remote.h defines STEERING=1, THROTTLE=3, …)
-//    Cross-checked by static_asserts in sound_hal.cpp.
+//    Cross-checked by static_asserts in sound_init.h.
 // =============================================================================
 
 #define SOUND_CH_STEERING       1u   ///< pulseWidth[1] — steering
