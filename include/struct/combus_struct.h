@@ -27,7 +27,7 @@
 // =============================================================================
 
 /**
- * @brief Which module is allowed to write this ComBus channel.
+ * @brief ComBus channel ownership for write access.
  *
  * @details Each channel stores one `ChanOwner` value that names the module
  *   responsible for writing it. All other modules must only read it.
@@ -42,12 +42,12 @@
  *   `ANY`  — any module may write; use only for shared scratch channels.
  */
 enum class ChanOwner : uint8_t {
-    NONE     = 0,   ///< No writer declared — channel is passive / read-only
-    ANY,            ///< Any module may write (shared scratchpad — use sparingly)
+    NONE     = 0,   ///< No mandate declared — nobody is allowed to write this channel
+    ANY,            ///< All modules are allowed to write this channel (shared scratchpad — use sparingly)
     MACHINE,        ///< Written by the machine main node (RunLevel FSM, motion control)
-    INPUT,          ///< Written by the input module (PS4, SBUS, Wi-Fi remote…)
+    INPUT_DEV,      ///< Written by the input module (PS4, SBUS, Wi-Fi remote…)
     SOUND,          ///< Written by the sound module (standalone mode only)
-    VBAT,           ///< Written by the battery monitor module
+    VBAT_MON,       ///< Written by the battery monitor module
     REMOTE,         ///< Written by a remote node over a communication link
 };
 
@@ -74,9 +74,12 @@ enum class ChanOwner : uint8_t {
 
   // Main communication bus structure
 typedef struct {
-  RunLevel runLevel;                            // runlevel state
-  bool batteryIsLow    = false;                 // true when any vbat channel reports low — written by vbat module, read by all
-  bool keyOn           = false;                 // operator ignition consent — derived from input, used by state machine transitions
+  RunLevel  runLevel;                           // machine run level — written by the MACHINE module FSM
+  ChanOwner runLevelOwner = ChanOwner::NONE;    // module allowed to write runLevel — set at init
+  bool batteryIsLow = false;                    // true when any vbat channel reports low — written by vbat module, read by all
+  ChanOwner battLowOwner = ChanOwner::NONE;     // module allowed to write batteryIsLow — set at init
+  bool keyOn = false;                           // operator ignition consent — derived from input, used by state machine transitions
+  ChanOwner keyOnOwner = ChanOwner::NONE;       // module allowed to write keyOn — set at init
   uint32_t lastFrameMs = 0;                     // millis() of the last successful combus_frame_apply — used by watchdog
   AnalogComBus* analogBus;                      // analogic bus channels
   DigitalComBus* digitalBus;                    // digital bus channels
