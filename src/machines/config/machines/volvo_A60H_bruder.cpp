@@ -8,7 +8,7 @@ DcDevice dcDevArray[DC_DRV_COUNT] = {
     .infoName = "steering actuators",
     .drvPort = &drvPortArray[DRV_PORT_1A],
     .DevType = DcDevType::DC_MOTOR,
-    .usage = DevUsage::GEN_ACTUATOR,
+    .usage = DevUsage::STEER_MOTOR,
     .mode = DcDrvMode::TWO_WAY_NEUTRAL_CENTER,
     .comChannel = AnalogComBusID::STEERING_BUS, // naming from enum in core/config/combus_types.h
     .pwmFreq = M_DEF_PWM_FREQ, 
@@ -20,7 +20,7 @@ DcDevice dcDevArray[DC_DRV_COUNT] = {
     .infoName = "cabin left motor",
     .drvPort = &drvPortArray[DRV_PORT_1B],
     .DevType = DcDevType::DC_MOTOR,
-    .usage = DevUsage::GEN_WHEEL,
+    .usage = DevUsage::TRACT_WHEEL,
     .mode = DcDrvMode::TWO_WAY_NEUTRAL_CENTER,
     .comChannel = AnalogComBusID::DRIVE_SPEED_BUS,
     .pwmFreq = M_DEF_PWM_FREQ, 
@@ -68,9 +68,10 @@ DcDevice dcDevArray[DC_DRV_COUNT] = {
   },
 
   {
-    .ID =DUMP_ACTUATOR,
+    .ID = DUMP_ACTUATOR,
     .infoName = "dump actuators L+R",
     .drvPort = &drvPortArray[DRV_PORT_2A],
+    .usage = DevUsage::HYD_LINEAR,              // explicit: overrides STEER_MOTOR inherited from parent
     .comChannel = AnalogComBusID::DUMP_BUS,
     .polInv = false,
     .parentID = STEERING

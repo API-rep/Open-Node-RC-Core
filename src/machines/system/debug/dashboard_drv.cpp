@@ -46,10 +46,18 @@ static const char* devTypeStr(DcDevType t) {
 
 static const char* devUsageStr(DevUsage u) {
 	switch (u) {
-		case DevUsage::GEN_WHEEL:    return "Wheel";
-		case DevUsage::GEN_ACTUATOR: return "Actuator";
-		case DevUsage::UNDEFINED:    return "---";
-		default:                     return "---";
+			case DevUsage::TRACT_WHEEL:   return "Tract.Wheel";
+			case DevUsage::TRACT_TRACK:   return "Tract.Track";
+			case DevUsage::HYD_LINEAR:    return "Hyd.Linear";
+			case DevUsage::HYD_ROTARY:    return "Hyd.Rotary";
+			case DevUsage::HYD_ASSIST:    return "Hyd.Assist";
+			case DevUsage::HYD_PUMP:      return "Hyd.Pump";
+			case DevUsage::STEER_SERVO:   return "Steer.Servo";
+			case DevUsage::STEER_MOTOR:   return "Steer.Motor";
+			case DevUsage::SIG_HORN:      return "Sig.Horn";
+			case DevUsage::SIG_LIGHT:     return "Sig.Light";
+			case DevUsage::SIG_SOLENOID:  return "Sig.Solenoid";
+		case DevUsage::UNDEFINED:     default: return "---";
 	}
 }
 

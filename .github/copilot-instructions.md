@@ -2,6 +2,40 @@
 
 These instructions are loaded for every coding session in this workspace.
 
+## 0) Next session — READ FIRST
+
+### État hardware validé (session 2026-03-22)
+- Tous les bugs son (horn/volume, engine key, hydraulique) ✅ corrigés et validés hardware
+- `sound_config.h` mergé dans `config.h` ✅
+- **Debug serial block actif** dans `src/sound_module/system/sound_hal.cpp` (sous `#ifdef DEBUG_SYSTEM`)
+  → à supprimer avant toute mise en production (étape 0 du refactor)
+
+### Refactor sound engine — état (session 2026-03-22)
+
+**Décisions arrêtées :**
+- Architecture 4 couches : `SoundInterpreter` → `SoundCore` → `MixerState` → `SoundHalAudio` (ISR)
+- `DevUsage` étendu avec catégorisation par plages (0x10 traction, 0x20 hydraulique, 0x30 steer, 0x40 signaux) ✅ **implémenté**
+- `ChanOwner` enum ajouté dans `machines_defs.h` + champ dans `AnalogComBus`/`DigitalComBus` ✅ **implémenté**
+- `volvo_A60H_bruder.cpp` migré vers nouveaux `DevUsage` ✅ **implémenté**
+- `dashboard_drv.cpp` `devUsageStr()` mis à jour ✅ **implémenté**
+- `sound_map.h` : profil générique par défaut (`-D SOUND_PROFILE_xxx`), override machine via `-D SOUND_MAP_OVERRIDE`
+- PlatformIO : `sound_node_volvo` héritera de `env:volvo_A60H_bruder` via `extends`
+- Copyright DIYguy : historiquement GPL v3 (à vérifier upstream) — écrire `SoundCore` from scratch
+
+**Roadmap (voir `/memories/repo/sound_refactor_roadmap.md`) :**
+| # | Étape | Statut |
+|---|---|---|
+| 0 | Git commit backup + supprimer debug block sound_hal | **À FAIRE** |
+| 1 | DevUsage + ChanOwner + migration volvo | ✅ fait |
+| 2 | `sound_profiles/` infrastructure + sound_map dispatcher | non démarré |
+| 3 | `SoundInterpreter` interface | non démarré |
+| 4 | `MixerState` volatile struct + isoler reads ISR | non démarré |
+| 5 | Porter `sound_hal.cpp` → `ComBusSoundInterpreter` | non démarré |
+| 6 | `SoundCore` branché sur `MixerState` | non démarré |
+| 7 | PIO `extends` héritage | non démarré |
+
+---
+
 ## 1) Mandatory style re-check before coding
 Before creating or editing C/C++ code, always read:
 - `doc/code_style_synthesis.md`
@@ -301,10 +335,64 @@ All public API degrades to inline no-ops when the flag is absent — zero overhe
 - Do not reformat unrelated code.
 - Keep changes consistent with existing project style.
 
+### static_assert placement rule
+- A `static_assert` that only references constants defined **within the same header** stays in that header.
+- A `static_assert` that crosses **two distinct include chains** (e.g. a config constant vs. a board constant) belongs in the `.cpp` init file where both chains are guaranteed to be resolved.
+- Rationale: headers can be included in many TUs at different points in the include graph; a cross-chain assert will fail unpredictably depending on include order.
+- Known exception: `sound_init.h` (cross-checks `SOUND_CH_*` vs `2_Remote.h` macros) — intentionally left in place until the sound sub-project is refactored.
+
 ## 5) Deferred feature ideas
 
 Re-read this section periodically and propose one item when the project is stable
 enough to absorb it. Never propose more than one at a time.
+
+### Sound HAL — zero-mapping semantic sound (architectural intent)
+**Context:** The current sound HAL (`sound_hal.cpp`) maps ComBus channels to
+`pulseWidth[]` slots by hand (explicit index constants). This is fragile and
+requires a manual update whenever the ComBus layout or the vehicle profile changes.
+
+**Core insight (refined):** Every ComBus channel is already bound to a machine
+peripheral (driver, servo, actuator signal) with a known type (`TRACTION_DC`,
+`HYDRAULIC_LINEAR`, `HORN_SIGNAL`, …). The peripheral type IS the sound role —
+no separate mapping table needed.
+
+The sound module simply includes the machine config header to access the full
+peripheral descriptor and derives sound events directly:
+
+```
+ComBus analog[1]  → DRIVE_SPEED_BUS → motors[CABIN_LEFT].type = TRACTION_DC  → engine throttle
+ComBus analog[2]  → DUMP_BUS        → actuators[DUMP].type   = HYDRAULIC_LINEAR → hydraulic flow
+ComBus digital[0] → HORN            → signals[HORN].type      = HORN_SIGNAL   → horn trigger
+```
+
+**Implementation sketch:**
+- Sound module `platformio.ini` env adds `build_flags = -I src/machines` (already implied
+  by shared `src/core/` include path — may be zero cost).
+- `sound_hal.cpp` includes the machine config header for the target vehicle.
+- The HAL iterates `AnalogComBusID` / `DigitalComBusID` entries, reads the peripheral
+  type from the machine descriptor, and calls the appropriate sound engine function.
+- Adding a new ComBus channel = add it to the machine descriptor. Sound is automatic.
+- No `SoundRole` enum, no separate `sound_roles.h`, no manual mapping file.
+
+**Multi-peripheral constraint:** A single ComBus analog channel can drive several
+physical peripherals (e.g. two traction motors on the same `DRIVE_SPEED_BUS`).
+The sound mapping is valid only if **all peripherals bound to that channel share
+the same peripheral type**. Mixing types on one channel (e.g. one `TRACTION_DC`
+and one `HYDRAULIC_LINEAR` on the same analog index) is undefined from a sound
+perspective — the HAL cannot resolve which sound role applies.
+
+A `static_assert` (or early-init fatal log) must verify this at build time or
+boot time:
+```cpp
+// For each ComBus channel, all bound peripherals must have the same type.
+// Checked in sound_hal_init() when machine config header is included.
+static_assert(allSameType(DRIVE_SPEED_BUS), "Mixed peripheral types on same ComBus channel");
+```
+This constraint should be verified before the sound engine iterates any channel.
+
+**Prerequisite:** The current `rc_engine_sound`-based sound module (`src.ino`) must
+first be replaced by a native `.cpp` sound engine. This is a major refactor — do not
+start until the `src.ino` dependency is fully removed from the PlatformIO build.
 
 ### ExtPort conflict detection (board-level)
 **Context:** Extension/communication pins (`TxdExtPin`, `RxdExtPin`, …) in board headers

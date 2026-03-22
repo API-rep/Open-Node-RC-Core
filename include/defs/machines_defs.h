@@ -26,16 +26,59 @@ enum class RunLevel : int8_t {
 };
 
 
-/******************************************************************************
- * @brief Motherboard related hardware definitions
- *******************************************************************************/// 
+// =============================================================================
+// PERIPHERAL USAGE TAXONOMY
+// =============================================================================
 
-   /** @brief Available devices usages */
+/**
+ * @brief Functional role of a device in the vehicle's mechanical system.
+ *
+ * @details Each `DcDevice` or `SrvDevice` entry in a machine config declares its
+ *   `usage` so that output modules (sound, lighting, telemetry) can determine the
+ *   correct behavior without manual channel mapping.
+ *
+ *   Values are categorised by nibble: the upper 4 bits identify the category,
+ *   the lower 4 bits identify the variant within that category.
+ *   Use `devUsageCategory()` to compare categories without enumerating variants.
+ *
+ *   Category map:
+ *     0x00        — undefined
+ *     0x10–0x1F   — traction (wheel, track)
+ *     0x20–0x2F   — hydraulics (linear, rotary, assist, pump)
+ *     0x30–0x3F   — steering (servo, motor)
+ *     0x40–0x4F   — signals (horn, light, solenoid)
+ *     0x50–0xEF   — reserved for future categories
+ */
 enum class DevUsage : uint8_t {
-    UNDEFINED    = 0,    ///< Undefined usage
-    GEN_WHEEL    = 1,    ///< Generic propulsion wheel
-    GEN_ACTUATOR = 2     ///< Generic hydraulic actuator
+
+    UNDEFINED     = 0x00,   ///< Not declared — safe default
+
+    // --- Traction (0x10–0x1F) ---
+    TRACT_WHEEL   = 0x10,   ///< Propulsion wheel (skid-steer, axle-diff …) → ENGINE_THROTTLE sound role
+    TRACT_TRACK   = 0x11,   ///< Propulsion track (crawler) → ENGINE_THROTTLE sound role
+
+    // --- Hydraulics (0x20–0x2F) ---
+    HYD_LINEAR    = 0x20,   ///< Linear hydraulic cylinder (arm, bucket, dump …) → HYDRAULIC_ARM sound role
+    HYD_ROTARY    = 0x21,   ///< Rotary hydraulic motor → HYDRAULIC_PUMP sound role
+    HYD_ASSIST    = 0x22,   ///< Power-steering hydraulic assist → HYDRAULIC_STEER sound role (reduced volume)
+    HYD_PUMP      = 0x23,   ///< Standalone hydraulic pump (no direct mechanical output)
+
+    // --- Steering (0x30–0x3F) ---
+    STEER_SERVO   = 0x30,   ///< Servo-controlled steering
+    STEER_MOTOR   = 0x31,   ///< Motor-driven steering actuator
+
+    // --- Signals (0x40–0x4F) ---
+    SIG_HORN      = 0x40,   ///< Audible horn or buzzer → HORN sound role
+    SIG_LIGHT     = 0x41,   ///< Lighting output (no sound role)
+    SIG_SOLENOID  = 0x42,   ///< Discrete solenoid valve or relay
 };
+
+/// Returns the category nibble (upper 4 bits) of a `DevUsage` value.
+constexpr uint8_t devUsageCategory(DevUsage u) {
+    return static_cast<uint8_t>(u) & 0xF0u;
+}
+
+
 
 
 
