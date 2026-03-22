@@ -10,6 +10,7 @@
 #include <core/system/debug/dashboard.h>
 #include <core/system/input/input_manager.h>
 #include <core/system/combus/combus_manager.h>
+#include <core/system/combus/combus_access.h>
 #include <core/system/vbat/vbat_sense.h>
 
 
@@ -68,14 +69,14 @@ void loop() {
       disableAllDcDrivers(machine);
       failsafeActive = true;
     }
-    comBus.runLevel = RunLevel::IDLE;
+    combus_set_runlevel(comBus, RunLevel::IDLE, ChanOwner::MACHINE);
     return;  // dashboard runs on its own FreeRTOS task (Core 0)
   }
   failsafeActive = false;
 
 	// --- 3. Ignition key derivation ---
   uint8_t keyCh = static_cast<uint8_t>(DigitalComBusID::KEY); // dedicated ignition channel
-  comBus.keyOn = comBus.digitalBus[keyCh].isDrived && comBus.digitalBus[keyCh].value;
+  combus_set_keyon(comBus, comBus.digitalBus[keyCh].isDrived && comBus.digitalBus[keyCh].value, ChanOwner::MACHINE);
 
 // =============================================================================
 // 2. RUNLEVEL STATE MACHINE
@@ -107,7 +108,7 @@ void loop() {
         // --- 2. Transition trigger check ---
       if (comBus.keyOn) {
         sys_log_info("[SYSTEM][EVENT] input=KEY_ON action=enter_STARTING\n");
-        comBus.runLevel = RunLevel::STARTING;
+        combus_set_runlevel(comBus, RunLevel::STARTING, ChanOwner::MACHINE);
       }
       break;
     }
@@ -124,7 +125,7 @@ void loop() {
       }
 
         // --- 1. Auto-transition to RUNNING ---
-      comBus.runLevel = RunLevel::RUNNING;
+      combus_set_runlevel(comBus, RunLevel::RUNNING, ChanOwner::MACHINE);
       break;
     }
 
@@ -168,7 +169,7 @@ void loop() {
 
       if (comBus.keyOn) {
         sys_log_info("[SYSTEM][EVENT] input=KEY_ON action=rearm_from_SLEEPING\n");
-        comBus.runLevel = RunLevel::STARTING;
+        combus_set_runlevel(comBus, RunLevel::STARTING, ChanOwner::MACHINE);
       }
       break;
     }
@@ -185,14 +186,14 @@ void loop() {
   if (vbatChanged) {
     for (uint8_t i = 0; i < vbat_channel_count(); i++) {
       if (vbat_is_low(i)) { 
-        comBus.batteryIsLow = true;
-        DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::BATTERY_LOW)].value = true;
+        combus_set_battlow(comBus, true, ChanOwner::VBAT_MON);
+        combus_set_digital(comBus, DigitalComBusID::BATTERY_LOW, true, ChanOwner::VBAT_MON);
         break;
       }
     }
 
     if (comBus.batteryIsLow) {
-      comBus.runLevel = RunLevel::SLEEPING;
+      combus_set_runlevel(comBus, RunLevel::SLEEPING, ChanOwner::MACHINE);
       sys_log_warn("[SYSTEM][SAFE] reason=low_battery action=enter_SLEEPING\n");}
   }
 

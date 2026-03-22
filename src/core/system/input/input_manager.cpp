@@ -6,6 +6,7 @@
 #include "input_manager.h"
 #include <core/config/combus/combus_types.h>
 #include <core/system/combus/combus_manager.h>
+#include <core/system/combus/combus_access.h>
 #include <PS4Controller.h>
 
 
@@ -67,7 +68,7 @@ void input_update(ComBus &bus) {
 
       // --- ComBus Injection ---
     uint8_t ch = static_cast<uint8_t>(m.busChannel);
-    bus.analogBus[ch].value = m.isInverted ? (bus.analogBusMaxVal - val) : val;
+    combus_set_analog(bus, static_cast<AnalogComBusID>(ch), m.isInverted ? (bus.analogBusMaxVal - val) : val, ChanOwner::INPUT_DEV);
     bus.analogBus[ch].isDrived = true;
   }
 
@@ -111,7 +112,7 @@ void input_update(ComBus &bus) {
 
       // --- ComBus Injection ---
     uint8_t ch = static_cast<uint8_t>(m.busChannel);
-    bus.digitalBus[ch].value = finalState;
+    combus_set_digital(bus, static_cast<DigitalComBusID>(ch), finalState, ChanOwner::INPUT_DEV);
     bus.digitalBus[ch].isDrived = true;
   }
 

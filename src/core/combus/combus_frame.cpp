@@ -11,6 +11,7 @@
 
 #include <string.h>
 #include <Arduino.h>
+#include <core/system/combus/combus_access.h>
 
 
 // =============================================================================
@@ -288,7 +289,7 @@ void combus_frame_apply( const ComBusFrameCfg& cfg,
     }
 
       // --- 2. RunLevel + watchdog timestamp ---
-    combus->runLevel    = (RunLevel)inputFrame->header.runLevel;
+    combus_set_runlevel(*combus, (RunLevel)inputFrame->header.runLevel, ChanOwner::REMOTE);
     combus->lastFrameMs = millis();   // combus_watchdog uses this to detect frame loss and clear isDrived
 
       // --- 3. Flags (transport status only) ---
@@ -299,7 +300,7 @@ void combus_frame_apply( const ComBusFrameCfg& cfg,
 
     if (combus->analogBus) {
         for (uint8_t i = 0; i < nAnalogEff; ++i) {
-            combus->analogBus[i].value    = inputFrame->analog[i];
+            combus_set_analog(*combus, (AnalogComBusID)i, inputFrame->analog[i], ChanOwner::REMOTE);
             combus->analogBus[i].isDrived = true;
         }
     }
@@ -309,7 +310,7 @@ void combus_frame_apply( const ComBusFrameCfg& cfg,
 
     if (combus->digitalBus) {
         for (uint8_t i = 0; i < nDigitalEff; ++i) {
-            combus->digitalBus[i].value    = inputFrame->digital[i];
+            combus_set_digital(*combus, (DigitalComBusID)i, inputFrame->digital[i], ChanOwner::REMOTE);
             combus->digitalBus[i].isDrived = true;
         }
     }

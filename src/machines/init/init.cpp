@@ -9,6 +9,7 @@
 #include "init.h"
 #include "../system/drv_control.h"
 #include <core/system/input/input_manager.h>
+#include <core/system/combus/combus_access.h>
 #include <machines/system/debug/dashboard_machine.h>
 #include <core/system/debug/dashboard.h>
 
@@ -53,7 +54,7 @@ void machine_init() {
 
 	  // --- 5. Boot-safe runlevel ---
   sys_log_info("[SYSTEM] Applying boot-safe runlevel...\n");
-  comBus.runLevel = DEF_RUNLEVEL;
+  combus_set_runlevel(comBus, DEF_RUNLEVEL, ChanOwner::MACHINE);
   stopAllDcDrivers(machine);
   sleepAllDcDrivers(machine);
   disableAllDcDrivers(machine);
