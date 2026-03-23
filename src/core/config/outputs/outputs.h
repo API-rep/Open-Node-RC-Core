@@ -12,7 +12,7 @@
 #include <const.h>
 #include <struct/struct.h>
 #include <defs/defs.h>
-// NOTE: board constants (SerialExt, TxdExtPin, SoundUartBaud …) are available because
+// NOTE: board constants (SerialExt, TxdExtPin, ComBusUartBaud …) are available because
 //       outputs/outputs.h is always included via output_init.h → init.h,
 //       by which point the board header is already in scope.
 
@@ -21,8 +21,8 @@
 // 1. OUTPUT MODULE SELECTION
 // =============================================================================
 
-#ifdef SOUND_OUTPUT_UART
-  #include "sound_uart.h"
+#ifdef COMBUS_OUTPUT_UART
+  #include "combus_uart.h"
 #endif
 
 // EOF outputs.h

@@ -6,7 +6,7 @@
  * RF link, etc.) based on active build flags.
  * Pin assignments are read from the active environment configuration (ex: boards/*.h).
  * Compile-time cap checks live in each module’s own config sub-file
- * (e.g. outputs/sound_uart.h).
+ * (e.g. outputs/combus_uart.h).
  *
  * This file MUST be included via the init.h umbrella header.
  *****************************************************************************/

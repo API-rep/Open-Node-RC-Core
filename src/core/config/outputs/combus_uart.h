@@ -1,24 +1,23 @@
 /******************************************************************************
- * @file sound_uart.h
- * @brief Sound UART output transport — channel counts, frame size, and cap checks.
+ * @file combus_uart.h
+ * @brief ComBus UART output transport — channel counts, frame size, and cap checks.
  *
- * @details Derives the exact encoded frame size for this machine’s ComBus
+ * @details Derives the exact encoded frame size for this machine's ComBus
  *   layout and validates that it fits the generic transport protocol limits
  *   AND the board-supplied UART parameters are within safe operating ranges.
- *   Included by outputs/outputs.h when SOUND_OUTPUT_UART is set.
+ *   Included by outputs/outputs.h when COMBUS_OUTPUT_UART is set.
  *
  *   Constants exported:
- *     SoundTransportFrameSize  — exact frame size for this layout (bytes)
- *     SoundUartBaud            — negotiated UART baud rate (≤ board UartMaxBaud)
- *     SoundTransportTxHz       — frame transmit rate in Hz
- *     SoundTransportMaxTxHz    — controller-side frame-rate ceiling (Hz)
+ *     ComBusUartFrameSize  — exact frame size for this layout (bytes)
+ *     ComBusUartBaud       — negotiated UART baud rate (≤ board UartMaxBaud)
+ *     ComBusUartTxHz       — frame transmit rate in Hz
+ *     ComBusUartMaxTxHz    — controller-side frame-rate ceiling (Hz)
  *****************************************************************************/
 #pragma once
 
 #include <stdint.h>
 #include <core/combus/combus_frame.h>
 #include <core/config/combus/combus_types.h>           // AnalogComBusID, DigitalComBusID (IS_MACHINE absent → enums only)
-// Board constant UartMaxBaud available via outputs/outputs.h → boards/boards.h.
 
 /// UART transport physical cap — chosen as uint8_t safety ceiling (no hardware limit).
 static constexpr uint8_t CombusPhysUartMax = 255u;
@@ -43,7 +42,7 @@ static constexpr uint8_t CombusPhysUartMax = 255u;
  *     AnalogComBusID::CH_COUNT × 2        — analog channels as uint16_t LE
  *     1 byte  — CRC-8
  */
-static constexpr uint8_t SoundTransportFrameSize =
+static constexpr uint8_t ComBusUartFrameSize =
     7u
   + ((static_cast<uint8_t>(DigitalComBusID::CH_COUNT) + 7u) / 8u)
   +  (static_cast<uint8_t>(AnalogComBusID::CH_COUNT)  * 2u)
@@ -54,17 +53,17 @@ static constexpr uint8_t SoundTransportFrameSize =
 // 3. TRANSPORT PARAMETERS  (protocol — agreed between machine and sound node)
 // =============================================================================
 
-	/// UART baud rate for the machine → sound node link.
+	/// UART baud rate for the ComBus UART TX link.
 	/// Must match SOUND_UART_BAUD in the sound node's sound_config.h.
-static constexpr uint32_t SoundUartBaud         = 115200u;
+static constexpr uint32_t ComBusUartBaud         = 115200u;
 
-	/// Frame transmit rate (Hz) from machine to sound node.
-static constexpr uint32_t SoundTransportTxHz    = 50u;
+	/// Frame transmit rate (Hz).
+static constexpr uint32_t ComBusUartTxHz         = 50u;
 
 	/// Controller-side frame-rate ceiling (Hz).
 	/// TODO: replace with SoundRxMaxHz from sound_config.h once sound node
 	///       firmware exposes its real receive throughput as a constexpr.
-static constexpr uint32_t SoundTransportMaxTxHz = 200u;
+static constexpr uint32_t ComBusUartMaxTxHz      = 200u;
 
 
 // =============================================================================
@@ -72,15 +71,14 @@ static constexpr uint32_t SoundTransportMaxTxHz = 200u;
 // =============================================================================
 
   // --- Physical transport caps: frame must fit the active medium ---
-static_assert(SoundTransportFrameSize <= CombusPhysUartMax,
-              "SoundTransportFrameSize exceeds UART practical cap (CombusPhysUartMax)");
+static_assert(ComBusUartFrameSize <= CombusPhysUartMax,
+              "ComBusUartFrameSize exceeds UART practical cap (CombusPhysUartMax)");
 
-  // --- Baud rate: desired must not exceed board hardware ceiling ---
-static_assert(SoundUartBaud <= UartMaxBaud,
-              "SoundUartBaud exceeds board hardware ceiling UartMaxBaud");
+  // --- Baud rate: checked in output_init.cpp (UartMaxBaud requires board header ---
+  //     which is not yet in scope here — see static_assert in output_init.cpp)
 
   // --- Frame rate: must be in valid protocol range ---
-static_assert(SoundTransportTxHz > 0u && SoundTransportTxHz <= SoundTransportMaxTxHz,
-              "SoundTransportTxHz out of range [1, SoundTransportMaxTxHz]");
+static_assert(ComBusUartTxHz > 0u && ComBusUartTxHz <= ComBusUartMaxTxHz,
+              "ComBusUartTxHz out of range [1, ComBusUartMaxTxHz]");
 
-// EOF sound_uart.h
+// EOF combus_uart.h

@@ -410,7 +410,7 @@ build flags from both claiming the same pin — the conflict is silent until har
 **Prerequisite:** Project is stable with ≥ 2 independent output modules active
 simultaneously — only then does the risk justify the added infrastructure.
 ### Sound transport cap cross-check (controller ↔ sound module)
-**Context:** `output_init.h` defines `SoundTransportMaxTxHz = 200u` as the
+**Context:** `output_init.h` defines `ComBusUartMaxTxHz = 200u` as the
 controller-side ceiling. `ESP32_8M_6S.h` has a matching TODO comment. The sound
 module side has no equivalent `constexpr` yet — the cross-check is therefore
 one-sided and the 200 Hz cap is an arbitrary placeholder.
@@ -420,13 +420,13 @@ one-sided and the 200 Hz cap is an arbitrary placeholder.
 static constexpr uint32_t SoundRxMaxHz  = ...;   // max frame rate the node can process
 static constexpr uint32_t SoundRxMaxBaud = ...;  // max supported baud
 ```
-Add to `output_init.h` (under `#ifdef SOUND_OUTPUT_UART`):
+Add to `output_init.h` (under `#ifdef COMBUS_OUTPUT_UART`):
 ```cpp
-static_assert(SoundTransportTxHz  <= SoundRxMaxHz,   "TX rate exceeds sound node capability");
-static_assert(SoundUartBaud       <= SoundRxMaxBaud,  "Baud exceeds sound node capability");
+static_assert(ComBusUartTxHz  <= SoundRxMaxHz,   "TX rate exceeds sound node capability");
+static_assert(ComBusUartBaud  <= SoundRxMaxBaud,  "Baud exceeds sound node capability");
 ```
 Replace the `200u` magic number with `SoundRxMaxHz` and remove the `// TODO` comment from the board header.
-Also update the `static_assert` in `sound_uart.h` from `UartMaxBaud` to `SoundRxMaxBaud` once the sound node exposes it.
+Also update the `static_assert` in `combus_uart.h` from `UartMaxBaud` to `SoundRxMaxBaud` once the sound node exposes it.
 
 **Prerequisite:** Sound node firmware is stable enough to characterise its real
 receive throughput and commit it as a `constexpr` in `sound_config.h`.

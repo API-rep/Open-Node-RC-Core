@@ -7,7 +7,7 @@
 #include <machines/config/config.h>
 #include <core/system/debug/debug.h>
 
-#ifdef SOUND_OUTPUT_UART
+#ifdef COMBUS_OUTPUT_UART
   #include <core/system/com/ports/uart_com.h>
   #include <core/system/com/protocols/combus_tx.h>
 #endif
@@ -30,12 +30,15 @@
 void output_init() {
   sys_log_info("[OUTPUT] output_init ...\n");
 
-	// --- Sound node UART TX ---
-#ifdef SOUND_OUTPUT_UART
+	// --- ComBus UART TX ---
+#ifdef COMBUS_OUTPUT_UART
+  // Board ceiling check — UartMaxBaud in scope (board header resolved via machines/config/config.h).
+  static_assert(ComBusUartBaud <= UartMaxBaud,
+                "ComBusUartBaud exceeds board hardware ceiling UartMaxBaud");
   {
     NodeCom* com = uart_com_init(
         &SerialExt,
-        SoundUartBaud,
+        ComBusUartBaud,
         TxdExtPin,
         RxdExtPin,
         "sound_tx");
@@ -44,7 +47,7 @@ void output_init() {
         static_cast<uint8_t>(AnalogComBusID::CH_COUNT),
         static_cast<uint8_t>(DigitalComBusID::CH_COUNT),
     };
-    combus_tx_init(com, comBusFrameCfg, SoundTransportTxHz);
+    combus_tx_init(com, comBusFrameCfg, ComBusUartTxHz);
   }
 #endif
 

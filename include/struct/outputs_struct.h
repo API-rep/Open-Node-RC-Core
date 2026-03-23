@@ -23,7 +23,7 @@
  * @details Groups the four parameters required by any UART-based output
  *   initialisation into a single typed aggregate.
  *   Constexpr instances are defined in the active output config sub-file
- *   (e.g. src/core/config/outputs/sound_uart.h).
+ *   (e.g. src/core/config/outputs/combus_uart.h).
  */
 
 struct OutputUartConfig {
