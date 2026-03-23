@@ -52,7 +52,7 @@ DcDevice dcDevArray[DC_DRV_COUNT] = {
   },
 
   {
-    .ID =TRAILER_REAR_LEFT_MOTOR,
+    .ID = TRAILER_REAR_LEFT_MOTOR,
     .infoName = "trailer rear left motor",
     .drvPort = &drvPortArray[DRV_PORT_3B],
     .polInv = true,
@@ -60,7 +60,7 @@ DcDevice dcDevArray[DC_DRV_COUNT] = {
   },
 
   {
-    .ID =TRAILER_REAR_RIGHT_MOTOR,
+    .ID = TRAILER_REAR_RIGHT_MOTOR,
     .infoName = "trailer rear right motor",
     .drvPort = &drvPortArray[DRV_PORT_4B],
     .polInv = false,
@@ -71,7 +71,7 @@ DcDevice dcDevArray[DC_DRV_COUNT] = {
     .ID = DUMP_ACTUATOR,
     .infoName = "dump actuators L+R",
     .drvPort = &drvPortArray[DRV_PORT_2A],
-    .usage = DevUsage::HYD_LINEAR,              // explicit: overrides STEER_MOTOR inherited from parent
+    .usage = DevUsage::HYD_LINEAR,
     .comChannel = AnalogComBusID::DUMP_BUS,
     .polInv = false,
     .parentID = STEERING

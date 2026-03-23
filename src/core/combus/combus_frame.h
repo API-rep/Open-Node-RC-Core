@@ -111,17 +111,24 @@ bool combus_frame_decode( const ComBusFrameCfg& cfg,
  * @brief Apply a decoded frame onto a live ComBus.
  *
  * @details Writes runLevel, flags, analog and digital values into the
- * provided ComBus arrays. Caller must ensure array sizes match nAnalog
- * and nDigital in the frame.
+ *  provided ComBus arrays. Caller must ensure array sizes match nAnalog
+ *  and nDigital in the frame.
+ *
+ * @note Caller param pass the ChanOwner identity (typically REMOTE for any
+ *  RX-only node) to enforce channel access security. If the caller identity
+ *  does not match the channel's owner, the write will be silently rejected by
+ *  combus_set_*() and the channel will not be updated.
  *
  * @param[in]  cfg         Static layout descriptor — clamp values come from cfg.nAnalog / nDigital.
  * @param[out] combus      Target ComBus to update.
  * @param[in]  inputFrame  Source frame (from combus_frame_decode).
+ * @param[in]  caller      Ownership identity of the node calling this function.
  */
 
 void combus_frame_apply( const ComBusFrameCfg& cfg,
                          ComBus*               combus,
-                         const ComBusFrame*    inputFrame );
+                         const ComBusFrame*    inputFrame,
+                         ChanOwner             caller );
 
 
 

@@ -15,9 +15,6 @@
 // ADC SYSTEM CONSTANTS
 // =============================================================================
 
-// ADC_REF_VOLTAGE is a board-level constant (voltage regulator output).
-// Define AdcRefVoltage in the board config file (e.g. ESP32_8M_6S.h).
-
 	/// ADC full-scale count — derived from MCU resolution at compile time.
 #if defined(ESP32) || defined(ARDUINO_ARCH_ESP32)
   static constexpr uint16_t ADC_MAX_COUNT = 4095;   // 12-bit ADC

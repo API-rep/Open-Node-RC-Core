@@ -271,13 +271,15 @@ bool combus_frame_decode( const ComBusFrameCfg& cfg,
  * Caller must ensure combus->analogBus and combus->digitalBus arrays are
  * allocated and sized to at least cfg.nAnalog / cfg.nDigital entries.
  *
+ * @param[in]  cfg         Layout descriptor used as upper clamp (nAnalog, nDigital).
  * @param[out] combus      Target ComBus instance to update.
  * @param[in]  inputFrame  Populated frame from combus_frame_decode().
- * @param[in]  cfg         Layout descriptor used as upper clamp (nAnalog, nDigital).
+ * @param[in]  caller      Ownership identity forwarded to combus_set_*() guards.
  */
 void combus_frame_apply( const ComBusFrameCfg& cfg,
                          ComBus*               combus,
-                         const ComBusFrame*    inputFrame ) {
+                         const ComBusFrame*    inputFrame,
+                         ChanOwner             caller ) {
 
       //  Analog and digital channels upper clamp
     const uint8_t nAnalog  = cfg.nAnalog;    // analog channels bus capacity
@@ -289,7 +291,7 @@ void combus_frame_apply( const ComBusFrameCfg& cfg,
     }
 
       // --- 2. RunLevel + watchdog timestamp ---
-    combus_set_runlevel(*combus, (RunLevel)inputFrame->header.runLevel, ChanOwner::REMOTE);
+    combus_set_runlevel(*combus, (RunLevel)inputFrame->header.runLevel, caller);
     combus->lastFrameMs = millis();   // combus_watchdog uses this to detect frame loss and clear isDrived
 
       // --- 3. Flags (transport status only) ---
@@ -300,7 +302,7 @@ void combus_frame_apply( const ComBusFrameCfg& cfg,
 
     if (combus->analogBus) {
         for (uint8_t i = 0; i < nAnalogEff; ++i) {
-            combus_set_analog(*combus, (AnalogComBusID)i, inputFrame->analog[i], ChanOwner::REMOTE);
+            combus_set_analog(*combus, (AnalogComBusID)i, inputFrame->analog[i], caller);
             combus->analogBus[i].isDrived = true;
         }
     }
@@ -310,7 +312,7 @@ void combus_frame_apply( const ComBusFrameCfg& cfg,
 
     if (combus->digitalBus) {
         for (uint8_t i = 0; i < nDigitalEff; ++i) {
-            combus_set_digital(*combus, (DigitalComBusID)i, inputFrame->digital[i], ChanOwner::REMOTE);
+            combus_set_digital(*combus, (DigitalComBusID)i, inputFrame->digital[i], caller);
             combus->digitalBus[i].isDrived = true;
         }
     }

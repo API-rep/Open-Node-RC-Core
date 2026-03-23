@@ -71,10 +71,10 @@
 // =============================================================================
 
 #define SOUND_CH_STEERING       1u   ///< pulseWidth[1] — steering
-#define SOUND_CH_FUNCTION_R     2u   ///< pulseWidth[2] — FUNCTION_R (lights / jake brake)
+#define SOUND_CH_FUNCTION_R     2u   ///< pulseWidth[2] — LOADER_MODE dump arm (loaderControl() reads this; lights have no audio mapping)
 #define SOUND_CH_THROTTLE       3u   ///< pulseWidth[3] — throttle
-#define SOUND_CH_FUNCTION_L     4u   ///< pulseWidth[4] — FUNCTION_L (indicators, encoded)
-#define SOUND_CH_HORN           5u   ///< pulseWidth[5] — horn
-#define SOUND_CH_HYDRAULIC      6u   ///< pulseWidth[6] — GEARBOX slot reused for hydraulic
+#define SOUND_CH_FUNCTION_L     4u   ///< pulseWidth[4] — FUNCTION_L (HORN priority, then indicators / hazards encoded)
+#define SOUND_CH_HORN           5u   ///< pulseWidth[5] — NOT written by HAL (stays neutral 1500 µs to avoid FUNCTION_R side effects)
+#define SOUND_CH_HYDRAULIC      6u   ///< pulseWidth[6] — DUMP_BUS debug display (loaderControl() reads pulseWidth[2], not this)
 
 // EOF sound_map.h
