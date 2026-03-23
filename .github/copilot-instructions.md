@@ -4,13 +4,11 @@ These instructions are loaded for every coding session in this workspace.
 
 ## 0) Next session — READ FIRST
 
-### État hardware validé (session 2026-03-22)
+### État hardware validé (session 2026-03-22/23)
 - Tous les bugs son (horn/volume, engine key, hydraulique) ✅ corrigés et validés hardware
 - `sound_config.h` mergé dans `config.h` ✅
-- **Debug serial block actif** dans `src/sound_module/system/sound_hal.cpp` (sous `#ifdef DEBUG_SYSTEM`)
-  → à supprimer avant toute mise en production (étape 0 du refactor)
 
-### Refactor sound engine — état (session 2026-03-22)
+### Refactor sound engine — état (session 2026-03-23)
 
 **Décisions arrêtées :**
 - Architecture 4 couches : `SoundInterpreter` → `SoundCore` → `MixerState` → `SoundHalAudio` (ISR)
@@ -18,21 +16,21 @@ These instructions are loaded for every coding session in this workspace.
 - `ChanOwner` enum ajouté dans `machines_defs.h` + champ dans `AnalogComBus`/`DigitalComBus` ✅ **implémenté**
 - `volvo_A60H_bruder.cpp` migré vers nouveaux `DevUsage` ✅ **implémenté**
 - `dashboard_drv.cpp` `devUsageStr()` mis à jour ✅ **implémenté**
-- `sound_map.h` : profil générique par défaut (`-D SOUND_PROFILE_xxx`), override machine via `-D SOUND_MAP_OVERRIDE`
-- PlatformIO : `sound_node_volvo` héritera de `env:volvo_A60H_bruder` via `extends`
-- Copyright DIYguy : historiquement GPL v3 (à vérifier upstream) — écrire `SoundCore` from scratch
+- `sound_map.h` : dispatcher sur `MACHINE_TYPE` (même constante que `combus_types.h`), override via `-D SOUND_MAP_OVERRIDE` ✅ **implémenté**
+- PlatformIO : section `[volvo_A60H_id]` partagée entre les deux envs via `${volvo_A60H_id.build_flags}` ✅ **implémenté** (extends non viable — hériterait IS_MACHINE + src_filter)
+- Copyright DIYguy rc_engine_sound : MIT (libre avec attribution)
 
-**Roadmap (voir `/memories/repo/sound_refactor_roadmap.md`) :**
+**Roadmap :**
 | # | Étape | Statut |
 |---|---|---|
-| 0 | Git commit backup + supprimer debug block sound_hal | **À FAIRE** |
+| 0 | Git commit backup + supprimer debug block sound_hal | ✅ fait |
 | 1 | DevUsage + ChanOwner + migration volvo | ✅ fait |
-| 2 | `sound_profiles/` infrastructure + sound_map dispatcher | non démarré |
-| 3 | `SoundInterpreter` interface | non démarré |
-| 4 | `MixerState` volatile struct + isoler reads ISR | non démarré |
-| 5 | Porter `sound_hal.cpp` → `ComBusSoundInterpreter` | non démarré |
-| 6 | `SoundCore` branché sur `MixerState` | non démarré |
-| 7 | PIO `extends` héritage | non démarré |
+| 2 | `sound_profiles/` infrastructure + sound_map dispatcher | ✅ fait |
+| 3 | `SoundInterpreter` interface | ✅ fait |
+| 4 | `MixerState` volatile struct + isoler reads ISR | ✅ fait |
+| 5 | Porter `sound_hal.cpp` → `ComBusSoundInterpreter` (OO) | 🔵 déféré |
+| 6 | `SoundCore` branché sur `MixerState` | ✅ fait (simultané étape 4) |
+| 7 | PIO identity section + sound_map dispatch sur `MACHINE_TYPE` | ✅ fait |
 
 ---
 
