@@ -27,9 +27,8 @@ DigitalComBus DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::CH_COUNT)
 
 ComBus comBus {
   .runLevel       = RunLevel::NOT_YET_SET,
-  .runLevelOwner  = ChanOwner::MACHINE,     // machine main.cpp FSM is the sole writer
-  .battLowOwner   = ChanOwner::VBAT_MON,    // vbat_sense module writes batteryIsLow
-  .keyOnOwner     = ChanOwner::MACHINE,     // keyOn bool is derived by the machine FSM from the KEY channel
+  .runLevelOwner  = ChanOwner::MACHINE_NODE,  // machine main.cpp FSM is the sole writer
+  .keyOnOwner     = ChanOwner::MACHINE_NODE,  // keyOn bool is derived by the machine FSM from the KEY channel
   .analogBus      = AnalogComBusArray,
   .digitalBus     = DigitalComBusArray,
   .analogBusMaxVal = (1UL << (sizeof(decltype(AnalogComBus::value)) * 8)) - 1

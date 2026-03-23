@@ -42,9 +42,10 @@
  *   `ANY`  — any module may write; use only for shared scratch channels.
  */
 enum class ChanOwner : uint8_t {
-    NONE     = 0,   ///< No mandate declared — nobody is allowed to write this channel
-    ANY,            ///< All modules are allowed to write this channel (shared scratchpad — use sparingly)
-    MACHINE,        ///< Written by the machine main node (RunLevel FSM, motion control)
+    NONE         = 0,   ///< No mandate declared — nobody is allowed to write this channel
+    ANY,                ///< All modules are allowed to write this channel (shared scratchpad — use sparingly)
+    MACHINE_NODE,       ///< Written by the machine main node (RunLevel FSM, motion control)
+                        ///<   NOTE: not named MACHINE to avoid clash with -D MACHINE=<id> build flag.
     INPUT_DEV,      ///< Written by the input module (PS4, SBUS, Wi-Fi remote…)
     SOUND,          ///< Written by the sound module (standalone mode only)
     VBAT_MON,       ///< Written by the battery monitor module
