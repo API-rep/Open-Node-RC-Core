@@ -8,10 +8,11 @@
  *
  *   Call hierarchy triggered by dashboard_machine_setup():
  *     dashboard_setup()              — Layer 1 core reset
- *     dashboard_register_slot('0')   — overview (this file)
- *     dashboard_input_register()     — Layer 3 inputs view
- *     dashboard_drv_register()       — Layer 3 drivers view
- *     dashboard_vbat_register()      — Layer 3 battery view
+ *     dashboard_register_slot('1')   — overview (this file)
+ *     dashboard_input_register()     — Layer 3 inputs view (slot 2)
+ *     dashboard_drv_register()       — Layer 3 drivers view (slot 3)
+ *     dashboard_vbat_register()      — Layer 3 battery view (slot 4)
+ *     dashboard_sig_register()       — Layer 3 signals view (slot 5)
  *
  *   Compiled only when -D DEBUG_DASHBOARD is set.
  *****************************************************************************/

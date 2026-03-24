@@ -24,6 +24,7 @@ static void checkHwConfig() {
 
   hasError |= checkDrvHwConfig(machine);
   hasError |= checkSrvHwConfig(machine);
+  hasError |= checkSigHwConfig(machine);
 
   if (hasError) {
     hw_log_err("  [HW] FATAL: Config check failed \u2014 system halted\n");
@@ -60,7 +61,12 @@ void hw_init() {
   servoInit(machine);
   hw_log_info("  [HW] Servo init complete\n\n");
 
-	// --- 4. Battery init ---
+	// --- 5. Signal device init ---
+  hw_log_info("  [HW] Signal device init\n");
+  sigDevInit(machine);
+  hw_log_info("  [HW] Signal device init complete\n\n");
+
+	// --- 5. Battery init ---
   hw_log_info("  [HW] Battery init\n");
   hw_log_info("    [BAT] Battery sensing init: %d channel(s) configured\n", vBatSense.count);
   vbat_init(vBatSense);
