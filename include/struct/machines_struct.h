@@ -142,6 +142,26 @@ typedef struct {
 
 
 /**
+ * @brief Signal device structure
+ *
+ * @details Represents a discrete or continuous signal source (horn, lights,
+ *   indicator, key…) that has no physical driver port and is read directly
+ *   from a ComBus channel.  Output modules (sound, lighting…) use
+ *   `usage` to determine the correct action for each signal.
+ *
+ *   Exactly one of `analogChannel` / `digitalChannel` must be set.
+ *   The init code validates this and logs an error for misconfigured entries.
+ */
+typedef struct {
+  const int8_t  ID;                                     // device ID (enum from machine header)
+  const char*   infoName;                               // short description
+  DevUsage      usage = DevUsage::UNDEFINED;            // signal role (SIG_HORN, SIG_LIGHT…)
+  std::optional<AnalogComBusID>  analogChannel;         // set if signal source is a continuous channel
+  std::optional<DigitalComBusID> digitalChannel;        // set if signal source is a discrete channel
+} SigDevice;
+
+
+/**
  * @brief Machine main structure
  *  * Contain all configuration and manipulators of the machine
  * NOTE:
@@ -153,10 +173,12 @@ typedef struct {
   CombusLayout combusLayout = CombusLayout::UNDEFINED;  // machine com-bus layout
   std::optional<float> maxFwSpeed;                      // maximum forward driving speed (0 to 100% - Defaut 100%)
   std::optional<float> maxBackSpeed;                     // maximum backward driving speed (0 to 100% - Defaut 100%)
-  DcDevice* dcDev;                                      // DC driver device config structure
-  uint8_t dcDevCount;                                    // number of DC driver device configured
-  SrvDevice* srvDev;                                    // DC driver device config structure
-  uint8_t srvDevCount;                                   // number of servo device configured
+  DcDevice*  dcDev;                                      // DC driver device config structure
+  uint8_t    dcDevCount;                                  // number of DC driver device configured
+  SrvDevice* srvDev;                                      // servo device config structure
+  uint8_t    srvDevCount;                                 // number of servo device configured
+  SigDevice* sigDev     = nullptr;                        // signal device config structure (optional)
+  uint8_t    sigDevCount = 0;                             // number of signal devices configured
 } Machine;
 
 // EOF machines_struct.h

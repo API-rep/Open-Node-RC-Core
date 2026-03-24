@@ -70,18 +70,35 @@ extern DcDevice dcDevArray[DC_DRV_COUNT];
 
    // Servo config structure declaration. Edit data in cpp file
  extern SrvDevice SrvDevArray[];
+
+
+  // signal devices index
+enum SigDev {
+    HORN_SIG = 0,
+    LIGHTS_SIG,
+    KEY_SIG,
+    INDIC_L_SIG,
+    INDIC_R_SIG,
+    HAZARDS_SIG,
+    SIG_COUNT
+};
+
+  // Signal device config structure declaration. Edit data in cpp file
+extern SigDevice sigDevArray[SIG_COUNT];
  
 
 
   /** @brief Vehicle config structure definition */
 
 inline constexpr Machine machine {
-  .infoName = "Volvo A60H Bruder",
-  .combusLayout = CombusLayout::DUMPER_TRUCK,
-  .dcDev = dcDevArray,
-  .dcDevCount = DC_DRV_COUNT,
-  .srvDev = SrvDevArray,  // set to nullptr if no servo used or srvDevArray if servo used
-  .srvDevCount = SRV_COUNT
+  .infoName      = "Volvo A60H Bruder",
+  .combusLayout  = CombusLayout::DUMPER_TRUCK,
+  .dcDev         = dcDevArray,
+  .dcDevCount    = DC_DRV_COUNT,
+  .srvDev        = SrvDevArray,
+  .srvDevCount   = SRV_COUNT,
+  .sigDev        = sigDevArray,
+  .sigDevCount   = SIG_COUNT
 };
 
 // EOF volvo_A60H_bruder.h

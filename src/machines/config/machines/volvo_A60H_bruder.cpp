@@ -97,3 +97,43 @@ SrvDevice SrvDevArray[SRV_COUNT] = {
 //  TEMPLATE     .zeroAtHwAngle = 0
 //  TEMPLATE },
 };
+
+
+SigDevice sigDevArray[SIG_COUNT] = {
+  {
+    .ID          = HORN_SIG,
+    .infoName    = "horn",
+    .usage       = DevUsage::SIG_HORN,
+    .digitalChannel = DigitalComBusID::HORN
+  },
+  {
+    .ID          = LIGHTS_SIG,
+    .infoName    = "lights",
+    .usage       = DevUsage::SIG_LIGHT,
+    .digitalChannel = DigitalComBusID::LIGHTS
+  },
+  {
+    .ID          = KEY_SIG,
+    .infoName    = "ignition key",
+    .usage       = DevUsage::UNDEFINED,
+    .digitalChannel = DigitalComBusID::KEY
+  },
+  {
+    .ID          = INDIC_L_SIG,
+    .infoName    = "indicator left",
+    .usage       = DevUsage::UNDEFINED,
+    .digitalChannel = DigitalComBusID::INDICATOR_LEFT
+  },
+  {
+    .ID          = INDIC_R_SIG,
+    .infoName    = "indicator right",
+    .usage       = DevUsage::UNDEFINED,
+    .digitalChannel = DigitalComBusID::INDICATOR_RIGHT
+  },
+  {
+    .ID          = HAZARDS_SIG,
+    .infoName    = "hazards",
+    .usage       = DevUsage::UNDEFINED,
+    .digitalChannel = DigitalComBusID::HAZARDS
+  },
+};
