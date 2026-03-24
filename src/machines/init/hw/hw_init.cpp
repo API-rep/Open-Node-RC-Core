@@ -15,7 +15,7 @@
 /**
  * @brief Verify hardware configuration coherence.
  *
- * @details Delegates to sub-module checks for drivers and servos.
+ * @details Delegates to sub-module checks for drivers, servos, and signal devices.
  *   Halts the system when a critical error is detected.
  */
 static void checkHwConfig() {
@@ -61,7 +61,7 @@ void hw_init() {
   servoInit(machine);
   hw_log_info("  [HW] Servo init complete\n\n");
 
-	// --- 5. Signal device init ---
+	// --- 4. Signal device init ---
   hw_log_info("  [HW] Signal device init\n");
   sigDevInit(machine);
   hw_log_info("  [HW] Signal device init complete\n\n");

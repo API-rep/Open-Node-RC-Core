@@ -1,6 +1,6 @@
 /*!****************************************************************************
  * @file    volvo_A60H_bruder.h
- * @brief   Volvo A60H Bruder — vehicle configuration header.
+ * @brief   Volvo A60H Bruder RC converssion configuration.
  *
  * @details Declares device-index enums and extern arrays for the Bruder
  *   Volvo A60H full-electric conversion.  Physical layout:

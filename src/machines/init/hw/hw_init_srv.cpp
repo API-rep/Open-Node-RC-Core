@@ -12,16 +12,17 @@
 // 1. OBJECT ALLOCATION & POINTERS
 // =============================================================================
 
-	// --- Global pointer to Servo object array ---
+	// Global pointer to Servo object array ---
 ESP32_PWM_Servo* srvDevObj = nullptr;
 
 /**
  * @brief Initialize and allocate Servo objects in RAM.
  */
+
 void allocateServos(int8_t count) {
   if (count <= 0) return;
 
-  // Heap-allocate the servo object array.
+    // Allocate the servo object array.
   srvDevObj = new ESP32_PWM_Servo[count];
   hw_log_info("    [SRV] Allocated memory for %d servo devices\n", count);
 }
@@ -33,23 +34,24 @@ void allocateServos(int8_t count) {
 /**
  * @brief Initialize servo devices from machine configuration.
  */
+
 void servoInit(const Machine &config) {
   hw_log_info("    [SRV] Initializing servo devices...\n");
 
-  // 1. Early-out: no servo devices configured.
+    // 1. Early-out: no servo devices configured.
   if (config.srvDevCount == 0) {
     hw_log_info("    [SRV] No servo devices to initialize.\n");
     return;
   }
 
-  // 2. Allocate servo objects.
+    // 2. Allocate servo objects.
   allocateServos(config.srvDevCount);
 
-  // 3. Initialize each servo from config.
+    // 3. Initialize each servo from config.
   for (int i = 0; i < config.srvDevCount; i++) {
     const SrvDevice* currentDev = &config.srvDev[i];
 
-    // Skip if device has no servo port mapping.
+      // 3.1 Skip if device has no servo port mapping.
     if (currentDev->srvPort == nullptr || !currentDev->srvPort->pwmPin) {
       hw_log_warn("      [SRV] WARNING: SRV_%d has no servo port mapping\n", currentDev->ID);
       continue;
@@ -64,7 +66,7 @@ void servoInit(const Machine &config) {
     // Placeholder: attach servo to PWM pin here.
   }
 
-  // 4. Report completion.
+    // 4. Report completion.
   hw_log_info("    [SRV] Servo devices initialized\n");
 }
 
@@ -84,7 +86,7 @@ bool checkSrvHwConfig(const Machine &config) {
   hw_log_info("  [SRV] Servos config check...");
   bool hasError = false;
 
-  // 1. Validate servo index vs declared ID.
+    // 1. Validate servo index vs declared ID.
   for (int i = 0; i < config.srvDevCount; i++) {
     if (config.srvDev[i].ID != i) {
       hw_log_err("\n      [SRV] CONFIG ERROR: Servo index [%d] mismatch with srvID (%d)\n",
@@ -93,7 +95,7 @@ bool checkSrvHwConfig(const Machine &config) {
     }
   }
 
-  // 2. Report overall result.
+    // 2. Report overall result.
   if (!hasError) {
     hw_log_info(" OK\n");
   }

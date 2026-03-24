@@ -4,7 +4,7 @@
  *****************************************************************************/
 
 #include "drv_control.h"
-#include <init/hw_init_drv.h> // Required for dcDevObj access
+#include <init/hw/hw_init_drv.h> // Required for dcDevObj access
 #include <core/system/debug/debug.h>
 
 // =============================================================================

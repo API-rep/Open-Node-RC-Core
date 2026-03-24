@@ -2,8 +2,8 @@
  * @file    volvo_A60H_bruder.cpp
  * @brief   Volvo A60H Bruder — device configuration tables.
  *
- * @details Defines the three device arrays that describe every actuator and
- *   signal source fitted to this vehicle:
+ * @details Defines the three device arrays that describe every devices fitted
+ *   to this vehicle:
  *
  *   - `dcDevArray`  — DC-motor driven devices (traction, steering, dump).
  *   - `SrvDevArray` — Servo-driven devices (none on this build).

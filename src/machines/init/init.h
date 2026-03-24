@@ -30,16 +30,16 @@
 // =============================================================================
 
 	// --- System level setup ---
-#include "sys_init.h"
+#include "sys/sys_init.h"
 
 	// --- Machine hardware setup ---
-#include "hw_init.h"
+#include "hw/hw_init.h"
 
 	// --- Input device setup ---
-#include "input_init.h"
+#include "input/input_init.h"
 
 	// --- Output peripherals setup ---
-#include "output_init.h"
+#include "output/output_init.h"
 
 
 // =============================================================================

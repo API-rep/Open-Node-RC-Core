@@ -13,19 +13,22 @@
 // 1. OBJECT ALLOCATION & POINTERS
 // =============================================================================
 
-	// --- Global pointer to DC motor object array ---
+	// Global pointer to DC motor object array
 DcMotorCore* dcDevObj = nullptr;
+
 
 /**
  * @brief Initialize and allocate DC driver objects in RAM
  */
+
 void allocateDrivers(int8_t count) {
   if (count <= 0) return;
 
-  // Heap-allocate the DC motor controller array.
+    // Allocate the DC motor controller array.
   dcDevObj = new DcMotorCore[count];
   hw_log_info("    [DRV] Allocated memory for %d DC drivers\n", count);
 }
+
 
 // =============================================================================
 // 2. CONFIGURATION INHERITANCE
@@ -34,22 +37,22 @@ void allocateDrivers(int8_t count) {
 /**
  * @brief Apply parent's configuration to child drivers (Cloning logic)
  */
+
 void applyParentConfig(const Machine &config) {
   for (int i = 0; i < config.dcDevCount; i++) {
     DcDevice* child = &config.dcDev[i];
 
-    // Skip devices that declare no parent — nothing to inherit.
+      // 1. Skip devices that declare no parent — nothing to inherit.
     if (!child->parentID) continue;
 
     bool parentIsFound = false;
 
-    // 1. Search the device table for the matching parent entry.
+      // 2. Search the device table for the matching parent entry.
     for (int j = 0; j < config.dcDevCount; j++) {
       const DcDevice* parent = &config.dcDev[j];
 
+        // Copy unset fields from parent to child (UNDEFINED / nullopt = not set).
       if (parent->ID == *child->parentID) {
-
-        // 2. Copy unset fields from parent to child (UNDEFINED / nullopt = not set).
         if (child->DevType == DcDevType::UNDEFINED)    child->DevType      = parent->DevType;
         if (child->usage == DevUsage::UNDEFINED)       child->usage        = parent->usage;
         if (child->mode == DcDrvMode::UNDEFINED)       child->mode         = parent->mode;
@@ -63,13 +66,14 @@ void applyParentConfig(const Machine &config) {
       }
     }
 
-    // 3. Parent not found — config is invalid, halt immediately.
+     // 3. Parent not found — config is invalid, halt immediately.
     if (!parentIsFound) {
       hw_log_err("FATAL: Parent ID %d not found for driver %s\n", *child->parentID, child->infoName);
       while(1);
     }
   }
 }
+
 
 // =============================================================================
 // 3. HARDWARE INITIALIZATION
@@ -78,26 +82,27 @@ void applyParentConfig(const Machine &config) {
 /**
  * @brief Initialize DC drivers hardware from machine configuration
  */
+
 void dcDriverInit(const Machine &config) {
 	hw_log_info("    [DRV] Initializing DC drivers...\n");
 
-  // 1. Early-out: no DC drivers configured.
+    // 1. Early-out: no DC drivers configured.
   if (config.dcDev == nullptr || config.dcDevCount <= 0) {
     hw_log_info("    [DRV] No DC devices to initialize.\n");
     return;
   }
 
-  // 2. Initialize each DC driver from config.
+    // 2. Initialize each DC driver from config.
   for (int i = 0; i < config.dcDevCount; i++) {
     const DcDevice* currentDev = &config.dcDev[i];
 
-    // 2.1 Skip if device has no DC driver port mapping.
+      // 2.1 Skip if device has no DC driver port mapping.
     if (currentDev->drvPort == nullptr || !currentDev->drvPort->pwmPin) {
         hw_log_err("        [DRV] ERROR: DRV_%d has no DC driver port mapping\n", currentDev->ID);
       continue;
     }
 
-    // 2.2 Resolve PWM pin, DIR pin, and driver model.
+      // 2.2 Resolve PWM pin, DIR pin, and driver model.
     uint8_t pwmPin = *currentDev->drvPort->pwmPin;
     std::optional<int8_t> dirPin = std::nullopt;
     const DriverModel* model = currentDev->drvPort->driverModel;
@@ -109,7 +114,7 @@ void dcDriverInit(const Machine &config) {
       dirPin = -1;
     }
 
-    // 2.3 Configure driver-side safety pins before attach().
+      // 2.3 Configure driver-side safety pins (safe idle: sleep + disabled).
     if (currentDev->drvPort->slpPin) {
       ActiveLevel sleepMode = (model) ? model->sleepActiveLevel : ActiveLevel::ActiveHigh;
       dcDevObj[i].setSleepPin(*currentDev->drvPort->slpPin, sleepMode);
@@ -137,7 +142,8 @@ void dcDriverInit(const Machine &config) {
       dcDevObj[i].setPwmFreq(*currentDev->pwmFreq);
     }
 
-    // 2.4 Attach to PWM pin — clone mode (shared timer) or master mode.
+      // 2.4 Attach to PWM pin
+      // 2.4.1 Clone mode (shared timer) or master mode.
     if (currentDev->parentID) {
       uint8_t pID = *currentDev->parentID;
       if (pID < config.dcDevCount) {
@@ -161,7 +167,8 @@ void dcDriverInit(const Machine &config) {
       }
     }
 
-    else { // master mode: independent timer
+      // 2.4.2 Master mode: independent timer
+    else {
       dcDevObj[i].attach(pwmPin, dirPin);
       if (currentDev->pwmFreq) {
         hw_log_info("      > DRV_%d attached to pin %d at %uHz frequency\n",
@@ -177,17 +184,9 @@ void dcDriverInit(const Machine &config) {
       }
     }
 
-    // 2.5 Final safety lock — ensure output is stopped after attach.
-    dcDevObj[i].stop();
-    if (currentDev->drvPort->slpPin) {
-      dcDevObj[i].sleep();
-    }
-    if (currentDev->drvPort->enPin) {
-      dcDevObj[i].disable();
-    }
   }
 
-  // 3. Report completion.
+    // 3. Report completion.
   hw_log_info("    [DRV] DC drivers successfully initialized\n");
 }
 
@@ -207,7 +206,7 @@ bool checkDrvHwConfig(const Machine &config) {
   hw_log_info("  [DRV] DC drivers config check...");
   bool hasError = false;
 
-  // 1. Validate driver index vs declared ID.
+    // 1. Validate driver index vs declared ID.
   for (int i = 0; i < config.dcDevCount; i++) {
     if (config.dcDev[i].ID != i) {
       hw_log_err("\n      [DRV] CONFIG ERROR: Driver index [%d] mismatch with driverID (%d)\n",
@@ -216,7 +215,7 @@ bool checkDrvHwConfig(const Machine &config) {
     }
   }
 
-  // 2. Report overall result.
+    // 2. Report overall result.
   if (!hasError) {
     hw_log_info(" OK\n");
   }
