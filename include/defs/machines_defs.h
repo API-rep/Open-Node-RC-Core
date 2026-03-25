@@ -69,8 +69,9 @@ enum class DevUsage : uint8_t {
 
     // --- Signals (0x40–0x4F) ---
     SIG_HORN      = 0x40,   ///< Audible horn or buzzer → HORN sound role
-    SIG_LIGHT     = 0x41,   ///< Lighting output (no sound role)
+    SIG_LIGHT     = 0x41,   ///< Lighting output (no direct sound role)
     SIG_SOLENOID  = 0x42,   ///< Discrete solenoid valve or relay
+    SIG_IGNITION  = 0x43,   ///< Engine ignition key → ENGINE_ON sound event
 };
 
 /// Returns the category nibble (upper 4 bits) of a `DevUsage` value.
