@@ -4,8 +4,9 @@
  *
  * Dispatches to the machine-specific com-bus file which exposes, depending on
  * the build environment:
- *   - IS_MACHINE absent  → enum IDs only (AnalogComBusID, DigitalComBusID)
- *   - IS_MACHINE defined → enum IDs + array externs + comBus extern + inputs_map
+ *   - IS_REMOTE defined   → enum IDs only (prefixed: DumperTruck::AnalogComBusID::…)
+ *   - Single-combus nodes → enum IDs + array externs + comBus extern (i.e. machine nodes)
+ *   - INPUT_MODULE set    → also includes inputs_map.h (input-device → com-bus mapping)
  *
  * NAMESPACE STRATEGY:
  *   Each machine wraps its channel enums inside a dedicated namespace

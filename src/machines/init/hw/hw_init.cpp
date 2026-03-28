@@ -6,7 +6,7 @@
 #include "hw_init.h"
 #include <core/config/combus/combus_types.h>
 #include <core/system/debug/debug.h>
-#include <core/system/vbat/vbat_sense.h>
+#include <core/system/vbat/vbat.h>
 
 // =============================================================================
 // 1. HARDWARE CONFIG CHECK
@@ -69,7 +69,7 @@ void hw_init() {
 	// --- 5. Battery init ---
   hw_log_info("  [HW] Battery init\n");
   hw_log_info("    [BAT] Battery sensing init: %d channel(s) configured\n", vBatSense.count);
-  vbat_init(vBatSense);
+  vbat_init(&vBatSense);
 
   uint8_t batActive = 0;
   for (uint8_t i = 0; i < vBatSense.count; i++) {

@@ -20,7 +20,7 @@
 #include <core/system/debug/debug.h>
 
 
-	/// Vbat sensing datas — set once by vbat_init(), used by all accessors and tick.
+	/// Vbat sensing datas — set once by vbat_sense_init(), used by all accessors and tick.
 static VBatSense* vBatSense;
 
 
@@ -94,16 +94,16 @@ static float updateAverage(uint8_t idx) {
  *   2.5. Reads one instant voltage sample: if below 0.5 V (pull-down = not wired),
  *        marks state.disabled and skips the channel silently.
  *   3. Seeds the sliding average buffer with SamplingDepth real ADC reads so
- *      the first vbat_tick() result is immediately stable.
+ *      the first vbat_sense_tick() result is immediately stable.
  *   4. Auto-detects cell count (1S–6S) by comparing the initial averaged voltage
  *      against chargedVolt thresholds spaced at 0.5-cell intervals.
  *
- *   Must be called once at startup before vbat_tick().
+ *   Must be called once at startup before vbat_sense_tick().
  *   Safe to call with sense.count == 0 (no channels configured, no-op).
  *
  * @param sense  Board-defined VBatSense container (cfg array + state array pre-wired).
  */
-void vbat_init(VBatSense& sense) {
+void vbat_sense_init(VBatSense& sense) {
   vBatSense = &sense;
 
   for (uint8_t idx = 0; idx < vBatSense->count; idx++) {
@@ -165,11 +165,11 @@ void vbat_init(VBatSense& sense) {
  *      This prevents rapid toggling near the threshold.
  *   4. Logs a warning on trip and an info on recovery.
  *
- *   Returns immediately (false) if vbat_init() has not been called yet.
+ *   Returns immediately (false) if vbat_sense_init() has not been called yet.
  *
  * @return True when any channel’s isLow state has changed this tick.
  */
-bool vbat_tick() {
+bool vbat_sense_tick() {
   if (!vBatSense) {
     return false;
   }
@@ -217,8 +217,8 @@ bool vbat_tick() {
 /**
  * @brief Return the number of active sensing channels.
  *
- * @details Reflects VBatSense.count as stored by vbat_init().
- *   Returns 0 if vbat_init() has not been called.
+ * @details Reflects VBatSense.count as stored by vbat_sense_init().
+ *   Returns 0 if vbat_sense_init() has not been called.
  *
  * @return Active channel count, or 0 if not initialized.
  */
@@ -243,7 +243,7 @@ const char* vbat_name(uint8_t idx) {
 /**
  * @brief Return the last sliding-average voltage for channel idx (V).
  *
- * @details The value is updated on every successful vbat_tick() interval.
+ * @details The value is updated on every successful vbat_sense_tick() interval.
  *   Averaging depth is SamplingDepth (defined in core/config/vbat/config.h).
  *   Defaults to channel 0 when called without argument.
  *
@@ -260,10 +260,10 @@ float vbat_voltage(uint8_t idx) {
 /**
  * @brief Return the auto-detected cell count for channel idx (1S–6S).
  *
- * @details Cell count is detected once during vbat_init() by comparing the
+ * @details Cell count is detected once during vbat_sense_init() by comparing the
  *   initial averaged voltage against chargedVolt * (N + 0.5) thresholds.
  *   It is not updated at runtime — reconnecting a different pack requires
- *   a new vbat_init() call.
+ *   a new vbat_sense_init() call.
  *   Defaults to channel 0 when called without argument.
  *
  * @param idx  Channel index (0-based). Defaults to 0.
@@ -300,7 +300,7 @@ bool vbat_is_disabled(uint8_t idx) {
 /**
  * @brief Return the battery voltage captured at init for channel idx (V).
  *
- * @details Stored once by vbat_init() right after the initial sliding-average
+ * @details Stored once by vbat_sense_init() right after the initial sliding-average
  *   seed. Used by the dashboard detail view to show voltage drift vs boot.
  *
  * @param idx  Channel index (0-based). Defaults to 0.

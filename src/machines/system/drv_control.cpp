@@ -14,6 +14,7 @@
 /**
  * @brief Put all DC drivers into sleep mode
  */
+
 void sleepAllDcDrivers(const Machine &config) {
   if (config.dcDev == nullptr || config.dcDevCount <= 0) return;
 
@@ -29,9 +30,11 @@ void sleepAllDcDrivers(const Machine &config) {
 }
 
 
+
 /**
  * @brief Wake up all DC drivers
  */
+
 void wakeupAllDcDrivers(const Machine &config) {
   if (config.dcDev == nullptr || config.dcDevCount <= 0) return;
 
@@ -47,9 +50,11 @@ void wakeupAllDcDrivers(const Machine &config) {
 }
 
 
+
 /**
  * @brief Enable all DC drivers output bridges
  */
+
 void enableAllDcDrivers(const Machine &config) {
   if (config.dcDev == nullptr || config.dcDevCount <= 0) return;
 
@@ -65,9 +70,11 @@ void enableAllDcDrivers(const Machine &config) {
 }
 
 
+
 /**
  * @brief Disable all DC drivers output bridges
  */
+
 void disableAllDcDrivers(const Machine &config) {
   if (config.dcDev == nullptr || config.dcDevCount <= 0) return;
 
@@ -83,9 +90,11 @@ void disableAllDcDrivers(const Machine &config) {
 }
 
 
+
 /**
  * @brief Stop all DC drivers outputs
  */
+
 void stopAllDcDrivers(const Machine &config) {
   if (config.dcDev == nullptr || config.dcDevCount <= 0) return;
 

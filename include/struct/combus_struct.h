@@ -44,8 +44,7 @@
 enum class ChanOwner : uint8_t {
     NONE         = 0,   ///< No mandate declared — nobody is allowed to write this channel
     ANY,                ///< All modules are allowed to write this channel (shared scratchpad — use sparingly)
-    MACHINE_NODE,       ///< Written by the machine main node (RunLevel FSM, motion control)
-                        ///<   NOTE: not named MACHINE to avoid clash with -D MACHINE=<id> build flag.
+    SYSTEM,             ///< Written by the node system layer (RunLevel FSM, key-on logic)
     INPUT_DEV,      ///< Written by the input module (PS4, SBUS, Wi-Fi remote…)
     SOUND,          ///< Written by the sound module (standalone mode only)
     VBAT_MON,       ///< Written by the battery monitor module
@@ -62,7 +61,7 @@ enum class ChanOwner : uint8_t {
   const char* infoName;                    // analog bus short description
   uint16_t value;                          // analog bus current value
   bool isDrived   = false;                 // true if the AnalogComBus have a driving source
-  ChanOwner owner = ChanOwner::NONE;  // authoritative writer — see ChanOwner
+  ChanOwner owner = ChanOwner::NONE;       // authoritative writer — see ChanOwner
 } AnalogComBus;
 
   // digital bus data structure (two state)
@@ -70,7 +69,7 @@ enum class ChanOwner : uint8_t {
   const char* infoName;                     // digital bus short description
   bool value;                               // digital bus current value (true of false)
   bool isDrived   = false;                  // true if the DigitalComBus have a driving source
-  ChanOwner owner = ChanOwner::NONE;   // authoritative writer — see ChanOwner
+  ChanOwner owner = ChanOwner::NONE;        // authoritative writer — see ChanOwner
 } DigitalComBus;
 
   // Main communication bus structure

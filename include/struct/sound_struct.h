@@ -6,7 +6,7 @@
  *   vehicle sound profile tables (`kSoundProfile[]`).  Each entry binds one
  *   ComBus channel index to an `ApplyFn` dispatch function; the profile table
  *   is declared per vehicle in
- *   `sound_module/config/profiles/<vehicle>/sound_channels.h` and lives const
+ *   `sound_module/config/profiles/<vehicle>/dumper_truck.h` and lives const
  *   in Flash.
  *******************************************************************************
  */

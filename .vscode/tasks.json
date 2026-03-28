@@ -192,6 +192,12 @@
 				"$gcc"
 			],
 			"group": "build"
+		},
+		{
+			"label": "PIO Build sound_node_volvo",
+			"type": "shell",
+			"command": "${userHome}\\.platformio\\penv\\Scripts\\pio.exe run -e sound_node_volvo",
+			"group": "build"
 		}
 	]
 }

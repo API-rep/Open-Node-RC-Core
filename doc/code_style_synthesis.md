@@ -87,9 +87,11 @@ Example (struct context):
 - Class/type names: PascalCase
 - Enum type names: PascalCase
 - Enum values: UPPER_SNAKE_CASE
-- Methods/functions: lowerCamelCase
+- Free functions (C-style module API): snake_case (`pin_reg_init`, `combus_tx_init`)
+- Class methods: lowerCamelCase
 - `#define` preprocessor macros: UPPER_SNAKE_CASE
 - `constexpr` compile-time constants: PascalCase
+- Struct fields / variables: lowerCamelCase (`pinRegEntry`, `pinEntryCursor`)
 - Variable names: explicit and readable (except short loop indices)
 
 ### Spacing and indentation

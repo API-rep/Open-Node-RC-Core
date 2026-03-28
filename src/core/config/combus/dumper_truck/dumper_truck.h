@@ -2,13 +2,15 @@
  * @file  dumper_truck.h
  * @brief Dumper truck com-bus — channel IDs, externs and input mapping
  *
- * This single file covers two scopes controlled by IS_MACHINE:
+ * This single file covers three scopes:
  *
- *   Always included (machine node + sound node):
+ *   Always included (all build environments):
  *     - AnalogComBusID / DigitalComBusID enums
  *
- *   IS_MACHINE only (machine node build):
+ *   Single-combus nodes (all except IS_REMOTE):
  *     - AnalogComBusArray / DigitalComBusArray / comBus externs
+ *
+ *   Nodes with an input module (INPUT_MODULE defined):
  *     - inputs_map.h (input-device → com-bus mapping)
  *
  * NOTE:
@@ -27,14 +29,10 @@
 
 
 // =============================================================================
-// 2. COM-BUS EXTERNS AND INPUT MAPPING  (machine node only)
+// 2. COM-BUS EXTERNS  (single-combus nodes — excluded for IS_REMOTE)
 // =============================================================================
 
-// IS_MACHINE is the compile-time discriminator between a machine node and a
-// cross-boundary consumer (e.g. sound node). It is defined via -D IS_MACHINE
-// in platformio.ini for every [env:machines]-derived environment.
-// Do NOT remove or rename this flag — the split between sections 1 and 2 depends on it.
-#ifdef IS_MACHINE
+#ifndef IS_REMOTE
 
 #include <struct/combus_struct.h>
 
@@ -47,9 +45,15 @@ extern DigitalComBus DigitalComBusArray[static_cast<uint8_t>(DumperTruck::Digita
 /// @brief Communication bus structure
 extern ComBus comBus;
 
-  // Automatically includes the correct input mapping for this com-bus type
-#include "inputs_map/inputs_map.h"
+#endif  // !IS_REMOTE
 
-#endif  // IS_MACHINE
+
+// =============================================================================
+// 3. INPUT MAPPING  (nodes with an input device module)
+// =============================================================================
+
+#ifdef INPUT_MODULE
+#include "inputs_map/inputs_map.h"
+#endif  // INPUT_MODULE
 
 // EOF dumper_truck.h

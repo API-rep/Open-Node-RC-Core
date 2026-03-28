@@ -38,7 +38,7 @@ void loop() {
 	// a fresh voltage regardless of controller state or runlevel.
 	// The result (any isLow transition this tick) is stored and consumed by
 	// the battery state-machine block in section 3 to avoid calling tick twice.
-  bool vbatChanged = vbat_tick();
+  bool vbatChanged = vbat_sense_tick();
 
 	// --- 2. Input watchdog/failsafe ---
   combus_watchdog(comBus, ComBusDisconnectTimeoutMs);
@@ -69,14 +69,14 @@ void loop() {
       disableAllDcDrivers(machine);
       failsafeActive = true;
     }
-    combus_set_runlevel(comBus, RunLevel::IDLE, ChanOwner::MACHINE_NODE);
+    combus_set_runlevel(comBus, RunLevel::IDLE, ChanOwner::SYSTEM);
     return;  // dashboard runs on its own FreeRTOS task (Core 0)
   }
   failsafeActive = false;
 
 	// --- 3. Ignition key derivation ---
   uint8_t keyCh = static_cast<uint8_t>(DigitalComBusID::KEY); // dedicated ignition channel
-  combus_set_keyon(comBus, comBus.digitalBus[keyCh].isDrived && comBus.digitalBus[keyCh].value, ChanOwner::MACHINE_NODE);
+  combus_set_keyon(comBus, comBus.digitalBus[keyCh].isDrived && comBus.digitalBus[keyCh].value, ChanOwner::SYSTEM);
 
 // =============================================================================
 // 2. RUNLEVEL STATE MACHINE
@@ -108,7 +108,7 @@ void loop() {
         // --- 2. Transition trigger check ---
       if (comBus.keyOn) {
         sys_log_info("[SYSTEM][EVENT] input=KEY_ON action=enter_STARTING\n");
-        combus_set_runlevel(comBus, RunLevel::STARTING, ChanOwner::MACHINE_NODE);
+        combus_set_runlevel(comBus, RunLevel::STARTING, ChanOwner::SYSTEM);
       }
       break;
     }
@@ -125,7 +125,7 @@ void loop() {
       }
 
         // --- 1. Auto-transition to RUNNING ---
-      combus_set_runlevel(comBus, RunLevel::RUNNING, ChanOwner::MACHINE_NODE);
+      combus_set_runlevel(comBus, RunLevel::RUNNING, ChanOwner::SYSTEM);
       break;
     }
 
@@ -169,7 +169,7 @@ void loop() {
 
       if (comBus.keyOn) {
         sys_log_info("[SYSTEM][EVENT] input=KEY_ON action=rearm_from_SLEEPING\n");
-        combus_set_runlevel(comBus, RunLevel::STARTING, ChanOwner::MACHINE_NODE);
+        combus_set_runlevel(comBus, RunLevel::STARTING, ChanOwner::SYSTEM);
       }
       break;
     }
@@ -193,7 +193,7 @@ void loop() {
     }
 
     if (comBus.batteryIsLow) {
-      combus_set_runlevel(comBus, RunLevel::SLEEPING, ChanOwner::MACHINE_NODE);
+        combus_set_runlevel(comBus, RunLevel::SLEEPING, ChanOwner::SYSTEM);
       sys_log_warn("[SYSTEM][SAFE] reason=low_battery action=enter_SLEEPING\n");}
   }
 

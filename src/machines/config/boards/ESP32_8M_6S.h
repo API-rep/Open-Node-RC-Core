@@ -110,6 +110,9 @@ static constexpr uint32_t UartMaxBaud = 115200u;  // hardware ceiling for all UA
   // Maximum number of simultaneously UART ports on this board (including Serial0/USB).
 static constexpr uint8_t  UartComMaxPorts = 3u;
 
+  // Pin registry capacity — ESP32 has 40 GPIOs, 32 slots covers all usable pins.
+static constexpr uint8_t  PinRegMaxEntry = 32u;
+
   // servo power sensing pins (also used by VBatSrvACfg / VBatSrvBCfg)
 static constexpr uint8_t SrvASensePin  = 39;  // SRV-A power rail ADC sense pin
 static constexpr uint8_t SrvBSensePin  = 35;  // SRV-B power rail ADC sense pin
@@ -163,7 +166,7 @@ enum VBatChannel {
 extern const VBatSenseConfig vBatSenseConfigArray[VBAT_CH_COUNT];
 	/// Board sensing channel state array — defined in .cpp, zero-initialized.
 extern VBatSenseState        vBatSenseStateArray[VBAT_CH_COUNT];
-	/// Top-level sensing container — pre-wired at startup, passed to vbat_init().
+	/// Top-level sensing container — pre-wired at startup, passed to vbat_sense_init().
 extern VBatSense             vBatSense;
 
 

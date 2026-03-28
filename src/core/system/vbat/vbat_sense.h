@@ -24,10 +24,10 @@
 // =============================================================================
 
 	/// Initialize all sensing channels from a board.h config file.
-void vbat_init(VBatSense& sense);
+void vbat_sense_init(VBatSense& sense);
 
-	/// Checks and updates voltage sensing average and low-battery state
-bool vbat_tick();
+	/// Checks and updates voltage sensing average and low-battery state.
+bool vbat_sense_tick();
 
 	/// Return the channel name (infoName from board config).
 	/// Returns "---" if idx is out of range or module not initialized.
@@ -71,8 +71,8 @@ const VBatSenseConfig* vbat_cfg(uint8_t idx = 0);
 // =============================================================================
 
 	/// Dummy symbols so unconditional call sites compile without #ifdef.
-inline void    vbat_init(VBatSense&)          {}
-inline bool    vbat_tick()                { return false; }
+inline void    vbat_sense_init(VBatSense&)     {}
+inline bool    vbat_sense_tick()           { return false; }
 inline uint8_t vbat_channel_count()       { return 0;     }
 inline const char* vbat_name(uint8_t = 0) { return "---"; }
 inline const char* vbat_tech_name()       { return "---"; }
