@@ -14,6 +14,5 @@
 #include <config/config.h>
 
 #include "drv_control.h"
-#include "output/output_manager.h"
 
 // EOF utils.h

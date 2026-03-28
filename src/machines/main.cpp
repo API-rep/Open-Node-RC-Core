@@ -9,6 +9,7 @@
 #include <core/system/debug/debug.h>
 #include <core/system/debug/dashboard.h>
 #include <core/system/input/input_manager.h>
+#include <core/system/output/output_manager.h>
 #include <core/system/combus/combus_manager.h>
 #include <core/system/combus/combus_access.h>
 #include <core/system/vbat/vbat_sense.h>

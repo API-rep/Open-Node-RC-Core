@@ -1,6 +1,6 @@
 /******************************************************************************
  * @file vbat_sense.h
- * @brief Battery voltage sensing — core utility module.
+ * @brief Battery voltage sensing module.
  *
  * @details Voltage divider-based ADC sensing with sliding average,
  *   1S–6S auto-detection, and hysteresis re-arm logic.

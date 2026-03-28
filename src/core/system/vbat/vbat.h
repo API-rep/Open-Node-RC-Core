@@ -3,32 +3,20 @@
  * @brief Battery management — top-level module.
  *
  * @details Single entry point for all battery-related functionality.
- *   Composed of two independent, optional sub-modules:
+ *   Composed of two independent sub-modules:
  *
- *   - `vbat_sense` (activated by `-D VBAT_SENSING=<TYPE>`)
- *     ADC read, sliding average, cell detection, low-bat flag.
- *     Writes `batteryIsLow` into the ComBus digital bus as event.
+ *   - `vbat_sense` : hardware ADC sensing, sliding average, cell auto-detection,
+ *     low-bat flag. Writes `batteryIsLow` into the ComBus digital bus as event.
+ *     Activated by `-D VBAT_SENSING=<TYPE>` compile flag
  *
- *   - `vbat_alert` (each reaction gated by its own compile flag:
- *     `VBAT_ALERT_BEEP`, `VBAT_ALERT_SOUND`, `VBAT_ALERT_LIGHT`)
- *     Reads `comBus.batteryIsLow` and triggers reactions.
+ *   - `vbat_alert` : reactions to low battery (beep, sound alert, LED alert, etc.).
+ *     Reads `batteryIsLow` from the ComBus digital bus and triggers reactions. 
+ *     Activated by any of the `-D VBAT_ALERT_*` compile flags.
  *
  *   Both sub-modules are optional and can operate independently.
- *   The ComBus `batteryIsLow` flag is the pivot: `vbat_sense` (or any
- *   remote node on the bus) writes it, and `vbat_alert` reads it —
- *   regardless of who produced the sensing data.  A sound module
- *   running standalone senses and reacts locally; one receiving ComBus
- *   frames from a machine reacts to the remote flag without sensing.
- *
- *   ComBus runlevel reaction (sleeping / re-arm) to `batteryIsLow`
- *   is machine-config dependent and will be gated by a dedicated
- *   compile flag (future `-D VBAT_COMBUS_RUNLEVEL`).
- *   That logic lives here at the `vbat` root level, between the
- *   sense and alert steps of `vbat_update()`.
- *
- *   API:
- *     `vbat_init()`   — hardware ADC setup (sense) + app-level boot (alert).
- *     `vbat_update()`  — main-loop tick: sense → (runlevel) → alert.
+ *   The ComBus `batteryIsLow` flag is the pivot of battery sensing: `vbat_sense`
+ *   (or any remote node on the bus) writes it, and `vbat_alert` reads it,
+ *   regardless of who produced the sensing data.
  *
  *   When neither VBAT_SENSING nor any VBAT_ALERT_* flag is set, both
  *   functions are inline no-ops.
@@ -58,6 +46,7 @@
 
 void vbat_init(VBatSense* sense = nullptr);
 
+
 /**
  * @brief Main-loop battery tick — single entry point.
  *
@@ -70,13 +59,15 @@ void vbat_init(VBatSense* sense = nullptr);
  *   In ComBus-only mode, the input bridge must populate `comBus.batteryIsLow`
  *   before this function is called.
  */
+
 void vbat_update();
 
-#else // neither VBAT_SENSING nor VBAT_ALERT
 
 // =============================================================================
 // 2. NO-OP STUBS
 // =============================================================================
+
+#else // neither VBAT_SENSING nor VBAT_ALERT
 
 inline void vbat_init(VBatSense* = nullptr) {}
 inline void vbat_update() {}

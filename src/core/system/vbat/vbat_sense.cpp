@@ -103,6 +103,7 @@ static float updateAverage(uint8_t idx) {
  *
  * @param sense  Board-defined VBatSense container (cfg array + state array pre-wired).
  */
+
 void vbat_sense_init(VBatSense& sense) {
   vBatSense = &sense;
 
@@ -117,7 +118,7 @@ void vbat_sense_init(VBatSense& sense) {
 	    // --- 2. Configure ADC pin ---
     pinMode(vBatSense->cfg[idx].pin, INPUT);
 
-	    // --- 2.5. Disable check — pull-down (~0 V) means channel not wired ---
+	    // Disable check if pull-down (0 V, means channel not wired)
     if (readInstantVoltage(idx) < 0.5f) {
       vBatSense->state[idx].disabled = true;
       hw_log_info("    [BAT] \"%s\" — no voltage detected, sensing disabled.\n", vBatSense->cfg[idx].infoName);
@@ -225,14 +226,12 @@ bool vbat_sense_tick() {
 
 uint8_t vbat_channel_count() { return vBatSense ? vBatSense->count : 0; }
 
-/**
- * @brief Return the battery chemistry type name (compile-time string from profile).
- */
+
+/** @brief Return the battery chemistry type name (compile-time string from profile). */
 const char* vbat_tech_name() { return VBatTechName; }
 
-/**
- * @brief Return the channel name from board config.
- */
+
+/** @brief Return the channel name from board config. */
 const char* vbat_name(uint8_t idx) {
   return (vBatSense && idx < vBatSense->count && vBatSense->cfg[idx].infoName)
          ? vBatSense->cfg[idx].infoName : "---";

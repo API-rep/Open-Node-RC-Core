@@ -26,10 +26,11 @@
 /**
  * @brief Battery monitoring init — hardware sensing + alert hardware setup.
  *
- * @details Sequences:
- *   1. `vbat_sense_init()` — (if @p sense is non-null and VBAT_SENSING is
- *      set) ADC setup, sliding-average seed, cell detection.
- *   2. `vbat_alert_init()` — initializes alert hardware (buzzer channel, etc.).
+ * @details Initialization sequences two optional sub-modules in order:
+ *   1. `vbat_sense_init()` : ADC setup, sliding-average seed, cell auto-detection,
+ *      low-bat evaluation.  Activated when @p sense is non-null and VBAT_SENSING is set.
+ *   2. `vbat_alert_init()` : initializes alert hardware (buzzer channel, etc.).
+ *      Activated when any VBAT_ALERT_* flag is set.
  *
  * @param sense  Board-defined VBatSense container. nullptr disables battery sensing.
  */
@@ -53,13 +54,12 @@ void vbat_init(VBatSense* sense)
 // =============================================================================
 
 /**
- * @brief Main-loop battery tick — single entry point.
+ * @brief Main-loop battery monitoring routine.
  *
- * @details Sequences:
- *   1. `vbat_sense_tick()`  — (if VBAT_SENSING) ADC read, sliding average,
- *      low-bat detection.
+ * @details Single entry point for runtime battery monitoring. Sequences:
+ *   1. vbat_sense_tick() : battery sensing
  *   2.  (future)            — ComBus runlevel sleeping / re-arm.
- *   3. `vbat_alert_tick()`  — read comBus.batteryIsLow + trigger gated reactions.
+ *   3. vbat_alert_tick() : alert reactions
  */
 
 void vbat_update()

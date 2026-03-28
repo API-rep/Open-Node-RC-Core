@@ -64,6 +64,7 @@ static constexpr uint8_t  ErrorBeepCnt = 10;
 
 void vbat_alert_init()
 {
+  
 }
 
 
@@ -82,7 +83,9 @@ void vbat_alert_init()
  */
 
 void vbat_alert_tick()
-{}
+{
+
+}
 
 #endif // VBAT_ALERT
 
