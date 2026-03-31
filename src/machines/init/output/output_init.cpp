@@ -8,8 +8,7 @@
 #include <core/system/debug/debug.h>
 
 #if defined(COMBUS_UART_TX) || defined(COMBUS_UART)
-  #include <core/system/com/ports/uart_com.h>
-  #include <core/system/com/protocols/combus_tx.h>
+  #include <core/system/com/combus_uart_init.h>
 #endif
 
 
@@ -36,22 +35,12 @@ void output_init() {
   static_assert(ComBusUartBaud <= UartMaxBaud,
                 "ComBusUartBaud exceeds board hardware ceiling UartMaxBaud");
   {
-    #if defined(COMBUS_UART)
-      constexpr int uartCh    = COMBUS_UART;           // uartChannel (full duplex)
-      const     int uartTxPin = uartPins[uartCh].tx;   // TX pin from board UART pin table
-      const     int uartRxPin = uartPins[uartCh].rx;   // RX pin from board UART pin table
-    #else  // COMBUS_UART_TX
-      constexpr int uartCh    = COMBUS_UART_TX;        // uartChannel (TX-only link)
-      const     int uartTxPin = uartPins[uartCh].tx;   // TX pin from board UART pin table
-      constexpr int uartRxPin = -1;                    // TX-only: RX not enabled
-    #endif
-    NodeCom* com = uart_com_init(uart_serial_for(uartCh), ComBusUartBaud, uartTxPin, uartRxPin, "sound_tx");
-    constexpr ComBusFrameCfg comBusFrameCfg = {
+    constexpr ComBusFrameCfg txCfg = {
         static_cast<uint8_t>(CombusLayout::MACHINE_TYPE),
         static_cast<uint8_t>(AnalogComBusID::CH_COUNT),
         static_cast<uint8_t>(DigitalComBusID::CH_COUNT),
     };
-    combus_tx_init(com, comBusFrameCfg, ComBusUartTxHz);
+    combus_uart_init(ComBusUartBaud, txCfg, ComBusUartTxHz, {}, nullptr, nullptr);
   }
 #endif
 
