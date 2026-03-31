@@ -127,4 +127,23 @@ inline constexpr Machine machine {
   .sigDevCount   = SIG_COUNT
 };
 
+
+// =============================================================================
+// UART pin table
+// =============================================================================
+
+/**
+ * @brief UART channel pin assignments for the Volvo A60H Bruder (ESP32_8M_6S board).
+ *
+ * @details Indexed by UART channel number:
+ *   [0] UART0 — USB / debug serial  (Txd0Pin / Rxd0Pin)
+ *   [1] UART1 — unassigned on this board
+ *   [2] UART2 — extension port / ComBus TX link  (TxdExtPin / RxdExtPin)
+ *
+ *   Values come from the active board header (ESP32_8M_6S.h) included above.
+ *   Init modules select the correct port via COMBUS_UART_TX=N or COMBUS_UART=N.
+ */
+extern const UartPinCfg uartPins[];
+extern const uint8_t    uartPinsCount;
+
 // EOF volvo_A60H_bruder.h

@@ -173,4 +173,18 @@ extern VBatSense             vBatSense;
 
 #endif // VBAT_SENSING
 
+
+// =============================================================================
+// SWITCH INPUTS  (none wired on this board revision)
+// =============================================================================
+
+/// Switch channel index — no switches on this board revision.
+enum Switch {
+  SW_CH_COUNT = 0
+};
+
+  /// Top-level switch port container — passed to switch_init().
+extern SwitchPort switchPort;  ///< count = 0 (no switches configured).
+
+
 // EOF ESP32_8M_6S.h

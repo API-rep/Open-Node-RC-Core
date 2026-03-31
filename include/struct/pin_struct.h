@@ -36,6 +36,7 @@ enum class PinOwner : uint8_t {
     Sound,       ///< DAC audio output.
     Vbat,        ///< Battery voltage sensing (ADC).
     ServoIn,     ///< PWM RC input (CH connectors).
+    Switch,      ///< Digital switch / sensor input.
 };
 
 

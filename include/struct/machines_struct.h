@@ -181,4 +181,85 @@ typedef struct {
   uint8_t    sigDevCount = 0;                             // number of signal devices configured
 } Machine;
 
+
+// =============================================================================
+// SWITCH PORT SENSING
+// =============================================================================
+
+/**
+ * @brief Hardware configuration for one polling-based switch input.
+ *
+ * @details Defined once per physical switch in the board config file.
+ *   The switch manager reads this at init time to configure the GPIO and
+ *   debounce parameters.  All fields are const — they must not change at runtime.
+ */
+struct SwitchPortCfg {
+  const char* infoName;    ///< Human-readable channel name.
+  int8_t      pin;         ///< GPIO pin number (-1 = disabled / slot unused).
+  bool        pullUp;      ///< true = INPUT_PULLUP, false = INPUT_PULLDOWN.
+  uint16_t    debounceMs;  ///< Debounce window in ms (0 = immediate).
+};
+
+/**
+ * @brief Runtime state for one switch channel.
+ *
+ * @details Written exclusively by the switch manager — treat as read-only from
+ *   callers.  Zero-initialised by default construction.
+ */
+struct SwitchPortState {
+  bool     confirmed;   ///< Last debounced digitalRead() level.
+  bool     pending;     ///< Candidate level pending debounce confirmation.
+  uint32_t pendingMs;   ///< millis() timestamp of the most-recent raw level change.
+};
+
+/**
+ * @brief Top-level switch port container.
+ *
+ * @details cfg points to the board-defined config array (flash).
+ *   state points to the module runtime state array (RAM).
+ *   count holds the number of active channels.
+ *   Mirrors the VBatSense / Board / Machine container pattern.
+ */
+struct SwitchPort {
+  const SwitchPortCfg* cfg   = nullptr;  ///< Pointer to board config array (flash).
+  uint8_t              count = 0;        ///< Number of registered channels.
+  SwitchPortState*     state = nullptr;  ///< Pointer to runtime state array (RAM).
+};
+
+
+// =============================================================================
+// LIGHT PORT CONFIG
+// =============================================================================
+
+/**
+ * @brief Hardware configuration for one PWM-driven light channel.
+ *
+ * @details Defined once per channel in the board config file.
+ *   `light_init()` iterates these entries, requests a PwmControl lease from
+ *   PwmBroker for each active pin, and calls `statusLED::begin()`.  Pins set
+ *   to -1 (or implicitly cast from `SOUND_NO_LED_PIN`) are skipped silently.
+ *   LEDC channel allocation is handled entirely by PwmBroker — no ledcCh
+ *   field needed here.
+ */
+
+struct LightCfg {
+  const char* infoName;   ///< Human-readable channel name.
+  int8_t      pin;        ///< GPIO pin (-1 = disabled, e.g. SOUND_NO_LED_PIN cast to int8_t).
+};
+
+
+
+/**
+ * @brief Board light container — passed to light_init().
+ *
+ * @details cfg points to the board config array (flash).
+ *   count holds the total number of channels (active and disabled).
+ *   Runtime brightness and pattern state live inside each statusLED instance.
+ */
+
+struct LightPort {
+  const LightCfg* cfg;    ///< Pointer to board config array (flash).
+  uint8_t         count;  ///< Number of registered channels.
+};
+
 // EOF machines_struct.h

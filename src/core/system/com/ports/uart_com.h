@@ -5,9 +5,9 @@
  * @details Initializes a HardwareSerial port once and returns a claimed
  * NodeCom* pointer that encapsulates the UART read/write/available calls.
  *
- * A second call with the same serial interface fails loudly and returns
- * nullptr — preventing two modules from calling Serial.begin() on the same
- * port with different parameters.
+ * A second call with the same serial interface at the same baud rate returns the
+ * existing NodeCom* (port sharing — bidirectional TX+RX use case). A second call
+ * with a different baud rate fails loudly and returns nullptr.
  *
  * Available port pool is sized to UartComMaxPorts (declared in the board header,
  * included via config/config.h). A static_assert in uart_com.cpp validates if this
@@ -20,7 +20,7 @@
  * Typical use in a protocol layer:
  * @code
  *     // port init and use of NodeCom return pointer in protocol init:
- *   NodeCom* com = uart_com_init(&Serial2, 115200, TX_PIN, RX_PIN, "combus");
+ *   NodeCom* com = uart_com_init(&Serial1, 115200, TX_PIN, RX_PIN, "combus");
  *   combus_tx_init(com, ...);
  * @endcode
  *****************************************************************************/
@@ -30,6 +30,7 @@
 #include <Arduino.h>
 
 #include "../node_com.h"
+#include <core/system/hw/pin_reg.h>
 
 
 // =============================================================================
@@ -48,6 +49,8 @@
  * @param txPin    GPIO TX pin (-1 to use Arduino default).
  * @param rxPin    GPIO RX pin (-1 to use Arduino default).
  * @param owner    Caller identifier logged in the claim table (e.g. "combus").
+ * @param reg      Optional pin registry — if non-null, TX and RX pins are claimed
+ *                 before serial.begin(). Pass nullptr to skip pin claiming.
  *
  * @return Pointer to a ready-to-use NodeCom, or nullptr on failure.
  */
@@ -56,6 +59,18 @@ NodeCom* uart_com_init( HardwareSerial* serial,
                         uint32_t        baud,
                         int             txPin,
                         int             rxPin,
-                        const char*     owner );
+                        const char*     owner,
+                        PinReg*         reg = nullptr );
+
+/**
+ * @brief Map an ESP32 Arduino UART index to its HardwareSerial instance.
+ *
+ * @param n  UART index: 0 = Serial (UART0), 1 = Serial1 (UART1), 2 = Serial2 (UART2).
+ * @return   Pointer to the HardwareSerial instance, or nullptr for unsupported indices.
+ *
+ * @details Used by init modules that select a UART port via the value-based build flags
+ *   COMBUS_UART_TX=N, COMBUS_UART_RX=N, or COMBUS_UART=N.
+ */
+HardwareSerial* uart_serial_for(int n);
 
 // EOF uart_com.h

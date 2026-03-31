@@ -132,7 +132,7 @@ Defined in `platformio.ini`:
 
 | Environment         | Purpose                                   | Key build flags                       |
 |---------------------|-------------------------------------------|---------------------------------------|
-| `sound_node_base`   | Base sound env (no profile-specific libs) | `SOUND_NODE` · `COMBUS_HAL_INPUT`     |
+| `sound_node_base`   | Base sound env (no profile-specific libs) | `SOUND_NODE` · `COMBUS_UARTx_RX`     |
 | `sound_node_volvo`  | Volvo A60H profile + full audio libs      | `+ MACHINE_TYPE=DUMPER_TRUCK`         |
 
 Source filter (both envs):

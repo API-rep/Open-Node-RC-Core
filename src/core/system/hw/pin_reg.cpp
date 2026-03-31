@@ -51,6 +51,7 @@ static const char* owner_name(PinOwner o) {
         case PinOwner::Sound:      return "Sound";
         case PinOwner::Vbat:       return "Vbat";
         case PinOwner::ServoIn:    return "ServoIn";
+        case PinOwner::Switch:     return "Switch";
         default:                   return "Free";
     }
 }
@@ -140,8 +141,13 @@ bool pin_claim(PinReg& reg, uint8_t pin, PinOwner owner,
 uint8_t pin_claim_batch(PinReg& reg, const PinDesc* descs, uint8_t count) {
     uint8_t claimed = 0;
     for (uint8_t i = 0; i < count; i++) {
-        if (pin_claim(reg, descs[i].pin, descs[i].role, descs[i].label, descs[i].critical))
+        if (descs[i].pin == PIN_SLOT_EMPTY) {
+            continue;   // skip disabled / no-pin entries
+        }
+
+        if (pin_claim(reg, descs[i].pin, descs[i].role, descs[i].label, descs[i].critical)){
             claimed++;
+        }
     }
     return claimed;
 }

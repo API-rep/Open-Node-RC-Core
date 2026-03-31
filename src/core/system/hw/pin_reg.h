@@ -41,6 +41,24 @@
  *
  *       pin_reg_dump(pinReg);  // log full claim table (gated by DEBUG_SYSTEM)
  *   @endcode
+ *
+ * @par Multiple registries
+ *   `PinReg` is a plain struct with no global state.  The singleton `pinReg`
+ *   is defined by the environment init (e.g. `sys_init.cpp`) and is the
+ *   registry for the main SoC GPIOs.
+ *
+ *   A second registry can be created for any GPIO expander (I2C, SPI, …)
+ *   that has its own pin-number space:
+ *   @code
+ *       // sys_init.cpp (sound module example)
+ *       PinReg pinReg;         // SoC GPIOs 0-39
+ *       PinReg pinRegExpander; // e.g. PCF8574 virtual ports 0-7
+ *
+ *       pin_reg_init(pinReg,        PinRegMaxEntry);
+ *       pin_reg_init(pinRegExpander, 8u);
+ *   @endcode
+ *   Each peripheral init that targets the expander receives `pinRegExpander&`
+ *   instead of `pinReg&` — the conflict-resolution logic is identical.
  *****************************************************************************/
 #pragma once
 
@@ -127,5 +145,6 @@ uint8_t pin_resolve(const PinReg& pinReg, uint8_t pin, PinOwner owner);
 
 /// Dump the full registry to the debug log (no-op when DEBUG_SYSTEM is absent).
 void pin_reg_dump(const PinReg& pinReg);
+
 
 // EOF pin_reg.h

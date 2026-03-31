@@ -14,29 +14,7 @@
 
 
 // =============================================================================
-// 1. UART OUTPUT TRANSPORT
-// =============================================================================
-
-/**
- * @brief Hardware and rate configuration for one UART output transport link.
- *
- * @details Groups the four parameters required by any UART-based output
- *   initialisation into a single typed aggregate.
- *   Constexpr instances are defined in the active output config sub-file
- *   (e.g. src/core/config/outputs/combus_uart.h).
- */
-
-struct OutputUartConfig {
-  int8_t   txPin;   ///< ESP32 GPIO TX pin.
-  int8_t   rxPin;   ///< ESP32 GPIO RX pin (-1 = TX-only link).
-  uint32_t baud;    ///(<  to UART baud rate (Hz).
-  uint32_t txHz;    ///< Frame transmit rate (Hz).
-};
-
-
-
-// =============================================================================
-// 2. COMBUS TRANSPORT FRAME STRUCTURE
+// 1. COMBUS TRANSPORT FRAME STRUCTURE
 // =============================================================================
 
 /**

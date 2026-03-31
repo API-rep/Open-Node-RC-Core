@@ -5,7 +5,7 @@
  * @details Derives the exact encoded frame size for this machine's ComBus
  *   layout and validates that it fits the generic transport protocol limits
  *   AND the board-supplied UART parameters are within safe operating ranges.
- *   Included by outputs/outputs.h when COMBUS_OUTPUT_UART is set.
+ *   Included by outputs/outputs.h when COMBUS_UART_TX=N or COMBUS_UART=N is set.
  *
  *   Constants exported:
  *     ComBusUartFrameSize  — exact frame size for this layout (bytes)

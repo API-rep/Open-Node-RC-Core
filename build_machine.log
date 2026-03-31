@@ -1,0 +1,159 @@
+﻿Processing volvo_A60H_bruder (platform: espressif32@6.7.0; board: esp32dev; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/espressif32/esp32dev.html
+PLATFORM: Espressif 32 (6.7.0) > Espressif ESP32 Dev Module
+HARDWARE: ESP32 240MHz, 320KB RAM, 4MB Flash
+DEBUG: Current (cmsis-dap) External (cmsis-dap, esp-bridge, esp-prog, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa)
+PACKAGES: 
+ - framework-arduinoespressif32 @ 3.20016.0 (2.0.16) 
+ - tool-esptoolpy @ 1.40501.0 (4.5.1) 
+ - toolchain-xtensa-esp32 @ 8.4.0+2021r2-patch5
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 40 compatible libraries
+Scanning dependencies...
+Dependency Graph
+|-- PS4_Controller_Host @ 1.1.1+sha.b58a05d
+|-- common_defs @ 0.0.0+20260315160858.sha.45b8759
+|-- PwmBroker @ 1.0.0+sha.ae043d5
+|-- DcMotorCore @ 1.0.0+sha.b23fa87
+|-- statusLED @ 1.0.0-fork
+|-- ESP32_PWM_Servo
+Building in release mode
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\core\combus\combus_frame.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\core\config\combus\dumper_truck\dumper_truck.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\core\config\combus\dumper_truck\inputs_map\PS4_dualshock_map.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\core\config\inputs\PS4_dualshock.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\core\system\com\ports\uart_com.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\core\system\com\protocols\combus_rx.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\core\system\com\protocols\combus_tx.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\core\system\combus\combus_access.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\core\system\combus\combus_manager.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\core\system\debug\dashboard.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\core\system\debug\debug.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\core\system\hw\light.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\core\system\hw\pin_reg.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\core\system\hw\switch.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\core\system\input\input_manager.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\core\system\output\output_manager.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\core\system\vbat\vbat.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\core\system\vbat\vbat_alert.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\core\system\vbat\vbat_sense.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\machines\config\boards\ESP32_8M_6S.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\machines\config\machines\volvo_A60H_bruder.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\machines\init\hw\hw_init.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\machines\init\hw\hw_init_drv.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\machines\init\hw\hw_init_sig.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\machines\init\hw\hw_init_srv.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\machines\init\init.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\machines\init\input\input_init.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\machines\init\output\output_init.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\machines\init\sys\sys_init.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\machines\main.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\machines\system\debug\dashboard_drv.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\machines\system\debug\dashboard_input.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\machines\system\debug\dashboard_machine.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\machines\system\debug\dashboard_sig.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\machines\system\debug\dashboard_vbat.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\machines\system\drv_control.cpp.o
+Building C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\bootloader.bin
+Generating partitions C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\partitions.bin
+esptool.py v4.5.1
+Creating esp32 image...
+Merged 1 ELF section
+Successfully created esp32 image.
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\lib43a\PS4_Controller_Host\PS4Controller.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\lib43a\PS4_Controller_Host\ps4.c.o
+pio.exe : .pio/libdeps/volvo_A60H_bruder/PS4_Controller_Host/src/ps4.c: In 
+function 'ps4Deinit':
+Au caractère Ligne:1 : 1
++ & "$env:USERPROFILE\.platformio\penv\Scripts\pio.exe" run -e volvo_A6 ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (.pio/libdeps/vo...on 'ps4Deinit': 
+   :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+.pio/libdeps/volvo_A60H_bruder/PS4_Controller_Host/src/ps4.c:70:4: warning: 
+implicit declaration of function 'spp_deinit'; did you mean 'sppInit'? 
+[-Wimplicit-function-declaration]
+    spp_deinit();
+    ^~~~~~~~~~
+    sppInit
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\lib43a\PS4_Controller_Host\ps4_l2cap.c.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\lib43a\PS4_Controller_Host\ps4_parser.c.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\lib43a\PS4_Controller_Host\ps4_spp.c.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\lib992\PwmBroker\Esp32PwmBroker.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\lib992\PwmBroker\Esp32PwmControl.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\lib421\DcMotorCore\DcMotorCore.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\lib252\statusLED\statusLED.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\libc12\ESP32_PWM_Servo\ESP32_PWM_Servo.cpp.o
+Archiving C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\lib43a\libPS4_Controller_Host.a
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\Esp.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\FirmwareMSC.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\FunctionalInterrupt.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\HWCDC.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\HardwareSerial.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\IPAddress.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\IPv6Address.cpp.o
+Archiving C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\lib992\libPwmBroker.a
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\MD5Builder.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\Print.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\Stream.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\StreamString.cpp.o
+Archiving C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\lib421\libDcMotorCore.a
+Archiving C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\lib252\libstatusLED.a
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\Tone.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\USB.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\USBCDC.cpp.o
+Archiving C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\libc12\libESP32_PWM_Servo.a
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\USBMSC.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\WMath.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\WString.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\base64.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\cbuf.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\esp32-hal-adc.c.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\esp32-hal-bt.c.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\esp32-hal-cpu.c.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\esp32-hal-dac.c.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\esp32-hal-gpio.c.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\esp32-hal-i2c-slave.c.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\esp32-hal-i2c.c.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\esp32-hal-ledc.c.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\esp32-hal-matrix.c.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\esp32-hal-misc.c.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\esp32-hal-psram.c.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\esp32-hal-rgb-led.c.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\esp32-hal-rmt.c.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\esp32-hal-sigmadelta.c.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\esp32-hal-spi.c.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\esp32-hal-time.c.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\esp32-hal-timer.c.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\esp32-hal-tinyusb.c.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\esp32-hal-touch.c.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\esp32-hal-uart.c.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\firmware_msc_fat.c.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\libb64\cdecode.c.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\libb64\cencode.c.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\main.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\stdlib_noniso.c.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\wiring_pulse.c.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\FrameworkArduino\wiring_shift.c.o
+Archiving C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\libFrameworkArduino.a
+Linking C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\firmware.elf
+Retrieving maximum program size C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\firmware.elf
+Checking size C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [=         ]  13.4% (used 43788 bytes from 327680 bytes)
+Flash: [====      ]  35.7% (used 1124125 bytes from 3145728 bytes)
+Building C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\firmware.bin
+esptool.py v4.5.1
+Creating esp32 image...
+Merged 27 ELF sections
+Successfully created esp32 image.
+========================= [SUCCESS] Took 73.40 seconds =========================
+
+Environment        Status    Duration
+-----------------  --------  ------------
+volvo_A60H_bruder  SUCCESS   00:01:13.395
+========================= 1 succeeded in 00:01:13.395 =========================

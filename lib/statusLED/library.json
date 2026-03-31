@@ -1,0 +1,11 @@
+{
+  "name": "statusLED",
+  "version": "1.0.0-fork",
+  "description": "Fork of TheDIYGuy999/statusLED — PwmBroker integration (Open Node RC Core). Original: https://github.com/TheDIYGuy999/statusLED (public domain)",
+  "keywords": ["led", "pwm"],
+  "frameworks": "arduino",
+  "platforms": "espressif32",
+  "build": {
+    "srcDir": "src"
+  }
+}

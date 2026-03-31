@@ -195,4 +195,12 @@ VBatSense      vBatSense { vBatSenseConfigArray, VBAT_CH_COUNT, vBatSenseStateAr
 
 #endif // VBAT_SENSING
 
+
+// =============================================================================
+// SWITCH INPUTS
+// =============================================================================
+// No switches wired on this board revision.
+
+SwitchPort switchPort;  // count = 0, cfg / state = nullptr
+
 // EOF ESP32_8M_6S.cpp

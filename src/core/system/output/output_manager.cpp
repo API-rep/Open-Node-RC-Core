@@ -5,7 +5,7 @@
 
 #include "output_manager.h"
 
-#ifdef COMBUS_OUTPUT_UART
+#if defined(COMBUS_UART_TX) || defined(COMBUS_UART)
   #include <core/system/com/protocols/combus_tx.h>
 #endif
 
@@ -20,7 +20,7 @@
 void output_update(const ComBus& bus, bool failsafeActive) {
 
 	// --- ComBus UART TX (50 Hz timer-gated, non-blocking) ---
-#ifdef COMBUS_OUTPUT_UART
+#if defined(COMBUS_UART_TX) || defined(COMBUS_UART)
   combus_tx_update(&bus, failsafeActive);
 #endif
 

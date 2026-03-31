@@ -11,5 +11,6 @@
 #include "vbat_struct.h"
 #include "outputs_struct.h"
 #include "pin_struct.h"
+#include "uart_struct.h"
 
 // EOF struct.h

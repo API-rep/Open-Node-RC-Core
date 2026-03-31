@@ -21,7 +21,7 @@
 // 1. OUTPUT MODULE SELECTION
 // =============================================================================
 
-#ifdef COMBUS_OUTPUT_UART
+#if defined(COMBUS_UART_TX) || defined(COMBUS_UART)
   #include "combus_uart.h"
 #endif
 

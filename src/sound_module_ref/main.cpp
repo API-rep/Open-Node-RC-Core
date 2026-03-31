@@ -14,7 +14,7 @@
  * Build environment: sound_node_volvo (see platformio.ini)
  * Required build flags:
  *   -D SOUND_NODE                  identifies this env as a sound node
- *   -D COMBUS_HAL_INPUT            disables RC receiver input in src.ino
+ *   -D COMBUS_UART_RX=1            disables RC receiver input in src.ino
  *   -D MACHINE_TYPE=DUMPER_TRUCK   sets ComBus layout
  *   -D <vehicle profile defines>   same as original rc_engine_sound env
  *****************************************************************************/

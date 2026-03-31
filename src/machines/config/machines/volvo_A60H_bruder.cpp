@@ -196,3 +196,19 @@ SigDevice sigDevArray[SIG_COUNT] = {
     .digitalChannel = DigitalComBusID::HAZARDS
   },
 };
+
+
+// =============================================================================
+// 4. UART PIN TABLE
+// =============================================================================
+
+// Values from ESP32_8M_6S.h, included via volvo_A60H_bruder.h → boards.h.
+const UartPinCfg uartPins[] = {
+	{ Txd0Pin,   Rxd0Pin   },  // [0] UART0 — USB / debug serial
+	{ -1,        -1        },  // [1] UART1 — unassigned on this board
+	{ TxdExtPin, RxdExtPin },  // [2] UART2 — extension port / ComBus TX link
+};
+
+const uint8_t uartPinsCount = static_cast<uint8_t>(sizeof(uartPins) / sizeof(uartPins[0]));
+
+// EOF volvo_A60H_bruder.cpp

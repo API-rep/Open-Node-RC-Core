@@ -418,7 +418,7 @@ one-sided and the 200 Hz cap is an arbitrary placeholder.
 static constexpr uint32_t SoundRxMaxHz  = ...;   // max frame rate the node can process
 static constexpr uint32_t SoundRxMaxBaud = ...;  // max supported baud
 ```
-Add to `output_init.h` (under `#ifdef COMBUS_OUTPUT_UART`):
+Add to `output_init.h` (under `#if defined(COMBUS_UART_TX) || defined(COMBUS_UART)`):
 ```cpp
 static_assert(ComBusUartTxHz  <= SoundRxMaxHz,   "TX rate exceeds sound node capability");
 static_assert(ComBusUartBaud  <= SoundRxMaxBaud,  "Baud exceeds sound node capability");
