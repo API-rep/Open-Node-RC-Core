@@ -1,5 +1,5 @@
 /******************************************************************************
- * @file combus.h
+ * @file combus_uart.h
  * @brief ComBus UART protocol layer — wire TX/RX protocol layers to transport.
  *
  * @details Initialises the TX and/or RX ComBus protocol layers over the UART

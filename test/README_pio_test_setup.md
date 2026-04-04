@@ -28,12 +28,12 @@ projet (`src/`) ne sont **pas** compilés — résultat : des dizaines de
 ### 4. `build_src_filter` sur UNE SEULE ligne
 
 ```ini
-build_src_filter = -<*> +<core/combus/**> +<core/system/com/**>   ✅
+build_src_filter = -<*> +<core/system/combus/**> +<core/system/hw/**>   ✅
 
 ; Syntaxe multiligne cassée pour ce paramètre :
 build_src_filter =    ❌
     -<*>
-    +<core/combus/**>
+    +<core/system/combus/**>
 ```
 
 ### 5. Stub `config/config.h` dans le dossier de la suite

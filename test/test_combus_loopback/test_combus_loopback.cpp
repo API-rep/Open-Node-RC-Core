@@ -23,10 +23,10 @@
 #include <Arduino.h>
 #include <unity.h>
 
-#include <core/combus/combus_frame.h>
-#include <core/system/com/transport/uart_com.h>
-#include <core/system/com/protocols/combus_tx.h>
-#include <core/system/com/protocols/combus_rx.h>
+#include <core/system/combus/frame/combus_frame.h>
+#include <core/system/hw/transport/uart_com.h>
+#include <core/system/combus/protocol/combus_tx.h>
+#include <core/system/combus/protocol/combus_rx.h>
 #include <struct/combus_struct.h>
 #include <struct/outputs_struct.h>
 

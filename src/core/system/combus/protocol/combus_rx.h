@@ -32,8 +32,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "../node_com.h"
-#include <core/combus/combus_frame.h>
+#include <core/system/hw/node_com.h>
+#include <core/system/combus/frame/combus_frame.h>
 #include <struct/outputs_struct.h>
 
 

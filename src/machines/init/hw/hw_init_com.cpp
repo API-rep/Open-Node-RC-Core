@@ -6,7 +6,7 @@
 #include "hw_init_com.h"
 
 #include <machines/config/config.h>
-#include <core/system/com/transport/uart_com.h>
+#include <core/system/hw/transport/uart_com.h>
 #include <core/system/debug/debug.h>
 #include "../sys/sys_init.h"
 

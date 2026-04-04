@@ -6,7 +6,7 @@
 #include "output_manager.h"
 
 #if defined(COMBUS_UART_TX) || defined(COMBUS_UART)
-  #include <core/system/com/protocols/combus_tx.h>
+  #include <core/system/combus/protocol/combus_tx.h>
 #endif
 
 

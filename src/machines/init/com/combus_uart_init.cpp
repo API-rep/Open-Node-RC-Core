@@ -9,7 +9,7 @@
 
 #include <machines/config/config.h>
 #include <core/config/outputs/combus_uart.h>         // ComBusUartBaud, ComBusUartTxHz, UartMaxBaud
-#include <core/system/com/protocols/combus.h>
+#include <core/system/combus/protocol/combus_uart.h>
 #include <core/system/debug/debug.h>
 
 

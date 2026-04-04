@@ -1,15 +1,15 @@
 /******************************************************************************
- * @file combus.cpp
+ * @file combus_uart.cpp
  * @brief ComBus UART protocol layer — implementation.
  *****************************************************************************/
 
 #if defined(COMBUS_UART_TX) || defined(COMBUS_UART_RX) || defined(COMBUS_UART)
 
-#include "combus.h"
+#include "combus_uart.h"
 
-#include <core/system/com/transport/uart_com.h>
-#include <core/system/com/protocols/combus_tx.h>
-#include <core/system/com/protocols/combus_rx.h>
+#include <core/system/hw/transport/uart_com.h>
+#include <core/system/combus/protocol/combus_tx.h>
+#include <core/system/combus/protocol/combus_rx.h>
 #include <core/system/debug/debug.h>
 
 

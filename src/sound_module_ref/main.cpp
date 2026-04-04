@@ -24,8 +24,8 @@
 // --- Sound module HAL & transport ---
 #include "hal/sound_hal.h"
 #include "config/sound_config.h"
-#include <core/system/com/transport/uart_com.h>
-#include <core/system/com/protocols/combus_rx.h>
+#include <core/system/hw/transport/uart_com.h>
+#include <core/system/combus/protocol/combus_rx.h>
 
 // --- Vehicle & sound engine includes (rc_engine_sound) ---
 // Uncomment (or set -D SOUND_ENGINE_READY) once engine sources are copied

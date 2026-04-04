@@ -23,7 +23,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "../node_com.h"
+#include <core/system/hw/node_com.h>
 #include <struct/combus_struct.h>
 #include <struct/outputs_struct.h>
 
