@@ -1,5 +1,5 @@
 /******************************************************************************
- * @file combus_init.h
+ * @file combus.h
  * @brief ComBus core initialisation — channel count log and sanity check.
  *
  * @details Called from sys_init() (machine env only) after the ComBus config
@@ -24,4 +24,4 @@
  */
 void combus_init(uint8_t nAnalog, uint8_t nDigital);
 
-// EOF combus_init.h
+// EOF combus.h

@@ -1,9 +1,9 @@
 /******************************************************************************
- * @file combus_init.cpp
+ * @file combus.cpp
  * @brief ComBus core initialisation — implementation.
  *****************************************************************************/
 
-#include "combus_init.h"
+#include "combus.h"
 
 #include <core/system/debug/debug.h>
 
@@ -18,4 +18,4 @@ void combus_init(uint8_t nAnalog, uint8_t nDigital)
                  nAnalog, nDigital);
 }
 
-// EOF combus_init.cpp
+// EOF combus.cpp

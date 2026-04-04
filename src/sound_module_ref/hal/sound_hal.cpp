@@ -25,7 +25,7 @@
 
 #include <core/system/combus/protocol/combus_rx.h>
 #include "../config/sound_config.h"
-#include <core/system/combus/frame/combus_frame.h>
+#include <core/system/combus/combus_frame.h>
 
 
 // =============================================================================

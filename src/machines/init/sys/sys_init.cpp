@@ -7,7 +7,7 @@
 #include <config/config.h>
 #include <core/system/debug/debug.h>
 #include <core/system/hw/transport/uart_com.h>
-#include <core/system/combus/combus_init.h>
+#include <core/system/combus/combus.h>
 #include <core/system/hw/pin_reg.h>
 
 // =============================================================================
