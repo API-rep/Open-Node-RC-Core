@@ -4,7 +4,7 @@
  ***************************************************************************/
 #pragma once
 
-#include <ESP32_PWM_Servo.h>
+#include <ServoCore.h>
 #include <core/config/combus/combus_types.h>
 
 // =============================================================================
@@ -12,7 +12,7 @@
 // =============================================================================
 
 	// --- Global pointer to Servo object array ---
-extern ESP32_PWM_Servo* srvDevObj;
+extern ServoCore* srvDevObj;
 
 /**
  * @brief Initialize and allocate Servo objects in RAM

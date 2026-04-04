@@ -13,7 +13,7 @@
 // =============================================================================
 
 	// Global pointer to Servo object array ---
-ESP32_PWM_Servo* srvDevObj = nullptr;
+ServoCore* srvDevObj = nullptr;
 
 /**
  * @brief Initialize and allocate Servo objects in RAM.
@@ -23,7 +23,7 @@ void allocateServos(int8_t count) {
   if (count <= 0) return;
 
     // Allocate the servo object array.
-  srvDevObj = new ESP32_PWM_Servo[count];
+  srvDevObj = new ServoCore[count];
   hw_log_info("    [SRV] Allocated memory for %d servo devices\n", count);
 }
 
