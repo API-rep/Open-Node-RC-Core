@@ -3,6 +3,8 @@
  * @brief Implementation of the main initialization sequence
  *
  * @details Calls sub-init modules in order: sys_init → hw_init → input_init.
+ *   hw_init() internally opens the communication transport first (pin claim)
+ *   then initialises drivers, servos, signal devices and battery sensing.
  *   Boot-safe runlevel is applied after all hardware is initialized.
  *****************************************************************************/
 

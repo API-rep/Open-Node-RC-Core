@@ -4,12 +4,9 @@
  *****************************************************************************/
 
 #include "output_init.h"
+#include "../com/com_init.h"
 #include <machines/config/config.h>
 #include <core/system/debug/debug.h>
-
-#if defined(COMBUS_UART_TX) || defined(COMBUS_UART)
-  #include <core/system/com/combus_uart_init.h>
-#endif
 
 
 // =============================================================================
@@ -29,20 +26,7 @@
 void output_init() {
   sys_log_info("[OUTPUT] output_init ...\n");
 
-	// --- ComBus UART TX ---
-#if defined(COMBUS_UART_TX) || defined(COMBUS_UART)
-  // Board ceiling check — UartMaxBaud in scope (board header resolved via machines/config/config.h).
-  static_assert(ComBusUartBaud <= UartMaxBaud,
-                "ComBusUartBaud exceeds board hardware ceiling UartMaxBaud");
-  {
-    constexpr ComBusFrameCfg txCfg = {
-        static_cast<uint8_t>(CombusLayout::MACHINE_TYPE),
-        static_cast<uint8_t>(AnalogComBusID::CH_COUNT),
-        static_cast<uint8_t>(DigitalComBusID::CH_COUNT),
-    };
-    combus_uart_init(ComBusUartBaud, txCfg, ComBusUartTxHz, {}, nullptr, nullptr);
-  }
-#endif
+  com_init();    // no-op if no transport flag is defined
 
   sys_log_info("[OUTPUT] output_init done\n\n");
 }

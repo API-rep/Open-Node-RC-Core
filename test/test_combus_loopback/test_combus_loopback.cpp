@@ -24,7 +24,7 @@
 #include <unity.h>
 
 #include <core/combus/combus_frame.h>
-#include <core/system/com/ports/uart_com.h>
+#include <core/system/com/transport/uart_com.h>
 #include <core/system/com/protocols/combus_tx.h>
 #include <core/system/com/protocols/combus_rx.h>
 #include <struct/combus_struct.h>

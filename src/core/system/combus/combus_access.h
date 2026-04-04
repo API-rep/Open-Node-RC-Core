@@ -39,7 +39,6 @@ bool combus_set_analog(ComBus& bus, AnalogComBusID ch, uint16_t val, ChanOwner c
 
 
 
-
 /**
  * @brief Write a value to a digital ComBus channel.
  * @param bus    Target ComBus instance.
@@ -72,7 +71,6 @@ bool combus_set_runlevel(ComBus& bus, RunLevel rl, ChanOwner caller);
 
 
 
-
 /**
  * @brief Write the ComBus keyOn flag.
  * 
@@ -87,7 +85,6 @@ bool combus_set_keyon(ComBus& bus, bool val, ChanOwner caller);
 
 
 
-
 /**
  * @brief Write the ComBus batteryIsLow flag.
  * 
@@ -99,6 +96,5 @@ bool combus_set_keyon(ComBus& bus, bool val, ChanOwner caller);
  */
 
 bool combus_set_battlow(ComBus& bus, bool val, ChanOwner caller);
-
 
 // EOF combus_access.h

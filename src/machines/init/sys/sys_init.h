@@ -6,8 +6,19 @@
  * ***************************************************************************/
 #pragma once
 
+#include <core/system/hw/pin_reg.h>
+
 // =============================================================================
-// 1. SYSTEM INITIALIZATION
+// 1. SINGLETON
+// =============================================================================
+
+/// Board-level GPIO registry for the machine environment.
+/// Defined in sys_init.cpp — populated during sys_init().
+extern PinReg pinReg;
+
+
+// =============================================================================
+// 2. SYSTEM INITIALIZATION
 // =============================================================================
 
 	/// System-level init — environment parsing, bus limits, sanity checks.

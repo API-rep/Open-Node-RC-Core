@@ -1,6 +1,6 @@
 ﻿/******************************************************************************
  * @file uart_com.cpp
- * @brief UART port implementation for NodeCom.
+ * @brief UART transport — port init, claim guard and ComBus channel helpers.
  *****************************************************************************/
 
 #include <config/config.h>
@@ -8,6 +8,7 @@
 
 #include <core/system/debug/debug.h>
 #include <core/system/hw/pin_reg.h>
+#include <struct/uart_struct.h>
 
 // Board UartComMaxPorts config validation from config/config.h (board header)
 static_assert(UartComMaxPorts >= 1u, "UartComMaxPorts must be >= 1 (check board header)");
@@ -167,5 +168,52 @@ HardwareSerial* uart_serial_for(int n) {
 		default: sys_log_err("[UART_COM] uart_serial_for: unsupported index %d\n", n); return nullptr;
 	}
 }
+
+
+// =============================================================================
+// 5. COMBUS UART CHANNEL INIT  (compile-flag driven)
+// =============================================================================
+
+#if defined(COMBUS_UART_TX) || defined(COMBUS_UART_RX) || defined(COMBUS_UART)
+
+// Board-level UART pin table — defined in the active env's board .cpp, resolved at link time.
+extern const UartPinCfg uartPins[];
+
+static NodeCom* s_com[UartComMaxPorts] = {};
+
+
+void uart_init(uint32_t baud, PinReg* reg)
+{
+		// --- Resolve UART channel and GPIO pins from build flag ---
+	#if defined(COMBUS_UART)
+		constexpr int uartCh    = COMBUS_UART;
+		const     int uartTxPin = uartPins[uartCh].tx;
+		const     int uartRxPin = uartPins[uartCh].rx;
+	#elif defined(COMBUS_UART_TX)
+		constexpr int uartCh    = COMBUS_UART_TX;
+		const     int uartTxPin = uartPins[uartCh].tx;
+		constexpr int uartRxPin = -1;
+	#else  // COMBUS_UART_RX
+		constexpr int uartCh    = COMBUS_UART_RX;
+		constexpr int uartTxPin = -1;
+		const     int uartRxPin = uartPins[uartCh].rx;
+	#endif
+
+		// --- Open UART port once ---
+	s_com[uartCh] = uart_com_init(uart_serial_for(uartCh), baud,
+	                              uartTxPin, uartRxPin, "combus", reg);
+}
+
+
+NodeCom* uart_get_com(int uartCh)
+{
+	if (uartCh < 0 || uartCh >= UartComMaxPorts) {
+		sys_log_err("[UART_COM] uart_get_com: channel %d out of range.\n", uartCh);
+		return nullptr;
+	}
+	return s_com[uartCh];
+}
+
+#endif  // COMBUS_UART_TX / COMBUS_UART_RX / COMBUS_UART
 
 // EOF uart_com.cpp

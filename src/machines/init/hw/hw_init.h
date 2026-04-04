@@ -10,6 +10,7 @@
 #include "hw_init_drv.h"
 #include "hw_init_srv.h"
 #include "hw_init_sig.h"
+#include "hw_init_com.h"
 
 
 // =============================================================================
