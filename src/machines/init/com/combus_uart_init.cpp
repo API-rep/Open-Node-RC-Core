@@ -9,7 +9,8 @@
 
 #include <machines/config/config.h>
 #include <core/config/outputs/combus_uart.h>         // ComBusUartBaud, ComBusUartTxHz, UartMaxBaud
-#include <core/system/combus/protocol/combus_uart.h>
+#include <core/system/combus/protocol/combus_protocol.h>
+#include <core/system/hw/transport/uart_com.h>
 #include <core/system/debug/debug.h>
 
 
@@ -37,9 +38,9 @@ void combus_uart_init()
           static_cast<uint8_t>(AnalogComBusID::CH_COUNT),
           static_cast<uint8_t>(DigitalComBusID::CH_COUNT),
       };
-      combus_protocol_init(txCfg, ComBusUartTxHz, rxCfg, s_analog, s_digital);
+      combus_protocol_init(uart_get_combus_com(), txCfg, ComBusUartTxHz, rxCfg, s_analog, s_digital);
     #else
-      combus_protocol_init(txCfg, ComBusUartTxHz, {}, nullptr, nullptr);
+      combus_protocol_init(uart_get_combus_com(), txCfg, ComBusUartTxHz, {}, nullptr, nullptr);
     #endif
 }
 

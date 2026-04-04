@@ -42,6 +42,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include <core/system/hw/node_com.h>
 #include <struct/outputs_struct.h>
 
 
@@ -52,21 +53,24 @@
 #if defined(COMBUS_UART_TX) || defined(COMBUS_UART_RX) || defined(COMBUS_UART)
 
 /**
- * @brief Initialise the ComBus protocol layers over the existing UART transport.
+ * @brief Initialise the ComBus protocol layers over any open transport.
  *
- * @details Retrieves the NodeCom* stored by uart_init() and passes it to
- * combus_tx_init() and/or combus_rx_init() depending on which flags are active.
+ * @details Passes @p com to combus_tx_init() and/or combus_rx_init()
+ * depending on which build flags are active.  The transport itself is
+ * opened by the caller (e.g. uart_com_init()) before calling this function.
  *
  * TX side parameters are ignored when only COMBUS_UART_RX is defined.
  * RX side parameters are ignored when only COMBUS_UART_TX is defined.
  *
+ * @param com        Open NodeCom* handle (from any *_com_init).
  * @param txCfg      ComBus frame config for TX (envId, nAnalog, nDigital).
  * @param txHz       TX frame rate in Hz.
  * @param rxCfg      ComBus frame config for RX (envId, nAnalog, nDigital).
  * @param analogBuf  Caller-owned backing buffer for analog channels (RX side).
  * @param digitalBuf Caller-owned backing buffer for digital channels (RX side).
  */
-void combus_protocol_init( ComBusFrameCfg  txCfg,
+void combus_protocol_init( NodeCom*        com,
+                           ComBusFrameCfg  txCfg,
                            uint32_t        txHz,
                            ComBusFrameCfg  rxCfg,
                            uint16_t*       analogBuf,
@@ -74,4 +78,4 @@ void combus_protocol_init( ComBusFrameCfg  txCfg,
 
 #endif  // COMBUS_UART_TX / COMBUS_UART_RX / COMBUS_UART
 
-// EOF combus.h
+// EOF combus_protocol.h
