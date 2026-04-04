@@ -116,4 +116,22 @@ enum class SrvDevType : uint8_t {
 };
 
 
+/**
+ * @brief ESC output protocol / library selector.
+ *
+ * @details Drives init and write dispatch in hw_init_esc — callers use
+ *   `esc_write()` without any protocol-specific branching.
+ *
+ *   PWM_SERVO_SIG — external crawler ESC wired to a single servo-protocol pin
+ *                 (50 Hz, 1000–2000 µs pulse-width).  Uses ServoCore.
+ *   PWM_HBRIDGE — onboard H-bridge receiving duty-cycle PWM.  Uses DcMotorCore.
+ *                 Requires a separate dir pin for bidirectional control.
+ */
+enum class EscType : uint8_t {
+    UNDEFINED    = 0,   ///< Not declared — safe default
+    PWM_SERVO_SIG = 1,   ///< External RC ESC — ServoCore, 50 Hz servo protocol (1 pin)
+    PWM_HBRIDGE  = 2,   ///< On-board H-bridge — DcMotorCore, duty-cycle PWM (pwmPin + dirPin)
+};
+
+
 // EOF machine_defs.h

@@ -240,6 +240,42 @@
 			"type": "shell",
 			"command": "${userHome}\\.platformio\\penv\\Scripts\\pio.exe run -e sound_node_volvo 2>&1 | findstr /v \"libdeps FastLED register ^$\" | findstr /i \"error: warning: note: undefined\"",
 			"group": "build"
+		},
+		{
+			"label": "PIO Build sound_node_volvo",
+			"type": "shell",
+			"command": "${userHome}\\.platformio\\penv\\Scripts\\pio.exe run -e sound_node_volvo",
+			"group": "build"
+		},
+		{
+			"label": "PIO Build sound_node_volvo",
+			"type": "shell",
+			"command": "${userHome}\\.platformio\\penv\\Scripts\\pio.exe run -e sound_node_volvo",
+			"group": "build"
+		},
+		{
+			"label": "PIO Build sound_node_volvo",
+			"type": "shell",
+			"command": "${userHome}\\.platformio\\penv\\Scripts\\pio.exe run -e sound_node_volvo",
+			"group": "build"
+		},
+		{
+			"label": "PIO Build sound_node_volvo",
+			"type": "shell",
+			"command": "${userHome}\\.platformio\\penv\\Scripts\\pio.exe run -e sound_node_volvo",
+			"group": "build"
+		},
+		{
+			"label": "PIO Build sound_node_volvo",
+			"type": "shell",
+			"command": "${userHome}\\.platformio\\penv\\Scripts\\pio.exe run -e sound_node_volvo",
+			"group": "build"
+		},
+		{
+			"label": "PIO Build sound_node_volvo",
+			"type": "shell",
+			"command": "${userHome}\\.platformio\\penv\\Scripts\\pio.exe run -e sound_node_volvo",
+			"group": "build"
 		}
 	]
 }

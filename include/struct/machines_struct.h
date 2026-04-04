@@ -70,6 +70,24 @@ typedef struct {
 } ServoPort;
 
 
+/**
+ * @brief Board ESC output port structure.
+ *
+ * @details Combines protocol type and GPIO assignments for one ESC channel.
+ *   hw_init_esc selects ServoCore (PWM_SERVO_SIG) or DcMotorCore (PWM_HBRIDGE)
+ *   at init time based on escType — callers use esc_write() without any
+ *   protocol-specific branching.
+ *
+ *   dirPin is only required for EscType::PWM_HBRIDGE bidirectional mode.
+ */
+typedef struct {
+  const int8_t           ID;
+  const char*            infoName;
+  EscType                escType = EscType::UNDEFINED;  ///< Protocol / library selector
+  std::optional<uint8_t> pwmPin;                        ///< PWM output GPIO
+  std::optional<uint8_t> dirPin;                        ///< Direction pin (PWM_HBRIDGE only)
+} EscPort;
+
 
 /**
  * @brief Board main structure
