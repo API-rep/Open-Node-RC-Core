@@ -7,7 +7,7 @@
  * the Flysky FS-i6X profile convention used as the base remote config:
  *
  *   pulseWidth[1]  STEERING  ← ComBus STEERING_BUS
- *   pulseWidth[3]  THROTTLE  ← ComBus DRIVE_SPEED_BUS
+ *   pulseWidth[3]  THROTTLE  ← ComBus ENGINE_RPM_BUS
  *   pulseWidth[5]  HORN      ← ComBus HORN (digital → 1000/2000)
  *   pulseWidth[2]  FUNCTION_R← ComBus LIGHTS (digital → 1000/2000)
  *   pulseWidth[6]  GEARBOX   ← ComBus DUMP_BUS

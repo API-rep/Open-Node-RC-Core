@@ -29,7 +29,7 @@
  * @details Physical layout:
  *   - 1 steering actuator (or two wired in parallel) on port 1A.
  *   - 6 traction wheel motors: two in the cabin (1B, 2B) and four on the
- *     trailer (3A, 4A, 3B, 4B).  All six share DRIVE_SPEED_BUS and clone
+ *     trailer (3A, 4A, 3B, 4B).  All six share ENGINE_RPM_BUS and clone
  *     their config from CABIN_LEFT_MOTOR.
  *   - 2 dump actuators wired in parallel on port 2A, sharing DUMP_BUS.
  *     They clone their mode/speed config from STEERING (TWO_WAY_NEUTRAL_CENTER).
@@ -57,7 +57,7 @@ DcDevice dcDevArray[DC_DRV_COUNT] = {
     .DevType    = DcDevType::DC_MOTOR,
     .usage      = DevUsage::TRACT_WHEEL,
     .mode       = DcDrvMode::TWO_WAY_NEUTRAL_CENTER,
-    .comChannel = AnalogComBusID::DRIVE_SPEED_BUS,
+    .comChannel = AnalogComBusID::ENGINE_RPM_BUS,
     .pwmFreq    = M_DEF_PWM_FREQ,
     .polInv     = true
   },

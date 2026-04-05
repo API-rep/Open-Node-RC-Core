@@ -73,7 +73,7 @@ void sound_hal_init();
  * and holds pulseWidth[] at neutral.
  *
  * Updates the following rc_engine_sound global variables:
- *   - pulseWidth[THROTTLE]    ← analogBus[DRIVE_SPEED_BUS]
+ *   - pulseWidth[THROTTLE]    ← analogBus[ENGINE_RPM_BUS]
  *   - pulseWidth[STEERING]    ← analogBus[STEERING_BUS]
  *   - pulseWidth[GEARBOX]     ← analogBus[DUMP_BUS]
  *   - pulseWidth[HORN]        ← digitalBus[HORN]

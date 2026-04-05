@@ -25,8 +25,9 @@ namespace DumperTruck {
 /// @brief Com-bus analog channel identifiers
 enum class AnalogComBusID : uint8_t {
   STEERING_BUS = 0,
-  DRIVE_SPEED_BUS,
+  ENGINE_RPM_BUS,      ///< Raw throttle stick value — drives engine sound RPM (owner: INPUT_DEV)
   DUMP_BUS,
+  ESC_SPEED_BUS,       ///< Inertia-smoothed speed — drives ESC output + currentSpeed (owner: MACHINE_CTRL or SOUND)
   CH_COUNT
 };
 

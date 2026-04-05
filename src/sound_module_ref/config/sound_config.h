@@ -49,7 +49,7 @@
 
 /// ComBus analog channel → rc_engine_sound THROTTLE input.
 /// Maps full range [0, 65535] → pulseWidth [1000, 2000] µs.
-#define SOUND_CB_THROTTLE   AnalogComBusID::DRIVE_SPEED_BUS
+#define SOUND_CB_THROTTLE   AnalogComBusID::ENGINE_RPM_BUS
 
 /// ComBus analog channel → rc_engine_sound STEERING input.
 /// Used by the sound engine for indicator auto-detection and tyre squeal.

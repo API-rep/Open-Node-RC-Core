@@ -45,10 +45,11 @@ enum class ChanOwner : uint8_t {
     NONE         = 0,   ///< No mandate declared — nobody is allowed to write this channel
     ANY,                ///< All modules are allowed to write this channel (shared scratchpad — use sparingly)
     SYSTEM,             ///< Written by the node system layer (RunLevel FSM, key-on logic)
-    INPUT_DEV,      ///< Written by the input module (PS4, SBUS, Wi-Fi remote…)
-    SOUND,          ///< Written by the sound module (standalone mode only)
-    VBAT_MON,       ///< Written by the battery monitor module
-    REMOTE,         ///< Written by a remote node over a communication link
+    INPUT_DEV,          ///< Written by the input module (PS4, SBUS, Wi-Fi remote…)
+    MACHINE_CTRL,       ///< Written by the machine controller logic (ESC inertia FSM, drive state…)
+    SOUND,              ///< Written by the sound module (standalone mode only)
+    VBAT_MON,           ///< Written by the battery monitor module
+    REMOTE,             ///< Written by a remote node over a communication link
 };
 
 

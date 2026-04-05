@@ -79,7 +79,7 @@ At 50 Hz → ~520 bytes/s on a 115200 baud link (< 1 % utilisation).
 
 | ComBus channel              | rc_engine_sound index | Role          |
 |-----------------------------|-----------------------|---------------|
-| `DRIVE_SPEED_BUS` (analog)  | `pulseWidth[3]`       | Throttle      |
+| `ENGINE_RPM_BUS` (analog)   | `pulseWidth[3]`       | Throttle      |
 | `STEERING_BUS`    (analog)  | `pulseWidth[1]`       | Steering      |
 | `DUMP_BUS`        (analog)  | `pulseWidth[6]`       | Gearbox / 2nd |
 | `HORN`    (digital, bit 0)  | `pulseWidth[5]`       | Horn toggle   |
