@@ -34,20 +34,23 @@
  *
  *   At init time a module checks `owner` to decide if it should write the
  *   channel or just read it. The same channel can have a different owner
- *   depending on the build environment. Example: `runLevel` is owned by
- *   `MACHINE` when a machine node is present; it is owned by `SOUND` when
- *   the sound module runs standalone with no machine master.
+ *   depending on the build environment.
  *
+ *   `SYSTEM`     — the local/primary system process on this node.
+ *                  Covers RunLevel FSM, ESC/drive inertia FSM, key-on logic.
+ *                  Used by both machine nodes and standalone sound nodes.
+ *   `SYSTEM_EXT` — an external system process connected via ComBus.
+ *                  Example: the sound module receiving ESC_SPEED_BUS from
+ *                  the machine controller (transitional, migration in progress).
  *   `NONE` — no owner declared, channel is passive (safe default).
  *   `ANY`  — any module may write; use only for shared scratch channels.
  */
 enum class ChanOwner : uint8_t {
     NONE         = 0,   ///< No mandate declared — nobody is allowed to write this channel
     ANY,                ///< All modules are allowed to write this channel (shared scratchpad — use sparingly)
-    SYSTEM,             ///< Written by the node system layer (RunLevel FSM, key-on logic)
+    SYSTEM,             ///< Local system process — RunLevel FSM, ESC/drive FSM, or standalone node
+    SYSTEM_EXT,         ///< External system process over ComBus (e.g. sound node receiving from machine)
     INPUT_DEV,          ///< Written by the input module (PS4, SBUS, Wi-Fi remote…)
-    MACHINE_CTRL,       ///< Written by the machine controller logic (ESC inertia FSM, drive state…)
-    SOUND,              ///< Written by the sound module (standalone mode only)
     VBAT_MON,           ///< Written by the battery monitor module
     REMOTE,             ///< Written by a remote node over a communication link
 };

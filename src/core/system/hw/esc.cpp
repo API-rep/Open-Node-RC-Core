@@ -39,8 +39,8 @@ static std::unique_ptr<DcMotorCore[]> s_dc;
 // 2. PULSE RANGE CALIBRATION
 // =============================================================================
 
-void esc_calibrate(uint16_t span,
-                   uint16_t takeoffPunch,
+void esc_calibrate(uint16_t halfSpan,
+                   uint16_t deadBandHalf,
                    uint16_t reversePlus,
                    uint16_t* outMax,
                    uint16_t* outMin,
@@ -49,10 +49,16 @@ void esc_calibrate(uint16_t span,
 {
     if (!outMax || !outMin || !outMaxNeutral || !outMinNeutral) return;
 
-    *outMaxNeutral = static_cast<uint16_t>(1500u + takeoffPunch);
-    *outMinNeutral = static_cast<uint16_t>(1500u - takeoffPunch);
-    *outMax        = static_cast<uint16_t>(1500u + span);
-    *outMin        = static_cast<uint16_t>(1500u - span + reversePlus);
+    // All arithmetic in 32-bit to avoid silent wrapping on saturating inputs.
+    static constexpr int32_t kNeutral = 32767;
+    auto sat16 = [](int32_t v) -> uint16_t {
+        return static_cast<uint16_t>(v < 0 ? 0 : v > 65535 ? 65535 : v);
+    };
+
+    *outMax        = sat16(kNeutral + halfSpan);
+    *outMin        = sat16(kNeutral - halfSpan + reversePlus);
+    *outMaxNeutral = sat16(kNeutral + deadBandHalf);
+    *outMinNeutral = sat16(kNeutral - deadBandHalf);
 }
 
 
@@ -119,15 +125,22 @@ void esc_init(const EscPort* /*ports*/, uint8_t /*count*/, PinReg& /*reg*/) {}
 
 #ifdef ESC_OUTPUT_ENABLED
 
-void esc_write(uint8_t id, uint16_t signalUs)
+void esc_write(uint8_t id, uint16_t cbusVal)
 {
     if (id >= s_count || !s_ports) return;
 
     if (s_ports[id].escType == EscType::PWM_SERVO_SIG) {
-        s_srv[id].writeMicroseconds(signalUs);
+        // 16-bit → 1000–2000 µs servo pulse
+        const uint16_t us = static_cast<uint16_t>(
+            1000u + static_cast<uint32_t>(cbusVal) * 1000u / 65535u);
+        s_srv[id].writeMicroseconds(us);
 
     } else if (s_ports[id].escType == EscType::PWM_HBRIDGE) {
-        float speed = (static_cast<float>(signalUs) - 1500.0f) / 5.0f;
+        // 16-bit → -100.0 … +100.0 %   (neutral = 32767, not 32768 — unavoidable 1-lsb asymmetry)
+        // DcMotorCore::runAtSpeed() range is [-100, +100] regardless of dirPin presence:
+        //   with dirPin    → SpeedDir mode  (bidirectional, lib clamps |speed| to [0, 100])
+        //   without dirPin → unsigned PWM   (negatives clamped to 0 inside lib)
+        const float speed = (static_cast<float>(cbusVal) - 32767.0f) * (100.0f / 32767.0f);
         s_dc[id].runAtSpeed(speed);
     }
 }

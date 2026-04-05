@@ -32,11 +32,22 @@
 // 1. TYPES
 // =============================================================================
 
-/// Function pointer for ESC output linearization (QUICRUN and similar).
-/// @param pw  Raw pulse-width value (1000–2000 µs).
-/// @return    Linearized pulse-width value.
-/// Pass `nullptr` to `EscInertiaConfig::linearizeFn` for a direct passthrough.
-using EscLinearizeFn = uint16_t (*)(uint16_t pw);
+/**
+ * @brief Dispatch hook for ESC output curve correction (QUICRUN, non-linear ESCs…).
+ *
+ * @details Used as an "aiguillage" (routing switch) in `map_esc_signal()`:
+ *   - `nullptr`      → signal passes through unchanged (linear ESC, direct mapping).
+ *   - non-`nullptr`  → the function is called with the raw inertial ComBus position
+ *                      and must return the corrected value before the final
+ *                      `[escMin..escMax] → [0..65535]` scaling is applied.
+ *
+ *   Typical use: `reMap(curveQuicrunFusion, val)` wrapper that indexes a
+ *   pre-built correction table to compensate for non-linear motor response.
+ *
+ * @param val  Raw inertial position in ComBus units (0–65535).
+ * @return     Corrected position in ComBus units (0–65535).
+ */
+using EscLinearizeFn = uint16_t (*)(uint16_t val);
 
 
 // =============================================================================
@@ -50,24 +61,28 @@ using EscLinearizeFn = uint16_t (*)(uint16_t pw);
  *   values.  The result is suitable for both the inertia FSM and for the
  *   signal mapping step that converts `escPulseWidthOut` → 1000–2000 µs.
  *
+ *   All parameters and outputs are expressed in 16-bit ComBus units (0–65535).
+ *   The neutral point is always `EscNeutral = 32767`.
+ *
  *   Formulas:
  *   @code
- *     escPulseMaxNeutral = 1500 + takeoffPunch
- *     escPulseMinNeutral = 1500 - takeoffPunch
- *     escPulseMax        = 1500 + span
- *     escPulseMin        = 1500 - span + reversePlus
+ *     outMax        = EscNeutral + halfSpan
+ *     outMin        = EscNeutral - halfSpan + reversePlus
+ *     outMaxNeutral = EscNeutral + deadBandHalf
+ *     outMinNeutral = EscNeutral - deadBandHalf
  *   @endcode
  *
- * @param span           Half-range in µs (EscPulseSpan, e.g. 600).
- * @param takeoffPunch   Dead-band at neutral in µs (EscTakeoffPunch, e.g. 0).
- * @param reversePlus    Reverse range extension in µs (EscReversePlus, e.g. 0).
- * @param[out] outMax             Full-forward limit.
- * @param[out] outMin             Full-reverse limit.
- * @param[out] outMaxNeutral      Positive edge of takeoff dead-band.
- * @param[out] outMinNeutral      Negative edge of takeoff dead-band.
+ * @param halfSpan       Forward/reverse half-range (0–32767).
+ *                       E.g. 32767 for a full-range ESC, 26214 for a 80%-range ESC.
+ * @param deadBandHalf   Half-width of the takeoff dead-band (0–32767, typically 0).
+ * @param reversePlus    Reverse range extension (0–halfSpan, typically 0).
+ * @param[out] outMax             Full-forward limit  (0–65535).
+ * @param[out] outMin             Full-reverse limit  (0–65535).
+ * @param[out] outMaxNeutral      Positive edge of takeoff dead-band (0–65535).
+ * @param[out] outMinNeutral      Negative edge of takeoff dead-band (0–65535).
  */
-void esc_calibrate(uint16_t span,
-                   uint16_t takeoffPunch,
+void esc_calibrate(uint16_t halfSpan,
+                   uint16_t deadBandHalf,
                    uint16_t reversePlus,
                    uint16_t* outMax,
                    uint16_t* outMin,
@@ -84,8 +99,11 @@ void esc_calibrate(uint16_t span,
  *
  * @details Iterates `ports[0..count-1]`, claims pins via `reg`, and attaches
  *   the appropriate driver object:
- *   - `EscType::PWM_SERVO_SIG` → `ServoCore` at `EscPwmFreq`, neutral 1500 µs.
- *   - `EscType::PWM_HBRIDGE`   → `DcMotorCore` at `EscPwmFreq`.
+ *   - `EscType::PWM_SERVO_SIG` → `ServoCore` at `EscPwmFreq`, neutral at 1500 µs
+ *                                 (hardware init only — runtime commands go through `esc_write()`).
+ *   - `EscType::PWM_HBRIDGE`   → `DcMotorCore` at `EscPwmFreq`, with optional dirPin
+ *                                 for bidirectional SpeedDir mode.  Without dirPin,
+ *                                 `runAtSpeed()` clamps negatives to 0 (unsigned PWM).
  *   Ports whose pin was not granted by `reg` are silently skipped.
  *
  * @param ports  Board ESC port configuration array (must outlive all calls).
@@ -100,15 +118,16 @@ void esc_init(const EscPort* ports, uint8_t count, PinReg& reg);
 // =============================================================================
 
 /**
- * @brief Write a 1000–2000 µs command to one ESC channel.
+ * @brief Write a 16-bit ComBus command to one ESC channel.
  *
- * @details Dispatches to `ServoCore::writeMicroseconds()` for PWM_SERVO_SIG
- *   or to `DcMotorCore::runAtSpeed((us-1500)/5)` for PWM_HBRIDGE.
+ * @details Maps the 16-bit ComBus value to the 1000–2000 µs hardware range
+ *   internally, then dispatches to `ServoCore::writeMicroseconds()` for
+ *   PWM_SERVO_SIG or to `DcMotorCore::runAtSpeed()` for PWM_HBRIDGE.
  *   Out-of-range `id` is silently ignored.
  *
- * @param id        Channel index matching the board's `EscCh` enum value.
- * @param signalUs  Command in µs (1000 = full reverse, 1500 = neutral, 2000 = full forward).
+ * @param id       Channel index matching the board's `EscCh` enum value.
+ * @param cbusVal  Command in ComBus units (0 = full reverse, 32767 = neutral, 65535 = full forward).
  */
-void esc_write(uint8_t id, uint16_t signalUs);
+void esc_write(uint8_t id, uint16_t cbusVal);
 
 // EOF esc.h

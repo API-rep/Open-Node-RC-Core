@@ -10,11 +10,11 @@
  *   **Ownership model:**
  *   The FSM writes `AnalogComBusID::ESC_SPEED_BUS` with an ownership tag
  *   declared in `EscInertiaConfig::owner`:
- *   - `ChanOwner::MACHINE_CTRL` — machine controller node runs the FSM,
- *     the sound node reads `ESC_SPEED_BUS` passively.
- *   - `ChanOwner::SOUND`        — transitional mode while the DiYGuy esc()
- *     FSM still lives in `sound_module/main.cpp` (single-TU constraint).
- *     Remove once the migration is complete.
+ *   - `ChanOwner::SYSTEM`     — this node (machine or standalone sound) runs
+ *     the FSM locally and owns ESC_SPEED_BUS.
+ *   - `ChanOwner::SYSTEM_EXT` — transitional mode: the DiYGuy esc() FSM still
+ *     lives in `sound_module/main.cpp` (single-TU constraint) while the machine
+ *     controller has already taken over the channel.  Remove once migration done.
  *
  *   **Usage:**
  *   @code
@@ -52,20 +52,20 @@
  */
 struct EscInertiaConfig {
 
-    // --- Pulse-range calibration (from esc_calibrate()) ---
-    uint16_t pulseZero;          ///< RC neutral = 1500 µs
-    uint16_t pulseMax;           ///< RC full-forward limit (e.g. 2000)
-    uint16_t pulseMin;           ///< RC full-reverse limit (e.g. 1000)
-    uint16_t pulseMaxNeutral;    ///< Upper edge of neutral dead-band
-    uint16_t pulseMinNeutral;    ///< Lower edge of neutral dead-band
-    uint16_t pulseMaxLimit;      ///< Sanity cap — signal above this is invalid
-    uint16_t pulseMinLimit;      ///< Sanity floor — signal below this is invalid
+    // --- RC input range (16-bit ComBus units, from esc_calibrate()) ---
+    uint16_t cbusNeutral;        ///< Neutral = 32767 (maps to 1500 µs)
+    uint16_t cbusMax;            ///< Full-forward limit (e.g. 65535)
+    uint16_t cbusMin;            ///< Full-reverse limit (e.g. 0)
+    uint16_t cbusMaxNeutral;     ///< Upper edge of neutral dead-band
+    uint16_t cbusMinNeutral;     ///< Lower edge of neutral dead-band
+    uint16_t cbusMaxLimit;       ///< Sanity cap  — values above this are invalid
+    uint16_t cbusMinLimit;       ///< Sanity floor — values below this are invalid
 
-    // --- ESC hardware range (from esc_calibrate()) ---
-    uint16_t escPulseMax;        ///< ← EscPulseSpan forward limit
-    uint16_t escPulseMin;        ///< ← EscPulseSpan+EscReversePlus reverse limit
-    uint16_t escPulseMaxNeutral; ///< ← EscTakeoffPunch dead-band positive edge
-    uint16_t escPulseMinNeutral; ///< ← EscTakeoffPunch dead-band negative edge
+    // --- ESC hardware range (16-bit ComBus units, from esc_calibrate()) ---
+    uint16_t escMax;             ///< ← EscPulseSpan forward limit
+    uint16_t escMin;             ///< ← EscPulseSpan+EscReversePlus reverse limit
+    uint16_t escMaxNeutral;      ///< ← EscTakeoffPunch dead-band positive edge
+    uint16_t escMinNeutral;      ///< ← EscTakeoffPunch dead-band negative edge
 
     // --- Ramp timing (see 3_ESC.h escRampTimeFirstGear etc.) ---
     uint16_t rampTimeFirstMs;    ///< ms per ramp step in 1st gear (~20)
@@ -73,10 +73,10 @@ struct EscInertiaConfig {
     uint16_t rampTimeThirdMs;    ///< ms per ramp step in 3rd gear (~75)
     uint16_t crawlerRampTimeMs;  ///< ms per step in crawler direct mode (~2)
 
-    // --- Ramp rate limits ---
-    uint8_t  brakeSteps;         ///< Max braking ramp steps (escBrakeSteps)
-    uint8_t  accelSteps;         ///< Max acceleration ramp steps (escAccelerationSteps)
-    uint8_t  brakeMargin;        ///< Min offset from neutral while braking (EscBrakeMargin)
+    // --- Ramp rate limits (ComBus units per ramp step, from esc_calibrate() scaled) ---
+    uint16_t brakeSteps;         ///< Max braking increment per step (cbusVal units)
+    uint16_t accelSteps;         ///< Max acceleration increment per step (cbusVal units)
+    uint16_t brakeMargin;        ///< Min offset from neutral while braking (cbusVal units)
 
     // --- Scaling percentages ---
     uint8_t  globalAccelPct;     ///< Global accel scaling 1–200 (100 = nominal)
@@ -90,7 +90,7 @@ struct EscInertiaConfig {
 
     // --- ComBus output ---
     ComBus*   bus;               ///< Target ComBus — writes ESC_SPEED_BUS. nullptr = skip.
-    ChanOwner owner;             ///< MACHINE_CTRL (controller) or SOUND (transitional).
+    ChanOwner owner;             ///< SYSTEM (local controller) or SYSTEM_EXT (external, transitional).
 };
 
 
@@ -143,8 +143,8 @@ struct EscInertiaInputs {
  *   one-shot pulse — the caller must process it and clear it on the same cycle.
  */
 struct EscInertiaState {
-    uint16_t escPulseWidth;    ///< Current inertial ESC position (1000–2000 µs, pre-linearize)
-    uint16_t escSignalUs;      ///< Mapped 1000–2000 µs ESC command (post-linearize + ESC_DIR)
+    uint16_t cbusPos;          ///< Current inertial position in ComBus units (0–65535, pre-linearize)
+    uint16_t escCbusVal;       ///< Mapped 16-bit ComBus ESC command (post-linearize + ESC_DIR)
     uint16_t currentSpeed;     ///< 0–500 proportional to inertial deviation from neutral
     bool     escIsBraking;
     bool     escInReverse;
@@ -165,22 +165,22 @@ void esc_inertia_init(const EscInertiaConfig& cfg);
 /**
  * @brief Advance the inertia FSM by one cycle.
  *
- * @details Reads `rawPulseUs` (the current `ENGINE_RPM_BUS` stick value,
- *   1000–2000 µs), advances the 5-state drive state machine, updates
- *   `out->escPulseWidth`, writes `ESC_SPEED_BUS` into the ComBus declared
+ * @details Reads `cbusVal` (the current `ENGINE_RPM_BUS` ComBus value,
+ *   0–65535), advances the 5-state drive state machine, updates
+ *   `out->cbusPos`, writes `ESC_SPEED_BUS` into the ComBus declared
  *   in `EscInertiaConfig::bus`, and fills all `EscInertiaState` fields.
  *
  *   Call frequency is gated internally by `escRampTimeMs` — the function
  *   is safe to call every loop cycle and skips the state update when the
  *   ramp timer has not elapsed.
  *
- * @param rawPulseUs  Current throttle stick position in µs (ENGINE_RPM_BUS value).
- * @param inputs      Dynamic per-cycle inputs filled by the caller.
- * @param[out] out    Output state — may be nullptr if caller does not need it.
+ * @param cbusVal  Current throttle position in ComBus units (0–65535, from ENGINE_RPM_BUS).
+ * @param inputs   Dynamic per-cycle inputs filled by the caller.
+ * @param[out] out Output state — may be nullptr if caller does not need it.
  *
  * @note No-op when ESC_INERTIA_ENABLED is absent.
  */
-void esc_inertia_update(uint16_t rawPulseUs,
+void esc_inertia_update(uint16_t cbusVal,
                         const EscInertiaInputs& inputs,
                         EscInertiaState* out);
 
