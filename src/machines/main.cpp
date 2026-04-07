@@ -147,7 +147,9 @@ void loop() {
         uint16_t rawValue = comBus.analogBus[chIdx].value;
 
         if (!comBus.analogBus[chIdx].isDrived) {
-          rawValue = (machine.dcDev[i].mode == DcDrvMode::TWO_WAY_NEUTRAL_CENTER) ? (comBus.analogBusMaxVal / 2) : 0;
+          rawValue = (machine.dcDev[i].signal == DcDrvSignal::PWM_TWO_WAY_NEUTRAL_CENTER
+                   || machine.dcDev[i].signal == DcDrvSignal::SERVO_SIG_NEUTRAL_CENTER)
+                   ? (comBus.analogBusMaxVal / 2) : 0;
         }
 
         float speed = (float)map(rawValue, 0, comBus.analogBusMaxVal, -PERCENT_MAX, PERCENT_MAX);

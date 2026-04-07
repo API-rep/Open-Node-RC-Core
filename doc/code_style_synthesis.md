@@ -55,33 +55,156 @@ The objective is a clean, stable, educational style for both app code and reusab
     - use 2 empty lines by default
     - use 3 empty lines if the preceding code block exceeds 40 lines
 
-### Doxygen `@details` writing style — relationships over implementation
+### `@brief` writing style — role first, detail after
 
-The preferred `@details` style focuses on **responsibilities and relationships between components**, not on algorithmic details.
+Every `@brief` (in `.h` or `.cpp`) follows the same pattern:
 
-Structure each `@details` as short prose paragraphs, one per concern, in natural reading order:
+```
+<Role noun/phrase>. <One-sentence explanation of what it contributes in context.>
+```
 
-- **Paragraph 1 — Producer:** who creates/fills this, when, and what it stores.
-- **Paragraph 2 — Consumer:** who reads it, why, and what it enables.
-- **Paragraph 3 — Lifetime / safety:** allocation scope, pointer validity guarantees, any constraints.
+Rules:
+- Start with a **noun or short noun phrase** naming the role, not with a verb ("Upper travel limit selector.", not "Returns the upper limit.").
+- One sentence after the dot — explain *why* this exists in the context of the module, not just *what* it does.
+- No technical jargon that a non-native English reader would need to look up (`saturate`, `guardrail`, `clamp` is fine, `saturate` is not).
+- Keep it on **one line** — if it doesn't fit, the `@brief` is too long.
+
+Examples:
+```cpp
+/** @brief Upper travel limit selector. Use software margin when configured, otherwise hw hard stop. */
+/** @brief Lower travel limit selector. Use software margin when configured, otherwise hw hard stop. */
+/** @brief Value clamper. Keep @p val within [@p lo, @p hi] to stay within travel limits. */
+```
+
+Anti-patterns to avoid:
+```cpp
+/** @brief Effective upper limit — margin when present, otherwise hw. */   // ✗ no role name, passive
+/** @brief Returns the clamped value. */                                    // ✗ verb-first, no context
+/** @brief Saturate @p val within range. */                                 // ✗ jargon (saturate)
+```
+
+### Doxygen depth: `.h` vs `.cpp`
+
+A function is documented **twice** — once for the caller, once for the maintainer.
+
+**In `.h` — caller perspective (what and why):**
+- `@brief` on one line: role + one-sentence purpose.
+- `@details` optional: algorithm selection table, pointer rules, mode matrix — anything that helps a caller configure the function correctly without reading the implementation.
+- `@param` / `@return`: what each parameter means to the caller; units, null rules, ownership.
+- No code structure, no step sequences, no internal variable names.
+
+```cpp
+/**
+ * @brief Validate a MotionConfig before first use.
+ *
+ * @details Algorithm selection by pointer pattern (ramp XOR gear+inertia):
+ *
+ *   Mode         | ramp  | gear  | inertia
+ *   -------------|-------|-------|--------
+ *   Simple ramp  |  set  |  null |  null
+ *   Traction     |  null |  set  |  set
+ *
+ *   Value checks: hw->maxHwVal > minHwVal, band within effective limits, ...
+ *
+ * @param cfg  Config to validate. Must not be null.
+ * @return     True when valid. False + fatal log on first violation.
+ */
+bool motion_check(const MotionConfig* cfg);
+```
+
+**In `.cpp` — maintainer perspective (how and why it works):**
+- Same `@brief` (copy from `.h` — keeps both files self-contained).
+- `@details` **mandatory for non-trivial functions**: numbered step sequence matching the `// N.` comments in the body. Reading the block alone must give a complete mental map of the function without opening the code.
+- Technical details belong here: pointer arithmetic, timing model, state machine transitions, sound engine hooks, etc.
+- Goal: navigate the code at a glance, even for someone unfamiliar with the module.
+
+```cpp
+/**
+ * @brief Validate a MotionConfig before first use.
+ *
+ * @details Checks in order, stops on the first failure:
+ *   1. hw and band are non-null (mandatory for all modes).
+ *   2. Algorithm coherence: ramp XOR (gear + inertia).
+ *   3. hw->maxHwVal > hw->minHwVal.
+ *   4. margin (when present) within hw limits, max > min.
+ *   5. dead-band within the effective limits (margin or hw).
+ */
+bool motion_check(const MotionConfig* cfg)
+{
+```
+
+The numbered list mirrors the `// N.` step comments inside the function body —
+the reader can jump from the doc to the code step with zero friction.
+
+#### `// N.` comment indentation rule
+
+Step comments (`// N.`) and inline section comments (`// <label>`) are indented
+**2 spaces more** than the first code line of the block they introduce:
+
+```cpp
+      // 1. Clamp to travel limits, snap dead-band to neutral        ← 6 spaces
+    rawComBusVal = s_clamp(rawComBusVal, minLimit, maxLimit);        ← 4 spaces
+
+        if (runtime->cbusPos < rawComBusVal) {
+              // Accelerating — driveRampGain scales the step        ← 14 spaces
+            const uint16_t gain = ...;                               ← 12 spaces
+        }
+```
+
+This visual offset makes step boundaries scannable at a glance without relying
+on blank lines alone. The rule applies at every nesting level.
+
+### `@brief` + `@details` for sequential functions
+
+When a function is a sequential pipeline, `@brief` stays on one line (role-first) and the numbered sequence goes in `@details`:
+
+```cpp
+/**
+ * @brief Validate a MotionConfig before first use.
+ *
+ * @details Checks in order, stops on the first failure:
+ *   1. hw and band are non-null (mandatory for all modes).
+ *   2. Algorithm coherence: ramp XOR (gear + inertia).
+ *   3. hw->maxHwVal > hw->minHwVal.
+ *   4. margin (when present) within hw limits, max > min.
+ *   5. dead-band within the effective limits (margin or hw).
+ */
+```
+
+The numbered list mirrors the `// N.` step comments inside the function body —
+the reader can jump from the doc to the code step with zero friction.
+
+
+
+### `@details` in the file header (`.h` only) — module overview
+
+The **file-level `@details`** (the `@details` block at the top of a `.h` file) describes the module as a whole: its theme, design intent, architecture, and key concepts. It is the entry point for anyone opening the file for the first time.
+
+Focus on **responsibilities and relationships between components**, not on implementation details.
+
+Structure as short prose paragraphs, one per concern, in natural reading order:
+
+- **Paragraph 1 — Purpose / theme:** what this module does and why it exists.
+- **Paragraph 2 — Architecture / concepts:** key types, ownership rules, design patterns used (pointer pattern, registry, state machine…).
+- **Paragraph 3 — Usage / constraints:** who calls what, in what order, any lifecycle rules.
 
 Rules:
 - Always use `` `backticks` `` for identifiers (functions, fields, types, arrays).
-- No bullet lists in `@details` — write prose sentences.
+- No bullet lists — write prose sentences.
 - Do not describe *how* the code works line by line; describe *what role it plays* and *who depends on it*.
-- For function `@details` with a numbered sequence, each step should be a brief phrase — not a re-narration of the implementation.
 
-Example (struct context):
+Example (file header context):
 ```
- * @details During initialization, `uart_com_init()` claims one entry
- *   in the static `ports[]` registry and fills its metadata.
+ * @details `uart_com_init()` claims one entry in the static `ports[]` registry
+ *   and fills its metadata, then returns a `NodeCom*` pointing into that entry.
  *
- *   Each `NodeCom` instance embeds a `ctx` pointer back to its `UartCtx`,
- *   so the port callbacks can retrieve the correct `HardwareSerial*` at runtime.
+ *   Each `NodeCom` embeds a `ctx` pointer back to its `UartCtx`, so the
+ *   port callbacks can retrieve the correct `HardwareSerial*` at runtime.
  *
  *   Because the registry is statically allocated, the returned `NodeCom*`
  *   remains valid for the lifetime of the program.
 ```
+
 
 ### Naming and layout
 - Class/type names: PascalCase

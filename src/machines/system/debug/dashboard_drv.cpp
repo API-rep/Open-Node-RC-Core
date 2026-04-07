@@ -25,12 +25,13 @@ static const Machine* s_mach = nullptr;
 // 2. PRIVATE HELPERS
 // =============================================================================
 
-static const char* drvModeStr(DcDrvMode m) {
-	switch (m) {
-		case DcDrvMode::TWO_WAY_NEUTRAL_CENTER: return "BIPOLAR";
-		case DcDrvMode::ONE_WAY:                return "ONE_WAY";
-		case DcDrvMode::UNDEFINED:              return "---";
-		default:                                return "---";
+static const char* drvSignalStr(DcDrvSignal s) {
+	switch (s) {
+		case DcDrvSignal::PWM_TWO_WAY_NEUTRAL_CENTER: return "PWM_BIPOLAR";
+		case DcDrvSignal::PWM_ONE_WAY:                return "PWM_ONE_WAY";
+		case DcDrvSignal::SERVO_SIG_NEUTRAL_CENTER:   return "SERVO_SIG";
+		case DcDrvSignal::UNDEFINED:              return "---";
+		default:                                  return "---";
 	}
 }
 
@@ -119,7 +120,7 @@ static void render_drv_view() {
 		if (d.comChannel.has_value()) {
 			uint8_t  chIdx = static_cast<uint8_t>(d.comChannel.value());
 			uint16_t raw   = s_bus->analogBus[chIdx].value;
-			int16_t  pct   = (d.mode == DcDrvMode::ONE_WAY)
+			int16_t  pct   = (d.signal == DcDrvSignal::PWM_ONE_WAY)
 			                 ? dashPctOneway (raw, s_bus->analogBusMaxVal)
 			                 : dashPctBipolar(raw, s_bus->analogBusMaxVal);
 			dLine("  %2d  %-32.32s  %2u   %6u  %+4d%%  %-7s  %s",
@@ -242,7 +243,7 @@ static void render_drv_detail() {
 		dLine("  Usage :  %s",        devUsageStr(d.usage));
 		dLine("  Port :  %s",         portName);
 		dLine("  Driver model :  %s", modelName);
-		dLine("  Mode :  %s",         drvModeStr(d.mode));
+		dLine("  Signal :  %s",        drvSignalStr(d.signal));
 		dLine("  Channel :  %s",      chStr);
 		dLine("  Parent :  %s",       parentStr);
 		dLine("  Max forward/back speed :  %.1f / %.1f %%",
@@ -271,7 +272,7 @@ static void render_drv_detail() {
 		if (d.comChannel.has_value()) {
 			uint8_t  chIdx = static_cast<uint8_t>(d.comChannel.value());
 			uint16_t raw   = s_bus->analogBus[chIdx].value;
-			int16_t  pct   = (d.mode == DcDrvMode::ONE_WAY)
+			int16_t  pct   = (d.signal == DcDrvSignal::PWM_ONE_WAY)
 			                 ? dashPctOneway (raw, s_bus->analogBusMaxVal)
 			                 : dashPctBipolar(raw, s_bus->analogBusMaxVal);
 			snprintf(cmdStr, sizeof(cmdStr), "%+4d%%", pct);

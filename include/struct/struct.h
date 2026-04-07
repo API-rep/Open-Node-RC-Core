@@ -12,5 +12,6 @@
 #include "outputs_struct.h"
 #include "pin_struct.h"
 #include "uart_struct.h"
+#include "motion_struct.h"
 
 // EOF struct.h

@@ -27,7 +27,7 @@
 
 #ifdef ESC_OUTPUT_ENABLED
 
-static const EscPort*            s_ports  = nullptr;
+static const DcDevice*               s_ports  = nullptr;
 static uint8_t                   s_count  = 0;
 static std::unique_ptr<ServoCore[]>   s_srv;
 static std::unique_ptr<DcMotorCore[]> s_dc;
@@ -72,49 +72,53 @@ void esc_calibrate(uint16_t halfSpan,
  * @brief Pre-allocate driver arrays and attach each port.
  *
  * @details Allocates `count` ServoCore and DcMotorCore instances.  Only the
- *   slots matching the active EscType are actually attached — the other
+ *   slots matching the active mode are actually attached — the other
  *   slots remain default-constructed (no PWM channel consumed).
  *   Silently skips any port whose pin is not owned by PinOwner::Esc in `reg`.
  */
-void esc_init(const EscPort* ports, uint8_t count, PinReg& reg)
+void esc_init(const DcDevice* devs, uint8_t count, PinReg& reg)
 {
-    if (!ports || count == 0) return;
+    if (!devs || count == 0) return;
 
-    // --- 1. Allocate both arrays — only matching-type slots are attached ---
-    s_ports = ports;
+    // --- 1. Store pointer and allocate driver arrays ---
+    s_ports = devs;
     s_count = count;
     s_srv = std::make_unique<ServoCore[]>(count);
     s_dc  = std::make_unique<DcMotorCore[]>(count);
 
-    // --- 2. Iterate ports and attach each ---
+    // --- 2. Iterate devices and attach each ---
     for (uint8_t i = 0; i < count; i++) {
-        if (!ports[i].pwmPin.has_value()) continue;
+        if (devs[i].parentID.has_value())               continue; // clone — shares parent hardware
+        if (devs[i].signal != DcDrvSignal::PWM_TWO_WAY_NEUTRAL_CENTER &&
+            devs[i].signal != DcDrvSignal::SERVO_SIG_NEUTRAL_CENTER) continue; // not an ESC device
+        if (!devs[i].drvPort)                           continue; // not wired
+        if (!devs[i].drvPort->pwmPin.has_value())       continue;
 
-        if (ports[i].escType == EscType::PWM_SERVO_SIG) {
+        if (devs[i].signal == DcDrvSignal::SERVO_SIG_NEUTRAL_CENTER) {
             // --- 2.1 Servo-signal ESC ---
-            if (pin_resolve(reg, ports[i].pwmPin.value(), PinOwner::Esc) == PIN_SLOT_EMPTY) continue;
+            if (pin_resolve(reg, devs[i].drvPort->pwmPin.value(), PinOwner::Esc) == PIN_SLOT_EMPTY) continue;
             s_srv[i].setPwmFreq(EscPwmFreq);
-            s_srv[i].begin(static_cast<int8_t>(ports[i].pwmPin.value()));
+            s_srv[i].begin(static_cast<int8_t>(devs[i].drvPort->pwmPin.value()));
             s_srv[i].writeMicroseconds(1500);
-            sys_log_dbg("[esc] ch%u: PWM_SERVO_SIG on GPIO%u\n", i, ports[i].pwmPin.value());
+            sys_log_dbg("[esc] ch%u: SERVO_SIG on GPIO%u\n", i, devs[i].drvPort->pwmPin.value());
 
-        } else if (ports[i].escType == EscType::PWM_HBRIDGE) {
+        } else if (devs[i].signal == DcDrvSignal::PWM_TWO_WAY_NEUTRAL_CENTER) {
             // --- 2.2 H-bridge DC motor driver ---
-            if (pin_resolve(reg, ports[i].pwmPin.value(), PinOwner::Esc) == PIN_SLOT_EMPTY) continue;
+            if (pin_resolve(reg, devs[i].drvPort->pwmPin.value(), PinOwner::Esc) == PIN_SLOT_EMPTY) continue;
             s_dc[i].setPwmFreq(EscPwmFreq);
             std::optional<int8_t> dir = std::nullopt;
-            if (ports[i].dirPin.has_value())
-                dir = static_cast<int8_t>(ports[i].dirPin.value());
-            s_dc[i].attach(static_cast<int8_t>(ports[i].pwmPin.value()), dir);
+            if (devs[i].drvPort->dirPin.has_value())
+                dir = static_cast<int8_t>(devs[i].drvPort->dirPin.value());
+            s_dc[i].attach(static_cast<int8_t>(devs[i].drvPort->pwmPin.value()), dir);
             s_dc[i].enable();
-            sys_log_dbg("[esc] ch%u: PWM_HBRIDGE on GPIO%u\n", i, ports[i].pwmPin.value());
+            sys_log_dbg("[esc] ch%u: PWM_BIPOLAR on GPIO%u\n", i, devs[i].drvPort->pwmPin.value());
         }
     }
 }
 
 #else
 
-void esc_init(const EscPort* /*ports*/, uint8_t /*count*/, PinReg& /*reg*/) {}
+void esc_init(const DcDevice* /*devs*/, uint8_t /*count*/, PinReg& /*reg*/) {}
 
 #endif // ESC_OUTPUT_ENABLED
 
@@ -129,13 +133,13 @@ void esc_write(uint8_t id, uint16_t cbusVal)
 {
     if (id >= s_count || !s_ports) return;
 
-    if (s_ports[id].escType == EscType::PWM_SERVO_SIG) {
+    if (s_ports[id].signal == DcDrvSignal::SERVO_SIG_NEUTRAL_CENTER) {
         // 16-bit → 1000–2000 µs servo pulse
         const uint16_t us = static_cast<uint16_t>(
             1000u + static_cast<uint32_t>(cbusVal) * 1000u / 65535u);
         s_srv[id].writeMicroseconds(us);
 
-    } else if (s_ports[id].escType == EscType::PWM_HBRIDGE) {
+    } else if (s_ports[id].signal == DcDrvSignal::PWM_TWO_WAY_NEUTRAL_CENTER) {
         // 16-bit → -100.0 … +100.0 %   (neutral = 32767, not 32768 — unavoidable 1-lsb asymmetry)
         // DcMotorCore::runAtSpeed() range is [-100, +100] regardless of dirPin presence:
         //   with dirPin    → SpeedDir mode  (bidirectional, lib clamps |speed| to [0, 100])

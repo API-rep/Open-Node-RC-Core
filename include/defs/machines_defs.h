@@ -95,11 +95,12 @@ enum class DcDevType : uint8_t {
     SOLENOID    = 3     ///< Electromagnetic plunger
 };
 
-  /** @brief Available DC driver mode */
-enum class DcDrvMode : uint8_t {
-    UNDEFINED              = 0,    ///< Mode not set
-    TWO_WAY_NEUTRAL_CENTER = 1,    ///< Bidirectional (CW/CCW) with stop at 50% duty cycle
-    ONE_WAY                = 2     ///< Unidirectional (0-100% duty cycle, sense set via polarity setting)
+  /** @brief DC driver output signal type */
+enum class DcDrvSignal : uint8_t {
+    UNDEFINED                = 0,    ///< Mode not set
+    PWM_TWO_WAY_NEUTRAL_CENTER = 1,  ///< Bidirectional (CW/CCW) with stop at 50% duty cycle — plain PWM or H-bridge ESC
+    PWM_ONE_WAY              = 2,    ///< Unidirectional (0-100% duty cycle, sense set via polarity setting)
+    SERVO_SIG_NEUTRAL_CENTER = 3,    ///< ESC via servo signal — ServoCore, 50 Hz (1000–2000 µs, single pin)
 };
 
 

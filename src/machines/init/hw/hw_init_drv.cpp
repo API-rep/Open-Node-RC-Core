@@ -55,11 +55,13 @@ void applyParentConfig(const Machine &config) {
       if (parent->ID == *child->parentID) {
         if (child->DevType == DcDevType::UNDEFINED)    child->DevType      = parent->DevType;
         if (child->usage == DevUsage::UNDEFINED)       child->usage        = parent->usage;
-        if (child->mode == DcDrvMode::UNDEFINED)       child->mode         = parent->mode;
+        if (child->signal == DcDrvSignal::UNDEFINED)     child->signal       = parent->signal;
         if (!child->comChannel)                        child->comChannel   = parent->comChannel;
         if (!child->pwmFreq)                           child->pwmFreq      = parent->pwmFreq;
         if (!child->maxFwSpeed)                        child->maxFwSpeed   = parent->maxFwSpeed;
         if (!child->maxBackSpeed)                      child->maxBackSpeed = parent->maxBackSpeed;
+        if (child->motion == nullptr)                  child->motion       = parent->motion;
+        // motionRt intentionally skipped — per-instance FSM state, never inherited
 
         parentIsFound = true;
         break;
@@ -110,7 +112,7 @@ void dcDriverInit(const Machine &config) {
     if (currentDev->drvPort->dirPin) {
       dirPin = (int8_t)(*currentDev->drvPort->dirPin);
     }
-    else if (currentDev->mode == DcDrvMode::ONE_WAY) {
+    else if (currentDev->signal == DcDrvSignal::PWM_ONE_WAY) {
       dirPin = -1;
     }
 

@@ -17,6 +17,7 @@
  */
 
 #include "volvo_A60H_bruder.h"
+#include <core/config/hw/esc/esc_presets.h>
 
 
 // =============================================================================
@@ -32,7 +33,7 @@
  *     trailer (3A, 4A, 3B, 4B).  All six share ENGINE_RPM_BUS and clone
  *     their config from CABIN_LEFT_MOTOR.
  *   - 2 dump actuators wired in parallel on port 2A, sharing DUMP_BUS.
- *     They clone their mode/speed config from STEERING (TWO_WAY_NEUTRAL_CENTER).
+ *     They clone their mode/speed config from STEERING (PWM_TWO_WAY_NEUTRAL_CENTER).
  *
  *   polInv corrects wiring direction per port without touching the ComBus value.
  */
@@ -44,7 +45,7 @@ DcDevice dcDevArray[DC_DRV_COUNT] = {
     .drvPort    = &drvPortArray[DRV_PORT_1A],
     .DevType    = DcDevType::DC_MOTOR,
     .usage      = DevUsage::STEER_MOTOR,
-    .mode       = DcDrvMode::TWO_WAY_NEUTRAL_CENTER,
+    .signal     = DcDrvSignal::PWM_TWO_WAY_NEUTRAL_CENTER,
     .comChannel = AnalogComBusID::STEERING_BUS,
     .pwmFreq    = M_DEF_PWM_FREQ,
     .polInv     = true
@@ -56,10 +57,11 @@ DcDevice dcDevArray[DC_DRV_COUNT] = {
     .drvPort    = &drvPortArray[DRV_PORT_1B],
     .DevType    = DcDevType::DC_MOTOR,
     .usage      = DevUsage::TRACT_WHEEL,
-    .mode       = DcDrvMode::TWO_WAY_NEUTRAL_CENTER,
+    .signal     = DcDrvSignal::PWM_TWO_WAY_NEUTRAL_CENTER,
     .comChannel = AnalogComBusID::ENGINE_RPM_BUS,
     .pwmFreq    = M_DEF_PWM_FREQ,
-    .polInv     = true
+    .polInv     = true,
+    .motion     = &kMotion_Traction_Truck
   },
 
   {
@@ -109,7 +111,7 @@ DcDevice dcDevArray[DC_DRV_COUNT] = {
     .usage      = DevUsage::HYD_LINEAR,
     .comChannel = AnalogComBusID::DUMP_BUS,
     .polInv     = false,
-    .parentID   = STEERING                  ///< inherits TWO_WAY_NEUTRAL_CENTER mode
+    .parentID   = STEERING                  ///< inherits PWM_TWO_WAY_NEUTRAL_CENTER mode
   },
 };
 
@@ -131,7 +133,7 @@ SrvDevice SrvDevArray[SRV_COUNT] = {
 //  TEMPLATE     .srvPort = &srvPortArray[SRV_PORT_1A],
 //  TEMPLATE     .type = SrvDevType::SERVO,
 //  TEMPLATE     .usage = DevUsage::GEN_ACTUATOR,
-//  TEMPLATE     .mode = TWO_WAY_NEUTRAL_CENTER,
+//  TEMPLATE     .signal = PWM_TWO_WAY_NEUTRAL_CENTER,
 //  TEMPLATE     .pwmPin = SRV_1_PIN,
 //  TEMPLATE     .comChannel = A_CH1,
 //  TEMPLATE     .pwmFreq = SRV_DEF_PWM_FREQ,

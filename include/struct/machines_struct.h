@@ -18,6 +18,8 @@
 // could create include cycles.
 #include <core/config/combus/combus_ids.h>
 
+#include <struct/esc_inertia_struct.h>  // EscInertiaConfig, EscInertiaRuntime (embedded in DcDevice)
+
 
 /**
  * @brief DC driver module structure
@@ -70,24 +72,6 @@ typedef struct {
 } ServoPort;
 
 
-/**
- * @brief Board ESC output port structure.
- *
- * @details Combines protocol type and GPIO assignments for one ESC channel.
- *   hw_init_esc selects ServoCore (PWM_SERVO_SIG) or DcMotorCore (PWM_HBRIDGE)
- *   at init time based on escType — callers use esc_write() without any
- *   protocol-specific branching.
- *
- *   dirPin is only required for EscType::PWM_HBRIDGE bidirectional mode.
- */
-typedef struct {
-  const int8_t           ID;
-  const char*            infoName;
-  EscType                escType = EscType::UNDEFINED;  ///< Protocol / library selector
-  std::optional<uint8_t> pwmPin;                        ///< PWM output GPIO
-  std::optional<uint8_t> dirPin;                        ///< Direction pin (PWM_HBRIDGE only)
-} EscPort;
-
 
 /**
  * @brief Board main structure
@@ -122,13 +106,15 @@ typedef struct {
   const DriverPort* drvPort;                  // DC device board driver port
   DcDevType DevType = DcDevType::UNDEFINED;   // attached device type
   DevUsage usage = DevUsage::UNDEFINED;       // attached device usage in the vehicle
-  DcDrvMode mode = DcDrvMode::UNDEFINED;      // DC device configuration
+  DcDrvSignal signal = DcDrvSignal::UNDEFINED;    // DC driver output signal type
   std::optional<AnalogComBusID> comChannel;   // internal com-bus channel used to set the driver speed
   std::optional<uint32_t> pwmFreq;            // driver PWM frequency (in hz)
   bool polInv = false;                        // driver polarity inversion (true = inverted)
   std::optional<float> maxFwSpeed;            // maximum forward speed (0 to 100% - Defaut 100%)
   std::optional<float> maxBackSpeed;          // maximum backward speed (0 to 100% - Defaut 100%)
   const std::optional<uint8_t> parentID;      // parent identifier (used in clone mode)
+  const EscInertiaConfig* motion = nullptr;   ///< Inertia/ramp config; nullptr = no inertia (requires PWM_TWO_WAY_NEUTRAL_CENTER or SERVO_SIG_NEUTRAL_CENTER mode)
+  EscInertiaRuntime motionRt{};               ///< Per-instance FSM state (never cloned from parent)
 } DcDevice;
 
 
@@ -141,21 +127,20 @@ typedef struct {
  */
 
 typedef struct {
-  const int8_t ID;                           // servo ID
-  const char* infoName;                      // device short description
-  const ServoPort* srvPort;                  // DC device board driver port
-  SrvDevType type = SrvDevType::UNDEFINED;   // device wired to servo output
-  std::optional<uint8_t> usage;              // device usage in the vehicle
-  std::optional<uint8_t> mode;               // servo configuration
-  std::optional<AnalogComBusID> comChannel;  // internal com-bus used to set the servo angle
-  std::optional<uint32_t> pwmFreq;           // output PWM frequency (in hz)
-  bool isInverted = false;                   // servo sense inversion (true = inverted)
-  std::optional<float> minAngleLimit;        // servo minimun angle limit (0 to min HW angle)
-  std::optional<float> maxAngleLimit;        // servo maximum angle limit (0 to max HW angle)
-  std::optional<float> zeroAtHwAngle;        // servo zero at hardware angle (min HW angle to max HW angle, typ. 0)
-  std::optional<float> maxSpeed;             // servo maximum speed
-  std::optional<float> maxAccel;             // servo maximum acceleration
-  const std::optional<uint8_t> parentID;     // parent identifier (used in clone mode)
+  const int8_t ID;                              ///< Servo device ID.
+  const char* infoName;                         ///< Device short description.
+  const ServoPort* srvPort;                     ///< Board servo port this device is wired to.
+  SrvDevType type = SrvDevType::UNDEFINED;      ///< Device type wired to this servo output.
+  std::optional<uint8_t> usage;                 ///< Device usage role in the vehicle.
+  std::optional<AnalogComBusID> comChannel;     ///< ComBus channel used to set the servo angle.
+  std::optional<uint32_t> pwmFreq;              ///< Output PWM frequency (Hz).
+  bool isInverted = false;                      ///< Servo sense inversion (true = inverted).
+  uint16_t minUsTick = 500;                     ///< PWM µs at minHwAngle — hardware calibration, field-adjustable.
+  uint16_t maxUsTick = 2500;                    ///< PWM µs at maxHwAngle — hardware calibration, field-adjustable.
+  SrvHwAngle hwAngle;                          ///< Servo model angle range — mandatory. Use a preset from servo_presets.h.
+  std::optional<float> maxSpeed;                ///< Servo maximum speed  (→ MotionRamp, A2).
+  std::optional<float> maxAccel;                ///< Servo maximum acceleration (→ MotionRamp, A2).
+  const std::optional<uint8_t> parentID;        ///< Parent ID for clone mode.
 } SrvDevice;
 
 

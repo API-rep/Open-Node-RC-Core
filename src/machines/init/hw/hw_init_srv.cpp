@@ -93,6 +93,23 @@ bool checkSrvHwConfig(const Machine &config) {
                  i, config.srvDev[i].ID);
       hasError = true;
     }
+
+      // Validate hwAngle range if configured.
+    const SrvHwAngle* ang = config.srvDev[i].hwAngle;
+    if (ang != nullptr && ang->totalRange() <= 0.0f) {
+      hw_log_err("\n      [SRV] CONFIG ERROR: SRV_%d hwAngle invalid range (min=%.1f max=%.1f)\n",
+                 config.srvDev[i].ID, ang->minHwAngle, ang->maxHwAngle);
+      hasError = true;
+    }
+
+      // Validate PWM tick range.
+    const uint16_t minUs = config.srvDev[i].minUsTick;
+    const uint16_t maxUs = config.srvDev[i].maxUsTick;
+    if (minUs == 0 || maxUs <= minUs) {
+      hw_log_err("\n      [SRV] CONFIG ERROR: SRV_%d usTick invalid (min=%u max=%u)\n",
+                 config.srvDev[i].ID, minUs, maxUs);
+      hasError = true;
+    }
   }
 
     // 2. Report overall result.
