@@ -13,6 +13,7 @@
 #include <core/system/combus/combus_manager.h>
 #include <core/system/combus/combus_access.h>
 #include <core/system/vbat/vbat_sense.h>
+#include <core/system/hw/motion.h>
 
 
 /**
@@ -143,17 +144,26 @@ void loop() {
 
         // --- 1. Process DC Drivers ---
       for (int i = 0; i < machine.dcDevCount; i++) {
-        uint8_t chIdx = static_cast<uint8_t>(machine.dcDev[i].comChannel.value());
-        uint16_t rawValue = comBus.analogBus[chIdx].value;
+        uint8_t  chIdx    = static_cast<uint8_t>(machine.dcDev[i].comChannel.value());
+        uint16_t busVal   = comBus.analogBus[chIdx].value;  ///< read-only — ComBus is never modified here
 
-        if (!comBus.analogBus[chIdx].isDrived) {
-          rawValue = (machine.dcDev[i].signal == DcDrvSignal::PWM_TWO_WAY_NEUTRAL_CENTER
-                   || machine.dcDev[i].signal == DcDrvSignal::SERVO_SIG_NEUTRAL_CENTER)
-                   ? (comBus.analogBusMaxVal / 2) : 0;
+        uint16_t motorCmd = comBus.analogBus[chIdx].isDrived
+                          ? busVal
+                          : (machine.dcDev[i].signal == DcDrvSignal::PWM_TWO_WAY_NEUTRAL_CENTER
+                          || machine.dcDev[i].signal == DcDrvSignal::SERVO_SIG_NEUTRAL_CENTER)
+                          ? (comBus.analogBusMaxVal / 2) : 0u;
+
+          // --- Motion filter (applied to motorCmd only — busVal stays untouched) ---
+        if (machine.dcDev[i].motion != nullptr) {
+          motion_update(motorCmd, machine.dcDev[i].motion, &machine.dcDev[i].motionRt, nullptr);
+          motorCmd = machine.dcDev[i].motionRt.currentPos;
+          // Feed filtered position back to ComBus so the sound module sees
+          // smooth inertia-based RPM instead of the raw stick value.
+          combus_set_analog(comBus, static_cast<AnalogComBusID>(chIdx), motorCmd, ChanOwner::SYSTEM);
         }
 
-        float speed = (float)map(rawValue, 0, comBus.analogBusMaxVal, -PERCENT_MAX, PERCENT_MAX);
-        float finalSpeed = machine.dcDev[i].polInv ? -speed : speed;
+        float finalSpeed = (float)map(motorCmd, 0, comBus.analogBusMaxVal, -PERCENT_MAX, PERCENT_MAX);
+        if (machine.dcDev[i].polInv) finalSpeed = -finalSpeed;
         dcDevObj[i].runAtSpeed(finalSpeed);
       }
       break;
