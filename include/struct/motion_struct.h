@@ -61,8 +61,15 @@ struct MotionHwMargin {
  *
  * @details Optional in `MotionConfig` (`margin = nullptr` = use hw limits
  *   directly).  When present, must satisfy `minHwVal ≤ minVal` and
- *   `maxVal ≤ maxHwVal` (checked at init).
- */
+ *   `maxVal ≤ maxHwVal` (checked at init). *
+ *   Asymmetric limits are the primary use-case: for example, a traction
+ *   device limited to 30 % reverse but full forward:
+ *   @code
+ *     constexpr MotionMargin kTraction_HeavyMargin {
+ *         .maxVal = CbusMaxVal,                      // full forward
+ *         .minVal = CbusNeutral - pctToCbus(30),     // 30 % reverse cap
+ *     };
+ *   @endcode */
 
 struct MotionMargin {
     combus_t maxVal;  ///< Forward soft limit.   e.g. CbusNeutral + pctToCbus(80)
@@ -149,8 +156,15 @@ struct MotionInertia {
  *     - `margin`                         : optional (nullptr = use hw limits)
  *     - `ramp`                           : must be nullptr
  *
- *   Declare `constexpr` instances in machine config headers and store the
- *   address in the device struct (e.g. future `DcDevice::motionCfg`).
+ *   Instances are `constexpr` and shared across multiple devices (clone
+ *   pattern).  Because one preset may be assigned to devices on different
+ *   ComBus channels, the target channel is NOT stored here — the caller
+ *   (update loop) reads `DcDevice::comChannel` and writes
+ *   `runtime.currentPos` to the correct ComBus slot after calling
+ *   `motion_update()`.
+ *
+ *   Declare `constexpr` instances in `motion_presets.h` and assign the
+ *   address to `DcDevice::motion`.
  */
 
 struct MotionConfig {
@@ -160,8 +174,6 @@ struct MotionConfig {
     const MotionRamp*      ramp;    ///< Slew-rate profile — simple ramp only; nullptr for traction.
     const MotionGear*      gear;    ///< Gear timing — traction only; nullptr for simple ramp.
     const MotionInertia*   inertia; ///< Inertia model — traction only; nullptr for simple ramp.
-    ComBus*                comBus;  ///< Target ComBus — nullptr = skip write.
-    ChanOwner              owner;   ///< SYSTEM (local) or SYSTEM_EXT (external).
 };
 
 
@@ -179,7 +191,7 @@ struct MotionConfig {
  */
 
 struct MotionRuntime {
-    combus_t currentPos    = CbusNeutral;  ///< Ramp output — current ComBus position after inertia filtering.
+    combus_t currentPos    = CbusNeutral;  ///< current ComBus position after inertia filtering (ramp output).
     int8_t   driveState    = 0;            ///< FSM state index (0–4).
     uint16_t driveRampRate = 1u;           ///< Acceleration increment this cycle.
     uint16_t brakeRampRate = 1u;           ///< Braking increment this cycle.
@@ -200,7 +212,7 @@ struct MotionRuntime {
  *   All fields are valid for the current cycle only.
  */
 struct MotionOutput {
-    combus_t currentPos;   ///< Ramp output — current ComBus position after inertia filtering.
+    combus_t currentPos;   ///< current ComBus position after inertia filtering (ramp output).
     combus_t escCbusVal;   ///< Final ESC command (after scaling).
     combus_t currentSpeed; ///< Inertial deviation from neutral — used by sound engine.
     bool     isBraking;    ///< Pipeline is in a braking state.

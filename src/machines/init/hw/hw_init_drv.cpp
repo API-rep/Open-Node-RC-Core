@@ -6,6 +6,7 @@
 #include <core/config/combus/combus_types.h>
 #include <struct/struct.h>
 #include <core/system/debug/debug.h>
+#include <core/system/hw/motion.h>
 
 #include "hw_init_drv.h"
 
@@ -35,7 +36,20 @@ void allocateDrivers(int8_t count) {
 // =============================================================================
 
 /**
- * @brief Apply parent's configuration to child drivers (Cloning logic)
+ * @brief Propagate parent fields to clone device entries.
+ *
+ * @details For every `DcDevice` with `parentID` set, copies all unset
+ *   fields (UNDEFINED / nullopt / nullptr) from the named parent entry.
+ *   This is the sole runtime cost of the clone pattern — one linear scan
+ *   at init, zero overhead afterwards.
+ *
+ *   Motion rules:
+ *   - `motion`   pointer IS copied — all clones share the same MotionConfig
+ *     (intentional: one config, N independent ramp states).
+ *   - `motionRt` is NEVER copied — each device accumulates its own ramp
+ *     position independently, even when sharing a MotionConfig.
+ *
+ * @param config  Machine descriptor owning the DC device array.
  */
 
 void applyParentConfig(const Machine &config) {
@@ -217,7 +231,17 @@ bool checkDrvHwConfig(const Machine &config) {
     }
   }
 
-    // 2. Report overall result.
+    // 2. Validate motion config for every device that declares one.
+  for (int i = 0; i < config.dcDevCount; i++) {
+    const DcDevice* dev = &config.dcDev[i];
+    if (dev->motion == nullptr) continue;
+    if (!motion_check(dev->motion)) {
+      hw_log_err("\n      [DRV] CONFIG ERROR: motion_check failed for driver %s\n", dev->infoName);
+      hasError = true;
+    }
+  }
+
+    // 3. Report overall result.
   if (!hasError) {
     hw_log_info(" OK\n");
   }

@@ -18,7 +18,7 @@
 // could create include cycles.
 #include <core/config/combus/combus_ids.h>
 
-#include <struct/esc_inertia_struct.h>  // EscInertiaConfig, EscInertiaRuntime (embedded in DcDevice)
+#include <struct/motion_struct.h>      // MotionConfig, MotionRuntime (embedded in DcDevice)
 
 
 /**
@@ -93,37 +93,52 @@ typedef struct {
 
 
 /**
- * @brief DC device structure
- * Contain all configuration and manipulators of devices wired to DC driver ports
- * NOTE:
- * - Instance of these structures are created in hw_init.h
- * - DON'T forget tu update hw_init.h applyParentConfig() section if this structure change
+ * @brief DC device structure.
+ *
+ * @details Defines one DC-motor driver device.  Instances live in the
+ *   machine config array (`dcDevArray[]`) and are initialised once by
+ *   `dcDriverInit()` + `applyParentConfig()`.
+ *
+ * @note Clone mode (`parentID` set):
+ *   Use clone entries whenever several devices share the same config
+ *   (e.g. six traction motors with identical signal, ComBus channel and
+ *   MotionConfig).  `applyParentConfig()` copies all unset fields from the
+ *   parent at init time — zero CPU overhead at runtime, no duplication.
+ *   Prefer clone entries over repeating full config blocks.
+ *
+ * @note If this struct gains or loses fields, update `applyParentConfig()`
+ *   in `hw_init_drv.cpp` accordingly.
  */
 
 typedef struct {
-  const int8_t ID;                            // DC device ID
-  const char* infoName;                       // attached device short description
-  const DriverPort* drvPort;                  // DC device board driver port
-  DcDevType DevType = DcDevType::UNDEFINED;   // attached device type
-  DevUsage usage = DevUsage::UNDEFINED;       // attached device usage in the vehicle
-  DcDrvSignal signal = DcDrvSignal::UNDEFINED;    // DC driver output signal type
-  std::optional<AnalogComBusID> comChannel;   // internal com-bus channel used to set the driver speed
-  std::optional<uint32_t> pwmFreq;            // driver PWM frequency (in hz)
-  bool polInv = false;                        // driver polarity inversion (true = inverted)
-  std::optional<float> maxFwSpeed;            // maximum forward speed (0 to 100% - Defaut 100%)
-  std::optional<float> maxBackSpeed;          // maximum backward speed (0 to 100% - Defaut 100%)
-  const std::optional<uint8_t> parentID;      // parent identifier (used in clone mode)
-  const EscInertiaConfig* motion = nullptr;   ///< Inertia/ramp config; nullptr = no inertia (requires PWM_TWO_WAY_NEUTRAL_CENTER or SERVO_SIG_NEUTRAL_CENTER mode)
-  EscInertiaRuntime motionRt{};               ///< Per-instance FSM state (never cloned from parent)
+  const int8_t ID;                              ///< DC device ID
+  const char* infoName;                         ///< attached device short description
+  const DriverPort* drvPort;                    ///< DC device board driver port
+  DcDevType DevType = DcDevType::UNDEFINED;     ///< attached device type
+  DevUsage usage = DevUsage::UNDEFINED;         ///< attached device usage in the vehicle
+  DcDrvSignal signal = DcDrvSignal::UNDEFINED;  ///< DC driver output signal type
+  std::optional<AnalogComBusID> comChannel;     ///< internal com-bus channel used to set the driver speed
+  std::optional<uint32_t> pwmFreq;              ///< driver PWM frequency (in hz)
+  bool polInv = false;                          ///< driver polarity inversion (true = inverted)
+  std::optional<float> maxFwSpeed;              ///< maximum forward speed (0 to 100% - Defaut 100%)
+  std::optional<float> maxBackSpeed;            ///< maximum backward speed (0 to 100% - Defaut 100%)
+  const std::optional<uint8_t> parentID;        ///< parent identifier (used in clone mode)
+  const MotionConfig*  motion = nullptr;        ///< Shared motion/ramp config (copied from parent in clone mode; nullptr = no ramp).
+  MotionRuntime        motionRt{};              ///< Per-instance ramp state — never inherited from parent (see applyParentConfig).
 } DcDevice;
 
 
 /**
- * @brief Servo device structure
- * Contain all configuration and manipulators of devices wired to servo driver ports
- * NOTE:
- * - Instance of these structures are created in hw_init.h
- * - DON'T forget tu update hw_init.h FILL_DRV section if this structures change
+ * @brief Servo device structure.
+ *
+ * @details Defines one servo-driven device.  Instances live in the
+ *   machine config array (`SrvDevArray[]`) and are initialised once by
+ *   `srvDriverInit()` + `applyParentConfig()`.
+ *
+ * @note Clone mode (`parentID` set):
+ *   Use clone entries to share config between identical servos with no
+ *   runtime overhead.  If this struct gains or loses fields, update
+ *   `applyParentConfig()` in `hw_init_drv.cpp` accordingly.
  */
 
 typedef struct {
@@ -137,7 +152,7 @@ typedef struct {
   bool isInverted = false;                      ///< Servo sense inversion (true = inverted).
   uint16_t minUsTick = 500;                     ///< PWM µs at minHwAngle — hardware calibration, field-adjustable.
   uint16_t maxUsTick = 2500;                    ///< PWM µs at maxHwAngle — hardware calibration, field-adjustable.
-  SrvHwAngle hwAngle;                          ///< Servo model angle range — mandatory. Use a preset from servo_presets.h.
+  SrvHwAngle hwAngle;                           ///< Servo model angle range — mandatory. Use a preset from servo_presets.h.
   std::optional<float> maxSpeed;                ///< Servo maximum speed  (→ MotionRamp, A2).
   std::optional<float> maxAccel;                ///< Servo maximum acceleration (→ MotionRamp, A2).
   const std::optional<uint8_t> parentID;        ///< Parent ID for clone mode.

@@ -15,6 +15,7 @@
 #include <core/system/debug/debug.h>
 
 #ifdef ESC_OUTPUT_ENABLED
+#  include <config/config.h>       // EscPwmFreq — resolved per environment (-I src/machines or -I src/sound_module)
 #  include <ServoCore.h>
 #  include <DcMotorCore.h>
 #  include <memory>

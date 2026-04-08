@@ -95,10 +95,10 @@ bool checkSrvHwConfig(const Machine &config) {
     }
 
       // Validate hwAngle range if configured.
-    const SrvHwAngle* ang = config.srvDev[i].hwAngle;
-    if (ang != nullptr && ang->totalRange() <= 0.0f) {
+    const SrvHwAngle& ang = config.srvDev[i].hwAngle;
+    if (ang.totalRange() <= 0.0f) {
       hw_log_err("\n      [SRV] CONFIG ERROR: SRV_%d hwAngle invalid range (min=%.1f max=%.1f)\n",
-                 config.srvDev[i].ID, ang->minHwAngle, ang->maxHwAngle);
+                 config.srvDev[i].ID, ang.minHwAngle, ang.maxHwAngle);
       hasError = true;
     }
 

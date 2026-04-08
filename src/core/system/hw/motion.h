@@ -54,7 +54,7 @@ bool motion_check(const MotionConfig* cfg);
 // =============================================================================
 
 /**
- * @brief Motion pipeline entry point. Call each control cycle to advance cbusPos toward rawComBusVal.
+ * @brief Motion pipeline entry point. Call each control cycle to process rawComBusVal.
  *
  * @details The ramp algorithm is selected automatically from the config pointer pattern
  *   (`config->ramp` for simple ramp, `config->gear` for traction) — see `motion_check()` for
@@ -66,6 +66,10 @@ bool motion_check(const MotionConfig* cfg);
  * @param runtime       Per-device runtime state, updated in place every call.
  * @param output        Optional output struct, used by sub-modules (e.g. sound engine) to read
  *                      computed state (isBraking, currentSpeed…).  Pass `nullptr` if not used.
+ *
+ * @note ComBus write is the caller's responsibility.  After this call, write
+ *   `runtime->currentPos` to the ComBus channel identified by
+ *   `DcDevice::comChannel`.
  */
 
 void motion_update(combus_t             rawComBusVal,

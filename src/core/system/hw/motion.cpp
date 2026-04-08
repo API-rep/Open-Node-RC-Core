@@ -1,4 +1,4 @@
-/******************************************************************************
+﻿/******************************************************************************
  * @file motion.cpp
  * @brief Stateless motion-control pipeline — implementation.
  *****************************************************************************/
@@ -256,10 +256,7 @@ void motion_update(combus_t            rawComBusVal,
       // 1. Run ramp pipeline
     motion_process(rawComBusVal, config, runtime, output);
 
-      // 2. Write to ComBus when this node owns the channel
-    if (config->comBus && config->owner == ChanOwner::SYSTEM) {
-        config->comBus->analog[0] = runtime->currentPos;   // channel index resolved at A6
-    }
+      // 2. ComBus write is the caller's responsibility -- see motion.h @note.
 #endif // MOTION_ENABLED
 }
 

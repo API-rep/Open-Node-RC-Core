@@ -17,7 +17,7 @@
  */
 
 #include "volvo_A60H_bruder.h"
-#include <core/config/hw/esc/esc_presets.h>
+#include <core/config/hw/motion_presets.h>
 
 
 // =============================================================================
@@ -61,7 +61,7 @@ DcDevice dcDevArray[DC_DRV_COUNT] = {
     .comChannel = AnalogComBusID::ENGINE_RPM_BUS,
     .pwmFreq    = M_DEF_PWM_FREQ,
     .polInv     = true,
-    .motion     = &kMotion_Traction_Truck
+    .motion     = &kTraction_Heavy
   },
 
   {
