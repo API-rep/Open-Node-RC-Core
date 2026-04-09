@@ -138,8 +138,14 @@ void loop() {
         sys_log_info("[SYSTEM][STATE] runlevel=RUNNING\n");
         stateTM = millis();
         stopAllDcDrivers(machine);
+#ifdef PATCH_MOTORS_FORCE_SLEEP
+        sys_log_warn("[PATCH] PATCH_MOTORS_FORCE_SLEEP active — all DC drivers forced to sleep\n");
+        sleepAllDcDrivers(machine);
+        disableAllDcDrivers(machine);
+#else
         wakeupAllDcDrivers(machine);
-        enableAllDcDrivers(machine);       
+        enableAllDcDrivers(machine);
+#endif
       }
 
         // --- 1. Process DC Drivers ---
@@ -162,9 +168,11 @@ void loop() {
           combus_set_analog(comBus, static_cast<AnalogComBusID>(chIdx), motorCmd, ChanOwner::SYSTEM);
         }
 
+#ifndef PATCH_MOTORS_FORCE_SLEEP
         float finalSpeed = (float)map(motorCmd, 0, comBus.analogBusMaxVal, -PERCENT_MAX, PERCENT_MAX);
         if (machine.dcDev[i].polInv) finalSpeed = -finalSpeed;
         dcDevObj[i].runAtSpeed(finalSpeed);
+#endif
       }
       break;
     }

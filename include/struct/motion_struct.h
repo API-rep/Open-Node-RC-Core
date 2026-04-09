@@ -106,20 +106,18 @@ struct MotionRamp {
 
 
 /**
- * @brief Gear-set timing profiles.
+ * @brief Gear-set timing profile — 1st / 2nd / 3rd ramp periods.
  *
- * @details Four step-period profiles (1st gear to crawler) plus three global
- *   scaling factors.  Step sizes live in `MotionInertia`.
- *   Mandatory fields — no defaults.
+ * @details Gear advance (1→2→3) is always active when a `MotionConfig::gear`
+ *   pointer is set.  Set `MotionConfig::gear = nullptr` to switch to simple-ramp
+ *   mode with no gear model.
+ *   Step sizes live in `MotionInertia`.  Mandatory fields — no defaults.
  */
 struct MotionGear {
-    uint16_t rampTimeFirstMs;    ///< 1st gear ramp period (ms).     e.g. 20
-    uint16_t rampTimeSecondMs;   ///< 2nd gear ramp period (ms).     e.g. 50
-    uint16_t rampTimeThirdMs;    ///< 3rd gear ramp period (ms).     e.g. 75
-    uint16_t rampTimeCrawlerMs;  ///< Crawler / direct mode (ms).    e.g. 2
-    uint8_t  globalAccelPct;     ///< Global ramp scale — all gears.  100 = nominal.
-    uint8_t  lowRangePct;        ///< Low-range ramp-time multiplier.  50 = half speed.
-    uint8_t  autoRevAccelPct;    ///< Auto-reverse acceleration boost.  200 = 2× faster.
+    uint16_t rampTimeFirstMs;   ///< 1st gear ramp period (ms).  e.g. 40
+    uint16_t rampTimeSecondMs;  ///< 2nd gear ramp period (ms).  e.g. 80
+    uint16_t rampTimeThirdMs;   ///< 3rd gear ramp period (ms).  e.g. 120
+    uint8_t  globalAccelPct;    ///< Global ramp scale — all gears.  100 = nominal.
 };
 
 
@@ -192,7 +190,7 @@ struct MotionConfig {
 
 struct MotionRuntime {
     combus_t currentPos    = CbusNeutral;  ///< current ComBus position after inertia filtering (ramp output).
-    int8_t   driveState    = 0;            ///< FSM state index (0–4).
+    int8_t   gearSetTo     = 1;            ///< Active virtual gear: 1–3, auto-managed by motion_process().
     uint16_t driveRampRate = 1u;           ///< Acceleration increment this cycle.
     uint16_t brakeRampRate = 1u;           ///< Braking increment this cycle.
     uint8_t  driveRampGain = 1u;           ///< Clutch-engagement multiplier (1, 2, or 4).

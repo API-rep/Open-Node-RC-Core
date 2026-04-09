@@ -9,7 +9,7 @@
  *  Algorithm:
  *   - ramp : single ramp period + accel/brake step sizes; same timing in both
  *       directions, no gear or inertia model.
- *   - gear : per-gear ramp periods (1st / 2nd / 3rd / crawler) + global accel
+ *   - gear : 1st / 2nd / 3rd ramp periods + global accel
  *       scaling; determines how fast the speed ramps up.
  *   - inertia : step sizes for accel and brake; brakeMargin transmitted to the
  *       sound engine to signal engine braking.
@@ -76,6 +76,27 @@ void motion_update(combus_t             rawComBusVal,
                    const MotionConfig*  config,
                    MotionRuntime*       runtime,
                    MotionOutput*        output);
+
+
+
+// =============================================================================
+// 3. GEAR CONTROL
+// =============================================================================
+
+/**
+ * @brief Override the active virtual gear advance or disable it.
+ *
+ * @details Overrides the automatic gear-advance; call before `motion_update()`.
+ *   Pass `gear = 0` to disable gear advance: `rampTimeDirectMs` is used, giving
+ *   near-direct response.  Automatic advance resumes on the next `motion_update()`
+ *   call when `gearSetTo != 0`.
+ *   Pass `gear = 1`–`3` to force a specific gear.
+ *
+ * @param runtime  Per-device runtime.  Must not be null.
+ * @param gear     0 = gear advance disabled (direct), 1–3 = force gear.
+ */
+
+void motion_gear_set(MotionRuntime* runtime, uint8_t gear);
 
 
 // EOF motion.h

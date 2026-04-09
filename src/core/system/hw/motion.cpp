@@ -1,4 +1,4 @@
-﻿/******************************************************************************
+/******************************************************************************
  * @file motion.cpp
  * @brief Stateless motion-control pipeline — implementation.
  *****************************************************************************/
@@ -8,7 +8,6 @@
 #include <cassert>
 
 #include <core/system/debug/debug.h>    // sys_log_err
-#include <struct/combus_struct.h>       // ChanOwner
 
 
 // =============================================================================
@@ -113,6 +112,7 @@ bool motion_check(const MotionConfig* cfg)
 }
 
 
+
 // =============================================================================
 // 3. PIPELINE UPDATE
 // =============================================================================
@@ -120,20 +120,53 @@ bool motion_check(const MotionConfig* cfg)
 #if defined(MOTION_ENABLED)
 
 /**
- * @brief Ramp processor. Advance cbusPos one step toward rawComBusVal and fill output.
+ * @brief Ramp processor. Move motion current position one step closer to raw ComBus value each ramp tick, and fill output.
  *
- * @details Both modes share the same skeleton:
- *   1. Clamp rawComBusVal to effective limits, snap dead-band to neutral.
- *   2. Compute ramp period: gear table (traction) or config->ramp->rampTimeMs.
- *   3. If the period has elapsed, advance cbusPos by one accel or brake step.
- *      In traction mode driveRampGain scales the accel step.
- *      brakeMin is computed but not yet used — reserved for the sound engine.
- *   4. Detect isBraking: cbusPos retreating toward neutral (traction only).
- *   5. Write all fields to output (skipped when output == nullptr).
+ * @details
+ * Inertia principle : Motion currentPos never jumps to rawComBusVal directly.
+ *   Each time the ramp period (`rampMs`) elapses, currentPos is moved by a fixed
+ *   step size (accelSteps or brakeSteps) to approach rawComBusVal.
+ *   This creates the "weight" effect: the faster the step (small rampMs) and the
+ *   bigger the step size, the more responsive the motion.  Larger rampMs or smaller
+ *   steps simulate a heavier / lazier machine.
  *
- * @param rawComBusVal  Receiver value after dead-band snap, clamped to hw limits.
+ * Two modes for the same skeleton, but different parameters:
+ *
+ * - Simple ramp (config->ramp != null):
+ *     rampMs    = config->ramp->rampTimeMs — fixed, same for accel and brake.
+ *     accelStep = config->ramp->accelSteps — fixed increment per tick.
+ *     brakeStep = config->ramp->brakeSteps — fixed decrement per tick.
+ *     No gear or inertia model.  Used for hydraulics and steering.
+ *
+ * - Traction (config->gear + config->inertia both != null):
+ *     rampMs    = per-gear period (1st / 2nd / 3rd / direct), optionally scaled
+ *                 by globalAccelPct (< 100 % = shorter period = faster response).
+ *     accelStep = config->inertia->accelSteps * driveRampGain — gain is a
+ *                 runtime multiplier (1, 2, or 4) simulating clutch engagement.
+ *     brakeStep = config->inertia->brakeSteps — fixed; may be asymmetric to
+ *                 simulate engine braking heavier than free decel.
+ *     brakeMargin: the lowest ComBus value currentPos could reach during braking
+ *                 (currentPos - brakeMargin).  Passed (future) to the sound engine
+ *                 to gauge engine-braking intensity.  Not applied to currentPos itself.
+ *
+ * Dead-band: values of rawComBusVal within [minNeutral, maxNeutral] are snapped
+ * to CbusNeutral before any ramp logic, preventing drift around stick center.
+ *
+ * isBraking: true in traction mode when currentPos is non-neutral AND moving
+ * back toward neutral (i.e. target is neutral or target is closer to neutral than
+ * current position).  Always false in simple ramp mode.
+ *
+ * Steps reference:
+ *   1. Clamp rawComBusVal to travel limits, snap dead-band to neutral.
+ *   2. Auto-advance virtual gear from currentPos (traction only; skipped when gearAdvance is false).
+ *   3. Compute ramp period: gear table (traction) or config->ramp->rampTimeMs.
+ *   4. Ramp tick: if period elapsed, shift currentPos by accel/brake step.
+ *   5. Detect isBraking (traction only).
+ *   6. Fill output struct.
+ *
+ * @param rawComBusVal  Raw ComBus value, unfiltered (straight from the receiver).
  * @param config        Active config — algorithm selected by pointer pattern.
- * @param runtime       Runtime state — cbusPos and ramp timer updated in place.
+ * @param runtime       Runtime state — currentPos and ramp timer updated in place.
  * @param output        Optional output struct filled with computed state; nullptr to skip.
  */
 
@@ -142,79 +175,94 @@ static void motion_process(combus_t            rawComBusVal,
                            MotionRuntime*      runtime,
                            MotionOutput*       output)
 {
-    const combus_t effMax = s_maxLimit(config);
-    const combus_t effMin = s_minLimit(config);
+    const combus_t maxLimit = s_maxLimit(config);
+    const combus_t minLimit = s_minLimit(config);
 
       // 1. Clamp to travel limits, snap dead-band to neutral
-    rawComBusVal = s_clamp(rawComBusVal, effMin, effMax);
+    rawComBusVal = s_clamp(rawComBusVal, minLimit, maxLimit);
     if (rawComBusVal >= config->band->minNeutral && rawComBusVal <= config->band->maxNeutral) {
         rawComBusVal = CbusNeutral;
     }
 
-      // 2. Ramp period: per-gear table (traction) or fixed period (simple ramp)
+      // 2. Auto-advance gear (traction only)
+    if (config->gear) {
+        const uint32_t halfTravel = (runtime->currentPos >= CbusNeutral)
+                                  ? static_cast<uint32_t>(maxLimit - CbusNeutral)
+                                  : static_cast<uint32_t>(CbusNeutral - minLimit);
+        const uint32_t dev = (runtime->currentPos >= CbusNeutral)
+                            ? static_cast<uint32_t>(runtime->currentPos - CbusNeutral)
+                            : static_cast<uint32_t>(CbusNeutral - runtime->currentPos);
+        if (halfTravel > 0u) {
+            if      (dev * 3u >= halfTravel * 2u) runtime->gearSetTo = 3;
+            else if (dev * 3u >= halfTravel)      runtime->gearSetTo = 2;
+            else                                  runtime->gearSetTo = 1;
+        }
+    }
+
+      // 3. Ramp period: per-gear table (traction) or fixed period (simple ramp)
     uint16_t rampMs;
     if (config->gear) {
-        switch (runtime->driveState) {
+        switch (runtime->gearSetTo) {
             case 1:  rampMs = config->gear->rampTimeFirstMs;   break;
-            case 2:  rampMs = config->gear->rampTimeSecondMs;  break;
-            case 3:  rampMs = config->gear->rampTimeThirdMs;   break;
-            default: rampMs = config->gear->rampTimeCrawlerMs; break;
+            case 2:  rampMs = config->gear->rampTimeSecondMs; break;
+            case 3:  rampMs = config->gear->rampTimeThirdMs;  break;
+            default: rampMs = config->gear->rampTimeFirstMs;    break;
         }
           // Global acceleration scaling (100 % = no scaling)
         if (config->gear->globalAccelPct != 100u) {
-            rampMs = static_cast<uint16_t>(
-                         static_cast<uint32_t>(rampMs) * config->gear->globalAccelPct / 100u);
+            rampMs = static_cast<uint16_t>(static_cast<uint32_t>(rampMs) * config->gear->globalAccelPct / 100u);
             if (rampMs == 0u) rampMs = 1u;
         }
     } else {
         rampMs = config->ramp->rampTimeMs;
     }
 
-      // 3. Advance cbusPos by one step when the ramp period has elapsed
+      // 4. Ramp tick: if period elapsed, shift currentPos by accel/brake step.
     const uint32_t now = millis();
     if (now - runtime->rampMillis >= rampMs) {
         runtime->rampMillis = now;
 
         if (runtime->currentPos < rawComBusVal) {
-             // Accelerating — driveRampGain scales the step in traction mode
+              // Accelerating — driveRampGain scales the step in traction mode
             const uint16_t gain = config->inertia ? runtime->driveRampGain : 1u;
             const combus_t step = config->inertia
                                   ? static_cast<combus_t>(config->inertia->accelSteps * gain)
                                   : static_cast<combus_t>(config->ramp->accelSteps);
             runtime->currentPos = (rawComBusVal - runtime->currentPos > step)
-                                ? runtime->currentPos + step
-                                : rawComBusVal;
+                                  ? runtime->currentPos + step
+                                  : rawComBusVal;
 
         } else if (runtime->currentPos > rawComBusVal) {
-             // Braking
+              // Braking
             const combus_t step = config->inertia
                                   ? static_cast<combus_t>(config->inertia->brakeSteps)
                                   : static_cast<combus_t>(config->ramp->brakeSteps);
             if (config->inertia) {
-                 // brakeMin: engine-braking floor transmitted to sound engine — not clamped here
+                  // brakeMin: lowest ComBus value currentPos could reach during this brake phase —
+                  //           passed to the sound engine to gauge engine-braking intensity. Not used yet.
                 const combus_t brakeMin = (runtime->currentPos > config->inertia->brakeMargin)
                                           ? runtime->currentPos - config->inertia->brakeMargin
                                           : CbusNeutral;
                 (void)brakeMin;
             }
             runtime->currentPos = (runtime->currentPos - rawComBusVal > step)
-                                ? runtime->currentPos - step
-                                : rawComBusVal;
+                                  ? runtime->currentPos - step
+                                  : rawComBusVal;
         }
     }
 
-    runtime->currentPos = s_clamp(runtime->currentPos, effMin, effMax);
+    runtime->currentPos = s_clamp(runtime->currentPos, minLimit, maxLimit);
 
-    // 4. isBraking: cbusPos moving back toward neutral (traction only)
+      // 5. isBraking: currentPos moving back toward neutral (traction only)
     const bool isBraking = config->inertia &&
                            (runtime->currentPos != CbusNeutral) &&
-                           (rawComBusVal == CbusNeutral                                          ||
-                            (runtime->currentPos > CbusNeutral && rawComBusVal < runtime->currentPos)  ||
+                           (rawComBusVal == CbusNeutral                                               ||
+                            (runtime->currentPos > CbusNeutral && rawComBusVal < runtime->currentPos) ||
                             (runtime->currentPos < CbusNeutral && rawComBusVal > runtime->currentPos));
 
-    // 5. Fill output struct
+      // 6. Fill output struct
     if (output) {
-        output->currentPos      = runtime->currentPos;
+        output->currentPos   = runtime->currentPos;
         output->escCbusVal   = runtime->currentPos;
         output->currentSpeed = (runtime->currentPos >= CbusNeutral)
                                ? runtime->currentPos - CbusNeutral
@@ -228,6 +276,7 @@ static void motion_process(combus_t            rawComBusVal,
 #endif // MOTION_ENABLED
 
 
+
 // =============================================================================
 // 4. PUBLIC UPDATE ENTRY POINT
 // =============================================================================
@@ -236,11 +285,12 @@ static void motion_process(combus_t            rawComBusVal,
  * @brief Motion pipeline entry point. Call each control cycle to process rawComBusVal.
  *
  * @details
- *   1. Run motion_process(): clamp rawComBusVal, resolve ramp period, advance cbusPos one step,
+ *   1. Run motion_process(): clamp rawComBusVal, auto-advance gear, resolve ramp period, advance currentPos,
  *      compute isBraking, fill @p output.
- *   2. Write runtime->currentPos to config->comBus when owner == SYSTEM
- *      (channel index is a placeholder until A6).
+ *   2. Write runtime->currentPos to the ComBus channel — caller's responsibility
+ *      (use DcDevice::comChannel as the index into ComBus::analog[]).
  */
+
 void motion_update(combus_t            rawComBusVal,
                    const MotionConfig* config,
                    MotionRuntime*      runtime,
@@ -256,7 +306,36 @@ void motion_update(combus_t            rawComBusVal,
       // 1. Run ramp pipeline
     motion_process(rawComBusVal, config, runtime, output);
 
-      // 2. ComBus write is the caller's responsibility -- see motion.h @note.
+      // 2. ComBus write is the caller's responsibility — see motion.h @note.
+#endif // MOTION_ENABLED
+}
+
+
+// =============================================================================
+// 5. GEAR CONTROL
+// =============================================================================
+
+/**
+ * @brief Override the active virtual gear or disable gear advance.
+ *
+ * @details Overrides the automatic gear-advance inside `motion_process()`.
+ *   Pass `gear = 0` to disable gear advance: `rampTimeDirectMs` is used, giving
+ *   near-direct response.  Automatic advance resumes as soon as `gearSetTo != 0`
+ *   on the next `motion_update()` call.
+ *   Pass `gear = 1`–`3` to force a specific gear.
+ *
+ * @param runtime  Per-device runtime.  Must not be null.
+ * @param gear     0 = gear advance disabled (direct), 1–3 = force gear.  Values > 3
+ *                 fall through to `rampTimeDirectMs` inside `motion_process()`.
+ */
+
+void motion_gear_set(MotionRuntime* runtime, uint8_t gear)
+{
+#if !defined(MOTION_ENABLED)
+    (void)runtime; (void)gear;
+#else
+    assert(runtime != nullptr);
+    runtime->gearSetTo = static_cast<int8_t>(gear);
 #endif // MOTION_ENABLED
 }
 

@@ -45,23 +45,19 @@ static constexpr MotionDeadBand kBand_3pct {
 
 
 /**
- * @brief Gear-set timing — generic heavy construction-vehicle defaults.
+ * @brief Gear timing — generic heavy construction-vehicle defaults.
  *
- * @details Matches the diyGuy defaults shared by all heavy vehicles
- *   (Benford 3T dumper, CAT trucks, construction haulers): ramp1=20 ms,
- *   ramp2=50 ms, ramp3=75 ms.  Conservative first-gear ramp suits a
- *   loaded multi-axle hauler.
+ * @details Conservative 1st-gear ramp suits a loaded multi-axle hauler.
  *   Decrease `rampTimeFirstMs` (e.g. 10 ms) for a snappier response;
- *   increase it (e.g. 30 ms) on slippery ground with a full load.
+ *   increase it (e.g. 60 ms) on slippery ground with a full load.
+ *   Gear advance (1→2→3) is always active — set `MotionConfig::gear = nullptr`
+ *   to revert to simple-ramp mode with no gear model.
  */
 static constexpr MotionGear kTraction_HeavyGear {
-    .rampTimeFirstMs   = 40u,   ///< Heavy hauler — ~2 s from neutral to full forward.
-    .rampTimeSecondMs  = 80u,   ///< Mid-speed ramp (2× 1st-gear period).
-    .rampTimeThirdMs   = 120u,  ///< High-speed ramp (3× 1st-gear period).
-    .rampTimeCrawlerMs = 10u,   ///< Crawler / direct ESC mode.
-    .globalAccelPct    = 100u,  ///< Nominal rate — adjust to taste.
-    .lowRangePct       = 50u,   ///< Low-range: half ramp speed.
-    .autoRevAccelPct   = 100u,  ///< Auto-reverse: no extra boost.
+    .rampTimeFirstMs  = 40u,   ///< Heavy hauler — ~2 s from neutral to full forward.
+    .rampTimeSecondMs = 80u,   ///< Mid-speed ramp (2× 1st-gear period).
+    .rampTimeThirdMs  = 120u,  ///< High-speed ramp (3× 1st-gear period).
+    .globalAccelPct   = 100u,  ///< Nominal rate — adjust to taste.
 };
 
 /**
