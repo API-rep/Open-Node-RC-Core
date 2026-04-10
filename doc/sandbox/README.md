@@ -33,18 +33,19 @@ migration for that layer is complete.
 
 ### NOT yet migrated — features to add to `motion` when needed
 
-| Feature | `esc_inertia` location | Purpose | Priority |
+| Feature | `esc_inertia` location | Purpose | Status |
 |---|---|---|---|
-| `EscLinearizeFn` callback | `esc_inertia_struct.h` | ESC output curve correction for non-linear ESCs (QuicRun etc.) | Low — no non-linear ESC in use |
-| `crawlerRampTimeMs` | `EscInertiaConfig` | Direct-control mode with ~2ms ramp (bypass inertia) | Medium — useful for precision positioning |
-| `lowRangePct` | `EscInertiaConfig` | Ramp time scaling for low-range transfer case (e.g. 50% = half speed) | Low — no transfer case in use |
-| `autoRevAccelPct` | `EscInertiaConfig` | Acceleration boost in automatic reverse (200 = 2× faster) | Low |
-| `cbusMaxLimit / cbusMinLimit` | `EscInertiaConfig` | Sanity cap — reject values outside valid range | Medium — good defensive input validation |
-| `airBrakeTrigger` | `EscInertiaState` | One-shot pulse when inertial motion stops → triggers air brake sound | High — needed for sound migration |
-| `brakeDetect` | `EscInertiaState` | Stick and inertia position on opposing sides → brake light / sound | High — needed for sound migration |
-| 5-state driveState FSM | `esc_inertia.cpp` | Explicit states (standing/fwd/braking-fwd/rev/braking-rev) — richer than current bidirectional ramp | Medium — current motion works but lacks transition logic |
-| `currentSpeed` 0–500 scale | `EscInertiaState` | DiYGuy sound engine expects 0–500 range, not combus_t | High — adapt when sound reads MotionOutput |
+| `airBrakeTrigger` | `esc_inertia_struct.h` / `.cpp` | One-shot pulse when inertial motion stops → air brake sound | **Migrated** — `MotionOutput::airBrakePulse` |
+| `brakeDetect` | `esc_inertia_struct.h` / `.cpp` | Stick vs inertia opposition → brake light / sound | **Migrated** — `DriveState::kBrakeFwd / kBrakeRev` |
+| `currentSpeed` 0–500 scale | `EscInertiaState` | DiYGuy sound engine expects 0–500, not combus_t | **Deferred** — handle during sound module refactor (combus_t native) |
+| 5-state driveState FSM | `esc_inertia.cpp` | Explicit states (standing/fwd/braking-fwd/rev/braking-rev) | **Migrated** — `DriveState` namespace + `MotionRuntime::driveState` |
 | `kMotion_Hydraulic_Slow` | `esc_presets.h` | Slow hydraulic cylinder preset (200ms ramp) | Medium — add when hydraulic uses motion |
+| ~~`autoRevAccelPct`~~ | — | ~~Acceleration boost in auto reverse~~ | **Dropped** — not needed |
+| ~~`EscLinearizeFn`~~ | — | ~~ESC output curve for non-linear ESCs~~ | **Noted** — TODO in `motion.cpp` step 6 |
+| ~~`kMotion_Hydraulic_Slow`~~ | — | ~~Slow hydraulic preset (200ms ramp)~~ | **Dropped** — trivial to recreate as MotionRamp |
+| ~~`lowRangePct`~~ | — | ~~Transfer case low-range scaling~~ | **Dropped** — not needed |
+| ~~`crawlerRampTimeMs`~~ | — | ~~Direct-control ~2ms ramp~~ | **Dropped** — not needed |
+| ~~`cbusMaxLimit / cbusMinLimit`~~ | — | ~~Input range sanity cap~~ | **Dropped** — already in motion (`s_clamp`) |
 
 ### Sandbox reference files
 

@@ -177,7 +177,31 @@ struct MotionConfig {
 
 
 // =============================================================================
-// 3. RUNTIME STATE  (mutable, one instance per device)
+// 3. DRIVE STATE  (signed: 0 neutral, + forward, − reverse)
+// =============================================================================
+
+/**
+ * @brief 5-state drive FSM encoded as signed int8_t.
+ *
+ * @details Sign gives direction, magnitude distinguishes driving from braking:
+ *   - `state > 0` → forward,  `state < 0` → reverse
+ *   - `abs(state) == 1` → driving,  `abs(state) == 2` → braking
+ *   - `state == 0` → standing still
+ *
+ *   Traction mode uses all 5 states.  Simple ramp only uses 0 / +1 / −1
+ *   (braking states require an inertia model).
+ */
+namespace DriveState {
+    constexpr int8_t kStanding  =  0;  ///< No motion.
+    constexpr int8_t kDriveFwd  = +1;  ///< Accelerating or cruising forward.
+    constexpr int8_t kBrakeFwd  = +2;  ///< Decelerating forward (toward neutral).
+    constexpr int8_t kDriveRev  = -1;  ///< Accelerating or cruising in reverse.
+    constexpr int8_t kBrakeRev  = -2;  ///< Decelerating in reverse (toward neutral).
+}
+
+
+// =============================================================================
+// 4. RUNTIME STATE  (mutable, one instance per device)
 // =============================================================================
 
 /**
@@ -189,18 +213,19 @@ struct MotionConfig {
  */
 
 struct MotionRuntime {
-    combus_t currentPos    = CbusNeutral;  ///< current ComBus position after inertia filtering (ramp output).
-    int8_t   gearSetTo     = 1;            ///< Active virtual gear: 1–3, auto-managed by motion_process().
-    uint16_t driveRampRate = 1u;           ///< Acceleration increment this cycle.
-    uint16_t brakeRampRate = 1u;           ///< Braking increment this cycle.
-    uint8_t  driveRampGain = 1u;           ///< Clutch-engagement multiplier (1, 2, or 4).
-    uint32_t rampMillis    = 0u;           ///< Timestamp of last ramp step (millis()).
+    combus_t currentPos    = CbusNeutral;            ///< current ComBus position after inertia filtering (ramp output).
+    int8_t   driveState    = DriveState::kStanding;  ///< 5-state FSM — see DriveState namespace.
+    int8_t   gearSetTo     = 1;                      ///< Active virtual gear: 1–3, auto-managed by motion_process().
+    uint16_t driveRampRate = 1u;                     ///< Acceleration increment this cycle.
+    uint16_t brakeRampRate = 1u;                     ///< Braking increment this cycle.
+    uint8_t  driveRampGain = 1u;                     ///< Clutch-engagement multiplier (1, 2, or 4).
+    uint32_t rampMillis    = 0u;                     ///< Timestamp of last ramp step (millis()).
 };
 
 
 
 // =============================================================================
-// 4. MOTION OUTPUT  (per-cycle result of the inertia pipeline)
+// 5. MOTION OUTPUT  (per-cycle result of the inertia pipeline)
 // =============================================================================
 
 /**
@@ -210,12 +235,14 @@ struct MotionRuntime {
  *   All fields are valid for the current cycle only.
  */
 struct MotionOutput {
-    combus_t currentPos;   ///< current ComBus position after inertia filtering (ramp output).
-    combus_t escCbusVal;   ///< Final ESC command (after scaling).
-    combus_t currentSpeed; ///< Inertial deviation from neutral — used by sound engine.
-    bool     isBraking;    ///< Pipeline is in a braking state.
-    bool     inReverse;    ///< Pipeline is driving in reverse.
-    bool     isDriving;    ///< Pipeline is actively driving (forward or reverse).
+    combus_t currentPos;    ///< current ComBus position after inertia filtering (ramp output).
+    combus_t escCbusVal;    ///< Final ESC command (after scaling).
+    combus_t currentSpeed;  ///< Inertial deviation from neutral — used by sound engine.
+    int8_t   driveState;    ///< 5-state FSM snapshot — see DriveState namespace.
+    bool     airBrakePulse; ///< One-shot: true on the cycle where braking ends (±2 → 0 or ±1).
+    bool     isBraking;     ///< Pipeline is in a braking state.
+    bool     inReverse;     ///< Pipeline is driving in reverse.
+    bool     isDriving;     ///< Pipeline is actively driving (forward or reverse).
 };
 
 // EOF motion_struct.h

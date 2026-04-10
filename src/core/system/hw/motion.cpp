@@ -260,16 +260,36 @@ static void motion_process(combus_t            rawComBusVal,
                             (runtime->currentPos > CbusNeutral && rawComBusVal < runtime->currentPos) ||
                             (runtime->currentPos < CbusNeutral && rawComBusVal > runtime->currentPos));
 
+      // 5b. DriveState FSM — signed encoding: +fwd, −rev, |1|=drive, |2|=brake
+    int8_t newState = DriveState::kStanding;
+    if (runtime->currentPos > CbusNeutral) {
+        newState = isBraking ? DriveState::kBrakeFwd : DriveState::kDriveFwd;
+    } else if (runtime->currentPos < CbusNeutral) {
+        newState = isBraking ? DriveState::kBrakeRev : DriveState::kDriveRev;
+    }
+
+      // 5c. airBrakePulse — one-shot on exit from any braking state
+    const int8_t prev = runtime->driveState;
+    const bool airBrakePulse = (prev == DriveState::kBrakeFwd || prev == DriveState::kBrakeRev)
+                               && (newState != prev);
+    runtime->driveState = newState;
+
       // 6. Fill output struct
+      // TODO: EscLinearizeFn — optional output curve callback (linearizeFn)
+      //       Apply here: escCbusVal = linearizeFn(currentPos) if callback set,
+      //       keeping currentPos linear for ramp math, escCbusVal curved for ESC.
+      //       See doc/sandbox/esc_inertia_struct.h section 2 for original design.
     if (output) {
-        output->currentPos   = runtime->currentPos;
-        output->escCbusVal   = runtime->currentPos;
-        output->currentSpeed = (runtime->currentPos >= CbusNeutral)
-                               ? runtime->currentPos - CbusNeutral
-                               : CbusNeutral - runtime->currentPos;
-        output->isBraking    = isBraking;
-        output->inReverse    = (runtime->currentPos < CbusNeutral);
-        output->isDriving    = (runtime->currentPos != CbusNeutral);
+        output->currentPos    = runtime->currentPos;
+        output->escCbusVal    = runtime->currentPos;
+        output->currentSpeed  = (runtime->currentPos >= CbusNeutral)
+                                ? runtime->currentPos - CbusNeutral
+                                : CbusNeutral - runtime->currentPos;
+        output->driveState    = newState;
+        output->airBrakePulse = airBrakePulse;
+        output->isBraking     = isBraking;
+        output->inReverse     = (runtime->currentPos < CbusNeutral);
+        output->isDriving     = (runtime->currentPos != CbusNeutral);
     }
 }
 
