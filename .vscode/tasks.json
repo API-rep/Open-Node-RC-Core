@@ -294,6 +294,30 @@
 			"type": "shell",
 			"command": "${userHome}\\.platformio\\penv\\Scripts\\pio.exe run -e sound_node_volvo",
 			"group": "build"
+		},
+		{
+			"label": "PIO Build sound errors only2",
+			"type": "shell",
+			"command": "C:\\Users\\Arnaud\\.platformio\\penv\\Scripts\\pio.exe run -e sound_node_volvo 2>&1 | findstr /i \"error: #error FAILED SUCCESS\"",
+			"group": "build"
+		},
+		{
+			"label": "PIO Build sound errors only2",
+			"type": "shell",
+			"command": "C:\\Users\\Arnaud\\.platformio\\penv\\Scripts\\pio.exe run -e sound_node_volvo 2>&1 | findstr /i \"error: #error FAILED SUCCESS\"",
+			"group": "build"
+		},
+		{
+			"label": "PIO Build sound errors only2",
+			"type": "shell",
+			"command": "C:\\Users\\Arnaud\\.platformio\\penv\\Scripts\\pio.exe run -e sound_node_volvo 2>&1 | findstr /i \"error: #error FAILED SUCCESS\"",
+			"group": "build"
+		},
+		{
+			"label": "PIO Build sound result",
+			"type": "shell",
+			"command": "C:\\Users\\Arnaud\\.platformio\\penv\\Scripts\\pio.exe run -e sound_node_volvo 2>&1 | findstr /i \"FAILED SUCCESS\"",
+			"group": "build"
 		}
 	]
 }
