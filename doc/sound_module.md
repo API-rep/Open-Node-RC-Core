@@ -2,7 +2,7 @@
 
 Source de départ : RC Engine Sound ESP32 (TheDIYGuy999)  
 Répertoire : `src/sound_module/`  
-Backup skeleton architecture cible : `src/sound_module_ref/`  
+Backup skeleton architecture cible : `src/sound_module_ref/` (**supprimé** — parité atteinte)  
 Backup sources tiers (privé) : repo GitHub séparé à créer
 
 ---
@@ -30,8 +30,8 @@ Backup sources tiers (privé) : repo GitHub séparé à créer
   - Build confirmé vert — RAM 10 % / Flash 26,6 % (identique Étape 1)
 
 ### Étape 3 — Remplacement input par ComBus RX
-- [ ] Intégrer `combus_rx` (depuis `sound_module_ref/`) en remplacement de SBUS/PWM
-- [ ] Mapper ComBus → `pulseWidth[]` via `sound_hal.cpp` (déjà écrit dans `sound_module_ref/`)
+- [ ] Intégrer `combus_rx` en remplacement de SBUS/PWM
+- [ ] Mapper ComBus → `pulseWidth[]` via `sound_hal.cpp`
 - [ ] Désactiver `2_Remote.h` (protocoles RC physiques) pour le build ComBus
 - [ ] Test hardware : machine → UART → nœud son
 
@@ -41,9 +41,9 @@ Backup sources tiers (privé) : repo GitHub séparé à créer
 - [ ] Supprimer `src/serialInterface.h` si non utilisé
 - [ ] Conditionner WiFi/ESP-NOW (`ENABLE_WIRELESS`) proprement
 
-### Étape 5 — Fusion avec skeleton `sound_module_ref`
-- [ ] Migrer `main.cpp` vers l'architecture de `sound_module_ref/main.cpp`
-- [ ] Supprimer `sound_module_ref/` une fois la parité validée
+### Étape 5 — Fusion avec skeleton `sound_module_ref` [ DONE ]
+- [x] Migrer `main.cpp` vers l'architecture cible
+- [x] Supprimer `sound_module_ref/` (parité validée — commit chore)
 
 ---
 
@@ -57,7 +57,7 @@ Backup sources tiers (privé) : repo GitHub séparé à créer
 - Données sources disponibles directement dans le moteur son une fois intégré
 - Lib : TFT_eSPI (Bodmer) — à ajouter en `lib_deps` de `sound_node_volvo`
 - Pins : SCL=18, DC=19, RES=21, SDA=23, CS=GND — conflit shaker+balises si activé
-- Référence supprimée de `src/sound_module/` — à recréer depuis `sound_module_ref` ou backup privé
+- Référence supprimée de `src/sound_module/` — à recréer depuis backup privé si nécessaire
 
 ### Dashboard mobile (monitoring technique)
 - Option A : USB OTG + app *Serial USB Terminal* (Android) — zéro modif code, utilisable maintenant
