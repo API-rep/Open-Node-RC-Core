@@ -14,7 +14,8 @@
  *            0 = standstill, 500 = maximum speed.
  *
  *          This file exposes `kVehicleSoundDynamics` — the canonical instance
- *          name consumed by `sound_dynamics.h` and referenced from main.cpp.
+ *          name included via `dumper_truck_config.h` (section 4 — SOUND_NODE guard)
+ *          and consumed from main.cpp.
  *****************************************************************************/
 #pragma once
 

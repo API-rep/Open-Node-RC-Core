@@ -6,7 +6,7 @@
 #include "combus_manager.h"
 
 #include <Arduino.h>
-#include <core/config/combus/combus_types.h>
+#include <core/config/machines/combus_types.h>
 
 
 /**

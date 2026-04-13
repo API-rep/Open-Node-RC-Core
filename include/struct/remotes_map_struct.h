@@ -15,7 +15,7 @@ enum class AnalogInputDevID  : uint8_t;   ///< Input device analog channel IDs
 enum class DigitalInputDevID : uint8_t;   ///< Input device digital channel IDs
 
 // Com-bus channel IDs live in a machine namespace — dispatched by combus_ids.h.
-#include <core/config/combus/combus_ids.h>
+#include <core/config/machines/combus_ids.h>
 
 typedef struct {
   AnalogInputDevID devID;    // L'index dans AnalogInputDevArray (ex: LY_STICK)

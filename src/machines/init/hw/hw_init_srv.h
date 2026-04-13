@@ -5,7 +5,7 @@
 #pragma once
 
 #include <ServoCore.h>
-#include <core/config/combus/combus_types.h>
+#include <core/config/machines/combus_types.h>
 
 // =============================================================================
 // 1. OBJECT ALLOCATION & POINTERS

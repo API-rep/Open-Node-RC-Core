@@ -32,11 +32,11 @@
 #include <defs/defs.h>
 
 #if defined(MACHINE_TYPE) && (MACHINE_TYPE == DUMPER_TRUCK)
-  #include "dumper_truck/dumper_truck.h"
+  #include <core/config/machines/dumper_truck/combus/dumper_truck.h>
   using namespace DumperTruck;
 
 #elif defined(MACHINE_TYPE) && (MACHINE_TYPE == AUTRE_MACHINE_EXEMPLE)
-  #include "autre_machine/autre_machine.h"
+  #include <core/config/machines/autre_machine/combus/autre_machine.h>
   // using namespace AutreMachine;   // uncomment when namespace is added
 
 #else

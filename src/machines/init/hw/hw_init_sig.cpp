@@ -3,7 +3,7 @@
  * @brief Implementation of signal device configuration check and init.
  *****************************************************************************/
 
-#include <core/config/combus/combus_types.h>
+#include <core/config/machines/combus_types.h>
 #include <struct/struct.h>
 #include <core/system/debug/debug.h>
 

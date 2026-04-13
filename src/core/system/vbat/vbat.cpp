@@ -14,7 +14,7 @@
 #include "vbat.h"
 
 #ifdef VBAT_SENSING
-#include <core/config/combus/combus_types.h>   // comBus.batteryIsLow
+#include <core/config/machines/combus_types.h>   // comBus.batteryIsLow
 #endif
 
 #if defined(VBAT_SENSING) || defined(VBAT_ALERT)

@@ -53,7 +53,7 @@ extern ComBus comBus;
 // =============================================================================
 
 #ifdef INPUT_MODULE
-#include "inputs_map/inputs_map.h"
+#include "../inputs_map/inputs_map.h"
 #endif  // INPUT_MODULE
 
 // EOF dumper_truck.h

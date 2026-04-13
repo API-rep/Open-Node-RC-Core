@@ -19,7 +19,7 @@
 #pragma once
 
 #include <struct/combus_struct.h>
-#include <core/config/combus/combus_ids.h>
+#include <core/config/machines/combus_ids.h>
 
 
 // =============================================================================

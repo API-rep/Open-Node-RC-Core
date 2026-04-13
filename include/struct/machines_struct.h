@@ -16,7 +16,7 @@
 // Provides the correct namespace-scoped enum declarations + using namespace for
 // AnalogComBusID/DigitalComBusID used below. This fix project dependencies that 
 // could create include cycles.
-#include <core/config/combus/combus_ids.h>
+#include <core/config/machines/combus_ids.h>
 
 #include <struct/motion_struct.h>      // MotionConfig, MotionRuntime (embedded in DcDevice)
 

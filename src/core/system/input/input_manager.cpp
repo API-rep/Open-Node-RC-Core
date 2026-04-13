@@ -4,7 +4,7 @@
  */
 
 #include "input_manager.h"
-#include <core/config/combus/combus_types.h>
+#include <core/config/machines/combus_types.h>
 #include <core/system/combus/combus_manager.h>
 #include <core/system/combus/combus_access.h>
 #include <PS4Controller.h>

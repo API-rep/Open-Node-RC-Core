@@ -17,7 +17,7 @@
 
 #include <stdint.h>
 #include <core/system/combus/combus_frame.h>
-#include <core/config/combus/combus_types.h>           // AnalogComBusID, DigitalComBusID (IS_MACHINE absent → enums only)
+#include <core/config/machines/combus_types.h>           // AnalogComBusID, DigitalComBusID (IS_MACHINE absent → enums only)
 
 /// UART transport physical cap — chosen as uint8_t safety ceiling (no hardware limit).
 static constexpr uint8_t CombusPhysUartMax = 255u;

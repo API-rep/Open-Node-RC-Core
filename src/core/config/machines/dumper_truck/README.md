@@ -10,10 +10,11 @@ of which circuit board (machine node or sound node) is compiling it.
 
 | File | Purpose |
 |---|---|
-| `dumper_truck_ids.h` | `AnalogComBusID` / `DigitalComBusID` enum values |
-| `dumper_truck.h` / `.cpp` | `ComBus` struct and channel arrays |
+| `dumper_truck_config.h` | Sub-umbrella: includes all sub-modules, guarded by `MACHINE_TYPE` / `SOUND_NODE` |
+| `combus/dumper_truck_ids.h` | `AnalogComBusID` / `DigitalComBusID` enum values |
+| `combus/dumper_truck.h` / `.cpp` | `ComBus` struct and channel arrays |
 | `sound/dumper_truck_sound.h` / `.cpp` | **Sound engine dynamics** (acc, dec, CEP, shift thresholds) |
-| `dumper_truck_motion.h` | **Traction motion preset alias** (`kDumperTruckTractionPreset`) |
+| `motion/dumper_truck_motion.h` | **Traction motion preset alias** (`kDumperTruckTractionPreset`) |
 | `inputs_map/` | Input-device → com-bus mapping |
 
 ---
@@ -21,10 +22,11 @@ of which circuit board (machine node or sound node) is compiling it.
 ## Sound profile (`sound/dumper_truck_sound.h`)
 
 The active profile is routed by `MACHINE_TYPE` through
-`src/core/config/combus/sound_dynamics.h`, which exposes the
-canonical symbol `kVehicleSoundDynamics`.  `main.cpp` and legacy vehicle
-headers include `sound_dynamics.h` via `<core/config/combus/sound_dynamics.h>` —
-they never reference the concrete header directly.
+`src/core/config/machines/machine_config.h`, which includes
+`dumper_truck_config.h` (section 4 — SOUND_NODE guard), which includes
+this file and exposes `kVehicleSoundDynamics`.  `main.cpp` and vehicle
+headers include via `<core/config/machines/machine_config.h>` —
+they never reference this file directly.
 
 ### Migrated parameters
 
@@ -71,8 +73,8 @@ vehicle-class relationship explicit.
 
 To add a second vehicle class (e.g. `wheel_loader`):
 
-1. **Create** `src/core/config/combus/wheel_loader/` (copy `dumper_truck/`
-   as a template).
+1. **Create** `src/core/config/machines/wheel_loader/` (copy `dumper_truck/`
+   as a template, preserving sub-dirs: `combus/`, `sound/`, `motion/`, `inputs_map/`).
 2. **Create** `wheel_loader_sound.h` / `.cpp` with a
    `WheelLoaderSoundProfile kVehicleSoundDynamics` struct (same field names,
    tuned values).
@@ -81,6 +83,7 @@ To add a second vehicle class (e.g. `wheel_loader`):
    (or define a new one in that file).
 4. **Update** `1_Vehicle.h` to select the new vehicle header
    (e.g. `#include "vehicles/WheelLoaderLiebherr.h"`).
-5. **Add a dispatch branch** in
-   `src/core/config/combus/sound_dynamics.h` for
-   `MACHINE_TYPE == WHEEL_LOADER`.
+5. **Add dispatch branches** in:
+   - `src/core/config/machines/machine_config.h` → include `wheel_loader/wheel_loader_config.h`
+   - `src/core/config/machines/combus_types.h` → point to `wheel_loader/combus/wheel_loader.h`
+   - `src/core/config/machines/combus_ids.h` → point to `wheel_loader/combus/wheel_loader_ids.h`

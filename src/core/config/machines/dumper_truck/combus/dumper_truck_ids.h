@@ -8,7 +8,7 @@
  *
  * Consumers:
  *   - dumper_truck.h   — include these IDs as part of the full layout
- *   - combus_ids.h     — umbrella dispatcher for struct headers
+ *   - combus_ids.h     — umbrella dispatcher for struct headers (src/core/config/machines/combus_ids.h)
  *
  * On machine builds, combus_ids.h and combus_types.h adds using namespace DumperTruck;
  * So all existing code uses the names unqualified.
