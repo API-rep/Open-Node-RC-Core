@@ -14,6 +14,7 @@ AnalogComBus AnalogComBusArray[static_cast<uint8_t>(AnalogComBusID::CH_COUNT)] =
   { .infoName = "steering channel",        .owner = ChanOwner::INPUT_DEV },
   { .infoName = "driving speed channel",   .owner = ChanOwner::INPUT_DEV },
   { .infoName = "dump actuators channel",  .owner = ChanOwner::INPUT_DEV },
+  { .infoName = "esc speed channel",       .owner = ChanOwner::SYSTEM    },
 };
 
 

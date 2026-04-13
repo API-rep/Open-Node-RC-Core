@@ -63,7 +63,7 @@ static inline uint16_t ring_writable(const RingBuf* ringBuf)
 // =============================================================================
 
 	// --- 2.1 Internal limits ---
-static constexpr uint16_t kDefaultRingBufSize = 128;    ///< Default ring buffer capacity (power of two).
+static constexpr uint16_t kDefaultRingBufSize = 512;    ///< Default ring buffer capacity (power of two).
 static constexpr uint16_t kMaxRingBufSize     = 1024;   ///< Ring buffer size upper limit — sizes static storage.
 static constexpr uint8_t  kDacSilence         = 128;    ///< DAC midpoint (written when ring is empty).
 

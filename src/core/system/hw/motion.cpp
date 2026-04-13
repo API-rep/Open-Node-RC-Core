@@ -222,20 +222,39 @@ static void motion_process(combus_t            rawComBusVal,
     if (now - runtime->rampMillis >= rampMs) {
         runtime->rampMillis = now;
 
+          // In inertia mode the step size depends on whether currentPos is moving
+          // AWAY from neutral (accelerating) or TOWARD neutral (engine braking).
+          // Comparison is on absolute distance from CbusNeutral — this is correct
+          // for both forward AND reverse: brakeSteps is used whenever the target
+          // is closer to neutral than the current position, regardless of sign.
+        bool isInertiaAccel = false;
+        if (config->inertia) {
+            const uint32_t currDist = (runtime->currentPos >= CbusNeutral)
+                                    ? static_cast<uint32_t>(runtime->currentPos - CbusNeutral)
+                                    : static_cast<uint32_t>(CbusNeutral - runtime->currentPos);
+            const uint32_t targDist = (rawComBusVal >= CbusNeutral)
+                                    ? static_cast<uint32_t>(rawComBusVal - CbusNeutral)
+                                    : static_cast<uint32_t>(CbusNeutral - rawComBusVal);
+            isInertiaAccel = (targDist > currDist);
+        }
+
         if (runtime->currentPos < rawComBusVal) {
-              // Accelerating — driveRampGain scales the step in traction mode
-            const uint16_t gain = config->inertia ? runtime->driveRampGain : 1u;
+            const uint16_t gain = (config->inertia && isInertiaAccel) ? runtime->driveRampGain : 1u;
             const combus_t step = config->inertia
-                                  ? static_cast<combus_t>(config->inertia->accelSteps * gain)
+                                  ? (isInertiaAccel
+                                     ? static_cast<combus_t>(config->inertia->accelSteps * gain)
+                                     : static_cast<combus_t>(config->inertia->brakeSteps))
                                   : static_cast<combus_t>(config->ramp->accelSteps);
             runtime->currentPos = (rawComBusVal - runtime->currentPos > step)
                                   ? runtime->currentPos + step
                                   : rawComBusVal;
 
         } else if (runtime->currentPos > rawComBusVal) {
-              // Braking
+            const uint16_t gain = (config->inertia && isInertiaAccel) ? runtime->driveRampGain : 1u;
             const combus_t step = config->inertia
-                                  ? static_cast<combus_t>(config->inertia->brakeSteps)
+                                  ? (isInertiaAccel
+                                     ? static_cast<combus_t>(config->inertia->accelSteps * gain)
+                                     : static_cast<combus_t>(config->inertia->brakeSteps))
                                   : static_cast<combus_t>(config->ramp->brakeSteps);
             if (config->inertia) {
                   // brakeMin: lowest ComBus value currentPos could reach during this brake phase —

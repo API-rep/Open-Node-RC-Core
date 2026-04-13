@@ -163,9 +163,18 @@ void loop() {
         if (machine.dcDev[i].motion != nullptr) {
           motion_update(motorCmd, machine.dcDev[i].motion, &machine.dcDev[i].motionRt, nullptr);
           motorCmd = machine.dcDev[i].motionRt.currentPos;
-          // Feed filtered position back to ComBus so the sound module sees
-          // smooth inertia-based RPM instead of the raw stick value.
-          combus_set_analog(comBus, static_cast<AnalogComBusID>(chIdx), motorCmd, ChanOwner::SYSTEM);
+          // NOTE: filtered value is intentionally NOT written back to ENGINE_RPM_BUS.
+          //       The sound module runs its own ESC inertia simulation on the raw
+          //       throttle value; feeding a pre-filtered signal would double the ramp
+          //       and prevent the engine RPM sound from tracking vehicle speed.
+          //       ESC_SPEED_BUS is written separately below for gear-shift logic only.
+          if (chIdx == static_cast<uint8_t>(AnalogComBusID::ENGINE_RPM_BUS)) {
+            // Publish real inertia-filtered speed for the sound node's gear-shift
+            // decisions. No double-ramp risk: sound uses ENGINE_RPM_BUS for RPM
+            // pitch; ESC_SPEED_BUS is consumed only by the SEMI_AUTOMATIC logic.
+            combus_set_analog(comBus, AnalogComBusID::ESC_SPEED_BUS,
+                              machine.dcDev[i].motionRt.currentPos, ChanOwner::SYSTEM);
+          }
         }
 
 #ifndef PATCH_MOTORS_FORCE_SLEEP
