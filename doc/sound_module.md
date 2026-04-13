@@ -29,11 +29,12 @@ Backup sources tiers (privé) : repo GitHub séparé à créer
   - Variante Wemos D1 Mini ESP32 et options `NEOPIXEL_ON_CH4` / `THIRD_BRAKELIGHT` conservées dans le header
   - Build confirmé vert — RAM 10 % / Flash 26,6 % (identique Étape 1)
 
-### Étape 3 — Remplacement input par ComBus RX
-- [ ] Intégrer `combus_rx` en remplacement de SBUS/PWM
-- [ ] Mapper ComBus → `pulseWidth[]` via `sound_hal.cpp`
-- [ ] Désactiver `2_Remote.h` (protocoles RC physiques) pour le build ComBus
-- [ ] Test hardware : machine → UART → nœud son
+### Étape 3 — Remplacement input par ComBus RX [ DONE ]
+- [x] Intégrer `combus_rx` en remplacement de SBUS/PWM  
+      → `combus_sound_interpreter.cpp` + architecture `SoundInterpreter` → `SoundCore` → `MixerState` → ISR
+- [x] Mapper ComBus → sound via `sound_apply.cpp` + `soundMapper[]` (profiles/dumper_truck/)
+- [x] Désactiver `2_Remote.h` — build guard `-D COMBUS_UART_RX=1` dans `sound_node_base`
+- [x] Test hardware validé : machine COM3 → UART → nœud son COM8 (session 2026-03-22/23)
 
 ### Étape 4 — Nettoyage résidus
 - [ ] Supprimer / conditionner les includes SBUS, IBUS, SUMD, PPM (`src/sbus.cpp`, `src/SUMD.cpp`)
