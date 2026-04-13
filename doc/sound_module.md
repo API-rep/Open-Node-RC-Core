@@ -36,11 +36,12 @@ Backup sources tiers (privé) : repo GitHub séparé à créer
 - [x] Désactiver `2_Remote.h` — build guard `-D COMBUS_UART_RX=1` dans `sound_node_base`
 - [x] Test hardware validé : machine COM3 → UART → nœud son COM8 (session 2026-03-22/23)
 
-### Étape 4 — Nettoyage résidus
-- [ ] Supprimer / conditionner les includes SBUS, IBUS, SUMD, PPM (`src/sbus.cpp`, `src/SUMD.cpp`)
-- [ ] Supprimer `webInterface.h` (page config WiFi — non utilisée en mode ComBus)
-- [ ] Supprimer `src/serialInterface.h` si non utilisé
-- [ ] Conditionner WiFi/ESP-NOW (`ENABLE_WIRELESS`) proprement
+### Étape 4 — Nettoyage résidus [ DONE ]
+- [x] Supprimer `src/sbus.h/.cpp`, `src/SUMD.h/.cpp` — ComBus UART remplace tous les protocoles RC physiques
+- [x] Supprimer `src/serialInterface.h`, `src/webInterface.h` — non utilisés en mode ComBus
+- [x] Garder déclarations SBUS/SUMD dans `sound_state.h/.cpp` sous guard `#if !defined(COMBUS_UART_RX)` (code rc_engine_sound intact)
+- [x] Retirer `-D EMBEDDED_SBUS` de `platformio.ini`
+- [ ] Conditionner WiFi/ESP-NOW (`ENABLE_WIRELESS`) proprement — déféré
 
 ### Étape 5 — Fusion avec skeleton `sound_module_ref` [ DONE ]
 - [x] Migrer `main.cpp` vers l'architecture cible
