@@ -11,7 +11,7 @@
 #include <struct/struct.h>
 #include <defs/defs.h>
 
-#include "combus/combus_types.h"
+#include "machines/combus_types.h"
 #include "inputs/inputs.h"
 #include "outputs/outputs.h"
 

@@ -14,10 +14,7 @@
 
 #include <stdint.h>
 #include <defs/machines_defs.h>
-
-
-// Forward declaration — full type in callers via combus_frame.h.
-struct ComBusFrame;
+#include <struct/combus_struct.h>
 
 
 // =============================================================================
@@ -28,13 +25,12 @@ struct ComBusFrame;
  * @brief Dispatch function: extract one channel value and forward to SoundCore.
  *
  * @details Called once per ComBus update cycle for each `SoundChannel` entry.
- *   @p snap is the current valid frame; @p chanID is the channel index stored
- *   in the owning `SoundChannel`.  The function reads `snap->analog[chanID]`
- *   or `snap->digital[chanID]` as appropriate and calls the corresponding
- *   `sound_core_set_*()` entry point.  Compound functions (e.g. indicators)
- *   may ignore `chanID` and read multiple channels directly from @p snap.
+ *   @p bus is the local ComBus instance; @p chanID is the channel index stored
+ *   in the owning `SoundChannel`.  The function reads
+ *   `bus->analogBus[chanID].value` or `bus->digitalBus[chanID].value` as
+ *   appropriate and calls the corresponding `sound_core_set_*()` entry point.
  */
-using ApplyFn = void (*)(const ComBusFrame*, uint8_t);
+using ApplyFn = void (*)(const ComBus*, uint8_t);
 
 
 /**
