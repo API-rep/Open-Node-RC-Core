@@ -70,7 +70,7 @@ void input_update(ComBus &bus) {
     uint8_t ch = static_cast<uint8_t>(m.busChannel);
     uint16_t busVal = m.isInverted ? (bus.analogBusMaxVal - val) : val;
 
-    combus_set_analog(bus, static_cast<AnalogComBusID>(ch), busVal, ChanOwner::INPUT_DEV);
+    combus_set_analog(bus, static_cast<AnalogComBusID>(ch), busVal, ChanOwner::MACHINE_INPUT);
 
     bus.analogBus[ch].isDrived = true;
   }
@@ -116,7 +116,7 @@ void input_update(ComBus &bus) {
       // --- ComBus Injection ---
     uint8_t ch = static_cast<uint8_t>(m.busChannel);
 
-    combus_set_digital(bus, static_cast<DigitalComBusID>(ch), finalState, ChanOwner::INPUT_DEV);
+    combus_set_digital(bus, static_cast<DigitalComBusID>(ch), finalState, ChanOwner::MACHINE_INPUT);
     
     bus.digitalBus[ch].isDrived = true;
   }

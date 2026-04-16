@@ -56,7 +56,7 @@ void machine_init() {
 
 	  // --- 5. Boot-safe runlevel ---
   sys_log_info("[SYSTEM] Applying boot-safe runlevel...\n");
-  combus_set_runlevel(comBus, DEF_RUNLEVEL, ChanOwner::SYSTEM);
+  combus_set_runlevel(comBus, DEF_RUNLEVEL, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
   stopAllDcDrivers(machine);
   sleepAllDcDrivers(machine);
   disableAllDcDrivers(machine);

@@ -23,7 +23,18 @@
 
 
 // =============================================================================
-// 1. CHANNEL WRITE ACCESSORS
+// 1. NODE GROUP
+// =============================================================================
+
+/**
+ * @brief Set the NodeGroup of this node — must be called once in combus_init().
+ * @param group  One of ComBusOwner::GRP_MACHINE, ComBusOwner::GRP_SOUND, ComBusOwner::GRP_REMOTE, …
+ */
+void combus_set_node_group(uint8_t group);
+
+
+// =============================================================================
+// 2. CHANNEL WRITE ACCESSORS
 // =============================================================================
 
 /**
@@ -34,7 +45,6 @@
  * @param caller Identity of the calling module — checked against ch.owner.
  * @return true if the write was accepted, false if ownership mismatch.
  */
-
 bool combus_set_analog(ComBus& bus, AnalogComBusID ch, uint16_t val, ChanOwner caller);
 
 

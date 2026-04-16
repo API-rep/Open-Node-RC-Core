@@ -31,6 +31,10 @@
   #define BOARD            ESP32_8M_6S  ///< Default motherboard if not set by build flags.
 #endif
 
+  // ComBus node group for this machine environment (see ComBusOwner::GRP_* in combus_struct.h).
+  // Change only when adding a new execution environment that requires its own group.
+static constexpr uint8_t EnvNodeGroup = ComBusOwner::GRP_MACHINE;
+
 #define MAX_FW_SPEED         100.00     ///< Maximum forward speed cap (0–100 %).
 #define MAX_BACK_SPEED       100.00     ///< Maximum reverse speed cap (0–100 %).
 

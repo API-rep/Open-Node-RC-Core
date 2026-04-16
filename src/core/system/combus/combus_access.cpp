@@ -13,13 +13,44 @@
 
 
 // =============================================================================
-// 1. INTERNAL HELPERS
+// 1. NODE GROUP STATE  (set once at combus_init)
 // =============================================================================
 
-/** Returns true when the caller is allowed to write a slot with the given owner. */
-static inline bool _owner_ok(ChanOwner slot_owner, ChanOwner caller) {
-    return (slot_owner == ChanOwner::ANY   ||
-            slot_owner == caller);
+/** NodeGroup of the current build environment — set by combus_set_node_group(). */
+static uint8_t s_envNodeGroup = ComBusOwner::GRP_NONE;
+
+void combus_set_node_group(uint8_t group) {
+    s_envNodeGroup = group;
+}
+
+
+// =============================================================================
+// 2. INTERNAL HELPERS
+// =============================================================================
+
+/**
+ * @brief Returns true when @p caller is authorised to write a slot with the given @p owner.
+ *
+ * @details Rules (in priority order):
+ *   1. NONE (0x00)            — unclaimed; deny all.
+ *   2. ANY  (0xFF)            — unrestricted; allow all.
+ *   3. GRP_ANY, PROC != ANY   — wildcard group: any node's matching process.
+ *   4. slot.group == my group — local domain: full byte match required.
+ *   5. otherwise              — foreign domain: PROC_BRIDGE only.
+ */
+static inline bool _owner_ok(ChanOwner slot, ChanOwner caller) {
+    using namespace ComBusOwner;
+    const uint8_t raw_s = static_cast<uint8_t>(slot);
+    const uint8_t raw_c = static_cast<uint8_t>(caller);
+    const uint8_t s_grp = raw_s & GRP_MASK;
+    const uint8_t s_prc = raw_s & PROC_MASK;
+    const uint8_t c_prc = raw_c & PROC_MASK;
+
+    if (raw_s == 0x00u)       return false;           // NONE — unclaimed, deny all
+    if (raw_s == 0xFFu)       return true;            // ANY  — unrestricted, allow all
+    if (s_grp == GRP_ANY)     return s_prc == c_prc;  // wildcard group — match process only
+    if (s_grp == s_envNodeGroup)  return raw_s == raw_c;  // local domain — full byte match
+    return c_prc == PROC_BRIDGE;                      // foreign domain — bridge only
 }
 
 #ifdef DEBUG_COMBUS

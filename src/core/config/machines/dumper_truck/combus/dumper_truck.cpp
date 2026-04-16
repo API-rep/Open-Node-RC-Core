@@ -11,42 +11,22 @@ using namespace DumperTruck;
 // =============================================================================
 
 AnalogComBus AnalogComBusArray[static_cast<uint8_t>(AnalogComBusID::CH_COUNT)] = {
-#ifdef SOUND_NODE
-    // On the sound node all analog channels are written by the UART RX bridge.
-  { .infoName = "steering channel",        .owner = ChanOwner::SYSTEM_EXT },
-  { .infoName = "driving speed channel",   .owner = ChanOwner::SYSTEM_EXT },
-  { .infoName = "dump actuators channel",  .owner = ChanOwner::SYSTEM_EXT },
-  { .infoName = "esc speed channel",       .owner = ChanOwner::SYSTEM_EXT },
-#else
-  { .infoName = "steering channel",        .owner = ChanOwner::INPUT_DEV },
-  { .infoName = "driving speed channel",   .owner = ChanOwner::INPUT_DEV },
-  { .infoName = "dump actuators channel",  .owner = ChanOwner::INPUT_DEV },
-  { .infoName = "esc speed channel",       .owner = ChanOwner::SYSTEM    },
-#endif
+  { .infoName = "steering channel",        .owner = ChanOwner::MACHINE_INPUT  },
+  { .infoName = "driving speed channel",   .owner = ChanOwner::MACHINE_INPUT  },
+  { .infoName = "dump actuators channel",  .owner = ChanOwner::MACHINE_INPUT  },
+  { .infoName = "esc speed channel",       .owner = ChanOwner::MACHINE_SYSTEM },
 };
 
 
 
 DigitalComBus DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::CH_COUNT)] = {
-#ifdef SOUND_NODE
-    // On the sound node all digital channels are written by the UART RX bridge,
-    // except BATTERY_LOW which is written locally by the vbat module.
-  { .infoName = "horn channel",            .owner = ChanOwner::SYSTEM_EXT },
-  { .infoName = "lights channel",          .owner = ChanOwner::SYSTEM_EXT },
-  { .infoName = "key channel",             .owner = ChanOwner::SYSTEM_EXT },
-  { .infoName = "battery low channel",     .owner = ChanOwner::VBAT_MON  },
-  { .infoName = "indicator left channel",  .owner = ChanOwner::SYSTEM_EXT },
-  { .infoName = "indicator right channel", .owner = ChanOwner::SYSTEM_EXT },
-  { .infoName = "hazards channel",         .owner = ChanOwner::SYSTEM_EXT },
-#else
-  { .infoName = "horn channel",            .owner = ChanOwner::INPUT_DEV },
-  { .infoName = "lights channel",          .owner = ChanOwner::INPUT_DEV },
-  { .infoName = "key channel",             .owner = ChanOwner::INPUT_DEV },
-  { .infoName = "battery low channel",     .owner = ChanOwner::VBAT_MON },
-  { .infoName = "indicator left channel",  .owner = ChanOwner::INPUT_DEV },
-  { .infoName = "indicator right channel", .owner = ChanOwner::INPUT_DEV },
-  { .infoName = "hazards channel",         .owner = ChanOwner::INPUT_DEV },
-#endif
+  { .infoName = "horn channel",            .owner = ChanOwner::MACHINE_INPUT },
+  { .infoName = "lights channel",          .owner = ChanOwner::MACHINE_INPUT },
+  { .infoName = "key channel",             .owner = ChanOwner::MACHINE_INPUT },
+  { .infoName = "battery low channel",     .owner = ChanOwner::VBAT_MON     },
+  { .infoName = "indicator left channel",  .owner = ChanOwner::MACHINE_INPUT },
+  { .infoName = "indicator right channel", .owner = ChanOwner::MACHINE_INPUT },
+  { .infoName = "hazards channel",         .owner = ChanOwner::MACHINE_INPUT },
 };
 
 
@@ -54,20 +34,14 @@ DigitalComBus DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::CH_COUNT)
 /**
  * @brief Communication bus structure definition.
  *
- * @details Ownership fields define the default writer mandate for each
- *   meta-channel.  The writing module verifies its own access right at
- *   runtime — ownership is the same for all mono-combus nodes.
+ * @details Machine-perspective owners — shared across all nodes.
+ *   Foreign nodes (sound, remote) may only write via the UART RX bridge.
  */
 
 ComBus comBus {
   .runLevel       = RunLevel::NOT_YET_SET,
-#ifdef SOUND_NODE
-  .runLevelOwner  = ChanOwner::SYSTEM_EXT,    // UART RX bridge writes runLevel
-  .keyOnOwner     = ChanOwner::SYSTEM_EXT,    // UART RX bridge writes keyOn
-#else
-  .runLevelOwner  = ChanOwner::SYSTEM,        // system layer (RunLevel FSM)
-  .keyOnOwner     = ChanOwner::SYSTEM,        // system layer (key-on logic from input)
-#endif
+  .runLevelOwner  = ChanOwner::MACHINE_SYSTEM,
+  .keyOnOwner     = ChanOwner::MACHINE_SYSTEM,
   .analogBus      = AnalogComBusArray,
   .digitalBus     = DigitalComBusArray,
   .analogBusMaxVal = (1UL << (sizeof(decltype(AnalogComBus::value)) * 8)) - 1

@@ -53,8 +53,11 @@ void sys_init() {
 	// Logic using comBus or bus limits goes here
 
 	// --- 4. System sanity checks ---
+	static_assert(EnvNodeGroup != ComBusOwner::GRP_NONE, "EnvNodeGroup not set for this env");
+	
   combus_init(static_cast<uint8_t>(AnalogComBusID::CH_COUNT),
-              static_cast<uint8_t>(DigitalComBusID::CH_COUNT));
+              static_cast<uint8_t>(DigitalComBusID::CH_COUNT),
+              EnvNodeGroup);
 
   sys_log_info("[SYSTEM] System initialisation complete\n\n");
 }

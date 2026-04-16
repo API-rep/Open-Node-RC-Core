@@ -10,6 +10,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <struct/combus_struct.h>   // ComBusOwner::GRP_* constants for nodeGroup parameter
 
 
 // =============================================================================
@@ -17,11 +18,15 @@
 // =============================================================================
 
 /**
- * @brief Log ComBus channel counts at boot (sanity trace only).
+ * @brief Initialise ComBus: register node group and log channel counts.
  *
- * @param nAnalog   Number of analog ComBus channels for this build.
- * @param nDigital  Number of digital ComBus channels for this build.
+ * @param nAnalog    Number of analog ComBus channels for this build.
+ * @param nDigital   Number of digital ComBus channels for this build.
+ * @param nodeGroup  Node-group identity of this environment (`ComBusOwner::GRP_*`
+ *                   — see `combus_struct.h`). Determines which channels are
+ *                   local or not (ex : extension board).
+ *                   Pass `EnvNodeGroup` from the env `config.h`.
  */
-void combus_init(uint8_t nAnalog, uint8_t nDigital);
+void combus_init(uint8_t nAnalog, uint8_t nDigital, uint8_t nodeGroup);
 
 // EOF combus.h

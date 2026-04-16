@@ -71,14 +71,14 @@ void loop() {
       disableAllDcDrivers(machine);
       failsafeActive = true;
     }
-    combus_set_runlevel(comBus, RunLevel::IDLE, ChanOwner::SYSTEM);
+    combus_set_runlevel(comBus, RunLevel::IDLE, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
     return;  // dashboard runs on its own FreeRTOS task (Core 0)
   }
   failsafeActive = false;
 
 	// --- 3. Ignition key derivation ---
   uint8_t keyCh = static_cast<uint8_t>(DigitalComBusID::KEY); // dedicated ignition channel
-  combus_set_keyon(comBus, comBus.digitalBus[keyCh].isDrived && comBus.digitalBus[keyCh].value, ChanOwner::SYSTEM);
+  combus_set_keyon(comBus, comBus.digitalBus[keyCh].isDrived && comBus.digitalBus[keyCh].value, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
 
 // =============================================================================
 // 2. RUNLEVEL STATE MACHINE
@@ -110,7 +110,7 @@ void loop() {
         // --- 2. Transition trigger check ---
       if (comBus.keyOn) {
         sys_log_info("[SYSTEM][EVENT] input=KEY_ON action=enter_STARTING\n");
-        combus_set_runlevel(comBus, RunLevel::STARTING, ChanOwner::SYSTEM);
+        combus_set_runlevel(comBus, RunLevel::STARTING, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
       }
       break;
     }
@@ -127,7 +127,7 @@ void loop() {
       }
 
         // --- 1. Auto-transition to RUNNING ---
-      combus_set_runlevel(comBus, RunLevel::RUNNING, ChanOwner::SYSTEM);
+        combus_set_runlevel(comBus, RunLevel::RUNNING, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
       break;
     }
 
@@ -173,7 +173,7 @@ void loop() {
             // decisions. No double-ramp risk: sound uses ENGINE_RPM_BUS for RPM
             // pitch; ESC_SPEED_BUS is consumed only by the SEMI_AUTOMATIC logic.
             combus_set_analog(comBus, AnalogComBusID::ESC_SPEED_BUS,
-                              machine.dcDev[i].motionRt.currentPos, ChanOwner::SYSTEM);
+                              machine.dcDev[i].motionRt.currentPos, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
           }
         }
 
@@ -199,7 +199,7 @@ void loop() {
 
       if (comBus.keyOn) {
         sys_log_info("[SYSTEM][EVENT] input=KEY_ON action=rearm_from_SLEEPING\n");
-        combus_set_runlevel(comBus, RunLevel::STARTING, ChanOwner::SYSTEM);
+        combus_set_runlevel(comBus, RunLevel::STARTING, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
       }
       break;
     }
@@ -216,14 +216,14 @@ void loop() {
   if (vbatChanged) {
     for (uint8_t i = 0; i < vbat_channel_count(); i++) {
       if (vbat_is_low(i)) { 
-        combus_set_battlow(comBus, true, ChanOwner::VBAT_MON);
-        combus_set_digital(comBus, DigitalComBusID::BATTERY_LOW, true, ChanOwner::VBAT_MON);
+        combus_set_battlow(comBus, true, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_VBAT));
+        combus_set_digital(comBus, DigitalComBusID::BATTERY_LOW, true, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_VBAT));
         break;
       }
     }
 
     if (comBus.batteryIsLow) {
-        combus_set_runlevel(comBus, RunLevel::SLEEPING, ChanOwner::SYSTEM);
+        combus_set_runlevel(comBus, RunLevel::SLEEPING, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
       sys_log_warn("[SYSTEM][SAFE] reason=low_battery action=enter_SLEEPING\n");}
   }
 

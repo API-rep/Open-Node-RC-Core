@@ -27,33 +27,113 @@
 // =============================================================================
 
 /**
- * @brief ComBus channel ownership for write access.
+ * @brief Raw bitmask constants for NodeGroup/ProcessOwner ChanOwner values.
  *
- * @details Each channel stores one `ChanOwner` value that names the module
- *   responsible for writing it. All other modules must only read it.
+ * @details One byte = two nibbles:
+ *   - bits 7..4  NodeGroup   (GRP_*):  physical node that natively own the channel.
+ *   - bits 3..0  ProcessRole (PROC_*): process on that node that is authorised to write.
  *
- *   At init time a module checks `owner` to decide if it should write the
- *   channel or just read it. The same channel can have a different owner
- *   depending on the build environment.
+ *   Composed ChanOwner enum values (e.g. GRP_MACHINE | PROC_INPUT) are built
+ *   from these constants.
  *
- *   `SYSTEM`     — the local/primary system process on this node.
- *                  Covers RunLevel FSM, ESC/drive inertia FSM, key-on logic.
- *                  Used by both machine nodes and standalone sound nodes.
- *   `SYSTEM_EXT` — an external system process connected via ComBus.
- *                  Example: the sound module receiving ESC_SPEED_BUS from
- *                  the machine controller (transitional, migration in progress).
- *   `NONE` — no owner declared, channel is passive (safe default).
- *   `ANY`  — any module may write; use only for shared scratch channels.
+ *   Sentinels (fixed by contract — do not renumber):
+ *   - GRP_NONE  / PROC_NONE  (0x0) — absent / unassigned.
+ *   - GRP_ANY   / PROC_ANY   (0xF) — wildcard (see _owner_ok logic).
+ *
+ *   Slots 0x5..0xE are free for future groups and roles.
+ */
+namespace ComBusOwner {
+
+    // --- NodeGroup nibble (bits 7..4) ---
+    static constexpr uint8_t GRP_MASK    = 0xF0u;   ///< isolates the group nibble
+    static constexpr uint8_t GRP_NONE    = 0x00u;   ///< 0000 — no group declared
+    static constexpr uint8_t GRP_MACHINE = 0x10u;   ///< 0001 — primary controller node
+    static constexpr uint8_t GRP_SOUND   = 0x20u;   ///< 0010 — sound node
+    static constexpr uint8_t GRP_REMOTE  = 0x30u;   ///< 0011 — remote controller
+    static constexpr uint8_t GRP_EXT     = 0x40u;   ///< 0100 — extension board
+    //                                     ...       ///< 0101..1110 — reserved
+    static constexpr uint8_t GRP_ANY     = 0xF0u;   ///< 1111 — wildcard: process match only
+
+    // --- ProcessRole nibble (bits 3..0) ---
+    static constexpr uint8_t PROC_MASK   = 0x0Fu;   ///< isolates the process role nibble
+    static constexpr uint8_t PROC_NONE   = 0x00u;   ///< 0000 — no process declared
+    static constexpr uint8_t PROC_SYSTEM = 0x01u;   ///< 0001 — FSM / state machine / local system
+    static constexpr uint8_t PROC_INPUT  = 0x02u;   ///< 0010 — input layer (PS4, SBUS, …)
+    static constexpr uint8_t PROC_VBAT   = 0x03u;   ///< 0011 — battery monitor
+    static constexpr uint8_t PROC_BRIDGE = 0x04u;   ///< 0100 — UART RX bridge (combus_frame_apply)
+    //                                     ...       ///< 0101..1110 — reserved
+    static constexpr uint8_t PROC_ANY    = 0x0Fu;   ///< 1111 — wildcard (only valid in NONE/ANY slots)
+
+} // namespace ComBusOwner
+
+
+/**
+ * @brief ComBus channel access identity — one byte, two nibbles.
+ *
+ * @details Each named value is composed from a ComBusOwner::GRP_* constant (high nibble)
+ *   and a ComBusOwner::PROC_* constant (low nibble).  Changing a raw constant in ComBusOwner
+ *   propagates automatically to every named owner — no cascading edits needed.
+ *
+ *   Access rules applied by combus_access (_owner_ok):
+ *   - NONE (0x00)              — channel unclaimed; write denied for all callers.
+ *   - ANY  (0xFF)              — unrestricted; any caller may write.
+ *   - GRP == GRP_ANY, PRC != PROC_ANY — wildcard group: any node's matching process.
+ *   - GRP == this node's group — local domain: full byte match required.
+ *   - GRP != this node's group — foreign domain: PROC_BRIDGE only (UART RX bridge).
+ *
+ *   Helper inlines: chanOwnerGroup() / chanOwnerProcess() (see below).
  */
 enum class ChanOwner : uint8_t {
-    NONE         = 0,   ///< No mandate declared — nobody is allowed to write this channel
-    ANY,                ///< All modules are allowed to write this channel (shared scratchpad — use sparingly)
-    SYSTEM,             ///< Local system process — RunLevel FSM, ESC/drive FSM, or standalone node
-    SYSTEM_EXT,         ///< External system process over ComBus (e.g. sound node receiving from machine)
-    INPUT_DEV,          ///< Written by the input module (PS4, SBUS, Wi-Fi remote…)
-    VBAT_MON,           ///< Written by the battery monitor module
-    REMOTE,             ///< Written by a remote node over a communication link
+    NONE           = ComBusOwner::GRP_NONE    | ComBusOwner::PROC_NONE,    ///< 0x00 — unclaimed
+
+    // Machine node (GRP_MACHINE = 0x10)
+    MACHINE_SYSTEM = ComBusOwner::GRP_MACHINE | ComBusOwner::PROC_SYSTEM,  ///< 0x11 — machine FSM / RunLevel / key-on
+    MACHINE_INPUT  = ComBusOwner::GRP_MACHINE | ComBusOwner::PROC_INPUT,   ///< 0x12 — machine input layer
+    MACHINE_VBAT   = ComBusOwner::GRP_MACHINE | ComBusOwner::PROC_VBAT,   ///< 0x13 — machine battery monitor
+    MACHINE_BRIDGE = ComBusOwner::GRP_MACHINE | ComBusOwner::PROC_BRIDGE,  ///< 0x14 — machine UART RX bridge
+
+    // Sound node (GRP_SOUND = 0x20)
+    SOUND_SYSTEM   = ComBusOwner::GRP_SOUND   | ComBusOwner::PROC_SYSTEM,  ///< 0x21 — sound node FSM
+    SOUND_BRIDGE   = ComBusOwner::GRP_SOUND   | ComBusOwner::PROC_BRIDGE,  ///< 0x24 — sound UART RX bridge
+
+    // Remote controller (GRP_REMOTE = 0x30)
+    REMOTE_SYSTEM  = ComBusOwner::GRP_REMOTE  | ComBusOwner::PROC_SYSTEM,  ///< 0x31 — remote FSM
+    REMOTE_INPUT   = ComBusOwner::GRP_REMOTE  | ComBusOwner::PROC_INPUT,   ///< 0x32 — remote input layer
+
+    // Extension board (GRP_EXT = 0x40)
+    EXT_SYSTEM     = ComBusOwner::GRP_EXT     | ComBusOwner::PROC_SYSTEM,  ///< 0x41 — extension board FSM
+
+    // Wildcard-group owners (GRP_ANY = 0xF0): any node's matching process may write
+    VBAT_MON       = ComBusOwner::GRP_ANY     | ComBusOwner::PROC_VBAT,    ///< 0xF3 — any node's battery monitor
+
+    // Unrestricted
+    ANY            = ComBusOwner::GRP_ANY     | ComBusOwner::PROC_ANY,     ///< 0xFF — anyone may write
 };
+
+/** Returns the group nibble (bits 7..4) of a ChanOwner value. */
+constexpr uint8_t chanOwnerGroup  (ChanOwner o) { return static_cast<uint8_t>(o) & ComBusOwner::GRP_MASK;  }
+
+/** Returns the process role nibble (bits 3..0) of a ChanOwner value. */
+constexpr uint8_t chanOwnerProcess(ChanOwner o) { return static_cast<uint8_t>(o) & ComBusOwner::PROC_MASK; }
+
+
+/**
+ * @brief Compose a `ChanOwner` from a node group and a process role.
+ *
+ * @details Use in env-agnostic code instead of hardcoded named owners:
+ *   @code
+ *     combus_set_runlevel(bus, lvl, makeChanOwner(COMBUS_ENV_NODE_GROUP, ComBusOwner::PROC_SYSTEM));
+ *     combus_set_battlow (bus, v,   makeChanOwner(COMBUS_ENV_NODE_GROUP, ComBusOwner::PROC_VBAT));
+ *     combus_frame_apply (cfg, bus, snap, makeChanOwner(COMBUS_ENV_NODE_GROUP, ComBusOwner::PROC_BRIDGE));
+ *   @endcode
+ *
+ * @param grp   A `ComBusOwner::GRP_*` constant — pass `COMBUS_ENV_NODE_GROUP` from env config.
+ * @param proc  A `ComBusOwner::PROC_*` constant.
+ * @return      Composed `ChanOwner` value.
+ */
+constexpr ChanOwner makeChanOwner(uint8_t grp, uint8_t proc) {
+    return static_cast<ChanOwner>(grp | proc);
+}
 
 
 // =============================================================================
