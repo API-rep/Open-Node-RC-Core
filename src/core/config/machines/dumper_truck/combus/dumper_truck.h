@@ -13,6 +13,9 @@
  *   Nodes with an input module (INPUT_MODULE defined):
  *     - inputs_map.h (input-device → com-bus mapping)
  *
+ *   All non-remote nodes:
+ *     - dumper_truck_lights.h (kLedDescriptors[], kLightModuleCfg)
+ *
  * NOTE:
  * - enum entry and AnalogComBusArray/DigitalComBusArray MUST have the same order
  * - if an entry is not used, set  .analogBus = nullptr  and/or  .srvDev = digitalBus
@@ -49,7 +52,16 @@ extern ComBus comBus;
 
 
 // =============================================================================
-// 3. INPUT MAPPING  (nodes with an input device module)
+// 3. LIGHT CONFIG  (sound node only — LIGHT_ENABLE must be set)
+// =============================================================================
+
+#if !defined(IS_REMOTE) && defined(LIGHT_ENABLE)
+#include "../light/dumper_truck_lights.h"  ///< kLedDescriptors[], kLightModuleCfg, kBeacon/Ind sub-structs
+#endif  // !IS_REMOTE && LIGHT_ENABLE
+
+
+// =============================================================================
+// 4. INPUT MAPPING  (nodes with an input device module)
 // =============================================================================
 
 #ifdef INPUT_MODULE

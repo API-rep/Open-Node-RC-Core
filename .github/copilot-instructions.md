@@ -464,3 +464,79 @@ duplication. Unidirectional callers keep their single `_tx_init` / `_rx_init` ca
 
 **Prerequisite:** A concrete bidirectional node exists in the project — do not
 create the wrapper speculatively.
+### Light module v2 — LedDescriptor + bitmask runlevels (winter 2026 rework)
+**Context:** The current `light_core.cpp` is a direct port of the legacy `led()` / `updateRGBLEDs()`
+functions.  The architecture decisions below were agreed 2026-04-18 and are the
+template for the next light module rework.
+
+**Architecture decisions (arrêtées — ne pas remettre en question) :**
+
+1. **`LedDescriptor` per channel** — one struct per LED channel, in two parts:
+   - `constexpr` config section (in flash): brightness levels, activeMask, type,
+     optional sub-struct for special behaviour (see below).
+   - RAM state section: current brightness, phase timer, on/off flag — written by
+     the parser each loop pass.
+   - `statusLED*` backend kept as-is for now; full class migration deferred to
+     the same winter rework.
+
+2. **Bitmask activation (`activeMask : uint8_t`)** — encodes *when* to drive this
+   channel, not just *how bright*.  Each bit corresponds to a light runlevel step.
+   The parser evaluates early-exit conditions in priority order (e.g. forced hazard
+   > indicator active > sidemarker dim > off) using a series of `case`-style guards.
+   Combinable example: clignotant actif si (canal INDICATOR actif) **ou** (feux de
+   roulage actifs) **ou** (hazard) — chaque condition est un bit dans le mask.
+
+3. **Optional behavioural sub-structs** — instead of a `type` enum with flat flags,
+   special channels embed a typed sub-struct (à la `MotionCfg`):
+   - `BeaconCfg { uint16_t onMs, offMs, pauseMs; uint8_t pulses; bool blueLight; }`
+   - `XenonCfg  { uint32_t ignitionFlashMs; uint8_t flashBrightness; }`
+   - `IndicatorCfg { uint16_t onMs, offMs; bool ledType; }`  (ledType = no ramp)
+   A `nullptr` sub-struct pointer means "plain PWM channel" — no special behaviour.
+
+4. **Variable-length channel array via enum** — same pattern as `DcDevID` in the
+   machine config: an enum defines channel count, a `constexpr LedDescriptor[]`
+   array is indexed by it.  No hardcoded channel constants anywhere in the parser.
+
+5. **Parser loop** — `light_core_update()` iterates the descriptor array; each
+   iteration evaluates `activeMask`, calls the appropriate driver (plain PWM,
+   beacon flash, xenon flash, indicator), updates the RAM state section.
+   Zero `switch(lightsState)` blocks — table-driven throughout.
+
+**Prerequisite:** `statusLED` refactor to proper class (winter 2026). Until then,
+`statusLED*` backend is kept per descriptor.  Do not start this rework during the
+active season.
+
+---
+
+### ComBus v2 — layered bus architecture (winter 2026 rework)
+**Context:** The current ComBus is a single flat struct exchanged between the
+machine node and the sound node.  The architecture decisions below were agreed
+2026-04-18 and define the next ComBus rework.
+
+**Architecture decisions (arrêtées — ne pas remettre en question) :**
+
+```
+ComBus Core (noyau)
+  ├─ RunLevel, batteryIsLow, nodeId, sequence           ← obligatoire, échangé par TOUS
+  │
+  ├─ GlobalLightBus   { digital[], analog[] }           ← partagé inter-node (machine → sound)
+  ├─ GlobalSoundBus   { digital[], analog[] }           ← partagé inter-node
+  │     IDs définis dans les enums machine (dumper_truck_ids.h, etc.)
+  │     Données INTER-NODE : IMPERATIVEMENT dans ce bus global
+  │
+  └─ LocalLightBus    { LightState, LedDescriptor[] }   ← local au sound node uniquement
+      LocalSoundBus   { EngineSimState, ... }            ← local au sound node
+          Jamais transmis sur le fil — API interne seulement
+```
+
+- **Règle dure** : toute donnée échangée entre remote ↔ machine ↔ sous-module
+  doit résider dans le ComBus Core ou dans un GlobalXxxBus.  Les LocalXxxBus
+  sont strictement privés au nœud.
+- **Branchement conditionnel** : chaque module local garde un `const GlobalXxxBus*`
+  pointant vers la section correspondante du ComBus reçu par UART.  Le pointeur
+  est `nullptr` si le module est absent (guard `-D LIGHT_ENABLE`).
+- **Ce mode de fonctionnement devient le template** pour tout nouveau module
+  (ventilation, remorque, etc.) ajouté après la saison 2026.
+
+**Prerequisite:** Refonte complète des structs ComBus + transport frame.
+Ne pas commencer avant la fin de saison 2026.

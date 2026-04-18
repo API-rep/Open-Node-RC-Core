@@ -120,14 +120,14 @@ constexpr uint8_t chanOwnerProcess(ChanOwner o) { return static_cast<uint8_t>(o)
 /**
  * @brief Compose a `ChanOwner` from a node group and a process role.
  *
- * @details Use in env-agnostic code instead of hardcoded named owners:
+ * @details Usefull in env-agnostic code instead of hardcoded named owners:
  *   @code
- *     combus_set_runlevel(bus, lvl, makeChanOwner(COMBUS_ENV_NODE_GROUP, ComBusOwner::PROC_SYSTEM));
- *     combus_set_battlow (bus, v,   makeChanOwner(COMBUS_ENV_NODE_GROUP, ComBusOwner::PROC_VBAT));
- *     combus_frame_apply (cfg, bus, snap, makeChanOwner(COMBUS_ENV_NODE_GROUP, ComBusOwner::PROC_BRIDGE));
+ *     combus_set_runlevel(bus, lvl, makeChanOwner(COMBUS_NODE_GROUP, ComBusOwner::PROC_SYSTEM));
+ *     combus_set_battlow (bus, v,   makeChanOwner(COMBUS_NODE_GROUP, ComBusOwner::PROC_VBAT));
+ *     combus_frame_apply (cfg, bus, snap, makeChanOwner(COMBUS_NODE_GROUP, ComBusOwner::PROC_BRIDGE));
  *   @endcode
  *
- * @param grp   A `ComBusOwner::GRP_*` constant — pass `COMBUS_ENV_NODE_GROUP` from env config.
+ * @param grp   A `ComBusOwner::GRP_*` constant — pass `COMBUS_NODE_GROUP` from env config.
  * @param proc  A `ComBusOwner::PROC_*` constant.
  * @return      Composed `ChanOwner` value.
  */
@@ -158,13 +158,16 @@ constexpr ChanOwner makeChanOwner(uint8_t grp, uint8_t proc) {
 
   // Main communication bus structure
 typedef struct {
+    // --- Core state ---
   RunLevel  runLevel;                           // machine run level — written by the MACHINE module FSM
   ChanOwner runLevelOwner = ChanOwner::NONE;    // module allowed to write runLevel — set at init
   bool batteryIsLow = false;                    // true when any vbat channel reports low — written by vbat module, read by all
   ChanOwner battLowOwner = ChanOwner::NONE;     // module allowed to write batteryIsLow — set at init
   bool keyOn = false;                           // operator ignition consent — derived from input, used by state machine transitions
   ChanOwner keyOnOwner = ChanOwner::NONE;       // module allowed to write keyOn — set at init
+    // --- Transport ---
   uint32_t lastFrameMs = 0;                     // millis() of the last successful combus_frame_apply — used by watchdog
+    // --- Channel arrays ---
   AnalogComBus* analogBus;                      // analogic bus channels
   DigitalComBus* digitalBus;                    // digital bus channels
   uint32_t analogBusMaxVal;                     // Com-bus analog channel maximum value

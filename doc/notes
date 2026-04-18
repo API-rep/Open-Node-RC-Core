@@ -93,3 +93,38 @@ After deleting files from the terminal (e.g. Remove-Item), VSCode's file explore
 may still show the deleted entries until manually refreshed.
 Fix: right-click the parent folder in the Explorer panel -> Refresh, or
 Ctrl+Shift+P -> File: Refresh Explorer.
+
+
+---
+
+## Deferred — ComBus typed/pluggable groups + dual-frame (2026-04-17)
+
+### Context
+The current AnalogComBusID / DigitalComBusID enums use range markers (MOTION_END,
+LIGHT_END…) to partition channels into logical groups within a single flat array.
+This is zero-cost and sufficient for the current UART transport.
+
+### Deferred idea 1 — typed channel groups (pluggable sub-bus)
+Instead of a single flat enum, each logical group becomes its own typed struct
+carrying its own array pointer:
+    MotionComBus    motion;    // STEERING, RPM, DUMP, ESC_SPEED
+    LightComBus     light;     // LIGHTS_STATE, ...
+    CoreComBus      core;      // HORN, KEY, BATTERY_LOW
+Modules include only the sub-bus they need. A ComBus node connects its sub-bus
+via pointer — not included = not transmitted. Benefit: true optional groups,
+no guard macros, no dead frame slots. Cost: protocol change (separate frame per
+group or muxing scheme needed), heavier refactor.
+Prerequisite: a use case with ≥3 independent modules having genuinely disjoint
+channel needs AND a transport that can carry multiple frame types.
+
+### Deferred idea 2 — dual-frame (high-rate control + low-rate config)
+Inspired by CANopen PDO/SDO. A high-rate frame carries time-critical controls
+(sticks, on/off signals). A low-rate frame carries slow config (brightness
+potentiometer, PID trims, EEPROM settings from remote).
+Current transport handles both at 200 Hz — acceptable since all channels are
+small (uint16_t). Becomes relevant when a remote brightness pot needs to reach
+the light node without consuming bandwidth in every control frame.
+Simplest implementation: Nth-frame mux — every N frames, certain channels carry
+config data. No protocol change needed, just a frame counter in combus_tx.
+Prerequisite: a confirmed use case (e.g. brightness pot on remote → light node)
+before adding complexity.

@@ -260,7 +260,7 @@ struct SwitchPort {
  *   field needed here.
  */
 
-struct LightCfg {
+struct LightPinCfg {
   const char* infoName;   ///< Human-readable channel name.
   int8_t      pin;        ///< GPIO pin (-1 = disabled, e.g. SOUND_NO_LED_PIN cast to int8_t).
 };
@@ -276,8 +276,8 @@ struct LightCfg {
  */
 
 struct LightPort {
-  const LightCfg* cfg;    ///< Pointer to board config array (flash).
-  uint8_t         count;  ///< Number of registered channels.
+  const LightPinCfg* cfg;    ///< Pointer to board config array (flash).
+  uint8_t            count;  ///< Number of registered channels.
 };
 
 // EOF machines_struct.h

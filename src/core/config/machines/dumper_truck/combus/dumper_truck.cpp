@@ -27,6 +27,8 @@ DigitalComBus DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::CH_COUNT)
   { .infoName = "indicator left channel",  .owner = ChanOwner::MACHINE_INPUT },
   { .infoName = "indicator right channel", .owner = ChanOwner::MACHINE_INPUT },
   { .infoName = "hazards channel",         .owner = ChanOwner::MACHINE_INPUT },
+  { .infoName = "high beam channel",       .owner = ChanOwner::MACHINE_INPUT },
+  { .infoName = "roof light channel",      .owner = ChanOwner::MACHINE_INPUT },
 };
 
 
