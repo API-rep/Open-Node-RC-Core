@@ -20,6 +20,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <core/config/hw/shaker_presets.h>
 
 
 // =============================================================================
@@ -51,6 +52,14 @@ struct DumperTruckSoundProfile {
 /// @details Canonical symbol — exposed via sound_dynamics.h dispatcher as
 ///          `kVehicleSoundDynamics`.
 extern const DumperTruckSoundProfile kVehicleSoundDynamics;
+
+
+// =============================================================================
+// 3. SHAKER PRESET
+// =============================================================================
+
+/// @brief Active shaker preset for the dumper-truck / articulated hauler class.
+static constexpr ShakerCfg kShakerCfg = kShaker_GtPowerStock;
 
 
 // EOF dumper_truck_sound.h
