@@ -43,6 +43,13 @@ static const char* owner_name(PinOwner o) {
         case PinOwner::Uart0:      return "Uart0";
         case PinOwner::Uart1:      return "Uart1";
         case PinOwner::Uart2:      return "Uart2";
+        case PinOwner::DcDrv:      return "DcDrv";
+        case PinOwner::DcDrvPwm:   return "DcDrvPwm";
+        case PinOwner::DcDrvDir:   return "DcDrvDir";
+        case PinOwner::DcDrvBrk:   return "DcDrvBrk";
+        case PinOwner::DcDrvEn:    return "DcDrvEn";
+        case PinOwner::DcDrvSlp:   return "DcDrvSlp";
+        case PinOwner::DcDrvFlt:   return "DcDrvFlt";
         case PinOwner::Light:      return "Light";
         case PinOwner::NeoPixel:   return "NeoPixel";
         case PinOwner::ServoOut:   return "ServoOut";
@@ -80,7 +87,7 @@ void pin_reg_init(PinReg& reg, uint8_t size) {
     reg.pinRegEntryCount = size;
     reg.pinEntryCursor   = 0;
     for (uint8_t i = 0; i < size; i++) {
-        reg.pinRegEntry[i] = { PIN_SLOT_EMPTY, PinOwner::Free, nullptr };
+        reg.pinRegEntry[i] = { PIN_SLOT_EMPTY, PinOwner::Free, nullptr, false };
     }
 }
 
@@ -98,19 +105,32 @@ void pin_reg_init(PinReg& reg, uint8_t size) {
  *   3. Guard: registry full → always fatal (PinRegSize too small).
  *   4. Write new entry, increment count.
  */
-bool pin_claim(PinReg& reg, uint8_t pin, PinOwner owner,
-               const char* label, bool critical) {
+bool pin_claim(PinReg& reg, uint8_t pin, PinOwner owner, const char* label, bool critical, bool sharedPin) {
 
         // 1. Existing claim check
     PinRegEntry* existing = find_slot(reg, pin);
     if (existing != nullptr) {
+        if (existing->owner == owner &&
+            existing->sharedPin &&
+            sharedPin) {
+            return true;
+        }
+
         if (critical) {
-            sys_log_err("[pin_reg] FATAL CONFLICT GPIO%u: '%s' (%s) already claimed — '%s' rejected\n",
-                        pin, existing->label, owner_name(existing->owner), label);
+            sys_log_err("[pin_reg] FATAL CONFLICT GPIO%u: '%s' (%s) already claimed — '%s' (%s) rejected\n",
+                        pin,
+                        existing->label,
+                        owner_name(existing->owner),
+                        label,
+                        owner_name(owner));
             while (true) {}
         }
-        sys_log_warn("[pin_reg] conflict GPIO%u: '%s' (%s) already claimed — '%s' skipped\n",
-                     pin, existing->label, owner_name(existing->owner), label);
+        sys_log_warn("[pin_reg] conflict GPIO%u: '%s' (%s) already claimed — '%s' (%s) skipped\n",
+                     pin,
+                     existing->label,
+                     owner_name(existing->owner),
+                     label,
+                     owner_name(owner));
         return false;
     }
 
@@ -122,7 +142,7 @@ bool pin_claim(PinReg& reg, uint8_t pin, PinOwner owner,
     }
 
         // 3. Record claim
-    reg.pinRegEntry[reg.pinEntryCursor++] = { pin, owner, label };
+    reg.pinRegEntry[reg.pinEntryCursor++] = { pin, owner, label, sharedPin };
     return true;
 }
 
@@ -145,7 +165,7 @@ uint8_t pin_claim_batch(PinReg& reg, const PinDesc* descs, uint8_t count) {
             continue;   // skip disabled / no-pin entries
         }
 
-        if (pin_claim(reg, descs[i].pin, descs[i].role, descs[i].label, descs[i].critical)){
+        if (pin_claim(reg, descs[i].pin, descs[i].role, descs[i].label, descs[i].critical, descs[i].sharedPin)){
             claimed++;
         }
     }
@@ -196,7 +216,11 @@ void pin_reg_dump(const PinReg& reg) {
     for (uint8_t i = 0; i < reg.pinEntryCursor; i++) {
         const PinRegEntry& e = reg.pinRegEntry[i];
 
-        sys_log_info("[pin_reg]   GPIO%-2u  %-10s  %s\n", e.pin, owner_name(e.owner), e.label ? e.label : "");
+        sys_log_info("[pin_reg]   GPIO%-2u  %-10s  shared=%c  %s\n",
+                     e.pin,
+                     owner_name(e.owner),
+                     e.sharedPin ? 'Y' : 'N',
+                     e.label ? e.label : "");
     }
 }
 

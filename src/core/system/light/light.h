@@ -33,14 +33,17 @@ static constexpr uint32_t LightPwmFreq = 20000u;
 
 #if __has_include(<statusLED.h>)
 #  include <statusLED.h>
-#  include "pin_reg.h"
+#  include <core/system/hw/pin_reg.h>
 
-/// Initialise all PWM-driven light and shaker channels.
+/// Initialise all PWM-driven light channels.
+/// Allocates a `statusLED[port->count]` array internally — no caller-owned array needed.
 /// @param port  Board LightPort — config array + channel count (must outlive all calls).
-/// @param leds  Caller-owned array of `statusLED*`, same count and order as `port->cfg[]`.
-/// Channels whose pin is already owned by another peripheral in `reg` are skipped.
+/// @param reg   Pin registry — channels whose pin is claimed by another peripheral are skipped.
+void light_init(LightPort* port, PinReg& reg);
 
-void light_init(LightPort* port, statusLED** leds, PinReg& reg);
+/// Return the internally allocated statusLED array (nullptr before light_init).
+/// Indexed by the vehicle LedCh enum (matches LightPort slot order).
+statusLED* light_leds_array();
 
 #endif  // __has_include(<statusLED.h>)
 

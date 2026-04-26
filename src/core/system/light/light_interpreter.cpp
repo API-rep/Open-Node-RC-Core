@@ -14,85 +14,73 @@
 
 
 // =============================================================================
-// 1. FILE-SCOPE STATE  (edge-detect only — no output state here)
-// =============================================================================
-
-static bool    s_prevLights   = false;  ///< Previous LIGHTS channel value — rising-edge detect.
-static uint8_t s_lightsState  = 0u;    ///< Current 6-step light FSM position.
-
-
-// =============================================================================
 // 2. IMPLEMENTATION
 // =============================================================================
 
+
+/**
+ * @brief Translates a ComBus snapshot into LightState (runtimeMask, runLevelMask).
+ *
+ * @details
+ *   The function follows three clear steps:
+ *     1. Capture ComBus inputs into local bools (readability, no repeated indexing).
+ *     2. Compute the permission mask (runLevelMask) according to the current RunLevel.
+ *     3. Build the runtimeMask (active bits) from flags, RunLevel, and ComBus channels.
+ *
+ * @note
+ *   All local bool variables are temporary aliases for clarity and safety:
+ *   they capture the value of a ComBus channel or condition, are never stored in global RAM,
+ *   and are inlined by the compiler (no memory cost).
+ *
+ * @param bus   Current ComBus snapshot (read-only)
+ * @param mod   Module-level config (runLevelMask table, skip options...)
+ * @param state LightState to fill (runtimeMask, runLevelMask)
+ */
 void light_interp_update(const ComBus& bus, const LightModuleCfg& mod, LightState& state) {
 
-    // --- Light FSM: 6-step cycle on LIGHTS rising edge ---
-  const bool lights = bus.digitalBus[static_cast<uint8_t>(DigitalComBusID::LIGHTS)].value;
-  if (lights && !s_prevLights) {
-    s_lightsState = static_cast<uint8_t>((s_lightsState + 1u) % 6u);
-  }
-  s_prevLights      = lights;
-  state.lightsState = s_lightsState;
-
-    // --- Beam flags ---
-  const bool highBeam = bus.digitalBus[static_cast<uint8_t>(DigitalComBusID::HIGH_BEAM)].value;
-  const bool flasher  = false;  // TBD: no dedicated FLASHER channel yet
-
-    // --- Indicators / hazards ---
+    // --- 1. Capture ComBus inputs into local bools (readability, no repeated indexing)
+  const bool highBeam       = bus.digitalBus[static_cast<uint8_t>(DigitalComBusID::HIGH_BEAM)].value;
+  const bool flasher        = false;  // TBD: no dedicated FLASHER channel yet
   const bool indicatorLeft  = bus.digitalBus[static_cast<uint8_t>(DigitalComBusID::INDICATOR_LEFT)].value;
   const bool indicatorRight = bus.digitalBus[static_cast<uint8_t>(DigitalComBusID::INDICATOR_RIGHT)].value;
   const bool hazard         = bus.digitalBus[static_cast<uint8_t>(DigitalComBusID::HAZARDS)].value;
+  const bool roofLight      = bus.digitalBus[static_cast<uint8_t>(DigitalComBusID::ROOF_LIGHT)].value;
+  const bool engineRunning  = (bus.runLevel == RunLevel::RUNNING || bus.runLevel == RunLevel::TURNING_OFF);
+  const uint16_t centre     = static_cast<uint16_t>(bus.analogBusMaxVal / 2u);
+  const bool escInReverse   = (bus.analogBus[static_cast<uint8_t>(AnalogComBusID::ESC_SPEED_BUS)].value < centre);
+  const bool escIsBraking   = bus.digitalBus[static_cast<uint8_t>(DigitalComBusID::BRAKING)].value;
+  const bool batteryLow     = bus.batteryIsLow;
 
-    // --- Roof / special lights ---
-  const bool roofLight = bus.digitalBus[static_cast<uint8_t>(DigitalComBusID::ROOF_LIGHT)].value;
-
-    // --- Engine state (derived from RunLevel) ---
-  const bool engineRunning = (bus.runLevel == RunLevel::RUNNING ||
-                              bus.runLevel == RunLevel::TURNING_OFF);
-
-    // --- Direction (ESC_SPEED_BUS vs centre; below centre = reverse) ---
-  const uint16_t centre      = static_cast<uint16_t>(bus.analogBusMaxVal / 2u);
-  const bool     escInReverse = (bus.analogBus[static_cast<uint8_t>(AnalogComBusID::ESC_SPEED_BUS)].value < centre);
-
-    // --- Braking (MotionOutput::isBraking written to BRAKING digital channel) ---
-  const bool escIsBraking = bus.digitalBus[static_cast<uint8_t>(DigitalComBusID::BRAKING)].value;
-
-    // --- System flags ---
-  const bool batteryLow = bus.batteryIsLow;
-
-    // --- FSM step-skip (prevents empty button presses when circuit not wired) ---
-  if (s_lightsState == 1u && mod.skipCabStep)  s_lightsState = 2u;
-  if (s_lightsState == 4u && mod.skipFogStep)  s_lightsState = 5u;
-  if (s_lightsState == 5u && mod.skipCabStep)  s_lightsState = 0u;
-  state.lightsState = s_lightsState;
-
-    // --- Layer 2 : permission gate (stored in state; AND-ed with runtimeMask in core) ---
-  const uint8_t rl = (bus.runLevel >= RunLevel::IDLE)
-                     ? static_cast<uint8_t>(bus.runLevel) : 0u;
+  // --- 2. Compute the permission mask (runLevelMask) according to current RunLevel
+  const uint8_t rl = (bus.runLevel >= RunLevel::IDLE) ? static_cast<uint8_t>(bus.runLevel) : 0u;
   state.runLevelMask = mod.runLevelMask[rl];
 
-    // --- Layer 3 : commanded bits → runtimeMask ---
+  // --- 3. Build the runtimeMask (active bits) from flags, RunLevel, and ComBus
   const bool forcedHazard = hazard || batteryLow;
-  LightBitmask mask       = 0u;
+  LightBitmask mask = 0u;
 
-    //   RunLevel auto-bits (structural lights driven by machine state)
-  if (bus.runLevel == RunLevel::IDLE)
-      mask |= LightBit::PARKING_ON;
+  // RunLevel auto-bits (structural lights driven by machine state)
+  if (bus.runLevel == RunLevel::IDLE){
+    mask |= LightBit::PARKING_ON;
+  }
+
   else if (bus.runLevel == RunLevel::STARTING  ||
            bus.runLevel == RunLevel::RUNNING    ||
-           bus.runLevel == RunLevel::TURNING_OFF)
-      mask |= LightBit::PARKING_ON | LightBit::CAB_ON;
-  if (bus.runLevel == RunLevel::STARTING)
-      mask |= LightBit::CRANKING;
+           bus.runLevel == RunLevel::TURNING_OFF){
+    mask |= LightBit::PARKING_ON | LightBit::CAB_ON;
+  }
+  
+  if (bus.runLevel == RunLevel::STARTING){
+    mask |= LightBit::CRANKING;
+  }
 
-    //   Motion-derived
+  // Motion-derived
   if (escInReverse && engineRunning)  mask |= LightBit::REVERSING;
   if (escIsBraking)                   mask |= LightBit::BRAKING;
 
-    //   ComBus-commanded  (LOW_BEAM before HIGH_BEAM — dependency order)
+  // ComBus-commanded  (LOW_BEAM before HIGH_BEAM — dependency order)
   if (bus.digitalBus[static_cast<uint8_t>(DigitalComBusID::LOW_BEAM)].value)
-                                                mask |= LightBit::LOW_BEAM_ON;
+    mask |= LightBit::LOW_BEAM_ON;
   if (highBeam && (mask & LightBit::LOW_BEAM_ON))  mask |= LightBit::HIGH_BEAM;
   if (indicatorLeft  || forcedHazard)              mask |= LightBit::IND_L;
   if (indicatorRight || forcedHazard)              mask |= LightBit::IND_R;

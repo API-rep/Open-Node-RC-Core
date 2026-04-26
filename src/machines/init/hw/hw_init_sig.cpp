@@ -110,7 +110,13 @@ void sigDevInit(const Machine &config) {
 		return;
 	}
 
-	  // 2. Walk the signal device table and log each entry with its channel info.
+	  // 2. Always run config coherence checks, even when called standalone.
+	if (checkSigHwConfig(config)) {
+		hw_log_err("    [SIG] FATAL: Invalid signal configuration — init aborted\n");
+		return;
+	}
+
+	  // 3. Walk the signal device table and log each entry with its channel info.
 	for (int i = 0; i < config.sigDevCount; i++) {
 		const SigDevice* sigDev = &config.sigDev[i];
 		const char*      name   = sigDev->infoName ? sigDev->infoName : "?";
@@ -133,7 +139,7 @@ void sigDevInit(const Machine &config) {
 		}
 	}
 
-	  // 3. Report completion.
+	  // 4. Report completion.
 	hw_log_info("    [SIG] Signal devices initialized\n");
 }
 

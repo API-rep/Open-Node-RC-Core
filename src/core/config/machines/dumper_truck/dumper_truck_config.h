@@ -51,5 +51,4 @@
   #include <core/config/machines/dumper_truck/sound/dumper_truck_sound.h>
 #endif
 
-
 // EOF dumper_truck_config.h

@@ -25,14 +25,31 @@
 
 enum class PinOwner : uint8_t {
     Free = 0,    ///< Unclaimed — initial registry state.
+
+    // --- UART transport ---
     Uart0,       ///< HardwareSerial0 (debug TX / RX).
     Uart1,       ///< HardwareSerial1 (RC input / ComBus RX).
     Uart2,       ///< HardwareSerial2 (ComBus / ext device).
+
+    // --- DC driver outputs ---
+    DcDrv,       ///< Generic DC driver ownership (module-level fallback).
+    DcDrvPwm,    ///< DC motor driver PWM output.
+    DcDrvDir,    ///< DC motor driver direction pin.
+    DcDrvBrk,    ///< DC motor driver brake / decay pin.
+    DcDrvEn,     ///< DC motor driver enable pin.
+    DcDrvSlp,    ///< DC motor driver sleep pin.
+    DcDrvFlt,    ///< DC motor driver fault pin.
+
+    // --- Lighting and signalling ---
     Light,       ///< LED light output.
     NeoPixel,    ///< WS2812 NeoPixel data output (one CH connector).
+
+    // --- Motion outputs ---
     ServoOut,    ///< Servo PWM output (CH connectors).
     Esc,         ///< ESC PWM output.
     Shaker,      ///< Shaker motor (built-in MOSFET driver).
+
+    // --- Sensing and audio ---
     Sound,       ///< DAC audio output.
     Vbat,        ///< Battery voltage sensing (ADC).
     ServoIn,     ///< PWM RC input (CH connectors).
@@ -58,13 +75,16 @@ enum class PinOwner : uint8_t {
  *
  *   `critical = true`  → fatal firmware halt if the pin is already claimed.
  *   `critical = false` → conflict logged; `pin_claim()` returns false.
+ *   `sharedPin = true` allows several claimers of the exact same `PinOwner`
+ *   role (for example one shared brake pin on a driver bank).
  */
 
 struct PinDesc {
-    uint8_t     pin;       ///< Physical GPIO number.
-    PinOwner    role;      ///< Intended functional owner.
-    const char* label;     ///< Human-readable use (e.g. "TAILLIGHT", "UART2_RX").
-    bool        critical;  ///< True → fatal halt if another owner already holds this pin.
+    uint8_t     pin;                       ///< Physical GPIO number.
+    PinOwner    role;                      ///< Intended functional owner.
+    const char* label;                     ///< Human-readable use (e.g. "TAILLIGHT", "UART2_RX").
+    bool        critical;                  ///< True → fatal halt if another owner already holds this pin.
+    bool        sharedPin = false;         ///< Allow re-claim only when existing owner matches exactly.
 };
 
 
@@ -83,9 +103,10 @@ static constexpr uint8_t PIN_SLOT_EMPTY = 0xFFu;
  */
 
 struct PinRegEntry {
-    uint8_t     pin;    ///< Physical GPIO number (PIN_SLOT_EMPTY = unused).
-    PinOwner    owner;  ///< Current functional owner.
-    const char* label;  ///< Label recorded at claim time (points to Flash string).
+    uint8_t     pin;        ///< Physical GPIO number (PIN_SLOT_EMPTY = unused).
+    PinOwner    owner;      ///< Current functional owner.
+    const char* label;      ///< Label recorded at claim time (points to Flash string).
+    bool        sharedPin;  ///< Re-claim allowed only for the same owner when true.
 };
 
 

@@ -7,6 +7,7 @@
 #include <struct/struct.h>
 #include <core/system/debug/debug.h>
 #include "hw_init_srv.h"
+#include "../sys/sys_init.h"
 
 // =============================================================================
 // 1. OBJECT ALLOCATION & POINTERS
@@ -39,31 +40,69 @@ void servoInit(const Machine &config) {
   hw_log_info("    [SRV] Initializing servo devices...\n");
 
     // 1. Early-out: no servo devices configured.
-  if (config.srvDevCount == 0) {
+  if (config.srvDev == nullptr || config.srvDevCount == 0) {
     hw_log_info("    [SRV] No servo devices to initialize.\n");
     return;
   }
 
-    // 2. Allocate servo objects.
+    // 2. Always run config coherence checks, even when called standalone.
+  if (checkSrvHwConfig(config)) {
+    hw_log_err("    [SRV] FATAL: Invalid servo configuration — init aborted\n");
+    return;
+  }
+
+    // 3. Allocate servo objects.
   allocateServos(config.srvDevCount);
 
-    // 3. Initialize each servo from config.
+    // 4. Initialize each servo from config.
   for (int i = 0; i < config.srvDevCount; i++) {
     const SrvDevice* currentDev = &config.srvDev[i];
 
-      // 3.1 Skip if device has no servo port mapping.
+      // 4.1 Skip if device has no servo port mapping.
     if (currentDev->srvPort == nullptr || !currentDev->srvPort->pwmPin) {
       hw_log_warn("      [SRV] WARNING: SRV_%d has no servo port mapping\n", currentDev->ID);
       continue;
     }
 
-    int8_t chId = currentDev->comChannel.has_value() ? static_cast<int8_t>(currentDev->comChannel.value()) : -1;
-    hw_log_info("      > SRV_%d attached to pin %d on com channel %d\n",
-                currentDev->ID,
-                *currentDev->srvPort->pwmPin,
-                chId);
+      // 4.2 Claim pin ownership before touching ServoCore.
+    const uint8_t pwmPin = *currentDev->srvPort->pwmPin;
+    const char* pinLabel = (currentDev->infoName != nullptr) ? currentDev->infoName : "SRV";
 
-    // Placeholder: attach servo to PWM pin here.
+    if (!pin_claim(pinReg, pwmPin, PinOwner::ServoOut, pinLabel, false)) {
+      hw_log_warn("      [SRV] WARNING: SRV_%d skipped (GPIO%d already claimed)\n", currentDev->ID, pwmPin);
+      continue;
+    }
+
+      // 4.3 Apply device descriptor then attach to the PWM pin.
+    if (currentDev->pwmFreq) {
+      srvDevObj[i].setPwmFreq(*currentDev->pwmFreq);
+    }
+
+    if (!srvDevObj[i].setTickDuration(currentDev->minUsTick, currentDev->maxUsTick)) {
+      hw_log_err("      [SRV] ERROR: SRV_%d invariant broken on tick duration (min=%u max=%u)\n",
+                 currentDev->ID,
+                 currentDev->minUsTick,
+                 currentDev->maxUsTick);
+      continue;
+    }
+
+    if (!srvDevObj[i].setHwAngles(currentDev->hwAngle.minHwAngle, currentDev->hwAngle.maxHwAngle)) {
+      hw_log_err("      [SRV] ERROR: SRV_%d invariant broken on hwAngle range (min=%.1f max=%.1f)\n",
+                 currentDev->ID,
+                 currentDev->hwAngle.minHwAngle,
+                 currentDev->hwAngle.maxHwAngle);
+      continue;
+    }
+
+    if (!srvDevObj[i].begin(pwmPin)) {
+      hw_log_err("      [SRV] ERROR: SRV_%d begin() failed on GPIO%d\n",
+                 currentDev->ID,
+                 pwmPin);
+      continue;
+    }
+
+    int8_t chId = currentDev->comChannel.has_value() ? static_cast<int8_t>(currentDev->comChannel.value()) : -1;
+    hw_log_info("      > SRV_%d attached to pin %d on com channel %d\n", currentDev->ID, pwmPin, chId);
   }
 
     // 4. Report completion.

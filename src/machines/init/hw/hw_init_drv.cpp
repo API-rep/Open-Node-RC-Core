@@ -9,6 +9,7 @@
 #include <core/system/hw/motion.h>
 
 #include "hw_init_drv.h"
+#include "../sys/sys_init.h"
 
 // =============================================================================
 // 1. OBJECT ALLOCATION & POINTERS
@@ -108,43 +109,77 @@ void dcDriverInit(const Machine &config) {
     return;
   }
 
-    // 2. Initialize each DC driver from config.
+    // 2. Always run config coherence checks, even when called standalone.
+  if (checkDrvHwConfig(config)) {
+    hw_log_err("    [DRV] FATAL: Invalid driver configuration — init aborted\n");
+    return;
+  }
+
+    // 3. Initialize each DC driver from config.
   for (int i = 0; i < config.dcDevCount; i++) {
     const DcDevice* currentDev = &config.dcDev[i];
 
-      // 2.1 Skip if device has no DC driver port mapping.
+      // 3.1 Skip if device has no DC driver port mapping.
     if (currentDev->drvPort == nullptr || !currentDev->drvPort->pwmPin) {
         hw_log_err("        [DRV] ERROR: DRV_%d has no DC driver port mapping\n", currentDev->ID);
       continue;
     }
 
-      // 2.2 Resolve PWM pin, DIR pin, and driver model.
+      // 3.2 Resolve PWM pin, DIR pin, and driver model.
     uint8_t pwmPin = *currentDev->drvPort->pwmPin;
     std::optional<int8_t> dirPin = std::nullopt;
     const DriverModel* model = currentDev->drvPort->driverModel;
 
+      // 3.2.1 Resolve and claim DIR pin when present.
+    const char* pinLabel = (currentDev->infoName != nullptr) ? currentDev->infoName : "DRV";
+
     if (currentDev->drvPort->dirPin) {
+      if (!pin_claim(pinReg, *currentDev->drvPort->dirPin, PinOwner::DcDrvDir, pinLabel, false, true)) {
+        hw_log_warn("      [DRV] WARNING: DRV_%d skipped (DIR GPIO already claimed)\n", currentDev->ID);
+        continue;
+      }
       dirPin = (int8_t)(*currentDev->drvPort->dirPin);
     }
     else if (currentDev->signal == DcDrvSignal::PWM_ONE_WAY) {
       dirPin = -1;
     }
 
-      // 2.3 Configure driver-side safety pins (safe idle: sleep + disabled).
+      // 3.2.2 Resolve and claim fault pin when present.
+    if (currentDev->drvPort->fltPin) {
+      if (!pin_claim(pinReg, *currentDev->drvPort->fltPin, PinOwner::DcDrvFlt, pinLabel, false, true)) {
+        hw_log_warn("      [DRV] WARNING: DRV_%d skipped (FLT GPIO already claimed)\n", currentDev->ID);
+        continue;
+      }
+    }
+
+      // 3.2.3 Resolve and claim sleep pin when present.
     if (currentDev->drvPort->slpPin) {
+      if (!pin_claim(pinReg, *currentDev->drvPort->slpPin, PinOwner::DcDrvSlp, pinLabel, false, true)) {
+        hw_log_warn("      [DRV] WARNING: DRV_%d skipped (SLP GPIO already claimed)\n", currentDev->ID);
+        continue;
+      }
       ActiveLevel sleepMode = (model) ? model->sleepActiveLevel : ActiveLevel::ActiveHigh;
       dcDevObj[i].setSleepPin(*currentDev->drvPort->slpPin, sleepMode);
       dcDevObj[i].sleep();
     }
 
+      // 3.2.4 Resolve and claim enable pin when present.
     if (currentDev->drvPort->enPin) {
+      if (!pin_claim(pinReg, *currentDev->drvPort->enPin, PinOwner::DcDrvEn, pinLabel, false, true)) {
+        hw_log_warn("      [DRV] WARNING: DRV_%d skipped (EN GPIO already claimed)\n", currentDev->ID);
+        continue;
+      }
       ActiveLevel enableMode = (model) ? model->enableActiveLevel : ActiveLevel::ActiveHigh;
       dcDevObj[i].setEnablePin(*currentDev->drvPort->enPin, enableMode);
       dcDevObj[i].disable();
     }
 
-    if (currentDev->drvPort->brkPin && model &&
-        (model->DecayPinHighState == DecayMode::SlowDecay || model->DecayPinHighState == DecayMode::FastDecay)) {
+      // 3.2.5 Resolve and claim brake/decay pin when present.
+    if (currentDev->drvPort->brkPin && model && (model->DecayPinHighState == DecayMode::SlowDecay || model->DecayPinHighState == DecayMode::FastDecay)) {
+      if (!pin_claim(pinReg, *currentDev->drvPort->brkPin, PinOwner::DcDrvBrk, pinLabel, false, true)) {
+        hw_log_warn("      [DRV] WARNING: DRV_%d skipped (BRK GPIO already claimed)\n", currentDev->ID);
+        continue;
+      }
       DecayMode highState = model->DecayPinHighState;
       DecayMode lowState = (highState == DecayMode::SlowDecay) ? DecayMode::FastDecay : DecayMode::SlowDecay;
       dcDevObj[i].setDecayPin(*currentDev->drvPort->brkPin, lowState, highState);
@@ -158,8 +193,13 @@ void dcDriverInit(const Machine &config) {
       dcDevObj[i].setPwmFreq(*currentDev->pwmFreq);
     }
 
-      // 2.4 Attach to PWM pin
-      // 2.4.1 Clone mode (shared timer) or master mode.
+      // 3.3 Attach to PWM pin
+      // 3.3.1 Clone mode (shared timer) or master mode.
+    if (!pin_claim(pinReg, pwmPin, PinOwner::DcDrvPwm, pinLabel, false, false)) {
+      hw_log_warn("      [DRV] WARNING: DRV_%d skipped (PWM GPIO already claimed)\n", currentDev->ID);
+      continue;
+    }
+
     if (currentDev->parentID) {
       uint8_t pID = *currentDev->parentID;
       if (pID < config.dcDevCount) {
@@ -183,7 +223,7 @@ void dcDriverInit(const Machine &config) {
       }
     }
 
-      // 2.4.2 Master mode: independent timer
+      // 3.4.2 Master mode: independent timer
     else {
       dcDevObj[i].attach(pwmPin, dirPin);
       if (currentDev->pwmFreq) {
@@ -202,7 +242,7 @@ void dcDriverInit(const Machine &config) {
 
   }
 
-    // 3. Report completion.
+    // 4. Report completion.
   hw_log_info("    [DRV] DC drivers successfully initialized\n");
 }
 

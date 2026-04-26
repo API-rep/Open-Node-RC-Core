@@ -261,8 +261,9 @@ struct SwitchPort {
  */
 
 struct LightPinCfg {
-  const char* infoName;   ///< Human-readable channel name.
-  int8_t      pin;        ///< GPIO pin (-1 = disabled, e.g. SOUND_NO_LED_PIN cast to int8_t).
+  const char* infoName;         ///< Human-readable channel name (for debug/dashboard).
+  int8_t      pin;              ///< GPIO pin (-1 = disabled, e.g. SOUND_NO_LED_PIN cast to int8_t).
+  bool        inversePolarity;  ///< True = active-low LED (output inverted). Default: false.
 };
 
 

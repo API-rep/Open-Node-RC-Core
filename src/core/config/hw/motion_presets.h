@@ -78,13 +78,13 @@ static constexpr MotionInertia kTraction_HeavyInertia {
 /**
  * @brief Asymmetric travel margin for heavy traction — full forward, capped reverse.
  *
- * @details Reverse is limited to 30 % of the full half-range, preventing
+ * @details Reverse is limited to 50 % of the full half-range, preventing
  *   runaway on slopes and matching construction-site safety practice.
  *   Forward is unrestricted (hardware limit applies).
  */
 static constexpr MotionMargin kTraction_HeavyMargin {
     .maxVal = CbusMaxVal,                       ///< Full forward — no restriction.
-    .minVal = static_cast<combus_t>(CbusNeutral - pctToCbus(30)),  ///< 30 % reverse cap.
+    .minVal = static_cast<combus_t>(CbusNeutral - pctToCbus(50)),  ///< 50 % reverse cap.
 };
 
 /**
@@ -96,7 +96,7 @@ static constexpr MotionMargin kTraction_HeavyMargin {
  */
 static constexpr MotionConfig kTraction_Heavy {
     .hw      = &kHw_Full,
-    .margin  = &kTraction_HeavyMargin,           ///< Asymmetric: full forward, 30 % reverse.
+    .margin  = &kTraction_HeavyMargin,           ///< Asymmetric: full forward, 50 % reverse.
     .band    = &kBand_None,
     .ramp    = nullptr,                          ///< Traction mode: gear + inertia algorithm.
     .gear    = &kTraction_HeavyGear,

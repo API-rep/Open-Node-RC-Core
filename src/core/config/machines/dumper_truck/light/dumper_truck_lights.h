@@ -53,32 +53,46 @@ inline constexpr IndicatorCfg kIndLCfg     = { 375u, 375u, false, false };
 /// @brief Right indicator (non-fading incandescent, standard side).
 inline constexpr IndicatorCfg kIndRCfg     = { 375u, 375u, false, false };
 
+/// @brief Neopixel bar config for the Dumper Truck.
+inline constexpr NeopixelCfg kNeopixelCfg  = {
+  .count             =  8u,   ///< WS2812 LED count.
+  .brightness        = 127u,  ///< Global FastLED brightness cap (0–255).
+  .maxPowerMilliAmps = 100u,  ///< FastLED power budget (mA).
+  .mode              =  2u,   ///< 1=Demo 2=KnightRider 3=Bluelight 4=UnionJack 5=B33lz3bub.
+  .asHighBeam        = true,  ///< Fill bar white when high-beam or flasher active.
+};
+
 
 // =============================================================================
 // 3. RUN-LEVEL MASK TABLE  (layer 2 — permission gate)
 // =============================================================================
 
 /**
- * @brief Permission gate: maps each RunLevel (IDLE=0 … RESET=5) to the set of
- *   LightBit:: bits that MAY be active at that RunLevel.
+ * @brief Auto-activation table: maps each RunLevel (IDLE=0 … RESET=5) to the set of
+ *   LightBit:: bits that are FORCED ON at that RunLevel, regardless of ComBus.
  *
- * @details This is a GATE, not an "auto-on" list.  A channel activates only when
- *   its activeMask has at least one bit present in BOTH this table and runtimeMask.
- *   In core: `active = (activeMask & runLevelMask & runtimeMask) != 0`.
+ * @details With the wired-OR activation model, bits here independently activate channels
+ *   (no ComBus command needed).  Only include bits that must auto-on per RunLevel.
+ *   ComBus-driven bits (LOW_BEAM, FOG, HIGH_BEAM, IND_L/R, FLASHER, ROOF, REVERSING, BRAKING)
+ *   must NOT appear here — they are set in runtimeMask by the interpreter and activate
+ *   channels through the OR's second branch.
  *
- *   RunLevel permission for the Dumper Truck:
- *   - IDLE        → PARKING_ON + signals     (engine off — no beams, no cab)
- *   - STARTING    → PARKING_ON + CAB + signals  (cranking — no driving lights yet)
- *   - RUNNING     → all bits                 (full lighting available via ComBus)
- *   - TURNING_OFF → PARKING + CAB + LOW_BEAM + signals  (no fog / high-beam)
- *   - SLEEPING    → 0                        (system suspended)
- *   - RESET       → 0                        (boot/reinit)
+ *   Null-guard: entries of 0u force ALL channels off regardless of runtimeMask
+ *   (enforced by the null-guard in light_core_update).  Used for SLEEPING / RESET.
+ *
+ *   Dumper Truck:
+ *   - IDLE        → PARKING_ON           (engine off: parking lights auto-on)
+ *   - STARTING    → PARKING_ON + CAB_ON  (cranking: cab + parking auto-on)
+ *   - RUNNING     → CAB_ON               (running: same auto set; all else via ComBus)
+ *   - TURNING_OFF → PARKING_ON + CAB_ON  (shutdown: same auto set)
+ *   - SLEEPING    → 0                    (all off — null-guard in core forces hard-off)
+ *   - RESET       → 0                    (all off)
  */
-inline constexpr LightBitmask kRunLevelMask[6] = {
+inline constexpr LightBitmask kRunLevelMask[kRunLevelCount] = {
   /* IDLE        */ LightBit::PARKING_ON,
-  /* STARTING    */ LightBit::CAB_ON,
+  /* STARTING    */ LightBit::PARKING_ON | LightBit::CAB_ON,
   /* RUNNING     */ LightBit::CAB_ON,
-  /* TURNING_OFF */ LightBit::CAB_ON,
+  /* TURNING_OFF */ LightBit::PARKING_ON | LightBit::CAB_ON,
   /* SLEEPING    */ 0u,
   /* RESET       */ 0u,
 };
@@ -87,20 +101,20 @@ inline constexpr LightBitmask kRunLevelMask[6] = {
 // =============================================================================
 // 4. CHANNEL DESCRIPTORS
 // =============================================================================
-//   {channel,   activeMask,                                  brt, pkBrt, dim, type,               dipDim, beacon,       xenon,   indicator}
+//   {name,          channel,   activeMask,                                  brt, pkBrt, dim, type,               dipDim, beacon,       xenon,   indicator}
 inline constexpr LightCfg kLedDescriptors[LED_CH_COUNT] = {
-  { LED_HEAD,    LightBit::LOW_BEAM_ON | LightBit::FLASHER,  255u,   3u,  0u, LedChannelType::PLAIN_PWM, true,  nullptr,       nullptr, nullptr   },
-  { LED_TAIL,    LightBit::LOW_BEAM_ON,                       30u,   3u, 15u, LedChannelType::TAIL,      false, nullptr,       nullptr, nullptr   },
-  { LED_IND_L,   LightBit::IND_L,                            255u,   0u,  0u, LedChannelType::INDICATOR, false, nullptr,       nullptr, &kIndLCfg },
-  { LED_IND_R,   LightBit::IND_R,                            255u,   0u,  0u, LedChannelType::INDICATOR, false, nullptr,       nullptr, &kIndRCfg },
-  { LED_FOG,     LightBit::FOG_ON,                           200u,   0u,  0u, LedChannelType::PLAIN_PWM, false, nullptr,       nullptr, nullptr   },
-  { LED_REVERSE, LightBit::REVERSING,                        140u,   0u,  0u, LedChannelType::PLAIN_PWM, false, nullptr,       nullptr, nullptr   },
-  { LED_ROOF,    LightBit::PARKING_ON,                       130u,   0u,  0u, LedChannelType::PLAIN_PWM, false, nullptr,       nullptr, nullptr   },
-  { LED_SIDE,    LightBit::PARKING_ON,                       150u,   0u, 75u, LedChannelType::PLAIN_PWM, false, nullptr,       nullptr, nullptr   },
-  { LED_BEACON1, LightBit::ROOF,                             255u,   0u,  0u, LedChannelType::BEACON,    false, &kBeaconBlue1, nullptr, nullptr   },
-  { LED_BEACON2, LightBit::ROOF,                             255u,   0u,  0u, LedChannelType::BEACON,    false, &kBeaconBlue2, nullptr, nullptr   },
-  { LED_BRAKE,   0x0000u,                                    255u,   0u,  0u, LedChannelType::TAIL,      false, nullptr,       nullptr, nullptr   },
-  { LED_CAB,     LightBit::CAB_ON,                           100u,   0u,  0u, LedChannelType::PLAIN_PWM, false, nullptr,       nullptr, nullptr   },
+  { "headLight",   LED_HEAD,    LightBit::LOW_BEAM_ON | LightBit::FLASHER,  255u,   3u,  0u, LedChannelType::PLAIN_PWM, true,  nullptr,       nullptr, nullptr    },
+  { "tailLight",   LED_TAIL,    LightBit::LOW_BEAM_ON,                       30u,   3u, 15u, LedChannelType::TAIL,      false, nullptr,       nullptr, nullptr    },
+  { "indicatorL",  LED_IND_L,   LightBit::IND_L,                            255u,   0u,  0u, LedChannelType::INDICATOR, false, nullptr,       nullptr, &kIndLCfg  },
+  { "indicatorR",  LED_IND_R,   LightBit::IND_R,                            255u,   0u,  0u, LedChannelType::INDICATOR, false, nullptr,       nullptr, &kIndRCfg  },
+  { "fogLight",    LED_FOG,     LightBit::FOG_ON,                           200u,   0u,  0u, LedChannelType::PLAIN_PWM, false, nullptr,       nullptr, nullptr    },
+  { "reverseLight",LED_REVERSE, LightBit::REVERSING,                        140u,   0u,  0u, LedChannelType::PLAIN_PWM, false, nullptr,       nullptr, nullptr    },
+  { "roofLight",   LED_ROOF,    LightBit::PARKING_ON,                       130u,   0u,  0u, LedChannelType::PLAIN_PWM, false, nullptr,       nullptr, nullptr    },
+  { "sideLight",   LED_SIDE,    LightBit::PARKING_ON,                       150u,   0u, 75u, LedChannelType::PLAIN_PWM, false, nullptr,       nullptr, nullptr    },
+  { "beacon1",     LED_BEACON1, LightBit::ROOF,                             255u,   0u,  0u, LedChannelType::BEACON,    false, &kBeaconBlue1, nullptr, nullptr    },
+  { "beacon2",     LED_BEACON2, LightBit::ROOF,                             255u,   0u,  0u, LedChannelType::BEACON,    false, &kBeaconBlue2, nullptr, nullptr    },
+  { "brakeLight",  LED_BRAKE,   0x0000u,                                    255u,   0u,  0u, LedChannelType::TAIL,      false, nullptr,       nullptr, nullptr    },
+  { "cabLight",    LED_CAB,     LightBit::CAB_ON,                           100u,   0u,  0u, LedChannelType::PLAIN_PWM, false, nullptr,       nullptr, nullptr    },
 };
 
 
@@ -110,16 +124,10 @@ inline constexpr LightCfg kLedDescriptors[LED_CH_COUNT] = {
 
 /// @brief Module-level static config for the Dumper Truck light module.
 inline constexpr LightModuleCfg kLightModuleCfg = {
-  .runLevelMask              = kRunLevelMask,    ///< Layer 3: machine RunLevel → LightBit mask table.
-  .flickeringWhileCranking   = false, ///< Flicker all channels while engine cranking.
-  .skipCabStep               = false, ///< Pass through cab-only step in FSM.
-  .skipFogStep               = false, ///< Pass through fog step in FSM.
-  .hazardsWhile5thWheelOpen  = true,  ///< Auto-hazards when 5th-wheel unlocked.
-  .neopixelCount             =  8u,   ///< Number of WS2812 LEDs on the bar.
-  .neopixelBrightness        = 127u,  ///< Global FastLED brightness cap.
-  .neopixelMaxPowerMilliAmps = 100u,  ///< FastLED power budget (mA).
-  .neopixelMode              =  2u,   ///< 1=Demo 2=KnightRider 3=Bluelight 4=UnionJack 5=B33lz3bub
-  .neopixelAsHighBeam        = true,  ///< Fill bar white when high-beam active.
+  .runLevelMask             = kRunLevelMask, ///< RunLevel → LightBit permission table.
+  .flickeringWhileCranking  = false,         ///< Flicker all channels while engine cranking.
+  .hazardsWhile5thWheelOpen = true,          ///< Auto-hazards when 5th-wheel unlocked.
+  .neopixel                 = &kNeopixelCfg, ///< Neopixel bar config (nullptr = bar absent).
 };
 
 // EOF dumper_truck_lights.h

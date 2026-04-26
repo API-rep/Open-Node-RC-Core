@@ -7,7 +7,7 @@
  *   HIGHBEAM).  Replaces the legacy led() switch-case FSM.
  *
  *   Coupling notes (transitional — addressed at step 10 main.cpp cleanup):
- *   - Includes sound_module/state/sound_state.h for soundLeds[] and statusLED externs.
+ *   - Includes sound_module/state/led_state.h for soundLeds[] and statusLED externs.
  *   - Writes gEngineSimState.indicatorOn so the audio task triggers the
  *     indicator click sound (engine_sim_state.h).
  *****************************************************************************/
@@ -18,9 +18,8 @@
 
 #include <Arduino.h>
 #include <statusLED.h>
+#include <core/system/light/light.h>          // light_leds_array()
 
-  // soundLeds[] (statusLED* array indexed by Light enum) + rgbLEDs[]
-#include <sound_module/state/sound_state.h>
   // gEngineSimState — indicator click feed to audio task
 #include <sound_module/system/sound/engine_sim_state.h>
 
@@ -42,12 +41,12 @@
  *   3. otherwise → off; xenon timer reset.
  */
 static void drivePlainChannel(statusLED& led, const LightCfg& d,
-                               uint16_t runtimeMask, uint8_t crankingDim,
+                               uint16_t runtimeMask, uint16_t runLevelMask, uint8_t crankingDim,
                                uint8_t dipDim) {
 
-  const bool active     = (d.activeMask & runtimeMask) != 0u;
-  const bool park       = !active && (d.parkBrightness > 0u)
-                          && ((runtimeMask & LightBit::PARKING_ON) != 0u);
+  // Wired-OR activation: channel is active if any bit in activeMask is present in runLevelMask OR runtimeMask
+  const bool active     = (d.activeMask & runtimeMask) != 0u || (d.activeMask & runLevelMask) != 0u;
+  const bool park       = !active && (d.parkBrightness > 0u) && ((runtimeMask & LightBit::PARKING_ON) != 0u);
   const bool lightIsOff = !active && !park;
 
     // --- Xenon overlay ---
@@ -76,10 +75,11 @@ static void drivePlainChannel(statusLED& led, const LightCfg& d,
  * @brief INDICATOR handler — flash when activeMask & runtimeMask; sideMarker dim when PARKING_ON.
  */
 static void driveIndicatorChannel(statusLED& led, const IndicatorCfg& ic,
-                                   const LightCfg& d, uint16_t runtimeMask,
+                                   const LightCfg& d, uint16_t runtimeMask, uint16_t runLevelMask,
                                    uint8_t crankingDim) {
   const int  fade     = ic.ledType ? 0 : 300;
-  const bool chActive = (d.activeMask & runtimeMask) != 0u;
+  // Wired-OR activation for indicator
+  const bool chActive = (d.activeMask & runtimeMask) != 0u || (d.activeMask & runLevelMask) != 0u;
   const bool sideOn   = ic.sideMarker && ((runtimeMask & LightBit::PARKING_ON) != 0u);
   const int  offBright = sideOn
     ? constrain((int)d.parkBrightness - crankingDim / 2, 0, 255) : 0;
@@ -98,8 +98,9 @@ static void driveIndicatorChannel(statusLED& led, const IndicatorCfg& ic,
  * @brief BEACON handler — flash when activeMask & runtimeMask (ROOF bit).
  */
 static void driveBeaconChannel(statusLED& led, const BeaconCfg& bc,
-                                const LightCfg& d, uint16_t runtimeMask) {
-  if ((d.activeMask & runtimeMask) != 0u)
+                                const LightCfg& d, uint16_t runtimeMask, uint16_t runLevelMask) {
+  // Wired-OR activation for beacon
+  if ((d.activeMask & runtimeMask) != 0u || (d.activeMask & runLevelMask) != 0u)
     led.flash((int)bc.onMs, (int)bc.offMs, (int)bc.pauseMs,
               (int)bc.pulses, (int)bc.phaseOffsetMs);
   else
@@ -112,8 +113,9 @@ static void driveBeaconChannel(statusLED& led, const BeaconCfg& bc,
  *   Park mode (dim) when PARKING_ON set and parkBrightness > 0.
  */
 static void driveTailChannel(statusLED& led, const LightCfg& d,
-                              uint16_t runtimeMask, uint8_t crankingDim) {
-  const bool chActive = (d.activeMask & runtimeMask) != 0u;
+                              uint16_t runtimeMask, uint16_t runLevelMask, uint8_t crankingDim) {
+  // Wired-OR activation for tail
+  const bool chActive = (d.activeMask & runtimeMask) != 0u || (d.activeMask & runLevelMask) != 0u;
   const bool chPark   = !chActive && (d.parkBrightness > 0u)
                         && ((runtimeMask & LightBit::PARKING_ON) != 0u);
   if ((runtimeMask & LightBit::BRAKING) != 0u) {
@@ -135,6 +137,15 @@ void light_core_update(const LightState& state,
                        const LightCfg* descriptors, uint8_t count,
                        const LightModuleCfg& mod) {
 
+    // --- 0. Null-guard: SLEEPING / RESET — hard-off all channels immediately ---
+  if (state.runLevelMask == 0u) {
+    statusLED* const arr = light_leds_array();
+    if (arr)
+      for (uint8_t i = 0; i < count; ++i)
+        arr[descriptors[i].lightChannel].off();
+    return;
+  }
+
     // --- 1. Cranking dimming ---
   static uint32_t flickerMillis = 0;
   static uint8_t  crankingDim   = 0;
@@ -149,35 +160,37 @@ void light_core_update(const LightState& state,
     crankingDim = cranking ? 50u : 0u;
   }
 
-    // --- 2. Activation gate: active = (activeMask & runLevelMask & runtimeMask) ≠ 0 ---
-  const LightBitmask rm = state.runLevelMask & state.runtimeMask;
-  const uint8_t dipDim = (rm & (LightBit::FLASHER | LightBit::HIGH_BEAM)) ? 10u : 170u;
+    // --- 2. Activation gate: wired-OR model ---
+  // For dipDim and indicatorOn, use the union of runLevelMask and runtimeMask
+  const LightBitmask rm_or = state.runLevelMask | state.runtimeMask;
+  const uint8_t dipDim = (rm_or & (LightBit::FLASHER | LightBit::HIGH_BEAM)) ? 10u : 170u;
 
     // --- 3. Feed indicator state to audio task (indicator click sound) ---
-  gEngineSimState.indicatorOn = (rm & (LightBit::IND_L | LightBit::IND_R)) != 0u;
+  gEngineSimState.indicatorOn = (rm_or & (LightBit::IND_L | LightBit::IND_R)) != 0u;
 
     // --- 4. Channel parser loop ---
+  statusLED* const arr = light_leds_array();
+  if (!arr) return;
   for (uint8_t i = 0; i < count; ++i) {
     const LightCfg& d = descriptors[i];
-    statusLED* led = soundLeds[d.lightChannel];
-    if (!led) continue;  // pin not claimed (pin-registry conflict)
+    statusLED& led = arr[d.lightChannel];
 
     switch (d.type) {
 
     case LedChannelType::PLAIN_PWM:
-      drivePlainChannel(*led, d, rm, crankingDim, dipDim);
+      drivePlainChannel(led, d, state.runtimeMask, state.runLevelMask, crankingDim, dipDim);
       break;
 
     case LedChannelType::INDICATOR:
-      driveIndicatorChannel(*led, *d.indicator, d, rm, crankingDim);
+      driveIndicatorChannel(led, *d.indicator, d, state.runtimeMask, state.runLevelMask, crankingDim);
       break;
 
     case LedChannelType::BEACON:
-      driveBeaconChannel(*led, *d.beacon, d, rm);
+      driveBeaconChannel(led, *d.beacon, d, state.runtimeMask, state.runLevelMask);
       break;
 
     case LedChannelType::TAIL:
-      driveTailChannel(*led, d, rm, crankingDim);
+      driveTailChannel(led, d, state.runtimeMask, state.runLevelMask, crankingDim);
       break;
     }
   }
@@ -191,41 +204,43 @@ void light_core_update(const LightState& state,
 void light_core_update_neopixel(const LightState& state, const LightModuleCfg& mod) {
 #if defined NEOPIXEL_ENABLED
 
-  if (mod.neopixelCount == 0) return;
+  if (!mod.neopixel || mod.neopixel->count == 0 || state.runLevelMask == 0u) return;
+  const NeopixelCfg& np = *mod.neopixel;
 
-  const LightBitmask rm = state.runLevelMask & state.runtimeMask;
+  // Wired-OR for neopixel overlays
+  const LightBitmask rm = state.runLevelMask | state.runtimeMask;
   static uint32_t lastNeopixelTime   = millis();
   static bool     knightRiderLatch   = false;
   static bool     unionJackLatch     = false;
   static bool     neopixelShow       = false;
 
     // --- High-beam overlay (all white when high-beam or flasher) ---
-  if (mod.neopixelAsHighBeam) {
+  if (np.asHighBeam) {
     static uint32_t lastHighbeamTime = millis();
     if (millis() - lastHighbeamTime > 20u) {
       lastHighbeamTime = millis();
       if (!knightRiderLatch && (rm & LightBit::ROOF) == 0u && !unionJackLatch) {
         if ((rm & (LightBit::HIGH_BEAM | LightBit::FLASHER)) != 0u)
-          fill_solid(rgbLEDs, mod.neopixelCount, CRGB::White);
+          fill_solid(neoPixelLEDs, np.count, CRGB::White);
         else
-          fill_solid(rgbLEDs, mod.neopixelCount, CRGB::Black);
+          fill_solid(neoPixelLEDs, np.count, CRGB::Black);
       }
       neopixelShow = true;
     }
   }
 
-  switch (mod.neopixelMode) {
+  switch (np.mode) {
 
   case 1: {  // Demo (reserved — static hue, pulseWidth channel unavailable) ---
     if (millis() - lastNeopixelTime > 20u) {
       lastNeopixelTime = millis();
       constexpr uint8_t kDemoHue = 128u;
-      rgbLEDs[0] = CHSV(kDemoHue, 255, 255);
-      if (mod.neopixelCount > 1) rgbLEDs[1] = CRGB::Red;
-      if (mod.neopixelCount > 2) rgbLEDs[2] = CRGB::White;
-      if (mod.neopixelCount > 3) rgbLEDs[3] = CRGB::Yellow;
-      if (mod.neopixelCount > 4) rgbLEDs[4] = CRGB::Blue;
-      if (mod.neopixelCount > 5) rgbLEDs[5] = CRGB::Green;
+      neoPixelLEDs[0] = CHSV(kDemoHue, 255, 255);
+      if (np.count > 1) neoPixelLEDs[1] = CRGB::Red;
+      if (np.count > 2) neoPixelLEDs[2] = CRGB::White;
+      if (np.count > 3) neoPixelLEDs[3] = CRGB::Yellow;
+      if (np.count > 4) neoPixelLEDs[4] = CRGB::Blue;
+      if (np.count > 5) neoPixelLEDs[5] = CRGB::Green;
       neopixelShow = true;
     }
     break;
@@ -238,16 +253,16 @@ void light_core_update_neopixel(const LightState& state, const LightModuleCfg& m
     if (millis() - lastNeopixelTime > 91u) {
       lastNeopixelTime = millis();
       if ((rm & LightBit::ROOF) != 0u || knightRiderLatch) {
-        if (counter >= (int16_t)mod.neopixelCount - 1) increment = -1;
+        if (counter >= (int16_t)np.count - 1) increment = -1;
         if (counter <= 0)                               increment =  1;
         knightRiderLatch    = (counter > 0);
-        rgbLEDs[counter]    = CRGB::Red;
+        neoPixelLEDs[counter]    = CRGB::Red;
         counter            += increment;
       } else {
         counter = 0;
       }
-      for (uint8_t i = 0; i < mod.neopixelCount; ++i)
-        rgbLEDs[i].nscale8(160);
+      for (uint8_t i = 0; i < np.count; ++i)
+        neoPixelLEDs[i].nscale8(160);
       neopixelShow = true;
     }
     break;
@@ -261,24 +276,24 @@ void light_core_update_neopixel(const LightState& state, const LightModuleCfg& m
       if ((rm & LightBit::ROOF) != 0u) {
         const uint32_t elapsed = millis() - lastBluelightTime;
         if (elapsed < 160u) {
-          for (uint8_t i = 0; i < mod.neopixelCount; i += 2) {
-            rgbLEDs[i    ] = CRGB::Red;
-            if (i + 1 < mod.neopixelCount) rgbLEDs[i + 1] = CRGB::Blue;
+          for (uint8_t i = 0; i < np.count; i += 2) {
+            neoPixelLEDs[i    ] = CRGB::Red;
+            if (i + 1 < np.count) neoPixelLEDs[i + 1] = CRGB::Blue;
           }
         } else if (elapsed < 300u) {
-          fill_solid(rgbLEDs, mod.neopixelCount, CRGB::Black);
+          fill_solid(neoPixelLEDs, np.count, CRGB::Black);
         } else if (elapsed < 460u) {
-          for (uint8_t i = 0; i < mod.neopixelCount; i += 2) {
-            rgbLEDs[i    ] = CRGB::Blue;
-            if (i + 1 < mod.neopixelCount) rgbLEDs[i + 1] = CRGB::Red;
+          for (uint8_t i = 0; i < np.count; i += 2) {
+            neoPixelLEDs[i    ] = CRGB::Blue;
+            if (i + 1 < np.count) neoPixelLEDs[i + 1] = CRGB::Red;
           }
         } else if (elapsed < 600u) {
-          fill_solid(rgbLEDs, mod.neopixelCount, CRGB::Black);
+          fill_solid(neoPixelLEDs, np.count, CRGB::Black);
         } else {
           lastBluelightTime = millis();
         }
       } else {
-        fill_solid(rgbLEDs, mod.neopixelCount, CRGB::Black);
+        fill_solid(neoPixelLEDs, np.count, CRGB::Black);
       }
       neopixelShow = true;
     }
@@ -295,30 +310,30 @@ void light_core_update_neopixel(const LightState& state, const LightModuleCfg& m
         lastUnionJackTime = millis();
         switch (animStep) {
           case 1: case 9:
-            if (mod.neopixelCount >= 8) {
-              rgbLEDs[0]=CRGB::Red;  rgbLEDs[1]=CRGB::Blue;
-              rgbLEDs[2]=CRGB::Blue; rgbLEDs[3]=CRGB::Red;
-              rgbLEDs[4]=CRGB::Red;  rgbLEDs[5]=CRGB::Blue;
-              rgbLEDs[6]=CRGB::Blue; rgbLEDs[7]=CRGB::Red;
+            if (np.count >= 8) {
+              neoPixelLEDs[0]=CRGB::Red;  neoPixelLEDs[1]=CRGB::Blue;
+              neoPixelLEDs[2]=CRGB::Blue; neoPixelLEDs[3]=CRGB::Red;
+              neoPixelLEDs[4]=CRGB::Red;  neoPixelLEDs[5]=CRGB::Blue;
+              neoPixelLEDs[6]=CRGB::Blue; neoPixelLEDs[7]=CRGB::Red;
             } break;
           case 2: case 8:
-            if (mod.neopixelCount >= 8) {
-              rgbLEDs[0]=CRGB::White; rgbLEDs[1]=CRGB::Red;
-              rgbLEDs[2]=CRGB::Blue;  rgbLEDs[3]=CRGB::Red;
-              rgbLEDs[4]=CRGB::Red;   rgbLEDs[5]=CRGB::Blue;
-              rgbLEDs[6]=CRGB::Red;   rgbLEDs[7]=CRGB::White;
+            if (np.count >= 8) {
+              neoPixelLEDs[0]=CRGB::White; neoPixelLEDs[1]=CRGB::Red;
+              neoPixelLEDs[2]=CRGB::Blue;  neoPixelLEDs[3]=CRGB::Red;
+              neoPixelLEDs[4]=CRGB::Red;   neoPixelLEDs[5]=CRGB::Blue;
+              neoPixelLEDs[6]=CRGB::Red;   neoPixelLEDs[7]=CRGB::White;
             } break;
           case 3: case 7:
-            if (mod.neopixelCount >= 8) {
-              rgbLEDs[0]=CRGB::Blue;  rgbLEDs[1]=CRGB::White;
-              rgbLEDs[2]=CRGB::Red;   rgbLEDs[3]=CRGB::Red;
-              rgbLEDs[4]=CRGB::Red;   rgbLEDs[5]=CRGB::Red;
-              rgbLEDs[6]=CRGB::White; rgbLEDs[7]=CRGB::Blue;
+            if (np.count >= 8) {
+              neoPixelLEDs[0]=CRGB::Blue;  neoPixelLEDs[1]=CRGB::White;
+              neoPixelLEDs[2]=CRGB::Red;   neoPixelLEDs[3]=CRGB::Red;
+              neoPixelLEDs[4]=CRGB::Red;   neoPixelLEDs[5]=CRGB::Red;
+              neoPixelLEDs[6]=CRGB::White; neoPixelLEDs[7]=CRGB::Blue;
             } break;
           case 4: case 5: case 6:
-            fill_solid(rgbLEDs, mod.neopixelCount, CRGB::Red); break;
+            fill_solid(neoPixelLEDs, np.count, CRGB::Red); break;
           case 10:
-            fill_solid(rgbLEDs, mod.neopixelCount, CRGB::Black);
+            fill_solid(neoPixelLEDs, np.count, CRGB::Black);
             animStep       = 0;
             unionJackLatch = false;
             break;
@@ -339,8 +354,8 @@ void light_core_update_neopixel(const LightState& state, const LightModuleCfg& m
       lastNeopixelTime = millis();
         // Hue from potentiometer unavailable in ComBus model — use fixed hue
       constexpr uint8_t kCabHue = 128u;
-      for (uint8_t i = 0; i < mod.neopixelCount; ++i)
-        rgbLEDs[i] = CHSV(kCabHue, 255, 255);
+      for (uint8_t i = 0; i < np.count; ++i)
+        neoPixelLEDs[i] = CHSV(kCabHue, 255, 255);
       neopixelShow = true;
     }
     break;

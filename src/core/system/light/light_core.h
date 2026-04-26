@@ -9,7 +9,7 @@
  *   Only compiled when LIGHT_ENABLE is defined.
  *
  * Coupling notes (transitional — addressed at step 10 main.cpp cleanup):
- *   - light_core.cpp includes sound_module/state/sound_state.h for the
+ *   - light_core.cpp includes sound_module/state/led_state.h for the
  *     soundLeds[] array and statusLED externs.
  *   - Writes gEngineSimState.indicatorOn so the audio task triggers the
  *     indicator click sound (engine_sim_state.h).
@@ -19,6 +19,12 @@
 #ifdef LIGHT_ENABLE
 
 #include "light_state.h"
+
+#if defined NEOPIXEL_ENABLED
+#  include <core/system/light/neopixel/neopixel.h>
+/// FastLED pixel buffer — defined in core/system/light/neopixel/neopixel.cpp.
+extern CRGB neoPixelLEDs[];
+#endif
 
 
 // =============================================================================
@@ -30,10 +36,10 @@
  *
  * @details Iterates `descriptors[0..count-1]`.  For each entry, dispatches to
  *   the appropriate handler based on `d.type`:
- *   - PLAIN_PWM   — activeMask / parkMask driven; optional xenon overlay; optional flasherOverride.
- *   - INDICATOR   — flashes on the ComBus indicator channel; forced hazard has priority.
- *   - BEACON      — gyrophare pattern when `LightBit::ROOF` set.
- *   - TAIL        — step-based + full brightness when `LightBit::BRAKING` set.
+ *   - PLAIN_PWM   — activeMask / parkMask driven (wired-OR: runLevelMask OR runtimeMask); optional xenon overlay; optional flasherOverride.
+ *   - INDICATOR   — flashes on the ComBus indicator channel (wired-OR).
+ *   - BEACON      — gyrophare pattern when `LightBit::ROOF` set (wired-OR).
+ *   - TAIL        — step-based + full brightness when `LightBit::BRAKING` set (wired-OR).
  *
  * @param state        Current runtime light state (from light_interp_update).
  * @param descriptors  Per-channel config array (constexpr, machine config).
@@ -49,7 +55,7 @@ void light_core_update(const LightState&      state,
  * @brief Drive the FastLED Neopixel bar.
  *
  * @details Rate-limited to one FastLED.show() every 20 ms.
- *   Dispatches on mod.neopixelMode (1–5).  No-op when mod.neopixelCount == 0.
+ *   Dispatches on mod.neopixel->mode (1–5).  No-op when mod.neopixel == nullptr.
  *
  * @param state  Current runtime light state.
  * @param mod    Module-level config carrying neopixel parameters.

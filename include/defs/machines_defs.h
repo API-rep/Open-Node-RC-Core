@@ -22,7 +22,8 @@ enum class RunLevel : int8_t {
     RUNNING     =  2,
     TURNING_OFF =  3,
     SLEEPING    =  4,
-    RESET       =  5
+    RESET       =  5,
+    COUNT            ///< Number of indexable run levels (IDLE … RESET). NOT_YET_SET excluded.
 };
 
 
@@ -62,6 +63,7 @@ enum class DevUsage : uint8_t {
     HYD_ROTARY    = 0x21,   ///< Rotary hydraulic motor → HYDRAULIC_PUMP sound role
     HYD_ASSIST    = 0x22,   ///< Power-steering hydraulic assist → HYDRAULIC_STEER sound role (reduced volume)
     HYD_PUMP      = 0x23,   ///< Standalone hydraulic pump (no direct mechanical output)
+    HYD_WINCH     = 0x24,   ///< Winch drum actuator (pull/release)
 
     // --- Steering (0x30–0x3F) ---
     STEER_SERVO   = 0x30,   ///< Servo-controlled steering
@@ -72,6 +74,7 @@ enum class DevUsage : uint8_t {
     SIG_LIGHT     = 0x41,   ///< Lighting output (no direct sound role)
     SIG_SOLENOID  = 0x42,   ///< Discrete solenoid valve or relay
     SIG_IGNITION  = 0x43,   ///< Engine ignition key → ENGINE_ON sound event
+    SIG_BEACON    = 0x44,   ///< Rotating beacon protocol trigger (servo pulse sequencer)
 };
 
 /// Returns the category nibble (upper 4 bits) of a `DevUsage` value.
@@ -115,7 +118,6 @@ enum class SrvDevType : uint8_t {
     SERVO     = 1     ///< Standard position-controlled servo
     // GPIO   = 2     // GPIO on servo port
 };
-
 
 /**
  * @brief ESC output protocol / library selector.

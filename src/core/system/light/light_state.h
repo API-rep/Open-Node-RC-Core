@@ -4,8 +4,8 @@
  *
  * @details Five distinct type groups live here:
  *
- *   BeaconCfg / XenonCfg / IndicatorCfg — optional per-channel behavioural
- *       sub-structs (pointer nullptr = feature inactive).
+ *   BeaconCfg / XenonCfg / IndicatorCfg / NeopixelCfg — optional per-channel or
+ *       per-module behavioural sub-structs (pointer nullptr = feature inactive). *       sub-structs (pointer nullptr = feature inactive).
  *
  *   LedChannelType — dispatch enum selecting which parser handler applies.
  *
@@ -29,6 +29,13 @@
 #pragma once
 
 #include <cstdint>
+#include <defs/machines_defs.h>  ///< RunLevel — needed for kRunLevelCount
+
+
+/// @brief Number of indexable RunLevel entries (IDLE … RESET).
+///   Derived from RunLevel::COUNT — update the enum, this follows automatically.
+///   Use as array bound for kRunLevelMask[] in machine light config headers.
+static constexpr uint8_t kRunLevelCount = static_cast<uint8_t>(RunLevel::COUNT);
 
 
 // =============================================================================
@@ -81,6 +88,21 @@ struct IndicatorCfg {
 };
 
 
+/**
+ * @brief WS2812 Neopixel bar module config.
+ *
+ * @note Pass as the `neopixel` pointer in LightModuleCfg.
+ *   `nullptr` = neopixel bar absent; `light_core_update_neopixel()` becomes a no-op.
+ */
+struct NeopixelCfg {
+  uint8_t  count;              ///< Number of WS2812 LEDs on the bar.
+  uint8_t  brightness;         ///< Global FastLED brightness cap (0–255).
+  uint16_t maxPowerMilliAmps;  ///< FastLED power budget (mA).
+  uint8_t  mode;               ///< Strip animation: 1=Demo 2=KnightRider 3=Bluelight 4=UnionJack 5=B33lz3bub.
+  bool     asHighBeam;         ///< Fill bar white when high-beam or flasher is active.
+};
+
+
 // =============================================================================
 // 2. RUNTIME MASK BIT DEFINITIONS
 // =============================================================================
@@ -95,9 +117,9 @@ using LightBitmask = uint16_t;
  * @brief Named bit positions for the LightBitmask runtime light mask.
  *
  * @details The interpreter builds `LightState::runtimeMask` each loop pass.
- *   The parser AND-s each channel's `activeMask` against it to decide brightness —
- *   no separate per-type switch logic needed.
- *   `channel ON  =  (activeMask & runtimeMask) != 0`
+ *   The parser now uses a wired-OR model: a channel is active if any bit in its `activeMask`
+ *   is present in either `runLevelMask` or `runtimeMask`.
+ *   `channel ON  =  ((activeMask & runLevelMask) != 0) || ((activeMask & runtimeMask) != 0)`
  *
  */
 namespace LightBit {
@@ -120,7 +142,6 @@ namespace LightBit {
 
 } // namespace LightBit
 
-
 // =============================================================================
 // 3. LED CHANNEL DESCRIPTOR
 // =============================================================================
@@ -133,9 +154,9 @@ namespace LightBit {
  *   LightBit::HIGH_BEAM | LightBit::FLASHER) instead.
  */
 enum class LedChannelType : uint8_t {
-  PLAIN_PWM  = 0u, ///< Step-based brightness driven by activeMask AND runtimeMask.
-  INDICATOR,       ///< Flash driven by activeMask AND runtimeMask (IND_L/IND_R bits). Needs IndicatorCfg.
-  BEACON,          ///< Flash driven by activeMask AND runtimeMask (ROOF bit). Needs BeaconCfg.
+  PLAIN_PWM  = 0u, ///< Step-based brightness driven by activeMask OR runtimeMask (wired-OR model).
+  INDICATOR,       ///< Flash driven by activeMask OR runtimeMask (IND_L/IND_R bits). Needs IndicatorCfg.
+  BEACON,          ///< Flash driven by activeMask OR runtimeMask (ROOF bit). Needs BeaconCfg.
   TAIL,            ///< Like PLAIN_PWM but drives brightness=255 when BRAKING bit set.
 };
 
@@ -163,8 +184,9 @@ enum class LedChannelType : uint8_t {
 struct LightCfg {
 
   // --- Compile-time config (flash) ----------------------------------------
+  const char*     infoName;        ///< Human-readable channel name (vehicle config). Shown in debug log.
   uint8_t         lightChannel;    ///< soundLeds[] index — matches the board Light enum value.
-  LightBitmask    activeMask;      ///< Bitmask AND runtimeMask → drive at \c brightness. Use LightBit:: constants.
+  LightBitmask    activeMask;      ///< Bitmask: channel is active if any bit is present in runLevelMask OR runtimeMask (wired-OR). Use LightBit:: constants.
   uint8_t         brightness;      ///< Full-on target brightness (0–255).
   uint8_t         parkBrightness;  ///< Parking-mode brightness (0–255). 0 = no park mode. Active when PARKING_ON set but activeMask not matched.
   uint8_t         dimFloor;        ///< Floor brightness after cranking dim (0 = no floor).
@@ -187,20 +209,14 @@ struct LightCfg {
  *
  * @details Minimal set passed from light_interpreter to light_core.
  *   All mask bits are pre-computed by the interpreter from ComBus;
- *   light_core reads only `runLevelMask`, `runtimeMask`, and `lightsState`
+ *   light_core reads `runLevelMask` and `runtimeMask` only
  *   — it never touches ComBus directly.
  *   Entirely on Core 1 — no volatile qualifier needed.
  */
 struct LightState {
-
-  // ---- Computed masks (built by light_interpreter each loop pass) ----------
-  LightBitmask runLevelMask;     ///< Layer 2 — permission gate: which LightBit:: bits are ALLOWED at the current RunLevel.
-  LightBitmask runtimeMask;      ///< Layer 3 — commanded bits: RunLevel auto-bits + ComBus channel parsing.
-  ///< Channel active = (activeMask & runLevelMask & runtimeMask) != 0  — computed in light_core.
-
-  // ---- Main light FSM ----------------------------------------------------
-  uint8_t lightsState;           ///< 6-step manual FSM (0=off … 5=full).
-
+  LightBitmask runLevelMask;  ///< Layer 2 — auto-activation: LightBit:: bits forced on by the current RunLevel (wired-OR source 1).
+  LightBitmask runtimeMask;   ///< Layer 3 — commanded bits: RunLevel auto-bits + ComBus channel parsing (wired-OR source 2).
+  ///< Channel active = runLevelMask != 0 AND ((activeMask & runLevelMask) != 0 || (activeMask & runtimeMask) != 0).
 };
 
 
@@ -212,24 +228,16 @@ struct LightState {
  * @brief Module-level light config — parameters that apply globally across all channels.
  *
  * @details Fields that cannot be expressed per LightCfg channel are grouped here:
- *   - `skipCabStep` / `skipFogStep` prevent "empty" button presses when the corresponding
- *     light circuit is absent; the interpreter skips those FSM steps.
  *   - Cranking flicker is global (all channels share the same crankingDim offset).
  *   - Neopixel params apply to the whole strip, not per channel.
  *
  *   Instantiated once as `inline constexpr` in the machine light config header.
  */
 struct LightModuleCfg {
-  const LightBitmask* runLevelMask;    ///< Permission gate table[6], one entry per RunLevel. Entry i = set of LightBit:: bits PERMITTED at that RunLevel. AND-ed with runtimeMask in core.
-  bool     flickeringWhileCranking;    ///< All channels flicker (random dim) while engine cranking.
-  bool     skipCabStep;                ///< Skip FSM step 1 (cab only) when cab light is not wired.
-  bool     skipFogStep;                ///< Skip FSM step 4 (fog) when fog light is not wired.
-  bool     hazardsWhile5thWheelOpen;   ///< Trigger hazards when 5th-wheel is unlocked (TBD).
-  uint8_t  neopixelCount;             ///< Number of WS2812 LEDs on the bar (0 = neopixel disabled).
-  uint8_t  neopixelBrightness;        ///< Global FastLED brightness cap (0–255).
-  uint16_t neopixelMaxPowerMilliAmps; ///< FastLED power budget (mA).
-  uint8_t  neopixelMode;             ///< Strip animation: 1=Demo 2=KnightRider 3=Bluelight 4=UnionJack 5=B33lz3bub.
-  bool     neopixelAsHighBeam;        ///< Fill bar white when high-beam or flasher is active.
+  const LightBitmask* runLevelMask;    ///< Auto-activation table[kRunLevelCount]. Entry i = LightBit:: bits forced on at that RunLevel. 0 = force all off (SLEEPING/RESET null-guard).
+  bool                flickeringWhileCranking;  ///< All channels flicker (random dim) while engine cranking.
+  bool                hazardsWhile5thWheelOpen; ///< Trigger hazards when 5th-wheel is unlocked (TBD).
+  const NeopixelCfg*  neopixel;        ///< Neopixel bar config; nullptr = bar absent (light_core_update_neopixel no-op).
 };
 
 

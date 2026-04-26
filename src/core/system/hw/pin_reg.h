@@ -94,18 +94,25 @@ void pin_reg_init(PinReg& pinReg, uint8_t size);
  * @details On conflict:
  *   - `critical = true`  → logs + halts firmware (`while(true)`).
  *   - `critical = false` → logs + returns `false`; caller skips the peripheral.
+ *   - `sharedPin = true` allows a repeated claim only when the existing owner
+ *      is identical to `owner` and both claims opt in.
  *
  * @return `true` on success, `false` on non-critical conflict.
  */
 
-bool pin_claim(PinReg& pinReg, uint8_t pin, PinOwner owner, const char* label, bool critical = false);
+bool pin_claim(PinReg&     pinReg,
+			         uint8_t     pin,
+			         PinOwner    owner,
+			         const char* label,
+			         bool        critical = false,
+			         bool        sharedPin = false);
 
 
 /**
  * @brief Claim a batch of pins  from a board theme descriptor array.
  *
  * @details Calls `pin_claim()` for each `PinDesc` entry using its `critical`
- *   flag.  Returns the number of pins successfully claimed.
+ *   flag and `sharedPin`. Returns the number of pins successfully claimed.
  */
 
 uint8_t pin_claim_batch(PinReg& pinReg, const PinDesc* descs, uint8_t count);
