@@ -69,12 +69,12 @@ machines.h
 - `-D MACHINE=VOLVO_A60_H_BRUDER` — selects vehicle in `machines.h`.
 - `-D IS_MACHINE` — structural flag for ComBus headers (always set in `[env:machines]`).
 - `-D IS_MAINBOARD` — selects the mainboard env tree in `volvo_A60H_bruder.h`.
-- `-D IS_EXT_BOARD` — future: selects the extension-board env tree.
+- `-D IS_EXT_BOARD` — selects the extension-board env tree in `volvo_A60H_bruder.h`.
 - `-D BOARD=ESP32_8M_6S` — optional board override (default set in `mainboard/mainboard.h`).
 
 **Rules:**
 - Level-0 (`volvo_A60H_bruder.h`) declares only `kVehicleName` and `kVehicleCombusLayout`.
-  Sound node and remote envs include it for these constants only — they define neither `IS_MAINBOARD` nor `IS_EXT_BOARD`.
+  Sound node and remote envs include it **with** the env-type flag (`IS_EXT_BOARD` for sound node).
 - Device enums (`DrvDev`, `SrvDev`, `SigDev`), extern arrays, and `inline constexpr EnvCfg machine` live in the board-specific `envCfg.h` under `<board>/`.
 - `envCfg.h` uses `kVehicleName`/`kVehicleCombusLayout` from Level-0 in the `machine` aggregate — no literal strings.
 - Adding a new vehicle = new `<vehicle>/` folder with the same three-level structure.
