@@ -13,7 +13,7 @@
  *   (e.g. namespace DumperTruck) so that a remote build can include multiple
  *   machine configs in the same TU without name collisions.
  * 
- *   - On machine-side builds, `using namespace <Machine>` re-exports the enums
+ *   - On machine-side builds, `using namespace <EnvCfg>` re-exports the enums
  *   into global scope. All existing code compiles unchanged, no prefix needed.
  * 
  *   - On remote builds the directive is absent; the remote uses the fully

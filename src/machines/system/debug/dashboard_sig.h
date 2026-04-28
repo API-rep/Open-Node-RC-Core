@@ -21,9 +21,9 @@
  *   Must be called from dashboard_machine_setup() after dashboard_setup().
  *
  * @param bus   Pointer to the active ComBus instance.
- * @param mach  Pointer to the Machine config.
+ * @param mach  Pointer to the EnvCfg config.
  */
-void dashboard_sig_register(const ComBus* bus, const Machine* mach);
+void dashboard_sig_register(const ComBus* bus, const EnvCfg* mach);
 
 #else // !DEBUG_DASHBOARD
 inline void dashboard_sig_register(const void*, const void*) {}

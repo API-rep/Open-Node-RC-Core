@@ -4,7 +4,7 @@
  *
  * @details Channel indices are resolved via combus_types.h which dispatches
  *   to the machine-specific enum file and re-exports it with
- *   `using namespace <Machine>` — no manual index constants.
+ *   `using namespace <EnvCfg>` — no manual index constants.
  *****************************************************************************/
 
 #ifdef LIGHT_ENABLE

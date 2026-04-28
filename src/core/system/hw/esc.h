@@ -76,7 +76,7 @@ void esc_calibrate(uint16_t halfSpan,
  *                                                `drvPort->dirPin` for bidirectional SpeedDir mode.
  *   Entries whose pin was not granted by `reg` are silently skipped.
  *
- * @param devs   Machine DC device array (must outlive all calls).
+ * @param devs   EnvCfg DC device array (must outlive all calls).
  * @param count  Number of entries in `devs`.
  * @param reg    Pin registry â€” used to resolve pin ownership.
  */

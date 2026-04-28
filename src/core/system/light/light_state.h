@@ -134,7 +134,7 @@ namespace LightBit {
   static constexpr LightBitmask IND_L         = 1u << 6;  ///< Left turn indicator (also set by hazard / batteryLow).
   static constexpr LightBitmask IND_R         = 1u << 7;  ///< Right turn indicator (also set by hazard / batteryLow).
 
-    // --- Machine states (bits 8-11) ---------------------------------------
+    // --- EnvCfg states (bits 8-11) ---------------------------------------
   static constexpr LightBitmask PARKING_ON    = 1u << 8;  ///< Parking / side markers active.
   static constexpr LightBitmask REVERSING     = 1u << 9;  ///< ESC reversing AND engine running / cranking.
   static constexpr LightBitmask BRAKING       = 1u << 10; ///< ESC braking.

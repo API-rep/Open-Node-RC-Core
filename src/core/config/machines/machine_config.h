@@ -1,6 +1,6 @@
 /*!****************************************************************************
  * @file  machine_config.h
- * @brief Machine-type config umbrella — top-level dispatcher.
+ * @brief EnvCfg-type config umbrella — top-level dispatcher.
  *
  * @details Dispatches to the machine-class sub-umbrella based on MACHINE_TYPE.
  *          Including this single header brings in all active sub-modules for

@@ -36,7 +36,7 @@ void allocateServos(int8_t count) {
  * @brief Initialize servo devices from machine configuration.
  */
 
-void servoInit(const Machine &config) {
+void servoInit(const EnvCfg &config) {
   hw_log_info("    [SRV] Initializing servo devices...\n");
 
     // 1. Early-out: no servo devices configured.
@@ -121,7 +121,7 @@ void servoInit(const Machine &config) {
  *   Returns true when at least one error is detected — halting is the
  *   caller's responsibility.
  */
-bool checkSrvHwConfig(const Machine &config) {
+bool checkSrvHwConfig(const EnvCfg &config) {
   hw_log_info("  [SRV] Servos config check...");
   bool hasError = false;
 

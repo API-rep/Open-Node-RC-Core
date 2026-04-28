@@ -1,6 +1,6 @@
 /******************************************************************************
  * @file com_init.h
- * @brief Machine env communication transports initialisation — umbrella.
+ * @brief EnvCfg env communication transports initialisation — umbrella.
  *
  * @details Initialises all active communication transport layers based on
  * active build flags. Each transport module degrades to a no-op when its

@@ -26,7 +26,7 @@ void allocateServos(int8_t count);
 /**
  * @brief Initialize all servos defined for the machine configuration
  */
-void servoInit(const Machine &config);
+void servoInit(const EnvCfg &config);
 
 
 // =============================================================================
@@ -37,6 +37,6 @@ void servoInit(const Machine &config);
  * @brief Verify servo configuration coherence.
  * @return true when at least one error is detected.
  */
-bool checkSrvHwConfig(const Machine &config);
+bool checkSrvHwConfig(const EnvCfg &config);
 
 // EOF hw_init_srv.h

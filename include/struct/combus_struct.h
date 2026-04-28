@@ -86,7 +86,7 @@ namespace ComBusOwner {
 enum class ChanOwner : uint8_t {
     NONE           = ComBusOwner::GRP_NONE    | ComBusOwner::PROC_NONE,    ///< 0x00 — unclaimed
 
-    // Machine node (GRP_MACHINE = 0x10)
+    // EnvCfg node (GRP_MACHINE = 0x10)
     MACHINE_SYSTEM = ComBusOwner::GRP_MACHINE | ComBusOwner::PROC_SYSTEM,  ///< 0x11 — machine FSM / RunLevel / key-on
     MACHINE_INPUT  = ComBusOwner::GRP_MACHINE | ComBusOwner::PROC_INPUT,   ///< 0x12 — machine input layer
     MACHINE_VBAT   = ComBusOwner::GRP_MACHINE | ComBusOwner::PROC_VBAT,   ///< 0x13 — machine battery monitor

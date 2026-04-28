@@ -1,6 +1,6 @@
 /******************************************************************************
  * @file com_init.cpp
- * @brief Machine env communication transports initialisation — orchestrator.
+ * @brief EnvCfg env communication transports initialisation — orchestrator.
  *
  * @details Dispatches to each active transport sub-init based on compile flags.
  * Each sub-init is self-contained and degrades to a no-op when its flag is absent.

@@ -1,6 +1,6 @@
 /*!****************************************************************************
- * @file    volvo_A60H_bruder.cpp
- * @brief   Volvo A60H Bruder — device configuration tables.
+ * @file    envCfg.cpp
+ * @brief   Volvo A60H Bruder — device configuration tables (ESP32_8M_6S board).
  *
  * @details Defines the three device arrays that describe every devices fitted
  *   to this vehicle:
@@ -16,7 +16,7 @@
  *******************************************************************************
  */
 
-#include "volvo_A60H_bruder.h"
+#include "envCfg.h"
 #include <core/config/hw/motion_presets.h>
 
 
@@ -106,12 +106,10 @@ DcDevice dcDevArray[DC_DRV_COUNT] = {
 
   {
     .ID         = DUMP_ACTUATOR,
-    .infoName   = "dump actuators L+R",     ///< two actuators wired in parallel
+    .infoName   = "dump actuators",         ///< two actuators wired in //
     .drvPort    = &drvPortArray[DRV_PORT_2A],
-    .usage      = DevUsage::HYD_LINEAR,
     .comChannel = AnalogComBusID::DUMP_BUS,
-    .polInv     = false,
-    .parentID   = STEERING                  ///< inherits PWM_TWO_WAY_NEUTRAL_CENTER mode
+    .parentID   = STEERING
   },
 };
 
@@ -204,7 +202,7 @@ SigDevice sigDevArray[SIG_COUNT] = {
 // 4. UART PIN TABLE
 // =============================================================================
 
-// Values from ESP32_8M_6S.h, included via volvo_A60H_bruder.h → boards.h.
+// Values from ESP32_8M_6S.h, included via envCfg.h → boards.h.
 const UartPinCfg uartPins[] = {
 	{ Txd0Pin,   Rxd0Pin   },  // [0] UART0 — USB / debug serial
 	{ -1,        -1        },  // [1] UART1 — unassigned on this board
@@ -213,4 +211,4 @@ const UartPinCfg uartPins[] = {
 
 const uint8_t uartPinsCount = static_cast<uint8_t>(sizeof(uartPins) / sizeof(uartPins[0]));
 
-// EOF volvo_A60H_bruder.cpp
+// EOF envCfg.cpp

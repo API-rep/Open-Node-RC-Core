@@ -1,6 +1,6 @@
 /******************************************************************************
  * @file main.cpp
- * @brief Main execution loop with RunLevel State Machine
+ * @brief Main execution loop with RunLevel State EnvCfg
  ****************************************************************************/
 
 #include "config/config.h"

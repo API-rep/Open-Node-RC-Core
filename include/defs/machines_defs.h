@@ -1,6 +1,6 @@
 /*!****************************************************************************
  * @file  machine_defs.h
- * @brief Machine-specific hardware types and mechanical definitions.
+ * @brief EnvCfg-specific hardware types and mechanical definitions.
  * @details This file defines harware related configuration constants.
  *******************************************************************************/// 
 

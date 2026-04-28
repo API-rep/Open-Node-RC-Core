@@ -36,7 +36,7 @@ DigitalComBus DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::CH_COUNT)
 /**
  * @brief Communication bus structure definition.
  *
- * @details Machine-perspective owners — shared across all nodes.
+ * @details EnvCfg-perspective owners — shared across all nodes.
  *   Foreign nodes (sound, remote) may only write via the UART RX bridge.
  */
 

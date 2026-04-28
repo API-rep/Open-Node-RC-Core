@@ -1,6 +1,6 @@
 /*!****************************************************************************
- * @file    volvo_A60H_bruder.h
- * @brief   Volvo A60H Bruder RC converssion configuration.
+ * @file    envCfg.h
+ * @brief   Volvo A60H Bruder — ESP32_8M_6S board environment configuration.
  *
  * @details Declares device-index enums and extern arrays for the Bruder
  *   Volvo A60H full-electric conversion.  Physical layout:
@@ -10,7 +10,7 @@
  *   - No servo-driven devices on this build.
  *   - 6 signal sources: horn, lights, engine key, two indicators, hazards.
  *
- *   Array contents are defined in `volvo_A60H_bruder.cpp`.
+ *   Array contents are defined in `envCfg.cpp`.
  *   The `machine` constexpr aggregates all pointers for use by init code.
  *******************************************************************************
  */
@@ -26,10 +26,6 @@
 // =============================================================================
 // Build-time parameters
 // =============================================================================
-
-#ifndef BOARD
-  #define BOARD            ESP32_8M_6S  ///< Default motherboard if not set by build flags.
-#endif
 
   // ComBus node group for this machine environment (see ComBusOwner::GRP_* in combus_struct.h).
   // Change only when adding a new execution environment that requires its own group.
@@ -68,7 +64,7 @@ enum DrvDev {
     DC_DRV_COUNT                ///< Sentinel — number of DC-motor devices.
 };
 
-/// DC-motor device table. Data defined in `volvo_A60H_bruder.cpp`.
+/// DC-motor device table. Data defined in `envCfg.cpp`.
 extern DcDevice dcDevArray[DC_DRV_COUNT];
 
 
@@ -83,7 +79,7 @@ enum SrvDev {
     SRV_COUNT  ///< Sentinel — number of servo devices (0 on this build).
 };
 
-/// Servo device table. Data defined in `volvo_A60H_bruder.cpp`.
+/// Servo device table. Data defined in `envCfg.cpp`.
 extern SrvDevice SrvDevArray[];
 
 
@@ -106,7 +102,7 @@ enum SigDev {
     SIG_COUNT       ///< Sentinel — number of signal devices.
 };
 
-/// Signal device table. Data defined in `volvo_A60H_bruder.cpp`.
+/// Signal device table. Data defined in `envCfg.cpp`.
 extern SigDevice sigDevArray[SIG_COUNT];
 
 
@@ -120,9 +116,9 @@ extern SigDevice sigDevArray[SIG_COUNT];
  * @details Aggregates all device array pointers and counts.  Consumed by
  *   `machine_init()` and the sound / output module init functions.
  */
-inline constexpr Machine machine {
-  .infoName      = "Volvo A60H Bruder",
-  .combusLayout  = CombusLayout::DUMPER_TRUCK,
+inline constexpr EnvCfg machine {
+  .infoName      = kVehicleName,
+  .combusLayout  = kVehicleCombusLayout,
   .dcDev         = dcDevArray,
   .dcDevCount    = DC_DRV_COUNT,
   .srvDev        = SrvDevArray,
@@ -150,4 +146,4 @@ inline constexpr Machine machine {
 extern const UartPinCfg uartPins[];
 extern const uint8_t    uartPinsCount;
 
-// EOF volvo_A60H_bruder.h
+// EOF envCfg.h

@@ -3,7 +3,7 @@
  * @brief Traction motion preset alias — dumper truck class.
  *
  * @details Aliases the shared kTraction_Heavy preset as the canonical
- *          traction config for this vehicle class.  Machine-specific motor
+ *          traction config for this vehicle class.  EnvCfg-specific motor
  *          definitions (e.g. volvo_A60H_bruder.cpp) may still reference
  *          kTraction_Heavy directly; this alias exists as a stable per-class
  *          symbol for future vehicle profiles that might need to deviate.

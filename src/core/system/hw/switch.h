@@ -5,7 +5,7 @@
  * @details Manages a board-configured array of digital input switches with
  *   per-channel debounce.  Configuration is provided via SwitchPort (defined
  *   in machines_struct.h), the same ptr+count+state container pattern used by
- *   VBatSense, Board, and Machine.  No fixed channel limit — the count is
+ *   VBatSense, Board, and EnvCfg.  No fixed channel limit — the count is
  *   driven entirely by the board config.
  *
  *   Registration : call switch_init() once with the board SwitchPort pointer.

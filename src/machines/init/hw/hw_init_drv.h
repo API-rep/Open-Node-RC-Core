@@ -28,7 +28,7 @@ void allocateDrivers(int8_t count);
 /**
  * @brief Apply parent's configuration to child drivers
  */
-void applyParentConfig(const Machine &config);
+void applyParentConfig(const EnvCfg &config);
 
 
 
@@ -39,7 +39,7 @@ void applyParentConfig(const Machine &config);
 /**
  * @brief Initialize DC drivers defined for the machine configuration
  */
-void dcDriverInit(const Machine &config);
+void dcDriverInit(const EnvCfg &config);
 
 
 // =============================================================================
@@ -50,6 +50,6 @@ void dcDriverInit(const Machine &config);
  * @brief Verify DC driver configuration coherence.
  * @return true when at least one error is detected.
  */
-bool checkDrvHwConfig(const Machine &config);
+bool checkDrvHwConfig(const EnvCfg &config);
 
 // EOF hw_init_drv.h

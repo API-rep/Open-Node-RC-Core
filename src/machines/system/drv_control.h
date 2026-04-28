@@ -16,26 +16,26 @@
 /**
  * @brief Put all DC drivers into low-power sleep mode
  */
-void sleepAllDcDrivers(const Machine &config);
+void sleepAllDcDrivers(const EnvCfg &config);
 
 /**
  * @brief Wake up all DC drivers from sleep mode
  */
-void wakeupAllDcDrivers(const Machine &config);
+void wakeupAllDcDrivers(const EnvCfg &config);
 
 /**
  * @brief Enable all DC drivers output bridges
  */
-void enableAllDcDrivers(const Machine &config);
+void enableAllDcDrivers(const EnvCfg &config);
 
 /**
  * @brief Disable all DC drivers output bridges
  */
-void disableAllDcDrivers(const Machine &config);
+void disableAllDcDrivers(const EnvCfg &config);
 
 /**
  * @brief Stop all DC drivers outputs
  */
-void stopAllDcDrivers(const Machine &config);
+void stopAllDcDrivers(const EnvCfg &config);
 
 // EOF drv_control.h

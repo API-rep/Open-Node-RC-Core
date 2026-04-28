@@ -3,7 +3,7 @@
  * @brief Com-bus channel ID dispatcher — the single #if chain for IDs
  *
  * Dispatches to the active machine's *_ids.h (enum IDs only, zero deps).
- * Adds `using namespace <Machine>` so machine-side code uses unqualified names.
+ * Adds `using namespace <EnvCfg>` so machine-side code uses unqualified names.
  *
  * WHY THIS FILE EXISTS:
  *   struct headers (machines_struct.h, remotes_map_struct.h) need

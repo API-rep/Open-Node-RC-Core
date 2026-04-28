@@ -50,10 +50,10 @@ void allocateDrivers(int8_t count) {
  *   - `motionRt` is NEVER copied — each device accumulates its own ramp
  *     position independently, even when sharing a MotionConfig.
  *
- * @param config  Machine descriptor owning the DC device array.
+ * @param config  EnvCfg descriptor owning the DC device array.
  */
 
-void applyParentConfig(const Machine &config) {
+void applyParentConfig(const EnvCfg &config) {
   for (int i = 0; i < config.dcDevCount; i++) {
     DcDevice* child = &config.dcDev[i];
 
@@ -100,7 +100,7 @@ void applyParentConfig(const Machine &config) {
  * @brief Initialize DC drivers hardware from machine configuration
  */
 
-void dcDriverInit(const Machine &config) {
+void dcDriverInit(const EnvCfg &config) {
 	hw_log_info("    [DRV] Initializing DC drivers...\n");
 
     // 1. Early-out: no DC drivers configured.
@@ -258,7 +258,7 @@ void dcDriverInit(const Machine &config) {
  *   Returns true when at least one error is detected \u2014 halting is the
  *   caller's responsibility.
  */
-bool checkDrvHwConfig(const Machine &config) {
+bool checkDrvHwConfig(const EnvCfg &config) {
   hw_log_info("  [DRV] DC drivers config check...");
   bool hasError = false;
 

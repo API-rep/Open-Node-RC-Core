@@ -22,7 +22,7 @@
 // 2. CONFIGURATION & SELECTION
 // =============================================================================
 
-	// --- Machine and remote selectors ---
+	// --- EnvCfg and remote selectors ---
 #include <config/config.h>
 
 // =============================================================================
@@ -32,7 +32,7 @@
 	// --- System level setup ---
 #include "sys/sys_init.h"
 
-	// --- Machine hardware setup ---
+	// --- EnvCfg hardware setup ---
 #include "hw/hw_init.h"
 
 	// --- Input device setup ---

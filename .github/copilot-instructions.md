@@ -51,6 +51,35 @@ If a generated file does not match these documents, fix formatting before finali
 
 ## 3) Workflow extension area
 
+#### Vehicle config hierarchy ✅ implemented
+Each vehicle lives under `src/machines/config/machines/<vehicle>/`.
+Include chain (top-down, driven by build flags):
+
+```
+machines.h
+  └─ (MACHINE == VOLVO_A60_H_BRUDER)
+       volvo_A60H_bruder/volvo_A60H_bruder.h   ← Level 0: kVehicleName, kVehicleCombusLayout
+         ├─ (IS_MAINBOARD) mainboard/mainboard.h   ← env umbrella
+         │    └─ (BOARD == ESP32_8M_6S) ESP32_8M_6S/envCfg.h/.cpp
+         └─ (IS_EXT_BOARD) ext_board/ext_board.h   ← future
+              └─ (BOARD == ...) .../envCfg.h/.cpp
+```
+
+**Build flags:**
+- `-D MACHINE=VOLVO_A60_H_BRUDER` — selects vehicle in `machines.h`.
+- `-D IS_MACHINE` — structural flag for ComBus headers (always set in `[env:machines]`).
+- `-D IS_MAINBOARD` — selects the mainboard env tree in `volvo_A60H_bruder.h`.
+- `-D IS_EXT_BOARD` — future: selects the extension-board env tree.
+- `-D BOARD=ESP32_8M_6S` — optional board override (default set in `mainboard/mainboard.h`).
+
+**Rules:**
+- Level-0 (`volvo_A60H_bruder.h`) declares only `kVehicleName` and `kVehicleCombusLayout`.
+  Sound node and remote envs include it for these constants only — they define neither `IS_MAINBOARD` nor `IS_EXT_BOARD`.
+- Device enums (`DrvDev`, `SrvDev`, `SigDev`), extern arrays, and `inline constexpr EnvCfg machine` live in the board-specific `envCfg.h` under `<board>/`.
+- `envCfg.h` uses `kVehicleName`/`kVehicleCombusLayout` from Level-0 in the `machine` aggregate — no literal strings.
+- Adding a new vehicle = new `<vehicle>/` folder with the same three-level structure.
+- Adding a new board for an existing vehicle = new folder under `mainboard/` (or `ext_board/`) + `#elif` branch in the env umbrella.
+
 #### Transport layer architecture
 Implemented in `src/core/system/com/`:
 

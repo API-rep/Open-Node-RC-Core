@@ -180,7 +180,7 @@ typedef struct {
 
 
 /**
- * @brief Machine main structure
+ * @brief EnvCfg main structure
  *  * Contain all configuration and manipulators of the machine
  * NOTE:
  * - Instance of these structures is created in config/machines/machine_name.h
@@ -197,7 +197,7 @@ typedef struct {
   uint8_t    srvDevCount;                                 // number of servo device configured
   SigDevice* sigDev     = nullptr;                        // signal device config structure (optional)
   uint8_t    sigDevCount = 0;                             // number of signal devices configured
-} Machine;
+} EnvCfg;
 
 
 // =============================================================================
@@ -236,7 +236,7 @@ struct SwitchPortState {
  * @details cfg points to the board-defined config array (flash).
  *   state points to the module runtime state array (RAM).
  *   count holds the number of active channels.
- *   Mirrors the VBatSense / Board / Machine container pattern.
+ *   Mirrors the VBatSense / Board / EnvCfg container pattern.
  */
 struct SwitchPort {
   const SwitchPortCfg* cfg   = nullptr;  ///< Pointer to board config array (flash).

@@ -18,7 +18,7 @@
 // =============================================================================
 
 static const ComBus*  s_bus  = nullptr;
-static const Machine* s_mach = nullptr;
+static const EnvCfg* s_mach = nullptr;
 
 
 // =============================================================================
@@ -203,7 +203,7 @@ static void render_sig_detail() {
 // 5. REGISTRATION
 // =============================================================================
 
-void dashboard_sig_register(const ComBus* bus, const Machine* mach) {
+void dashboard_sig_register(const ComBus* bus, const EnvCfg* mach) {
 	s_bus  = bus;
 	s_mach = mach;
 	dashboard_register_slot('5', "signals", render_sig_view);

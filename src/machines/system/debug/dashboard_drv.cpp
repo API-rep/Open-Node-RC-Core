@@ -18,7 +18,7 @@
 // =============================================================================
 
 static const ComBus*  s_bus  = nullptr;
-static const Machine* s_mach = nullptr;
+static const EnvCfg* s_mach = nullptr;
 
 
 // =============================================================================
@@ -293,7 +293,7 @@ static void render_drv_detail() {
 // 5. REGISTRATION
 // =============================================================================
 
-void dashboard_drv_register(const ComBus* bus, const Machine* mach) {
+void dashboard_drv_register(const ComBus* bus, const EnvCfg* mach) {
 	s_bus  = bus;
 	s_mach = mach;
 	dashboard_register_slot('3', "drivers", render_drv_view);

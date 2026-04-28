@@ -9,7 +9,7 @@
 
   /* TP dumper trucks */
 #if MACHINE == VOLVO_A60_H_BRUDER    // Bruder Volvo_A60H full electric conversion
-  #include "volvo_A60H_bruder.h"
+  #include "volvo_A60H_bruder/volvo_A60H_bruder.h"
 #endif
 
 #ifndef MACHINE 

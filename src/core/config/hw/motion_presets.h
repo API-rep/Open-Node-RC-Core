@@ -2,7 +2,7 @@
  * @file motion_presets.h
  * @brief Ready-made MotionConfig presets — generic vehicle-class library.
  *
- * @details Each entry is a `constexpr MotionConfig` value.  Machine config
+ * @details Each entry is a `constexpr MotionConfig` value.  EnvCfg config
  *   files include this header and assign a preset address to the device's
  *   motion config pointer for any device that needs inertia simulation or
  *   slew-rate limiting.

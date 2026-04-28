@@ -32,15 +32,15 @@
  *   complete, before the first dashboard_update() in loop().
  *
  * @param bus        Pointer to the active ComBus instance.
- * @param mach       Pointer to the active Machine config.
+ * @param mach       Pointer to the active EnvCfg config.
  * @param analogCh   Total number of analog combus channels.
  * @param digitalCh  Total number of digital combus channels.
  */
-void dashboard_machine_setup(const ComBus* bus, const Machine* mach,
+void dashboard_machine_setup(const ComBus* bus, const EnvCfg* mach,
                               uint8_t analogCh, uint8_t digitalCh);
 
 #else // !DEBUG_DASHBOARD
-inline void dashboard_machine_setup(const ComBus*, const Machine*, uint8_t, uint8_t) {}
+inline void dashboard_machine_setup(const ComBus*, const EnvCfg*, uint8_t, uint8_t) {}
 #endif // DEBUG_DASHBOARD
 
 // EOF dashboard_machine.h

@@ -3,7 +3,7 @@
  * @brief Ready-made ShakerCfg presets — generic shaker hardware library.
  *
  * @details Each entry is a `constexpr ShakerCfg` value (0–100 % motor power).
- *   Machine sound config files include this header and select the preset that
+ *   EnvCfg sound config files include this header and select the preset that
  *   matches their physical shaker hardware.
  *
  *   Preset naming convention: `kShaker_<HardwareModel>`.

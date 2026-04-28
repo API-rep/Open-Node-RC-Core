@@ -25,7 +25,7 @@
 // 2. MACHINE & BUS CONFIGURATION
 // =============================================================================
 
-	// Machine selector and bus enums
+	// EnvCfg selector and bus enums
 #include <core/config/machines/combus_types.h>
 
 // =============================================================================

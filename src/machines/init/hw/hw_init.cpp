@@ -15,7 +15,8 @@
 /**
  * @brief Verify hardware configuration coherence.
  *
- * @details Delegates to sub-module checks for drivers, servos, and signal devices.
+ * @details Delegates to sub-module checks for drivers and servos.
+ *   Signal devices are checked inside sigDevInit().
  *   Halts the system when a critical error is detected.
  */
 static void checkHwConfig() {
@@ -24,7 +25,6 @@ static void checkHwConfig() {
 
   hasError |= checkDrvHwConfig(machine);
   hasError |= checkSrvHwConfig(machine);
-  hasError |= checkSigHwConfig(machine);
 
   if (hasError) {
     hw_log_err("  [HW] FATAL: Config check failed \u2014 system halted\n");

@@ -26,7 +26,7 @@
 // =============================================================================
 
 static const ComBus*  s_bus       = nullptr;
-static const Machine* s_mach      = nullptr;
+static const EnvCfg* s_mach      = nullptr;
 static uint8_t        s_analogCh  = 0;
 static uint8_t        s_digitalCh = 0;
 
@@ -130,11 +130,11 @@ static void render_overview() {
  *   slots, then pushes an initial event.
  *
  * @param bus        Pointer to the active ComBus instance.
- * @param mach       Pointer to the Machine config.
+ * @param mach       Pointer to the EnvCfg config.
  * @param analogCh   Total number of analog combus channels.
  * @param digitalCh  Total number of digital combus channels.
  */
-void dashboard_machine_setup(const ComBus* bus, const Machine* mach,
+void dashboard_machine_setup(const ComBus* bus, const EnvCfg* mach,
                               uint8_t analogCh, uint8_t digitalCh) {
 		// --- 1. Store machine data ---
 	s_bus       = bus;

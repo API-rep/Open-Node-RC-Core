@@ -15,7 +15,7 @@
  * @brief Put all DC drivers into sleep mode
  */
 
-void sleepAllDcDrivers(const Machine &config) {
+void sleepAllDcDrivers(const EnvCfg &config) {
   if (config.dcDev == nullptr || config.dcDevCount <= 0) return;
 
   for (int i = 0; i < config.dcDevCount; i++) {
@@ -35,7 +35,7 @@ void sleepAllDcDrivers(const Machine &config) {
  * @brief Wake up all DC drivers
  */
 
-void wakeupAllDcDrivers(const Machine &config) {
+void wakeupAllDcDrivers(const EnvCfg &config) {
   if (config.dcDev == nullptr || config.dcDevCount <= 0) return;
 
   for (int i = 0; i < config.dcDevCount; i++) {
@@ -55,7 +55,7 @@ void wakeupAllDcDrivers(const Machine &config) {
  * @brief Enable all DC drivers output bridges
  */
 
-void enableAllDcDrivers(const Machine &config) {
+void enableAllDcDrivers(const EnvCfg &config) {
   if (config.dcDev == nullptr || config.dcDevCount <= 0) return;
 
   for (int i = 0; i < config.dcDevCount; i++) {
@@ -75,7 +75,7 @@ void enableAllDcDrivers(const Machine &config) {
  * @brief Disable all DC drivers output bridges
  */
 
-void disableAllDcDrivers(const Machine &config) {
+void disableAllDcDrivers(const EnvCfg &config) {
   if (config.dcDev == nullptr || config.dcDevCount <= 0) return;
 
   for (int i = 0; i < config.dcDevCount; i++) {
@@ -95,7 +95,7 @@ void disableAllDcDrivers(const Machine &config) {
  * @brief Stop all DC drivers outputs
  */
 
-void stopAllDcDrivers(const Machine &config) {
+void stopAllDcDrivers(const EnvCfg &config) {
   if (config.dcDev == nullptr || config.dcDevCount <= 0) return;
 
   for (int i = 0; i < config.dcDevCount; i++) {
