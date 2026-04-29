@@ -1,5 +1,5 @@
 /*****************************************************************************
- * @file sig.h
+ * @file sig_dev.h
  * @brief Signal device configuration check and initialization.
  *
  * @details A signal device (SigDevice) is a lightweight logical entry that

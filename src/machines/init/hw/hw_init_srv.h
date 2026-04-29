@@ -1,42 +1,18 @@
 /*****************************************************************************
  * @file hw_init_srv.h
- * @brief Servo hardware initialization and configuration
- ***************************************************************************/
+ * @brief Servo hardware initialization — machine environment wrapper.
+ *****************************************************************************/
 #pragma once
 
-#include <ServoCore.h>
-#include <core/config/machines/combus_types.h>
-
-// =============================================================================
-// 1. OBJECT ALLOCATION & POINTERS
-// =============================================================================
-
-	// --- Global pointer to Servo object array ---
-extern ServoCore* srvDevObj;
-
-/**
- * @brief Initialize and allocate Servo objects in RAM
- */
-void allocateServos(int8_t count);
-
-// =============================================================================
-// 2. HARDWARE INITIALIZATION
-// =============================================================================
-
-/**
- * @brief Initialize all servos defined for the machine configuration
- */
-void servoInit(const EnvCfg &config);
+#include <core/system/hw/dev/srv_dev.h>
 
 
 // =============================================================================
-// 3. CONFIGURATION CHECK
+// 1. INIT  (zero-arg environment entry point)
 // =============================================================================
 
-/**
- * @brief Verify servo configuration coherence.
- * @return true when at least one error is detected.
- */
-bool checkSrvHwConfig(const EnvCfg &config);
+/// Initialize all active servo output channels for the machine environment.
+/// @details Calls servoInit(config, pinReg) with the machine EnvCfg.
+void servoInit(const EnvCfg& config);
 
 // EOF hw_init_srv.h

@@ -1,5 +1,5 @@
 /*****************************************************************************
- * @file sig.cpp
+ * @file sig_dev.cpp
  * @brief Implementation of signal device configuration check and init.
  *****************************************************************************/
 
@@ -7,7 +7,7 @@
 #include <struct/struct.h>
 #include <core/system/debug/debug.h>
 
-#include "sig.h"
+#include "sig_dev.h"
 
 
 // =============================================================================
@@ -143,4 +143,4 @@ void sigDevInit(const EnvCfg &config) {
 	hw_log_info("    [SIG] Signal devices initialized\n");
 }
 
-// EOF sig.cpp
+// EOF sig_dev.cpp

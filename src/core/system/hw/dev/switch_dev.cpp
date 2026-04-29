@@ -1,9 +1,9 @@
 /******************************************************************************
- * @file switch.cpp
+ * @file switch_dev.cpp
  * @brief Polling-based switch debounce — board config driven.
  *****************************************************************************/
 
-#include "switch.h"
+#include "switch_dev.h"
 
 #include <Arduino.h>
 
@@ -20,7 +20,7 @@ static SwitchPort* s_switch = nullptr;
 /**
  * @brief Register the board switch config and seed initial pin states.
  *
- * @details Called once during hardware init. `switch_init()` stores the
+ * @details Called once during hardware init. `switchDevInit()` stores the
  *   `SwitchPort` pointer in the module-static `s_switch` and immediately
  *   reads each pin so that `state[i].confirmed` reflects the physical level
  *   before the first `switch_update()` call.
@@ -32,7 +32,7 @@ static SwitchPort* s_switch = nullptr;
  * @param port  Board-defined SwitchPort container (must outlive all calls).
  */
 
-void switch_init(SwitchPort* port)
+void switchDevInit(SwitchPort* port)
 {
     s_switch = port;
 
@@ -128,8 +128,8 @@ bool switch_read(uint8_t idx)
 
 uint8_t switch_count()
 {
-      // 0 before switch_init().
+      // 0 before switchDevInit().
     return s_switch ? s_switch->count : 0;
 }
 
-// EOF switch.cpp
+// EOF switch_dev.cpp

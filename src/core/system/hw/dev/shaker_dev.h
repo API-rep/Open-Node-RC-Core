@@ -1,5 +1,5 @@
 /******************************************************************************
- * @file shaker.h
+ * @file shaker_dev.h
  * @brief Shaker motor — shared configuration type.
  *
  * @details Provides the ShakerCfg struct — per-vehicle shaker intensity levels
@@ -28,4 +28,4 @@ struct ShakerCfg {
 	uint8_t stop;         ///< Motor power during engine stop.
 };
 
-// EOF shaker.h
+// EOF shaker_dev.h

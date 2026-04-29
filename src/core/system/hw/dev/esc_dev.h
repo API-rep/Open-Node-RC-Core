@@ -1,6 +1,6 @@
 ﻿/******************************************************************************
- * @file esc.h
- * @brief Board-agnostic ESC output dispatch â€” init, calibrate, write.
+ * @file esc_dev.h
+ * @brief Board-agnostic ESC output dispatch — init, calibrate, write.
  *
  * @details Manages a runtime-sized array of ESC output channels without
  *   exposing hardware objects to the caller.  Configuration is supplied at
@@ -14,12 +14,25 @@
  *   always available via `esc_calibrate()`.  This allows the inertia FSM
  *   (`esc_inertia`) to use correct range values even when no physical ESC
  *   is wired.
+ *
+ * @note **Winter 2026 refactor intent** — ESC is architecturally a specialised
+ *   sub-type of DcDevice (`DevType == ESC`).  Planned changes:
+ *   - ESC descriptor becomes a variant of `DcDevice` stored in `EnvCfg` (same
+ *     array pattern as `dcDev`).
+ *   - `esc_init(devs, count, reg)` → `escDevInit(const EnvCfg&, PinReg&)` to
+ *     align on the drv/srv/sig pattern.
+ *   - Module plugged onto the DcDevice pipeline as a pointer — pointer semantics
+ *     unchanged from the current `dcDevObj` pattern ("on ne change pas une
+ *     équipe qui gagne").
+ *   - `esc_calibrate()` stays independent: used by the inertia FSM regardless
+ *     of whether a physical ESC pin is wired.
+ *   Prerequisite: active season over; do not start before winter 2026.
  *****************************************************************************/
 #pragma once
 
 #include <cstdint>
 #include <struct/machines_struct.h>
-#include "pin_reg.h"
+#include <core/system/hw/pin_reg.h>
 
 
 // 1. PULSE RANGE CALIBRATION  (always available, independent of ESC_OUTPUT_ENABLED)
@@ -100,4 +113,4 @@ void esc_init(const DcDevice* devs, uint8_t count, PinReg& reg);
  */
 void esc_write(uint8_t id, uint16_t cbusVal);
 
-// EOF esc.h
+// EOF esc_dev.h

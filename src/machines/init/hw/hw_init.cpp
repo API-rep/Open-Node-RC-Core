@@ -15,8 +15,8 @@
 /**
  * @brief Verify hardware configuration coherence.
  *
- * @details Delegates to sub-module checks for drivers and servos.
- *   Signal devices are checked inside sigDevInit().
+ * @details Delegates to sub-module checks for drivers.
+ *   Servo and signal devices are checked inside servoInit() / sigDevInit().
  *   Halts the system when a critical error is detected.
  */
 static void checkHwConfig() {
@@ -24,10 +24,9 @@ static void checkHwConfig() {
   bool hasError = false;
 
   hasError |= checkDrvHwConfig(machine);
-  hasError |= checkSrvHwConfig(machine);
 
   if (hasError) {
-    hw_log_err("  [HW] FATAL: Config check failed \u2014 system halted\n");
+    hw_log_err("  [HW] FATAL: Config check failed — system halted\n");
     while(1);
   }
 
@@ -49,27 +48,22 @@ void hw_init() {
 	// --- 0. Communication transport init (pin claim — must be first) ---
   hw_init_com();
 
-	// --- 1. Config check ---
-  checkHwConfig();
-
-	// --- 2. Driver init ---
+	// --- 1. Driver init ---
   hw_log_info("  [HW] Driver init\n");
-  applyParentConfig(machine);
-  allocateDrivers(machine.dcDevCount);
   dcDriverInit(machine);
   hw_log_info("  [HW] Driver init complete\n\n");
 
-	// --- 3. Servo init ---
+	// --- 2. Servo init ---
   hw_log_info("  [HW] Servo init\n");
   servoInit(machine);
   hw_log_info("  [HW] Servo init complete\n\n");
 
-	// --- 4. Signal device init ---
+	// --- 3. Signal device init ---
   hw_log_info("  [HW] Signal device init\n");
   sigDevInit(machine);
   hw_log_info("  [HW] Signal device init complete\n\n");
 
-	// --- 5. Battery init ---
+	// --- 4. Battery init ---
   hw_log_info("  [HW] Battery init\n");
   hw_log_info("    [BAT] Battery sensing init: %d channel(s) configured\n", vBatSense.count);
   vbat_init(&vBatSense);

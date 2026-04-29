@@ -1,5 +1,5 @@
 /******************************************************************************
- * @file esc.cpp
+ * @file esc_dev.cpp
  * @brief Board-agnostic ESC output dispatch — implementation.
  *
  * @details Owns runtime-allocated `ServoCore` and `DcMotorCore` arrays indexed
@@ -11,7 +11,7 @@
  *   `esc_calibrate()` has no hardware dependency and is always compiled.
  *****************************************************************************/
 
-#include "esc.h"
+#include "esc_dev.h"
 #include <core/system/debug/debug.h>
 
 #ifdef ESC_OUTPUT_ENABLED

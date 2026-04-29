@@ -183,7 +183,7 @@ enum Switch {
   SW_CH_COUNT = 0
 };
 
-  /// Top-level switch port container — passed to switch_init().
+  /// Top-level switch port container — passed to switchDevInit().
 extern SwitchPort switchPort;  ///< count = 0 (no switches configured).
 
 

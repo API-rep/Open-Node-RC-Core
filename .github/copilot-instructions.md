@@ -569,3 +569,56 @@ ComBus Core (noyau)
 
 **Prerequisite:** Refonte complète des structs ComBus + transport frame.
 Ne pas commencer avant la fin de saison 2026.
+
+---
+
+### ESC → DcDevice subtype  (winter 2026 refactor)
+**Context:** `esc_dev.h/.cpp` treats ESC outputs as a standalone module driven
+by a raw `(const DcDevice*, uint8_t count, PinReg&)` interface — separate from
+the `EnvCfg`-based pipeline used by `drv_dev`, `srv_dev`, and `sig_dev`.
+
+**Planned integration:**
+- ESC descriptor becomes a variant of `DcDevice` stored in `EnvCfg` under a
+  dedicated `escDev` / `escDevCount` pair, same array pattern as `dcDev`.
+- Module plugged onto the DcDevice pipeline as a pointer — pointer semantics
+  preserved ("on ne change pas une équipe qui gagne").
+- `esc_init(devs, count, reg)` → `escDevInit(const EnvCfg&, PinReg&)` to align
+  on the drv/srv/sig naming pattern.
+- `esc_calibrate()` stays independent — used by the inertia FSM regardless of
+  whether a physical ESC pin is wired.
+
+**Prerequisite:** Active season over. Do not start before winter 2026.
+
+---
+
+### SwitchDevice → EnvCfg  (winter 2026 refactor)
+**Context:** `switch_dev` currently uses a board-level `SwitchPort*` interface
+(same category as `VBatSense` and `LightPort`).  `SwitchPortCfg` contains GPIO
+pin data — a board concern — so it cannot be placed in `EnvCfg` as-is.
+
+**Planned split:**
+- **Board side** — richer `SwitchPortCfg` replacing the current minimal struct:
+  ```cpp
+  struct SwitchPortCfg {
+    const char* infoName;    // human-readable name
+    int8_t      pin;         // GPIO (-1 = disabled)
+    bool        pullUp;      // INPUT_PULLUP / INPUT_PULLDOWN
+    bool        activeHigh;  // true = pressed == HIGH (new field)
+    uint16_t    debounceMs;
+  };
+  ```
+- **Machine side** — new `SwitchDevice` struct with a role/usage field (analogue
+  to `DcDevice::DevType` / `SrvDevice::type`) and an optional `parentID` for
+  switches that belong to a parent device (e.g. a limit switch on an actuator):
+  ```cpp
+  struct SwitchDevice {
+    const int8_t ID;
+    const char*  infoName;
+    DevUsage     usage;           // SW_COUPLER, SW_LIMIT_DUMP, …
+    int8_t       parentID = -1;   // parent DcDevice / SrvDevice ID (-1 = standalone)
+  };
+  ```
+  Stored in `EnvCfg` alongside a `switchDev` / `switchDevCount` pair.
+- `switchDevInit(const EnvCfg&, SwitchPort*, PinReg&)` when both sides exist.
+
+**Prerequisite:** Active season over. Do not start before winter 2026.

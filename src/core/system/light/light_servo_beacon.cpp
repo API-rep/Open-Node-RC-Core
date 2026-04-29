@@ -10,7 +10,7 @@
 
 #if defined(SOUND_NODE)
 #include <sound_module/init/hw_init_srv.h>
-#include <sound_module/config/boards/sound_board_esp32.h>
+#include <sound_module/config/config.h>
 #endif
 
 

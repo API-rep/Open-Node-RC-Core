@@ -1,55 +1,18 @@
 /*****************************************************************************
  * @file hw_init_drv.h
- * @brief DC drivers hardware initialization and memory allocation
- ***************************************************************************/
+ * @brief DC driver hardware initialization — machine environment wrapper.
+ *****************************************************************************/
 #pragma once
 
-#include <DcMotorCore.h>
-#include <core/config/machines/combus_types.h>
-
-// =============================================================================
-// 1. OBJECT ALLOCATION & POINTERS
-// =============================================================================
-
-	// --- Global pointer to DC motor object array ---
-extern DcMotorCore* dcDevObj;
-
-/**
- * @brief Initialize and allocate DC driver objects in RAM
- */
-void allocateDrivers(int8_t count);
-
+#include <core/system/hw/dev/drv_dev.h>
 
 
 // =============================================================================
-// 2. CONFIGURATION INHERITANCE
+// 1. INIT  (single-arg environment entry point)
 // =============================================================================
 
-/**
- * @brief Apply parent's configuration to child drivers
- */
-void applyParentConfig(const EnvCfg &config);
-
-
-
-// =============================================================================
-// 3. HARDWARE INITIALIZATION
-// =============================================================================
-
-/**
- * @brief Initialize DC drivers defined for the machine configuration
- */
-void dcDriverInit(const EnvCfg &config);
-
-
-// =============================================================================
-// 4. CONFIGURATION CHECK
-// =============================================================================
-
-/**
- * @brief Verify DC driver configuration coherence.
- * @return true when at least one error is detected.
- */
-bool checkDrvHwConfig(const EnvCfg &config);
+/// Initialize all active DC motor output channels for the machine environment.
+/// @details Calls dcDriverInit(config, pinReg) with the machine EnvCfg.
+void dcDriverInit(const EnvCfg& config);
 
 // EOF hw_init_drv.h
