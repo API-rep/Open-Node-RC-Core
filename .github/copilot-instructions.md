@@ -537,6 +537,83 @@ active season.
 
 ---
 
+### SoundDevice — table-driven sound engine  (winter 2026 refactor)
+**Context:** The current sound engine (`main.cpp`, 1637 lines) is a monolithic
+rc_engine_sound fork built around a flat `pulseWidth[]` array and `#ifdef`-guarded
+control functions (`loaderControl()`, `excavatorControl()`, `steamLocomotiveControl()`).
+The `ComBusSoundInterpreter` → `sound_core_set_*()` → `MixerState` stack is already
+clean (3-layer); the legacy backend (`pulseWidth[]` bridge, `soundMapper[]`/`SoundChannel`,
+and the mode control functions) is what remains to replace.
+
+**Architecture decisions (arrêtées — ne pas remettre en question) :**
+
+- `SoundDevice` (Flash, `constexpr`) + `SoundDevState` (RAM, allocated by `soundDevInit()`)
+  replace `SoundChannel` and the hand-written `soundMapper[]` table.
+- `SoundBehaviorFn` (Option B — function pointer per device) signature:
+  ```cpp
+  using SoundBehaviorFn = void (*)(const ComBus*, const SoundDevice*, SoundDevState*, const SoundDevState* gateState);
+  ```
+- Gate device via `SoundCfgHdr::gateDevID` — **common header struct** pattern:
+  `SoundCfgHdr { int8_t gateDevID; }` must be the **first field (offset 0)** in every
+  cfg struct (`HydRampCfg`, `HydPumpCfg`, `TriggerCfg`). The interpreter reads
+  `gateDevID` via `static_cast<const SoundCfgHdr*>(dev->cfg)->gateDevID` without
+  knowing the concrete type. `static_assert(offsetof(T, hdr) == 0)` enforces the
+  layout in `sound_device_cfg.h`. Gate device must have a lower array index (-1 = no gate).
+- `DevUsage` kept as readable discriminant (dashboard + behaviorFn hint).
+- `cfg : const void*` → typed tune structs (`EngineCfg`, `HydPumpCfg`, `nullptr` for simple).
+- `assetID : uint8_t` for PCM sample binding; `looping : bool` for loop vs. one-shot.
+- Accessor/removable modules via `src_filter` + `extern const SoundDevice` additions.
+
+```cpp
+struct SoundCfgHdr { int8_t gateDevID; };  // must be first field (offset 0) in every cfg struct
+struct SoundDevice {
+    const int8_t                   ID;
+    const char*                    infoName;
+    DevUsage                       usage;        // dashboard + behaviorFn hint
+    std::optional<AnalogComBusID>  analogChan;   // primary analog channel, or nullopt
+    std::optional<DigitalComBusID> digitalChan;  // primary digital channel, or nullopt
+    SoundBehaviorFn                behaviorFn;   // nullptr = simple passthrough
+    const void*                    cfg;          // HydRampCfg* / HydPumpCfg* / TriggerCfg* / nullptr
+                                                 // gate: static_cast<SoundCfgHdr*>(cfg)->gateDevID
+    SoundDevState*                 state;        // RW runtime state; nullptr for passthrough
+};
+struct SoundDevState { uint16_t volume; uint16_t target; uint32_t lastUpdateMs;
+                       bool active; uint16_t lastInput1; uint16_t lastInput2;
+                       uint16_t internal[8]; int16_t loadFeedback; uint16_t knockExtra; };
+```
+
+**ComBus v2 migration note (winter 2026 — do not forget):**
+- `analogChan` / `digitalChan` use `std::optional<AnalogComBusID>` / `std::optional<DigitalComBusID>`,
+  same pattern as `SigDeviceCfg` in `machines_struct.h`.
+- At ComBus v2 refactor: replace both fields with typed `GlobalSoundBus` accessors
+  (e.g. `combus_get_analog(bus, dev->analogChan)`) — the optional fields become redundant
+  once the bus API is typed.
+- `HydPumpCfg::chanIDs[8]` (currently `uint8_t`) must also migrate to `AnalogComBusID[]`
+  at the same time — the `uint8_t` raw index is a temporary workaround for the same reason.
+
+**Migration path — by layer, in order:**
+| # | Scope | What changes |
+|---|---|---|
+| 1 | `include/struct/sound_struct.h` | Add `SoundDevice` + `SoundDevState`; keep `SoundChannel` until all callers migrated |
+| 2 | `config/profiles/dumper_truck/` | Replace `soundMapper[]` (6 `SoundChannel` entries) with `kSoundDevArray[]` (`SoundDevice`) |
+| 3 | `system/sound_interpreter.cpp` | Iterate `kSoundDevArray[]`; call `dev.behaviorFn()` or passthrough |
+| 4 | `main.cpp` | Remove `#ifdef LOADER_MODE loaderControl()` / `EXCAVATOR_MODE excavatorControl()` blocks — absorbed by behaviour fns |
+| 5 | `main.cpp` | Remove `pulseWidth[]` consumer blocks (mapThrottle, escPulseWidth, loaderControl reads) once all replaced by ComBus → MixerState path |
+| 6 | Legacy tab headers | `2_Remote.h`–`8_Sound.h` absorbed into `vehicle_legacy_cfg.h` per profile (dumper_truck already done); remaining profiles follow |
+| 7 | `vehicles/*.h` (60+ files) | Keep frozen; new vehicles get a `config/profiles/<name>/` folder instead |
+
+**Current residues (legacy, do not touch until migration starts):**
+- `vehicles/*.h` — 60+ original rc_engine_sound vehicle presets (frozen, do not delete)
+- `0_GeneralSettings.h`, `1_Vehicle.h`, `2_Remote.h`–`8_Sound.h` — legacy tab headers still included by `main.cpp`
+- `pulseWidth[]` global array (1000–2000 µs) — bridge between `ComBusSoundInterpreter` and monolithic backend; removed once backend is replaced
+- `soundMapper[]` / `SoundChannel` in `dumper_truck.cpp` — direct migration target for step 2 above
+- `loaderControl()` / `excavatorControl()` / `steamLocomotiveControl()` — called from `loop()` under `#ifdef`; replaced by `SoundBehaviorFn` per device
+- `escPulseWidth` / `escPulseWidthOut` local variables in `main.cpp` — legacy throttle bridge; replaced by `MixerState` ESC_SPEED_BUS slot
+
+**Prerequisite:** Active season over. Do not start before winter 2026.
+
+---
+
 ### ComBus v2 — layered bus architecture (winter 2026 rework)
 **Context:** The current ComBus is a single flat struct exchanged between the
 machine node and the sound node.  The architecture decisions below were agreed
