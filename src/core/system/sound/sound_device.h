@@ -45,7 +45,6 @@
 #include <optional>
 #include <defs/machines_defs.h>               // DevUsage
 #include <struct/combus_struct.h>             // ComBus
-#include <struct/sound_struct.h>              // ApplyFn  (transitional — remove when all devices use behaviorFn)
 #include <core/config/machines/combus_ids.h>  // AnalogComBusID, DigitalComBusID
 #include "sound_device_cfg.h"                 // HydRampCfg, HydPumpCfg, TriggerCfg
 
@@ -182,7 +181,7 @@ struct SoundDevState {
  *
  *   | `cfg` value          | Mode                        | `state` required |
  *   |----------------------|-----------------------------|-----------------|
- *   | `nullptr`            | Passthrough (legacy apply)  | No  (`nullptr`) |
+ *   | `nullptr`            | Passthrough — direct `sound_core_set_*()`  | No  (`nullptr`) |
  *   | `HydRampCfg*`        | Single-channel volume ramp  | Yes             |
  *   | `HydPumpCfg*`        | Multi-cylinder pump load    | Yes             |
  *   | `TriggerCfg*`        | Delta-trigger one-shot      | Yes             |
@@ -225,9 +224,8 @@ struct SoundDevice {
 	DevUsage                          usage;        ///< Mechanical role — dashboard hint only.
 	std::optional<AnalogComBusID>     analogChan;   ///< Analog channel, or nullopt. TODO ComBus v2: typed GlobalSoundBus accessor.
 	std::optional<DigitalComBusID>    digitalChan;  ///< Digital channel, or nullopt. TODO ComBus v2: typed GlobalSoundBus accessor.
-	SoundBehaviorFn                   behaviorFn;     ///< Per-frame callback; null = passthrough.
-	ApplyFn                           legacyApplyFn;  ///< Transitional: legacy sound_apply_*() adapter used when behaviorFn is null. Remove when all devices have behaviorFn.
-	const void*                       cfg;            ///< Behaviour config (HydRampCfg* / HydPumpCfg* / TriggerCfg* / nullptr). Gate: cfg->hdr.gateDevID.
+	SoundBehaviorFn                   behaviorFn;   ///< Per-frame callback.
+	const void*                       cfg;          ///< Behaviour config (HydRampCfg* / HydPumpCfg* / TriggerCfg* / nullptr). Gate: cfg->hdr.gateDevID.
 	SoundDevState*                    state;          ///< RW runtime state; null for passthrough devices.
 };
 
