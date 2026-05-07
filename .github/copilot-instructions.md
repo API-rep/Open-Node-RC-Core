@@ -8,29 +8,45 @@ These instructions are loaded for every coding session in this workspace.
 - Tous les bugs son (horn/volume, engine key, hydraulique) ✅ corrigés et validés hardware
 - `sound_config.h` mergé dans `config.h` ✅
 
-### Refactor sound engine — état (session 2026-03-23)
+### Refactor sound engine — état (session 2026-03-23 → 2026-05-07)
 
 **Décisions arrêtées :**
 - Architecture 4 couches : `SoundInterpreter` → `SoundCore` → `MixerState` → `SoundHalAudio` (ISR)
-- `DevUsage` étendu avec catégorisation par plages (0x10 traction, 0x20 hydraulique, 0x30 steer, 0x40 signaux) ✅ **implémenté**
-- `ChanOwner` enum ajouté dans `machines_defs.h` + champ dans `AnalogComBus`/`DigitalComBus` ✅ **implémenté**
-- `volvo_A60H_bruder.cpp` migré vers nouveaux `DevUsage` ✅ **implémenté**
-- `dashboard_drv.cpp` `devUsageStr()` mis à jour ✅ **implémenté**
-- `sound_map.h` : dispatcher sur `MACHINE_TYPE` (même constante que `combus_types.h`), override via `-D SOUND_MAP_OVERRIDE` ✅ **implémenté**
-- PlatformIO : section `[volvo_A60H_id]` partagée entre les deux envs via `${volvo_A60H_id.build_flags}` ✅ **implémenté** (extends non viable — hériterait IS_MACHINE + src_filter)
+- `DevUsage` étendu avec catégorisation par plages (0x10 traction, 0x20 hydraulique, 0x30 steer, 0x40 signaux) ✅
+- `ChanOwner` enum + `sound_map.h` dispatcher + PIO identity section ✅
 - Copyright DIYguy rc_engine_sound : MIT (libre avec attribution)
 
 **Roadmap :**
 | # | Étape | Statut |
 |---|---|---|
-| 0 | Git commit backup + supprimer debug block sound_hal | ✅ fait |
-| 1 | DevUsage + ChanOwner + migration volvo | ✅ fait |
-| 2 | `sound_profiles/` infrastructure + sound_map dispatcher | ✅ fait |
-| 3 | `SoundInterpreter` interface | ✅ fait |
-| 4 | `MixerState` volatile struct + isoler reads ISR | ✅ fait |
+| 0–4, 6–7 | Architecture + MixerState + SoundInterpreter + profiles | ✅ fait |
 | 5 | Porter `sound_hal.cpp` → `ComBusSoundInterpreter` (OO) | 🔵 déféré |
-| 6 | `SoundCore` branché sur `MixerState` | ✅ fait (simultané étape 4) |
-| 7 | PIO identity section + sound_map dispatch sur `MACHINE_TYPE` | ✅ fait |
+| **8** | **Migration double-buffer → `gEngineSimState` directe** | ✅ **fait (2026-05-07)** |
+
+#### Migration double-buffer (étape 8) — complétée 2026-05-07
+Objectif : éliminer la couche `flat global → syncEngineSimState() → gEngineSimState`.
+Toutes les variables cross-core (Core 0 écrit / Core 1 lit, ou l'inverse) sont désormais
+écrites directement dans `gEngineSimState` à leur site d'écriture. `syncEngineSimState()`
+est vide → supprimé.
+
+| Batch | Variables | Commits |
+|---|---|---|
+| Hydraulic+track vols | `hydraulicVolume*`, `trackRattle*` | `8fcccb1` / `361e13d` |
+| masterVolume + dacOffset | Init dans `engine_sim_state.cpp` | `6fc9257` / `679c932` |
+| Batch 1 | 8 triggers + `engineSampleRate` + `clutchDisengaged` | `19d43b6` / `63b6918` |
+| Batch 2 | `escIsBraking` + `escIsDriving` + `brakeDetect` + `escInReverse` (gated) | `5a957ab` / `6442b86` |
+| Batch 3 | `currentRpm` + `currentSpeed` | `8ccbcb2` / `282528d` |
+| Batch 3b | `currentThrottle` + `currentThrottleFaded` + delete `syncEngineSimState()` | `8b3ce26` / `f7b978f` |
+
+**Variables flat restantes (non migrées — par conception) :**
+- `escInReverse` : Core 0 écrit ET lit (gearboxDetection, automaticGearSelector) — même-core, pas de risque.
+- `hydraulicLoad` : Core 1 écrit, Core 0 + Core 1 lisent — maintenu volatile flat.
+- `engineRunning`, `engineState`, `engineOn` : machine à états Core 0, lus Core 1 — migration future (winter 2026).
+- `driveState` : Core 0 écrit, Core 1 lit — migration future.
+- `crawlerMode`, `neutralGear`, `gearX*` : même-core ou écriture unique — pas prioritaire.
+
+**Règle permanente :** Ne jamais recréer `syncEngineSimState()` ni de flat global cross-core.
+Toute nouvelle donnée partagée entre cores → champ `volatile` dans `gEngineSimState`, écrit directement.
 
 ---
 
