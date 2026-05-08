@@ -21,28 +21,14 @@
 
 #include <stdint.h>
 #include <core/config/hw/shaker_presets.h>
+#include <struct/sound_struct.h>   ///< EngineMode, GearboxType
 
 
 // =============================================================================
 // 1. TYPES
 // =============================================================================
 
-/** @brief Vehicle engine mode — controls throttle mapping and clutch behaviour. */
-enum class EngineMode : uint8_t {
-    NORMAL,      ///< Standard bidirectional throttle; forward and reverse.
-    LOADER,      ///< Forward throttle + hydraulic RPM boost (dump body / loader arm).
-    EXCAVATOR,   ///< Forward-only throttle; hydraulic clutch; RPM lowering from hydraulicLoad.
-    TRACKED,     ///< Dual-stick throttle (max of L/R tracks); forced gear-2.
-    AIRPLANE,    ///< Forward-only with 10 % deadband; no ESC ramp control.
-    STEAM_LOCO,  ///< targetRpm tracks currentSpeed; forced gear-2.
-};
-
-/** @brief Gearbox simulation type — controls RPM calculation and gear-selection strategy. */
-enum class GearboxType : uint8_t {
-    REAL_3SPEED,    ///< Physical 3-position switch on CH2; real gear ratios.
-    VIRTUAL_3SPEED, ///< Virtual gear ratios + speed-threshold auto-shifting (SEMI_AUTOMATIC + VIRTUAL_3_SPEED).
-    VIRTUAL_16SEQ,  ///< 16-speed sequential via up/down impulses on CH2 (VIRTUAL_16_SPEED_SEQUENTIAL).
-};
+// EngineMode and GearboxType enums are defined in <struct/sound_struct.h>.
 
 /** @brief Engine dynamics tuning set for the dumper-truck vehicle class.
  *

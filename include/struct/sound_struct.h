@@ -18,7 +18,42 @@
 
 
 // =============================================================================
-// 1. SOUND CHANNEL
+// 1. ENGINE BEHAVIOUR TYPES
+// =============================================================================
+
+/**
+ * @brief Vehicle engine mode — controls throttle mapping and clutch behaviour.
+ *
+ * @details Named after the **capability set** of the powertrain, not the
+ *   vehicle archetype.  Set once in `DumperTruckSoundProfile::engineMode`
+ *   (or equivalent per-class profile); consumed at runtime by `mapThrottle()`,
+ *   `engineMassSimulation()`, `gearboxDetection()`, and `esc()`.
+ */
+enum class EngineMode : uint8_t {
+    ENGINE_ONLY,      ///< Traction only — bidirectional throttle, no hydraulics.
+    ENGINE_HYDRAULIC, ///< Traction + hydraulic pump — RPM boosted by hydraulic demand (dump body, loader arm).
+    EXCAVATOR,        ///< Hydraulic-primary — clutch always off, RPM lowered by hydraulicLoad, on/off via 3-pos switch.
+    TRACKED,          ///< Dual-stick throttle (max of L/R tracks); forced gear-2.
+    AIRPLANE,         ///< Forward-only with 10 % deadband; no ESC ramp control.
+    STEAM_LOCO,       ///< targetRpm tracks currentSpeed; forced gear-2.
+};
+
+/**
+ * @brief Gearbox simulation type — controls RPM calculation and gear-selection strategy.
+ *
+ * @details Set once in `DumperTruckSoundProfile::gearboxType`
+ *   (or equivalent per-class profile); consumed at runtime by
+ *   `engineMassSimulation()`, `gearboxDetection()`, and `esc()`.
+ */
+enum class GearboxType : uint8_t {
+    REAL_3SPEED,    ///< Physical 3-position switch on CH2; real gear ratios.
+    VIRTUAL_3SPEED, ///< Virtual gear ratios + speed-threshold auto-shifting.
+    VIRTUAL_16SEQ,  ///< 16-speed sequential via up/down impulses on CH2.
+};
+
+
+// =============================================================================
+// 2. SOUND CHANNEL
 // =============================================================================
 
 /**
