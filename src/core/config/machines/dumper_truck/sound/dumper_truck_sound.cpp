@@ -16,6 +16,8 @@
 // =============================================================================
 
 const DumperTruckSoundProfile kVehicleSoundDynamics = {
+    .engineMode          = EngineMode::LOADER,
+    .gearboxType         = GearboxType::VIRTUAL_3SPEED,
     .engineAcc           = 2,              // 1 = loco slow, 9 = trophy fast
     .engineDec           = 1,
     .clutchEngagingPoint = 80u,

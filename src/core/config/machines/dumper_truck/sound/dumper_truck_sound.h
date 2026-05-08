@@ -27,6 +27,23 @@
 // 1. TYPES
 // =============================================================================
 
+/** @brief Vehicle engine mode — controls throttle mapping and clutch behaviour. */
+enum class EngineMode : uint8_t {
+    NORMAL,      ///< Standard bidirectional throttle; forward and reverse.
+    LOADER,      ///< Forward throttle + hydraulic RPM boost (dump body / loader arm).
+    EXCAVATOR,   ///< Forward-only throttle; hydraulic clutch; RPM lowering from hydraulicLoad.
+    TRACKED,     ///< Dual-stick throttle (max of L/R tracks); forced gear-2.
+    AIRPLANE,    ///< Forward-only with 10 % deadband; no ESC ramp control.
+    STEAM_LOCO,  ///< targetRpm tracks currentSpeed; forced gear-2.
+};
+
+/** @brief Gearbox simulation type — controls RPM calculation and gear-selection strategy. */
+enum class GearboxType : uint8_t {
+    REAL_3SPEED,    ///< Physical 3-position switch on CH2; real gear ratios.
+    VIRTUAL_3SPEED, ///< Virtual gear ratios + speed-threshold auto-shifting (SEMI_AUTOMATIC + VIRTUAL_3_SPEED).
+    VIRTUAL_16SEQ,  ///< 16-speed sequential via up/down impulses on CH2 (VIRTUAL_16_SPEED_SEQUENTIAL).
+};
+
 /** @brief Engine dynamics tuning set for the dumper-truck vehicle class.
  *
  *  Array indices correspond to (selectedGear - 1).  Index 0 drives gear 1↔2
@@ -34,13 +51,15 @@
  *  Hysteresis: upShift[n] > downShift[n] for every n — prevents gear hunting.
  */
 struct DumperTruckSoundProfile {
+    EngineMode  engineMode;       ///< Vehicle engine / throttle behaviour mode.
+    GearboxType gearboxType;      ///< Gearbox simulation type.
     int8_t   engineAcc;           ///< Engine mass accel step (scale 0..9, 1=loco, 9=trophy).
     int8_t   engineDec;           ///< Engine mass decel step (scale 0..9).
     uint16_t clutchEngagingPoint; ///< CEP — above this speed, RPM tracks ESC.
     uint32_t maxRpmPercentage;    ///< Max RPM as % of idle RPM.
-    int16_t  upShift[3];          ///< SEMI_AUTO upshift speed thresholds (spd 0..500).
-    int16_t  downShift[3];        ///< SEMI_AUTO downshift thresholds — coasting.
-    int16_t  downShiftBraking[3]; ///< SEMI_AUTO downshift thresholds — braking.
+    int16_t  upShift[3];          ///< Speed-threshold upshift points (spd 0..500, VIRTUAL_3SPEED only).
+    int16_t  downShift[3];        ///< Downshift thresholds — coasting (VIRTUAL_3SPEED only).
+    int16_t  downShiftBraking[3]; ///< Downshift thresholds — braking (VIRTUAL_3SPEED only).
 };
 
 
