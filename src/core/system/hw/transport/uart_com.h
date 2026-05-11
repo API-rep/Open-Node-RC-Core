@@ -1,6 +1,6 @@
-ï»¿/******************************************************************************
+/******************************************************************************
  * @file uart_com.h
- * @brief UART transport â€” port init, claim guard and ComBus channel helpers.
+ * @brief UART transport — port init, claim guard and ComBus channel helpers.
  *
  * @details Groups all transport-layer UART concerns: low-level port opening
  * with claim guard, ComBus-channel init driven by compile flags, and a
@@ -22,7 +22,7 @@
  * @endcode
  *
  * When no COMBUS_UART* flag is defined, all ComBus helpers compile to inline
- * no-ops â€” zero overhead at call sites.
+ * no-ops — zero overhead at call sites.
  *****************************************************************************/
 #pragma once
 
@@ -49,7 +49,7 @@
  * @param txPin    GPIO TX pin (-1 to use Arduino default).
  * @param rxPin    GPIO RX pin (-1 to use Arduino default).
  * @param owner    Caller identifier logged in the claim table (e.g. "combus").
- * @param reg      Optional pin registry â€” TX and RX pins are claimed before
+ * @param reg      Optional pin registry — TX and RX pins are claimed before
  *                 serial.begin() when non-null.
  *
  * @return Pointer to a ready-to-use NodeCom, or nullptr on failure.
@@ -74,9 +74,9 @@ HardwareSerial* uart_serial_for(int n);
 // 2. COMBUS UART CHANNEL INIT  (compile-flag driven)
 // =============================================================================
 //
-//   uart_init(baud, reg)    â€” open the ComBus UART port from the active flag.
-//   uart_get_com(ch)        â€” NodeCom* for a given UART channel index.
-//   uart_get_combus_com()   â€” shortcut: resolve active channel â†’ uart_get_com().
+//   uart_init(baud, reg)    — open the ComBus UART port from the active flag.
+//   uart_get_com(ch)        — NodeCom* for a given UART channel index.
+//   uart_get_combus_com()   — shortcut: resolve active channel ? uart_get_com().
 //
 // =============================================================================
 
@@ -91,7 +91,7 @@ HardwareSerial* uart_serial_for(int n);
  * retrieved later by uart_get_com() or uart_get_combus_com().
  *
  * @param baud  UART baud rate.
- * @param reg   Optional pin registry â€” TX and RX pins are claimed if non-null.
+ * @param reg   Optional pin registry — TX and RX pins are claimed if non-null.
  */
 void uart_init(uint32_t baud, PinReg* reg = nullptr);
 

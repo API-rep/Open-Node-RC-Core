@@ -1,9 +1,9 @@
-﻿/******************************************************************************
+/******************************************************************************
  * @file combus_tx.h
  * @brief ComBus transmitter module
  *
  * @details Serializes the live ComBus into a binary frame and sends it via
- * any NodeCom* physical transport interface (UART, ESP-Now, …) provided at
+ * any NodeCom* physical transport interface (UART, ESP-Now, �) provided at
  * init time. Timer-gated and non-blocking: the update function does nothing
  * if the transmit interval has not elapsed since the last frame.
  *

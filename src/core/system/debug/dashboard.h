@@ -1,6 +1,6 @@
-﻿/******************************************************************************
+/******************************************************************************
  * @file dashboard.h
- * @brief ANSI terminal dashboard — Layer 1 core shell.
+ * @brief ANSI terminal dashboard � Layer 1 core shell.
  *
  * @details Pure rendering primitives, slot registration, keyboard dispatch,
  *   event ring buffer, and refresh timer.  Zero knowledge of any machine
@@ -10,14 +10,14 @@
  *   declared here to compose their own screens.
  *
  *   All public functions degrade to inline no-ops when DEBUG_DASHBOARD is
- *   not defined — callers compile cleanly in release builds without any
+ *   not defined � callers compile cleanly in release builds without any
  *   #ifdef guards.
  *****************************************************************************/
 #pragma once
 
 
 // =============================================================================
-// 1. GUARDED SECTION — compiles only with -D DEBUG_DASHBOARD
+// 1. GUARDED SECTION � compiles only with -D DEBUG_DASHBOARD
 // =============================================================================
 
 #ifdef DEBUG_DASHBOARD
@@ -79,7 +79,7 @@ void dMid();
 /**
  * @brief Print a mid-frame separator with an embedded label.
  *
- *   ├─── label ────────────────────────────────────────┤
+ *   +--- label ----------------------------------------�
  *
  * @param label  Short section title embedded into the separator.
  */
@@ -201,7 +201,7 @@ return (int16_t)((int32_t)raw * 100 / (int32_t)maxVal);
 // =============================================================================
 
 /**
- * @brief Initialize the core dashboard shell — record start time, reset state.
+ * @brief Initialize the core dashboard shell � record start time, reset state.
  *
  * @details Called internally by the env-layer setup (dashboard_machine_setup).
  *   Not intended to be called directly from application code.
@@ -253,7 +253,7 @@ uint8_t dashboard_detail_index();
 void dashboard_push_event(const char* msg);
 
 /**
- * @brief Non-blocking update — keyboard handling + timed redraw.
+ * @brief Non-blocking update � keyboard handling + timed redraw.
  *
  * @details Intended as the FreeRTOS task body.  May also be called
  *   directly from loop() when the task is not used (e.g. bare-metal
@@ -268,7 +268,7 @@ void dashboard_update();
  *   dashboard_update() with a 20 ms yield between iterations.
  *   Pinning to Core 0 offloads all Serial I/O away from the
  *   application loop running on Core 1.  The BT/WiFi IDF tasks
- *   also run on Core 0 but at much higher priority (≥5), so the
+ *   also run on Core 0 but at much higher priority (=5), so the
  *   dashboard task (priority 1) fills idle time only and never
  *   interferes with the radio stack.
  *
@@ -287,7 +287,7 @@ void dashboard_update();
 void dashboard_start_task();
 
 
-#else // !DEBUG_DASHBOARD — empty stubs
+#else // !DEBUG_DASHBOARD � empty stubs
 
 using DashRenderFn    = void (*)(void);
 using DashDetailFn    = void (*)(void);

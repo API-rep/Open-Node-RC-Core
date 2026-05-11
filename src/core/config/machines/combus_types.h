@@ -31,16 +31,20 @@
 #include <struct/struct.h>
 #include <defs/defs.h>
 
-#if defined(MACHINE_TYPE) && (MACHINE_TYPE == DUMPER_TRUCK)
+#if MACHINE == VOLVO_A60_H_BRUDER
   #include <core/config/machines/dumper_truck/combus/dumper_truck.h>
   using namespace DumperTruck;
 
-#elif defined(MACHINE_TYPE) && (MACHINE_TYPE == AUTRE_MACHINE_EXEMPLE)
-  #include <core/config/machines/autre_machine/combus/autre_machine.h>
-  // using namespace AutreMachine;   // uncomment when namespace is added
+// #elif MACHINE == FUTURE_EXCAVATOR_VEHICLE     // TODO winter 2026
+//   #include <core/config/machines/excavator/combus/excavator.h>
+//   using namespace Excavator;
+
+// #elif MACHINE == FUTURE_LOADER_VEHICLE        // TODO winter 2026
+//   #include <core/config/machines/loader/combus/loader.h>
+//   using namespace WheelLoader;
 
 #else
-    #error "No machine type defined for com-bus. Check platformio.ini file and env:xxx setting to fix the problem"
+    #error "No ComBus types for this MACHINE — add a #elif branch in combus_types.h."
 #endif
 
 

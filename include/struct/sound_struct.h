@@ -25,7 +25,7 @@
  * @brief Vehicle engine mode — controls throttle mapping and clutch behaviour.
  *
  * @details Named after the **capability set** of the powertrain, not the
- *   vehicle archetype.  Set once in `DumperTruckSoundProfile::engineMode`
+ *   vehicle archetype.  Set once in `VehicleSoundProfile::engineMode`
  *   (or equivalent per-class profile); consumed at runtime by `mapThrottle()`,
  *   `engineMassSimulation()`, `gearboxDetection()`, and `esc()`.
  */
@@ -41,14 +41,40 @@ enum class EngineMode : uint8_t {
 /**
  * @brief Gearbox simulation type — controls RPM calculation and gear-selection strategy.
  *
- * @details Set once in `DumperTruckSoundProfile::gearboxType`
- *   (or equivalent per-class profile); consumed at runtime by
+ * @details Set once in `VehicleSoundProfile::gearboxType`; consumed at runtime by
  *   `engineMassSimulation()`, `gearboxDetection()`, and `esc()`.
  */
 enum class GearboxType : uint8_t {
     REAL_3SPEED,    ///< Physical 3-position switch on CH2; real gear ratios.
     VIRTUAL_3SPEED, ///< Virtual gear ratios + speed-threshold auto-shifting.
     VIRTUAL_16SEQ,  ///< 16-speed sequential via up/down impulses on CH2.
+};
+
+
+/**
+ * @brief Engine dynamics tuning set — one instance per vehicle class.
+ *
+ * @details Stored in Flash as `kVehicleSoundDynamics` (defined in the
+ *   machine-class `<vehicle>_sound.cpp`).  Consumed at runtime by
+ *   `mapThrottle()`, `engineMassSimulation()`, `gearboxDetection()`
+ *   and `esc()` in the sound module.
+ *
+ *   Array indices correspond to (selectedGear - 1).  Index 0 drives
+ *   gear 1↔2 transitions; index 1 drives gear 2↔3; index 2 is an upper
+ *   guard value.  Hysteresis: upShift[n] > downShift[n] — prevents gear
+ *   hunting.  Fields `upShift`, `downShift`, and `downShiftBraking` are
+ *   only consumed when `gearboxType == GearboxType::VIRTUAL_3SPEED`.
+ */
+struct VehicleSoundProfile {
+    EngineMode  engineMode;       ///< Vehicle engine / throttle behaviour mode.
+    GearboxType gearboxType;      ///< Gearbox simulation type.
+    int8_t   engineAcc;           ///< Engine mass accel step (scale 0..9, 1=loco, 9=trophy).
+    int8_t   engineDec;           ///< Engine mass decel step (scale 0..9).
+    uint16_t clutchEngagingPoint; ///< CEP — above this speed, RPM tracks ESC.
+    uint32_t maxRpmPercentage;    ///< Max RPM as % of idle RPM.
+    int16_t  upShift[3];          ///< Speed-threshold upshift points (spd 0..500, VIRTUAL_3SPEED only).
+    int16_t  downShift[3];        ///< Downshift thresholds — coasting (VIRTUAL_3SPEED only).
+    int16_t  downShiftBraking[3]; ///< Downshift thresholds — braking (VIRTUAL_3SPEED only).
 };
 
 

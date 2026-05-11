@@ -20,8 +20,9 @@ These instructions are loaded for every coding session in this workspace.
 | # | Étape | Statut |
 |---|---|---|
 | 0–4, 6–7 | Architecture + MixerState + SoundInterpreter + profiles | ✅ fait |
-| 5 | Porter `sound_hal.cpp` → `ComBusSoundInterpreter` (OO) | 🔵 déféré |
+| 5 | Porter `sound_hal.cpp` → `ComBusSoundInterpreter` (OO) | ✅ **fait (avant 2026-05-14)** |
 | **8** | **Migration double-buffer → `gEngineSimState` directe** | ✅ **fait (2026-05-07)** |
+| **L1** | **Config Level-1 : dispatch MACHINE → vehicle headers, class umbrellas** | ✅ **fait (2026-05-11)** |
 
 #### Migration double-buffer (étape 8) — complétée 2026-05-07
 Objectif : éliminer la couche `flat global → syncEngineSimState() → gEngineSimState`.
@@ -95,6 +96,50 @@ machines.h
 - `envCfg.h` uses `kVehicleName`/`kVehicleCombusLayout` from Level-0 in the `machine` aggregate — no literal strings.
 - Adding a new vehicle = new `<vehicle>/` folder with the same three-level structure.
 - Adding a new board for an existing vehicle = new folder under `mainboard/` (or `ext_board/`) + `#elif` branch in the env umbrella.
+
+#### Machine-class config hierarchy (`src/core/config/machines/`) ✅ implemented 2026-05-11
+
+Config shared between **all environments** that build for a given machine class
+(machine node, sound node, future remote) lives in:
+
+```
+src/core/config/machines/
+  machine_config.h          ← top dispatcher: #if MACHINE == <id> → class umbrella
+  combus_ids.h              ← struct-safe dispatcher (no cycle): #if MACHINE == <id> → *_ids.h
+  combus_types.h            ← full combus dispatcher: #if MACHINE == <id> → *combus.h
+  <class>/
+    <class>_config.h        ← class umbrella (combus + motion + inputs_map + sound)
+    combus/<class>.h/.cpp   ← channel IDs, array externs, comBus extern
+    combus/<class>_ids.h    ← IDs only (zero deps — safe for struct headers)
+    motion/<class>_motion.h ← traction preset alias
+    inputs_map/             ← input → ComBus channel mapping
+    sound/<class>_sound.h/.cpp  ← kVehicleSoundDynamics (VehicleSoundProfile)
+```
+
+**Dispatch rule:** `#if MACHINE == VOLVO_A60_H_BRUDER` — the same token-comparison
+trick as `machines.h` (undefined token = 0, vehicle id = non-zero integer).
+Never use a separate integer constant or a second build flag for the machine class.
+
+**`MACHINE_TYPE` rule:** defined as `#define MACHINE_TYPE DUMPER_TRUCK` (enum token)
+in each vehicle's Level-0 header (`volvo_A60H_bruder.h`).
+Used exclusively where a C++ enum value is needed (`CombusLayout::MACHINE_TYPE`).
+**NOT** used as a preprocessor dispatch integer — use `MACHINE ==` for that.
+
+**Multi-class `.cpp` guard:** when a `*_sound.cpp` (or future `*_combus.cpp`)
+defines a global symbol, wrap it in `#if MACHINE == <its_vehicle_id>` to prevent
+duplicate-symbol linker errors when multiple class files are compiled simultaneously.
+Until a real vehicle exists for that class, use `#if 0` with a comment.
+
+**Classes defined:**
+- `dumper_truck/` — articulated hauler (active: Volvo A60H)
+- `excavator/`   — hydraulic-arm (combus/motion/inputs_map: TODO winter 2026; sound stub ready)
+- `loader/`      — wheel loader  (combus/motion/inputs_map: TODO winter 2026; sound stub ready)
+
+**Adding a new machine class:**
+1. Create `src/core/config/machines/<class>/` with the folder structure above.
+2. Add one `#elif MACHINE == <vehicle_id>` branch in `machine_config.h`, `combus_ids.h`, `combus_types.h`.
+3. Add one `#elif MACHINE == <vehicle_id>` branch in `sound_module/config/profiles/profiles.h`.
+4. No other file needs to change.
 
 #### Transport layer architecture
 Implemented in `src/core/system/com/`:
@@ -713,5 +758,23 @@ pin data — a board concern — so it cannot be placed in `EnvCfg` as-is.
   ```
   Stored in `EnvCfg` alongside a `switchDev` / `switchDevCount` pair.
 - `switchDevInit(const EnvCfg&, SwitchPort*, PinReg&)` when both sides exist.
+
+
+### Simulation struct — sound/motion config unification (winter 2026 rework)
+**Context:** Dynamic parameters (engine curves, ratios, dynamics) are currently duplicated in both sound and motion configs for each vehicle, leading to risk of drift and heavy maintenance.
+
+**Problem:** Fixes or changes in one section (sound or motion) are not always reflected in the other, causing profile divergence and complexity when adding vehicles or evolving the physical model.
+
+**Target solution:**
+- Create a shared struct (e.g. `VehicleSimulationProfile`) containing all dynamic parameters common to sound and motion.
+- Sound and motion modules reference this struct for shared fields.
+- Module-specific parameters (audio samples, GPIO mapping, activation flags) remain in their respective configs.
+- The struct is declared in a shared header (e.g. `simulation_struct.h`) and instantiated per vehicle.
+
+**Timing:** Refactor planned for winter 2026, after sound/motion profiles and ComBus v2 are stabilized.
+
+**History:**
+- Origin: session 2026-05-09, discussion on config drift between sound and motion.
+- See Copilot conversation of May 9, 2026 for full rationale.
 
 **Prerequisite:** Active season over. Do not start before winter 2026.

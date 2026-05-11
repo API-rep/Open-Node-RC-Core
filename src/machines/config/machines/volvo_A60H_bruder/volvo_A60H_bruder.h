@@ -23,6 +23,10 @@
 
 #include <defs/core_defs.h>   // CombusLayout
 
+/// Machine class selector — expands to a CombusLayout member token so that
+/// `CombusLayout::MACHINE_TYPE` resolves correctly in sound_module/config/config.h.
+#define MACHINE_TYPE  DUMPER_TRUCK
+
 
 // =============================================================================
 // Level-0 — vehicle identity (shared between all environments)

@@ -14,6 +14,7 @@
 #include <const.h>
 #include <struct/struct.h>
 #include <defs/defs.h>
+#include <machines/config/machines/machines.h>   // vehicle identity → defines MACHINE_TYPE
 
 #include <core/config/config.h>
 

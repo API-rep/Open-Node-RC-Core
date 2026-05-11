@@ -1,6 +1,6 @@
-﻿/*****************************************************************************
+/*****************************************************************************
  * @file hw_init_drv.cpp
- * @brief DC driver hardware initialization — machine environment wrapper.
+ * @brief DC driver hardware initialization � machine environment wrapper.
  *****************************************************************************/
 
 #include "hw_init_drv.h"

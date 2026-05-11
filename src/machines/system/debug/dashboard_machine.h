@@ -1,18 +1,18 @@
-ï»¿/******************************************************************************
+/******************************************************************************
  * @file dashboard_machine.h
- * @brief ANSI terminal dashboard â€” Layer 2 machine environment entry point.
+ * @brief ANSI terminal dashboard — Layer 2 machine environment entry point.
  *
  * @details Owns the overview view, auto-registers module slots, and stores
  *   machine-level data pointers.  This is the single setup call for the full
  *   dashboard stack from machine application code.
  *
  *   Call hierarchy triggered by dashboard_machine_setup():
- *     dashboard_setup()              â€” Layer 1 core reset
- *     dashboard_register_slot('1')   â€” overview (this file)
- *     dashboard_input_register()     â€” Layer 3 inputs view (slot 2)
- *     dashboard_drv_register()       â€” Layer 3 drivers view (slot 3)
- *     dashboard_vbat_register()      â€” Layer 3 battery view (slot 4)
- *     dashboard_sig_register()       â€” Layer 3 signals view (slot 5)
+ *     dashboard_setup()              — Layer 1 core reset
+ *     dashboard_register_slot('1')   — overview (this file)
+ *     dashboard_input_register()     — Layer 3 inputs view (slot 2)
+ *     dashboard_drv_register()       — Layer 3 drivers view (slot 3)
+ *     dashboard_vbat_register()      — Layer 3 battery view (slot 4)
+ *     dashboard_sig_register()       — Layer 3 signals view (slot 5)
  *
  *   Compiled only when -D DEBUG_DASHBOARD is set.
  *****************************************************************************/
@@ -25,7 +25,7 @@
 #ifdef DEBUG_DASHBOARD
 
 /**
- * @brief Full dashboard stack setup â€” the only dashboard call from init.cpp.
+ * @brief Full dashboard stack setup — the only dashboard call from init.cpp.
  *
  * @details Resets core state, registers all module slots, and pushes an
  *   initial event.  Must be called once after all other init sequences

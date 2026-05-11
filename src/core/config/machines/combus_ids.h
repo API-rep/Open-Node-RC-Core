@@ -23,16 +23,20 @@
 #include <const.h>
 
 
-#if defined(MACHINE_TYPE) && (MACHINE_TYPE == DUMPER_TRUCK)
+#if MACHINE == VOLVO_A60_H_BRUDER
   #include <core/config/machines/dumper_truck/combus/dumper_truck_ids.h>
   using namespace DumperTruck;
 
-// #elif defined(MACHINE_TYPE) && (MACHINE_TYPE == AUTRE_MACHINE_EXEMPLE)
-//   #include <core/config/machines/autre_machine/combus/autre_machine_ids.h>
-//   using namespace AutreMachine;
+// #elif MACHINE == FUTURE_EXCAVATOR_VEHICLE     // TODO winter 2026
+//   #include <core/config/machines/excavator/combus/excavator_ids.h>
+//   using namespace Excavator;
+
+// #elif MACHINE == FUTURE_LOADER_VEHICLE        // TODO winter 2026
+//   #include <core/config/machines/loader/combus/loader_ids.h>
+//   using namespace WheelLoader;
 
 #else
-  #error "combus_ids.h: unknown MACHINE_TYPE — add a new #elif branch for this machine."
+  #error "combus_ids.h: MACHINE undefined or unsupported — add a -D MACHINE= build flag."
 #endif
 
 

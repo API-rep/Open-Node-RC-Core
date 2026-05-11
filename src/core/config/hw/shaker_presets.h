@@ -1,8 +1,8 @@
-﻿/******************************************************************************
+/******************************************************************************
  * @file shaker_presets.h
- * @brief Ready-made ShakerCfg presets â€” generic shaker hardware library.
+ * @brief Ready-made ShakerCfg presets — generic shaker hardware library.
  *
- * @details Each entry is a `constexpr ShakerCfg` value (0â€“100 % motor power).
+ * @details Each entry is a `constexpr ShakerCfg` value (0–100 % motor power).
  *   EnvCfg sound config files include this header and select the preset that
  *   matches their physical shaker hardware.
  *

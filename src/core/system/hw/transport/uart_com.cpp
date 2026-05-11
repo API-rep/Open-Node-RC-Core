@@ -1,6 +1,6 @@
-ï»¿/******************************************************************************
+/******************************************************************************
  * @file uart_com.cpp
- * @brief UART transport â€” port init, claim guard and ComBus channel helpers.
+ * @brief UART transport — port init, claim guard and ComBus channel helpers.
  *****************************************************************************/
 
 #include <config/config.h>
@@ -84,7 +84,7 @@ static int uart_available(void* ctx) {
  * @brief Initialize a UART port and return a NodeCom pointer.
  *
  * @details Initialization sequence:
- *   1. Guard checks â€” null serial pointer, duplicate claim on the same
+ *   1. Guard checks — null serial pointer, duplicate claim on the same
  *      physical port, registry capacity exceeded. Returns nullptr on failure.
  *   2. Claim a context entry from the registry and record port metadata.
  *   3. Bind the NodeCom function pointers to this context.
@@ -100,17 +100,17 @@ NodeCom* uart_com_init(
     int             txPin,  // TX pin number
     int             rxPin,  // RX pin number
     const char*     owner,  // Name of the owning module (for debug)
-    PinReg*         reg   ) // Optional pin registry â€” claims tx/rx pins if non-null
+    PinReg*         reg   ) // Optional pin registry — claims tx/rx pins if non-null
  {
 
 		// --- 1. Guard checks ---
 		// --- 1.1: Null serial pointer ---
 	if (!serial) {
-		sys_log_err("[UART_COM] nullptr serial â€” init aborted\n");
+		sys_log_err("[UART_COM] nullptr serial — init aborted\n");
 		return nullptr;
 	}
 
-		// --- 1.2: Reject duplicate claim â€” one owner per physical port ---
+		// --- 1.2: Reject duplicate claim — one owner per physical port ---
 	for (uint8_t i = 0u; i < portsCount; i++) {
 		if (ports[i].serial == serial) {
 			sys_log_err("[UART_COM] FATAL: port already claimed by '%s', rejected for '%s'\n", ports[i].owner, owner);
@@ -150,7 +150,7 @@ NodeCom* uart_com_init(
 		// --- 5. Configure and start the hardware serial port ---
 	serial->begin(baud, SERIAL_8N1, rxPin, txPin);
 
-	sys_log_info("[UART_COM] '%s' â€” baud=%u  tx=%d  rx=%d\n",owner, baud, txPin, rxPin);
+	sys_log_info("[UART_COM] '%s' — baud=%u  tx=%d  rx=%d\n",owner, baud, txPin, rxPin);
 
 	return &port->com;
 }
@@ -176,7 +176,7 @@ HardwareSerial* uart_serial_for(int n) {
 
 #if defined(COMBUS_UART_TX) || defined(COMBUS_UART_RX) || defined(COMBUS_UART)
 
-// Board-level UART pin table â€” defined in the active env's board .cpp, resolved at link time.
+// Board-level UART pin table — defined in the active env's board .cpp, resolved at link time.
 extern const UartPinCfg uartPins[];
 
 static NodeCom* s_com[UartComMaxPorts] = {};

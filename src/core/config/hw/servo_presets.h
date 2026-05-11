@@ -1,4 +1,4 @@
-ï»¿/******************************************************************************
+/******************************************************************************
  * @file servo_presets.h
  * @brief Named `SrvHwAngle` constants for common servo hardware.
  *
@@ -20,16 +20,16 @@
 // 1. BUILT-IN PRESETS
 // =============================================================================
 
-  /// Generic Â±45Â° servo â€” 90Â° total swing, neutral-center.
+  /// Generic ±45° servo — 90° total swing, neutral-center.
 static constexpr SrvHwAngle srvNc90 { -45.0f, +45.0f };
 
-  /// Generic Â±90Â° servo â€” 180Â° total swing, neutral-center.
+  /// Generic ±90° servo — 180° total swing, neutral-center.
 static constexpr SrvHwAngle srvNc180 { -90.0f, +90.0f };
 
-  /// Generic Â±120Â° servo â€” 240Â° total swing, neutral-center.
+  /// Generic ±120° servo — 240° total swing, neutral-center.
 static constexpr SrvHwAngle srvNc120 { -60.0f, +60.0f };
 
-  /// Generic Â±120Â° servo â€” 240Â° total swing, neutral-center.
+  /// Generic ±120° servo — 240° total swing, neutral-center.
 static constexpr SrvHwAngle srvNc240 { -120.0f, +120.0f };
 
 
