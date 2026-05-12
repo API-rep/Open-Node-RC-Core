@@ -67,14 +67,14 @@ enum class GearboxType : uint8_t {
  */
 struct VehicleSoundProfile {
     EngineMode  engineMode;       ///< Vehicle engine / throttle behaviour mode.
-    GearboxType gearboxType;      ///< Gearbox simulation type.
-    int8_t   engineAcc;           ///< Engine mass accel step (scale 0..9, 1=loco, 9=trophy).
-    int8_t   engineDec;           ///< Engine mass decel step (scale 0..9).
-    uint16_t clutchEngagingPoint; ///< CEP — above this speed, RPM tracks ESC.
+    GearboxType gearboxType;      ///< Gearbox simulation type. // → VehicleSimulationProfile (winter 2026 — shared with motion)
+    int8_t   engineAcc;           ///< Engine mass accel step (scale 0..9). // → VehicleSimulationProfile
+    int8_t   engineDec;           ///< Engine mass decel step (scale 0..9).  // → VehicleSimulationProfile
+    uint16_t clutchEngagingPoint; ///< CEP — above this speed, RPM tracks ESC. // → VehicleSimulationProfile
     uint32_t maxRpmPercentage;    ///< Max RPM as % of idle RPM.
-    int16_t  upShift[3];          ///< Speed-threshold upshift points (spd 0..500, VIRTUAL_3SPEED only).
-    int16_t  downShift[3];        ///< Downshift thresholds — coasting (VIRTUAL_3SPEED only).
-    int16_t  downShiftBraking[3]; ///< Downshift thresholds — braking (VIRTUAL_3SPEED only).
+    int16_t  upShift[3];          ///< Speed-threshold upshift points (VIRTUAL_3SPEED). // → VehicleSimulationProfile
+    int16_t  downShift[3];        ///< Downshift thresholds — coasting (VIRTUAL_3SPEED).  // → VehicleSimulationProfile
+    int16_t  downShiftBraking[3]; ///< Downshift thresholds — braking (VIRTUAL_3SPEED).  // → VehicleSimulationProfile
 };
 
 
