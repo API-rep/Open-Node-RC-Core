@@ -23,6 +23,7 @@ These instructions are loaded for every coding session in this workspace.
 | 5 | Porter `sound_hal.cpp` → `ComBusSoundInterpreter` (OO) | ✅ **fait (avant 2026-05-14)** |
 | **8** | **Migration double-buffer → `gEngineSimState` directe** | ✅ **fait (2026-05-07)** |
 | **L1** | **Config Level-1 : dispatch MACHINE → vehicle headers, class umbrellas** | ✅ **fait (2026-05-11)** |
+| **L2** | **DiYGuy external linkage migration (cobaye CaboverCAT3408)** | 🔜 **en cours (2026-05-12)** |
 
 #### Migration double-buffer (étape 8) — complétée 2026-05-07
 Objectif : éliminer la couche `flat global → syncEngineSimState() → gEngineSimState`.
@@ -48,6 +49,48 @@ est vide → supprimé.
 
 **Règle permanente :** Ne jamais recréer `syncEngineSimState()` ni de flat global cross-core.
 Toute nouvelle donnée partagée entre cores → champ `volatile` dans `gEngineSimState`, écrit directement.
+
+---
+
+#### DiYGuy external linkage migration — L2 (active, cobaye CaboverCAT3408)
+
+**Objectif :** Permettre à `kEngineGenCfg`/`kEffectsCfg` de vivre dans `dumper_truck_sound.cpp`
+(config machine-classe), en donnant un linkage externe aux arrays de samples DiYGuy.
+Unbloque la suppression du bridge `sound_audio_task_setup()` et de `1_Vehicle.h`.
+
+**Technique — inline direct dans le profil :**
+Les `sounds/*.h` définissent des `const signed char xxxSamples[]` avec linkage interne.
+`config/profiles/<class>/<vehicle>_sound.cpp` est le **seul TU** à les inclure et utilise les
+variables DiYGuy directement dans les initialiseurs de `kEngineGenCfg`/`kEffectsCfg` :
+```cpp
+// dumper_truck_sound.cpp — seul TU incluant les sounds/*.h de ce vehicle
+#include "../../../vehicles/sounds/3408CatIdleLowpass.h"  // → const signed char samples[]
+// ...
+engCfg.idle = { (const int8_t*)samples, (uint32_t)sampleCount };
+```
+Aucune couche de pointeurs intermédiaire. Aucune modification des `sounds/*.h` originaux.
+Pas de duplication de données flash.
+
+**Cobaye :** `vehicles/CaboverCAT3408.h` + ses `sounds/*.h`. Les 60+ autres `vehicles/*.h` restent gelés.
+
+**Plan de sessions (chaque phase = 1 session, 1 commit submodule + 1 bump parent) :**
+
+| Phase | Fichiers touchés | Contenu | Statut |
+|---|---|---|---|
+| **A** | `vehicles/CaboverCAT3408.h` | Retirer tous les `#include "sounds/*.h"` | ✅ **fait** |
+| **B** | `config/profiles/dumper_truck/dumper_truck_sound.h/.cpp` | Seul TU incluant les `sounds/*.h` DiYGuy directement ; peupler `kEngineGenCfg`/`kEffectsCfg` + volumes en dur ; `sound_audio_task_setup()` → 2 lignes ; `vehicles/native/` supprimé | ✅ **fait (2026-05-12)** |
+| **C** | `main.cpp` FSMs + `sound_audio_init()` + `VehicleSoundProfile`/`VehicleLegacyCfg` | Remplacer ~20 lectures DiYGuy dans les FSMs par des champs struct : `escRampTime[3]`, `escBrakeSteps`, `escAccelerationSteps`, `maxClutchSlippingRpm`, `lowRangePercentage`, `automaticReverseAccelerationPercentage`, `shiftingAutoThrottle` ; `automatic`/`doubleClutch` → dérivés de `kVehicleSoundDynamics.gearboxType` ; `sound_audio_init()` prend `simState` en param (supprime `dumper_truck_sound_init()` et `dumper_truck_idle_sample_rate()`) ; après Phase C, `CaboverCAT3408.h` est vide | 🔜 **à faire** |
+| **D** | Cleanup | Supprimer `CaboverCAT3408.h`, retirer `1_Vehicle.h` de `main.cpp`, supprimer `sound_audio_task_setup()` et sa forward decl dans `sound_init.cpp` ; `sound_init.cpp` appelle directement `sound_audio_init()` | 🔜 **à faire** |
+
+**Règle de résumption de session :**
+- Toujours débuter par `build sound_node_volvo → SUCCESS` avant de toucher quoi que ce soit.
+- Phase C peut être découpée en sous-commits : gearbox (automatic/doubleClutch), escRamp, clutch, range.
+- Lire l’état de la phase précédente dans le résumé de session avant de commencer.
+
+**Template migration pour autres `vehicles/*.h` (après Phase D validée sur cobaye) :**
+1. Sélectionner le vehicle dans `1_Vehicle.h`.
+2. Créer `config/profiles/<class>/<vehicle>_sound.h/.cpp` — inclure les `sounds/*.h` DiYGuy directement dans le `.cpp` (seul TU). Peupler `kEngineGenCfg`/`kEffectsCfg` avec les variables DiYGuy directement.
+3. Rien à changer dans `main.cpp` (Phase C a déjà remplacé tous les reads DiYGuy par des structs).
 
 ---
 
@@ -671,7 +714,10 @@ struct SoundDevState { uint16_t volume; uint16_t target; uint32_t lastUpdateMs;
 - `loaderControl()` / `excavatorControl()` / `steamLocomotiveControl()` — called from `loop()` under `#ifdef`; replaced by `SoundBehaviorFn` per device
 - `escPulseWidth` / `escPulseWidthOut` local variables in `main.cpp` — legacy throttle bridge; replaced by `MixerState` ESC_SPEED_BUS slot
 
-**Prerequisite:** Active season over. Do not start before winter 2026.
+**Prerequisite:** DiYGuy external linkage migration (L2, Phase A–D above) must be complete first.
+Phase D removes `sound_audio_task_setup()` and all DiYGuy includes from `main.cpp` — that is the
+precondition for replacing the remaining FSM functions with `SoundBehaviorFn` per device.
+The `SoundDevice` table-driven architecture is the step AFTER DiYGuy removal, not before.
 
 ---
 
