@@ -48,6 +48,8 @@ enum class GearboxType : uint8_t {
     REAL_3SPEED,    ///< Physical 3-position switch on CH2; real gear ratios.
     VIRTUAL_3SPEED, ///< Virtual gear ratios + speed-threshold auto-shifting.
     VIRTUAL_16SEQ,  ///< 16-speed sequential via up/down impulses on CH2.
+    AUTOMATIC,      ///< Automatic with torque converter (AT).
+    DOUBLE_CLUTCH,  ///< DCT / pre-selected gearbox.
 };
 
 
@@ -75,6 +77,30 @@ struct VehicleSoundProfile {
     int16_t  upShift[3];          ///< Speed-threshold upshift points (VIRTUAL_3SPEED). // → VehicleSimulationProfile
     int16_t  downShift[3];        ///< Downshift thresholds — coasting (VIRTUAL_3SPEED).  // → VehicleSimulationProfile
     int16_t  downShiftBraking[3]; ///< Downshift thresholds — braking (VIRTUAL_3SPEED).  // → VehicleSimulationProfile
+
+    // --- ESC inertia ramp timing (Phase C — migrated from CaboverCAT3408.h) ---
+    uint8_t  escRampTime[3];           ///< Ramp tick budget: gear 1 / gear 2 / gear 3.
+    uint8_t  escBrakeSteps;            ///< Max brake ramp-rate step at full throttle.
+    uint8_t  escAccelerationSteps;     ///< Max drive ramp-rate step at full throttle.
+    uint16_t maxClutchSlippingRpm;     ///< Clutch slipping ceiling RPM.
+    uint16_t automaticReverseAccelPct; ///< Reverse acceleration scaler (%).
+    uint16_t lowRangePct;              ///< Low-range speed ratio (%).
+    uint8_t  numberOfAutoGears;        ///< Gear count for automatic / sequential modes.
+    bool     shiftingAutoThrottle;     ///< True → throttle sync for Tamiya 3-speed.
+
+    // --- Throttle / RPM dependent volume floors and start points ---
+    uint8_t  engineIdleVolumePct;      ///< Engine volume floor (% at idle throttle).
+    uint8_t  engineRevVolumePct;       ///< Rev sound volume floor (%).
+    uint8_t  fullThrottleVolumePct;    ///< Engine volume ceiling (% at full throttle).
+    uint8_t  dieselKnockIdleVolumePct; ///< Knock volume floor (% at idle throttle).
+    uint16_t dieselKnockStartPoint;    ///< Throttle above which knock volume increases (0–500).
+    uint8_t  jakeBrakeIdleVolumePct;   ///< Jake brake volume floor (% at idle RPM).
+    uint8_t  turboIdleVolumePct;       ///< Turbo volume floor (%).
+    uint16_t fanStartPoint;            ///< RPM above which fan volume increases (0–500).
+    uint8_t  fanIdleVolumePct;         ///< Fan volume floor (%).
+    uint16_t chargerStartPoint;        ///< RPM above which charger volume increases (0–500).
+    uint8_t  chargerIdleVolumePct;     ///< Supercharger volume floor (%).
+    uint8_t  wastegateIdleVolumePct;   ///< Wastegate volume floor (%).
 };
 
 
