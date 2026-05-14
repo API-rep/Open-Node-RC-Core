@@ -1,6 +1,6 @@
 /******************************************************************************
  * @file dashboard_vbat.cpp
- * @brief ANSI terminal dashboard — Layer 3 battery sensing module view.
+ * @brief ANSI terminal dashboard ï¿½ Layer 3 battery sensing module view.
  *****************************************************************************/
 
 #ifdef DEBUG_DASHBOARD
@@ -50,12 +50,12 @@ static void render_vbat_view() {
 			float       v     = dis ? 0.0f : vbat_voltage(i);
 			uint8_t     cells = dis ? 0    : vbat_cells(i);
 			bool        low   = !dis && vbat_is_low(i);
-				// Cells: centered in 5 chars — " nS  " (e.g. " 3S  ") or "  -  " (disabled/unknown)
+				// Cells: centered in 5 chars ï¿½ " nS  " (e.g. " 3S  ") or "  -  " (disabled/unknown)
 				// "Cells" header is 5 chars ? automatic visual center alignment
 			char cellStr[8];
 			if (!dis && cells > 0) snprintf(cellStr, sizeof(cellStr), " %uS  ", cells);
 			else                   snprintf(cellStr, sizeof(cellStr), "  -  ");
-				// Voltage: %5.2f V (enabled) or   --- V (disabled) — V column always aligned
+				// Voltage: %5.2f V (enabled) or   --- V (disabled) ï¿½ V column always aligned
 			char prefix[80];
 			int  pLen;
 			if (dis) pLen = snprintf(prefix, sizeof(prefix), "  %2u   %-24.24s  %5s V    %-5s  ", i, name, "---", cellStr);

@@ -4,95 +4,43 @@ These instructions are loaded for every coding session in this workspace.
 
 ## 0) Next session — READ FIRST
 
-### État hardware validé (session 2026-03-22/23)
-- Tous les bugs son (horn/volume, engine key, hydraulique) ✅ corrigés et validés hardware
+### État validé
+- Tous les bugs son (horn/volume, engine key, hydraulique) ✅ corrigés et validés hardware (2026-03-22/23)
 - `sound_config.h` mergé dans `config.h` ✅
+- Refactor sound engine (étapes 0–8, L1, L2 A–D) ✅ **toutes complétées (2026-05-07 → 2026-05-14)**
+  - Architecture 4 couches : `SoundInterpreter` → `SoundCore` → `MixerState` → `SoundHalAudio`
+  - `1_Vehicle.h` retiré, `sound_audio_task_setup()` supprimé, DiYGuy inline dans `dumper_truck_sound.cpp`
+  - `VehicleSoundProfile` / `VehicleLegacyCfg` en place ; `CaboverCAT3408.h` supprimé
+- `GearShiftProfile` + `gear_fsm` refactorisés (session 2026-05-14) — voir section ci-dessous
 
-### Refactor sound engine — état (session 2026-03-23 → 2026-05-07)
+### Template migration DiYGuy pour autres `vehicles/*.h`
+1. Créer `config/profiles/<class>/<vehicle>_sound.h/.cpp` — inclure les `sounds/*.h` DiYGuy directement dans le `.cpp` (seul TU). Peupler `kEngineGenCfg`/`kEffectsCfg` avec les variables DiYGuy directement.
+2. Rien à changer dans `main.cpp` (toutes les lectures DiYGuy ont été remplacées par des champs struct).
 
-**Décisions arrêtées :**
-- Architecture 4 couches : `SoundInterpreter` → `SoundCore` → `MixerState` → `SoundHalAudio` (ISR)
-- `DevUsage` étendu avec catégorisation par plages (0x10 traction, 0x20 hydraulique, 0x30 steer, 0x40 signaux) ✅
-- `ChanOwner` enum + `sound_map.h` dispatcher + PIO identity section ✅
-- Copyright DIYguy rc_engine_sound : MIT (libre avec attribution)
-
-**Roadmap :**
-| # | Étape | Statut |
-|---|---|---|
-| 0–4, 6–7 | Architecture + MixerState + SoundInterpreter + profiles | ✅ fait |
-| 5 | Porter `sound_hal.cpp` → `ComBusSoundInterpreter` (OO) | ✅ **fait (avant 2026-05-14)** |
-| **8** | **Migration double-buffer → `gEngineSimState` directe** | ✅ **fait (2026-05-07)** |
-| **L1** | **Config Level-1 : dispatch MACHINE → vehicle headers, class umbrellas** | ✅ **fait (2026-05-11)** |
-| **L2** | **DiYGuy external linkage migration (cobaye CaboverCAT3408)** | 🔜 **en cours (2026-05-12)** |
-
-#### Migration double-buffer (étape 8) — complétée 2026-05-07
-Objectif : éliminer la couche `flat global → syncEngineSimState() → gEngineSimState`.
-Toutes les variables cross-core (Core 0 écrit / Core 1 lit, ou l'inverse) sont désormais
-écrites directement dans `gEngineSimState` à leur site d'écriture. `syncEngineSimState()`
-est vide → supprimé.
-
-| Batch | Variables | Commits |
-|---|---|---|
-| Hydraulic+track vols | `hydraulicVolume*`, `trackRattle*` | `8fcccb1` / `361e13d` |
-| masterVolume + dacOffset | Init dans `engine_sim_state.cpp` | `6fc9257` / `679c932` |
-| Batch 1 | 8 triggers + `engineSampleRate` + `clutchDisengaged` | `19d43b6` / `63b6918` |
-| Batch 2 | `escIsBraking` + `escIsDriving` + `brakeDetect` + `escInReverse` (gated) | `5a957ab` / `6442b86` |
-| Batch 3 | `currentRpm` + `currentSpeed` | `8ccbcb2` / `282528d` |
-| Batch 3b | `currentThrottle` + `currentThrottleFaded` + delete `syncEngineSimState()` | `8b3ce26` / `f7b978f` |
+### Règle cross-core permanente
+Ne jamais recréer `syncEngineSimState()` ni de flat global cross-core.
+Toute nouvelle donnée partagée entre cores → champ `volatile` dans `gEngineSimState`, écrit directement.
 
 **Variables flat restantes (non migrées — par conception) :**
-- `escInReverse` : Core 0 écrit ET lit (gearboxDetection, automaticGearSelector) — même-core, pas de risque.
+- `escInReverse` : Core 0 écrit ET lit — même-core, pas de risque.
 - `hydraulicLoad` : Core 1 écrit, Core 0 + Core 1 lisent — maintenu volatile flat.
 - `engineRunning`, `engineState`, `engineOn` : machine à états Core 0, lus Core 1 — migration future (winter 2026).
 - `driveState` : Core 0 écrit, Core 1 lit — migration future.
-- `crawlerMode`, `neutralGear`, `gearX*` : même-core ou écriture unique — pas prioritaire.
 
-**Règle permanente :** Ne jamais recréer `syncEngineSimState()` ni de flat global cross-core.
-Toute nouvelle donnée partagée entre cores → champ `volatile` dans `gEngineSimState`, écrit directement.
+### GearShiftProfile + gear_fsm (session 2026-05-14)
+- `GearShiftProfile` : struct plat avec pointeurs `const int16_t*` + champ `gears` — aucune limite de rapport.
+  Les tableaux de seuils sont définis séparément dans `motion_presets.h` (ex. `kHeavy3_upShift[]`).
+- `gear_fsm` déplacé dans `src/core/system/simulation/` (accessible machine + sound node).
+- Preset `kGearShift_Heavy3Speed` dans `motion_presets.h` ; alias `kDumperTruckGearShift` (`const GearShiftProfile*`) dans `dumper_truck_motion.h`.
+- `VehicleSoundProfile::upShift/downShift/downShiftBraking` = `const int16_t*` pointant vers le preset (plus de copie).
+- Seuils en RPM (0–2100 CAT 3408). Conversion machine-side : `rpm = |pos − CbusNeutral| × maxRpm / CbusNeutral`.
 
----
+### Commits en attente
+1. `sound (fix): remove residual .gearboxGated/.drivesFlash initialisers from dumper_truck profile`
+2. `sound (refactor): apply project style to effects_gen.* (airy, explicit names, step comments)`
+3. `sound (refactor): invert generate() loops — switch once per device, not per sample`
+4. `motion (refactor): GearShiftProfile pointer arrays, gear_fsm to core/simulation, RPM scale`
 
-#### DiYGuy external linkage migration — L2 (active, cobaye CaboverCAT3408)
-
-**Objectif :** Permettre à `kEngineGenCfg`/`kEffectsCfg` de vivre dans `dumper_truck_sound.cpp`
-(config machine-classe), en donnant un linkage externe aux arrays de samples DiYGuy.
-Unbloque la suppression du bridge `sound_audio_task_setup()` et de `1_Vehicle.h`.
-
-**Technique — inline direct dans le profil :**
-Les `sounds/*.h` définissent des `const signed char xxxSamples[]` avec linkage interne.
-`config/profiles/<class>/<vehicle>_sound.cpp` est le **seul TU** à les inclure et utilise les
-variables DiYGuy directement dans les initialiseurs de `kEngineGenCfg`/`kEffectsCfg` :
-```cpp
-// dumper_truck_sound.cpp — seul TU incluant les sounds/*.h de ce vehicle
-#include "../../../vehicles/sounds/3408CatIdleLowpass.h"  // → const signed char samples[]
-// ...
-engCfg.idle = { (const int8_t*)samples, (uint32_t)sampleCount };
-```
-Aucune couche de pointeurs intermédiaire. Aucune modification des `sounds/*.h` originaux.
-Pas de duplication de données flash.
-
-**Cobaye :** `vehicles/CaboverCAT3408.h` + ses `sounds/*.h`. Les 60+ autres `vehicles/*.h` restent gelés.
-
-**Plan de sessions (chaque phase = 1 session, 1 commit submodule + 1 bump parent) :**
-
-| Phase | Fichiers touchés | Contenu | Statut |
-|---|---|---|---|
-| **A** | `vehicles/CaboverCAT3408.h` | Retirer tous les `#include "sounds/*.h"` | ✅ **fait** |
-| **B** | `config/profiles/dumper_truck/dumper_truck_sound.h/.cpp` | Seul TU incluant les `sounds/*.h` DiYGuy directement ; peupler `kEngineGenCfg`/`kEffectsCfg` + volumes en dur ; `sound_audio_task_setup()` → 2 lignes ; `vehicles/native/` supprimé | ✅ **fait (2026-05-12)** |
-| **C** | `main.cpp` FSMs + `sound_audio_init()` + `VehicleSoundProfile`/`VehicleLegacyCfg` | Remplacer ~20 lectures DiYGuy dans les FSMs par des champs struct : `escRampTime[3]`, `escBrakeSteps`, `escAccelerationSteps`, `maxClutchSlippingRpm`, `lowRangePercentage`, `automaticReverseAccelerationPercentage`, `shiftingAutoThrottle` ; `automatic`/`doubleClutch` → dérivés de `kVehicleSoundDynamics.gearboxType` ; `sound_audio_init()` prend `simState` en param (supprime `dumper_truck_sound_init()` et `dumper_truck_idle_sample_rate()`) ; après Phase C, `CaboverCAT3408.h` est vide | 🔜 **à faire** |
-| **D** | Cleanup | Supprimer `CaboverCAT3408.h`, retirer `1_Vehicle.h` de `main.cpp`, supprimer `sound_audio_task_setup()` et sa forward decl dans `sound_init.cpp` ; `sound_init.cpp` appelle directement `sound_audio_init()` | 🔜 **à faire** |
-
-**Règle de résumption de session :**
-- Toujours débuter par `build sound_node_volvo → SUCCESS` avant de toucher quoi que ce soit.
-- Phase C peut être découpée en sous-commits : gearbox (automatic/doubleClutch), escRamp, clutch, range.
-- Lire l’état de la phase précédente dans le résumé de session avant de commencer.
-
-**Template migration pour autres `vehicles/*.h` (après Phase D validée sur cobaye) :**
-1. Sélectionner le vehicle dans `1_Vehicle.h`.
-2. Créer `config/profiles/<class>/<vehicle>_sound.h/.cpp` — inclure les `sounds/*.h` DiYGuy directement dans le `.cpp` (seul TU). Peupler `kEngineGenCfg`/`kEffectsCfg` avec les variables DiYGuy directement.
-3. Rien à changer dans `main.cpp` (Phase C a déjà remplacé tous les reads DiYGuy par des structs).
-
----
 
 ## 1) Mandatory style re-check before coding
 Before creating or editing C/C++ code, always read:
@@ -817,10 +765,25 @@ pin data — a board concern — so it cannot be placed in `EnvCfg` as-is.
 - Module-specific parameters (audio samples, GPIO mapping, activation flags) remain in their respective configs.
 - The struct is declared in a shared header (e.g. `simulation_struct.h`) and instantiated per vehicle.
 
-**Timing:** Refactor planned for winter 2026, after sound/motion profiles and ComBus v2 are stabilized.
+**RPM-primary motion model (architectural decision 2026-05-14):**
+The current model is speed-primary : `stick → targetPos → inertia on pos → currentPos → rpm (derived)`.  
+The target model for winter 2026 is RPM-primary :
+```
+stick → targetRpm → inertia on rpm (engine mass) → currentRpm
+                                                  → speed = currentRpm × gearRatio[gear]
+                                                  → ComBus motor command
+```
+Motivation : RPM is the physically correct primary signal (throttle pedal = RPM request, not speed request);
+gear ratios become meaningful (upshift drops RPM, maintains speed); `gear_fsm` receives `currentRpm` directly
+with no artificial conversion; machine and sound nodes share the same simulation primitive.
 
-**History:**
-- Origin: session 2026-05-09, discussion on config drift between sound and motion.
-- See Copilot conversation of May 9, 2026 for full rationale.
+Implementation delta vs. current state :
+- `GearShiftProfile` gains `uint16_t gearRatio[gears]` (‰ of max speed, e.g. 300/500/700 for 3 gears).
+- `MotionRuntime` : `currentRpm` becomes primary inertia variable ; `currentPos` derived via `rpm × ratio`.
+- `motion_process()` / `motion_update()` : refonte complète — inertia on RPM, speed derived.
+- `gear_fsm_update()` : **no change** — already receives `rpm` + `throttlePct`, returns `gear`.
+- `machines/main.cpp` FSM call : remove artificial RPM conversion (`|pos − CbusNeutral| × maxRpm / CbusNeutral`).
+
+**Timing:** Refactor planned for winter 2026, after sound/motion profiles and ComBus v2 are stabilized.
 
 **Prerequisite:** Active season over. Do not start before winter 2026.

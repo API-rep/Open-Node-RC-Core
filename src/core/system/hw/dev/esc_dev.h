@@ -1,6 +1,6 @@
 /******************************************************************************
  * @file esc_dev.h
- * @brief Board-agnostic ESC output dispatch — init, calibrate, write.
+ * @brief Board-agnostic ESC output dispatch ï¿½ init, calibrate, write.
  *
  * @details Manages a runtime-sized array of ESC output channels without
  *   exposing hardware objects to the caller.  Configuration is supplied at
@@ -15,15 +15,15 @@
  *   (`esc_inertia`) to use correct range values even when no physical ESC
  *   is wired.
  *
- * @note **Winter 2026 refactor intent** — ESC is architecturally a specialised
+ * @note **Winter 2026 refactor intent** ï¿½ ESC is architecturally a specialised
  *   sub-type of DcDevice (`DevType == ESC`).  Planned changes:
  *   - ESC descriptor becomes a variant of `DcDevice` stored in `EnvCfg` (same
  *     array pattern as `dcDev`).
  *   - `esc_init(devs, count, reg)` ? `escDevInit(const EnvCfg&, PinReg&)` to
  *     align on the drv/srv/sig pattern.
- *   - Module plugged onto the DcDevice pipeline as a pointer — pointer semantics
+ *   - Module plugged onto the DcDevice pipeline as a pointer ï¿½ pointer semantics
  *     unchanged from the current `dcDevObj` pattern ("on ne change pas une
- *     équipe qui gagne").
+ *     ï¿½quipe qui gagne").
  *   - `esc_calibrate()` stays independent: used by the inertia FSM regardless
  *     of whether a physical ESC pin is wired.
  *   Prerequisite: active season over; do not start before winter 2026.
@@ -84,7 +84,7 @@ void esc_calibrate(uint16_t halfSpan,
  * @details Iterates `devs[0..count-1]`, skipping clones (`parentID` set) and
  *   entries whose `signal` is neither `PWM_TWO_WAY_NEUTRAL_CENTER` nor `SERVO_SIG_NEUTRAL_CENTER`.
  *   For each active entry, claims pins via `reg` and attaches the appropriate driver object:
- *   - `DcDrvSignal::SERVO_SIG_NEUTRAL_CENTER` ? `ServoCore` at `EscPwmFreq`, neutral at 1500 µs.
+ *   - `DcDrvSignal::SERVO_SIG_NEUTRAL_CENTER` ? `ServoCore` at `EscPwmFreq`, neutral at 1500 ï¿½s.
  *   - `DcDrvSignal::PWM_TWO_WAY_NEUTRAL_CENTER` ? `DcMotorCore` at `EscPwmFreq`, optional
  *                                                `drvPort->dirPin` for bidirectional SpeedDir mode.
  *   Entries whose pin was not granted by `reg` are silently skipped.

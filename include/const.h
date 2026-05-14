@@ -15,7 +15,7 @@
 // ADC SYSTEM CONSTANTS
 // =============================================================================
 
-	/// ADC full-scale count — derived from MCU resolution at compile time.
+	/// ADC full-scale size — derived from MCU resolution at compile time.
 #if defined(ESP32) || defined(ARDUINO_ARCH_ESP32)
   static constexpr uint16_t ADC_MAX_COUNT = 4095;   // 12-bit ADC
 #elif defined(__AVR__)
