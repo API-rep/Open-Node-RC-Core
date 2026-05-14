@@ -9,6 +9,7 @@
  *****************************************************************************/
 
 #include "dumper_truck_sound.h"
+#include <core/config/machines/dumper_truck/motion/dumper_truck_motion.h>  // kDumperTruckGearShift — single source of truth for shift thresholds
 
 
 // =============================================================================
@@ -22,9 +23,9 @@ const VehicleSoundProfile kVehicleSoundDynamics = {
     .engineDec           = 1,
     .clutchEngagingPoint = 80u,
     .maxRpmPercentage    = 350u,
-    .upShift             = { 150, 300, 500 },  // gear 1→2, 2→3, guard
-    .downShift           = {   0,  60, 160 },  // 2→1, 3→2 coasting, guard
-    .downShiftBraking    = {   0,  90, 210 },  // 2→1, 3→2 braking,  guard
+    .upShift          = kDumperTruckGearShift->upShift,
+    .downShift        = kDumperTruckGearShift->downShift,
+    .downShiftBraking = kDumperTruckGearShift->downShiftBraking,
 
     // --- ESC inertia ramp (from CaboverCAT3408.h) ---
     .escRampTime             = { 20u, 50u, 75u },  // gear 1 / 2 / 3

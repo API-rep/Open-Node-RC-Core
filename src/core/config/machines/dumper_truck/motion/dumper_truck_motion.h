@@ -1,24 +1,34 @@
 /******************************************************************************
  * @file  dumper_truck_motion.h
- * @brief Traction motion preset alias — dumper truck class.
+ * @brief Motion preset aliases — dumper truck class.
  *
- * @details Aliases the shared kTraction_Heavy preset as the canonical
- *          traction config for this vehicle class.  EnvCfg-specific motor
- *          definitions (e.g. volvo_A60H_bruder.cpp) may still reference
- *          kTraction_Heavy directly; this alias exists as a stable per-class
- *          symbol for future vehicle profiles that might need to deviate.
+ * @details Exposes two preset aliases for all dumper-truck builds:
+ *
+ *   `kDumperTruckTractionPreset` — pointer to `kTraction_Heavy`.
+ *   `kDumperTruckGearShift`      — pointer to `kGearShift_Heavy3Speed`.
+ *
+ *   Both presets are defined in `motion_presets.h` and shared with any
+ *   other vehicle class that may use the same dynamics.
  *****************************************************************************/
 #pragma once
 
-#include <core/config/hw/motion_presets.h>  // MotionConfig, kTraction_Heavy
+#include <core/config/hw/motion_presets.h>  // kTraction_Heavy, kGearShift_Heavy3Speed
 
 
 // =============================================================================
-// 1. PRESET ALIAS
+// 1. TRACTION PRESET ALIAS
 // =============================================================================
 
 /// @brief Canonical traction preset for the dumper-truck / articulated hauler class.
 static constexpr const MotionConfig* kDumperTruckTractionPreset = &kTraction_Heavy;
+
+
+// =============================================================================
+// 2. VIRTUAL-GEARBOX PRESET ALIAS
+// =============================================================================
+
+/// @brief Canonical gear-shift preset for the dumper-truck / articulated hauler class.
+static constexpr const GearShiftProfile* kDumperTruckGearShift = &kGearShift_Heavy3Speed;
 
 
 // EOF dumper_truck_motion.h

@@ -245,4 +245,36 @@ struct MotionOutput {
     bool     isDriving;     ///< Pipeline is actively driving (forward or reverse).
 };
 
+
+// =============================================================================
+// 6. GEAR-SHIFT PROFILE  (virtual gearbox — shared machine ↔ sound)
+// =============================================================================
+
+/**
+ * @brief Speed thresholds for a virtual semi-automatic gear FSM.
+ *
+ * @details All speed values are in RPM units (0 – maxRpm).
+ *   Only the first `gears` entries in each array are meaningful.
+ *   Index `n` covers the (n+1)↔(n+2) gear transition:
+ *     index 0 = 1st↔2nd,  index 1 = 2nd↔3rd,  …
+ *   Hysteresis requirement: `upShift[n] > downShift[n]` — prevents gear hunting.
+ *
+ *   Define the threshold arrays as `static constexpr int16_t` in the preset
+ *   file and assign their addresses here.  No fixed maximum gear count.
+ *   Presets are declared `constexpr` in `motion_presets.h`.  Vehicle aliases
+ *   expose a `const GearShiftProfile*` pointer consumed by `gear_fsm_update()`.
+ *   The FSM (`src/core/system/simulation/gear_fsm.h`) is accessible to both
+ *   the machine node and any standalone sound node.
+ */
+struct GearShiftProfile {
+    uint8_t         gears;             ///< Number of active gears.
+    const int16_t*  upShift;           ///< Upshift RPM thresholds — pointer to array[gears].
+    const int16_t*  downShift;         ///< Downshift RPM thresholds — coasting.
+    const int16_t*  downShiftBraking;  ///< Downshift RPM thresholds — braking (higher → earlier).
+    int16_t         maxRpm;            ///< Maximum simulated RPM at full output (scaling reference).
+    uint16_t        shiftGuardMs;      ///< Minimum interval between consecutive shifts (ms).
+    uint8_t         throttleGuardPct;  ///< Minimum forward throttle % (0–100) required for upshift.
+};
+
+
 // EOF motion_struct.h

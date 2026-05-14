@@ -25,18 +25,18 @@ void combus_uart_init()
 
     constexpr ComBusFrameCfg txCfg = {
         static_cast<uint8_t>(CombusLayout::MACHINE_TYPE),
-        static_cast<uint8_t>(AnalogComBusID::CH_COUNT),
-        static_cast<uint8_t>(DigitalComBusID::CH_COUNT),
+        static_cast<uint8_t>(AnalogComBusID::WIRE_END),   ///< Wire channels only — not local sound-node channels.
+        static_cast<uint8_t>(DigitalComBusID::WIRE_END),  ///< Wire channels only — not local sound-node channels.
     };
 
     // --- Full-duplex: also initialise RX side ---
     #if defined(COMBUS_UART)
-      static uint16_t s_analog[static_cast<uint8_t>(AnalogComBusID::CH_COUNT)];
-      static bool     s_digital[static_cast<uint8_t>(DigitalComBusID::CH_COUNT)];
+      static uint16_t s_analog[static_cast<uint8_t>(AnalogComBusID::WIRE_END)];
+      static bool     s_digital[static_cast<uint8_t>(DigitalComBusID::WIRE_END)];
       constexpr ComBusFrameCfg rxCfg = {
           static_cast<uint8_t>(CombusLayout::MACHINE_TYPE),
-          static_cast<uint8_t>(AnalogComBusID::CH_COUNT),
-          static_cast<uint8_t>(DigitalComBusID::CH_COUNT),
+          static_cast<uint8_t>(AnalogComBusID::WIRE_END),   ///< Wire channels only.
+          static_cast<uint8_t>(DigitalComBusID::WIRE_END),  ///< Wire channels only.
       };
       combus_protocol_init(uart_get_combus_com(), txCfg, ComBusUartTxHz, rxCfg, s_analog, s_digital);
     #else

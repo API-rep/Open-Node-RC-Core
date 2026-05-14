@@ -66,6 +66,10 @@ enum class GearboxType : uint8_t {
  *   guard value.  Hysteresis: upShift[n] > downShift[n] — prevents gear
  *   hunting.  Fields `upShift`, `downShift`, and `downShiftBraking` are
  *   only consumed when `gearboxType == GearboxType::VIRTUAL_3SPEED`.
+ *   Assign from `GearShiftProfile` arrays via the vehicle motion alias
+ *   (e.g. `kDumperTruckGearShift->upShift`).  The sound node may use them
+ *   to run a local gear FSM; the machine node publishes the computed gear
+ *   via the GEAR wire channel.
  */
 struct VehicleSoundProfile {
     EngineMode  engineMode;       ///< Vehicle engine / throttle behaviour mode.
@@ -74,9 +78,9 @@ struct VehicleSoundProfile {
     int8_t   engineDec;           ///< Engine mass decel step (scale 0..9).  // → VehicleSimulationProfile
     uint16_t clutchEngagingPoint; ///< CEP — above this speed, RPM tracks ESC. // → VehicleSimulationProfile
     uint32_t maxRpmPercentage;    ///< Max RPM as % of idle RPM.
-    int16_t  upShift[3];          ///< Speed-threshold upshift points (VIRTUAL_3SPEED). // → VehicleSimulationProfile
-    int16_t  downShift[3];        ///< Downshift thresholds — coasting (VIRTUAL_3SPEED).  // → VehicleSimulationProfile
-    int16_t  downShiftBraking[3]; ///< Downshift thresholds — braking (VIRTUAL_3SPEED).  // → VehicleSimulationProfile
+    const int16_t* upShift;          ///< Speed-threshold upshift points   — pointer to GearShiftProfile::upShift.          (VIRTUAL_3SPEED) // → VehicleSimulationProfile
+    const int16_t* downShift;         ///< Downshift thresholds — coasting  — pointer to GearShiftProfile::downShift.        (VIRTUAL_3SPEED)  // → VehicleSimulationProfile
+    const int16_t* downShiftBraking;  ///< Downshift thresholds — braking   — pointer to GearShiftProfile::downShiftBraking.  (VIRTUAL_3SPEED)  // → VehicleSimulationProfile
 
     // --- ESC inertia ramp timing (Phase C — migrated from CaboverCAT3408.h) ---
     uint8_t  escRampTime[3];           ///< Ramp tick budget: gear 1 / gear 2 / gear 3.

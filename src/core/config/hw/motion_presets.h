@@ -138,4 +138,44 @@ static constexpr MotionConfig kSteer_Electric_heavy {
     .inertia = nullptr,             ///< Simple ramp mode — no traction FSM.
 };
 
+// =============================================================================
+// 3. VIRTUAL GEARBOX PRESETS  (GearShiftProfile — speed-threshold shift FSM)
+// =============================================================================
+
+/**
+ * @brief Virtual 3-speed gearbox preset — heavy wheeled construction vehicle.
+ *
+ * @details Calibrated against the CAT 3408 operating band (~650–2100 RPM).
+ *   Suitable for ADTs and heavy haulers paired with the VIRTUAL_3SPEED gearbox
+ *   type.  Assign via `kDumperTruckGearShift` in `dumper_truck_motion.h`.
+ *
+ *   Callers convert their speed signal to simulated RPM before calling
+ *   `gear_fsm_update()`:
+ *     `rpm = |currentPos − CbusNeutral| × maxRpm / CbusNeutral`
+ *
+ *   upShift[0]          =  650 — shift 1→2 at ~31 % speed
+ *   upShift[1]          = 1300 — shift 2→3 at ~62 % speed
+ *   downShift[1]        =  250 — shift 3→2 coasting when RPM < 250
+ *   downShiftBraking[1] =  400 — shift 3→2 braking  when RPM < 400
+ *   throttleGuardPct    =   50 — upshift requires ≥ 50 % forward throttle
+ *   shiftGuardMs        = 2000 — 2 s minimum between consecutive shifts
+ *
+ *   downShift[0] = 0: gear 2→1 is never triggered by speed threshold alone;
+ *   it resets to 1 only on reverse (handled in `gear_fsm_update`).
+ */
+static constexpr int16_t kHeavy3_upShift[]          = {  650, 1300, 2100 };  ///< gear 1→2, 2→3, upper guard (= maxRpm)
+static constexpr int16_t kHeavy3_downShift[]        = {    0,  250,  650 };  ///< 2→1 (never), 3→2 coasting, guard
+static constexpr int16_t kHeavy3_downShiftBraking[] = {    0,  400,  800 };  ///< 2→1 (never), 3→2 braking,  guard
+
+static constexpr GearShiftProfile kGearShift_Heavy3Speed {
+    .gears            = 3u,
+    .upShift          = kHeavy3_upShift,
+    .downShift        = kHeavy3_downShift,
+    .downShiftBraking = kHeavy3_downShiftBraking,
+    .maxRpm           = 2100,
+    .shiftGuardMs     = 2000u,
+    .throttleGuardPct =   50u,
+};
+
+
 // EOF motion_presets.h

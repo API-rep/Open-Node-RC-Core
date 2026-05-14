@@ -6,6 +6,8 @@
 #include "config/config.h"
 #include "init/init.h"
 #include "system/utils.h"
+#include <core/system/simulation/gear_fsm.h>
+#include <core/config/machines/machine_config.h>   // kDumperTruckGearShift (via dumper_truck_motion.h)
 #include <core/system/debug/debug.h>
 #include <core/system/debug/dashboard.h>
 #include <core/system/input/input_manager.h>
@@ -22,6 +24,15 @@
 void setup() {
   machine_init();
 }
+
+
+// =============================================================================
+// PERSISTENT SIMULATION STATE
+// =============================================================================
+
+/// @brief Speed-based gear FSM state — one instance for the traction device.
+static GearFsmState s_gearFsm = { .gear = 1, .lastShiftMs = 0u };
+
 
 /**
  * @brief Main Loop
@@ -169,11 +180,34 @@ void loop() {
           //       and prevent the engine RPM sound from tracking vehicle speed.
           //       ESC_SPEED_BUS is written separately below for gear-shift logic only.
           if (chIdx == static_cast<uint8_t>(AnalogComBusID::ENGINE_RPM_BUS)) {
-            // Publish real inertia-filtered speed for the sound node's gear-shift
-            // decisions. No double-ramp risk: sound uses ENGINE_RPM_BUS for RPM
-            // pitch; ESC_SPEED_BUS is consumed only by the SEMI_AUTOMATIC logic.
+            // Speed-based gear FSM — computes RPM from inertia-filtered position,
+            // applies hysteresis thresholds, and publishes result to GEAR wire channel.
+            {
+              const MotionRuntime& rt      = machine.dcDev[i].motionRt;
+              const GearShiftProfile& profile = *kDumperTruckGearShift;
+                // Convert inertia-filtered ComBus position to simulated RPM
+              const int32_t dev = (rt.currentPos >= CbusNeutral)
+                                ? static_cast<int32_t>(rt.currentPos - CbusNeutral)
+                                : static_cast<int32_t>(CbusNeutral  - rt.currentPos);
+              const int16_t rpm = static_cast<int16_t>(
+                  dev * static_cast<int32_t>(profile.maxRpm) / static_cast<int32_t>(CbusNeutral));
+                // Convert raw throttle ComBus to percentage (forward only, 0–100)
+              const uint8_t throttlePct = (busVal > CbusNeutral)
+                  ? static_cast<uint8_t>(static_cast<int32_t>(busVal - CbusNeutral) * 100L / CbusNeutral)
+                  : 0u;
+                // Run FSM — result written directly to motionRt.gearSetTo
+              machine.dcDev[i].motionRt.gearSetTo = gear_fsm_update(
+                  &s_gearFsm, profile, rpm, throttlePct,
+                  rt.driveState == DriveState::kBrakeFwd || rt.driveState == DriveState::kBrakeRev,
+                  rt.driveState == DriveState::kDriveRev || rt.driveState == DriveState::kBrakeRev);
+            }
+            // Publish real inertia-filtered speed and speed-based gear to sound node.
+            // No double-ramp risk: sound uses ENGINE_RPM_BUS for RPM pitch;
+            // ESC_SPEED_BUS is consumed only by the SEMI_AUTOMATIC logic.
             combus_set_analog(comBus, AnalogComBusID::ESC_SPEED_BUS,
                               machine.dcDev[i].motionRt.currentPos, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
+            combus_set_analog(comBus, AnalogComBusID::GEAR,
+                              static_cast<uint16_t>(machine.dcDev[i].motionRt.gearSetTo), makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
           }
         }
 
