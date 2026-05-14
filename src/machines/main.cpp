@@ -13,7 +13,7 @@
 #include <core/system/combus/combus_manager.h>
 #include <core/system/combus/combus_access.h>
 #include <core/system/vbat/vbat_sense.h>
-#include <core/system/hw/motion.h>
+#include <core/system/simulation/motion.h>
 
 
 /**

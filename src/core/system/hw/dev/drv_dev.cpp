@@ -12,7 +12,7 @@
 #include "drv_dev.h"
 #include <struct/struct.h>
 #include <core/system/debug/debug.h>
-#include <core/system/hw/motion.h>
+#include <core/system/simulation/motion.h>
 
 #include <Arduino.h>
 
