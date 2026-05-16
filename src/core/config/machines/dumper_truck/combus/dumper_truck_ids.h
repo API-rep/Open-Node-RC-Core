@@ -66,8 +66,12 @@ enum class DigitalComBusID : uint8_t {
   /// Use WIRE_END (not CH_COUNT) for ComBus frame n_digital on both TX and RX sides.
   WIRE_END = MOTION_END,
 
+  // ---- Machine node local (never transmitted on wire) ---
+  DIRECT_DRIVE = WIRE_END,  ///< Direct-drive toggle (inertia bypass) — set by machine from operator input.
+  MACHINE_END,
+
   // ---- Sound node local (never transmitted on wire) ---
-  ALWAYS_ON = WIRE_END,  ///< Always true — continuous sources driven purely by volMod (value=true at init).
+  ALWAYS_ON = MACHINE_END,  ///< Always true — continuous sources driven purely by volMod (value=true at init).
   SIREN,                 ///< Siren / cannon mode active — toggled by FSM.
   INDICATOR_TICK,        ///< Indicator tick gate — combined INDICATOR_LEFT|RIGHT|HAZARDS — written by FSM.
   ESC_REVERSE,           ///< ESC is currently driving in reverse — written by FSM.

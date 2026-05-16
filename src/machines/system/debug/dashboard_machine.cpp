@@ -13,6 +13,7 @@
 #include "dashboard_input.h"
 #include "dashboard_vbat.h"
 #include "dashboard_sig.h"
+#include "dashboard_motion.h"
 #include <core/system/debug/dashboard.h>
 #include <core/system/vbat/vbat_sense.h>
 
@@ -153,6 +154,7 @@ void dashboard_machine_setup(const ComBus* bus, const EnvCfg* mach,
 	dashboard_drv_register(bus, mach);
 	dashboard_vbat_register();
 	dashboard_sig_register(bus, mach);
+	dashboard_motion_register(bus, mach);
 
 		// NOTE: dashboard_start_task() is NOT called here.
 		// It must be called from init.cpp *after* the PAUSE_LOG_AFTER_INIT

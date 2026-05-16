@@ -117,6 +117,8 @@ struct MotionGear {
     uint16_t rampTimeFirstMs;   ///< 1st gear ramp period (ms).  e.g. 40
     uint16_t rampTimeSecondMs;  ///< 2nd gear ramp period (ms).  e.g. 80
     uint16_t rampTimeThirdMs;   ///< 3rd gear ramp period (ms).  e.g. 120
+    uint16_t coastRampMs;       ///< Coasting period (ms) — stick at neutral, vehicle rolling.  0 = use rampTimeThirdMs.
+    uint16_t brakeRampMs;       ///< Engine-braking period (ms) — stick retracted, same side.  0 = use rampTimeFirstMs.
     uint8_t  globalAccelPct;    ///< Global ramp scale — all gears.  100 = nominal.
 };
 
@@ -126,12 +128,24 @@ struct MotionGear {
  *
  * @details Controls how fast the inertial position tracks the command
  *   (accel/brake step sizes) and how close to neutral the output must
- *   stay during braking.  All fields mandatory.
+ *   stay during braking.  All fields mandatory except `counterBrakeSteps`
+ *   (default 0 = no proportional brake boost).
+ *
+ *   Coasting: when stick returns to neutral, `coastSteps` is used instead of
+ *   `brakeSteps` — giving the free-wheel momentum decay feel (0 = use brakeSteps).
+ *
+ *   Counter-brake boost: when `counterBrakeSteps > 0` and the stick is pushed
+ *   against the current direction of travel, the effective brake step is
+ *   interpolated between `brakeSteps` (stick partially released) and
+ *   `brakeSteps + counterBrakeSteps` (stick at full opposite deflection).
+ *   This gives a proportional "brake harder by pulling more" feel.
  */
 struct MotionInertia {
-    uint16_t accelSteps;   ///< `combus_t` increment per step when accelerating.
-    uint16_t brakeSteps;   ///< `combus_t` increment per step when braking.
-    combus_t brakeMargin;  ///< Min offset from neutral while braking.  e.g. pctToCbus(5)
+    uint16_t accelSteps;         ///< `combus_t` increment per step when accelerating.
+    uint16_t coastSteps;         ///< `combus_t` decrement per step when coasting (stick at neutral).  0 = use brakeSteps.
+    uint16_t brakeSteps;         ///< `combus_t` increment per step when braking (baseline).
+    combus_t brakeMargin;        ///< Min offset from neutral while braking.  e.g. pctToCbus(5)
+    uint16_t counterBrakeSteps;  ///< Extra step added at full counter-stick (0 = disabled).
 };
 
 

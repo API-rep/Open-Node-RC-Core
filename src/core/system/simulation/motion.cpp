@@ -200,13 +200,54 @@ static void motion_process(combus_t            rawComBusVal,
     }
 
       // 3. Ramp period: per-gear table (traction) or fixed period (simple ramp)
+    //    During braking in traction mode, always use the 1st-gear period
+    //    (fastest tick) regardless of current gear.  Acceleration stays
+    //    progressive (gear-dependent period gives the heavy-vehicle feel);
+    //    braking is always responsive.
     uint16_t rampMs;
     if (config->gear) {
-        switch (runtime->gearSetTo) {
-            case 1:  rampMs = config->gear->rampTimeFirstMs;   break;
-            case 2:  rampMs = config->gear->rampTimeSecondMs; break;
-            case 3:  rampMs = config->gear->rampTimeThirdMs;  break;
-            default: rampMs = config->gear->rampTimeFirstMs;    break;
+          // Coasting: stick at neutral, vehicle still moving.
+          //   Use slowest tick (3rd-gear period) for a free-wheel, rolling-mass feel.
+          // Braking: stick actively reduced (but not neutral) or counter-stick.
+          //   Use fastest tick regardless of gear — always responsive.
+          // Acceleration: per-gear period for progressive heavy-vehicle feel.
+        const bool willCoast = config->inertia &&
+                               (rawComBusVal == CbusNeutral) &&
+                               (runtime->currentPos != CbusNeutral);
+        const bool willBrake = !willCoast && [&]() {
+            if (!config->inertia) return false;
+            const uint32_t cd = (runtime->currentPos >= CbusNeutral)
+                              ? static_cast<uint32_t>(runtime->currentPos - CbusNeutral)
+                              : static_cast<uint32_t>(CbusNeutral - runtime->currentPos);
+            const uint32_t td = (rawComBusVal >= CbusNeutral)
+                              ? static_cast<uint32_t>(rawComBusVal - CbusNeutral)
+                              : static_cast<uint32_t>(CbusNeutral - rawComBusVal);
+            return (td <= cd);
+        }();
+
+        if (willCoast) {
+            rampMs = (config->gear->coastRampMs > 0u)
+                     ? config->gear->coastRampMs
+                     : config->gear->rampTimeThirdMs;  // free-wheel rolling inertia
+        } else if (willBrake) {
+              // Counter-steer (stick past neutral, opposite side to travel): emergency stop → fastest tick.
+              // Normal engine braking (stick retracted but same side): progressive → brakeRampMs.
+            const bool counterSteer = (runtime->currentPos > CbusNeutral && rawComBusVal < CbusNeutral) ||
+                                      (runtime->currentPos < CbusNeutral && rawComBusVal > CbusNeutral);
+            if (counterSteer) {
+                rampMs = config->gear->rampTimeFirstMs;
+            } else {
+                rampMs = (config->gear->brakeRampMs > 0u)
+                         ? config->gear->brakeRampMs
+                         : config->gear->rampTimeFirstMs;
+            }
+        } else {
+            switch (runtime->gearSetTo) {
+                case 1:  rampMs = config->gear->rampTimeFirstMs;  break;
+                case 2:  rampMs = config->gear->rampTimeSecondMs; break;
+                case 3:  rampMs = config->gear->rampTimeThirdMs;  break;
+                default: rampMs = config->gear->rampTimeFirstMs;  break;
+            }
         }
           // Global acceleration scaling (100 % = no scaling)
         if (config->gear->globalAccelPct != 100u) {
@@ -221,6 +262,37 @@ static void motion_process(combus_t            rawComBusVal,
     const uint32_t now = millis();
     if (now - runtime->rampMillis >= rampMs) {
         runtime->rampMillis = now;
+
+          // Step size selection:
+          //   coasting  (stick at neutral)     → coastSteps  (gentle, free-wheel feel)
+          //   decelerating (stick partially back) → brakeSteps  (engine braking)
+          //   counter-stick (stick past neutral)  → brakeSteps + counterBrakeSteps×scale (emergency)
+        uint16_t effectiveBrakeStep = 0u;
+        if (config->inertia) {
+            const bool coasting = (rawComBusVal == CbusNeutral);
+            if (coasting && config->inertia->coastSteps > 0u) {
+                effectiveBrakeStep = config->inertia->coastSteps;
+            } else {
+                effectiveBrakeStep = config->inertia->brakeSteps;
+                if (config->inertia->counterBrakeSteps > 0u) {
+                    const bool counterSteer = (runtime->currentPos > CbusNeutral && rawComBusVal < CbusNeutral) ||
+                                              (runtime->currentPos < CbusNeutral && rawComBusVal > CbusNeutral);
+                    if (counterSteer) {
+                        const uint32_t halfTravel = (rawComBusVal < CbusNeutral)
+                                                  ? static_cast<uint32_t>(CbusNeutral - minLimit)
+                                                  : static_cast<uint32_t>(maxLimit    - CbusNeutral);
+                        const uint32_t stickDist  = (rawComBusVal < CbusNeutral)
+                                                  ? static_cast<uint32_t>(CbusNeutral - rawComBusVal)
+                                                  : static_cast<uint32_t>(rawComBusVal - CbusNeutral);
+                        if (halfTravel > 0u) {
+                            effectiveBrakeStep = static_cast<uint16_t>(
+                                config->inertia->brakeSteps +
+                                static_cast<uint32_t>(config->inertia->counterBrakeSteps) * stickDist / halfTravel);
+                        }
+                    }
+                }
+            }
+        }
 
           // In inertia mode the step size depends on whether currentPos is moving
           // AWAY from neutral (accelerating) or TOWARD neutral (engine braking).
@@ -243,7 +315,7 @@ static void motion_process(combus_t            rawComBusVal,
             const combus_t step = config->inertia
                                   ? (isInertiaAccel
                                      ? static_cast<combus_t>(config->inertia->accelSteps * gain)
-                                     : static_cast<combus_t>(config->inertia->brakeSteps))
+                                     : static_cast<combus_t>(effectiveBrakeStep))
                                   : static_cast<combus_t>(config->ramp->accelSteps);
             runtime->currentPos = (rawComBusVal - runtime->currentPos > step)
                                   ? runtime->currentPos + step
@@ -254,7 +326,7 @@ static void motion_process(combus_t            rawComBusVal,
             const combus_t step = config->inertia
                                   ? (isInertiaAccel
                                      ? static_cast<combus_t>(config->inertia->accelSteps * gain)
-                                     : static_cast<combus_t>(config->inertia->brakeSteps))
+                                     : static_cast<combus_t>(effectiveBrakeStep))
                                   : static_cast<combus_t>(config->ramp->brakeSteps);
             if (config->inertia) {
                   // brakeMin: lowest ComBus value currentPos could reach during this brake phase —

@@ -4,6 +4,14 @@ These instructions are loaded for every coding session in this workspace.
 
 ## 0) Next session — READ FIRST
 
+### En cours (WIP)
+
+| Session | Sujet | État |
+|---------|-------|------|
+| 2026-05-16 | `SimDev` — ComBus inertia processor | Architecture définie, **non implémenté** — winter 2026 |
+| 2026-05-16 | `SrvDevType::ESC_RC` | À ajouter dans `machines_defs.h` — winter 2026 |
+| 2026-05-16 | Backup commits (parent + sound_module) | **En attente** |
+
 ### État validé
 - Tous les bugs son (horn/volume, engine key, hydraulique) ✅ corrigés et validés hardware (2026-03-22/23)
 - `sound_config.h` mergé dans `config.h` ✅
@@ -36,9 +44,13 @@ Toute nouvelle donnée partagée entre cores → champ `volatile` dans `gEngineS
 - Seuils en RPM (0–2100 CAT 3408). Conversion machine-side : `rpm = |pos − CbusNeutral| × maxRpm / CbusNeutral`.
 
 ### Commits en attente
+
+**sound_module submodule:**
 1. `sound (fix): remove residual .gearboxGated/.drivesFlash initialisers from dumper_truck profile`
 2. `sound (refactor): apply project style to effects_gen.* (airy, explicit names, step comments)`
 3. `sound (refactor): invert generate() loops — switch once per device, not per sample`
+
+**parent repo:**
 4. `motion (refactor): GearShiftProfile pointer arrays, gear_fsm to core/simulation, RPM scale`
 
 
@@ -704,20 +716,80 @@ Ne pas commencer avant la fin de saison 2026.
 
 ---
 
-### ESC → DcDevice subtype  (winter 2026 refactor)
-**Context:** `esc_dev.h/.cpp` treats ESC outputs as a standalone module driven
-by a raw `(const DcDevice*, uint8_t count, PinReg&)` interface — separate from
-the `EnvCfg`-based pipeline used by `drv_dev`, `srv_dev`, and `sig_dev`.
+### SimDev — ComBus inertia processor  (winter 2026 refactor)
+**Context:** The current `esc()` FSM in `sound_module/main.cpp` (~400 lines) mixes
+inertia simulation, a 4-state drive machine, and hardware dispatch into one function.
+Architecture agreed 2026-05-16 separates these concerns cleanly.
 
-**Planned integration:**
-- ESC descriptor becomes a variant of `DcDevice` stored in `EnvCfg` under a
-  dedicated `escDev` / `escDevCount` pair, same array pattern as `dcDev`.
-- Module plugged onto the DcDevice pipeline as a pointer — pointer semantics
-  preserved ("on ne change pas une équipe qui gagne").
-- `esc_init(devs, count, reg)` → `escDevInit(const EnvCfg&, PinReg&)` to align
-  on the drv/srv/sig naming pattern.
-- `esc_calibrate()` stays independent — used by the inertia FSM regardless of
-  whether a physical ESC pin is wired.
+**Core insight:** The inertia/FSM layer is a pure ComBus processor — it reads one
+analog input channel, applies dynamics, and writes one analog output channel.  It
+has no knowledge of hardware ports, pins, or device type.  This is the same
+non-hardware pattern as `SigDevice` (hence the name analogy: `SimDev` ↔ `SigDev`).
+
+**Architecture:**
+```
+ComBus[inCh]  ──►  sim_dev_update()  ──►  ComBus[outCh]
+                   (inertia, 4-state        (read by srvDev/dcDev as a
+                    drive FSM, gear-ramp,    normal analog channel)
+                    failsafe, speed-limit)
+```
+
+**Hardware binding (separate concern):**
+- Classic RC ESC wired to a servo port → `SrvDevice` with new `SrvDevType::ESC_RC`.
+  Only hardware data in the descriptor (pulse range, pin) — no inertia or FSM logic.
+  Behavior deduced from `SrvDevType` in the update loop, same pattern as other `*DevType` values.
+- Brushless motor → future `BsDevice` with MCPWM backend (out of scope until needed).
+
+**Struct proposals:**
+```cpp
+struct SimCfg {
+    uint16_t rampTime[3];         // per-gear ramp ms (gear 1/2/3)
+    uint8_t  brakeSteps;
+    uint8_t  accelSteps;
+    uint16_t neutralBand;         // ComBus units around CbusNeutral = STAND
+    uint8_t  lowRangePct;
+    uint8_t  autoReverseAccelPct;
+    uint16_t crawlerRampTime;
+};
+
+struct SimState {
+    uint16_t inertiaPos;          // current position in ComBus domain [0..CbusMaxVal]
+    int8_t   driveState;          // 0=STAND 1=FWD 2=BRK_FWD 3=REV 4=BRK_REV
+    bool     escInReverse;
+    bool     escIsBraking;
+    bool     escIsDriving;
+    bool     brakeDetect;
+    uint16_t currentRampTime;
+    uint32_t lastUpdateMs;
+};
+
+struct SimDev {
+    const int8_t       ID;
+    const char*        infoName;
+    AnalogComBusID     inCh;      // source channel (e.g. throttle ComBus channel)
+    AnalogComBusID     outCh;     // output channel (read by the matching srvDev/dcDev)
+    const SimCfg*      cfg;
+    SimState*          state;     // mutable runtime
+};
+```
+
+**EnvCfg addition:**
+```cpp
+SimDev*  simDev      = nullptr;
+uint8_t  simDevCount = 0;
+```
+
+**Clone guard:** If two `SimDev` entries share the same `inCh`, the second is a no-op
+(same input → same output already computed). Checked in `sim_dev_update()`.
+
+**Migration path (winter 2026):**
+1. Add `SrvDevType::ESC_RC` to `machines_defs.h`.
+2. Define `SimCfg`, `SimState`, `SimDev` in `include/struct/machines_struct.h`.
+3. Add `simDev` / `simDevCount` to `EnvCfg`.
+4. `sim_dev_update(SimDev*, ComBus&, SimContext&)` extracted from `esc()` in `sound_module/main.cpp`.
+5. `esc()` in `main.cpp` replaced by loop over `simDev[]`.
+6. Static locals (`escPulseWidth`, `driveRampRate`, `escMillis`…) removed → `SimState`.
+7. `hw_init_esc.cpp` TODO comment resolved; `esc_init()` pulse-range globals gated by `#ifdef ESC_OUTPUT_ENABLED`.
 
 **Prerequisite:** Active season over. Do not start before winter 2026.
 

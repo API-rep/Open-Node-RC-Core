@@ -34,7 +34,9 @@ DigitalComBus DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::CH_COUNT)
   { .infoName = "roof light channel",      .value = false, .owner = ChanOwner::MACHINE_INPUT },
   { .infoName = "low beam channel",        .value = false, .owner = ChanOwner::MACHINE_INPUT },
   { .infoName = "braking channel",         .value = false, .owner = ChanOwner::MACHINE_SYSTEM },
-  // --- Sound-node-local channels (WIRE_END .. CH_COUNT-1) — never transmitted ---
+  // --- Machine-node-local channels (WIRE_END .. MACHINE_END-1) — never transmitted ---
+  { .infoName = "direct drive (local)",    .value = false, .owner = ChanOwner::MACHINE_INPUT }, ///< Direct-drive toggle — inertia bypass.
+  // --- Sound-node-local channels (MACHINE_END .. CH_COUNT-1) — never transmitted ---
   { .infoName = "always on (local)",       .value = true,  .owner = ChanOwner::NONE }, ///< Stays true: continuous sources driven by volMod.
   { .infoName = "siren (local)",           .value = false, .owner = ChanOwner::NONE }, ///< Siren/cannon mode toggle.
   { .infoName = "indicator tick (local)",  .value = false, .owner = ChanOwner::NONE }, ///< Combined indicator gate.

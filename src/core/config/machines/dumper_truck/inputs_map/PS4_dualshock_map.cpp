@@ -15,8 +15,9 @@ const uint8_t InputAnalogMapCount = sizeof(InputAnalogMapArray) / sizeof(InputAn
 
   // input to combus analog channel mapping
 const InputDigitalMap InputDigitalMapArray[] = {
-  { DigitalInputDevID::CIRCLE_BTN,   DigitalComBusID::HORN,   false },
-  { DigitalInputDevID::TRIANGLE_BTN, DigitalComBusID::KEY,    false }
+  { DigitalInputDevID::CIRCLE_BTN,   DigitalComBusID::HORN,         false },
+  { DigitalInputDevID::TRIANGLE_BTN, DigitalComBusID::KEY,          false },
+  { DigitalInputDevID::OPTIONS_BTN,  DigitalComBusID::DIRECT_DRIVE, false }
 };
 
   // number of digital mappings in InputDigital Map array

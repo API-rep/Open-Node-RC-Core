@@ -6,6 +6,7 @@
 #include "config/config.h"
 #include "init/init.h"
 #include "system/utils.h"
+#include <core/config/inputs/PS4_dualshock.h>  // DigitalInputDevID enum
 #include <core/system/simulation/gear_fsm.h>
 #include <core/config/machines/machine_config.h>   // kDumperTruckGearShift (via dumper_truck_motion.h)
 #include <core/system/debug/debug.h>
@@ -32,6 +33,28 @@ void setup() {
 
 /// @brief Speed-based gear FSM state — one instance for the traction device.
 static GearFsmState s_gearFsm = { .gear = 1, .lastShiftMs = 0u };
+
+/// @brief Direct-drive mode — OPTIONS button toggles inertia bypass.
+/// When true, motion_update() is skipped and raw ComBus value drives the motor directly.
+static bool s_directDrive    = false;
+static bool s_optionsBtnPrev = false;
+
+/// @brief Timestamp of the last operator activity (analog stick moved or button pressed).
+static uint32_t s_lastActivityMs = 0u;
+
+/// @brief Timestamp when the KEY button was first pressed in RUNNING state (long-press shutdown).
+/// 0 = KEY currently released.
+static uint32_t s_keyLongPressStartMs = 0u;
+
+/// @brief Previous keyOn state — rising-edge detection in IDLE to prevent auto-restart after long-press shutdown.
+static bool s_keyPrev = false;
+
+/// RUNNING → IDLE after 2 min of no stick/button input.
+static constexpr uint32_t kEngineOffTimeoutMs = 2u  * 60u * 1000u;
+/// IDLE → SLEEPING after 15 min in IDLE state (key off).
+static constexpr uint32_t kSleepTimeoutMs     = 15u * 60u * 1000u;
+/// RUNNING → IDLE on 3-second continuous KEY press.
+static constexpr uint32_t kKeyShutdownMs      = 3000u;
 
 
 /**
@@ -118,10 +141,17 @@ void loop() {
         disableAllDcDrivers(machine);
       }
 
-        // --- 2. Transition trigger check ---
-      if (comBus.keyOn) {
+        // --- 2. Transition trigger check: rising edge only — prevents auto-restart if key still held after long-press shutdown ---
+      const bool keyRisingEdge = comBus.keyOn && !s_keyPrev;
+      s_keyPrev = comBus.keyOn;
+      if (keyRisingEdge) {
         sys_log_info("[SYSTEM][EVENT] input=KEY_ON action=enter_STARTING\n");
         combus_set_runlevel(comBus, RunLevel::STARTING, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
+      }
+        // --- 3. Sleep timeout: prolonged idle (key off) → SLEEPING ---
+      if (!comBus.keyOn && (millis() - stateTM >= kSleepTimeoutMs)) {
+          sys_log_info("[SYSTEM][EVENT] reason=sleep_timeout action=enter_SLEEPING\n");
+          combus_set_runlevel(comBus, RunLevel::SLEEPING, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
       }
       break;
     }
@@ -147,7 +177,8 @@ void loop() {
     // ---------------------------------------------------------
       if (isNewRunLevel) {
         sys_log_info("[SYSTEM][STATE] runlevel=RUNNING\n");
-        stateTM = millis();
+        stateTM          = millis();
+        s_lastActivityMs = millis();   // reset idle countdown on each RUNNING entry
         stopAllDcDrivers(machine);
 #ifdef PATCH_MOTORS_FORCE_SLEEP
         sys_log_warn("[PATCH] PATCH_MOTORS_FORCE_SLEEP active — all DC drivers forced to sleep\n");
@@ -157,6 +188,52 @@ void loop() {
         wakeupAllDcDrivers(machine);
         enableAllDcDrivers(machine);
 #endif
+      }
+
+        // --- 0. OPTIONS button: toggle direct-drive (no inertia) ---
+      {
+        const bool optNow = comBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::DIRECT_DRIVE)].value;
+        if (optNow && !s_optionsBtnPrev) {
+          s_directDrive = !s_directDrive;
+          sys_log_info(s_directDrive ? "[MOTION] direct_drive=ON (inertia bypassed)\n"
+                                     : "[MOTION] direct_drive=OFF (inertia active)\n");
+        }
+        s_optionsBtnPrev = optNow;
+      }
+
+        // --- 0.2. KEY long press (3 s): manual engine shutdown → IDLE ---
+      {
+        const bool keyNow = comBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::KEY)].value;
+        if (keyNow) {
+            if (s_keyLongPressStartMs == 0u) s_keyLongPressStartMs = millis();
+            if (millis() - s_keyLongPressStartMs >= kKeyShutdownMs) {
+                sys_log_info("[SYSTEM][EVENT] input=KEY_LONGPRESS action=enter_IDLE\n");
+                s_keyLongPressStartMs = 0u;
+                combus_set_runlevel(comBus, RunLevel::IDLE, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
+                break;
+            }
+        } else {
+            s_keyLongPressStartMs = 0u;
+        }
+      }
+
+        // --- 0.5. Idle timeout: no stick/button input for kEngineOffTimeoutMs → IDLE ---
+      {
+        const int32_t kIdleBand = static_cast<int32_t>(CbusNeutral) / 20;  // ±5 % threshold
+        bool active = false;
+        for (uint8_t i = 0; i < static_cast<uint8_t>(AnalogComBusID::WIRE_END) && !active; i++) {
+            const int32_t off = static_cast<int32_t>(comBus.analogBus[i].value) - static_cast<int32_t>(CbusNeutral);
+            if (off > kIdleBand || off < -kIdleBand) active = true;
+        }
+        for (uint8_t i = 0; i < static_cast<uint8_t>(DigitalComBusID::WIRE_END) && !active; i++) {
+            if (comBus.digitalBus[i].value) active = true;
+        }
+        if (active) s_lastActivityMs = millis();
+        if (millis() - s_lastActivityMs >= kEngineOffTimeoutMs) {
+            sys_log_info("[SYSTEM][EVENT] reason=idle_timeout action=enter_IDLE\n");
+            combus_set_runlevel(comBus, RunLevel::IDLE, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
+            break;
+        }
       }
 
         // --- 1. Process DC Drivers ---
@@ -171,9 +248,14 @@ void loop() {
                           ? (comBus.analogBusMaxVal / 2) : 0u;
 
           // --- Motion filter (applied to motorCmd only — busVal stays untouched) ---
+          // In direct-drive mode, skip inertia and keep runtime in sync for smooth re-entry.
         if (machine.dcDev[i].motion != nullptr) {
-          motion_update(motorCmd, machine.dcDev[i].motion, &machine.dcDev[i].motionRt, nullptr);
-          motorCmd = machine.dcDev[i].motionRt.currentPos;
+          if (s_directDrive) {
+            machine.dcDev[i].motionRt.currentPos = static_cast<combus_t>(motorCmd);
+          } else {
+            motion_update(motorCmd, machine.dcDev[i].motion, &machine.dcDev[i].motionRt, nullptr);
+            motorCmd = machine.dcDev[i].motionRt.currentPos;
+          }
           // NOTE: filtered value is intentionally NOT written back to ENGINE_RPM_BUS.
           //       The sound module runs its own ESC inertia simulation on the raw
           //       throttle value; feeding a pre-filtered signal would double the ramp

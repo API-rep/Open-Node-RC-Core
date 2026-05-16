@@ -54,10 +54,12 @@ static constexpr MotionDeadBand kBand_3pct {
  *   to revert to simple-ramp mode with no gear model.
  */
 static constexpr MotionGear kTraction_HeavyGear {
-    .rampTimeFirstMs  = 40u,   ///< Heavy hauler — ~2 s from neutral to full forward.
-    .rampTimeSecondMs = 80u,   ///< Mid-speed ramp (2× 1st-gear period).
-    .rampTimeThirdMs  = 120u,  ///< High-speed ramp (3× 1st-gear period).
-    .globalAccelPct   = 100u,  ///< Nominal rate — adjust to taste.
+    .rampTimeFirstMs  = 40u,    ///< Heavy hauler — ~2 s from neutral to full forward.
+    .rampTimeSecondMs = 80u,    ///< Mid-speed ramp (2× 1st-gear period).
+    .rampTimeThirdMs  = 120u,   ///< High-speed ramp (3× 1st-gear period).
+    .coastRampMs      = 500u,   ///< Coast tick — ~50 s from full speed to stop (100 ticks × 500 ms).
+    .brakeRampMs      = 150u,   ///< Engine-brake tick — ~2.5 s from full speed (17 ticks × 150 ms). Counter-steer uses rampTimeFirstMs.
+    .globalAccelPct   = 100u,   ///< Nominal rate — adjust to taste.
 };
 
 /**
@@ -68,11 +70,16 @@ static constexpr MotionGear kTraction_HeavyGear {
  *   → ~0.6 % and ~6 % of ComBus half-range respectively).
  *   Braking is 6× stronger than acceleration — matches a loaded hauler
  *   that coasts slowly but stops firmly.
+ *   Counter-brake boost: pulling the stick against the current direction
+ *   scales braking from 6 % (stick barely pulled) up to 6+18 = 24 %
+ *   at full reverse stick — about 4× the coasting brake rate.
  */
 static constexpr MotionInertia kTraction_HeavyInertia {
-    .accelSteps  = pctToCbus(1),  ///< ~0.6 % of half-range per step — gradual (≈ diyGuy accelSteps=3).
-    .brakeSteps  = pctToCbus(6),  ///< ~6 % of half-range per step — firm   (≈ diyGuy brakeSteps=30).
-    .brakeMargin = pctToCbus(2),  ///< Hold ≥ 2 % from neutral during engine braking (≈ diyGuy brakeMargin=10).
+    .accelSteps         = pctToCbus(1),   ///< ~1 % of half-range per step — gradual spool-up (≈ diyGuy accelSteps=3).
+    .coastSteps         = pctToCbus(1),   ///< ~1 % per step at 40 ms — ≈4 s coast from full speed to stop.
+    .brakeSteps         = pctToCbus(6),   ///< ~6 % per step — firm engine braking when stick released.
+    .brakeMargin        = pctToCbus(2),   ///< Hold ≥ 2 % from neutral during engine braking (≈ diyGuy brakeMargin=10).
+    .counterBrakeSteps  = pctToCbus(60),  ///< Extra 60 % at full counter-stick → 66 % max brake rate (~80 ms emergency stop).
 };
 
 /**
@@ -97,7 +104,7 @@ static constexpr MotionMargin kTraction_HeavyMargin {
 static constexpr MotionConfig kTraction_Heavy {
     .hw      = &kHw_Full,
     .margin  = &kTraction_HeavyMargin,           ///< Asymmetric: full forward, 50 % reverse.
-    .band    = &kBand_None,
+    .band    = &kBand_3pct,                      ///< ±3 % dead-band — absorbs stick neutral drift.
     .ramp    = nullptr,                          ///< Traction mode: gear + inertia algorithm.
     .gear    = &kTraction_HeavyGear,
     .inertia = &kTraction_HeavyInertia,
