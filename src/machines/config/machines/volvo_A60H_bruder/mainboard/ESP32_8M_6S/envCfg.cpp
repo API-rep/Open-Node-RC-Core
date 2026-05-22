@@ -17,7 +17,6 @@
  */
 
 #include "envCfg.h"
-#include <core/config/hw/motion_presets.h>
 
 
 // =============================================================================
@@ -46,7 +45,7 @@ DcDevice dcDevArray[DC_DRV_COUNT] = {
     .DevType    = DcDevType::DC_MOTOR,
     .usage      = DevUsage::STEER_MOTOR,
     .signal     = DcDrvSignal::PWM_TWO_WAY_NEUTRAL_CENTER,
-    .comChannel = AnalogComBusID::STEERING_BUS,
+    .comChannel = AnalogComBusID::STEERING_RAMPED_BUS,  ///< reads inertia-smoothed position from sim_ramp
     .pwmFreq    = M_DEF_PWM_FREQ,
     .polInv     = true
   },
@@ -58,10 +57,9 @@ DcDevice dcDevArray[DC_DRV_COUNT] = {
     .DevType    = DcDevType::DC_MOTOR,
     .usage      = DevUsage::TRACT_WHEEL,
     .signal     = DcDrvSignal::PWM_TWO_WAY_NEUTRAL_CENTER,
-    .comChannel = AnalogComBusID::ENGINE_RPM_BUS,
+    .comChannel = AnalogComBusID::ESC_SPEED_BUS,     ///< reads inertia-smoothed speed from sim_ramp (SIM_TRACTION output)
     .pwmFreq    = M_DEF_PWM_FREQ,
-    .polInv     = true,
-    .motion     = &kTraction_Heavy
+    .polInv     = true
   },
 
   {
@@ -108,7 +106,7 @@ DcDevice dcDevArray[DC_DRV_COUNT] = {
     .ID         = DUMP_ACTUATOR,
     .infoName   = "dump actuators",         ///< two actuators wired in //
     .drvPort    = &drvPortArray[DRV_PORT_2A],
-    .comChannel = AnalogComBusID::DUMP_BUS,
+    .comChannel = AnalogComBusID::DUMP_RAMPED_BUS,  ///< reads inertia-smoothed position from sim_ramp
     .parentID   = STEERING
   },
 };
@@ -144,62 +142,7 @@ SrvDevice SrvDevArray[SRV_COUNT] = {
 
 
 // =============================================================================
-// 3. SIGNAL DEVICES
-// =============================================================================
-
-/**
- * @brief Signal device table for the Volvo A60H Bruder.
- *
- * @details Maps each discrete signal source to its ComBus digital channel
- *   and functional role (DevUsage).  Output modules (sound, lighting) iterate
- *   this table at init to build their channel binding tables automatically —
- *   no hard-coded channel indices in those modules.
- *
- *   Entries with DevUsage::UNDEFINED have no standard sound binding; they are
- *   handled by dedicated interpreter logic (engine key FSM, indicator mux…).
- */
-SigDevice sigDevArray[SIG_COUNT] = {
-  {
-    .ID             = HORN_SIG,
-    .infoName       = "horn",
-    .usage          = DevUsage::SIG_HORN,
-    .digitalChannel = DigitalComBusID::HORN
-  },
-  {
-    .ID             = LIGHTS_SIG,
-    .infoName       = "lights",
-    .usage          = DevUsage::SIG_LIGHT,
-    .digitalChannel = DigitalComBusID::LIGHTS
-  },
-  {
-    .ID             = KEY_SIG,
-    .infoName       = "ignition key",   ///< interpreted by engine on/off FSM in sound_interpreter
-    .usage          = DevUsage::UNDEFINED,
-    .digitalChannel = DigitalComBusID::KEY
-  },
-  {
-    .ID             = INDIC_L_SIG,
-    .infoName       = "indicator left", ///< encoded into FUNCTION_L mux by sound_core
-    .usage          = DevUsage::UNDEFINED,
-    .digitalChannel = DigitalComBusID::INDICATOR_LEFT
-  },
-  {
-    .ID             = INDIC_R_SIG,
-    .infoName       = "indicator right",
-    .usage          = DevUsage::UNDEFINED,
-    .digitalChannel = DigitalComBusID::INDICATOR_RIGHT
-  },
-  {
-    .ID          = HAZARDS_SIG,
-    .infoName    = "hazards",
-    .usage       = DevUsage::UNDEFINED,
-    .digitalChannel = DigitalComBusID::HAZARDS
-  },
-};
-
-
-// =============================================================================
-// 4. UART PIN TABLE
+// 3. UART PIN TABLE
 // =============================================================================
 
 // Values from ESP32_8M_6S.h, included via envCfg.h → boards.h.

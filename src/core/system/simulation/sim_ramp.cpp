@@ -15,6 +15,7 @@
 #include <Arduino.h>          // millis()
 
 #include "core/system/combus/combus_res.h"   // CbusNeutral
+#include "core/system/combus/combus_access.h" // AnalogComBusID (TRACTION_RAMP_BUS)
 
 
 // =============================================================================
@@ -22,7 +23,7 @@
 // =============================================================================
 
 /** @brief Asymmetric inertia ramp — see sim_ramp.h for full contract. */
-void sim_ramp_fn(SimProc* proc, uint16_t& value, bool& /*claimed*/, ComBus& /*bus*/)
+void sim_ramp_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& /*claimed*/)
 {
     const SimRampCfg* cfg   = static_cast<const SimRampCfg*>(proc->cfg);
     SimRampState*     state = static_cast<SimRampState*>(proc->state);
@@ -46,8 +47,16 @@ void sim_ramp_fn(SimProc* proc, uint16_t& value, bool& /*claimed*/, ComBus& /*bu
     }
 
     // --- 2. Ramp tick: advance currentPos one step when timer elapses --------
+    //  Per-gear override: read TRACTION_RAMP_BUS when rampTimeFromBus is set.
+    uint16_t rampTimeMs = cfg->rampTimeMs;
+    if (cfg->rampTimeFromBus) {
+        const uint16_t busRamp = bus.analogBus[
+            static_cast<uint8_t>(AnalogComBusID::TRACTION_RAMP_BUS)].value;
+        if (busRamp != 0u) rampTimeMs = busRamp;
+    }
+
     const uint32_t now = millis();
-    if (now - state->lastUpdateMs >= cfg->rampTimeMs) {
+    if (now - state->lastUpdateMs >= rampTimeMs) {
         state->lastUpdateMs = now;
 
         //  Step size: accelSteps when moving AWAY from neutral,
@@ -60,7 +69,13 @@ void sim_ramp_fn(SimProc* proc, uint16_t& value, bool& /*claimed*/, ComBus& /*bu
         const uint32_t targDist = (target >= CbusNeutral)
                                   ? static_cast<uint32_t>(target - CbusNeutral)
                                   : static_cast<uint32_t>(CbusNeutral - target);
-        const uint16_t step = (targDist > currDist) ? cfg->accelSteps : cfg->brakeSteps;
+        //  accelDownSteps: asymmetric accel for negative direction (e.g. dump descent).
+        //  Active when accelDownSteps != 0 AND target is below neutral AND moving away.
+        const bool isAccel    = (targDist > currDist);
+        const bool isNegDir   = (target < CbusNeutral);
+        const bool useDownCfg = isAccel && isNegDir && (cfg->accelDownSteps != 0u);
+        const uint16_t step = isAccel ? (useDownCfg ? cfg->accelDownSteps : cfg->accelSteps)
+                                      : cfg->brakeSteps;
 
         if (state->currentPos < target) {
             const uint16_t delta = static_cast<uint16_t>(target - state->currentPos);

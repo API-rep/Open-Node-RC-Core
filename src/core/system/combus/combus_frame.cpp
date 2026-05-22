@@ -303,7 +303,6 @@ void combus_frame_apply( const ComBusFrameCfg& cfg,
     if (combus->analogBus) {
         for (uint8_t i = 0; i < nAnalogEff; ++i) {
             combus_set_analog(*combus, (AnalogComBusID)i, inputFrame->analog[i], caller);
-            combus->analogBus[i].isDrived = true;
         }
     }
 
@@ -313,7 +312,6 @@ void combus_frame_apply( const ComBusFrameCfg& cfg,
     if (combus->digitalBus) {
         for (uint8_t i = 0; i < nDigitalEff; ++i) {
             combus_set_digital(*combus, (DigitalComBusID)i, inputFrame->digital[i], caller);
-            combus->digitalBus[i].isDrived = true;
         }
     }
 }

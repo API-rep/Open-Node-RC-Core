@@ -74,7 +74,7 @@ static void _warn_denied(const char* label, uint8_t ch,
 // 2. CHANNEL WRITE ACCESSORS
 // =============================================================================
 
-bool combus_set_analog(ComBus& bus, AnalogComBusID ch, uint16_t val, ChanOwner caller) {
+bool combus_set_analog(ComBus& bus, AnalogComBusID ch, uint16_t val, ChanOwner caller, bool setIsDrived) {
     auto& slot = bus.analogBus[static_cast<uint8_t>(ch)];
 
     if (!_owner_ok(slot.owner, caller)) {
@@ -83,12 +83,13 @@ bool combus_set_analog(ComBus& bus, AnalogComBusID ch, uint16_t val, ChanOwner c
         return false;
     }
 
-    slot.value = val;
+    slot.value    = val;
+    if (setIsDrived) slot.isDrived = true;
     return true;
 }
 
 
-bool combus_set_digital(ComBus& bus, DigitalComBusID ch, bool val, ChanOwner caller) {
+bool combus_set_digital(ComBus& bus, DigitalComBusID ch, bool val, ChanOwner caller, bool setIsDrived) {
     auto& slot = bus.digitalBus[static_cast<uint8_t>(ch)];
 
     if (!_owner_ok(slot.owner, caller)) {
@@ -97,7 +98,8 @@ bool combus_set_digital(ComBus& bus, DigitalComBusID ch, bool val, ChanOwner cal
         return false;
     }
 
-    slot.value = val;
+    slot.value    = val;
+    if (setIsDrived) slot.isDrived = true;
     return true;
 }
 

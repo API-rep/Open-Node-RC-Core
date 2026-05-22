@@ -1,19 +1,22 @@
 /*!****************************************************************************
  * @file    volvo_A60H_bruder.h
- * @brief   Volvo A60H Bruder — vehicle entry point.
+ * @brief   Volvo A60H Bruder — vehicle configuration.
  *
- * @details Declares vehicle-level identity constants shared between all
- *   execution environments (machine node, sound node, future remote…),
- *   then dispatches to the correct environment-type umbrella based on the
- *   build flag:
+ * @details Provides vehicle-level declarations for all execution environments:
+ *   - `kVehicleName`, `kVehicleCombusLayout` — identity constants (always present).
+ *   - `SigDev` enum and `sigDevArray` extern — IS_MAINBOARD only.
+ *   Dispatches to the board-specific environment based on the build flag:
  *   - `-D IS_MAINBOARD`  → machine main board (dispatches on -D BOARD).
  *   - `-D IS_EXT_BOARD`  → machine extension board (dispatches on -D BOARD).
+ *
+ *   Array definitions live in `volvo_A60H_bruder.cpp`.
  *
  *   Architecture:
  *   @code
  *   machines.h
  *     └── volvo_A60H_bruder/volvo_A60H_bruder.h   ← this file
- *           ├── [kVehicleName, kVehicleCombusLayout]   (Level 0 — shared)
+ *           ├── [kVehicleName, kVehicleCombusLayout]   (shared)
+ *           ├── [SigDev enum, sigDevArray]               (IS_MAINBOARD only)
  *           ├── mainboard/mainboard.h              (IS_MAINBOARD → BOARD dispatch)
  *           └── ext_board/ext_board.h              (IS_EXT_BOARD → BOARD dispatch)
  *   @endcode
@@ -40,11 +43,40 @@ inline constexpr CombusLayout kVehicleCombusLayout  = CombusLayout::DUMPER_TRUCK
 
 
 // =============================================================================
-// Environment-type dispatch
+// IS_MAINBOARD — vehicle-level device tables + board dispatch
 // =============================================================================
 
 #if defined(IS_MAINBOARD)
+
+#include <struct/struct.h>
+#include <defs/defs.h>
+#include <core/config/machines/combus_ids.h>
+
+/**
+ * @brief Indices into `sigDevArray[]`.
+ *
+ * @details Signal devices carry a ComBus channel reference and a `DevUsage`
+ *   tag.  Entries tagged `UNDEFINED` are handled by dedicated module logic
+ *   (engine key FSM, indicator/hazard mux in sound_core).
+ */
+enum SigDev {
+    HORN_SIG    = 0,   ///< Horn trigger → DevUsage::SIG_HORN.
+    LIGHTS_SIG,        ///< Main lights toggle → DevUsage::SIG_LIGHT.
+    KEY_SIG,           ///< Engine on/off key → DevUsage::UNDEFINED (FSM).
+    INDIC_L_SIG,       ///< Left indicator → DevUsage::UNDEFINED (mux).
+    INDIC_R_SIG,       ///< Right indicator → DevUsage::UNDEFINED (mux).
+    HAZARDS_SIG,       ///< Hazard flashers → DevUsage::UNDEFINED (mux).
+    SIG_COUNT          ///< Sentinel — number of signal devices.
+};
+
+/// Array definitions in `volvo_A60H_bruder.cpp`.
+extern SigDevice sigDevArray[SIG_COUNT];
+
+#include "sim_config.h"   ///< kSimChannels[], kSimChannelCount — vehicle-level, board-independent.
+
+// --- Board dispatch ---
   #include "mainboard/mainboard.h"
+
 #elif defined(IS_EXT_BOARD)
   #include "ext_board/ext_board.h"
 #endif

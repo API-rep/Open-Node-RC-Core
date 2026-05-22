@@ -11,6 +11,8 @@ These instructions are loaded for every coding session in this workspace.
 | 2026-05-16 | `SimDev` — ComBus inertia processor | Architecture définie, **non implémenté** — winter 2026 |
 | 2026-05-16 | `SrvDevType::ESC_RC` | À ajouter dans `machines_defs.h` — winter 2026 |
 | 2026-05-16 | Backup commits (parent + sound_module) | **En attente** |
+| 2026-05-17 | `DRIVE_STATE_BUS` — DriveState 3-bit sur le fil | ✅ Implémenté |
+| 2026-05-17 | `TRACTION_BUS` packed [bit15:BRAKE\|bit14:FWD\|13-bit magnitude] | Architecture décidée — winter 2026 (ComBus v2) |
 
 ### État validé
 - Tous les bugs son (horn/volume, engine key, hydraulique) ✅ corrigés et validés hardware (2026-03-22/23)
@@ -52,6 +54,22 @@ Toute nouvelle donnée partagée entre cores → champ `volatile` dans `gEngineS
 
 **parent repo:**
 4. `motion (refactor): GearShiftProfile pointer arrays, gear_fsm to core/simulation, RPM scale`
+5. `sim (refactor): add ComBus-only sim_dev_update overload`
+6. `sim (refactor): route per-gear ramp through TRACTION_RAMP_BUS`
+   ```
+   GearShiftProfile gains rampTime[] — single source of truth for per-gear
+   inertia ramp. sim_gear writes ramp time to TRACTION_RAMP_BUS (local channel)
+   after each gear update. sim_traction reads from bus, falls back to
+   defaultRampTime when no sim_gear upstream.
+   SimTractionCfg loses rampTime[]+gearCount — replaced by defaultRampTime.
+   ```
+7. `motion (feat): add DRIVE_STATE_BUS wire channel — 3-bit DriveState encoding`
+   ```
+   Drive state (standing/fwd/rev/braking) now transmitted on the wire.
+   DriveStateBus::encode()/decode() in motion_struct.h.
+   Consumers (sound node) can read the state without re-deriving it
+   from ESC_SPEED_BUS sign. To be replaced by TRACTION_BUS at ComBus v2.
+   ```
 
 
 ## 1) Mandatory style re-check before coding
@@ -713,6 +731,17 @@ ComBus Core (noyau)
 
 **Prerequisite:** Refonte complète des structs ComBus + transport frame.
 Ne pas commencer avant la fin de saison 2026.
+
+**TRACTION_BUS packed format (décidé 2026-05-17) :**
+Remplacement prévu de `ESC_SPEED_BUS` + `DRIVE_STATE_BUS` en un seul canal sémantique :
+```
+bit15  : BRAKE     — état freinant actif
+bit14  : FWD       — direction avant (0 = arrière)
+bit13-0: magnitude — vitesse 0..8191 (0 = à l'arrêt)
+```
+Décodeur : `mag = v & 0x1FFFu`, `fwd = v & 0x4000u`, `brake = v & 0x8000u`. Standing = 0x0000.
+Tous les consommateurs de `ESC_SPEED_BUS` doivent être mis à jour simultanément.
+Retirer `DriveStateBus` de `motion_struct.h` et remplacer par les helpers TRACTION_BUS.
 
 ---
 

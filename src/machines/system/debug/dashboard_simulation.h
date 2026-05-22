@@ -1,10 +1,11 @@
 /******************************************************************************
- * @file dashboard_motion.h
- * @brief ANSI terminal dashboard — Layer 3 motion/inertia module view.
+ * @file dashboard_simulation.h
+ * @brief ANSI terminal dashboard — Layer 3 simulation module view.
  *
- * @details Shows live inertia state per traction device (main view) and
- *   per-device config presets in the detail sub-view.  Only devices with a
- *   non-null MotionConfig pointer are displayed.
+ * @details Main view: live table of all SimChannels — name, inCh→outCh
+ *   mapping, live I/O values, bypass state, and active proc list.
+ *   Detail sub-view: per-channel drill-down with live I/O and per-proc
+ *   config snapshot (bypass condCh, ramp parameters, etc.).
  *   Compiled only when -D DEBUG_DASHBOARD is set.
  *****************************************************************************/
 #pragma once
@@ -16,7 +17,7 @@
 #include <struct/machines_struct.h>
 
 /**
- * @brief Register the motion/inertia view slot with the core dashboard.
+ * @brief Register the simulation view slot with the core dashboard.
  *
  * @details Stores data pointers and calls dashboard_register_slot('6', ...).
  *   Must be called from dashboard_machine_setup() after dashboard_setup().
@@ -24,10 +25,10 @@
  * @param bus   Pointer to the active ComBus instance.
  * @param mach  Pointer to the EnvCfg config.
  */
-void dashboard_motion_register(const ComBus* bus, const EnvCfg* mach);
+void dashboard_simulation_register(const ComBus* bus, const EnvCfg* mach);
 
 #else // !DEBUG_DASHBOARD
-inline void dashboard_motion_register(const void*, const void*) {}
+inline void dashboard_simulation_register(const void*, const void*) {}
 #endif // DEBUG_DASHBOARD
 
-// EOF dashboard_motion.h
+// EOF dashboard_simulation.h

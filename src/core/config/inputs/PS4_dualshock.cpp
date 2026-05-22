@@ -32,17 +32,19 @@ AnalogInputDev AnalogInputDevArray[static_cast<uint8_t>(AnalogInputDevID::ANALOG
     .isInverted = false                   // true if analog device axe is inverted
   },
   
-  {.infoName = "L2 analog button",         // device short description  
+  {.infoName = "L2 analog button",         // device short description
     .type = RemoteComp::ANALOG_BUTTON,     // analog device type
     .minVal = DEF_ANALOG_BUTTON_MIN_VAL,   // minimum value return by analog device decoder module at lower state
     .maxVal = DEF_ANALOG_BUTTON_MAX_VAL,   // maximum value return by analog device decoder module at higher state
+    .deadband = 5,                         // raw units — filters L2 idle noise (~2 % of 0–255 range)
     .isInverted = false                    // true if analog device axe is inverted
   },
-  
+
   {.infoName = "R2 analog button",         // device short description
     .type = RemoteComp::ANALOG_BUTTON,     // analog device type
     .minVal = DEF_ANALOG_BUTTON_MIN_VAL,   // minimum value return by analog device decoder module at lower state
     .maxVal = DEF_ANALOG_BUTTON_MAX_VAL,   // maximum value return by analog device decoder module at higher state
+    .deadband = 5,                         // raw units — filters R2 idle noise (~2 % of 0–255 range)
     .isInverted = false                    // true if analog device axe is inverted
   }
 };

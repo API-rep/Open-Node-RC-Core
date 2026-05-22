@@ -1,0 +1,78 @@
+/******************************************************************************
+ * @file  sim_brake.cpp
+ * @brief SimDev behaviour — analog brake axis (L2 trigger deceleration).
+ *
+ * @details Pure ComBus simulation processor — no hardware calls, no µs domain.
+ *   Reads `inCh` (BRAKE_BUS, ComBus domain 0–CbusMaxVal).  When the input
+ *   exceeds `SimBrakeCfg::deadband`, ramps `outCh` (ESC_SPEED_BUS) toward
+ *   CbusNeutral proportionally to the brake pressure.
+ *
+ *   Writes `outCh` only while braking is active — when released, the clone
+ *   guard stays transparent and a downstream `sim_traction` runs normally.
+ *****************************************************************************/
+
+#include "sim_brake.h"
+#include "sim_dev.h"          // SimDevCtx (full type needed for function body)
+
+#include <Arduino.h>          // millis(), map(), constrain()
+
+#include "core/system/combus/combus_res.h"    // CbusNeutral, CbusMaxVal
+#include "core/system/combus/combus_access.h" // combus_set_analog
+
+
+// =============================================================================
+// 1. BEHAVIOUR FUNCTION
+// =============================================================================
+
+/** @brief Analog brake behaviour — see sim_brake.h for full contract. */
+void sim_brake_update(SimDev* dev, ComBus& bus, const SimDevCtx& /*ctx*/)
+{
+    const SimBrakeCfg* cfg   = static_cast<const SimBrakeCfg*>(dev->cfg);
+    SimBrakeState*     state = static_cast<SimBrakeState*>(dev->state);
+
+    // --- 1. Read inputs -------------------------------------------------------
+    const uint16_t brakeInput = bus.analogBus[static_cast<uint8_t>(dev->inCh)].value;
+    const uint16_t currentPos = bus.analogBus[static_cast<uint8_t>(dev->outCh)].value;
+
+    // --- 2. Guard: brake released or already at neutral ----------------------
+    //    Returning without writing keeps isDrived=false — downstream sim_traction
+    //    is free to run normally.  Idle noise is filtered upstream by the
+    //    input device deadband (AnalogInputDev::deadband in PS4_dualshock.cpp).
+    if (brakeInput == 0)           return;
+    if (currentPos == CbusNeutral) return;
+
+    // --- 3. Effective ramp period — shorter at higher brake pressure ----------
+    //    Lower bound is 0 (deadband is handled upstream by the input device).
+    const uint32_t effectiveRampMs = static_cast<uint32_t>(
+        map((long)brakeInput,
+            0L, (long)CbusMaxVal,
+            (long)cfg->maxRampMs, (long)cfg->minRampMs));
+
+    // --- 4. Advance one ramp step when timer elapses -------------------------
+    uint16_t newPos = currentPos;
+    const uint32_t now = millis();
+
+    if (now - state->lastUpdateMs >= effectiveRampMs) {
+        state->lastUpdateMs = now;
+
+        if (currentPos > CbusNeutral) {
+              // Moving forward — decelerate downward.
+            newPos = (currentPos >= CbusNeutral + cfg->brakeStep)
+                   ? static_cast<uint16_t>(currentPos - cfg->brakeStep)
+                   : CbusNeutral;
+        } else {
+              // Moving in reverse — decelerate upward.
+            newPos = (currentPos + cfg->brakeStep <= CbusNeutral)
+                   ? static_cast<uint16_t>(currentPos + cfg->brakeStep)
+                   : CbusNeutral;
+        }
+    }
+
+    // --- 5. Write output — marks outCh as driven (clone guard) ---------------
+    //    Written every call while brake is active (whether or not the timer
+    //    elapsed) so that a downstream sim_traction is blocked for the full
+    //    braking duration.
+    combus_set_analog(bus, dev->outCh, newPos, dev->chanOwner);
+}
+
+// EOF sim_brake.cpp

@@ -13,7 +13,7 @@
 #include "dashboard_input.h"
 #include "dashboard_vbat.h"
 #include "dashboard_sig.h"
-#include "dashboard_motion.h"
+#include "dashboard_simulation.h"
 #include <core/system/debug/dashboard.h>
 #include <core/system/vbat/vbat_sense.h>
 
@@ -35,6 +35,28 @@ static uint8_t        s_digitalCh = 0;
 // =============================================================================
 // 2. PRIVATE HELPERS
 // =============================================================================
+
+/**
+ * @brief Render digital channels 4 per row: #N name:val* (DRV asterisk).
+ *
+ * @details Reduces the digital channel section from one row per channel to
+ *   one row per four channels, keeping the overview within terminal height.
+ */
+static void renderDigitalCompact(const ComBus* bus, uint8_t n)
+{
+	for (uint8_t r = 0u; r < n; r += 4u) {
+		char buf[DashInnerW + 4];
+		int  p = snprintf(buf, sizeof(buf), "  ");
+		for (uint8_t j = r; j < r + 4u && j < n; ++j) {
+			const char* nm  = bus->digitalBus[j].infoName ? bus->digitalBus[j].infoName : "?";
+			const char* val = bus->digitalBus[j].value    ? "ON " : "off";
+			const char  drv = bus->digitalBus[j].isDrived ? '*' : ' ';
+			p += snprintf(buf + p, sizeof(buf) - (size_t)p,
+			              "#%-2u %-14.14s:%-3s%c  ", j, nm, val, drv);
+		}
+		dLine("%s", buf);
+	}
+}
 
 
 // =============================================================================
@@ -103,12 +125,11 @@ static void render_overview() {
 		dLine("  %2u  %-44.44s  %5u  %+4d%%  %s",
 			i, name, raw, pct, drv ? "DRV" : "---");
 	}
-	for (uint8_t i = 0; i < s_digitalCh; i++) {
-		bool        val  = s_bus->digitalBus[i].value;
-		bool        drv  = s_bus->digitalBus[i].isDrived;
-		const char* name = s_bus->digitalBus[i].infoName ? s_bus->digitalBus[i].infoName : "?";
-		dLine("  %2u  %-44.44s  %-5s      %s",
-			i, name, val ? "ON" : "OFF", drv ? "DRV" : "---");
+	if (s_digitalCh > 0u) {
+		dMid();
+		dLine("  digital  (* = driven)");
+		dMid();
+		renderDigitalCompact(s_bus, s_digitalCh);
 	}
 
 		// --- 4. Serial log tail ---
@@ -154,7 +175,7 @@ void dashboard_machine_setup(const ComBus* bus, const EnvCfg* mach,
 	dashboard_drv_register(bus, mach);
 	dashboard_vbat_register();
 	dashboard_sig_register(bus, mach);
-	dashboard_motion_register(bus, mach);
+	dashboard_simulation_register(bus, mach);
 
 		// NOTE: dashboard_start_task() is NOT called here.
 		// It must be called from init.cpp *after* the PAUSE_LOG_AFTER_INIT

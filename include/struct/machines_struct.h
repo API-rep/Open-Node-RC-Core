@@ -18,7 +18,8 @@
 // could create include cycles.
 #include <core/config/machines/combus_ids.h>
 
-#include <struct/motion_struct.h>      // MotionConfig, MotionRuntime (embedded in DcDevice)
+#include <core/system/combus/combus_res.h>  // SrvHwAngle, pctToCbus, angleToCbus
+#include <struct/simulation_struct.h>   // SimChannel, SimDevCtx, SimDev, SimBehaviorFn, SimTractionCfg/State
 
 
 /**
@@ -123,8 +124,6 @@ typedef struct {
   std::optional<float> maxFwSpeed;              ///< maximum forward speed (0 to 100% - Defaut 100%)
   std::optional<float> maxBackSpeed;            ///< maximum backward speed (0 to 100% - Defaut 100%)
   const std::optional<uint8_t> parentID;        ///< parent identifier (used in clone mode)
-  const MotionConfig*  motion = nullptr;        ///< Shared motion/ramp config (copied from parent in clone mode; nullptr = no ramp).
-  MotionRuntime        motionRt{};              ///< Per-instance ramp state — never inherited from parent (see applyParentConfig).
 } DcDevice;
 
 
@@ -179,6 +178,11 @@ typedef struct {
 } SigDevice;
 
 
+// =============================================================================
+// SIMULATION DEVICES — see simulation_struct.h (included above)
+// =============================================================================
+
+
 /**
  * @brief EnvCfg main structure
  *  * Contain all configuration and manipulators of the machine
@@ -195,8 +199,10 @@ typedef struct {
   uint8_t    dcDevCount;                                  // number of DC driver device configured
   SrvDevice* srvDev;                                      // servo device config structure
   uint8_t    srvDevCount;                                 // number of servo device configured
-  SigDevice* sigDev     = nullptr;                        // signal device config structure (optional)
-  uint8_t    sigDevCount = 0;                             // number of signal devices configured
+  SigDevice* sigDev      = nullptr;                       // signal device config structure (optional)
+  uint8_t    sigDevCount  = 0;                            // number of signal devices configured
+  SimChannel*  simChannel      = nullptr;                 // simulation channel array (optional)
+  uint8_t      simChannelCount  = 0;                       // number of channels configured
 } EnvCfg;
 
 

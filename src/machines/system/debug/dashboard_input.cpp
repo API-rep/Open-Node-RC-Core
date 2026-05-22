@@ -1,6 +1,6 @@
 /******************************************************************************
  * @file dashboard_input.cpp
- * @brief ANSI terminal dashboard — Layer 3 inputs/combus module view.
+ * @brief ANSI terminal dashboard ï¿½ Layer 3 inputs/combus module view.
  *****************************************************************************/
 
 #ifdef DEBUG_DASHBOARD
@@ -26,6 +26,28 @@ static uint8_t       s_digitalCh  = 0;
 // =============================================================================
 // 2. VIEW RENDERER
 // =============================================================================
+
+/**
+ * @brief Render digital channels 4 per row: #N name:val* (DRV asterisk).
+ *
+ * @details Keeps the table height proportional to digitalCh / 4 instead of
+ *   one row per channel, so the view stays within a normal terminal height.
+ */
+static void renderDigitalCompact(const ComBus* bus, uint8_t n)
+{
+	for (uint8_t r = 0u; r < n; r += 4u) {
+		char buf[DashInnerW + 4];
+		int  p = snprintf(buf, sizeof(buf), "  ");
+		for (uint8_t j = r; j < r + 4u && j < n; ++j) {
+			const char* nm  = bus->digitalBus[j].infoName ? bus->digitalBus[j].infoName : "?";
+			const char* val = bus->digitalBus[j].value    ? "ON " : "off";
+			const char  drv = bus->digitalBus[j].isDrived ? '*' : ' ';
+			p += snprintf(buf + p, sizeof(buf) - (size_t)p,
+			              "#%-2u %-14.14s:%-3s%c  ", j, nm, val, drv);
+		}
+		dLine("%s", buf);
+	}
+}
 
 /**
  * @brief Render the inputs view: analog table (top) + digital table + combus state (bottom).
@@ -62,16 +84,9 @@ static void render_input_view() {
 
 		// --- Digital channels ---
 	dMid();
-	dLine("  %-3s  %-40s  %-5s  %s",
-	      "CH", "Name", "Val", "Drived");
+	dLine("  digital channels  (* = driven)");
 	dMid();
-	for (uint8_t i = 0; i < s_digitalCh; i++) {
-		const char* name = s_bus->digitalBus[i].infoName ? s_bus->digitalBus[i].infoName : "?";
-		dLine("  %2u   %-40.40s  %-5s  %s",
-		      i, name,
-		      s_bus->digitalBus[i].value    ? "ON"  : "OFF",
-		      s_bus->digitalBus[i].isDrived ? "yes" : "no");
-	}
+	renderDigitalCompact(s_bus, s_digitalCh);
 
 		// --- ComBus state ---
 	dMid();

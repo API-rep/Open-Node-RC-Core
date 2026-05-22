@@ -12,7 +12,6 @@
 #include "drv_dev.h"
 #include <struct/struct.h>
 #include <core/system/debug/debug.h>
-#include <core/system/simulation/motion.h>
 
 #include <Arduino.h>
 
@@ -75,8 +74,6 @@ static void applyParentConfig(const EnvCfg& config)
 				if (!child->pwmFreq)                           child->pwmFreq      = parent->pwmFreq;
 				if (!child->maxFwSpeed)                        child->maxFwSpeed   = parent->maxFwSpeed;
 				if (!child->maxBackSpeed)                      child->maxBackSpeed = parent->maxBackSpeed;
-				if (child->motion == nullptr)                  child->motion       = parent->motion;
-				// motionRt intentionally skipped — per-instance FSM state, never inherited
 
 				parentIsFound = true;
 				break;
@@ -117,16 +114,7 @@ bool checkDrvHwConfig(const EnvCfg& config)
 		}
 	}
 
-	  // 3. Validate motion config for every device that declares one.
-	for (int i = 0; i < config.dcDevCount; i++) {
-		const DcDevice* dev = &config.dcDev[i];
-		if (dev->motion == nullptr) continue;
-		if (!motion_check(dev->motion)) {
-			hw_log_err("\n      [DRV] CONFIG ERROR: motion_check failed for driver %s\n",
-			           dev->infoName);
-			hasError = true;
-		}
-	}
+	  // 3. No motion config — replaced by SimDev (sim_traction, sim_ramp).
 
 	if (!hasError) {
 		hw_log_info(" OK\n");

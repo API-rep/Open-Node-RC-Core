@@ -1,0 +1,146 @@
+/******************************************************************************
+ * @file  sim_dev.h
+ * @brief ComBus simulation device and signal processor.
+ *
+ * @details SimDev is a general-purpose, hardware-free ComBus processor.
+ *   It reads one or more input channels, applies a time-domain behaviour
+ *   (ramp, FSM, envelope, waveform…), and writes the result to one or more
+ *   output channels.  Every downstream module (hardware drivers, sound engine,
+ *   lighting…) reads those output channels as regular ComBus values — they are
+ *   entirely unaware that a SimDev sits upstream.
+ *
+ *   Analogous to `SigDevice` (no `*Port`, no pin), `SimDev` instances live in
+ *   `EnvCfg` alongside `dcDev` / `srvDev` / `sigDev`.
+ *
+ *   **Planned behaviour families (non-exhaustive):**
+ *   - Traction inertia / drive FSM (current implementation): gear-dependent
+ *     ramp + 5-state drive machine (STAND / FWD / BRK_FWD / REV / BRK_REV).
+ *     A `SrvDevice::ESC_RC` or `DcDevice` reads `outCh`; the hardware device
+ *     and SimDev are fully decoupled (pulse range, pin, direction inversion all
+ *     live in the hardware descriptor, never here).
+ *   - Light envelope: throttle-dependent flicker depth, Xenon ignition flash,
+ *     indicator pulse train.  Each writes a 0–CbusMaxVal brightness value that
+ *     the light core reads as a regular analog channel.
+ *   - Any other signal that needs a time-domain transform before reaching
+ *     hardware (hydraulic flow smoothing, beacon sweep, …).
+ *
+ *   **ComBus contract:**
+ *   - Analog `outCh` carries the primary processed value in [0 .. `CbusMaxVal`],
+ *     neutral = `CbusNeutral`.
+ *   - Optional digital outputs (`outRevCh`, `outBrakeCh`, `outDriveCh`) expose
+ *     derived boolean state.  External modules must **never** read `SimState`
+ *     directly; `SimState` is internal to `sim_dev_update()`.
+ *
+ *   **Usage:**
+ *   1. Declare `SimCfg`, `SimState`, and `SimDev` in the machine config
+ *      (see `machines_struct.h`; `EnvCfg::simDev` / `simDevCount`).
+ *   2. Call `sim_dev_init()` once per `SimDev` at end of hardware init.
+ *   3. Each main-loop cycle: fill a `SimDevCtx` from the relevant state source
+ *      and call `sim_dev_update()`.  The updated ComBus channels are
+ *      immediately visible to all downstream modules on the same core.
+ *****************************************************************************/
+#pragma once
+
+#include <stdint.h>
+
+#include <struct/machines_struct.h>   // SimDev, SimCfg, SimState (AnalogComBusID, DigitalComBusID)
+#include <struct/combus_struct.h>     // ComBus (analogBus, digitalBus)
+
+
+// =============================================================================
+// 1. DRIVE FSM STATES
+// =============================================================================
+//
+//   SimDev uses the canonical `DriveState` namespace from `simulation_struct.h`:
+//     kBrakeRev = -2  — braking from reverse, ramp back toward neutral.
+//     kDriveRev = -1  — driving in reverse, ramp toward negative target.
+//     kStanding =  0  — stationary, inertiaPos at CbusNeutral.
+//     kBrakeFwd = +1  — braking from forward, ramp back toward neutral.
+//     kDriveFwd = +2  — driving forward, ramp toward positive target.
+//
+//   `machines_struct.h` (included below) pulls in `simulation_struct.h` which
+//   declares that namespace — no extra include needed here.
+
+
+// =============================================================================
+// 2. CALLER CONTEXT SNAPSHOT
+// =============================================================================
+
+/**
+ * @brief Caller-supplied context for one `sim_dev_update()` call.
+ *
+ * @details The caller fills this struct from its own state source before each
+ *   `sim_dev_update()` call:
+ *   - Sound node: from `gEngineSimState`, switch states, etc.
+ *   - Machine node (future): from the machine FSM and input manager.
+ *
+ *   This decouples `SimDev` from any platform-specific global state struct and
+ *   keeps the simulation layer testable in isolation.
+ *
+ *   Gear data is **not** carried here: `sim_gear` writes the current gear to
+ *   a dedicated ComBus channel (`GEAR_BUS`), and `sim_traction` reads it
+ *   directly from the bus via `SimDev::gearCh`.  The array-order dependency
+ *   (sim_gear before sim_traction) replaces the former one-shot pulse flags.
+ */
+struct SimDevCtx {
+    bool     engineOn;         ///< Engine is running — gate for FSM entry from STAND.
+    bool     neutralGear;      ///< Transmission in neutral — blocks FWD/REV entry.
+    bool     failSafe;         ///< Failsafe active — forces maximum brake steps immediately.
+    bool     lowRange;         ///< Low-range active — scales ramp time by `SimTractionCfg::lowRangePct`.
+    uint16_t speedLimit;       ///< Speed cap (ComBus units, 0 = no cap) — clamps FWD/REV ramp target.
+    uint8_t  globalAccelPct;   ///< Global acceleration scale (1–200 %, 100 = nominal).
+};
+
+
+// =============================================================================
+// 3. PUBLIC API
+// =============================================================================
+
+/**
+ * @brief Placeholder lifecycle hook for the SimDev array.
+ *
+ * @details Each behaviour self-inits on its first `sim_dev_update()` call
+ *   (zero-state detection — e.g. `GearFsmState::gear == 0` triggers reset to
+ *   gear 1 in `sim_gear_update`).  This function is kept as a symmetric
+ *   counterpart to `dc_dev_init()` / `srv_dev_init()` and as a future hook
+ *   for behaviours that require explicit pre-flight work.
+ *
+ * @param devs   Pointer to the first element of the SimDev array.
+ * @param count  Number of devices in the array.
+ */
+void sim_dev_init(SimDev* devs, uint8_t count);
+
+/**
+ * @brief Update all SimDev instances — dispatch each device's behaviour function.
+ *
+ * @details Loops over the array and, for each device whose `behaviorFn` is not
+ *   `nullptr`, calls `dev->behaviorFn(dev, bus, ctx)`.
+ *
+ *   Clone guard: if `bus.analogBus[dev->outCh].isDrived` is already `true`
+ *   at the start of a device's turn (another SimDev wrote the same channel
+ *   this cycle), that device is silently skipped.
+ *
+ *   The caller is responsible for filling `ctx` before each call.  A single
+ *   `SimDevCtx` is shared across all devices in one update sweep — if different
+ *   devices need different contexts, call this function in separate passes with
+ *   a sub-array and its own context.
+ *
+ * @param devs   Pointer to the first element of the SimDev array.
+ * @param count  Number of devices in the array.
+ * @param bus    Shared ComBus — read/write by each behaviour function.
+ * @param ctx    Context snapshot filled by the caller for this cycle.
+ */
+void sim_dev_update(SimDev* devs, uint8_t count, ComBus& bus, const SimDevCtx& ctx);
+
+/**
+ * @brief Convenience overload — builds `SimDevCtx` from the bus.
+ *
+ * @details Reads `bus.keyOn` for `engineOn`; all other context fields use
+ *   their nominal stub values (neutral/crawlerMode/lowRange = false,
+ *   speedLimit = 0, globalAccelPct = 100).  Once those fields are routed
+ *   through dedicated ComBus channels, this overload will read them from
+ *   the bus too and the full-ctx overload can be removed.
+ */
+void sim_dev_update(SimDev* devs, uint8_t count, ComBus& bus);
+
+// EOF sim_dev.h

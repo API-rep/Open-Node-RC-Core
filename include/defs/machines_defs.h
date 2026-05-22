@@ -115,8 +115,9 @@ enum class DcDrvSignal : uint8_t {
   /** @brief available servo devices type */
 enum class SrvDevType : uint8_t {
     UNDEFINED = 0,    ///< Uninitialized servo
-    SERVO     = 1     ///< Standard position-controlled servo
-    // GPIO   = 2     // GPIO on servo port
+    SERVO     = 1,    ///< Standard position-controlled servo
+    ESC_RC    = 2     ///< RC ESC on servo port
+    // GPIO   = 3     // GPIO on servo port
 };
 
 /**

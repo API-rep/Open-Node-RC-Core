@@ -6,9 +6,11 @@
  *   preserved until sim_traction, sim_gear and sim_brake are migrated.
  *   Do not add new code to the archive.
  *
- *   Active area (sections 1–3, below the separator) — SimChannel pipeline.
- *   Already validated: `SimRampCfg/State` (sim_ramp_fn ✅), `DriveState` (✅),
- *   `SimProc/SimChannel` (sim.cpp ✅).
+ *   Active area (sections 1+, below the separator) — SimChannel pipeline.
+ *   Already validated: `SimProc/SimChannel` (sim.cpp ✅, section 3),
+ *   `SimRampCfg/State` (sim_ramp_fn ✅, section 1), `DriveState` (✅, section 2),
+ *   `SimBypassCfg` (sim_bypass_fn ✅, section 4).
+ *   `GearProcCfg` (sim_gear_fn ✅, section 5).
  *
  *   **Adding a new SimProcFn:**
  *   1. Add `MyProcCfg` and `MyProcState` in the active area (sections 1+).
@@ -30,35 +32,61 @@
 // =============================================================================
 
 /**
+ * @brief Threshold and inertia config for one virtual gear.
+ *
+ * @details `upShift` is the RPM at which the FSM transitions from this gear to
+ *   the next.  `downShift` / `downShiftBraking` are the thresholds below which
+ *   the FSM drops back one gear (coasting / braking respectively).
+ *   Hysteresis requirement: `upShift > downShift` — prevents gear hunting.
+ *
+ *   `shiftDelta` is the RPM drop applied when upshifting INTO this gear:
+ *   the virtual RPM used by the FSM drops by this amount at the moment of
+ *   the shift, simulating the engine RPM fall as the new ratio takes effect.
+ *   gear[0].shiftDelta is ignored (no upshift into gear 1).
+ *   `maxRpm` of the profile equals the last gear's `upShift` by convention.
+ */
+struct GearStepCfg {
+    int16_t  upShift;           ///< RPM threshold to upshift from this gear (= maxRpm for last gear).
+    int16_t  downShift;         ///< RPM threshold to downshift to this gear (coasting).
+    int16_t  downShiftBraking;  ///< RPM threshold to downshift to this gear (braking — higher → earlier).
+    uint16_t rampTime;          ///< Inertia ramp duration (ms) — written to TRACTION_RAMP_BUS.
+    int16_t  shiftDelta;        ///< RPM drop when upshifting INTO this gear (ignored for gear 1).
+};
+
+/**
+ * @brief Config for one sub-gear step.
+ *
+ * @details Index 0 = slowest crawl, index N-1 = fastest crawl.
+ *   All sub-gear ramp times are slower than normal gear-1 `rampTime`.
+ *   `maxPct` caps the RPM input to the gear FSM while this sub-gear is active:
+ *   expressed as a percentage (0–100) of `gear[0].upShift` (the gear-1 RPM ceiling).
+ *   Full throttle in sub-gear n maps to `gear[0].upShift × maxPct / 100`.
+ */
+struct SubGearStepCfg {
+    uint16_t rampTime;  ///< Inertia ramp duration (ms) for this sub-gear.
+    uint8_t  maxPct;   ///< RPM ceiling as % of gear[0].upShift (0–100).
+};
+
+/**
  * @brief Speed-threshold profile for a virtual N-speed gearbox FSM.
  *
- * @details All speed values are in RPM units (0–maxRpm).
- *   Only the first `gears` entries in each threshold array are meaningful.
- *   Index `n` covers the (n+1)↔(n+2) gear transition:
- *     index 0 = 1st↔2nd,  index 1 = 2nd↔3rd, …
- *   Hysteresis requirement: `upShift[n] > downShift[n]` — prevents gear hunting.
+ * @details All speed values are in RPM units.
+ *   `gear[n]` covers the (n+1)-th gear (0-based index).
+ *   `gear[n].upShift` is the RPM threshold to shift from gear n+1 to n+2.
+ *   `gear[gearCount-1].upShift` is the maximum RPM (scaling reference).
+ *   Hysteresis requirement: `gear[n].upShift > gear[n].downShift`.
  *
- *   Define the threshold arrays as `static constexpr int16_t` in the preset
- *   file (`motion_presets.h`) and assign their addresses here.  Presets are
- *   declared `constexpr` and exposed via vehicle aliases (`*_motion.h`).
+ *   Presets are declared `constexpr` in `simulation_presets.h` and exposed
+ *   via vehicle aliases (`*_motion.h`).
  *   The gear FSM lives inside `sim_gear.cpp` — no separate `gear_fsm.h`.
  */
 struct GearShiftProfile {
-    uint8_t         gears;             ///< Number of active gears.
-    const int16_t*  upShift;           ///< Upshift RPM thresholds — pointer to array[gears].
-    const int16_t*  downShift;         ///< Downshift RPM thresholds — coasting.
-    const int16_t*  downShiftBraking;  ///< Downshift RPM thresholds — braking (higher → earlier).
-    const uint16_t* rampTime;          ///< Per-gear inertia ramp duration (ms) — pointer to array[gears].
-                                       ///<   Written to TRACTION_RAMP_BUS by sim_gear; read by sim_traction.
-                                       ///<   nullptr = no ramp data (traction will use its defaultRampTime).
-    int16_t         maxRpm;            ///< Maximum simulated RPM at full output (scaling reference).
-    uint16_t        shiftGuardMs;      ///< Minimum interval between consecutive shifts (ms).
-    uint8_t         throttleGuardPct;  ///< Minimum forward throttle % (0–100) required for upshift.
+    uint8_t               gearCount;    ///< Number of active gears (= std::size(gear[])).
+    const GearStepCfg*    gear;         ///< Per-gear config — array[gearCount].
+    uint16_t              shiftGuardMs; ///< Minimum interval between consecutive shifts (ms).
 
-    uint8_t         subGearCount;      ///< Number of sub-gears in gear 1 (0 = sub-gear disabled).
-    const uint16_t* subGearRampTime;   ///< Per-sub-gear ramp durations (ms) — pointer to array[subGearCount].
-                                       ///<   Index 0 = slowest (highest sub-gear number = fastest crawl).
-                                       ///<   nullptr when subGearCount == 0.
+    uint8_t               subGearCount; ///< Number of sub-gears in gear 1 (0 = sub-gear disabled).
+    const SubGearStepCfg* subGear;      ///< Per-sub-gear config — array[subGearCount]; nullptr when subGearCount == 0.
 };
 
 
@@ -131,55 +159,6 @@ namespace DriveStateBus {
         return DriveState::kBrakeRev;
     }
 }
-
-
-// =============================================================================
-// 3. SIMCHANNEL PIPELINE  (sim.cpp — ✅ implemented)
-// =============================================================================
-
-// Forward declaration — SimProcFn references SimProc by pointer.
-struct SimProc;
-
-/// Processor function — one per SimProc instance, called once per channel per cycle.
-/// @param proc    Processor descriptor (name, inCh, cfg, state).
-/// @param value   Channel value (in/out) — seeded from bus[SimChannel::inCh].value before proc 0.
-/// @param claimed Set to true to short-circuit remaining processors this cycle.
-/// @param bus     Shared ComBus — read proc->inCh; do NOT write SimChannel::outCh (channel owns the write).
-using SimProcFn = void (*)(SimProc* proc, uint16_t& value, bool& claimed, ComBus& bus);
-
-
-/**
- * @brief One processing unit within a SimChannel pipeline.
- */
-struct SimProc {
-    const char*     name;    ///< Debug / dashboard label.
-    AnalogComBusID  inCh;    ///< Auxiliary input channel (e.g. TRACTION_RAMP_BUS). Ignored when unused.
-    SimProcFn       fn;      ///< C function pointer — assigned in sim_config.cpp (e.g. &sim_ramp_fn). nullptr = passthrough.
-    const void*     cfg;     ///< Flash — static config struct (e.g. SimRampCfg). Cast inside fn.
-    void*           state;   ///< RAM   — mutable runtime state (e.g. SimRampState). Cast inside fn.
-};
-
-
-/**
- * @brief One named processing channel — ordered processor list, single ComBus output.
- *
- * @details Defines *what* to compute and *where* to write the result.
- *   The ComBus is not stored here — it is provided at call time by
- *   `sim_update()` / `sim_channel_update()`.
- *
- *   Update sequence (sim_channel_update):
- *   1. Seed `value` from `bus.analogBus[inCh].value` — live input captured at cycle start.
- *   2. Iterate `simProc[]` in order; stop early when a processor sets `claimed = true`.
- *   3. Write `value` to `outCh` via `combus_set_analog()` — always, regardless of claimed.
- */
-struct SimChannel {
-    const char*     name;         ///< Human-readable channel name (debug / dashboard).
-    AnalogComBusID  inCh;         ///< Input channel — seeded into `value` at cycle start.
-    AnalogComBusID  outCh;        ///< Output channel — written after all processors complete.
-    SimProc*        simProc;      ///< Processor array (nullptr when simProcCount == 0).
-    uint8_t         simProcCount; ///< Number of processors in simProc[].
-    ChanOwner       chanOwner;    ///< Identity token passed to combus_set_analog().
-};
 
 
 // =============================================================================
@@ -358,6 +337,68 @@ struct SimDev {
 
 
 // =============================================================================
+// 3. SIMCHANNEL PIPELINE  (sim.cpp — ✅ implemented)
+// =============================================================================
+
+// Forward declaration — SimProcFn references SimProc by pointer.
+struct SimProc;
+
+/// Processor function — one per SimProc instance, called once per channel per cycle.
+/// @param proc    Processor descriptor (name, inCh, cfg, state).
+/// @param value   Channel value (in/out) — seeded from bus[SimChannel::inCh].value before proc 0.
+/// @param claimed Set to true to short-circuit remaining processors this cycle.
+/// @param bus     Shared ComBus — read proc->inCh; do NOT write SimChannel::outCh (channel owns the write).
+using SimProcFn = void (*)(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed);
+
+
+/**
+ * @brief One processing unit within a SimChannel pipeline.
+ *
+ * @note **Mutable config pattern:** `cfg` is flash-const (`const void*`).  If a
+ *   processor needs runtime-varying configuration (beyond internal state), embed a
+ *   `const MyCfg* dynCfg = nullptr` field in its `MyProcState` struct.  Inside the
+ *   fn, resolve the effective config as:
+ *   @code
+ *   const MyCfg* effective = state->dynCfg ? state->dynCfg
+ *                                           : static_cast<const MyCfg*>(proc->cfg);
+ *   @endcode
+ *   A preceding processor in the same pipeline (e.g. sim_gear_fn) can write
+ *   `state->dynCfg` before this proc runs, enabling per-cycle config switching
+ *   without touching flash.
+ */
+struct SimProc {
+    const char*                        name;      ///< Debug / dashboard label.
+    std::optional<AnalogComBusID>      optInCh;   ///< Auxiliary analog input read by the proc (e.g. TRACTION_RAMP_BUS). std::nullopt when unused.
+    std::optional<DigitalComBusID>     optOutDCh; ///< Optional digital side-effect output written by the proc (e.g. sign from sim_abs_fn). std::nullopt when unused.
+    SimProcFn                          fn;        ///< C function pointer — assigned in sim_config.cpp (e.g. &sim_ramp_fn). nullptr = passthrough.
+    const void*                        cfg;       ///< Flash — static config struct (e.g. SimRampCfg). Cast inside fn.
+    void*                              state;     ///< RAM   — mutable runtime state (e.g. SimRampState). Cast inside fn.
+};
+
+
+/**
+ * @brief One named processing channel — ordered processor list, single ComBus output.
+ *
+ * @details Defines *what* to compute and *where* to write the result.
+ *   The ComBus is not stored here — it is provided at call time by
+ *   `sim_update()` / `sim_channel_update()`.
+ *
+ *   Update sequence (sim_channel_update):
+ *   1. Seed `value` from `bus.analogBus[inCh].value` — live input captured at cycle start.
+ *   2. Iterate `simProc[]` in order; stop early when a processor sets `claimed = true`.
+ *   3. Write `value` to `outCh` via `combus_set_analog()` — always, regardless of claimed.
+ */
+struct SimChannel {
+    const char*     name;         ///< Human-readable channel name (debug / dashboard).
+    AnalogComBusID  inCh;         ///< Input channel — seeded into `value` at cycle start.
+    AnalogComBusID  outCh;        ///< Output channel — written after all processors complete.
+    SimProc*        simProc;      ///< Processor array (nullptr when simProcCount == 0).
+    uint8_t         simProcCount; ///< Number of processors in simProc[].
+    ChanOwner       chanOwner;    ///< Identity token passed to combus_set_analog().
+};
+
+
+// =============================================================================
 // 1. RAMP PROCESSOR  (sim_ramp_fn — ✅ implemented)
 // =============================================================================
 
@@ -372,10 +413,15 @@ struct SimDev {
  *   The downstream `DcDevice` reads the ramped output channel.
  */
 struct SimRampCfg {
-    uint16_t rampTimeMs;   ///< Period between ramp steps (ms).
-    uint16_t accelSteps;   ///< ComBus units per step when moving away from neutral.
-    uint16_t brakeSteps;   ///< ComBus units per step when moving toward neutral.
-    uint16_t neutralBand;  ///< ComBus units around CbusNeutral treated as zero (0 = no dead-band).
+    uint16_t rampTimeMs;                    ///< Default period between ramp steps (ms).
+    uint16_t accelSteps;                    ///< ComBus units per step when moving away from neutral (both directions if accelDownSteps == 0).
+    uint16_t accelDownSteps = 0u;           ///< ComBus units per step when moving in the NEGATIVE direction away from neutral.
+                                            ///<   0 = symmetric (falls back to accelSteps).
+    uint16_t brakeSteps;                    ///< ComBus units per step when moving toward neutral.
+    uint16_t neutralBand;                   ///< ComBus units around CbusNeutral treated as zero (0 = no dead-band).
+    bool     rampTimeFromBus = false; ///< When true, override rampTimeMs with TRACTION_RAMP_BUS value each cycle.
+                                            ///<   TRACTION_RAMP_BUS is written by sim_gear_fn per active gear.
+                                            ///<   Falls back to rampTimeMs when the channel value is 0.
 };
 
 /**
@@ -390,6 +436,91 @@ struct SimRampState {
     uint32_t lastUpdateMs;  ///< millis() timestamp of last ramp step.
                             ///<   Also used as first-call sentinel: 0 = never initialised.
                             ///<   Do NOT use currentPos == 0 — 0 is a valid position (full negative).
+};
+
+
+// =============================================================================
+// 4. BYPASS PROCESSOR  (sim_bypass_fn — ✅ implemented)
+// =============================================================================
+
+/**
+ * @brief Static configuration for a conditional bypass gate SimProc.
+ *
+ * @details When `condCh` digital channel is HIGH, `claimed` is set to `true`
+ *   and all downstream processors are skipped for this cycle.  The raw `inCh`
+ *   value passes through to `outCh` unchanged (sim_channel_update always
+ *   writes after all procs, regardless of `claimed`).
+ *
+ *   Assign to `SimProc::cfg` (as `const void*`); cast back inside
+ *   `sim_bypass_fn()`.  No runtime state required — `SimProc::state` must be
+ *   `nullptr`.
+ *
+ *   Typical placement: `simProc[0]` — evaluated before all other processors.
+ */
+struct SimBypassCfg {
+    DigitalComBusID condCh;  ///< Digital channel — HIGH → early exit (raw passthrough mode).
+};
+
+
+// =============================================================================
+// 5. GEAR FSM PROCESSOR  (sim_gear_fn — ✅ implemented)
+// =============================================================================
+
+/**
+ * @brief Static configuration for a gear-FSM SimProc.
+ *
+ * @details Shared by `sim_gear_fn` and `sim_apply_ratio_fn`.
+ *   Assigned to `SimProc::cfg` (as `const void*`); cast back to
+ *   `const GearProcCfg*` inside each fn.
+ *
+ *   `GearFsmState` (mutable runtime for `sim_gear_fn`) is declared in
+ *   archive section A2 and is available throughout the active area.
+ */
+struct GearProcCfg {
+    const GearShiftProfile* profile; ///< Shift threshold profile — pointer via vehicle alias.
+};
+
+/**
+ * @brief Mutable runtime state for `sim_apply_ratio_fn`.
+ *
+ * @details Assigned to `SimProc::state` (as `void*`); cast back inside
+ *   `sim_apply_ratio_fn()`.  Zero-init is valid (·prevGear = 0· means
+ *   no upshift on first cycle).
+ */
+struct ShiftDeltaState {
+    int8_t prevGear; ///< Gear seen last cycle — upshift edge detection.
+};
+
+
+// =============================================================================
+// 6. GENERIC ARITHMETIC PROC CONFIGS  (sim_math.h — ✅ implemented)
+// =============================================================================
+
+/**
+ * @brief Configuration for `sim_scale_fn` — linear domain rescale.
+ *
+ * @details `value = value × outMax / inMax`.
+ *
+ *   `sim_center_fn` and `sim_abs_fn` are **cfg-free** (`SimProc::cfg = nullptr`):
+ *   - `sim_center_fn`: pure signed deviation from CbusNeutral — no config needed.
+ *   - `sim_abs_fn`: sign side effect declared via `SimProc::optOutDCh`
+ *     (std::nullopt = skip, otherwise writes HIGH/LOW to that digital channel).
+ *
+   *   Typical three-proc chain for THROTTLE_BUS → RPM_BUS:
+ *   @code
+ *     sim_center_fn  { optInCh = nullopt, optOutDCh = nullopt, cfg = nullptr }
+ *     sim_abs_fn     { optOutDCh = nullopt,                    cfg = nullptr }
+ *     sim_scale_fn   { cfg = &{ inMax = CbusNeutral, outMax = gear[n-1].upShift } }
+ *   @endcode
+ *
+ *   For a pipeline that also captures direction as a digital side effect:
+ *   @code
+ *     sim_abs_fn     { optOutDCh = ESC_REVERSE_BUS }  // HIGH = FWD, LOW = REV
+ *   @endcode
+ */
+struct SimScaleCfg {
+    uint16_t inMax;   ///< Input range ceiling (e.g. CbusNeutral after sim_abs_fn).
+    uint16_t outMax;  ///< Output range ceiling (e.g. gear[n-1].upShift — init from profile).
 };
 
 

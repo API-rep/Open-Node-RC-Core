@@ -1,0 +1,81 @@
+/******************************************************************************
+ * @file  sim_gear.h
+ * @brief SimDev behaviour — speed-based virtual gear FSM.
+ *
+ * @details Two-level public API:
+ *
+ *   1. FSM primitives (`sim_gear_fsm_init`, `sim_gear_fsm_update`):
+ *      Simulates an automatic gearbox: decides upshift / downshift based on
+ *      RPM trend and hysteresis thresholds (FSM = Finite State Machine).
+ *      Pure RPM → gear logic, no ComBus involved.  Useful for explicit reset
+ *      (e.g. on runlevel transition) or direct use outside SimDev.
+ *
+ *   2. SimDev behaviour (`sim_gear_update`):
+ *      Full pipeline: ComBus position → RPM conversion → FSM → ComBus gear.
+ *      Assign to `SimDev::behaviorFn`. Self-inits on first call.
+ *      Must run before `sim_traction` in the SimDev array (GEAR written here,
+ *      read there).
+ *****************************************************************************/
+#pragma once
+
+#include <struct/machines_struct.h>   // SimDev, GearSimCfg, GearFsmState, SimBehaviorFn
+#include <struct/combus_struct.h>     // ComBus
+#include <struct/simulation_struct.h> // GearShiftProfile
+
+// Forward declaration — full type defined in sim_dev.h.
+struct SimDevCtx;
+
+
+// =============================================================================
+// 1. FSM PRIMITIVES
+// =============================================================================
+
+/**
+ * @brief Reset a `GearFsmState` to gear 1, clearing the shift guard timer.
+ *
+ * @details Called automatically by `sim_gear_update` on first call when
+ *   `state->gear == 0` (zero-init detection).  Exposed here for callers
+ *   that need to force-reset a running FSM (e.g. on runlevel transition).
+ *
+ * @param state  Non-null pointer to the FSM state to reset.
+ */
+void sim_gear_fsm_init(GearFsmState* state);
+
+/**
+ * @brief Advance the N-gear FSM by one cycle.
+ *
+ * @details Compares `rpm` to the shift thresholds in `profile`:
+ *   - Rising RPM trend above `upShift[gear-1]` → upshift (guarded).
+ *   - Falling RPM below `downShiftBraking[gear-1]` (or `downShift[gear-1]`
+ *     when not decelerating) → downshift (guarded).
+ *   - `rpm <= 0` forces gear 1 immediately.
+ *
+ * @param state    Mutable FSM state (gear, prevRpm, lastShiftMs).
+ * @param profile  Read-only gear-shift thresholds and guard timing.
+ * @param rpm      Current RPM (positive = forward, ≤ 0 = standing/reverse).
+ * @return         Active gear after this update (1–`profile.gears`).
+ */
+int8_t sim_gear_fsm_update(GearFsmState*           state,
+                           const GearShiftProfile& profile,
+                           int16_t                 rpm);
+
+
+// =============================================================================
+// 2. BEHAVIOUR FUNCTION
+// =============================================================================
+
+/**
+ * @brief Gear FSM behaviour — assigned to `SimDev::behaviorFn`.
+ *
+ * @details Matches the `SimBehaviorFn` signature.
+ *   Casts `dev->cfg` to `const GearSimCfg*` and `dev->state` to `GearFsmState*`.
+ *   `ctx` is not used (all inputs come from the ComBus `inCh`).
+ *   Self-inits on first call if `state->gear == 0`.
+ *
+ * @param dev  SimDev instance — `cfg` and `state` must not be nullptr.
+ * @param bus  Shared ComBus — `inCh` read, `outCh` written (gear value 1–N).
+ * @param ctx  Caller context snapshot — unused; kept for `SimBehaviorFn` signature.
+ */
+void sim_gear_update(SimDev* dev, ComBus& bus, const SimDevCtx& ctx);
+
+// EOF sim_gear.h

@@ -7,8 +7,7 @@
 #include "init/init.h"
 #include "system/utils.h"
 #include <core/config/inputs/PS4_dualshock.h>  // DigitalInputDevID enum
-#include <core/system/simulation/gear_fsm.h>
-#include <core/config/machines/machine_config.h>   // kDumperTruckGearShift (via dumper_truck_motion.h)
+#include <core/system/simulation/sim.h>
 #include <core/system/debug/debug.h>
 #include <core/system/debug/dashboard.h>
 #include <core/system/input/input_manager.h>
@@ -16,7 +15,6 @@
 #include <core/system/combus/combus_manager.h>
 #include <core/system/combus/combus_access.h>
 #include <core/system/vbat/vbat_sense.h>
-#include <core/system/simulation/motion.h>
 
 
 /**
@@ -30,14 +28,6 @@ void setup() {
 // =============================================================================
 // PERSISTENT SIMULATION STATE
 // =============================================================================
-
-/// @brief Speed-based gear FSM state — one instance for the traction device.
-static GearFsmState s_gearFsm = { .gear = 1, .lastShiftMs = 0u };
-
-/// @brief Direct-drive mode — OPTIONS button toggles inertia bypass.
-/// When true, motion_update() is skipped and raw ComBus value drives the motor directly.
-static bool s_directDrive    = false;
-static bool s_optionsBtnPrev = false;
 
 /// @brief Timestamp of the last operator activity (analog stick moved or button pressed).
 static uint32_t s_lastActivityMs = 0u;
@@ -190,17 +180,6 @@ void loop() {
 #endif
       }
 
-        // --- 0. OPTIONS button: toggle direct-drive (no inertia) ---
-      {
-        const bool optNow = comBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::DIRECT_DRIVE)].value;
-        if (optNow && !s_optionsBtnPrev) {
-          s_directDrive = !s_directDrive;
-          sys_log_info(s_directDrive ? "[MOTION] direct_drive=ON (inertia bypassed)\n"
-                                     : "[MOTION] direct_drive=OFF (inertia active)\n");
-        }
-        s_optionsBtnPrev = optNow;
-      }
-
         // --- 0.2. KEY long press (3 s): manual engine shutdown → IDLE ---
       {
         const bool keyNow = comBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::KEY)].value;
@@ -247,58 +226,28 @@ void loop() {
                           || machine.dcDev[i].signal == DcDrvSignal::SERVO_SIG_NEUTRAL_CENTER)
                           ? (comBus.analogBusMaxVal / 2) : 0u;
 
-          // --- Motion filter (applied to motorCmd only — busVal stays untouched) ---
-          // In direct-drive mode, skip inertia and keep runtime in sync for smooth re-entry.
-        if (machine.dcDev[i].motion != nullptr) {
-          if (s_directDrive) {
-            machine.dcDev[i].motionRt.currentPos = static_cast<combus_t>(motorCmd);
-          } else {
-            motion_update(motorCmd, machine.dcDev[i].motion, &machine.dcDev[i].motionRt, nullptr);
-            motorCmd = machine.dcDev[i].motionRt.currentPos;
-          }
-          // NOTE: filtered value is intentionally NOT written back to ENGINE_RPM_BUS.
-          //       The sound module runs its own ESC inertia simulation on the raw
-          //       throttle value; feeding a pre-filtered signal would double the ramp
-          //       and prevent the engine RPM sound from tracking vehicle speed.
-          //       ESC_SPEED_BUS is written separately below for gear-shift logic only.
-          if (chIdx == static_cast<uint8_t>(AnalogComBusID::ENGINE_RPM_BUS)) {
-            // Speed-based gear FSM — computes RPM from inertia-filtered position,
-            // applies hysteresis thresholds, and publishes result to GEAR wire channel.
-            {
-              const MotionRuntime& rt      = machine.dcDev[i].motionRt;
-              const GearShiftProfile& profile = *kDumperTruckGearShift;
-                // Convert inertia-filtered ComBus position to simulated RPM
-              const int32_t dev = (rt.currentPos >= CbusNeutral)
-                                ? static_cast<int32_t>(rt.currentPos - CbusNeutral)
-                                : static_cast<int32_t>(CbusNeutral  - rt.currentPos);
-              const int16_t rpm = static_cast<int16_t>(
-                  dev * static_cast<int32_t>(profile.maxRpm) / static_cast<int32_t>(CbusNeutral));
-                // Convert raw throttle ComBus to percentage (forward only, 0–100)
-              const uint8_t throttlePct = (busVal > CbusNeutral)
-                  ? static_cast<uint8_t>(static_cast<int32_t>(busVal - CbusNeutral) * 100L / CbusNeutral)
-                  : 0u;
-                // Run FSM — result written directly to motionRt.gearSetTo
-              machine.dcDev[i].motionRt.gearSetTo = gear_fsm_update(
-                  &s_gearFsm, profile, rpm, throttlePct,
-                  rt.driveState == DriveState::kBrakeFwd || rt.driveState == DriveState::kBrakeRev,
-                  rt.driveState == DriveState::kDriveRev || rt.driveState == DriveState::kBrakeRev);
-            }
-            // Publish real inertia-filtered speed and speed-based gear to sound node.
-            // No double-ramp risk: sound uses ENGINE_RPM_BUS for RPM pitch;
-            // ESC_SPEED_BUS is consumed only by the SEMI_AUTOMATIC logic.
-            combus_set_analog(comBus, AnalogComBusID::ESC_SPEED_BUS,
-                              machine.dcDev[i].motionRt.currentPos, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
-            combus_set_analog(comBus, AnalogComBusID::GEAR,
-                              static_cast<uint16_t>(machine.dcDev[i].motionRt.gearSetTo), makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
-          }
-        }
-
 #ifndef PATCH_MOTORS_FORCE_SLEEP
         float finalSpeed = (float)map(motorCmd, 0, comBus.analogBusMaxVal, -PERCENT_MAX, PERCENT_MAX);
         if (machine.dcDev[i].polInv) finalSpeed = -finalSpeed;
         dcDevObj[i].runAtSpeed(finalSpeed);
 #endif
       }
+
+      // --- 2. Direct-drive push-to-toggle: OPTIONS rising edge flips DIRECT_DRIVE state.
+      // TODO (winter 2026): replace with SwitchDevice lib toggle once available.
+      {
+        const uint8_t  optCh    = static_cast<uint8_t>(DigitalComBusID::DIRECT_DRIVE_BTN);  // raw input
+        static bool    s_toggle  = false;
+        static bool    s_prevBtn = false;
+        const  bool    btnNow    = comBus.digitalBus[optCh].isDrived && comBus.digitalBus[optCh].value;
+        if (btnNow && !s_prevBtn) { s_toggle = !s_toggle; }  // rising edge
+        s_prevBtn = btnNow;
+        combus_set_digital(comBus, DigitalComBusID::DIRECT_DRIVE, s_toggle,
+                           makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
+      }
+
+      // --- 3. Simulation channel update. ---
+      sim_update(machine.simChannel, machine.simChannelCount, comBus);
       break;
     }
 

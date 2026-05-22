@@ -25,17 +25,26 @@ namespace DumperTruck {
 /// @brief Com-bus analog channel identifiers
 enum class AnalogComBusID : uint8_t {
   STEERING_BUS = 0,
-  ENGINE_RPM_BUS,      ///< Raw throttle stick value — drives engine sound RPM (owner: INPUT_DEV)
+  RPM_BUS,             ///< Engine RPM magnitude [0..maxRpm], pre-inertia, post-ratio — written by SIM_THROTTLE. Transmitted to sound node.
   DUMP_BUS,
   ESC_SPEED_BUS,       ///< Inertia-smoothed speed — drives ESC output + currentSpeed (owner: SYSTEM_EXT)
-  GEAR,                ///< Active virtual gear (1–3) — derived from ESC_SPEED_BUS deviation by motion pipeline. Never 0; direction encoded separately in ESC_REVERSE.
+  GEAR,              ///< Active virtual gear (1–3) — derived from ESC_SPEED_BUS deviation by motion pipeline. Never 0; direction encoded separately in ESC_REVERSE.
+  DRIVE_STATE_BUS,   ///< DriveState 3-bit bitmask — see DriveStateBus::encode/decode in simulation_struct.h.
+                     ///<   bit0 ACTIVE | bit1 FWD | bit2 BRAKE  (0 = standing)
 
   /// Wire frontier — channels below this index are transmitted over UART.
   /// Channels at or above this index are node-local (never on the wire).
   /// Use WIRE_END (not CH_COUNT) for ComBus frame n_analog on both TX and RX sides.
   WIRE_END,
 
-  CH_COUNT = WIRE_END  ///< Total channel count — drives AnalogComBusArray size.
+  // ---- Machine node local (never transmitted on wire) -----
+  TRACTION_RAMP_BUS = WIRE_END, ///< Per-gear inertia ramp time (ms) — written by sim_gear, read by sim_traction.
+  BRAKE_BUS,                    ///< Brake pedal input (L2, ComBus domain) — written by input_manager, read by sim_brake.
+  SUBGEAR_BUS,                  ///< Active sub-gear index (1..N, 0 = inactive) — written by sim_gear.
+  DUMP_RAMPED_BUS,              ///< Inertia-smoothed dump position — written by sim_ramp, read by DUMP_ACTUATOR.
+  STEERING_RAMPED_BUS,          ///< Inertia-smoothed steering position — written by sim_ramp, read by STEERING.
+  THROTTLE_BUS,                 ///< Throttle stick position — written by input_manager, read by SIM_THROTTLE pipeline.
+  CH_COUNT                      ///< Total channel count (wire + local) — drives AnalogComBusArray size.
 };
 
 /// @brief Com-bus digital channel identifiers
@@ -67,7 +76,11 @@ enum class DigitalComBusID : uint8_t {
   WIRE_END = MOTION_END,
 
   // ---- Machine node local (never transmitted on wire) ---
-  DIRECT_DRIVE = WIRE_END,  ///< Direct-drive toggle (inertia bypass) — set by machine from operator input.
+  DIRECT_DRIVE = WIRE_END,  ///< Direct-drive toggle state (inertia bypass) — written by toggle logic in main.cpp, read by sim_bypass_fn.
+  DIRECT_DRIVE_BTN,         ///< Raw OPTIONS button — written by input_update every cycle; read only by toggle logic.
+  SUBGEAR_SET,              ///< Sub-gear mode toggle — activates/deactivates crawl mode (rising edge).
+  SUBGEAR_UP,               ///< Sub-gear increment — momentary, selects faster sub-gear (rising edge).
+  SUBGEAR_DOWN,             ///< Sub-gear decrement — momentary, selects slower sub-gear (rising edge).
   MACHINE_END,
 
   // ---- Sound node local (never transmitted on wire) ---

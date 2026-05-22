@@ -1,0 +1,339 @@
+/******************************************************************************
+ * @file  sim_traction.cpp
+ * @brief SimDev behaviour — traction inertia and 5-state drive FSM.
+ *
+ * @details Pure ComBus simulation processor — no hardware calls, no µs domain.
+ *   All values are in the ComBus domain (0–CbusMaxVal = 65535, neutral = 32767).
+ *
+ *   The output (`outCh`) is read by the downstream hardware device
+ *   (`SrvDevice ESC_RC`, `DcDevice`) as a normal analog channel.
+ *****************************************************************************/
+
+#include "sim_traction.h"
+#include "sim_dev.h"          // SimDevCtx (full type needed for function body)
+
+#include <Arduino.h>   // millis(), map(), constrain()
+
+#include "core/system/combus/combus_res.h"   // CbusNeutral, CbusMaxVal, CbusMinVal
+#include "core/system/combus/combus_access.h" // combus_set_analog, combus_set_digital
+#include <struct/simulation_struct.h>         // DriveStateBus::encode()
+
+
+// =============================================================================
+// 1. INTERNAL HELPERS
+// =============================================================================
+
+  /// Throttle stick direction: +1 forward, -1 reverse, 0 neutral.
+static inline int8_t throttle_dir(uint16_t throttleInput)
+{
+    if (throttleInput > CbusNeutral) return  1;
+    if (throttleInput < CbusNeutral) return -1;
+    return 0;
+}
+
+  /// Inertia direction: +1 moving forward, -1 moving in reverse, 0 in neutral band.
+static inline int8_t inertia_dir(uint16_t pos, uint16_t neutralFwd, uint16_t neutralRev)
+{
+    if (pos > neutralFwd) return  1;
+    if (pos < neutralRev) return -1;
+    return 0;
+}
+
+/**
+ * @brief Derive a 0–500 speed value from the inertial position.
+ *
+ * @details The 0–500 domain is kept for two internal purposes only:
+ *   - Gear-sync pulse correction (nudge magnitude proportional to speed).
+ *   - ClutchEngagingSpeed / driveRampGain reserved for future manual-gearbox support.
+ *   External callers derive speed from `outCh` (ComBus domain) directly.
+ */
+static inline int16_t compute_speed(uint16_t pos, uint16_t neutralFwd, uint16_t neutralRev)
+{
+    if (pos > neutralFwd)
+        return (int16_t)map((long)pos, (long)neutralFwd, (long)CbusMaxVal, 0L, 500L);
+    if (pos < neutralRev)
+        return (int16_t)map((long)pos, (long)neutralRev, (long)CbusMinVal, 0L, 500L);
+    return 0;
+}
+
+
+// =============================================================================
+// 2. BEHAVIOUR FUNCTION
+// =============================================================================
+
+/** @brief Traction inertia + drive FSM — see sim_traction.h for full contract. */
+void sim_traction_update(SimDev* dev, ComBus& bus, const SimDevCtx& ctx)
+{
+    const SimTractionCfg*  cfg   = static_cast<const SimTractionCfg*>(dev->cfg);
+    SimTractionState*      state = static_cast<SimTractionState*>(dev->state);
+
+      // Boundary constants derived from neutralBand.
+    const uint16_t neutralFwd = static_cast<uint16_t>(CbusNeutral + cfg->neutralBand);
+    const uint16_t neutralRev = static_cast<uint16_t>(CbusNeutral - cfg->neutralBand);
+
+    // --- 1. Read throttle input and derive directional signals --------------------
+    const uint16_t throttleInput = bus.analogBus[static_cast<uint8_t>(dev->inCh)].value;
+    const int8_t   thrDir        = throttle_dir(throttleInput);
+    const int8_t   inrDir        = inertia_dir(state->inertiaPos, neutralFwd, neutralRev);
+
+    // --- 2. Compute current speed (0–500 domain, local use only) -----------------
+    const int16_t  currentSpeed  = compute_speed(state->inertiaPos, neutralFwd, neutralRev);
+
+    // --- 3. Brake-detect: direction conflict between stick and inertia -----------
+    //    Latched here so sound engine reads it before the FSM moves on.
+    state->brakeDetect = ((thrDir == 1 && inrDir == -1) || (thrDir == -1 && inrDir == 1));
+
+    // --- 4. Compute ramp time for this cycle -------------------------------------
+    //    Gear: read from GEAR_BUS via SimDev::gearCh if present, else gear 1.
+    const uint8_t selectedGear = dev->gearCh.has_value()
+        ? static_cast<uint8_t>(bus.analogBus[static_cast<uint8_t>(dev->gearCh.value())].value)
+        : 1u;
+    const bool gearUpPulse   = cfg->shiftingAutoThrottle && (selectedGear > (uint8_t)state->prevGear);
+    const bool gearDownPulse = cfg->shiftingAutoThrottle && (selectedGear < (uint8_t)state->prevGear);
+    state->prevGear = static_cast<int8_t>(selectedGear);
+
+    {
+          // Ramp time pre-cooked by sim_gear on TRACTION_RAMP_BUS; fallback to cfg default.
+          // Sub-gear mode also writes TRACTION_RAMP_BUS (much larger value) — no special case needed here.
+        const uint16_t busRamp = bus.analogBus[static_cast<uint8_t>(AnalogComBusID::TRACTION_RAMP_BUS)].value;
+        uint16_t       rampTime = (busRamp != 0u) ? busRamp : cfg->defaultRampTime;
+
+          // Global acceleration scale: 100 % = nominal, 200 % = twice as fast.
+        if (ctx.globalAccelPct > 0u)
+            rampTime = rampTime * 100u / ctx.globalAccelPct;
+
+          // Low-range: slow ramp by lowRangePct (< 100 % = slower).
+        if (ctx.lowRange && cfg->lowRangePct > 0u)
+            rampTime = rampTime * cfg->lowRangePct / 100u;
+
+          // Reverse with auto-ramp: apply autoReverseAccelPct.
+        if (state->driveState == DriveState::kDriveRev && cfg->autoReverseAccelPct > 0u)
+            rampTime = rampTime * 100u / cfg->autoReverseAccelPct;
+
+        state->currentRampTime = rampTime;
+    }
+
+    // --- 5. Rate gate: run FSM only every currentRampTime ms ---------------------
+    const uint32_t now      = millis();
+    const bool     doUpdate = (now - state->lastUpdateMs >= state->currentRampTime);
+    if (doUpdate)
+    {
+    state->lastUpdateMs = now;
+
+    // --- 6. Compute ramp step rates (fixed — cfg values are calibrated step sizes) ---
+    //    Variable speed-dependent map() was removed: it started at 1 unit/tick
+    //    (imperceptibly slow) and never bootstrapped past neutralBand.
+    //    accelSteps / brakeSteps are the actual steps per rampTime tick.
+    int32_t brakeRampRate = (int32_t)cfg->brakeSteps;
+    int32_t driveRampRate = (int32_t)cfg->accelSteps;
+
+      // Failsafe: force maximum brake rate.
+    if (ctx.failSafe)
+    {
+        brakeRampRate = (int32_t)cfg->brakeSteps;
+        driveRampRate = (int32_t)cfg->brakeSteps;
+    }
+
+    // --- 7. Clutch-engaging gain: unused for automatic gearbox ------------------
+    //    Kept as no-op (gain=1) for future manual-gearbox support via cfg field.
+    const int8_t driveRampGain = 1;
+
+    // --- 8. Drive FSM ------------------------------------------------------------
+    {
+    switch (state->driveState)
+    {
+
+    case DriveState::kStanding: // STAND — stationary, waiting for engine + gear consent ------
+        state->inertiaPos = CbusNeutral;
+        if (thrDir ==  1 && ctx.engineOn && !ctx.neutralGear)
+            state->driveState = DriveState::kDriveFwd;
+        if (thrDir == -1 && ctx.engineOn && !ctx.neutralGear)
+            state->driveState = DriveState::kDriveRev;
+        break;
+
+    case DriveState::kDriveFwd: // FWD — driving forward, ramp toward positive target ----------
+    {
+        const uint16_t target = throttleInput;
+
+          // Accelerate toward target (speed cap: ComBus domain).
+        if (state->inertiaPos < target
+            && (ctx.speedLimit == 0u || state->inertiaPos < ctx.speedLimit)
+            && !bus.batteryIsLow)
+        {
+            if (state->inertiaPos >= neutralFwd) {
+                const uint32_t next = static_cast<uint32_t>(state->inertiaPos)
+                                    + static_cast<uint32_t>(driveRampRate * driveRampGain);
+                state->inertiaPos = (next > CbusMaxVal) ? CbusMaxVal : static_cast<uint16_t>(next);
+            } else
+                state->inertiaPos = (target < neutralFwd) ? target : neutralFwd;   // Boost past neutral band — clamped to target.
+        }
+          // Decelerate toward target (or battery low) — clamp to CbusNeutral to avoid underflow.
+        if ((state->inertiaPos > target || bus.batteryIsLow) && state->inertiaPos > CbusNeutral) {
+            const uint32_t step32 = static_cast<uint32_t>(driveRampRate * driveRampGain);
+            state->inertiaPos = (state->inertiaPos < static_cast<uint32_t>(CbusNeutral) + step32)
+                              ? CbusNeutral
+                              : static_cast<uint16_t>(state->inertiaPos - step32);
+        }
+
+          // Gear-sync pulse corrections — only for real manual gearbox.
+        if (cfg->shiftingAutoThrottle)
+        {
+            if (gearUpPulse)
+            {   // Lower inertia to sync engine speed (de-throttle).
+                const uint16_t delta = static_cast<uint16_t>(
+                    (int32_t)currentSpeed * (int32_t)(CbusMaxVal / 2u) / (4 * 500));
+                if (state->inertiaPos > delta + CbusNeutral)
+                    state->inertiaPos -= delta;
+                else
+                    state->inertiaPos = CbusNeutral;
+                state->inertiaPos = constrain(state->inertiaPos, CbusNeutral, CbusMaxVal);
+            }
+            if (gearDownPulse)
+            {   // Raise inertia to sync engine speed (blip throttle).
+                const uint16_t delta = static_cast<uint16_t>(
+                    50L * (int32_t)(CbusMaxVal / 2u) / 500L);
+                state->inertiaPos = constrain(
+                    (uint32_t)state->inertiaPos + delta, (uint32_t)CbusNeutral, (uint32_t)CbusMaxVal);
+            }
+        }
+
+          // Transitions.
+        if (thrDir == -1 && inrDir ==  1)  state->driveState = DriveState::kBrakeFwd;
+        if (thrDir == -1 && inrDir ==  0)  state->driveState = DriveState::kDriveRev;  // Skip hang guard.
+        if (thrDir ==  0 && inrDir ==  0)  state->driveState = DriveState::kStanding;
+        break;
+    }
+
+    case DriveState::kBrakeFwd: // BRK_FWD — braking from forward, ramp back toward neutral ----
+    {
+          // Ramp inertia back toward neutral.
+        if (state->inertiaPos > CbusNeutral)
+            state->inertiaPos -= static_cast<uint16_t>(brakeRampRate);
+
+          // Hold-off: if stick is still in reverse, don't go all the way to neutral.
+        if (state->inertiaPos < CbusNeutral + cfg->brakeMargin && thrDir == -1)
+            state->inertiaPos = CbusNeutral + cfg->brakeMargin;
+
+          // Overflow guard.
+        if (state->inertiaPos < CbusNeutral && thrDir == 0)
+            state->inertiaPos = CbusNeutral;
+
+          // Transitions.
+        if (thrDir == 0 && inrDir ==  1 && !ctx.neutralGear)
+        {
+            state->driveState = DriveState::kDriveFwd;
+            // TODO (winter 2026): route airBrakeTrigger via a dedicated outAirBrakeCh.
+        }
+        if (thrDir == 0 && inrDir == 0)
+        {
+            state->driveState = DriveState::kStanding;
+            // TODO (winter 2026): route airBrakeTrigger via a dedicated outAirBrakeCh.
+        }
+        if (thrDir == -1 && inrDir == 0)  state->driveState = DriveState::kDriveRev;
+        break;
+    }
+
+    case DriveState::kDriveRev: // REV — driving in reverse, ramp toward negative target ------
+    {
+        const uint16_t target = throttleInput;
+
+          // Accelerate toward target (in reverse: inertiaPos moves below neutral).
+        if (state->inertiaPos > target
+            && (ctx.speedLimit == 0u || state->inertiaPos > (CbusMaxVal - ctx.speedLimit))
+            && !bus.batteryIsLow)
+        {
+            if (state->inertiaPos <= neutralRev) {
+                const uint32_t step32 = static_cast<uint32_t>(driveRampRate * driveRampGain);
+                state->inertiaPos = (static_cast<uint32_t>(state->inertiaPos) < step32)
+                                  ? 0u
+                                  : static_cast<uint16_t>(state->inertiaPos - step32);
+            } else
+                state->inertiaPos = (target > neutralRev) ? target : neutralRev;   // Boost past neutral band — clamped to target.
+        }
+          // Decelerate toward target — clamp to CbusNeutral to avoid overflow above neutral.
+        if ((state->inertiaPos < target || bus.batteryIsLow) && state->inertiaPos < CbusNeutral) {
+            const uint32_t next = static_cast<uint32_t>(state->inertiaPos)
+                                + static_cast<uint32_t>(driveRampRate * driveRampGain);
+            state->inertiaPos = (next > CbusNeutral) ? CbusNeutral : static_cast<uint16_t>(next);
+        }
+
+          // Gear-sync pulse corrections — only for real manual gearbox.
+        if (cfg->shiftingAutoThrottle)
+        {
+            if (gearUpPulse)
+            {   // In reverse, upshift raises inertia (toward neutral).
+                const uint16_t delta = static_cast<uint16_t>(
+                    (int32_t)currentSpeed * (int32_t)(CbusMaxVal / 2u) / (4 * 500));
+                state->inertiaPos = constrain(
+                    (uint32_t)state->inertiaPos + delta, 0u, (uint32_t)CbusNeutral);
+            }
+            if (gearDownPulse)
+            {   // In reverse, downshift lowers inertia (away from neutral).
+                const uint16_t delta = static_cast<uint16_t>(
+                    50L * (int32_t)(CbusMaxVal / 2u) / 500L);
+                if (state->inertiaPos > delta)
+                    state->inertiaPos -= delta;
+                else
+                    state->inertiaPos = 0u;
+                state->inertiaPos = constrain(state->inertiaPos, (uint16_t)0u, CbusNeutral);
+            }
+        }
+
+          // Transitions.
+        if (thrDir ==  1 && inrDir == -1)  state->driveState = DriveState::kBrakeRev;
+        if (thrDir ==  1 && inrDir ==  0)  state->driveState = DriveState::kDriveFwd;  // Skip hang guard.
+        if (thrDir ==  0 && inrDir ==  0)  state->driveState = DriveState::kStanding;
+        break;
+    }
+
+    case DriveState::kBrakeRev: // BRK_REV — braking from reverse, ramp back toward neutral ---
+    {
+          // Ramp inertia back toward neutral.
+        if (state->inertiaPos < CbusNeutral)
+            state->inertiaPos += static_cast<uint16_t>(brakeRampRate);
+
+          // Hold-off: if stick is still forward, don't go all the way to neutral.
+        if (state->inertiaPos > CbusNeutral - cfg->brakeMargin && thrDir == 1)
+            state->inertiaPos = CbusNeutral - cfg->brakeMargin;
+
+          // Overflow guard.
+        if (state->inertiaPos > CbusNeutral && thrDir == 0)
+            state->inertiaPos = CbusNeutral;
+
+          // Transitions.
+        if (thrDir == 0 && inrDir == -1 && !ctx.neutralGear)
+        {
+            state->driveState = DriveState::kDriveRev;
+            // TODO (winter 2026): route airBrakeTrigger via a dedicated outAirBrakeCh.
+        }
+        if (thrDir == 0 && inrDir == 0)
+        {
+            state->driveState = DriveState::kStanding;
+            // TODO (winter 2026): route airBrakeTrigger via a dedicated outAirBrakeCh.
+        }
+        if (thrDir == 1 && inrDir == 0)  state->driveState = DriveState::kDriveFwd;
+        break;
+    }
+
+    } // end switch(driveState)
+    } // end FSM block
+    } // end doUpdate block
+
+    // --- 9. Write ComBus outputs --------------------------------------------------
+    //    Analog: inertial position (read by hardware device as throttle).
+    combus_set_analog(bus, dev->outCh, state->inertiaPos, dev->chanOwner);
+
+    //    Digital: external state flags (reverse, braking, driving).
+    const int8_t ds = state->driveState;
+
+    //    Analog: encoded drive state (read by sound node via DRIVE_STATE_BUS wire).
+    if (dev->outDriveStateCh.has_value())
+        combus_set_analog(bus, dev->outDriveStateCh.value(),
+                          DriveStateBus::encode(ds), dev->chanOwner);
+
+    combus_set_digital(bus, dev->outRevCh,   ds == DriveState::kDriveRev || ds == DriveState::kBrakeRev, dev->chanOwner);
+    combus_set_digital(bus, dev->outBrakeCh, ds == DriveState::kBrakeFwd || ds == DriveState::kBrakeRev, dev->chanOwner);
+    combus_set_digital(bus, dev->outDriveCh, ds == DriveState::kDriveFwd || ds == DriveState::kDriveRev, dev->chanOwner);
+}
+
+// EOF sim_traction.cpp

@@ -83,27 +83,8 @@ enum SrvDev {
 extern SrvDevice SrvDevArray[];
 
 
-/**
- * @brief Indices into `sigDevArray[]`.
- *
- * @details Signal devices carry a ComBus channel reference and a `DevUsage`
- *   tag that lets the sound and output modules derive their behaviour without
- *   additional mapping tables.  Entries tagged `UNDEFINED` are handled by
- *   internal FSM logic (engine key) or a multiplexer (indicators/hazards)
- *   inside the relevant module.
- */
-enum SigDev {
-    HORN_SIG = 0,   ///< Horn trigger → DevUsage::SIG_HORN.
-    LIGHTS_SIG,     ///< Main lights toggle → DevUsage::SIG_LIGHT.
-    KEY_SIG,        ///< Engine on/off key → DevUsage::UNDEFINED (handled by FSM).
-    INDIC_L_SIG,    ///< Left indicator → DevUsage::UNDEFINED (mux in sound_core).
-    INDIC_R_SIG,    ///< Right indicator → DevUsage::UNDEFINED (mux in sound_core).
-    HAZARDS_SIG,    ///< Hazard flashers → DevUsage::UNDEFINED (mux in sound_core).
-    SIG_COUNT       ///< Sentinel — number of signal devices.
-};
-
-/// Signal device table. Data defined in `envCfg.cpp`.
-extern SigDevice sigDevArray[SIG_COUNT];
+// SigDev enum and sigDevArray are declared in
+// volvo_A60H_bruder.h (included above) — they are board-independent.
 
 
 // =============================================================================
@@ -123,8 +104,10 @@ inline constexpr EnvCfg machine {
   .dcDevCount    = DC_DRV_COUNT,
   .srvDev        = SrvDevArray,
   .srvDevCount   = SRV_COUNT,
-  .sigDev        = sigDevArray,
-  .sigDevCount   = SIG_COUNT
+  .sigDev           = sigDevArray,
+  .sigDevCount      = SIG_COUNT,
+  .simChannel       = kSimChannels,
+  .simChannelCount  = SIM_CH_COUNT
 };
 
 

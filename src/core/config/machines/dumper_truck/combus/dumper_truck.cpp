@@ -13,10 +13,18 @@ using namespace DumperTruck;
 AnalogComBus AnalogComBusArray[static_cast<uint8_t>(AnalogComBusID::CH_COUNT)] = {
   // --- Wire channels (0 .. WIRE_END-1) --- transmitted over UART ---
   { .infoName = "steering channel",        .owner = ChanOwner::MACHINE_INPUT  },
-  { .infoName = "driving speed channel",   .owner = ChanOwner::MACHINE_INPUT  },
+  { .infoName = "rpm channel",              .owner = ChanOwner::MACHINE_SYSTEM }, ///< Engine RPM — written by SIM_RPM pipeline, transmitted to sound node.
   { .infoName = "dump actuators channel",  .owner = ChanOwner::MACHINE_INPUT  },
   { .infoName = "esc speed channel",       .owner = ChanOwner::MACHINE_SYSTEM },
   { .infoName = "gear channel",            .owner = ChanOwner::MACHINE_SYSTEM }, ///< Virtual gear (1–3) from motion pipeline; direction in ESC_REVERSE.
+  { .infoName = "drive state channel",     .owner = ChanOwner::MACHINE_SYSTEM }, ///< DriveState 3-bit bitmask — see DriveStateBus::encode() in simulation_struct.h.
+  // --- Machine-node-local channels (WIRE_END .. CH_COUNT-1) — never transmitted ---
+  { .infoName = "traction ramp channel",   .owner = ChanOwner::MACHINE_SYSTEM }, ///< Per-gear inertia ramp time (ms) — written by sim_gear, read by sim_traction.
+  { .infoName = "analog brake channel",    .owner = ChanOwner::MACHINE_INPUT  }, ///< L2 trigger input — written by input_manager, read by sim_brake.
+  { .infoName = "sub-gear channel",        .owner = ChanOwner::MACHINE_SYSTEM }, ///< Active sub-gear index — written by sim_gear.
+  { .infoName = "dump ramp channel",       .owner = ChanOwner::MACHINE_SYSTEM }, ///< Inertia-smoothed dump position — written by sim_ramp, read by DUMP_ACTUATOR.
+  { .infoName = "steering ramp channel",   .owner = ChanOwner::MACHINE_SYSTEM }, ///< Inertia-smoothed steering position — written by sim_ramp, read by STEERING.
+  { .infoName = "throttle channel",        .owner = ChanOwner::MACHINE_INPUT  }, ///< Throttle stick — written by input_manager, read by SIM_THROTTLE.
 };
 
 
@@ -35,7 +43,8 @@ DigitalComBus DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::CH_COUNT)
   { .infoName = "low beam channel",        .value = false, .owner = ChanOwner::MACHINE_INPUT },
   { .infoName = "braking channel",         .value = false, .owner = ChanOwner::MACHINE_SYSTEM },
   // --- Machine-node-local channels (WIRE_END .. MACHINE_END-1) — never transmitted ---
-  { .infoName = "direct drive (local)",    .value = false, .owner = ChanOwner::MACHINE_INPUT }, ///< Direct-drive toggle — inertia bypass.
+  { .infoName = "direct drive (local)",    .value = false, .owner = ChanOwner::MACHINE_SYSTEM }, ///< Toggle state — written by main.cpp toggle logic, read by sim_bypass_fn.
+  { .infoName = "direct drive btn (local)", .value = false, .owner = ChanOwner::MACHINE_INPUT  }, ///< Raw OPTIONS button — written by input_update every cycle.
   // --- Sound-node-local channels (MACHINE_END .. CH_COUNT-1) — never transmitted ---
   { .infoName = "always on (local)",       .value = true,  .owner = ChanOwner::NONE }, ///< Stays true: continuous sources driven by volMod.
   { .infoName = "siren (local)",           .value = false, .owner = ChanOwner::NONE }, ///< Siren/cannon mode toggle.

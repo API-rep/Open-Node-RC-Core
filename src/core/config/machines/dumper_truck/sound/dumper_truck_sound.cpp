@@ -23,14 +23,16 @@ const VehicleSoundProfile kVehicleSoundDynamics = {
     .engineDec           = 1,
     .clutchEngagingPoint = 80u,
     .maxRpmPercentage    = 350u,
-    .upShift          = kDumperTruckGearShift->upShift,
-    .downShift        = kDumperTruckGearShift->downShift,
-    .downShiftBraking = kDumperTruckGearShift->downShiftBraking,
+    .gearShift        = kDumperTruckGearShift,
 
-    // --- ESC inertia ramp (from CaboverCAT3408.h) ---
-    .escRampTime             = { 20u, 50u, 75u },  // gear 1 / 2 / 3
-    .escBrakeSteps           = 30u,
-    .escAccelerationSteps    = 3u,
+    // --- ESC inertia ramp ---
+    // Machine node already applies inertia (sim_ramp ~1.7 s).  Set esc() ramp
+    // to near-instant so the engine sound tracks RPM_BUS directly, same as the
+    // motors.  escRampTime=1 ms + max steps → escPulseWidth snaps to pw3 in
+    // one call; the remaining sound inertia is the machine's sim_ramp only.
+    .escRampTime             = {  1u,  1u,  1u },  // near-instant, all gears
+    .escBrakeSteps           = 255u,              // full range in one step (uint8_t max)
+    .escAccelerationSteps    = 255u,              // full range in one step (uint8_t max)
     .maxClutchSlippingRpm    = 250u,
     .automaticReverseAccelPct = 100u,
     .lowRangePct             = 58u,

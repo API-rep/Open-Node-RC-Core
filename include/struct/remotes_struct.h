@@ -41,6 +41,9 @@ typedef struct {
   uint16_t val;                               // analog device value
   const int32_t minVal = 0;                   // minimum value return by analog device decoder module at lower state
   const int32_t maxVal = 0;                   // maximum value return by analog device decoder module at higher state
+  const int32_t deadband = 0;                 // raw-domain idle deadband: ANALOG_BUTTON → input ≤ deadband clamps to minVal;
+                                              //   ANALOG_STICK → |input − center| ≤ deadband clamps to center.
+                                              //   0 = disabled (default). Set per-device in the remote config.
   const bool isInverted = false;              // true if analog device axe is inverted
 } AnalogInputDev;
 

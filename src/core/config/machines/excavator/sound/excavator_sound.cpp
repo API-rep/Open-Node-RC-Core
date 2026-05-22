@@ -29,9 +29,7 @@ const VehicleSoundProfile kVehicleSoundDynamics = {
     .engineDec           = 1,
     .clutchEngagingPoint = 500u,           // CEP = max: virtual clutch never engages
     .maxRpmPercentage    = 200u,
-    .upShift             = { 500, 500, 500 }, // not consumed — no traction gearbox
-    .downShift           = {   0,   0,   0 },
-    .downShiftBraking    = {   0,   0,   0 },
+    .gearShift           = nullptr,  // EXCAVATOR mode — no traction gearbox
 };
 #endif  // excavator machine guard
 

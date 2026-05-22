@@ -216,13 +216,36 @@ struct TriggerCfg {
 
 
 // =============================================================================
+// 4. THROTTLE RPM CONFIG  (throttle_behaviorFn — RPM domain input)
+// =============================================================================
+
+/**
+ * @brief Configuration for `throttle_behaviorFn` when `RPM_BUS` carries
+ *   engine RPM magnitude [0..maxRpm] (unipolar, 0 = idle).
+ *
+ * @details The behavior fn converts RPM to ComBus domain [0..CbusMaxVal]
+ *   bipolar (CbusNeutral = center) using `DRIVE_STATE_BUS` for direction,
+ *   so `gMixerState.throttleVal` stays in the format expected by DiYGuy.
+ *
+ *   `maxRpm` = top-gear upShift ceiling (e.g. 2100 for kHeavy3Speed).
+ *
+ *   `hdr.gateDevID = -1` — no gate device.
+ */
+struct ThrottleRpmCfg {
+	SoundCfgHdr hdr;     ///< Must be first (offset 0). Set gateDevID = -1.
+	uint16_t    maxRpm;  ///< Full-stick RPM ceiling — top-gear upShift value.
+};
+
+
+// =============================================================================
 // LAYOUT CONSTRAINTS
 // =============================================================================
 
 // SoundCfgHdr must be the first non-static field (offset 0) in every cfg struct.
 // The interpreter casts const void* cfg → const SoundCfgHdr* to read gateDevID.
-static_assert(offsetof(HydRampCfg, hdr) == 0, "SoundCfgHdr hdr must be first in HydRampCfg");
-static_assert(offsetof(HydPumpCfg, hdr) == 0, "SoundCfgHdr hdr must be first in HydPumpCfg");
-static_assert(offsetof(TriggerCfg,  hdr) == 0, "SoundCfgHdr hdr must be first in TriggerCfg");
+static_assert(offsetof(HydRampCfg,      hdr) == 0, "SoundCfgHdr hdr must be first in HydRampCfg");
+static_assert(offsetof(HydPumpCfg,      hdr) == 0, "SoundCfgHdr hdr must be first in HydPumpCfg");
+static_assert(offsetof(TriggerCfg,      hdr) == 0, "SoundCfgHdr hdr must be first in TriggerCfg");
+static_assert(offsetof(ThrottleRpmCfg,  hdr) == 0, "SoundCfgHdr hdr must be first in ThrottleRpmCfg");
 
 // EOF sound_device_cfg.h

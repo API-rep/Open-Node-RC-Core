@@ -29,9 +29,7 @@ const VehicleSoundProfile kVehicleSoundDynamics = {
     .engineDec           = 3,
     .clutchEngagingPoint = 500u,           // CEP = max: hydraulic torque converter
     .maxRpmPercentage    = 200u,
-    .upShift             = { 500, 500, 500 }, // 1-gear mode — never shifts to gear 2
-    .downShift           = {   0,   0,   0 },
-    .downShiftBraking    = {   0,   0,   0 },
+    .gearShift           = nullptr,  // 1-gear mode — no shift thresholds needed
 };
 #endif  // loader machine guard
 

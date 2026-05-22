@@ -1,0 +1,47 @@
+/******************************************************************************
+ * @file  sim_ramp.h
+ * @brief SimDev behaviour — single-axis inertia ramp (hydraulics, steering).
+ *
+ * @details `sim_ramp_update()` implements a simple inertia ramp:
+ *   - Reads `inCh` (target ComBus value, e.g. DUMP_BUS, STEERING_BUS).
+ *   - Advances `currentPos` toward the target by `accelSteps` (moving away
+ *     from neutral) or `brakeSteps` (returning toward neutral) on each
+ *     `rampTimeMs` tick.
+ *   - Writes the filtered position to `outCh` (e.g. DUMP_RAMPED_BUS) every
+ *     call, regardless of whether the timer elapsed this cycle.
+ *
+ *   Multi-instance: assign one `sim_ramp` SimDev per device that needs
+ *   inertia.  The downstream `DcDevice` reads `outCh` instead of the raw
+ *   input channel.
+ *
+ *   Assign this function to `SimDev::behaviorFn` in the machine config:
+ *   @code
+ *     SimDev kMyDev = { ..., .behaviorFn = sim_ramp_update };
+ *   @endcode
+ *****************************************************************************/
+#pragma once
+
+#include <struct/machines_struct.h>   // SimDev, SimRampCfg, SimRampState, SimBehaviorFn
+#include <struct/combus_struct.h>     // ComBus
+
+// Forward declaration — full type defined in sim_dev.h.
+struct SimDevCtx;
+
+
+// =============================================================================
+// 1. PUBLIC API
+// =============================================================================
+
+/**
+ * @brief Single-axis ramp behaviour — assigned to `SimDev::behaviorFn`.
+ *
+ * @details Matches the `SimBehaviorFn` signature.
+ *   Self-inits on first call when `state->currentPos == 0`.
+ *
+ * @param dev  SimDev instance — `cfg` and `state` must not be nullptr.
+ * @param bus  Shared ComBus — `inCh` read; `outCh` written every call.
+ * @param ctx  Caller-supplied context — not used by this behaviour.
+ */
+void sim_ramp_update(SimDev* dev, ComBus& bus, const SimDevCtx& ctx);
+
+// EOF sim_ramp.h

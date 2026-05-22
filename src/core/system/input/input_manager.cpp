@@ -62,8 +62,20 @@ void input_update(ComBus &bus) {
       default: break;
     }
 
-      // --- Dynamic Scaling ---
+      // --- Device-level deadband (raw domain) ---
     const AnalogInputDev &dev = inputDev.analogInputDev[devID];
+    
+    if (dev.deadband > 0) {
+      if (dev.type == RemoteComp::ANALOG_BUTTON && raw <= (int16_t)dev.deadband) {
+        raw = (int16_t)dev.minVal;   // clamp to rest position
+      } else if (dev.type == RemoteComp::ANALOG_STICK) {
+        const int32_t center = (dev.minVal + dev.maxVal) / 2;
+        if (raw >= (int16_t)(center - dev.deadband) && raw <= (int16_t)(center + dev.deadband))
+          raw = (int16_t)center;     // clamp to mechanical center
+      }
+    }
+
+      // --- Dynamic Scaling ---
     uint16_t val = map(raw, dev.minVal, dev.maxVal, 0, bus.analogBusMaxVal);
 
       // --- ComBus Injection ---

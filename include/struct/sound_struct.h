@@ -16,6 +16,8 @@
 #include <defs/machines_defs.h>
 #include <struct/combus_struct.h>
 
+struct GearShiftProfile;  // forward decl — full type in simulation_struct.h
+
 
 // =============================================================================
 // 1. ENGINE BEHAVIOUR TYPES
@@ -78,9 +80,7 @@ struct VehicleSoundProfile {
     int8_t   engineDec;           ///< Engine mass decel step (scale 0..9).  // → VehicleSimulationProfile
     uint16_t clutchEngagingPoint; ///< CEP — above this speed, RPM tracks ESC. // → VehicleSimulationProfile
     uint32_t maxRpmPercentage;    ///< Max RPM as % of idle RPM.
-    const int16_t* upShift;          ///< Speed-threshold upshift points   — pointer to GearShiftProfile::upShift.          (VIRTUAL_3SPEED) // → VehicleSimulationProfile
-    const int16_t* downShift;         ///< Downshift thresholds — coasting  — pointer to GearShiftProfile::downShift.        (VIRTUAL_3SPEED)  // → VehicleSimulationProfile
-    const int16_t* downShiftBraking;  ///< Downshift thresholds — braking   — pointer to GearShiftProfile::downShiftBraking.  (VIRTUAL_3SPEED)  // → VehicleSimulationProfile
+    const GearShiftProfile* gearShift;  ///< Gear shift thresholds — pointer to GearShiftProfile. (VIRTUAL_3SPEED) // → VehicleSimulationProfile
 
     // --- ESC inertia ramp timing (Phase C — migrated from CaboverCAT3408.h) ---
     uint8_t  escRampTime[3];           ///< Ramp tick budget: gear 1 / gear 2 / gear 3.
