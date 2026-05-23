@@ -4,12 +4,12 @@
  *
  * @details Defines the SimChannel array for the Volvo A60H Bruder machine.
  *
- *   Channel pipelines:
- *     SIM_THROTTLE : THROTTLE_BUS  →  [bypass + ramp + center + abs + scale + ratio]  →  RPM_BUS (wire)
- *     SIM_GEAR     : RPM_BUS       →  [gear-fsm]                                       →  GEAR    (wire)
- *     SIM_TRACTION : RPM_BUS       →  [rpm_to_speed]                                   →  ESC_SPEED_BUS (wire, motors)
- *     SIM_STEERING : STEERING_BUS  →  [bypass + ramp]  →  STEERING_RAMPED_BUS (local)
- *     SIM_DUMP     : DUMP_BUS      →  [bypass + ramp]  →  DUMP_RAMPED_BUS     (local)
+ *   Channel pipelines (each proc array is fully self-describing: read → … → write):
+ *     SIM_THROTTLE : read(THROTTLE_BUS) → center → abs → scale → bypass(DIRECT_DRIVE→RPM_BUS) → ramp → ratio → write(RPM_BUS)
+ *     SIM_GEAR     : read(RPM_BUS)      → bypass(DIRECT_DRIVE→GEAR,=1) → gear-fsm → write(GEAR)
+ *     SIM_TRACTION : read(RPM_BUS)      → rpm_to_speed → write(ESC_SPEED_BUS)
+ *     SIM_STEERING : read(STEERING_BUS) → bypass(DIRECT_DRIVE→STEERING_RAMPED_BUS) → ramp → write(STEERING_RAMPED_BUS)
+ *     SIM_DUMP     : read(DUMP_BUS)     → bypass(DIRECT_DRIVE→DUMP_RAMPED_BUS) → ramp → write(DUMP_RAMPED_BUS)
  *******************************************************************************
  */
 
@@ -19,10 +19,11 @@
 #include <core/config/hw/simulation_presets.h>    // kHeavy3_steps (for outMax ceiling)
 #include <struct/combus_struct.h>                 // makeChanOwner, ComBusOwner
 #include <core/system/combus/combus_res.h>        // CbusNeutral, pctToCbus
+#include <core/system/simulation/sim_io.h>        // sim_read_fn, sim_write_fn
 #include <core/system/simulation/sim_ramp.h>      // sim_ramp_fn, SimRampCfg, SimRampState
 #include <core/system/simulation/sim_bypass.h>    // sim_bypass_fn, SimBypassCfg
-#include <core/system/simulation/sim_math.h>       // sim_center_fn, sim_scale_fn, SimScaleCfg
-#include <core/system/simulation/sim_gear.h>       // sim_gear_fn, sim_apply_ratio_fn, GearProcCfg, GearFsmState, ShiftDeltaState
+#include <core/system/simulation/sim_math.h>      // sim_center_fn, sim_scale_fn, SimScaleCfg
+#include <core/system/simulation/sim_gear.h>      // sim_gear_fn, sim_apply_ratio_fn, GearProcCfg, GearFsmState, ShiftDeltaState
 #include <core/config/machines/dumper_truck/motion/dumper_truck_motion.h>  // kDumperTruckGearShift
 
 
@@ -47,7 +48,6 @@ static constexpr SimRampCfg kDumpAsymRamp {
     .neutralBand    = 0u,
 };
 
-
 //  Traction — heavy truck inertia (slow accel, moderate engine brake).
 //  Steps are in RPM units (domain [0..maxRpm=2100]): 3 %/tick accel, 6 %/tick brake.
 //  At 50 ms/tick: accel ~1.7 s, brake ~0.8 s  (same real-time as before the RPM-domain migration).
@@ -60,11 +60,40 @@ static constexpr SimRampCfg kTractionRamp {
     .neutralBand = 0u,
 };
 
-//  Traction direct-drive bypass — OPTIONS button → DIRECT_DRIVE HIGH → ramp skipped.
-static constexpr SimBypassCfg kTractionBypass {
+
+// =============================================================================
+// 2. BYPASS CONFIGURATIONS (per-channel — condCh + outCh)
+// =============================================================================
+
+//  Throttle bypass: DIRECT_DRIVE HIGH → skip ramp + ratio, scaled RPM → RPM_BUS direct.
+static constexpr SimBypassCfg kThrottleBypass {
     .condCh = DigitalComBusID::DIRECT_DRIVE,
+    .outCh  = AnalogComBusID::RPM_BUS,
 };
 
+//  Gear bypass: DIRECT_DRIVE HIGH → GEAR = 1 (locked, no upshifting).
+//  Uses sim_gear_bypass_fn which writes 1 (not the piped RPM value).
+static constexpr SimBypassCfg kGearBypass {
+    .condCh = DigitalComBusID::DIRECT_DRIVE,
+    .outCh  = AnalogComBusID::GEAR,
+};
+
+//  Steering bypass: DIRECT_DRIVE HIGH → STEERING_BUS → STEERING_RAMPED_BUS direct.
+static constexpr SimBypassCfg kSteeringBypass {
+    .condCh = DigitalComBusID::DIRECT_DRIVE,
+    .outCh  = AnalogComBusID::STEERING_RAMPED_BUS,
+};
+
+//  Dump bypass: DIRECT_DRIVE HIGH → DUMP_BUS → DUMP_RAMPED_BUS direct.
+static constexpr SimBypassCfg kDumpBypass {
+    .condCh = DigitalComBusID::DIRECT_DRIVE,
+    .outCh  = AnalogComBusID::DUMP_RAMPED_BUS,
+};
+
+
+// =============================================================================
+// 3. SCALE + GEAR CONFIG
+// =============================================================================
 
 //  Throttle → RPM mapping — center(signed) → abs → scale.
 //  No direction side effect here: direction is already tracked by DRIVE_STATE_BUS (drive FSM).
@@ -81,7 +110,7 @@ static constexpr GearProcCfg kGearCfg {
 
 
 // =============================================================================
-// 2. RUNTIME STATES (zero-init — self-snap to CbusNeutral on first call)
+// 4. RUNTIME STATES (zero-init — self-snap to CbusNeutral on first call)
 // =============================================================================
 
 static SimRampState    gSteerRampState          {};
@@ -92,10 +121,17 @@ static ShiftDeltaState gThrottleShiftDeltaState {};
 
 
 // =============================================================================
-// 3. PROCESSOR ARRAYS
+// 5. PROCESSOR ARRAYS
 // =============================================================================
 
 static SimProc kThrottleProcs[] = {
+    {
+        .name    = "read",
+        .optInCh = AnalogComBusID::THROTTLE_BUS,
+        .fn      = sim_read_fn,
+        .cfg     = nullptr,
+        .state   = nullptr,
+    },
     {
         .name    = "center",
         .optInCh = AnalogComBusID::THROTTLE_BUS,
@@ -105,151 +141,200 @@ static SimProc kThrottleProcs[] = {
     },
     {
         .name    = "abs",
-        .optInCh = AnalogComBusID::THROTTLE_BUS,  ///< Informational — value piped from center.
+        .optInCh = AnalogComBusID::THROTTLE_BUS,
         .fn      = sim_abs_fn,
         .cfg     = nullptr,
         .state   = nullptr,
     },
     {
         .name    = "scale",
-        .optInCh = AnalogComBusID::THROTTLE_BUS,  ///< Informational — value piped from abs.
+        .optInCh = AnalogComBusID::THROTTLE_BUS,
         .fn      = sim_scale_fn,
         .cfg     = &kThrottleScale,
         .state   = nullptr,
     },
     {
         .name    = "bypass",
-        .optInCh = AnalogComBusID::THROTTLE_BUS,  ///< DIRECT_DRIVE HIGH → skip ramp + ratio, scaled RPM → RPM_BUS direct.
         .fn      = sim_bypass_fn,
-        .cfg     = &kTractionBypass,
+        .cfg     = &kThrottleBypass,
         .state   = nullptr,
     },
     {
         .name    = "ramp",
-        .optInCh = AnalogComBusID::THROTTLE_BUS,  ///< Inertia in RPM domain [0..maxRpm].
+        .optInCh = AnalogComBusID::THROTTLE_BUS,
         .fn      = sim_ramp_fn,
         .cfg     = &kTractionRamp,
         .state   = &gTractionRampState,
     },
     {
         .name    = "ratio",
-        .optInCh = AnalogComBusID::RPM_BUS,       ///< Reads GEAR from bus (previous tick) for upshift detection.
+        .optInCh = AnalogComBusID::THROTTLE_BUS,
         .fn      = sim_apply_ratio_fn,
         .cfg     = &kGearCfg,
         .state   = &gThrottleShiftDeltaState,
+    },
+    {
+        .name     = "write",
+        .optOutCh = AnalogComBusID::RPM_BUS,
+        .fn       = sim_write_fn,
+        .cfg      = nullptr,
+        .state    = nullptr,
     },
 };
 
 static SimProc kGearProcs[] = {
     {
-        .name    = "bypass",
-        .optInCh = AnalogComBusID::RPM_BUS,  ///< DIRECT_DRIVE HIGH → GEAR = 0 (no gear simulation).
-        .fn      = sim_gear_bypass_fn,
+        .name    = "read",
+        .optInCh = AnalogComBusID::RPM_BUS,
+        .fn      = sim_read_fn,
         .cfg     = nullptr,
         .state   = nullptr,
     },
     {
+        .name    = "bypass",
+        .fn      = sim_gear_bypass_fn,
+        .cfg     = &kGearBypass,
+        .state   = nullptr,
+    },
+    {
         .name    = "gear-fsm",
-        .optInCh = AnalogComBusID::RPM_BUS,  ///< Reads DRIVE_STATE_BUS for FWD gate; value seeded from RPM_BUS.
+        .optInCh = AnalogComBusID::RPM_BUS,
         .fn      = sim_gear_fn,
         .cfg     = &kGearCfg,
         .state   = &gGearFsmState,
+    },
+    {
+        .name     = "write",
+        .optOutCh = AnalogComBusID::GEAR,
+        .fn       = sim_write_fn,
+        .cfg      = nullptr,
+        .state    = nullptr,
     },
 };
 
 static SimProc kTractionProcs[] = {
     {
+        .name    = "read",
+        .optInCh = AnalogComBusID::RPM_BUS,
+        .fn      = sim_read_fn,
+        .cfg     = nullptr,
+        .state   = nullptr,
+    },
+    {
         .name    = "rpm_to_speed",
-        .optInCh = AnalogComBusID::RPM_BUS,  ///< RPM post-inertia [0..maxRpm] → ESC_SPEED_BUS [0..CbusMaxVal] bipolar.
+        .optInCh = AnalogComBusID::RPM_BUS,
         .fn      = sim_rpm_to_speed_fn,
         .cfg     = &kGearCfg,
         .state   = nullptr,
+    },
+    {
+        .name     = "write",
+        .optOutCh = AnalogComBusID::ESC_SPEED_BUS,
+        .fn       = sim_write_fn,
+        .cfg      = nullptr,
+        .state    = nullptr,
     },
 };
 
 static SimProc kSteeringProcs[] = {
     {
-        .name    = "bypass",
+        .name    = "read",
         .optInCh = AnalogComBusID::STEERING_BUS,
+        .fn      = sim_read_fn,
+        .cfg     = nullptr,
+        .state   = nullptr,
+    },
+    {
+        .name    = "bypass",
         .fn      = sim_bypass_fn,
-        .cfg     = &kTractionBypass,
+        .cfg     = &kSteeringBypass,
         .state   = nullptr,
     },
     {
         .name    = "ramp",
-        .optInCh = AnalogComBusID::STEERING_BUS,  ///< Informational — value seeded by SimChannel
+        .optInCh = AnalogComBusID::STEERING_BUS,
         .fn      = sim_ramp_fn,
         .cfg     = &kSteerAsymRamp,
         .state   = &gSteerRampState,
+    },
+    {
+        .name     = "write",
+        .optOutCh = AnalogComBusID::STEERING_RAMPED_BUS,
+        .fn       = sim_write_fn,
+        .cfg      = nullptr,
+        .state    = nullptr,
     },
 };
 
 static SimProc kDumpProcs[] = {
     {
-        .name    = "bypass",
+        .name    = "read",
         .optInCh = AnalogComBusID::DUMP_BUS,
+        .fn      = sim_read_fn,
+        .cfg     = nullptr,
+        .state   = nullptr,
+    },
+    {
+        .name    = "bypass",
         .fn      = sim_bypass_fn,
-        .cfg     = &kTractionBypass,
+        .cfg     = &kDumpBypass,
         .state   = nullptr,
     },
     {
         .name    = "ramp",
-        .optInCh = AnalogComBusID::DUMP_BUS,      ///< Informational — value seeded by SimChannel
+        .optInCh = AnalogComBusID::DUMP_BUS,
         .fn      = sim_ramp_fn,
         .cfg     = &kDumpAsymRamp,
         .state   = &gDumpRampState,
+    },
+    {
+        .name     = "write",
+        .optOutCh = AnalogComBusID::DUMP_RAMPED_BUS,
+        .fn       = sim_write_fn,
+        .cfg      = nullptr,
+        .state    = nullptr,
     },
 };
 
 
 // =============================================================================
-// 4. CHANNEL ARRAY
+// 6. CHANNEL ARRAY
 // =============================================================================
 
 SimChannel kSimChannels[SIM_CH_COUNT] = {
 
   {
     .name         = "throttle",
-    .inCh         = AnalogComBusID::THROTTLE_BUS,
-    .outCh        = AnalogComBusID::RPM_BUS,       ///< Engine RPM magnitude [0..maxRpm] — post-inertia, post-ratio. Transmitted to sound node.
     .simProc      = kThrottleProcs,
-    .simProcCount = 6u,                            ///< bypass(0) + ramp(1) + center(2) + abs(3) + scale(4) + ratio(5)
+    .simProcCount = static_cast<uint8_t>(std::size(kThrottleProcs)),
     .chanOwner    = makeChanOwner(ComBusOwner::GRP_MACHINE, ComBusOwner::PROC_SYSTEM)
   },
 
   {
     .name         = "gear",
-    .inCh         = AnalogComBusID::RPM_BUS,
-    .outCh        = AnalogComBusID::GEAR,          ///< Active gear index (1..N) — read by SIM_TRACTION ramp + sound node.
     .simProc      = kGearProcs,
-    .simProcCount = 2u,                            ///< bypass(0) + gear-fsm(1)
+    .simProcCount = static_cast<uint8_t>(std::size(kGearProcs)),
     .chanOwner    = makeChanOwner(ComBusOwner::GRP_MACHINE, ComBusOwner::PROC_SYSTEM)
   },
 
   {
     .name         = "traction",
-    .inCh         = AnalogComBusID::RPM_BUS,
-    .outCh        = AnalogComBusID::ESC_SPEED_BUS, ///< RPM-derived speed → motors (wire). Gear-accumulation formula, direction from DRIVE_STATE_BUS.
     .simProc      = kTractionProcs,
-    .simProcCount = 1u,                            ///< rpm_to_speed(0)
+    .simProcCount = static_cast<uint8_t>(std::size(kTractionProcs)),
     .chanOwner    = makeChanOwner(ComBusOwner::GRP_MACHINE, ComBusOwner::PROC_SYSTEM)
   },
 
   {
     .name         = "steering",
-    .inCh         = AnalogComBusID::STEERING_BUS,
-    .outCh        = AnalogComBusID::STEERING_RAMPED_BUS,
     .simProc      = kSteeringProcs,
-    .simProcCount = 2u,                         ///< bypass(0) + ramp(1)
+    .simProcCount = static_cast<uint8_t>(std::size(kSteeringProcs)),
     .chanOwner    = makeChanOwner(ComBusOwner::GRP_MACHINE, ComBusOwner::PROC_SYSTEM)
   },
 
   {
     .name         = "dump",
-    .inCh         = AnalogComBusID::DUMP_BUS,
-    .outCh        = AnalogComBusID::DUMP_RAMPED_BUS,
     .simProc      = kDumpProcs,
-    .simProcCount = 2u,                         ///< bypass(0) + ramp(1)
+    .simProcCount = static_cast<uint8_t>(std::size(kDumpProcs)),
     .chanOwner    = makeChanOwner(ComBusOwner::GRP_MACHINE, ComBusOwner::PROC_SYSTEM)
   },
 };

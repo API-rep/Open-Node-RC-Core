@@ -344,11 +344,12 @@ struct SimDev {
 struct SimProc;
 
 /// Processor function — one per SimProc instance, called once per channel per cycle.
-/// @param proc    Processor descriptor (name, inCh, cfg, state).
-/// @param value   Channel value (in/out) — seeded from bus[SimChannel::inCh].value before proc 0.
-/// @param claimed Set to true to short-circuit remaining processors this cycle.
-/// @param bus     Shared ComBus — read proc->inCh; do NOT write SimChannel::outCh (channel owns the write).
-using SimProcFn = void (*)(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed);
+/// @param proc      Processor descriptor (name, cfg, state).
+/// @param value     Channel value (in/out) — seeded by `sim_read_fn` (proc 0), consumed by `sim_write_fn` (last proc).
+/// @param claimed   Set to `true` to short-circuit remaining processors this cycle.
+/// @param bus       Shared ComBus — read/write via cfg channel IDs; do not hardcode channel names.
+/// @param chanOwner Write identity forwarded by the runner from `SimChannel::chanOwner`.
+using SimProcFn = void (*)(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed, ChanOwner chanOwner);
 
 
 /**
@@ -368,8 +369,10 @@ using SimProcFn = void (*)(SimProc* proc, uint16_t& value, ComBus& bus, bool& cl
  */
 struct SimProc {
     const char*                        name;      ///< Debug / dashboard label.
-    std::optional<AnalogComBusID>      optInCh;   ///< Auxiliary analog input read by the proc (e.g. TRACTION_RAMP_BUS). std::nullopt when unused.
-    std::optional<DigitalComBusID>     optOutDCh; ///< Optional digital side-effect output written by the proc (e.g. sign from sim_abs_fn). std::nullopt when unused.
+    std::optional<AnalogComBusID>      optInCh;   ///< Analog input — used by sim_read_fn; set as documentary metadata on intermediate procs. std::nullopt when unused.
+    std::optional<DigitalComBusID>     optInDCh;  ///< Digital input — sim_read_fn silently converts to 0/CbusMaxVal when optInCh is not set. std::nullopt when unused.
+    std::optional<AnalogComBusID>      optOutCh;  ///< Analog output — used by sim_write_fn as the ComBus destination. std::nullopt when unused.
+    std::optional<DigitalComBusID>     optOutDCh; ///< Digital side-effect output written by the proc (e.g. sign from sim_abs_fn). std::nullopt when unused.
     SimProcFn                          fn;        ///< C function pointer — assigned in sim_config.cpp (e.g. &sim_ramp_fn). nullptr = passthrough.
     const void*                        cfg;       ///< Flash — static config struct (e.g. SimRampCfg). Cast inside fn.
     void*                              state;     ///< RAM   — mutable runtime state (e.g. SimRampState). Cast inside fn.
@@ -377,24 +380,27 @@ struct SimProc {
 
 
 /**
- * @brief One named processing channel — ordered processor list, single ComBus output.
+ * @brief One named processing channel — ordered processor list.
  *
  * @details Defines *what* to compute and *where* to write the result.
  *   The ComBus is not stored here — it is provided at call time by
  *   `sim_update()` / `sim_channel_update()`.
  *
  *   Update sequence (sim_channel_update):
- *   1. Seed `value` from `bus.analogBus[inCh].value` — live input captured at cycle start.
- *   2. Iterate `simProc[]` in order; stop early when a processor sets `claimed = true`.
- *   3. Write `value` to `outCh` via `combus_set_analog()` — always, regardless of claimed.
+ *   1. Iterates `simProc[]` in order; stops early when a processor sets `claimed = true`.
+ *   2. `sim_read_fn` (first proc) seeds `value` from the input channel.
+ *   3. `sim_write_fn` (last proc) writes `value` to the output channel.
+ *   4. `sim_bypass_fn` (optional) writes directly and sets `claimed = true`,
+ *      skipping all remaining processors including `sim_write_fn`.
+ *
+ *   `chanOwner` is passed by the runner to every `SimProcFn` call so that
+ *   `sim_write_fn` and `sim_bypass_fn` can identify the writer on the ComBus.
  */
 struct SimChannel {
     const char*     name;         ///< Human-readable channel name (debug / dashboard).
-    AnalogComBusID  inCh;         ///< Input channel — seeded into `value` at cycle start.
-    AnalogComBusID  outCh;        ///< Output channel — written after all processors complete.
     SimProc*        simProc;      ///< Processor array (nullptr when simProcCount == 0).
     uint8_t         simProcCount; ///< Number of processors in simProc[].
-    ChanOwner       chanOwner;    ///< Identity token passed to combus_set_analog().
+    ChanOwner       chanOwner;    ///< Identity token forwarded to sim_write_fn / sim_bypass_fn.
 };
 
 
@@ -458,7 +464,8 @@ struct SimRampState {
  *   Typical placement: `simProc[0]` — evaluated before all other processors.
  */
 struct SimBypassCfg {
-    DigitalComBusID condCh;  ///< Digital channel — HIGH → early exit (raw passthrough mode).
+    DigitalComBusID condCh;  ///< Digital channel — HIGH → early exit.
+    AnalogComBusID  outCh;   ///< Analog channel written (with chanOwner) before claiming.
 };
 
 

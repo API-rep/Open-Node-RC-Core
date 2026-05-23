@@ -4,7 +4,7 @@
  *****************************************************************************/
 
 #include "sim.h"
-#include "core/system/combus/combus_access.h"   // combus_set_analog
+#include "sim_io.h"                              // sim_read_fn, sim_write_fn (for helpers)
 
 
 // =============================================================================
@@ -26,34 +26,34 @@ void sim_init(SimChannel* /*channels*/, uint8_t /*count*/)
 
 
 /**
- * @brief Process a single SimChannel — seed, dispatch processors, write output.
+ * @brief Process a single SimChannel — dispatch processors, owned by sim_read_fn / sim_write_fn.
  *
  * @details Sequence:
- *   1. Seeds `value` from `bus.analogBus[ch.inCh].value` — live capture at cycle start.
- *   2. Iterates `ch.simProc[]`; skips entries where `fn == nullptr` (passthrough).
+ *   1. Iterates `ch.simProc[]`; skips entries where `fn == nullptr` (passthrough).
  *      Stops early when a processor sets `claimed = true`.
- *   3. Writes `value` to `ch.outCh` via `combus_set_analog()` — always,
- *      regardless of `claimed`.
+ *   2. `sim_read_fn` (first proc) seeds `value` from the input channel.
+ *   3. `sim_write_fn` (last proc) writes `value` to the output channel.
+ *   4. `sim_bypass_fn` writes directly to its `outCh` and sets `claimed = true`,
+ *      skipping all remaining procs including `sim_write_fn`.
  *
- * @param ch   Channel descriptor (inCh, outCh, simProc array).
+ *   `ch.chanOwner` is forwarded to every `SimProcFn` call so that
+ *   `sim_write_fn` and `sim_bypass_fn` can identify the writer.
+ *
+ * @param ch   Channel descriptor (simProc array, chanOwner).
  * @param bus  Shared ComBus for this cycle.
  */
 void sim_channel_update(SimChannel& ch, ComBus& bus)
 {
-    // --- 1. Seed value from SimChannel input — live capture at cycle start -----
-    uint16_t value   = bus.analogBus[static_cast<uint8_t>(ch.inCh)].value;
+    // --- Run processors in order, stop when claimed --------------------------
+    uint16_t value   = 0u;
     bool     claimed = false;
-
-    // --- 2. Run processors in order, stop when claimed -----------------------
     for (uint8_t p = 0; p < ch.simProcCount && !claimed; ++p) {
         SimProc& proc = ch.simProc[p];
         if (proc.fn != nullptr) {
-            proc.fn(&proc, value, bus, claimed);
+            proc.fn(&proc, value, bus, claimed, ch.chanOwner);
         }
     }
-
-    // --- 3. Write output — always, regardless of claimed ---------------------
-    combus_set_analog(bus, ch.outCh, value, ch.chanOwner);
+    // No seed, no write here — sim_read_fn / sim_write_fn (or sim_bypass_fn) own these.
 }
 
 
@@ -72,6 +72,31 @@ void sim_update(SimChannel* channels, uint8_t count, ComBus& bus)
     for (uint8_t p = 0; p < count; ++p) {
         sim_channel_update(channels[p], bus);
     }
+}
+
+
+// =============================================================================
+// 2. DASHBOARD HELPERS  (scan proc chain — debug use only)
+// =============================================================================
+
+/** @brief Returns the source channel of the first sim_read_fn proc. */
+AnalogComBusID sim_channel_read_ch(const SimChannel& ch)
+{
+    for (uint8_t p = 0; p < ch.simProcCount; ++p) {
+        if (ch.simProc[p].fn == sim_read_fn && ch.simProc[p].optInCh.has_value())
+            return ch.simProc[p].optInCh.value();
+    }
+    return AnalogComBusID{};
+}
+
+/** @brief Returns the target channel of the last sim_write_fn proc. */
+AnalogComBusID sim_channel_write_ch(const SimChannel& ch)
+{
+    for (uint8_t p = 0; p < ch.simProcCount; ++p) {
+        if (ch.simProc[p].fn == sim_write_fn && ch.simProc[p].optOutCh.has_value())
+            return ch.simProc[p].optOutCh.value();
+    }
+    return AnalogComBusID{};
 }
 
 // EOF sim.cpp
