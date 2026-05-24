@@ -25,6 +25,7 @@
 #include <core/config/machines/combus_ids.h>  // AnalogComBusID, DigitalComBusID
 #include <struct/combus_struct.h>              // ComBus (needed for SimBehaviorFn in archive)
 #include <defs/defs.h>                         // ChanOwner
+#include <core/system/combus/combus_res.h>     // CbusNeutral, CbusMaxVal (SimCenterCfg defaults)
 
 
 // =============================================================================
@@ -502,6 +503,28 @@ struct ShiftDeltaState {
 // =============================================================================
 // 6. GENERIC ARITHMETIC PROC CONFIGS  (sim_math.h — ✅ implemented)
 // =============================================================================
+
+/**
+ * @brief Configuration for `sim_center_fn` — neutral reference for signed deviation.
+ *
+ * @details `value = (uint16_t)(int16_t)(value − cfg->neutral)`.
+ *   Defaults to CbusNeutral = 32767 (standard ComBus bipolar center).
+ *   cfg = &SimCenterCfg, state = nullptr.
+ */
+struct SimCenterCfg {
+    uint16_t neutral = CbusNeutral;  ///< Center reference (default = CbusNeutral = 32767).
+};
+
+/**
+ * @brief Configuration for `sim_drive_state_fn` — direction detection thresholds.
+ *
+ * @details Reads a post-ramp bipolaire value, determines direction vs. cfg->neutral,
+ *   encodes via DriveStateBus::encode() and writes to proc->optOutCh.
+ *   cfg = &SimDriveStateCfg, state = nullptr.
+ */
+struct SimDriveStateCfg {
+    uint16_t neutral = CbusNeutral;  ///< Standing threshold (default = CbusNeutral = 32767).
+};
 
 /**
  * @brief Configuration for `sim_scale_fn` — linear domain rescale.

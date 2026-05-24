@@ -37,24 +37,24 @@
 // =============================================================================
 
 /**
- * @brief Signed center SimProc \u2014 `value = (uint16_t)(int16_t)(value \u2212 CbusNeutral)`.
+ * @brief Signed center SimProc — `value = (uint16_t)(int16_t)(value − cfg->neutral)`.
  *
- * @details Converts a CbusNeutral-centered ComBus position to its **signed**
+ * @details Converts a neutral-centered ComBus position to its **signed**
  *   deviation from neutral, packed as two's complement in uint16_t.
  *   Positive values (FWD side) are unchanged; negative values (REV side) wrap
- *   via two's complement (e.g. \u2212300 \u2192 0xFED4).
+ *   via two's complement (e.g. −300 → 0xFED4).
  *
  *   Chain with `sim_abs_fn` to extract the magnitude and optionally
  *   capture the direction as a DigitalComBusID side effect.
- *   cfg and state must be nullptr.
+ *   cfg = &SimCenterCfg (state must be nullptr).
  *   Does NOT set `claimed`.
  *
- * @param proc    Not read (cfg must be nullptr).
+ * @param proc    SimProc descriptor — `cfg` cast to `const SimCenterCfg*`.
  * @param value   In: unsigned ComBus [0..CbusMaxVal].  Out: signed packed int16.
  * @param bus     Not read.
  * @param claimed Not modified.
  */
-void sim_center_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed);
+void sim_center_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed, ChanOwner chanOwner);
 
 /**
  * @brief Absolute-value SimProc \u2014 `value = |reinterpret<int16_t>(value)|`.
@@ -75,7 +75,7 @@ void sim_center_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed);
  * @param bus     Written when `proc->optOutDCh.has_value()`.
  * @param claimed Not modified.
  */
-void sim_abs_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed);
+void sim_abs_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed, ChanOwner chanOwner);
 
 /**
  * @brief Linear scale SimProc \u2014 `value = value \u00d7 outMax / inMax`.
@@ -90,7 +90,30 @@ void sim_abs_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed);
  * @param bus     Not read.
  * @param claimed Not modified.
  */
-void sim_scale_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed);
+void sim_scale_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed, ChanOwner chanOwner);
+
+/**
+ * @brief Drive-state observer SimProc — encodes direction and writes DRIVE_STATE_BUS.
+ *
+ * @details Reads the post-ramp bipolaire `value` and compares it to
+ *   `SimDriveStateCfg::neutral` to determine direction:
+ *   - value > neutral  → DriveState::kDriveFwd
+ *   - value < neutral  → DriveState::kDriveRev
+ *   - value == neutral → DriveState::kStanding
+ *
+ *   Encodes the result via DriveStateBus::encode() and writes it to
+ *   `proc->optOutCh` (e.g. DRIVE_STATE_BUS).
+ *   Does **NOT** modify `value` — pure side-effect observer.
+ *   Does NOT set `claimed`.
+ *   cfg = &SimDriveStateCfg, state = nullptr.
+ *
+ * @param proc    SimProc descriptor — `cfg` cast to `const SimDriveStateCfg*`;
+ *                `optOutCh` = destination analog channel.
+ * @param value   Read-only — post-ramp bipolaire position [0..CbusMaxVal].
+ * @param bus     Written via `optOutCh` when has_value().
+ * @param claimed Not modified.
+ */
+void sim_drive_state_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed, ChanOwner chanOwner);
 
 
 // EOF sim_math.h

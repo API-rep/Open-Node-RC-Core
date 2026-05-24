@@ -5,7 +5,7 @@
  * @details Defines the SimChannel array for the Volvo A60H Bruder machine.
  *
  *   Channel pipelines (each proc array is fully self-describing: read → … → write):
- *     SIM_THROTTLE : read(THROTTLE_BUS) → center → abs → scale → bypass(DIRECT_DRIVE→RPM_BUS) → ramp → ratio → write(RPM_BUS)
+ *     SIM_THROTTLE : read(THROTTLE_BUS) → ramp → drive-state(→DRIVE_STATE_BUS) → center → abs → scale → bypass(DIRECT_DRIVE→RPM_BUS) → ratio → write(RPM_BUS)
  *     SIM_GEAR     : read(RPM_BUS)      → bypass(DIRECT_DRIVE→GEAR,=1) → gear-fsm → write(GEAR)
  *     SIM_TRACTION : read(RPM_BUS)      → rpm_to_speed → write(ESC_SPEED_BUS)
  *     SIM_STEERING : read(STEERING_BUS) → bypass(DIRECT_DRIVE→STEERING_RAMPED_BUS) → ramp → write(STEERING_RAMPED_BUS)
@@ -22,7 +22,7 @@
 #include <core/system/simulation/sim_io.h>        // sim_read_fn, sim_write_fn
 #include <core/system/simulation/sim_ramp.h>      // sim_ramp_fn, SimRampCfg, SimRampState
 #include <core/system/simulation/sim_bypass.h>    // sim_bypass_fn, SimBypassCfg
-#include <core/system/simulation/sim_math.h>      // sim_center_fn, sim_scale_fn, SimScaleCfg
+#include <core/system/simulation/sim_math.h>      // sim_center_fn, sim_abs_fn, sim_scale_fn, sim_drive_state_fn, SimCenterCfg, SimDriveStateCfg, SimScaleCfg
 #include <core/system/simulation/sim_gear.h>      // sim_gear_fn, sim_apply_ratio_fn, GearProcCfg, GearFsmState, ShiftDeltaState
 #include <core/config/machines/dumper_truck/motion/dumper_truck_motion.h>  // kDumperTruckGearShift
 
@@ -49,14 +49,12 @@ static constexpr SimRampCfg kDumpAsymRamp {
 };
 
 //  Traction — heavy truck inertia (slow accel, moderate engine brake).
-//  Steps are in RPM units (domain [0..maxRpm=2100]): 3 %/tick accel, 6 %/tick brake.
-//  At 50 ms/tick: accel ~1.7 s, brake ~0.8 s  (same real-time as before the RPM-domain migration).
+//  Steps in bipolaire ComBus domain [0..CbusMaxVal]: 3 %/tick accel, 6 %/tick brake.
+//  At 50 ms/tick: accel ~1.7 s neutral-to-full, brake ~0.8 s.
 static constexpr SimRampCfg kTractionRamp {
     .rampTimeMs  = 50u,
-    .accelSteps  = static_cast<combus_t>(3u * kHeavy3_steps[std::size(kHeavy3_steps) - 1u].upShift / 100u),
-                            ///< 3 % of 2100 RPM = 63 RPM/step
-    .brakeSteps  = static_cast<combus_t>(6u * kHeavy3_steps[std::size(kHeavy3_steps) - 1u].upShift / 100u),
-                            ///< 6 % of 2100 RPM = 126 RPM/step
+    .accelSteps  = pctToCbus(3),   ///< 3 % of CbusNeutral per tick (bipolaire domain)
+    .brakeSteps  = pctToCbus(6),   ///< 6 % of CbusNeutral per tick
     .neutralBand = 0u,
 };
 
@@ -95,8 +93,14 @@ static constexpr SimBypassCfg kDumpBypass {
 // 3. SCALE + GEAR CONFIG
 // =============================================================================
 
+//  Throttle center — standard ComBus bipolar neutral (CbusNeutral = 32767).
+static constexpr SimCenterCfg kThrottleCenter {};
+
+//  Throttle drive-state — standard ComBus bipolar neutral.
+static constexpr SimDriveStateCfg kThrottleDriveState {};
+
 //  Throttle → RPM mapping — center(signed) → abs → scale.
-//  No direction side effect here: direction is already tracked by DRIVE_STATE_BUS (drive FSM).
+//  No direction side effect here: direction is already tracked by DRIVE_STATE_BUS.
 static constexpr SimScaleCfg kThrottleScale {
     .inMax  = CbusNeutral,  ///< Magnitude after sim_center_fn is in [0..CbusNeutral].
     .outMax = static_cast<uint16_t>(kHeavy3_steps[std::size(kHeavy3_steps) - 1u].upShift),
@@ -133,45 +137,47 @@ static SimProc kThrottleProcs[] = {
         .state   = nullptr,
     },
     {
-        .name    = "center",
-        .optInCh = AnalogComBusID::THROTTLE_BUS,
-        .fn      = sim_center_fn,
-        .cfg     = nullptr,
-        .state   = nullptr,
+        .name  = "ramp",
+        .fn    = sim_ramp_fn,
+        .cfg   = &kTractionRamp,
+        .state = &gTractionRampState,
     },
     {
-        .name    = "abs",
-        .optInCh = AnalogComBusID::THROTTLE_BUS,
-        .fn      = sim_abs_fn,
-        .cfg     = nullptr,
-        .state   = nullptr,
+        .name     = "drive-state",
+        .optOutCh = AnalogComBusID::DRIVE_STATE_BUS,
+        .fn       = sim_drive_state_fn,
+        .cfg      = &kThrottleDriveState,
+        .state    = nullptr,
     },
     {
-        .name    = "scale",
-        .optInCh = AnalogComBusID::THROTTLE_BUS,
-        .fn      = sim_scale_fn,
-        .cfg     = &kThrottleScale,
-        .state   = nullptr,
+        .name  = "center",
+        .fn    = sim_center_fn,
+        .cfg   = &kThrottleCenter,
+        .state = nullptr,
     },
     {
-        .name    = "bypass",
-        .fn      = sim_bypass_fn,
-        .cfg     = &kThrottleBypass,
-        .state   = nullptr,
+        .name  = "abs",
+        .fn    = sim_abs_fn,
+        .cfg   = nullptr,
+        .state = nullptr,
     },
     {
-        .name    = "ramp",
-        .optInCh = AnalogComBusID::THROTTLE_BUS,
-        .fn      = sim_ramp_fn,
-        .cfg     = &kTractionRamp,
-        .state   = &gTractionRampState,
+        .name  = "scale",
+        .fn    = sim_scale_fn,
+        .cfg   = &kThrottleScale,
+        .state = nullptr,
     },
     {
-        .name    = "ratio",
-        .optInCh = AnalogComBusID::THROTTLE_BUS,
-        .fn      = sim_apply_ratio_fn,
-        .cfg     = &kGearCfg,
-        .state   = &gThrottleShiftDeltaState,
+        .name  = "bypass",
+        .fn    = sim_bypass_fn,
+        .cfg   = &kThrottleBypass,
+        .state = nullptr,
+    },
+    {
+        .name  = "ratio",
+        .fn    = sim_apply_ratio_fn,
+        .cfg   = &kGearCfg,
+        .state = &gThrottleShiftDeltaState,
     },
     {
         .name     = "write",
@@ -198,7 +204,6 @@ static SimProc kGearProcs[] = {
     },
     {
         .name    = "gear-fsm",
-        .optInCh = AnalogComBusID::RPM_BUS,
         .fn      = sim_gear_fn,
         .cfg     = &kGearCfg,
         .state   = &gGearFsmState,
@@ -222,7 +227,6 @@ static SimProc kTractionProcs[] = {
     },
     {
         .name    = "rpm_to_speed",
-        .optInCh = AnalogComBusID::RPM_BUS,
         .fn      = sim_rpm_to_speed_fn,
         .cfg     = &kGearCfg,
         .state   = nullptr,
@@ -252,7 +256,6 @@ static SimProc kSteeringProcs[] = {
     },
     {
         .name    = "ramp",
-        .optInCh = AnalogComBusID::STEERING_BUS,
         .fn      = sim_ramp_fn,
         .cfg     = &kSteerAsymRamp,
         .state   = &gSteerRampState,
@@ -282,7 +285,6 @@ static SimProc kDumpProcs[] = {
     },
     {
         .name    = "ramp",
-        .optInCh = AnalogComBusID::DUMP_BUS,
         .fn      = sim_ramp_fn,
         .cfg     = &kDumpAsymRamp,
         .state   = &gDumpRampState,

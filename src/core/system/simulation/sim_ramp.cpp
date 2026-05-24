@@ -23,7 +23,7 @@
 // =============================================================================
 
 /** @brief Asymmetric inertia ramp — see sim_ramp.h for full contract. */
-void sim_ramp_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& /*claimed*/)
+void sim_ramp_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& /*claimed*/, ChanOwner /*chanOwner*/)
 {
     const SimRampCfg* cfg   = static_cast<const SimRampCfg*>(proc->cfg);
     SimRampState*     state = static_cast<SimRampState*>(proc->state);

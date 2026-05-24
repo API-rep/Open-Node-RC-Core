@@ -95,7 +95,7 @@ int8_t sim_gear_fsm_update(GearFsmState*           state,
  *                written for TRACTION_RAMP_BUS / SUBGEAR_BUS.
  * @param claimed Not modified.
  */
-void sim_gear_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed);
+void sim_gear_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed, ChanOwner chanOwner);
 
 /**
  * @brief Gear direct-drive bypass — sets GEAR = 1 and claims when DIRECT_DRIVE is HIGH.
@@ -114,7 +114,7 @@ void sim_gear_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed);
  * @param bus     Read for DIRECT_DRIVE digital channel.
  * @param claimed Set to `true` when DIRECT_DRIVE is HIGH; unchanged otherwise.
  */
-void sim_gear_bypass_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed);
+void sim_gear_bypass_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed, ChanOwner chanOwner);
 
 /**
  * @brief Gear shift-delta SimProc — subtracts `shiftDelta` RPM on upshift.
@@ -141,7 +141,7 @@ void sim_gear_bypass_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claim
  * @param bus     Read for DIRECT_DRIVE (early exit) and GEAR.
  * @param claimed Not modified.
  */
-void sim_apply_ratio_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed);
+void sim_apply_ratio_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed, ChanOwner chanOwner);
 
 /**
  * @brief RPM → ESC speed SimProc — converts RPM_BUS to ESC_SPEED_BUS domain.
@@ -174,6 +174,6 @@ void sim_apply_ratio_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claim
  * @param bus     Read for DIRECT_DRIVE, GEAR, DRIVE_STATE_BUS.
  * @param claimed Not modified.
  */
-void sim_rpm_to_speed_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed);
+void sim_rpm_to_speed_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed, ChanOwner chanOwner);
 
 // EOF sim_gear.h

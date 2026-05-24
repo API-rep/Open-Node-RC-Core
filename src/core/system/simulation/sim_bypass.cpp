@@ -14,7 +14,7 @@
 // =============================================================================
 
 /** @brief Conditional bypass gate — see sim_bypass.h for full contract. */
-void sim_bypass_fn(SimProc* proc, uint16_t& /*value*/, ComBus& bus, bool& claimed)
+void sim_bypass_fn(SimProc* proc, uint16_t& /*value*/, ComBus& bus, bool& claimed, ChanOwner /*chanOwner*/)
 {
     const SimBypassCfg* cfg = static_cast<const SimBypassCfg*>(proc->cfg);
     if (bus.digitalBus[static_cast<uint8_t>(cfg->condCh)].value)

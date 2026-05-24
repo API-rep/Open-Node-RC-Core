@@ -50,6 +50,6 @@
  * @param claimed Set to `true` when condCh is HIGH; unchanged otherwise.
  * @param bus     Read-only — reads `digitalBus[condCh].value`.
  */
-void sim_bypass_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed);
+void sim_bypass_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed, ChanOwner chanOwner);
 
 // EOF sim_bypass.h

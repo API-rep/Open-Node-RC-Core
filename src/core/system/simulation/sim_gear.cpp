@@ -80,7 +80,7 @@ int8_t sim_gear_fsm_update(GearFsmState*           state,
 // =============================================================================
 
 /** @brief Gear FSM side-effect proc — see sim_gear.h for full contract. */
-void sim_gear_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& /*claimed*/)
+void sim_gear_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& /*claimed*/, ChanOwner /*chanOwner*/)
 {
     const GearProcCfg* cfg   = static_cast<const GearProcCfg*>(proc->cfg);
     GearFsmState*      state = static_cast<GearFsmState*>(proc->state);
@@ -173,7 +173,7 @@ void sim_gear_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& /*claimed*/)
 // =============================================================================
 
 /** @brief Shift-delta proc — subtracts shiftDelta RPM on upshift. */
-void sim_apply_ratio_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& /*claimed*/)
+void sim_apply_ratio_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& /*claimed*/, ChanOwner /*chanOwner*/)
 {
     // Direct drive = inertia bypassed — skip RPM dip simulation.
     if (bus.digitalBus[static_cast<uint8_t>(DigitalComBusID::DIRECT_DRIVE)].value)
@@ -201,7 +201,7 @@ void sim_apply_ratio_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& /*cla
 // =============================================================================
 
 /** @brief Gear direct-drive bypass — see sim_gear.h for contract. */
-void sim_gear_bypass_fn(SimProc* /*proc*/, uint16_t& value, ComBus& bus, bool& claimed)
+void sim_gear_bypass_fn(SimProc* /*proc*/, uint16_t& value, ComBus& bus, bool& claimed, ChanOwner /*chanOwner*/)
 {
     if (bus.digitalBus[static_cast<uint8_t>(DigitalComBusID::DIRECT_DRIVE)].value) {
         value   = 1u;
@@ -215,7 +215,7 @@ void sim_gear_bypass_fn(SimProc* /*proc*/, uint16_t& value, ComBus& bus, bool& c
 // =============================================================================
 
 /** @brief RPM → ESC speed proc — see sim_gear.h for full contract. */
-void sim_rpm_to_speed_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& /*claimed*/)
+void sim_rpm_to_speed_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& /*claimed*/, ChanOwner /*chanOwner*/)
 {
     // RPM_BUS always carries post-scale RPM [0..maxRpm].
     // GEAR = 1 when DIRECT_DRIVE (bypass locked gear 1, cumDelta = 0).

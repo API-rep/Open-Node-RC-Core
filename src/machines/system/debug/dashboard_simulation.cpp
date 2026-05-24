@@ -68,6 +68,24 @@ static const char* dCh(DigitalComBusID id)
 	}
 }
 
+/// @brief Derive the primary input channel from a SimChannel (first proc optInCh).
+static AnalogComBusID simChanInCh(const SimChannel& ch)
+{
+	if (ch.simProcCount > 0u && ch.simProc != nullptr && ch.simProc[0].optInCh.has_value())
+		return ch.simProc[0].optInCh.value();
+	return static_cast<AnalogComBusID>(0u);
+}
+
+/// @brief Derive the primary output channel from a SimChannel (last proc optOutCh).
+static AnalogComBusID simChanOutCh(const SimChannel& ch)
+{
+	if (ch.simProcCount > 0u && ch.simProc != nullptr) {
+		const SimProc& last = ch.simProc[ch.simProcCount - 1u];
+		if (last.optOutCh.has_value()) return last.optOutCh.value();
+	}
+	return static_cast<AnalogComBusID>(0u);
+}
+
 /**
  * @brief Render one proc slot as a single dLine().
  *
@@ -178,15 +196,17 @@ static void render_sim_view()
 	      "#", "name", "inCh", "outCh", "in %", "out %", "bypass");
 	dMid();
 	for (uint8_t i = 0; i < s_mach->simChannelCount; ++i) {
-		const SimChannel& ch     = s_mach->simChannel[i];
-		const uint16_t    inVal  = s_bus->analogBus[static_cast<uint8_t>(ch.inCh)].value;
-		const uint16_t    outVal = s_bus->analogBus[static_cast<uint8_t>(ch.outCh)].value;
+		const SimChannel&  ch     = s_mach->simChannel[i];
+		const AnalogComBusID chIn  = simChanInCh(ch);
+		const AnalogComBusID chOut = simChanOutCh(ch);
+		const uint16_t    inVal  = s_bus->analogBus[static_cast<uint8_t>(chIn)].value;
+		const uint16_t    outVal = s_bus->analogBus[static_cast<uint8_t>(chOut)].value;
 		const int16_t     inPct  = dashPctBipolar(inVal,  s_bus->analogBusMaxVal);
 		const int16_t     outPct = dashPctBipolar(outVal, s_bus->analogBusMaxVal);
 
 		//  out display: GEAR channel shows raw gear integer instead of %.
 		char outDisp[10];
-		if (ch.outCh == AnalogComBusID::GEAR) {
+		if (chOut == AnalogComBusID::GEAR) {
 			snprintf(outDisp, sizeof(outDisp), "  G:%u    ", (unsigned)outVal);
 		} else {
 			snprintf(outDisp, sizeof(outDisp), "%+6d%%", (int)outPct);
@@ -218,7 +238,7 @@ static void render_sim_view()
 		dLine("  %2u  %-12s  %-10s  %-10s  %+6d%%  %7s  %-7s  %s",
 		      (unsigned)i,
 		      ch.name ? ch.name : "?",
-		      aCh(ch.inCh), aCh(ch.outCh),
+		      aCh(chIn), aCh(chOut),
 		      (int)inPct, outDisp,
 		      chBypass ? "BYPASS" : "---",
 		      procNames);
@@ -239,8 +259,10 @@ static void render_channel_detail(uint8_t idx)
 	if (!s_bus || !s_mach || idx >= s_mach->simChannelCount) return;
 
 	const SimChannel& ch     = s_mach->simChannel[idx];
-	const uint16_t    inVal  = s_bus->analogBus[static_cast<uint8_t>(ch.inCh)].value;
-	const uint16_t    outVal = s_bus->analogBus[static_cast<uint8_t>(ch.outCh)].value;
+	const AnalogComBusID chIn  = simChanInCh(ch);
+	const AnalogComBusID chOut = simChanOutCh(ch);
+	const uint16_t    inVal  = s_bus->analogBus[static_cast<uint8_t>(chIn)].value;
+	const uint16_t    outVal = s_bus->analogBus[static_cast<uint8_t>(chOut)].value;
 	const int16_t     inPct  = dashPctBipolar(inVal,  s_bus->analogBusMaxVal);
 	const int16_t     outPct = dashPctBipolar(outVal, s_bus->analogBusMaxVal);
 
@@ -265,7 +287,7 @@ static void render_channel_detail(uint8_t idx)
 		int lLen = snprintf(left,  sizeof(left),  "  [ SIMULATION ]  #%u - %s  (%s \u2192 %s)",
 		                    (unsigned)(idx + 1u),
 		                    ch.name ? ch.name : "?",
-		                    aCh(ch.inCh), aCh(ch.outCh));
+		                    aCh(chIn), aCh(chOut));
 		lLen -= 2;  // '→' (U+2192) = 3 UTF-8 bytes, 1 display char → compensate 2 extra bytes
 		int rLen = snprintf(right, sizeof(right), "uptime: %s  ", upt);
 		dLine("%s%*s%s", left, (int)DashInnerW - lLen - rLen, "", right);
