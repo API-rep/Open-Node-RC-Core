@@ -30,8 +30,8 @@ void sim_abs_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& /*claimed*/, 
     const int16_t sv = static_cast<int16_t>(value);
 
     // --- Optional digital side effect (sign: HIGH = FWD, LOW = REV) -----------
-    if (proc->optOutDCh.has_value()) {
-        bus.digitalBus[static_cast<uint8_t>(*proc->optOutDCh)].value = (sv >= 0);
+    if (proc->optOutCh.has_value() && std::holds_alternative<DigitalComBusID>(*proc->optOutCh)) {
+        bus.digitalBus[static_cast<uint8_t>(std::get<DigitalComBusID>(*proc->optOutCh))].value = (sv >= 0);
     }
 
     // --- Absolute value --------------------------------------------------------
@@ -58,8 +58,8 @@ void sim_drive_state_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& /*cla
                     :                          DriveState::kStanding;
 
     // Write encoded state to optional output channel (e.g. DRIVE_STATE_BUS).
-    if (proc->optOutCh.has_value()) {
-        combus_set_analog(bus, proc->optOutCh.value(), DriveStateBus::encode(ds), chanOwner);
+    if (proc->optOutCh.has_value() && std::holds_alternative<AnalogComBusID>(*proc->optOutCh)) {
+        combus_set_analog(bus, std::get<AnalogComBusID>(*proc->optOutCh), DriveStateBus::encode(ds), chanOwner);
     }
     // value is NOT modified — this proc is a side-effect-only observer.
     (void)value;

@@ -5,10 +5,12 @@
  * @details Two symmetrical SimProc entries that bookend every SimChannel
  *   pipeline:
  *
- *   `sim_read_fn`  — placed as proc[0]: seeds `value` from `proc->optInCh` (analog)
- *                    or `proc->optInDCh` (digital → 0 / CbusMaxVal).  optInCh takes
- *                    priority when both are set.
- *   `sim_write_fn` — placed as proc[N]: writes `value` to `proc->optOutCh` (analog only).
+ *   `sim_read_fn`  — placed as proc[0]: seeds `value` from `proc->optInCh`.
+ *                    Analog source: reads `analogBus[id].value` directly.
+ *                    Digital source (`isDigital == true`): converts false → 0, true → CbusMaxVal.
+ *   `sim_write_fn` — placed as proc[N]: writes `value` to `proc->optOutCh`.
+ *                    Analog target: calls `combus_set_analog()`.
+ *                    Digital target (`isDigital == true`): writes `value != 0` to `digitalBus`.
  *
  *   This makes every pipeline self-documenting: the array alone shows
  *   the full data flow from read to write, without needing to look at
@@ -21,8 +23,8 @@
  *
  *   Typical pipeline layout:
  *   @code
- *     { .name="read",   .optInCh  = FOO_BUS, .fn=sim_read_fn,  .cfg=nullptr },   // proc 0
- *     { .name="bypass",              .fn=sim_bypass_fn,  .cfg=&kBypassCfg },   // optional
+ *     { .name="read",  .optInCh  = FOO_BUS, .fn=sim_read_fn,  .cfg=nullptr },   // proc 0
+ *     { .name="bypass",             .fn=sim_bypass_fn,  .cfg=&kBypassCfg },   // optional
  *     { .name="...", ... },                                                    // transforms
  *     { .name="write", .optOutCh = BAR_BUS, .fn=sim_write_fn, .cfg=nullptr },   // proc N
  *   @endcode
@@ -46,8 +48,9 @@
  *   Does not set `claimed`.
  *   Place as the first proc in every SimChannel pipeline.
  *
- * @param proc       SimProc descriptor — `optInCh` (analog) or `optInDCh` (digital)
- *                   must have a value; if both are set, `optInCh` takes priority.
+ * @param proc       SimProc descriptor — `proc->optInCh` must have a value.
+ *                   Analog: reads `analogBus[id].value`.
+ *                   Digital (`isDigital`): false → 0, true → CbusMaxVal.
  *                   `cfg` and `state` are unused (must be nullptr).
  * @param value      Out: overwritten with the channel value (digital: false→0, true→CbusMaxVal).
  * @param bus        ComBus — source of the read.
@@ -66,6 +69,8 @@ void sim_read_fn(SimProc* proc, uint16_t& value, ComBus& bus,
  *   Not reached when a bypass proc has already set `claimed = true`.
  *
  * @param proc       SimProc descriptor — `proc->optOutCh` must have a value.
+ *                   Analog: calls `combus_set_analog()` with `chanOwner`.
+ *                   Digital (`isDigital`): writes `value != 0` to `digitalBus`.
  *                   `cfg` and `state` are unused (must be nullptr).
  * @param value      In: final pipeline value to write.
  * @param bus        ComBus — target of the write.

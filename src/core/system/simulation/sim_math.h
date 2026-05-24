@@ -12,7 +12,7 @@
  *   `sim_abs_fn`     \u2014  absolute value of a signed-packed uint16_t:
  *                         `value = |reinterpret<int16_t>(value)|`
  *                       **cfg-free** (cfg = nullptr, state = nullptr).
- *                       Optional digital side effect via `proc->optOutDCh`:
+ *                       Optional digital side effect via `proc->optOutCh` (digital):
  *                         HIGH = positive (FWD), LOW = negative (REV).
  *                         std::nullopt = no side effect.
  *
@@ -62,7 +62,7 @@ void sim_center_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed, C
  * @details Interprets `value` as a two's complement int16_t (as produced by
  *   `sim_center_fn`), computes its absolute value, and writes it back.
  *   **cfg-free** (`proc->cfg` must be nullptr).
- *   Optionally writes the sign as a digital side effect via `proc->optOutDCh`:
+ *   Optionally writes the sign as a digital side effect via `proc->optOutCh` (when `isDigital == true`):
  *   HIGH if input was positive (FWD), LOW if negative (REV).
  *   std::nullopt = no side effect.
  *
@@ -70,9 +70,9 @@ void sim_center_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed, C
  *   state must be nullptr.
  *   Does NOT set `claimed`.
  *
- * @param proc    SimProc descriptor — reads `proc->optOutDCh`; `cfg` ignored.
+ * @param proc    SimProc descriptor — reads `proc->optOutCh` (digital) for sign side effect; `cfg` ignored.
  * @param value   In: signed-packed int16 (from sim_center_fn).  Out: magnitude.
- * @param bus     Written when `proc->optOutDCh.has_value()`.
+ * @param bus     Written when `proc->optOutCh.has_value()` and `isDigital == true`.
  * @param claimed Not modified.
  */
 void sim_abs_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed, ChanOwner chanOwner);
@@ -102,15 +102,15 @@ void sim_scale_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed, Ch
  *   - value == neutral → DriveState::kStanding
  *
  *   Encodes the result via DriveStateBus::encode() and writes it to
- *   `proc->optOutCh` (e.g. DRIVE_STATE_BUS).
+ *   `proc->optOutCh` (analog) (e.g. DRIVE_STATE_BUS).
  *   Does **NOT** modify `value` — pure side-effect observer.
  *   Does NOT set `claimed`.
  *   cfg = &SimDriveStateCfg, state = nullptr.
  *
  * @param proc    SimProc descriptor — `cfg` cast to `const SimDriveStateCfg*`;
- *                `optOutCh` = destination analog channel.
+ *                `optOutCh` (analog) = destination analog channel.
  * @param value   Read-only — post-ramp bipolaire position [0..CbusMaxVal].
- * @param bus     Written via `optOutCh` when has_value().
+ * @param bus     Written via `optOutCh` when has_value() and isDigital == false.
  * @param claimed Not modified.
  */
 void sim_drive_state_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed, ChanOwner chanOwner);

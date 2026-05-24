@@ -21,6 +21,7 @@
 
 #include <stdint.h>
 #include <optional>
+#include <variant>
 
 #include <core/config/machines/combus_ids.h>  // AnalogComBusID, DigitalComBusID
 #include <struct/combus_struct.h>              // ComBus (needed for SimBehaviorFn in archive)
@@ -356,27 +357,38 @@ using SimProcFn = void (*)(SimProc* proc, uint16_t& value, ComBus& bus, bool& cl
 /**
  * @brief One processing unit within a SimChannel pipeline.
  *
- * @note **Mutable config pattern:** `cfg` is flash-const (`const void*`).  If a
- *   processor needs runtime-varying configuration (beyond internal state), embed a
- *   `const MyCfg* dynCfg = nullptr` field in its `MyProcState` struct.  Inside the
- *   fn, resolve the effective config as:
+ * @details `cfg` is the static flash config for this proc.  `dynCfg` is an
+ *   optional runtime-override pointer — `nullptr` means use `cfg`.  A preceding
+ *   processor in the same pipeline (e.g. `sim_gear_fn`) can write `proc->dynCfg`
+ *   to point at a RAM-resident (non-const) config struct, allowing per-cycle
+ *   config mutation without touching flash.
+ *   The fn resolves the effective config as:
  *   @code
- *   const MyCfg* effective = state->dynCfg ? state->dynCfg
- *                                           : static_cast<const MyCfg*>(proc->cfg);
+ *   const MyCfg* effective = proc->dynCfg
+ *                                ? static_cast<const MyCfg*>(proc->dynCfg)
+ *                                : static_cast<const MyCfg*>(proc->cfg);
  *   @endcode
- *   A preceding processor in the same pipeline (e.g. sim_gear_fn) can write
- *   `state->dynCfg` before this proc runs, enabling per-cycle config switching
- *   without touching flash.
  */
 struct SimProc {
-    const char*                        name;      ///< Debug / dashboard label.
-    std::optional<AnalogComBusID>      optInCh;   ///< Analog input — used by sim_read_fn; set as documentary metadata on intermediate procs. std::nullopt when unused.
-    std::optional<DigitalComBusID>     optInDCh;  ///< Digital input — sim_read_fn silently converts to 0/CbusMaxVal when optInCh is not set. std::nullopt when unused.
-    std::optional<AnalogComBusID>      optOutCh;  ///< Analog output — used by sim_write_fn as the ComBus destination. std::nullopt when unused.
-    std::optional<DigitalComBusID>     optOutDCh; ///< Digital side-effect output written by the proc (e.g. sign from sim_abs_fn). std::nullopt when unused.
-    SimProcFn                          fn;        ///< C function pointer — assigned in sim_config.cpp (e.g. &sim_ramp_fn). nullptr = passthrough.
-    const void*                        cfg;       ///< Flash — static config struct (e.g. SimRampCfg). Cast inside fn.
-    void*                              state;     ///< RAM   — mutable runtime state (e.g. SimRampState). Cast inside fn.
+    const char* name;    ///< Debug / dashboard label.
+
+    // --- Channels ------------------------------------------------------------
+    /// Input channel — nullopt = none.
+    ///   analog : std::get<AnalogComBusID>(*optInCh)
+    ///   digital: std::get<DigitalComBusID>(*optInCh)
+    std::optional<std::variant<AnalogComBusID, DigitalComBusID>> optInCh;
+
+    /// Output channel — nullopt = none.
+    ///   analog : std::get<AnalogComBusID>(*optOutCh)
+    ///   digital: std::get<DigitalComBusID>(*optOutCh)
+    std::optional<std::variant<AnalogComBusID, DigitalComBusID>> optOutCh;
+
+    SimProcFn    fn;                      ///< Processing function. nullptr = passthrough.
+    const void*  cfg;                     ///< Flash — static config struct. Cast inside fn.
+    void*        dynCfg = nullptr;        ///< Runtime cfg override — nullptr = use cfg (flash).
+                                          ///<   Points at a RAM-resident (non-const) config struct.
+                                          ///<   Written by a preceding proc to switch config per-cycle.
+    void*        state;                   ///< RAM — mutable runtime state. Cast inside fn.
 };
 
 
@@ -439,10 +451,10 @@ struct SimRampCfg {
  *   a self-init to CbusNeutral on the first call.
  */
 struct SimRampState {
-    uint16_t currentPos;    ///< Current inertial position in ComBus domain [0..CbusMaxVal].
-    uint32_t lastUpdateMs;  ///< millis() timestamp of last ramp step.
-                            ///<   Also used as first-call sentinel: 0 = never initialised.
-                            ///<   Do NOT use currentPos == 0 — 0 is a valid position (full negative).
+    uint16_t          currentPos;       ///< Current inertial position in ComBus domain [0..CbusMaxVal].
+    uint32_t          lastUpdateMs;     ///< millis() timestamp of last ramp step.
+                                        ///<   Also used as first-call sentinel: 0 = never initialised.
+                                        ///<   Do NOT use currentPos == 0 — 0 is a valid position (full negative).
 };
 
 
@@ -533,19 +545,19 @@ struct SimDriveStateCfg {
  *
  *   `sim_center_fn` and `sim_abs_fn` are **cfg-free** (`SimProc::cfg = nullptr`):
  *   - `sim_center_fn`: pure signed deviation from CbusNeutral — no config needed.
- *   - `sim_abs_fn`: sign side effect declared via `SimProc::optOutDCh`
- *     (std::nullopt = skip, otherwise writes HIGH/LOW to that digital channel).
+ *   - `sim_abs_fn`: sign side effect declared via `SimProc::optOutCh`
+ *     (nullopt = skip, otherwise writes HIGH/LOW to the digital channel).
  *
-   *   Typical three-proc chain for THROTTLE_BUS → RPM_BUS:
+ *   Typical three-proc chain for THROTTLE_BUS → RPM_BUS:
  *   @code
- *     sim_center_fn  { optInCh = nullopt, optOutDCh = nullopt, cfg = nullptr }
- *     sim_abs_fn     { optOutDCh = nullopt,                    cfg = nullptr }
+ *     sim_center_fn  { optInCh = nullopt, optOutCh = nullopt, cfg = nullptr }
+ *     sim_abs_fn     { optOutCh = nullopt,                  cfg = nullptr }
  *     sim_scale_fn   { cfg = &{ inMax = CbusNeutral, outMax = gear[n-1].upShift } }
  *   @endcode
  *
  *   For a pipeline that also captures direction as a digital side effect:
  *   @code
- *     sim_abs_fn     { optOutDCh = ESC_REVERSE_BUS }  // HIGH = FWD, LOW = REV
+ *     sim_abs_fn     { optOutCh = DigitalComBusID::ESC_REVERSE_BUS }  // HIGH=FWD LOW=REV
  *   @endcode
  */
 struct SimScaleCfg {

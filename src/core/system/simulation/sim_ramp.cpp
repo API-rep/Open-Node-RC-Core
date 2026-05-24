@@ -25,8 +25,12 @@
 /** @brief Asymmetric inertia ramp — see sim_ramp.h for full contract. */
 void sim_ramp_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& /*claimed*/, ChanOwner /*chanOwner*/)
 {
-    const SimRampCfg* cfg   = static_cast<const SimRampCfg*>(proc->cfg);
     SimRampState*     state = static_cast<SimRampState*>(proc->state);
+    // dynCfg override: a preceding proc (e.g. sim_gear_fn) may write proc->dynCfg
+    // to select a per-cycle ramp config without touching flash.
+    const SimRampCfg* cfg   = (proc->dynCfg != nullptr)
+                                  ? static_cast<const SimRampCfg*>(proc->dynCfg)
+                                  : static_cast<const SimRampCfg*>(proc->cfg);
 
     // --- 0. Self-init on first call ------------------------------------------
     // Sentinel: both fields are zero-initialised at construction; after init,

@@ -83,8 +83,10 @@ void sim_update(SimChannel* channels, uint8_t count, ComBus& bus)
 AnalogComBusID sim_channel_read_ch(const SimChannel& ch)
 {
     for (uint8_t p = 0; p < ch.simProcCount; ++p) {
-        if (ch.simProc[p].fn == sim_read_fn && ch.simProc[p].optInCh.has_value())
-            return ch.simProc[p].optInCh.value();
+        const auto& opt = ch.simProc[p].optInCh;
+        if (ch.simProc[p].fn == sim_read_fn && opt.has_value()
+            && std::holds_alternative<AnalogComBusID>(*opt))
+            return std::get<AnalogComBusID>(*opt);
     }
     return AnalogComBusID{};
 }
@@ -93,8 +95,10 @@ AnalogComBusID sim_channel_read_ch(const SimChannel& ch)
 AnalogComBusID sim_channel_write_ch(const SimChannel& ch)
 {
     for (uint8_t p = 0; p < ch.simProcCount; ++p) {
-        if (ch.simProc[p].fn == sim_write_fn && ch.simProc[p].optOutCh.has_value())
-            return ch.simProc[p].optOutCh.value();
+        const auto& opt = ch.simProc[p].optOutCh;
+        if (ch.simProc[p].fn == sim_write_fn && opt.has_value()
+            && std::holds_alternative<AnalogComBusID>(*opt))
+            return std::get<AnalogComBusID>(*opt);
     }
     return AnalogComBusID{};
 }

@@ -130,11 +130,11 @@ static ShiftDeltaState gThrottleShiftDeltaState {};
 
 static SimProc kThrottleProcs[] = {
     {
-        .name    = "read",
-        .optInCh = AnalogComBusID::THROTTLE_BUS,
-        .fn      = sim_read_fn,
-        .cfg     = nullptr,
-        .state   = nullptr,
+        .name   = "read",
+        .optInCh  = AnalogComBusID::THROTTLE_BUS,
+        .fn     = sim_read_fn,
+        .cfg    = nullptr,
+        .state  = nullptr,
     },
     {
         .name  = "ramp",
@@ -143,11 +143,11 @@ static SimProc kThrottleProcs[] = {
         .state = &gTractionRampState,
     },
     {
-        .name     = "drive-state",
-        .optOutCh = AnalogComBusID::DRIVE_STATE_BUS,
-        .fn       = sim_drive_state_fn,
-        .cfg      = &kThrottleDriveState,
-        .state    = nullptr,
+        .name    = "drive-state",
+        .optOutCh  = AnalogComBusID::DRIVE_STATE_BUS,
+        .fn      = sim_drive_state_fn,
+        .cfg     = &kThrottleDriveState,
+        .state   = nullptr,
     },
     {
         .name  = "center",
@@ -180,21 +180,21 @@ static SimProc kThrottleProcs[] = {
         .state = &gThrottleShiftDeltaState,
     },
     {
-        .name     = "write",
-        .optOutCh = AnalogComBusID::RPM_BUS,
-        .fn       = sim_write_fn,
-        .cfg      = nullptr,
-        .state    = nullptr,
+        .name    = "write",
+        .optOutCh  = AnalogComBusID::RPM_BUS,
+        .fn      = sim_write_fn,
+        .cfg     = nullptr,
+        .state   = nullptr,
     },
 };
 
 static SimProc kGearProcs[] = {
     {
-        .name    = "read",
-        .optInCh = AnalogComBusID::RPM_BUS,
-        .fn      = sim_read_fn,
-        .cfg     = nullptr,
-        .state   = nullptr,
+        .name   = "read",
+        .optInCh  = AnalogComBusID::RPM_BUS,
+        .fn     = sim_read_fn,
+        .cfg    = nullptr,
+        .state  = nullptr,
     },
     {
         .name    = "bypass",
@@ -209,21 +209,21 @@ static SimProc kGearProcs[] = {
         .state   = &gGearFsmState,
     },
     {
-        .name     = "write",
-        .optOutCh = AnalogComBusID::GEAR,
-        .fn       = sim_write_fn,
-        .cfg      = nullptr,
-        .state    = nullptr,
+        .name    = "write",
+        .optOutCh  = AnalogComBusID::GEAR,
+        .fn      = sim_write_fn,
+        .cfg     = nullptr,
+        .state   = nullptr,
     },
 };
 
 static SimProc kTractionProcs[] = {
     {
-        .name    = "read",
-        .optInCh = AnalogComBusID::RPM_BUS,
-        .fn      = sim_read_fn,
-        .cfg     = nullptr,
-        .state   = nullptr,
+        .name   = "read",
+        .optInCh  = AnalogComBusID::RPM_BUS,
+        .fn     = sim_read_fn,
+        .cfg    = nullptr,
+        .state  = nullptr,
     },
     {
         .name    = "rpm_to_speed",
@@ -232,21 +232,21 @@ static SimProc kTractionProcs[] = {
         .state   = nullptr,
     },
     {
-        .name     = "write",
-        .optOutCh = AnalogComBusID::ESC_SPEED_BUS,
-        .fn       = sim_write_fn,
-        .cfg      = nullptr,
-        .state    = nullptr,
+        .name    = "write",
+        .optOutCh  = AnalogComBusID::ESC_SPEED_BUS,
+        .fn      = sim_write_fn,
+        .cfg     = nullptr,
+        .state   = nullptr,
     },
 };
 
 static SimProc kSteeringProcs[] = {
     {
-        .name    = "read",
-        .optInCh = AnalogComBusID::STEERING_BUS,
-        .fn      = sim_read_fn,
-        .cfg     = nullptr,
-        .state   = nullptr,
+        .name   = "read",
+        .optInCh  = AnalogComBusID::STEERING_BUS,
+        .fn     = sim_read_fn,
+        .cfg    = nullptr,
+        .state  = nullptr,
     },
     {
         .name    = "bypass",
@@ -261,21 +261,21 @@ static SimProc kSteeringProcs[] = {
         .state   = &gSteerRampState,
     },
     {
-        .name     = "write",
-        .optOutCh = AnalogComBusID::STEERING_RAMPED_BUS,
-        .fn       = sim_write_fn,
-        .cfg      = nullptr,
-        .state    = nullptr,
+        .name    = "write",
+        .optOutCh  = AnalogComBusID::STEERING_RAMPED_BUS,
+        .fn      = sim_write_fn,
+        .cfg     = nullptr,
+        .state   = nullptr,
     },
 };
 
 static SimProc kDumpProcs[] = {
     {
-        .name    = "read",
-        .optInCh = AnalogComBusID::DUMP_BUS,
-        .fn      = sim_read_fn,
-        .cfg     = nullptr,
-        .state   = nullptr,
+        .name   = "read",
+        .optInCh  = AnalogComBusID::DUMP_BUS,
+        .fn     = sim_read_fn,
+        .cfg    = nullptr,
+        .state  = nullptr,
     },
     {
         .name    = "bypass",
@@ -290,11 +290,11 @@ static SimProc kDumpProcs[] = {
         .state   = &gDumpRampState,
     },
     {
-        .name     = "write",
-        .optOutCh = AnalogComBusID::DUMP_RAMPED_BUS,
-        .fn       = sim_write_fn,
-        .cfg      = nullptr,
-        .state    = nullptr,
+        .name    = "write",
+        .optOutCh  = AnalogComBusID::DUMP_RAMPED_BUS,
+        .fn      = sim_write_fn,
+        .cfg     = nullptr,
+        .state   = nullptr,
     },
 };
 

@@ -68,20 +68,25 @@ static const char* dCh(DigitalComBusID id)
 	}
 }
 
-/// @brief Derive the primary input channel from a SimChannel (first proc optInCh).
+/// @brief Derive the primary input channel from a SimChannel (first proc optInCh, analog).
 static AnalogComBusID simChanInCh(const SimChannel& ch)
 {
-	if (ch.simProcCount > 0u && ch.simProc != nullptr && ch.simProc[0].optInCh.has_value())
-		return ch.simProc[0].optInCh.value();
+	if (ch.simProcCount > 0u && ch.simProc != nullptr) {
+		const auto& opt = ch.simProc[0].optInCh;
+		if (opt.has_value() && std::holds_alternative<AnalogComBusID>(*opt))
+			return std::get<AnalogComBusID>(*opt);
+	}
 	return static_cast<AnalogComBusID>(0u);
 }
 
-/// @brief Derive the primary output channel from a SimChannel (last proc optOutCh).
+/// @brief Derive the primary output channel from a SimChannel (last proc optOutCh, analog).
 static AnalogComBusID simChanOutCh(const SimChannel& ch)
 {
 	if (ch.simProcCount > 0u && ch.simProc != nullptr) {
 		const SimProc& last = ch.simProc[ch.simProcCount - 1u];
-		if (last.optOutCh.has_value()) return last.optOutCh.value();
+		const auto& opt = last.optOutCh;
+		if (opt.has_value() && std::holds_alternative<AnalogComBusID>(*opt))
+			return std::get<AnalogComBusID>(*opt);
 	}
 	return static_cast<AnalogComBusID>(0u);
 }
