@@ -1,9 +1,9 @@
 /******************************************************************************
  * @file  sim.h
- * @brief SimChain dispatcher — init and update.
+ * @brief CbChain dispatcher — init and update.
  *
  * @details Entry point for the simulation layer.  `sim_update()` iterates an
- *   array of SimChain descriptors and dispatches each stage's CbProcFn
+ *   array of CbChain descriptors and dispatches each stage's CbProcFn
  *   in sequence.
  *
  *   Runner contract:
@@ -28,7 +28,7 @@
 // 1. INCLUDES
 // =============================================================================
 
-#include <struct/simulation_struct.h>   // SimChain (= CbChain), SimProc (= CbProc)
+#include <struct/simulation_struct.h>   // CbChain (= CbChain), CbProc (= CbProc)
 #include <struct/combus_struct.h>       // ComBus
 
 
@@ -37,7 +37,7 @@
 // =============================================================================
 
 /**
- * @brief Placeholder lifecycle init for the SimChain array.
+ * @brief Placeholder lifecycle init for the CbChain array.
  *
  * @details Stages self-init on first update call (zero-state detection inside
  *   each CbProcFn).  Kept as a symmetric counterpart to dc_dev_init().
@@ -45,10 +45,10 @@
  * @param channels  Channel array (may be nullptr when count == 0).
  * @param count     Number of channels.
  */
-void sim_init(SimChain* channels, uint8_t count);
+void sim_init(CbChain* channels, uint8_t count);
 
 /**
- * @brief Process a single SimChain.
+ * @brief Process a single CbChain.
  *
  * @details Pre-reads optInCh, dispatches procs with secIn injection and
  *   secOut commit, then post-writes optOutCh.  May be called directly when
@@ -57,7 +57,7 @@ void sim_init(SimChain* channels, uint8_t count);
  * @param ch   Channel to process.
  * @param bus  Shared ComBus for this channel.
  */
-void sim_chain_update(SimChain& ch, ComBus& bus);
+void sim_chain_update(CbChain& ch, ComBus& bus);
 
 /**
  * @brief Update all channels.
@@ -66,6 +66,6 @@ void sim_chain_update(SimChain& ch, ComBus& bus);
  * @param count     Number of channels.
  * @param bus       Shared ComBus.
  */
-void sim_update(SimChain* channels, uint8_t count, ComBus& bus);
+void sim_update(CbChain* channels, uint8_t count, ComBus& bus);
 
 // EOF sim.h

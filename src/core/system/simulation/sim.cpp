@@ -1,6 +1,6 @@
 /******************************************************************************
  * @file  sim.cpp
- * @brief SimChain dispatcher — init and update implementation.
+ * @brief CbChain dispatcher — init and update implementation.
  *****************************************************************************/
 
 #include "sim.h"
@@ -48,19 +48,19 @@ static void cbWrite(ComBus& bus, const ChanOpt& ch, uint16_t value, ChanOwner ow
 // =============================================================================
 
 /**
- * @brief Placeholder lifecycle init for the SimChain array.
+ * @brief Placeholder lifecycle init for the CbChain array.
  *
  * @details Kept as a symmetric counterpart to dc_dev_init() / srv_dev_init().
- *   Each SimProcFn self-inits on first update call via zero-state detection.
+ *   Each CbProcFn self-inits on first update call via zero-state detection.
  */
-void sim_init(SimChain* /*channels*/, uint8_t /*count*/)
+void sim_init(CbChain* /*channels*/, uint8_t /*count*/)
 {
     // Stages self-init on first update call (zero-state detection).
 }
 
 
 /**
- * @brief Process a single SimChain — pre-read, dispatch processors, post-write.
+ * @brief Process a single CbChain — pre-read, dispatch processors, post-write.
  *
  * @details Sequence:
  *   1. Pre-read  : runner reads `ch.optInCh` → seeds `value`.
@@ -74,7 +74,7 @@ void sim_init(SimChain* /*channels*/, uint8_t /*count*/)
  * @param ch   Channel descriptor (procs, chainOwner, optInCh, optOutCh).
  * @param bus  Shared ComBus for this cycle.
  */
-void sim_chain_update(SimChain& ch, ComBus& bus)
+void sim_chain_update(CbChain& ch, ComBus& bus)
 {
     // --- 1. Pre-read primary input -------------------------------------------
     uint16_t value   = cbRead(bus, ch.optInCh, /*isDrivedGuard=*/true);
@@ -109,7 +109,7 @@ void sim_chain_update(SimChain& ch, ComBus& bus)
  * @param count     Number of channels.
  * @param bus       Shared ComBus — forwarded to each sim_chain_update().
  */
-void sim_update(SimChain* channels, uint8_t count, ComBus& bus)
+void sim_update(CbChain* channels, uint8_t count, ComBus& bus)
 {
     for (uint8_t p = 0; p < count; ++p) {
         sim_chain_update(channels[p], bus);

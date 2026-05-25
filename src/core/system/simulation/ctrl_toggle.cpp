@@ -1,18 +1,18 @@
 /*!****************************************************************************
  * @file  ctrl_toggle.cpp
- * @brief Toggle CtrlProcFn — pure rising-edge toggle implementation.
+ * @brief Toggle CbProcFn — pure rising-edge toggle implementation.
  *****************************************************************************/
 
 #include "ctrl_toggle.h"
 
-#include <struct/ctrl_struct.h>    // CtrlProc, CtrlToggleState
+#include <struct/ctrl_struct.h>    // CbProc, CtrlToggleState
 
 
 // =============================================================================
 // 1. PROC IMPLEMENTATION
 // =============================================================================
 
-void ctrl_toggle_fn(CtrlProc* proc, uint16_t& value,
+void ctrl_toggle_fn(CbProc* proc, uint16_t& value,
                     bool& /*claimed*/, ChanOwner /*owner*/)
 {
     auto* state = static_cast<CtrlToggleState*>(proc->state);

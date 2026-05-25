@@ -1,18 +1,18 @@
 /*!****************************************************************************
  * @file  ctrl_speed_gate.cpp
- * @brief Speed-gate CtrlProcFn — suppresses engagement above a speed threshold.
+ * @brief Speed-gate CbProcFn — suppresses engagement above a speed threshold.
  *****************************************************************************/
 
 #include "ctrl_speed_gate.h"
 
-#include <struct/ctrl_struct.h>    // CtrlProc, CtrlSpeedGateCfg
+#include <struct/ctrl_struct.h>    // CbProc, CtrlSpeedGateCfg
 
 
 // =============================================================================
 // 1. PROC IMPLEMENTATION
 // =============================================================================
 
-void ctrl_speed_gate_fn(CtrlProc* proc, uint16_t& value,
+void ctrl_speed_gate_fn(CbProc* proc, uint16_t& value,
                         bool& /*claimed*/, ChanOwner /*owner*/)
 {
     const auto* cfg = static_cast<const CtrlSpeedGateCfg*>(proc->cfg);

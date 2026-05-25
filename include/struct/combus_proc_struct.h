@@ -3,7 +3,7 @@
  * @brief ComBus processor pipeline — unified CbProc / CbChain types.
  *
  * @details Defines the single shared proc/channel types used by both the
- *   simulation layer (SimChain) and the ctrl layer (CtrlChain).
+ *   simulation layer (CbChain) and the ctrl layer (CbChain).
  *
  *   **Key architectural rules:**
  *   - `CbProcFn` has NO `ComBus& bus` parameter.
@@ -125,9 +125,9 @@ struct CbProc {
 // =============================================================================
 
 /**
- * @brief One named processing channel — ordered CbProc list with I/O declaration.
+ * @brief One named combus processing chain — ordered CbProc list with I/O declaration.
  *
- * @details The channel declares its primary input and output channels.
+ * @details The chain declares its primary input and output channels.
  *   The runner pre-reads `optInCh` before the proc chain and post-writes
  *   `optOutCh` after (regardless of `claimed`).
  *
@@ -135,7 +135,7 @@ struct CbProc {
  *   (primary + secondary) — no external owner parameter on the runner.
  */
 struct CbChain {
-    const char*  name;  ///< Human-readable channel name (debug / dashboard).
+    const char*  name;  ///< Human-readable chain name (debug / dashboard).
 
     // --- Primary I/O (runner-owned — no read/write proc needed) --------------
     /// Primary input channel — nullopt = no pre-read (value starts at 0).

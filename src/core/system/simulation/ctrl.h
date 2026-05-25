@@ -28,7 +28,7 @@
 // 1. INCLUDES
 // =============================================================================
 
-#include <struct/ctrl_struct.h>    // CtrlChain (= CbChain), CtrlProc (= CbProc)
+#include <struct/ctrl_struct.h>    // CbChain (= CbChain), CbProc (= CbProc)
 #include <struct/combus_struct.h>  // ComBus
 
 
@@ -43,6 +43,6 @@
  * @param count     Number of channels.
  * @param bus       ComBus — read/written by the runner (not passed to fn).
  */
-void ctrl_update(CtrlChain* channels, uint8_t count, ComBus& bus);
+void ctrl_update(CbChain* channels, uint8_t count, ComBus& bus);
 
 // EOF ctrl.h

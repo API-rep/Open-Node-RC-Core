@@ -1,8 +1,8 @@
 /*!****************************************************************************
  * @file    ctrl_config.cpp
- * @brief   Volvo A60H Bruder — CtrlChain pipeline configuration.
+ * @brief   Volvo A60H Bruder — CbChain pipeline configuration.
  *
- * @details Defines the CtrlChain array consumed by ctrl_update() in the
+ * @details Defines the CbChain array consumed by ctrl_update() in the
  *   machine main loop.
  *
  *   Channel pipelines (optInCh → procs → optOutCh):
@@ -11,7 +11,7 @@
 
 #include "ctrl_config.h"
 
-#include <struct/ctrl_struct.h>                       // CtrlChain, CtrlProc, CtrlSpeedGateCfg, CtrlToggleState
+#include <struct/ctrl_struct.h>                       // CbChain, CbProc, CtrlSpeedGateCfg, CtrlToggleState
 #include <struct/combus_struct.h>                     // makeChanOwner, ComBusOwner
 #include <core/config/machines/combus_types.h>        // DigitalComBusID, AnalogComBusID
 #include <core/system/simulation/ctrl_speed_gate.h>   // ctrl_speed_gate_fn
@@ -40,7 +40,7 @@ static CtrlToggleState gDirectDriveToggleState {};
 // 3. PROC ARRAYS
 // =============================================================================
 
-static CtrlProc kDirectDriveProcs[] = {
+static CbProc kDirectDriveProcs[] = {
     { .name      = "speed_gate",
       .secInCh   = { AnalogComBusID::RPM_BUS, DigitalComBusID::DIRECT_DRIVE },
       .fn        = ctrl_speed_gate_fn,
@@ -59,7 +59,7 @@ static CtrlProc kDirectDriveProcs[] = {
 // 4. CHANNEL ARRAY
 // =============================================================================
 
-CtrlChain kCtrlChains[] = {
+CbChain kCtrlChains[] = {
     { .name      = "direct_drive",
       .optInCh   = DigitalComBusID::DIRECT_DRIVE_BTN,
       .optOutCh  = DigitalComBusID::DIRECT_DRIVE,
@@ -69,6 +69,6 @@ CtrlChain kCtrlChains[] = {
     },
 };
 
-const uint8_t kCtrlChainCount = sizeof(kCtrlChains) / sizeof(CtrlChain);
+const uint8_t kCtrlChainCount = sizeof(kCtrlChains) / sizeof(CbChain);
 
 // EOF ctrl_config.cpp

@@ -1,13 +1,13 @@
 /******************************************************************************
  * @file  sim_ramp.cpp
- * @brief SimProc function — single-axis inertia ramp (hydraulics, steering).
+ * @brief CbProc function — single-axis inertia ramp (hydraulics, steering).
  *
  * @details Pure ComBus simulation processor — no hardware calls, no µs domain.
  *   Reads the target from `value` (seeded by sim_chain_update from
- *   SimChain::inCh).  Advances `state->currentPos` toward the target by
+ *   CbChain::inCh).  Advances `state->currentPos` toward the target by
  *   `accelSteps` (moving away from neutral) or `brakeSteps` (moving toward
  *   neutral) on each `rampTimeMs` tick.  Writes the filtered position back
- *   to `value` every call — SimChain owns the final bus write.
+ *   to `value` every call — CbChain owns the final bus write.
  *****************************************************************************/
 
 #include "sim_ramp.h"
@@ -22,7 +22,7 @@
 // =============================================================================
 
 /** @brief Asymmetric inertia ramp — see sim_ramp.h for full contract. */
-void sim_ramp_fn(SimProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)
+void sim_ramp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)
 {
     SimRampState*     state = static_cast<SimRampState*>(proc->state);
     // dynCfg override: a preceding proc (e.g. sim_gear_fn) may write proc->dynCfg

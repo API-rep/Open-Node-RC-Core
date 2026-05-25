@@ -1,27 +1,27 @@
 /******************************************************************************
  * @file  sim_gear.h
- * @brief SimProc function — speed-based virtual gear FSM.
+ * @brief CbProc function — speed-based virtual gear FSM.
  *
  * @details Two-level public API:
  *
  *   1. FSM primitives (`sim_gear_fsm_init`, `sim_gear_fsm_update`):
  *      Pure RPM → gear logic, no ComBus involved.  Useful for explicit reset
- *      (e.g. on runlevel transition) or direct use outside a SimProc.
+ *      (e.g. on runlevel transition) or direct use outside a CbProc.
  *
- *   2. SimProc function (`sim_gear_fn`):
+ *   2. CbProc function (`sim_gear_fn`):
  *      Output processor — reads `value` to derive RPM, runs the FSM,
  *      sets `value = gear` (written to outCh = `GEAR` by the channel mechanism),
  *      and writes per-gear ramp time to `TRACTION_RAMP_BUS` and sub-gear index
  *      to `SUBGEAR_BUS` as side effects.  Does NOT set `claimed`.
  *      Intended as the sole proc in a dedicated SIM_GEAR channel (outCh = GEAR).
  *
- *   3. SimProc function (`sim_apply_ratio_fn`):
+ *   3. CbProc function (`sim_apply_ratio_fn`):
  *      Shift-delta processor — will apply accumulated `shiftDelta` RPM drops
  *      to the throttle signal on each upshift.  Currently a no-op passthrough
  *      pending implementation.
  *
- *      Assign to `SimProc::fn`.  Pair with `GearProcCfg` in `SimProc::cfg`
- *      and `GearFsmState` in `SimProc::state`.  Self-inits on first call
+ *      Assign to `CbProc::fn`.  Pair with `GearProcCfg` in `CbProc::cfg`
+ *      and `GearFsmState` in `CbProc::state`.  Self-inits on first call
  *      when `state->gear == 0` (zero-init sentinel).
  *
  *      Typical placement: last proc in the chain — other procs (bypass, ramp)
@@ -29,7 +29,7 @@
  *****************************************************************************/
 #pragma once
 
-#include <struct/simulation_struct.h>   // SimProc, GearProcCfg, ShiftDeltaState, GearFsmState, GearShiftProfile
+#include <struct/simulation_struct.h>   // CbProc, GearProcCfg, ShiftDeltaState, GearFsmState, GearShiftProfile
 
 
 // =============================================================================
@@ -71,7 +71,7 @@ int8_t sim_gear_fsm_update(GearFsmState*           state,
 // =============================================================================
 
 /**
- * @brief Gear FSM SimProc — reads RPM magnitude, runs the FSM, sets `value = gear`.
+ * @brief Gear FSM CbProc — reads RPM magnitude, runs the FSM, sets `value = gear`.
  *
  * @details secInCh[0] = DRIVE_STATE_BUS (analog): gates RPM for reverse/standing.
  *          secInCh[1] = SUBGEAR_BUS (analog): suppresses upshift when active.
@@ -87,7 +87,7 @@ int8_t sim_gear_fsm_update(GearFsmState*           state,
  * @param value   In: RPM magnitude [0..maxRpm].  Out: active gear (1..N).
  * @param claimed Not modified.
  */
-void sim_gear_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void sim_gear_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
 
 /**
  * @brief Gear direct-drive bypass — sets GEAR = 1 and claims when DIRECT_DRIVE is HIGH.
@@ -99,10 +99,10 @@ void sim_gear_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chainO
  * @param value   Set to 1 when secInValue[0] != 0; unchanged otherwise.
  * @param claimed Set to `true` when DIRECT_DRIVE is HIGH; unchanged otherwise.
  */
-void sim_gear_bypass_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void sim_gear_bypass_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
 
 /**
- * @brief Gear shift-delta SimProc — subtracts shiftDelta RPM on upshift.
+ * @brief Gear shift-delta CbProc — subtracts shiftDelta RPM on upshift.
  *
  * @details secInCh[0] = DIRECT_DRIVE (digital): early exit when HIGH.
  *          secInCh[1] = GEAR (analog): current gear from SIM_GEAR channel.
@@ -112,10 +112,10 @@ void sim_gear_bypass_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner
  * @param value   In: RPM magnitude.  Out: RPM after shift dip.
  * @param claimed Not modified.
  */
-void sim_apply_ratio_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void sim_apply_ratio_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
 
 /**
- * @brief RPM → ESC speed SimProc — converts RPM_BUS to ESC_SPEED_BUS domain.
+ * @brief RPM → ESC speed CbProc — converts RPM_BUS to ESC_SPEED_BUS domain.
  *
  * @details secInCh[0] = DRIVE_STATE_BUS (analog): direction encoding.
  *          secInCh[1] = GEAR (analog): active gear from SIM_GEAR channel.
@@ -125,7 +125,7 @@ void sim_apply_ratio_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner
  * @param value   In: RPM_BUS magnitude.  Out: ESC_SPEED_BUS bipolar value.
  * @param claimed Not modified.
  */
-void sim_rpm_to_speed_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void sim_rpm_to_speed_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
 
 /**
  * @brief Gear→ramp bridge — updates per-gear ramp time in a linked SimRampCfg.
@@ -138,6 +138,6 @@ void sim_rpm_to_speed_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwne
  * @param value   In/out: current gear — passed through unchanged.
  * @param claimed Not modified.
  */
-void sim_gear_ramp_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void sim_gear_ramp_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
 
 // EOF sim_gear.h

@@ -1,16 +1,16 @@
 /******************************************************************************
  * @file  sim_bypass.h
- * @brief SimProc function — conditional bypass gate.
+ * @brief CbProc function — conditional bypass gate.
  *
- * @details `sim_bypass_fn()` implements a bypass gate for a SimChain pipeline.
+ * @details `sim_bypass_fn()` implements a bypass gate for a CbChain pipeline.
  *
  *   When `proc->secInValue[0]` (digital) is nonzero, `claimed` is set to
  *   `true`, skipping all downstream processors.  The runner always post-writes
  *   `value` to `ch.optOutCh`, so the raw input passes through to the output.
  *   When the condition is false, the function is a no-op.
  *
- *   No config struct needed: `SimProc::cfg` must be `nullptr`.
- *   No runtime state: `SimProc::state` must be `nullptr`.
+ *   No config struct needed: `CbProc::cfg` must be `nullptr`.
+ *   No runtime state: `CbProc::state` must be `nullptr`.
  *
  *   Typical declaration (in vehicle sim_config.cpp):
  *   @code
@@ -23,7 +23,7 @@
  *****************************************************************************/
 #pragma once
 
-#include <struct/simulation_struct.h>  // SimProc, CbProcFn
+#include <struct/simulation_struct.h>  // CbProc, CbProcFn
 
 
 // =============================================================================
@@ -31,9 +31,9 @@
 // =============================================================================
 
 /**
- * @brief Conditional bypass gate — assigned to `SimProc::fn`.
+ * @brief Conditional bypass gate — assigned to `CbProc::fn`.
  *
- * @details Matches the `CbProcFn` (`SimProcFn`) signature.
+ * @details Matches the `CbProcFn` (`CbProcFn`) signature.
  *   Sets `claimed = true` when `proc->secInValue[0]` is nonzero,
  *   causing all downstream processors to be skipped this cycle.
  *   Does not modify `value` — raw optInCh value passes through to optOutCh.
@@ -43,6 +43,6 @@
  * @param value   Not modified — runner always writes to optOutCh after chain.
  * @param claimed Set to `true` when secInValue[0] != 0; unchanged otherwise.
  */
-void sim_bypass_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void sim_bypass_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
 
 // EOF sim_bypass.h

@@ -1,18 +1,18 @@
 /*!****************************************************************************
  * @file  simulation_struct.h
- * @brief Simulation layer structures — archived SimDev + active SimChain pipeline.
+ * @brief Simulation layer structures — archived SimDev + active CbChain pipeline.
  *
  * @details Archive (A0–A4, above the separator) — old SimDev architecture,
  *   preserved until sim_traction, sim_gear and sim_brake are migrated.
  *   Do not add new code to the archive.
  *
- *   Active area (sections 1+, below the separator) — SimChain pipeline.
- *   Already validated: `SimProc/SimChain` (sim.cpp ✅, section 3),
+ *   Active area (sections 1+, below the separator) — CbChain pipeline.
+ *   Already validated: `CbProc/CbChain` (sim.cpp ✅, section 3),
  *   `SimRampCfg/State` (sim_ramp_fn ✅, section 1), `DriveState` (✅, section 2),
  *   `SimBypassCfg` (sim_bypass_fn ✅, section 4).
  *   `GearProcCfg` (sim_gear_fn ✅, section 5).
  *
- *   **Adding a new SimProcFn:**
+ *   **Adding a new CbProcFn:**
  *   1. Add `MyProcCfg` and `MyProcState` in the active area (sections 1+).
  *   2. Create `sim_<name>.h/.cpp` in `src/core/system/simulation/`.
  *   3. Nothing else changes here.
@@ -168,7 +168,7 @@ namespace DriveStateBus {
 // ┌─── ARCHIVE TEMPORAIRE ──────────────────────────────────────────────────┐
 // │  Ancienne architecture SimDev — conservée tant que les callers          │
 // │  existants ne sont pas migrés vers la nouvelle implémentation           │
-// │  SimChain.  Ne pas ajouter de nouveau code ici.                       │
+// │  CbChain.  Ne pas ajouter de nouveau code ici.                       │
 // │  À supprimer une fois sim_traction, sim_gear et sim_brake migrés.       │
 // └─────────────────────────────────────────────────────────────────────────┘
 // =============================================================================
@@ -281,7 +281,7 @@ struct SimBrakeState {
 
 
 // =============================================================================
-// A4. SimDev DESCRIPTOR  (ancienne architecture — remplacée par SimChain)
+// A4. SimDev DESCRIPTOR  (ancienne architecture — remplacée par CbChain)
 // =============================================================================
 
 struct SimDevCtx;  ///< Legacy context — used by SimBehaviorFn only.
@@ -352,7 +352,7 @@ struct SimDev {
  *   No `ComBus& bus` parameter — all bus I/O is handled by the runner via
  *   `CbChain::optInCh`/`optOutCh` and `CbProc::secInCh`/`optSecOutCh`.
  */
-using SimProcFn = CbProcFn;
+using CbProcFn = CbProcFn;
 
 /**
  * @brief Simulation proc descriptor — alias of CbProc.
@@ -366,7 +366,7 @@ using SimProcFn = CbProcFn;
  * @note Config arrays (`kThrottleProcs[]`, etc.) must use `CbProc` directly.
  *   `read` and `write` procs are removed — primary I/O belongs to the channel.
  */
-using SimProc = CbProc;
+using CbProc = CbProc;
 
 /**
  * @brief Simulation channel descriptor — alias of CbChain.
@@ -375,7 +375,7 @@ using SimProc = CbProc;
  *   - `simProc` renamed to `procs`; `simProcCount` renamed to `procCount`.
  *   - `optInCh` / `optOutCh` added (primary input/output, runner-owned).
  */
-using SimChain = CbChain;
+using CbChain = CbChain;
 
 
 // =============================================================================
@@ -383,12 +383,12 @@ using SimChain = CbChain;
 // =============================================================================
 
 /**
- * @brief Static configuration for a single-axis inertia ramp SimProc.
+ * @brief Static configuration for a single-axis inertia ramp CbProc.
  *
- * @details Assigned to `SimProc::cfg` (as `const void*`); cast back to
+ * @details Assigned to `CbProc::cfg` (as `const void*`); cast back to
  *   `const SimRampCfg*` inside `sim_ramp_fn()`.
  *
- *   Multi-instance: one SimProc entry per axis that needs inertia
+ *   Multi-instance: one CbProc entry per axis that needs inertia
  *   (e.g. DUMP_BUS → DUMP_RAMPED_BUS, STEERING_BUS → STEERING_RAMPED_BUS).
  *   The downstream `DcDevice` reads the ramped output channel.
  */
@@ -405,7 +405,7 @@ struct SimRampCfg {
 };
 
 /**
- * @brief Mutable runtime state for a ramp SimProc.
+ * @brief Mutable runtime state for a ramp CbProc.
  *
  * @details Written exclusively by `sim_ramp_fn()`.
  *   Zero-initialised by default construction — `currentPos == 0` triggers
@@ -431,7 +431,7 @@ struct SimRampState {
  *   The current pipeline `value` flows through unchanged; the runner
  *   always writes the primary `optOutCh` regardless of `claimed`.
  *
- *   No config struct needed — `SimProc::cfg` must be `nullptr`.
+ *   No config struct needed — `CbProc::cfg` must be `nullptr`.
  *   The condition channel is declared in `proc.secInCh[0]`.
  *   The output channel is the parent `CbChain::optOutCh`.
  *
@@ -445,11 +445,11 @@ struct SimBypassCfg {}; ///< Empty — kept for documentation; cfg = nullptr in 
 // =============================================================================
 
 /**
- * @brief Static configuration for a gear-FSM SimProc.
+ * @brief Static configuration for a gear-FSM CbProc.
  *
  * @details Shared by `sim_gear_fn`, `sim_gear_ramp_fn`, `sim_apply_ratio_fn`,
  *   and `sim_rpm_to_speed_fn`.
- *   Assigned to `SimProc::cfg` (as `const void*`); cast back to
+ *   Assigned to `CbProc::cfg` (as `const void*`); cast back to
  *   `const GearProcCfg*` inside each fn.
  *
  *   `GearFsmState` (mutable runtime for `sim_gear_fn`) is declared in
@@ -463,7 +463,7 @@ struct GearProcCfg {
 /**
  * @brief Mutable runtime state for `sim_apply_ratio_fn`.
  *
- * @details Assigned to `SimProc::state` (as `void*`); cast back inside
+ * @details Assigned to `CbProc::state` (as `void*`); cast back inside
  *   `sim_apply_ratio_fn()`.  Zero-init is valid (·prevGear = 0· means
  *   no upshift on first cycle).
  */
@@ -503,9 +503,9 @@ struct SimDriveStateCfg {
  *
  * @details `value = value × outMax / inMax`.
  *
- *   `sim_center_fn` and `sim_abs_fn` are **cfg-free** (`SimProc::cfg = nullptr`):
+ *   `sim_center_fn` and `sim_abs_fn` are **cfg-free** (`CbProc::cfg = nullptr`):
  *   - `sim_center_fn`: pure signed deviation from CbusNeutral — no config needed.
- *   - `sim_abs_fn`: sign side effect declared via `SimProc::optOutCh`
+ *   - `sim_abs_fn`: sign side effect declared via `CbProc::optOutCh`
  *     (nullopt = skip, otherwise writes HIGH/LOW to the digital channel).
  *
  *   Typical three-proc chain for THROTTLE_BUS → RPM_BUS:

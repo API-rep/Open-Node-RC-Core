@@ -4,7 +4,7 @@
  *
  * @details Defines the signal device array for the Volvo A60H.
  *   Simulation device configuration moved to sim_config.cpp.bak pending
- *   the SimChain refactor.
+ *   the CbChain refactor.
  *******************************************************************************
  */
 

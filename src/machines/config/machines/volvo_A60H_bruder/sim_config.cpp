@@ -1,8 +1,8 @@
 ﻿/*!****************************************************************************
  * @file    sim_config.cpp
- * @brief   Volvo A60H Bruder — SimChain pipeline configuration.
+ * @brief   Volvo A60H Bruder — CbChain pipeline configuration.
  *
- * @details Defines the SimChain array for the Volvo A60H Bruder machine.
+ * @details Defines the CbChain array for the Volvo A60H Bruder machine.
  *
  *   Channel pipelines (optInCh → procs → optOutCh):
  *     SIM_THROTTLE : THROTTLE_BUS → ramp, drive-state(→DRIVE_STATE_BUS), center, abs(→FWD_FLAG), scale, bypass(cond=DIRECT_DRIVE), ratio(DIRECT_DRIVE,GEAR) → RPM_BUS
@@ -98,7 +98,7 @@ static SimSubGearBtnState  gSubGearBtnState         {};
 // 4. PROCESSOR ARRAYS
 // =============================================================================
 
-static SimProc kThrottleProcs[] = {
+static CbProc kThrottleProcs[] = {
     // ramp — heavy-truck inertia on throttle input.
     { .name    = "ramp",
       .fn      = sim_ramp_fn,
@@ -147,7 +147,7 @@ static SimProc kThrottleProcs[] = {
     },
 };
 
-static SimProc kGearProcs[] = {
+static CbProc kGearProcs[] = {
     // bypass — DIRECT_DRIVE HIGH → set gear=1, claim (skips gear-fsm).
     { .name      = "bypass",
       .secInCh   = { DigitalComBusID::DIRECT_DRIVE },
@@ -182,7 +182,7 @@ static SimProc kGearProcs[] = {
     },
 };
 
-static SimProc kTractionProcs[] = {
+static CbProc kTractionProcs[] = {
     // rpm_to_speed — RPM + gear → ESC_SPEED_BUS bipolar.
     { .name      = "rpm_to_speed",
       .secInCh   = { AnalogComBusID::DRIVE_STATE_BUS, AnalogComBusID::GEAR },
@@ -192,7 +192,7 @@ static SimProc kTractionProcs[] = {
     },
 };
 
-static SimProc kSteeringProcs[] = {
+static CbProc kSteeringProcs[] = {
     // bypass — DIRECT_DRIVE HIGH → claim (raw steering bypasses ramp).
     { .name    = "bypass",
       .secInCh = { DigitalComBusID::DIRECT_DRIVE },
@@ -208,7 +208,7 @@ static SimProc kSteeringProcs[] = {
     },
 };
 
-static SimProc kDumpProcs[] = {
+static CbProc kDumpProcs[] = {
     // bypass — DIRECT_DRIVE HIGH → claim (raw dump bypasses ramp).
     { .name    = "bypass",
       .secInCh = { DigitalComBusID::DIRECT_DRIVE },
@@ -231,7 +231,7 @@ static SimProc kDumpProcs[] = {
 
 static constexpr ChanOwner kSimOwner = makeChanOwner(ComBusOwner::GRP_MACHINE, ComBusOwner::PROC_SYSTEM);
 
-SimChain kSimChannels[SIM_CH_COUNT] = {
+CbChain kSimChannels[SIM_CH_COUNT] = {
 
   { .name      = "throttle",
     .optInCh   = AnalogComBusID::THROTTLE_BUS,

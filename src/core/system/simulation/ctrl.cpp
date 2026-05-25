@@ -41,7 +41,7 @@ static void cbWrite(ComBus& bus, const ChanOpt& ch, uint16_t value, ChanOwner ow
 // 1. PUBLIC API
 // =============================================================================
 
-void ctrl_update(CtrlChain* channels, uint8_t count, ComBus& bus)
+void ctrl_update(CbChain* channels, uint8_t count, ComBus& bus)
 {
     if (!channels || count == 0u) return;
 

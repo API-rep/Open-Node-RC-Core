@@ -1,6 +1,6 @@
 /******************************************************************************
  * @file  sim_subgear_btn.cpp
- * @brief SimProc function — sub-gear mode button handler (implementation).
+ * @brief CbProc function — sub-gear mode button handler (implementation).
  *
  * @details Pure ComBus processor — no hardware calls, no µs domain.
  *   Reads three secondary digital inputs (SET, UP, DOWN) via secInValue[];
@@ -17,7 +17,7 @@
 // =============================================================================
 
 /** @brief Sub-gear button handler — see sim_subgear_btn.h for full contract. */
-void sim_subgear_btn_fn(SimProc* proc, uint16_t& /*value*/, bool& /*claimed*/, ChanOwner /*chainOwner*/)
+void sim_subgear_btn_fn(CbProc* proc, uint16_t& /*value*/, bool& /*claimed*/, ChanOwner /*chainOwner*/)
 {
     const SimSubGearBtnCfg* cfg   = static_cast<const SimSubGearBtnCfg*>(proc->cfg);
     SimSubGearBtnState*     state = static_cast<SimSubGearBtnState*>(proc->state);

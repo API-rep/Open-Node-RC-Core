@@ -1,8 +1,8 @@
 /******************************************************************************
  * @file  sim_math.h
- * @brief SimProc functions \u2014 generic arithmetic transforms. *
- * @details Stateless (or state-free) transforms composable in any SimChain
- *   pipeline.  All functions match `CbProcFn` (= `SimProcFn`) — no bus parameter.
+ * @brief CbProc functions \u2014 generic arithmetic transforms. *
+ * @details Stateless (or state-free) transforms composable in any CbChain
+ *   pipeline.  All functions match `CbProcFn` (= `CbProcFn`) — no bus parameter.
  *
  *   `sim_center_fn`      —  signed deviation from CbusNeutral, packed in uint16_t:
  *                              `value = (uint16_t)(int16_t)(value − CbusNeutral)`
@@ -37,7 +37,7 @@
  *****************************************************************************/
 #pragma once
 
-#include <struct/simulation_struct.h>  // SimProc, SimScaleCfg, SimProcFn
+#include <struct/simulation_struct.h>  // CbProc, SimScaleCfg, CbProcFn
 
 
 // =============================================================================
@@ -45,7 +45,7 @@
 // =============================================================================
 
 /**
- * @brief Signed center SimProc — `value = (uint16_t)(int16_t)(value − cfg->neutral)`.
+ * @brief Signed center CbProc — `value = (uint16_t)(int16_t)(value − cfg->neutral)`.
  *
  * @details cfg = &SimCenterCfg, state = nullptr.  Does NOT set `claimed`.
  *
@@ -53,10 +53,10 @@
  * @param value   In: unsigned ComBus [0..CbusMaxVal].  Out: signed packed int16.
  * @param claimed Not modified.
  */
-void sim_center_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void sim_center_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
 
 /**
- * @brief Absolute-value SimProc — `value = |reinterpret<int16_t>(value)|`.
+ * @brief Absolute-value CbProc — `value = |reinterpret<int16_t>(value)|`.
  *
  * @details Interprets `value` as two's complement int16_t (as produced by
  *   `sim_center_fn`), computes its absolute value, and writes it back.
@@ -71,10 +71,10 @@ void sim_center_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chai
  * @param value   In: signed-packed int16.  Out: magnitude [0..CbusNeutral].
  * @param claimed Not modified.
  */
-void sim_abs_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void sim_abs_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
 
 /**
- * @brief Linear scale SimProc — `value = value × outMax / inMax`.
+ * @brief Linear scale CbProc — `value = value × outMax / inMax`.
  *
  * @details Rescales `value` from [0..inMax] to [0..outMax].  No clamping.
  *   cfg = &SimScaleCfg, state = nullptr.  Does NOT set `claimed`.
@@ -83,10 +83,10 @@ void sim_abs_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOw
  * @param value   In/Out: value to rescale.
  * @param claimed Not modified.
  */
-void sim_scale_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void sim_scale_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
 
 /**
- * @brief Drive-state observer SimProc — encodes direction and writes DRIVE_STATE_BUS.
+ * @brief Drive-state observer CbProc — encodes direction and writes DRIVE_STATE_BUS.
  *
  * @details Reads post-ramp bipolaire `value`, compares to `cfg->neutral`:
  *   - value > neutral  → DriveState::kDriveFwd
@@ -102,6 +102,6 @@ void sim_scale_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chain
  * @param value   Read-only — post-ramp bipolaire position.
  * @param claimed Not modified.
  */
-void sim_drive_state_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void sim_drive_state_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
 
 // EOF sim_math.h

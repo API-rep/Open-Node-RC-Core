@@ -1,6 +1,6 @@
 /*!****************************************************************************
  * @file  ctrl_speed_gate.h
- * @brief Speed-gate CtrlProcFn — suppresses engagement above a speed threshold.
+ * @brief Speed-gate CbProcFn — suppresses engagement above a speed threshold.
  *
  * @details Reads the current speed and the current active state from the bus,
  *   and suppresses the button input (`value = false`) when the vehicle is moving
@@ -22,7 +22,7 @@
  *****************************************************************************/
 #pragma once
 
-#include <struct/ctrl_struct.h>  // CtrlProc, CtrlSpeedGateCfg, CtrlProcFn
+#include <struct/ctrl_struct.h>  // CbProc, CtrlSpeedGateCfg, CbProcFn
 
 
 // =============================================================================
@@ -30,7 +30,7 @@
 // =============================================================================
 
 /**
- * @brief Speed-gate CtrlProcFn — suppresses engagement when speed > threshold.
+ * @brief Speed-gate CbProcFn — suppresses engagement when speed > threshold.
  *
  * @param proc    Proc descriptor: `cfg → const CtrlSpeedGateCfg*`, `state → nullptr`.
  *                `secInCh[0]` = RPM_BUS (speed); `secInCh[1]` = DIRECT_DRIVE (active).
@@ -38,7 +38,7 @@
  * @param claimed Unused.
  * @param owner   Unused.
  */
-void ctrl_speed_gate_fn(CtrlProc* proc, uint16_t& value,
+void ctrl_speed_gate_fn(CbProc* proc, uint16_t& value,
                         bool& claimed, ChanOwner owner);
 
 // EOF ctrl_speed_gate.h

@@ -5,10 +5,10 @@
  * @details The ctrl layer shares `CbProc`/`CbChain`/`CbProcFn` with the
  *   simulation layer (defined in `cb_struct.h`).
  *
- *   Architecture (mirrors SimChain pipeline):
+ *   Architecture (mirrors CbChain pipeline):
  *   @code
  *     CbChain.optInCh  (runner pre-reads â€” raw button)
- *       â†’ CtrlProc[0..n-1]  (behaviour functions â€” speed gate, toggle, â€¦)
+ *       â†’ CbProc[0..n-1]  (behaviour functions â€” speed gate, toggle, â€¦)
  *     CbChain.optOutCh (runner post-writes â€” processed state)
  *   @endcode
  *
@@ -31,17 +31,9 @@
 #include <struct/combus_proc_struct.h>  // CbProc, CbChain, CbProcFn
 
 
-// =============================================================================
-// 1. TYPE ALIASES
-// =============================================================================
-
-using CtrlProcFn  = CbProcFn;   ///< Control proc function pointer (= CbProcFn, no bus).
-using CtrlProc    = CbProc;     ///< Control proc descriptor (= CbProc).
-using CtrlChain = CbChain;  ///< Control channel descriptor (= CbChain).
-
 
 // =============================================================================
-// 2. SPEED GATE PROC CONFIG  (ctrl_speed_gate_fn â€” see ctrl_speed_gate.h)
+// 1. SPEED GATE PROC CONFIG  (ctrl_speed_gate_fn â€” see ctrl_speed_gate.h)
 // =============================================================================
 
 /**
@@ -65,7 +57,7 @@ struct CtrlSpeedGateCfg {
 
 
 // =============================================================================
-// 3. TOGGLE PROC STATE  (ctrl_toggle_fn â€” see ctrl_toggle.h)
+// 2. TOGGLE PROC STATE  (ctrl_toggle_fn â€” see ctrl_toggle.h)
 // =============================================================================
 
 /**

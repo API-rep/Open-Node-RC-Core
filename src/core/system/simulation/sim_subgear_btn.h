@@ -1,6 +1,6 @@
 /******************************************************************************
  * @file  sim_subgear_btn.h
- * @brief SimProc function — sub-gear mode button handler.
+ * @brief CbProc function — sub-gear mode button handler.
  *
  * @details `sim_subgear_btn_fn()` tracks three digital buttons (SET, UP, DOWN)
  *   via rising-edge detection and advances a sub-gear index:
@@ -31,7 +31,7 @@
  *****************************************************************************/
 #pragma once
 
-#include <struct/simulation_struct.h>  // SimProc, SimSubGearBtnCfg, SimSubGearBtnState
+#include <struct/simulation_struct.h>  // CbProc, SimSubGearBtnCfg, SimSubGearBtnState
 
 
 // =============================================================================
@@ -39,7 +39,7 @@
 // =============================================================================
 
 /**
- * @brief Sub-gear button handler — assigned to `SimProc::fn`.
+ * @brief Sub-gear button handler — assigned to `CbProc::fn`.
  *
  * @details Matches `CbProcFn` signature.  Reads three secondary inputs
  *   (SET/UP/DOWN) via `proc->secInValue[]`; writes `proc->secOutValue` with
@@ -52,6 +52,6 @@
  * @param value   Not modified.
  * @param claimed Not modified.
  */
-void sim_subgear_btn_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void sim_subgear_btn_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
 
 // EOF sim_subgear_btn.h

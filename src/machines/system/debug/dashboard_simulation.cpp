@@ -67,16 +67,16 @@ static const char* dCh(DigitalComBusID id)
 	}
 }
 
-/// @brief Derive the primary input channel from a SimChain (ch.optInCh, analog).
-static AnalogComBusID simChanInCh(const SimChain& ch)
+/// @brief Derive the primary input channel from a CbChain (ch.optInCh, analog).
+static AnalogComBusID simChanInCh(const CbChain& ch)
 {
 	if (ch.optInCh.has_value() && std::holds_alternative<AnalogComBusID>(*ch.optInCh))
 		return std::get<AnalogComBusID>(*ch.optInCh);
 	return static_cast<AnalogComBusID>(0u);
 }
 
-/// @brief Derive the primary output channel from a SimChain (ch.optOutCh, analog).
-static AnalogComBusID simChanOutCh(const SimChain& ch)
+/// @brief Derive the primary output channel from a CbChain (ch.optOutCh, analog).
+static AnalogComBusID simChanOutCh(const CbChain& ch)
 {
 	if (ch.optOutCh.has_value() && std::holds_alternative<AnalogComBusID>(*ch.optOutCh))
 		return std::get<AnalogComBusID>(*ch.optOutCh);
@@ -92,9 +92,9 @@ static AnalogComBusID simChanOutCh(const SimChain& ch)
  *   generic fallback for others; "---" for empty slots (nullptr or fn==nullptr).
  *
  * @param idx   Slot index (0-based) shown in the row label.
- * @param proc  Pointer to the SimProc; nullptr or fn==nullptr → "---" row.
+ * @param proc  Pointer to the CbProc; nullptr or fn==nullptr → "---" row.
  */
-static void render_proc_row(uint8_t idx, const SimProc* proc)
+static void render_proc_row(uint8_t idx, const CbProc* proc)
 {
 	if (proc == nullptr || proc->fn == nullptr) {
 		dLine("  Proc %u : ---", (unsigned)idx);
@@ -169,7 +169,7 @@ static void render_proc_row(uint8_t idx, const SimProc* proc)
 
 
 // =============================================================================
-// 3. MAIN VIEW  (SimChain pipeline table)
+// 3. MAIN VIEW  (CbChain pipeline table)
 // =============================================================================
 
 static void render_sim_view()
@@ -195,7 +195,7 @@ static void render_sim_view()
 	      "#", "name", "inCh", "outCh", "in %", "out %", "bypass");
 	dMid();
 	for (uint8_t i = 0; i < s_mach->simChainCount; ++i) {
-		const SimChain&  ch     = s_mach->simChain[i];
+		const CbChain&  ch     = s_mach->simChain[i];
 		const AnalogComBusID chIn  = simChanInCh(ch);
 		const AnalogComBusID chOut = simChanOutCh(ch);
 		const uint16_t    inVal  = s_bus->analogBus[static_cast<uint8_t>(chIn)].value;
@@ -247,7 +247,7 @@ static void render_sim_view()
 
 
 // =============================================================================
-// 4. DETAIL VIEW  (one sub-item per SimChain)
+// 4. DETAIL VIEW  (one sub-item per CbChain)
 // =============================================================================
 
 /// Number of proc rows always rendered per detail sub-view (uniform height).
@@ -257,7 +257,7 @@ static void render_channel_detail(uint8_t idx)
 {
 	if (!s_bus || !s_mach || idx >= s_mach->simChainCount) return;
 
-	const SimChain& ch     = s_mach->simChain[idx];
+	const CbChain& ch     = s_mach->simChain[idx];
 	const AnalogComBusID chIn  = simChanInCh(ch);
 	const AnalogComBusID chOut = simChanOutCh(ch);
 	const uint16_t    inVal  = s_bus->analogBus[static_cast<uint8_t>(chIn)].value;
@@ -300,7 +300,7 @@ static void render_channel_detail(uint8_t idx)
 	dMidLabel("config");
 	//  Proc rows — always kMaxProcRows lines regardless of proc count (uniform height).
 	for (uint8_t p = 0u; p < kMaxProcRows; ++p) {
-		const SimProc* proc = (ch.procs != nullptr && p < ch.procCount)
+		const CbProc* proc = (ch.procs != nullptr && p < ch.procCount)
 		                      ? &ch.procs[p]
 		                      : nullptr;
 		render_proc_row(p, proc);
