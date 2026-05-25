@@ -22,8 +22,8 @@
 
 #include "dumper_truck_proc_config.h"
 
-#include <core/config/machines/combus_types.h>    // AnalogComBusID (+ using namespace DumperTruck)
-#include <core/config/hw/simulation_presets.h>    // kHeavy3_steps
+#include <core/config/machines/dumper_truck/combus/dumper_truck.h>  // AnalogComBusID, DigitalComBusID
+#include <core/config/hw/simulation_presets.h>    // kHeavy3_steps, kGearShift_Heavy3Speed
 #include <struct/combus_struct.h>                 // makeChanOwner, ComBusOwner
 #include <core/system/combus/combus_res.h>        // CbusNeutral, pctToCbus
 #include <core/system/simulation/sim_ramp.h>      // sim_ramp_fn, SimRampCfg, SimRampState
@@ -31,7 +31,7 @@
 #include <core/system/simulation/sim_math.h>      // sim_center_fn, sim_abs_fn, sim_scale_fn, sim_drive_state_fn
 #include <core/system/simulation/sim_gear.h>      // sim_gear_fn, sim_apply_ratio_fn, sim_gear_bypass_fn, sim_rpm_to_speed_fn, sim_gear_ramp_fn
 #include <core/system/simulation/sim_subgear_btn.h>  // sim_subgear_btn_fn
-#include <core/config/machines/dumper_truck/motion/dumper_truck_motion.h>  // kDumperTruckGearShift
+using namespace DumperTruck;
 
 
 // =============================================================================
@@ -80,11 +80,11 @@ static constexpr SimScaleCfg kThrottleScale {
 };
 
 static constexpr GearProcCfg kGearCfg {
-    .profile = kDumperTruckGearShift,
+    .profile = &kGearShift_Heavy3Speed,
 };
 
 static constexpr SimSubGearBtnCfg kSubGearBtnCfg {
-    .subGearCount = static_cast<uint8_t>(kDumperTruckGearShift->subGearCount),
+    .subGearCount = static_cast<uint8_t>(kGearShift_Heavy3Speed.subGearCount),
     .debounceMs   = 50u,
 };
 

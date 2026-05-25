@@ -33,7 +33,7 @@ DigitalComBus DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::CH_COUNT)
   { .infoName = "horn channel",            .value = false, .owner = ChanOwner::MACHINE_INPUT },
   { .infoName = "lights channel",          .value = false, .owner = ChanOwner::MACHINE_INPUT },
   { .infoName = "key channel",             .value = false, .owner = ChanOwner::MACHINE_INPUT },
-  { .infoName = "battery low channel",     .value = false, .owner = ChanOwner::VBAT_MON     },
+  { .infoName = "battery low channel",     .value = false, .owner = ChanOwner::VBAT_MON      },
   { .infoName = "indicator left channel",  .value = false, .owner = ChanOwner::MACHINE_INPUT },
   { .infoName = "indicator right channel", .value = false, .owner = ChanOwner::MACHINE_INPUT },
   { .infoName = "hazards channel",         .value = false, .owner = ChanOwner::MACHINE_INPUT },
@@ -43,7 +43,7 @@ DigitalComBus DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::CH_COUNT)
   { .infoName = "braking channel",         .value = false, .owner = ChanOwner::MACHINE_SYSTEM },
   // --- Machine-node-local channels (WIRE_END .. MACHINE_END-1) — never transmitted ---
   { .infoName = "direct drive (local)",    .value = false, .owner = ChanOwner::MACHINE_SYSTEM }, ///< Toggle state — written by main.cpp toggle logic, read by sim_bypass_fn.
-  { .infoName = "direct drive btn (local)", .value = false, .owner = ChanOwner::MACHINE_INPUT  }, ///< Raw OPTIONS button — written by input_update every cycle.
+  { .infoName = "direct drive btn (local)", .value = false, .owner = ChanOwner::MACHINE_INPUT }, ///< Raw OPTIONS button — written by input_update every cycle.
   // --- Sound-node-local channels (MACHINE_END .. CH_COUNT-1) — never transmitted ---
   { .infoName = "always on (local)",       .value = true,  .owner = ChanOwner::NONE }, ///< Stays true: continuous sources driven by volMod.
   { .infoName = "siren (local)",           .value = false, .owner = ChanOwner::NONE }, ///< Siren/cannon mode toggle.
