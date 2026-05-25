@@ -1,9 +1,9 @@
 /*!****************************************************************************
- * @file  cb_struct.h
- * @brief ComBus processor pipeline — unified CbProc / CbChannel types.
+ * @file  combus_proc_struct.h
+ * @brief ComBus processor pipeline — unified CbProc / CbChain types.
  *
  * @details Defines the single shared proc/channel types used by both the
- *   simulation layer (SimChannel) and the ctrl layer (CtrlChannel).
+ *   simulation layer (SimChain) and the ctrl layer (CtrlChain).
  *
  *   **Key architectural rules:**
  *   - `CbProcFn` has NO `ComBus& bus` parameter.
@@ -14,14 +14,14 @@
  *     Exception: `AnalogComBusID` / `DigitalComBusID` in cfg are allowed
  *     only for procs that are explicitly designated as multi-input bus
  *     readers (e.g. `sim_subgear_btn_fn` — secInCh covers all 3 inputs).
- *   - `ChanOwner` flows from `CbChannel::chanOwner` to the runner — never
+ *   - `ChanOwner` flows from `CbChain::chainOwner` to the runner — never
  *     from an external parameter on the update function.
  *
- *   **Runner contract (cb_channel_update):**
+ *   **Runner contract (cb_chain_update):**
  *   1. Pre-read  — runner reads `ch.optInCh` → seeds `value`.
  *   2. Proc loop — for each proc (stops on `claimed = true`):
  *        a. Inject secondary inputs: `secInValue[i]` ← `bus[secInCh[i]]`.
- *        b. Call `proc.fn(&proc, value, claimed, ch.chanOwner)`.
+ *        b. Call `proc.fn(&proc, value, claimed, ch.chainOwner)`.
  *        c. Commit secondary output: `bus[optSecOutCh]` ← `secOutValue`.
  *   3. Post-write — runner writes `value` → `ch.optOutCh`.
  *      The post-write happens ALWAYS (even when `claimed = true`).
@@ -65,11 +65,11 @@ struct CbProc;  ///< Forward — allows CbProcFn to reference CbProc by pointer.
  *
  * @param proc     Processor descriptor — cast `cfg`/`state` to concrete types.
  *                 May also read `proc->secInValue[]` and write `proc->secOutValue`.
- * @param value    Pipeline value (in/out) — seeded by runner from `CbChannel::optInCh`;
- *                 committed by runner to `CbChannel::optOutCh` after all procs.
+ * @param value    Pipeline value (in/out) — seeded by runner from `CbChain::optInCh`;
+ *                 committed by runner to `CbChain::optOutCh` after all procs.
  * @param claimed  Set to `true` to abort the remaining proc chain.
  *                 Does NOT suppress the final channel write.
- * @param owner    Identity forwarded from `CbChannel::chanOwner`.
+ * @param owner    Identity forwarded from `CbChain::chainOwner`.
  */
 using CbProcFn = void (*)(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner owner);
 
@@ -79,7 +79,7 @@ using CbProcFn = void (*)(CbProc* proc, uint16_t& value, bool& claimed, ChanOwne
 // =============================================================================
 
 /**
- * @brief One processing unit within a CbChannel pipeline.
+ * @brief One processing unit within a CbChain pipeline.
  *
  * @details All ComBus dependencies must be declared as `secInCh[i]` or
  *   `optSecOutCh` — never read directly from a bus parameter.
@@ -121,7 +121,7 @@ struct CbProc {
 
 
 // =============================================================================
-// 4. CHANNEL DESCRIPTOR
+// 4. CHAIN DESCRIPTOR
 // =============================================================================
 
 /**
@@ -131,10 +131,10 @@ struct CbProc {
  *   The runner pre-reads `optInCh` before the proc chain and post-writes
  *   `optOutCh` after (regardless of `claimed`).
  *
- *   `chanOwner` is forwarded to every fn call and to all bus writes
+ *   `chainOwner` is forwarded to every fn call and to all bus writes
  *   (primary + secondary) — no external owner parameter on the runner.
  */
-struct CbChannel {
+struct CbChain {
     const char*  name;  ///< Human-readable channel name (debug / dashboard).
 
     // --- Primary I/O (runner-owned — no read/write proc needed) --------------
@@ -148,8 +148,8 @@ struct CbChannel {
     uint8_t  procCount;  ///< Number of processors in procs[].
 
     // --- Identity ------------------------------------------------------------
-    ChanOwner  chanOwner;  ///< Identity forwarded to every fn call and bus write.
+    ChanOwner  chainOwner;  ///< Identity forwarded to every fn call and bus write.
 };
 
 
-// EOF cb_struct.h
+// EOF combus_proc_struct.h

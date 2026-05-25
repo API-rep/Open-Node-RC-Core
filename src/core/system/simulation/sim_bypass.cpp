@@ -14,7 +14,7 @@
 // =============================================================================
 
 /** @brief Conditional bypass gate — see sim_bypass.h for full contract. */
-void sim_bypass_fn(SimProc* proc, uint16_t& /*value*/, bool& claimed, ChanOwner /*chanOwner*/)
+void sim_bypass_fn(SimProc* proc, uint16_t& /*value*/, bool& claimed, ChanOwner /*chainOwner*/)
 {
     // secInCh[0] = condition channel (digital). Runner pre-reads into secInValue[0].
     if (proc->secInValue[0] != 0u) {

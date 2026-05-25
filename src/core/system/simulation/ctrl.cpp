@@ -1,6 +1,6 @@
 /*!****************************************************************************
  * @file  ctrl.cpp
- * @brief CbChannel dispatcher for ctrl layer — runner implementation.
+ * @brief CbChain dispatcher for ctrl layer — runner implementation.
  *****************************************************************************/
 
 #include "ctrl.h"
@@ -41,12 +41,12 @@ static void cbWrite(ComBus& bus, const ChanOpt& ch, uint16_t value, ChanOwner ow
 // 1. PUBLIC API
 // =============================================================================
 
-void ctrl_update(CtrlChannel* channels, uint8_t count, ComBus& bus)
+void ctrl_update(CtrlChain* channels, uint8_t count, ComBus& bus)
 {
     if (!channels || count == 0u) return;
 
     for (uint8_t ch = 0u; ch < count; ++ch) {
-        CbChannel& chan = channels[ch];
+        CbChain& chan = channels[ch];
 
         // --- Pre-read primary input (isDrived guard for raw operator inputs) --
         uint16_t value   = cbRead(bus, chan.optInCh, /*isDrivedGuard=*/true);
@@ -63,14 +63,14 @@ void ctrl_update(CtrlChannel* channels, uint8_t count, ComBus& bus)
             }
 
             //  Call proc fn.
-            proc.fn(&proc, value, claimed, chan.chanOwner);
+            proc.fn(&proc, value, claimed, chan.chainOwner);
 
             //  Commit secondary output.
-            cbWrite(bus, proc.optSecOutCh, proc.secOutValue, chan.chanOwner);
+            cbWrite(bus, proc.optSecOutCh, proc.secOutValue, chan.chainOwner);
         }
 
         // --- Post-write primary output (always) -------------------------------
-        cbWrite(bus, chan.optOutCh, value, chan.chanOwner);
+        cbWrite(bus, chan.optOutCh, value, chan.chainOwner);
     }
 }
 

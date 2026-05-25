@@ -67,16 +67,16 @@ static const char* dCh(DigitalComBusID id)
 	}
 }
 
-/// @brief Derive the primary input channel from a SimChannel (ch.optInCh, analog).
-static AnalogComBusID simChanInCh(const SimChannel& ch)
+/// @brief Derive the primary input channel from a SimChain (ch.optInCh, analog).
+static AnalogComBusID simChanInCh(const SimChain& ch)
 {
 	if (ch.optInCh.has_value() && std::holds_alternative<AnalogComBusID>(*ch.optInCh))
 		return std::get<AnalogComBusID>(*ch.optInCh);
 	return static_cast<AnalogComBusID>(0u);
 }
 
-/// @brief Derive the primary output channel from a SimChannel (ch.optOutCh, analog).
-static AnalogComBusID simChanOutCh(const SimChannel& ch)
+/// @brief Derive the primary output channel from a SimChain (ch.optOutCh, analog).
+static AnalogComBusID simChanOutCh(const SimChain& ch)
 {
 	if (ch.optOutCh.has_value() && std::holds_alternative<AnalogComBusID>(*ch.optOutCh))
 		return std::get<AnalogComBusID>(*ch.optOutCh);
@@ -169,7 +169,7 @@ static void render_proc_row(uint8_t idx, const SimProc* proc)
 
 
 // =============================================================================
-// 3. MAIN VIEW  (SimChannel pipeline table)
+// 3. MAIN VIEW  (SimChain pipeline table)
 // =============================================================================
 
 static void render_sim_view()
@@ -184,8 +184,8 @@ static void render_sim_view()
 	{
 		char left[72], right[28];
 		int lLen = snprintf(left,  sizeof(left),  "  [ SIMULATION ]  pipeline — %u channel%s",
-		                    (unsigned)s_mach->simChannelCount,
-		                    s_mach->simChannelCount != 1u ? "s" : "");
+		                    (unsigned)s_mach->simChainCount,
+		                    s_mach->simChainCount != 1u ? "s" : "");
 		lLen -= 2;  // '—' (U+2014) = 3 UTF-8 bytes, 1 display char → compensate 2 extra bytes
 		int rLen = snprintf(right, sizeof(right), "uptime: %s  ", upt);
 		dLine("%s%*s%s", left, (int)DashInnerW - lLen - rLen, "", right);
@@ -194,8 +194,8 @@ static void render_sim_view()
 	dLine("  %-2s  %-12s  %-10s  %-10s  %7s  %7s  %-7s  procs",
 	      "#", "name", "inCh", "outCh", "in %", "out %", "bypass");
 	dMid();
-	for (uint8_t i = 0; i < s_mach->simChannelCount; ++i) {
-		const SimChannel&  ch     = s_mach->simChannel[i];
+	for (uint8_t i = 0; i < s_mach->simChainCount; ++i) {
+		const SimChain&  ch     = s_mach->simChain[i];
 		const AnalogComBusID chIn  = simChanInCh(ch);
 		const AnalogComBusID chOut = simChanOutCh(ch);
 		const uint16_t    inVal  = s_bus->analogBus[static_cast<uint8_t>(chIn)].value;
@@ -247,7 +247,7 @@ static void render_sim_view()
 
 
 // =============================================================================
-// 4. DETAIL VIEW  (one sub-item per SimChannel)
+// 4. DETAIL VIEW  (one sub-item per SimChain)
 // =============================================================================
 
 /// Number of proc rows always rendered per detail sub-view (uniform height).
@@ -255,9 +255,9 @@ static constexpr uint8_t kMaxProcRows = 4u;
 
 static void render_channel_detail(uint8_t idx)
 {
-	if (!s_bus || !s_mach || idx >= s_mach->simChannelCount) return;
+	if (!s_bus || !s_mach || idx >= s_mach->simChainCount) return;
 
-	const SimChannel& ch     = s_mach->simChannel[idx];
+	const SimChain& ch     = s_mach->simChain[idx];
 	const AnalogComBusID chIn  = simChanInCh(ch);
 	const AnalogComBusID chOut = simChanOutCh(ch);
 	const uint16_t    inVal  = s_bus->analogBus[static_cast<uint8_t>(chIn)].value;
@@ -310,7 +310,7 @@ static void render_channel_detail(uint8_t idx)
 
 static uint8_t sim_detail_count()
 {
-	return s_mach ? s_mach->simChannelCount : 0u;
+	return s_mach ? s_mach->simChainCount : 0u;
 }
 
 static void render_sim_detail()

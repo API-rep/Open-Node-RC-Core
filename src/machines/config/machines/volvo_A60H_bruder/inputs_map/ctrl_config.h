@@ -1,8 +1,8 @@
 /*!****************************************************************************
  * @file    ctrl_config.h
- * @brief   Volvo A60H Bruder — CtrlChannel pipeline declaration.
+ * @brief   Volvo A60H Bruder — CtrlChain pipeline declaration.
  *
- * @details Exposes the CtrlChannel array consumed by ctrl_update() in the
+ * @details Exposes the CtrlChain array consumed by ctrl_update() in the
  *   machine main loop.
  *
  *   Channel pipelines:
@@ -10,7 +10,7 @@
  *****************************************************************************/
 #pragma once
 
-#include <struct/ctrl_struct.h>  // CtrlChannel
+#include <struct/ctrl_struct.h>  // CtrlChain
 
 
 // =============================================================================
@@ -18,7 +18,7 @@
 // =============================================================================
 
 /**
- * @brief Indices into `kCtrlChannels[]`.
+ * @brief Indices into `kCtrlChains[]`.
  *
  * @details `CTRL_CH_COUNT` is the sentinel used as array size and loop bound.
  */
@@ -32,7 +32,7 @@ enum CtrlCh {
 // 2. EXPORTED ARRAY
 // =============================================================================
 
-extern CtrlChannel kCtrlChannels[];
-extern const uint8_t kCtrlChannelCount;
+extern CtrlChain kCtrlChains[];
+extern const uint8_t kCtrlChainCount;
 
 // EOF ctrl_config.h

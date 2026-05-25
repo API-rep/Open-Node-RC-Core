@@ -19,8 +19,8 @@
 #include <core/config/machines/combus_ids.h>
 
 #include <core/system/combus/combus_res.h>  // SrvHwAngle, pctToCbus, angleToCbus
-#include <struct/simulation_struct.h>   // SimChannel, SimDevCtx, SimDev, SimBehaviorFn, SimTractionCfg/State
-#include <struct/ctrl_struct.h>          // CtrlChannel, CtrlProc, CtrlProcFn
+#include <struct/simulation_struct.h>   // SimChain, SimDevCtx, SimDev, SimBehaviorFn, SimTractionCfg/State
+#include <struct/ctrl_struct.h>          // CtrlChain, CtrlProc, CtrlProcFn
 
 
 /**
@@ -202,10 +202,10 @@ typedef struct {
   uint8_t    srvDevCount;                                 // number of servo device configured
   SigDevice* sigDev      = nullptr;                       // signal device config structure (optional)
   uint8_t    sigDevCount  = 0;                            // number of signal devices configured
-  SimChannel*  simChannel      = nullptr;                 // simulation channel array (optional)
-  uint8_t      simChannelCount  = 0;                       // number of channels configured
-  CtrlChannel* ctrlChannel      = nullptr;                 // ctrl channel array (optional)
-  uint8_t      ctrlChannelCount = 0;                       // number of ctrl channels configured
+  SimChain*  simChain      = nullptr;                 // simulation channel array (optional)
+  uint8_t      simChainCount  = 0;                       // number of channels configured
+  CtrlChain* ctrlChain      = nullptr;                 // ctrl channel array (optional)
+  uint8_t      ctrlChainCount = 0;                       // number of ctrl channels configured
 } EnvCfg;
 
 

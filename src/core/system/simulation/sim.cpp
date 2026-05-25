@@ -1,6 +1,6 @@
 /******************************************************************************
  * @file  sim.cpp
- * @brief SimChannel dispatcher — init and update implementation.
+ * @brief SimChain dispatcher — init and update implementation.
  *****************************************************************************/
 
 #include "sim.h"
@@ -48,33 +48,33 @@ static void cbWrite(ComBus& bus, const ChanOpt& ch, uint16_t value, ChanOwner ow
 // =============================================================================
 
 /**
- * @brief Placeholder lifecycle init for the SimChannel array.
+ * @brief Placeholder lifecycle init for the SimChain array.
  *
  * @details Kept as a symmetric counterpart to dc_dev_init() / srv_dev_init().
  *   Each SimProcFn self-inits on first update call via zero-state detection.
  */
-void sim_init(SimChannel* /*channels*/, uint8_t /*count*/)
+void sim_init(SimChain* /*channels*/, uint8_t /*count*/)
 {
     // Stages self-init on first update call (zero-state detection).
 }
 
 
 /**
- * @brief Process a single SimChannel — pre-read, dispatch processors, post-write.
+ * @brief Process a single SimChain — pre-read, dispatch processors, post-write.
  *
  * @details Sequence:
  *   1. Pre-read  : runner reads `ch.optInCh` → seeds `value`.
  *   2. Proc loop : for each proc (stops on `claimed = true`):
  *        a. Injects secondary inputs: `proc.secInValue[i]` ← bus[proc.secInCh[i]].
- *        b. Calls `proc.fn(&proc, value, claimed, ch.chanOwner)`.
+ *        b. Calls `proc.fn(&proc, value, claimed, ch.chainOwner)`.
  *        c. Commits secondary output: bus[proc.optSecOutCh] ← proc.secOutValue.
  *   3. Post-write: runner writes `value` → `ch.optOutCh`.
  *      Always executes — `claimed` only aborts the proc chain, not the write.
  *
- * @param ch   Channel descriptor (procs, chanOwner, optInCh, optOutCh).
+ * @param ch   Channel descriptor (procs, chainOwner, optInCh, optOutCh).
  * @param bus  Shared ComBus for this cycle.
  */
-void sim_channel_update(SimChannel& ch, ComBus& bus)
+void sim_chain_update(SimChain& ch, ComBus& bus)
 {
     // --- 1. Pre-read primary input -------------------------------------------
     uint16_t value   = cbRead(bus, ch.optInCh, /*isDrivedGuard=*/true);
@@ -91,28 +91,28 @@ void sim_channel_update(SimChannel& ch, ComBus& bus)
         }
 
         //  b. Call proc fn (no bus access inside fn).
-        proc.fn(&proc, value, claimed, ch.chanOwner);
+        proc.fn(&proc, value, claimed, ch.chainOwner);
 
         //  c. Commit secondary output.
-        cbWrite(bus, proc.optSecOutCh, proc.secOutValue, ch.chanOwner);
+        cbWrite(bus, proc.optSecOutCh, proc.secOutValue, ch.chainOwner);
     }
 
     // --- 3. Post-write primary output (always) -------------------------------
-    cbWrite(bus, ch.optOutCh, value, ch.chanOwner);
+    cbWrite(bus, ch.optOutCh, value, ch.chainOwner);
 }
 
 
 /**
- * @brief Update all SimChannels — iterates the array and calls sim_channel_update().
+ * @brief Update all SimChannels — iterates the array and calls sim_chain_update().
  *
  * @param channels  Channel array (may be nullptr when count == 0).
  * @param count     Number of channels.
- * @param bus       Shared ComBus — forwarded to each sim_channel_update().
+ * @param bus       Shared ComBus — forwarded to each sim_chain_update().
  */
-void sim_update(SimChannel* channels, uint8_t count, ComBus& bus)
+void sim_update(SimChain* channels, uint8_t count, ComBus& bus)
 {
     for (uint8_t p = 0; p < count; ++p) {
-        sim_channel_update(channels[p], bus);
+        sim_chain_update(channels[p], bus);
     }
 }
 

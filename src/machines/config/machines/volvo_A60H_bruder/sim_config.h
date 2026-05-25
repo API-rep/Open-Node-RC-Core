@@ -1,8 +1,8 @@
 /*!****************************************************************************
  * @file    sim_config.h
- * @brief   Volvo A60H Bruder — SimChannel pipeline declaration.
+ * @brief   Volvo A60H Bruder — SimChain pipeline declaration.
  *
- * @details Exposes the SimChannel array consumed by sim_update() in the
+ * @details Exposes the SimChain array consumed by sim_update() in the
  *   machine main loop.
  *
  *   Channel pipelines:
@@ -15,7 +15,7 @@
  */
 #pragma once
 
-#include <struct/simulation_struct.h>   // SimChannel
+#include <struct/simulation_struct.h>   // SimChain
 
 
 // =============================================================================
@@ -34,7 +34,7 @@ enum SimCh {
     SIM_TRACTION,      ///< THROTTLE_BUS  → [bypass + ramp]          → ESC_SPEED_BUS (wire, motors)
     SIM_STEERING,      ///< STEERING_BUS  → [bypass + ramp]          → STEERING_RAMPED_BUS
     SIM_DUMP,          ///< DUMP_BUS      → [bypass + ramp]          → DUMP_RAMPED_BUS
-    SIM_CH_COUNT       ///< Sentinel — number of SimChannel entries.
+    SIM_CH_COUNT       ///< Sentinel — number of SimChain entries.
 };
 
 
@@ -42,8 +42,8 @@ enum SimCh {
 // 2. CHANNEL ARRAY
 // =============================================================================
 
-/// SimChannel pipeline array — consumed by sim_update() in the machine main loop.
-extern SimChannel kSimChannels[SIM_CH_COUNT];
+/// SimChain pipeline array — consumed by sim_update() in the machine main loop.
+extern SimChain kSimChannels[SIM_CH_COUNT];
 
 
 // EOF sim_config.h

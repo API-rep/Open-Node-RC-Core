@@ -1,7 +1,7 @@
 /******************************************************************************
  * @file  sim_math.h
  * @brief SimProc functions \u2014 generic arithmetic transforms. *
- * @details Stateless (or state-free) transforms composable in any SimChannel
+ * @details Stateless (or state-free) transforms composable in any SimChain
  *   pipeline.  All functions match `CbProcFn` (= `SimProcFn`) — no bus parameter.
  *
  *   `sim_center_fn`      —  signed deviation from CbusNeutral, packed in uint16_t:
@@ -53,7 +53,7 @@
  * @param value   In: unsigned ComBus [0..CbusMaxVal].  Out: signed packed int16.
  * @param claimed Not modified.
  */
-void sim_center_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chanOwner);
+void sim_center_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
 
 /**
  * @brief Absolute-value SimProc — `value = |reinterpret<int16_t>(value)|`.
@@ -71,7 +71,7 @@ void sim_center_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chan
  * @param value   In: signed-packed int16.  Out: magnitude [0..CbusNeutral].
  * @param claimed Not modified.
  */
-void sim_abs_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chanOwner);
+void sim_abs_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
 
 /**
  * @brief Linear scale SimProc — `value = value × outMax / inMax`.
@@ -83,7 +83,7 @@ void sim_abs_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chanOwn
  * @param value   In/Out: value to rescale.
  * @param claimed Not modified.
  */
-void sim_scale_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chanOwner);
+void sim_scale_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
 
 /**
  * @brief Drive-state observer SimProc — encodes direction and writes DRIVE_STATE_BUS.
@@ -102,6 +102,6 @@ void sim_scale_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chanO
  * @param value   Read-only — post-ramp bipolaire position.
  * @param claimed Not modified.
  */
-void sim_drive_state_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chanOwner);
+void sim_drive_state_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
 
 // EOF sim_math.h

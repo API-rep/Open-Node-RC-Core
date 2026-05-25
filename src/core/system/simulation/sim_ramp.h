@@ -3,14 +3,14 @@
  * @brief SimProc function — single-axis inertia ramp (hydraulics, steering).
  *
  * @details `sim_ramp_fn()` implements an asymmetric inertia ramp for use as a
- *   SimProc within a SimChannel pipeline.
+ *   SimProc within a SimChain pipeline.
  *
  *   The function:
- *   - Reads `value` (target already seeded from SimChannel::inCh before proc 0).
+ *   - Reads `value` (target already seeded from SimChain::inCh before proc 0).
  *   - Advances `state->currentPos` toward the target by `accelSteps` (moving
  *     away from neutral) or `brakeSteps` (returning toward neutral) each
  *     `rampTimeMs` tick.
- *   - Writes the filtered position back to `value` — SimChannel owns the
+ *   - Writes the filtered position back to `value` — SimChain owns the
  *     final bus write after all procs complete.
  *   - Does NOT set `claimed = true`, so downstream procs may still run.
  *
@@ -49,6 +49,6 @@
  * @param claimed Not modified — downstream procs continue after this one.
  * @param bus     Not used — ramp is self-contained (reads/writes through `value` only).
  */
-void sim_ramp_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chanOwner);
+void sim_ramp_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
 
 // EOF sim_ramp.h

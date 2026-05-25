@@ -235,10 +235,10 @@ void loop() {
       }
 
       // --- 2. Ctrl channel update: raw buttons → processed digital states.
-      ctrl_update(machine.ctrlChannel, machine.ctrlChannelCount, comBus);
+      ctrl_update(machine.ctrlChain, machine.ctrlChainCount, comBus);
 
       // --- 3. Simulation channel update. ---
-      sim_update(machine.simChannel, machine.simChannelCount, comBus);
+      sim_update(machine.simChain, machine.simChainCount, comBus);
       break;
     }
 

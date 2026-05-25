@@ -80,7 +80,7 @@ int8_t sim_gear_fsm_update(GearFsmState*           state,
 // =============================================================================
 
 /** @brief Gear FSM side-effect proc — see sim_gear.h for full contract. */
-void sim_gear_fn(SimProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chanOwner*/)
+void sim_gear_fn(SimProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)
 {
     const GearProcCfg* cfg   = static_cast<const GearProcCfg*>(proc->cfg);
     GearFsmState*      state = static_cast<GearFsmState*>(proc->state);
@@ -115,7 +115,7 @@ void sim_gear_fn(SimProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*
 // =============================================================================
 
 /** @brief Shift-delta proc — subtracts shiftDelta RPM on upshift. */
-void sim_apply_ratio_fn(SimProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chanOwner*/)
+void sim_apply_ratio_fn(SimProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)
 {
     // secInCh[0] = DIRECT_DRIVE (digital). secInCh[1] = GEAR (analog).
     if (proc->secInValue[0] != 0u)
@@ -142,7 +142,7 @@ void sim_apply_ratio_fn(SimProc* proc, uint16_t& value, bool& /*claimed*/, ChanO
 // =============================================================================
 
 /** @brief Gear direct-drive bypass — see sim_gear.h for contract. */
-void sim_gear_bypass_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner /*chanOwner*/)
+void sim_gear_bypass_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner /*chainOwner*/)
 {
     // secInCh[0] = DIRECT_DRIVE (digital). Runner pre-reads into secInValue[0].
     if (proc->secInValue[0] != 0u) {
@@ -157,7 +157,7 @@ void sim_gear_bypass_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner
 // =============================================================================
 
 /** @brief RPM → ESC speed proc — see sim_gear.h for full contract. */
-void sim_rpm_to_speed_fn(SimProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chanOwner*/)
+void sim_rpm_to_speed_fn(SimProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)
 {
     // secInCh[0] = DRIVE_STATE_BUS (analog). secInCh[1] = GEAR (analog).
     const GearProcCfg*      cfg     = static_cast<const GearProcCfg*>(proc->cfg);
@@ -204,7 +204,7 @@ void sim_rpm_to_speed_fn(SimProc* proc, uint16_t& value, bool& /*claimed*/, Chan
 // =============================================================================
 
 /** @brief Gear→ramp bridge — see sim_gear.h for contract. */
-void sim_gear_ramp_fn(SimProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chanOwner*/)
+void sim_gear_ramp_fn(SimProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)
 {
     if (proc->dynCfg == nullptr) return;  // No ramp linked — passthrough.
 

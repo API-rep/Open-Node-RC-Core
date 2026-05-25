@@ -99,7 +99,7 @@ inline constexpr LightBitmask kRunLevelMask[kRunLevelCount] = {
 
 
 // =============================================================================
-// 4. CHANNEL DESCRIPTORS
+// 4. CHAIN DESCRIPTORS
 // =============================================================================
 //   {name,          channel,   activeMask,                                  brt, pkBrt, dim, type,               dipDim, beacon,       xenon,   indicator}
 inline constexpr LightCfg kLedDescriptors[LED_CH_COUNT] = {

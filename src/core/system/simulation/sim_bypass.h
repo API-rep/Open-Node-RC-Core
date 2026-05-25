@@ -2,7 +2,7 @@
  * @file  sim_bypass.h
  * @brief SimProc function — conditional bypass gate.
  *
- * @details `sim_bypass_fn()` implements a bypass gate for a SimChannel pipeline.
+ * @details `sim_bypass_fn()` implements a bypass gate for a SimChain pipeline.
  *
  *   When `proc->secInValue[0]` (digital) is nonzero, `claimed` is set to
  *   `true`, skipping all downstream processors.  The runner always post-writes
@@ -43,6 +43,6 @@
  * @param value   Not modified — runner always writes to optOutCh after chain.
  * @param claimed Set to `true` when secInValue[0] != 0; unchanged otherwise.
  */
-void sim_bypass_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chanOwner);
+void sim_bypass_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
 
 // EOF sim_bypass.h

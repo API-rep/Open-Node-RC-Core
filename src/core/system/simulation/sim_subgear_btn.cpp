@@ -17,7 +17,7 @@
 // =============================================================================
 
 /** @brief Sub-gear button handler — see sim_subgear_btn.h for full contract. */
-void sim_subgear_btn_fn(SimProc* proc, uint16_t& /*value*/, bool& /*claimed*/, ChanOwner /*chanOwner*/)
+void sim_subgear_btn_fn(SimProc* proc, uint16_t& /*value*/, bool& /*claimed*/, ChanOwner /*chainOwner*/)
 {
     const SimSubGearBtnCfg* cfg   = static_cast<const SimSubGearBtnCfg*>(proc->cfg);
     SimSubGearBtnState*     state = static_cast<SimSubGearBtnState*>(proc->state);

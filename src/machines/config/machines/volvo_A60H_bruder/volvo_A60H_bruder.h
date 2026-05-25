@@ -73,7 +73,7 @@ enum SigDev {
 extern SigDevice sigDevArray[SIG_COUNT];
 
 #include "sim_config.h"   ///< kSimChannels[], kSimChannelCount — vehicle-level, board-independent.
-#include "inputs_map/ctrl_config.h"   ///< kCtrlChannels[], kCtrlChannelCount — vehicle-level, board-independent.
+#include "inputs_map/ctrl_config.h"   ///< kCtrlChains[], kCtrlChainCount — vehicle-level, board-independent.
 
 // --- Board dispatch ---
   #include "mainboard/mainboard.h"

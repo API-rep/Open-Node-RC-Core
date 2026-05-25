@@ -2,14 +2,14 @@
  * @file  ctrl_struct.h
  * @brief Control channel pipeline â€” aliases and behaviour configs.
  *
- * @details The ctrl layer shares `CbProc`/`CbChannel`/`CbProcFn` with the
+ * @details The ctrl layer shares `CbProc`/`CbChain`/`CbProcFn` with the
  *   simulation layer (defined in `cb_struct.h`).
  *
- *   Architecture (mirrors SimChannel pipeline):
+ *   Architecture (mirrors SimChain pipeline):
  *   @code
- *     CbChannel.optInCh  (runner pre-reads â€” raw button)
+ *     CbChain.optInCh  (runner pre-reads â€” raw button)
  *       â†’ CtrlProc[0..n-1]  (behaviour functions â€” speed gate, toggle, â€¦)
- *     CbChannel.optOutCh (runner post-writes â€” processed state)
+ *     CbChain.optOutCh (runner post-writes â€” processed state)
  *   @endcode
  *
  *   Pipeline contract (from cb_struct.h):
@@ -28,7 +28,7 @@
  *****************************************************************************/
 #pragma once
 
-#include <struct/cb_struct.h>  // CbProc, CbChannel, CbProcFn
+#include <struct/combus_proc_struct.h>  // CbProc, CbChain, CbProcFn
 
 
 // =============================================================================
@@ -37,7 +37,7 @@
 
 using CtrlProcFn  = CbProcFn;   ///< Control proc function pointer (= CbProcFn, no bus).
 using CtrlProc    = CbProc;     ///< Control proc descriptor (= CbProc).
-using CtrlChannel = CbChannel;  ///< Control channel descriptor (= CbChannel).
+using CtrlChain = CbChain;  ///< Control channel descriptor (= CbChain).
 
 
 // =============================================================================

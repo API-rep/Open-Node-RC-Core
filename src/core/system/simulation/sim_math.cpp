@@ -13,7 +13,7 @@
 // =============================================================================
 
 /** @brief Signed center deviation — see sim_math.h for contract. */
-void sim_center_fn(SimProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chanOwner*/)
+void sim_center_fn(SimProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)
 {
     const SimCenterCfg* cfg = static_cast<const SimCenterCfg*>(proc->cfg);
     value = static_cast<uint16_t>(static_cast<int16_t>(value)
@@ -21,7 +21,7 @@ void sim_center_fn(SimProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner 
 }
 
 /** @brief Absolute value with sign side effect — see sim_math.h for contract. */
-void sim_abs_fn(SimProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chanOwner*/)
+void sim_abs_fn(SimProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)
 {
     const int16_t sv   = static_cast<int16_t>(value);
     proc->secOutValue  = static_cast<uint16_t>(sv >= 0 ? 1u : 0u);  // runner commits to optSecOutCh
@@ -29,7 +29,7 @@ void sim_abs_fn(SimProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*c
 }
 
 /** @brief Linear scale — see sim_math.h for contract. */
-void sim_scale_fn(SimProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chanOwner*/)
+void sim_scale_fn(SimProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)
 {
     const SimScaleCfg* cfg = static_cast<const SimScaleCfg*>(proc->cfg);
     value = static_cast<uint16_t>(
@@ -38,7 +38,7 @@ void sim_scale_fn(SimProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /
 }
 
 /** @brief Drive-state observer — see sim_math.h for contract. */
-void sim_drive_state_fn(SimProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chanOwner*/)
+void sim_drive_state_fn(SimProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)
 {
     const SimDriveStateCfg* cfg = static_cast<const SimDriveStateCfg*>(proc->cfg);
 

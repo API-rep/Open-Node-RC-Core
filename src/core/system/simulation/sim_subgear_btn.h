@@ -52,6 +52,6 @@
  * @param value   Not modified.
  * @param claimed Not modified.
  */
-void sim_subgear_btn_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chanOwner);
+void sim_subgear_btn_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
 
 // EOF sim_subgear_btn.h

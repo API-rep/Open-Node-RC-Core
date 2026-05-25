@@ -1,13 +1,13 @@
 /*!****************************************************************************
  * @file  simulation_struct.h
- * @brief Simulation layer structures — archived SimDev + active SimChannel pipeline.
+ * @brief Simulation layer structures — archived SimDev + active SimChain pipeline.
  *
  * @details Archive (A0–A4, above the separator) — old SimDev architecture,
  *   preserved until sim_traction, sim_gear and sim_brake are migrated.
  *   Do not add new code to the archive.
  *
- *   Active area (sections 1+, below the separator) — SimChannel pipeline.
- *   Already validated: `SimProc/SimChannel` (sim.cpp ✅, section 3),
+ *   Active area (sections 1+, below the separator) — SimChain pipeline.
+ *   Already validated: `SimProc/SimChain` (sim.cpp ✅, section 3),
  *   `SimRampCfg/State` (sim_ramp_fn ✅, section 1), `DriveState` (✅, section 2),
  *   `SimBypassCfg` (sim_bypass_fn ✅, section 4).
  *   `GearProcCfg` (sim_gear_fn ✅, section 5).
@@ -25,7 +25,7 @@
 
 #include <core/config/machines/combus_ids.h>  // AnalogComBusID, DigitalComBusID
 #include <struct/combus_struct.h>              // ComBus (needed for SimBehaviorFn in archive)
-#include <struct/cb_struct.h>                  // CbProc, CbChannel, CbProcFn
+#include <struct/combus_proc_struct.h>                  // CbProc, CbChain, CbProcFn
 #include <defs/defs.h>                         // ChanOwner
 #include <core/system/combus/combus_res.h>     // CbusNeutral, CbusMaxVal (SimCenterCfg defaults)
 
@@ -168,7 +168,7 @@ namespace DriveStateBus {
 // ┌─── ARCHIVE TEMPORAIRE ──────────────────────────────────────────────────┐
 // │  Ancienne architecture SimDev — conservée tant que les callers          │
 // │  existants ne sont pas migrés vers la nouvelle implémentation           │
-// │  SimChannel.  Ne pas ajouter de nouveau code ici.                       │
+// │  SimChain.  Ne pas ajouter de nouveau code ici.                       │
 // │  À supprimer une fois sim_traction, sim_gear et sim_brake migrés.       │
 // └─────────────────────────────────────────────────────────────────────────┘
 // =============================================================================
@@ -281,7 +281,7 @@ struct SimBrakeState {
 
 
 // =============================================================================
-// A4. SimDev DESCRIPTOR  (ancienne architecture — remplacée par SimChannel)
+// A4. SimDev DESCRIPTOR  (ancienne architecture — remplacée par SimChain)
 // =============================================================================
 
 struct SimDevCtx;  ///< Legacy context — used by SimBehaviorFn only.
@@ -326,7 +326,7 @@ struct SimDev {
 
     // --- Behaviour -----------------------------------------------------------
     SimBehaviorFn  behaviorFn;                           ///< Processing function. nullptr = no-op.
-    ChanOwner      chanOwner = ChanOwner::MACHINE_SYSTEM; ///< Identity passed to combus_set_* when writing output channels.
+    ChanOwner      chainOwner = ChanOwner::MACHINE_SYSTEM; ///< Identity passed to combus_set_* when writing output channels.
 };
 
 
@@ -350,7 +350,7 @@ struct SimDev {
  *   `void (*)(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner owner)`
  *
  *   No `ComBus& bus` parameter — all bus I/O is handled by the runner via
- *   `CbChannel::optInCh`/`optOutCh` and `CbProc::secInCh`/`optSecOutCh`.
+ *   `CbChain::optInCh`/`optOutCh` and `CbProc::secInCh`/`optSecOutCh`.
  */
 using SimProcFn = CbProcFn;
 
@@ -358,7 +358,7 @@ using SimProcFn = CbProcFn;
  * @brief Simulation proc descriptor — alias of CbProc.
  *
  * @details Fields in `cb_struct.h`.  Key change vs. pre-fusion:
- *   - `optInCh`/`optOutCh` moved to `CbChannel` (primary I/O, runner-owned).
+ *   - `optInCh`/`optOutCh` moved to `CbChain` (primary I/O, runner-owned).
  *   - `secInCh[3]` / `secInValue[3]` — up to 3 secondary inputs injected by runner.
  *   - `optSecOutCh` / `secOutValue` — one secondary output committed by runner.
  *   - Field renames: (none — CbProc is the canonical form).
@@ -369,13 +369,13 @@ using SimProcFn = CbProcFn;
 using SimProc = CbProc;
 
 /**
- * @brief Simulation channel descriptor — alias of CbChannel.
+ * @brief Simulation channel descriptor — alias of CbChain.
  *
  * @details Fields in `cb_struct.h`.  Key change vs. pre-fusion:
  *   - `simProc` renamed to `procs`; `simProcCount` renamed to `procCount`.
  *   - `optInCh` / `optOutCh` added (primary input/output, runner-owned).
  */
-using SimChannel = CbChannel;
+using SimChain = CbChain;
 
 
 // =============================================================================
@@ -433,7 +433,7 @@ struct SimRampState {
  *
  *   No config struct needed — `SimProc::cfg` must be `nullptr`.
  *   The condition channel is declared in `proc.secInCh[0]`.
- *   The output channel is the parent `CbChannel::optOutCh`.
+ *   The output channel is the parent `CbChain::optOutCh`.
  *
  *   Typical placement: first proc in the chain.
  */

@@ -87,7 +87,7 @@ int8_t sim_gear_fsm_update(GearFsmState*           state,
  * @param value   In: RPM magnitude [0..maxRpm].  Out: active gear (1..N).
  * @param claimed Not modified.
  */
-void sim_gear_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chanOwner);
+void sim_gear_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
 
 /**
  * @brief Gear direct-drive bypass — sets GEAR = 1 and claims when DIRECT_DRIVE is HIGH.
@@ -99,7 +99,7 @@ void sim_gear_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chanOw
  * @param value   Set to 1 when secInValue[0] != 0; unchanged otherwise.
  * @param claimed Set to `true` when DIRECT_DRIVE is HIGH; unchanged otherwise.
  */
-void sim_gear_bypass_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chanOwner);
+void sim_gear_bypass_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
 
 /**
  * @brief Gear shift-delta SimProc — subtracts shiftDelta RPM on upshift.
@@ -112,7 +112,7 @@ void sim_gear_bypass_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner
  * @param value   In: RPM magnitude.  Out: RPM after shift dip.
  * @param claimed Not modified.
  */
-void sim_apply_ratio_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chanOwner);
+void sim_apply_ratio_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
 
 /**
  * @brief RPM → ESC speed SimProc — converts RPM_BUS to ESC_SPEED_BUS domain.
@@ -125,7 +125,7 @@ void sim_apply_ratio_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner
  * @param value   In: RPM_BUS magnitude.  Out: ESC_SPEED_BUS bipolar value.
  * @param claimed Not modified.
  */
-void sim_rpm_to_speed_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chanOwner);
+void sim_rpm_to_speed_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
 
 /**
  * @brief Gear→ramp bridge — updates per-gear ramp time in a linked SimRampCfg.
@@ -138,6 +138,6 @@ void sim_rpm_to_speed_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwne
  * @param value   In/out: current gear — passed through unchanged.
  * @param claimed Not modified.
  */
-void sim_gear_ramp_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chanOwner);
+void sim_gear_ramp_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
 
 // EOF sim_gear.h

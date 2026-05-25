@@ -1,8 +1,8 @@
 ﻿/*!****************************************************************************
  * @file    sim_config.cpp
- * @brief   Volvo A60H Bruder — SimChannel pipeline configuration.
+ * @brief   Volvo A60H Bruder — SimChain pipeline configuration.
  *
- * @details Defines the SimChannel array for the Volvo A60H Bruder machine.
+ * @details Defines the SimChain array for the Volvo A60H Bruder machine.
  *
  *   Channel pipelines (optInCh → procs → optOutCh):
  *     SIM_THROTTLE : THROTTLE_BUS → ramp, drive-state(→DRIVE_STATE_BUS), center, abs(→FWD_FLAG), scale, bypass(cond=DIRECT_DRIVE), ratio(DIRECT_DRIVE,GEAR) → RPM_BUS
@@ -231,14 +231,14 @@ static SimProc kDumpProcs[] = {
 
 static constexpr ChanOwner kSimOwner = makeChanOwner(ComBusOwner::GRP_MACHINE, ComBusOwner::PROC_SYSTEM);
 
-SimChannel kSimChannels[SIM_CH_COUNT] = {
+SimChain kSimChannels[SIM_CH_COUNT] = {
 
   { .name      = "throttle",
     .optInCh   = AnalogComBusID::THROTTLE_BUS,
     .optOutCh  = AnalogComBusID::RPM_BUS,
     .procs     = kThrottleProcs,
     .procCount = static_cast<uint8_t>(std::size(kThrottleProcs)),
-    .chanOwner = kSimOwner,
+    .chainOwner = kSimOwner,
   },
 
   { .name      = "gear",
@@ -246,7 +246,7 @@ SimChannel kSimChannels[SIM_CH_COUNT] = {
     .optOutCh  = AnalogComBusID::GEAR,
     .procs     = kGearProcs,
     .procCount = static_cast<uint8_t>(std::size(kGearProcs)),
-    .chanOwner = kSimOwner,
+    .chainOwner = kSimOwner,
   },
 
   { .name      = "traction",
@@ -254,7 +254,7 @@ SimChannel kSimChannels[SIM_CH_COUNT] = {
     .optOutCh  = AnalogComBusID::ESC_SPEED_BUS,
     .procs     = kTractionProcs,
     .procCount = static_cast<uint8_t>(std::size(kTractionProcs)),
-    .chanOwner = kSimOwner,
+    .chainOwner = kSimOwner,
   },
 
   { .name      = "steering",
@@ -262,7 +262,7 @@ SimChannel kSimChannels[SIM_CH_COUNT] = {
     .optOutCh  = AnalogComBusID::STEERING_RAMPED_BUS,
     .procs     = kSteeringProcs,
     .procCount = static_cast<uint8_t>(std::size(kSteeringProcs)),
-    .chanOwner = kSimOwner,
+    .chainOwner = kSimOwner,
   },
 
   { .name      = "dump",
@@ -270,7 +270,7 @@ SimChannel kSimChannels[SIM_CH_COUNT] = {
     .optOutCh  = AnalogComBusID::DUMP_RAMPED_BUS,
     .procs     = kDumpProcs,
     .procCount = static_cast<uint8_t>(std::size(kDumpProcs)),
-    .chanOwner = kSimOwner,
+    .chainOwner = kSimOwner,
   },
 };
 
