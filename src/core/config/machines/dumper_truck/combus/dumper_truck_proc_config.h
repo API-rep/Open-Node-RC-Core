@@ -1,21 +1,24 @@
 /*!****************************************************************************
- * @file    sim_config.h
- * @brief   Volvo A60H Bruder — CbChain pipeline declaration.
+ * @file  dumper_truck_proc_config.h
+ * @brief Dumper truck — CbChain pipeline declaration.
  *
  * @details Exposes the CbChain array consumed by sim_update() in the
- *   machine main loop.
+ *   machine main loop.  Included from the vehicle header (IS_MAINBOARD block)
+ *   so that board-specific envCfg.h can reference kSimChannels[] directly.
  *
- *   Channel pipelines:
- *     SIM_THROTTLE : THROTTLE_BUS  →  [center + abs + scale + ratio]  →  RPM_BUS (wire)
- *     SIM_GEAR     : RPM_BUS       →  [gear-fsm]                      →  GEAR    (wire)
- *     SIM_TRACTION : THROTTLE_BUS  →  [bypass + ramp]  →  ESC_SPEED_BUS (wire, motors)
- *     SIM_STEERING : STEERING_BUS  →  [bypass + ramp]  →  STEERING_RAMPED_BUS (local)
- *     SIM_DUMP     : DUMP_BUS      →  [bypass + ramp]  →  DUMP_RAMPED_BUS     (local)
+ *   Channel pipelines (optInCh → procs → optOutCh):
+ *     SIM_THROTTLE : THROTTLE_BUS → [ramp, drive-state, center, abs, scale,
+ *                                     bypass, ratio] → RPM_BUS
+ *     SIM_GEAR     : RPM_BUS      → [bypass, subgear-btn, gear-fsm, gear-ramp]
+ *                                     → GEAR
+ *     SIM_TRACTION : RPM_BUS      → [rpm_to_speed] → ESC_SPEED_BUS
+ *     SIM_STEERING : STEERING_BUS → [bypass, ramp]  → STEERING_RAMPED_BUS
+ *     SIM_DUMP     : DUMP_BUS     → [bypass, ramp]  → DUMP_RAMPED_BUS
  *******************************************************************************
  */
 #pragma once
 
-#include <struct/simulation_struct.h>   // CbChain
+#include <struct/combus_proc_struct.h>   // CbChain
 
 
 // =============================================================================
@@ -29,9 +32,9 @@
  *   `SIM_CH_COUNT` is the sentinel used as array size and loop bound.
  */
 enum SimCh {
-    SIM_THROTTLE = 0,  ///< THROTTLE_BUS → [center+abs+scale+ratio] → RPM_BUS (wire, engine RPM)
-    SIM_GEAR,          ///< RPM_BUS       → [gear-fsm]               → GEAR    (wire)
-    SIM_TRACTION,      ///< THROTTLE_BUS  → [bypass + ramp]          → ESC_SPEED_BUS (wire, motors)
+    SIM_THROTTLE = 0,  ///< THROTTLE_BUS → [center+abs+scale+ratio] → RPM_BUS
+    SIM_GEAR,          ///< RPM_BUS       → [gear-fsm]               → GEAR
+    SIM_TRACTION,      ///< RPM_BUS       → [rpm_to_speed]           → ESC_SPEED_BUS
     SIM_STEERING,      ///< STEERING_BUS  → [bypass + ramp]          → STEERING_RAMPED_BUS
     SIM_DUMP,          ///< DUMP_BUS      → [bypass + ramp]          → DUMP_RAMPED_BUS
     SIM_CH_COUNT       ///< Sentinel — number of CbChain entries.
@@ -46,4 +49,4 @@ enum SimCh {
 extern CbChain kSimChannels[SIM_CH_COUNT];
 
 
-// EOF sim_config.h
+// EOF dumper_truck_proc_config.h

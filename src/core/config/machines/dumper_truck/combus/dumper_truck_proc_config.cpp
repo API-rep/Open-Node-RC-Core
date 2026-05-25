@@ -1,22 +1,29 @@
-﻿/*!****************************************************************************
- * @file    sim_config.cpp
- * @brief   Volvo A60H Bruder — CbChain pipeline configuration.
+/*!****************************************************************************
+ * @file  dumper_truck_proc_config.cpp
+ * @brief Dumper truck — CbChain pipeline configuration.
  *
- * @details Defines the CbChain array for the Volvo A60H Bruder machine.
+ * @details Defines the CbChain array for the dumper-truck machine class.
+ *   Compiled only in machine-node builds (IS_MAINBOARD guard).
  *
  *   Channel pipelines (optInCh → procs → optOutCh):
- *     SIM_THROTTLE : THROTTLE_BUS → ramp, drive-state(→DRIVE_STATE_BUS), center, abs(→FWD_FLAG), scale, bypass(cond=DIRECT_DRIVE), ratio(DIRECT_DRIVE,GEAR) → RPM_BUS
- *     SIM_GEAR     : RPM_BUS → bypass(cond=DIRECT_DRIVE), subgear-btn(→SUBGEAR_BUS), gear-fsm(DRIVE_STATE_BUS,SUBGEAR_BUS), gear-ramp(SUBGEAR_BUS) → GEAR
- *     SIM_TRACTION : RPM_BUS → rpm_to_speed(DRIVE_STATE_BUS,GEAR) → ESC_SPEED_BUS
- *     SIM_STEERING : STEERING_BUS → bypass(cond=DIRECT_DRIVE), ramp → STEERING_RAMPED_BUS
- *     SIM_DUMP     : DUMP_BUS → bypass(cond=DIRECT_DRIVE), ramp → DUMP_RAMPED_BUS
+ *     SIM_THROTTLE : THROTTLE_BUS → ramp, drive-state(→DRIVE_STATE_BUS),
+ *                    center, abs, scale, bypass(DIRECT_DRIVE),
+ *                    ratio(DIRECT_DRIVE, GEAR) → RPM_BUS
+ *     SIM_GEAR     : RPM_BUS → bypass(DIRECT_DRIVE), subgear-btn(→SUBGEAR_BUS),
+ *                    gear-fsm(DRIVE_STATE_BUS, SUBGEAR_BUS),
+ *                    gear-ramp(SUBGEAR_BUS) → GEAR
+ *     SIM_TRACTION : RPM_BUS → rpm_to_speed(DRIVE_STATE_BUS, GEAR) → ESC_SPEED_BUS
+ *     SIM_STEERING : STEERING_BUS → bypass(DIRECT_DRIVE), ramp → STEERING_RAMPED_BUS
+ *     SIM_DUMP     : DUMP_BUS     → bypass(DIRECT_DRIVE), ramp → DUMP_RAMPED_BUS
  *******************************************************************************
  */
 
-#include "sim_config.h"
+#ifdef IS_MAINBOARD
+
+#include "dumper_truck_proc_config.h"
 
 #include <core/config/machines/combus_types.h>    // AnalogComBusID (+ using namespace DumperTruck)
-#include <core/config/hw/simulation_presets.h>    // kHeavy3_steps (for outMax ceiling)
+#include <core/config/hw/simulation_presets.h>    // kHeavy3_steps
 #include <struct/combus_struct.h>                 // makeChanOwner, ComBusOwner
 #include <core/system/combus/combus_res.h>        // CbusNeutral, pctToCbus
 #include <core/system/simulation/sim_ramp.h>      // sim_ramp_fn, SimRampCfg, SimRampState
@@ -233,46 +240,47 @@ static constexpr ChanOwner kSimOwner = makeChanOwner(ComBusOwner::GRP_MACHINE, C
 
 CbChain kSimChannels[SIM_CH_COUNT] = {
 
-  { .name      = "throttle",
-    .optInCh   = AnalogComBusID::THROTTLE_BUS,
-    .optOutCh  = AnalogComBusID::RPM_BUS,
-    .procs     = kThrottleProcs,
-    .procCount = static_cast<uint8_t>(std::size(kThrottleProcs)),
+  { .name       = "throttle",
+    .optInCh    = AnalogComBusID::THROTTLE_BUS,
+    .optOutCh   = AnalogComBusID::RPM_BUS,
+    .procs      = kThrottleProcs,
+    .procCount  = static_cast<uint8_t>(std::size(kThrottleProcs)),
     .chainOwner = kSimOwner,
   },
 
-  { .name      = "gear",
-    .optInCh   = AnalogComBusID::RPM_BUS,
-    .optOutCh  = AnalogComBusID::GEAR,
-    .procs     = kGearProcs,
-    .procCount = static_cast<uint8_t>(std::size(kGearProcs)),
+  { .name       = "gear",
+    .optInCh    = AnalogComBusID::RPM_BUS,
+    .optOutCh   = AnalogComBusID::GEAR,
+    .procs      = kGearProcs,
+    .procCount  = static_cast<uint8_t>(std::size(kGearProcs)),
     .chainOwner = kSimOwner,
   },
 
-  { .name      = "traction",
-    .optInCh   = AnalogComBusID::RPM_BUS,
-    .optOutCh  = AnalogComBusID::ESC_SPEED_BUS,
-    .procs     = kTractionProcs,
-    .procCount = static_cast<uint8_t>(std::size(kTractionProcs)),
+  { .name       = "traction",
+    .optInCh    = AnalogComBusID::RPM_BUS,
+    .optOutCh   = AnalogComBusID::ESC_SPEED_BUS,
+    .procs      = kTractionProcs,
+    .procCount  = static_cast<uint8_t>(std::size(kTractionProcs)),
     .chainOwner = kSimOwner,
   },
 
-  { .name      = "steering",
-    .optInCh   = AnalogComBusID::STEERING_BUS,
-    .optOutCh  = AnalogComBusID::STEERING_RAMPED_BUS,
-    .procs     = kSteeringProcs,
-    .procCount = static_cast<uint8_t>(std::size(kSteeringProcs)),
+  { .name       = "steering",
+    .optInCh    = AnalogComBusID::STEERING_BUS,
+    .optOutCh   = AnalogComBusID::STEERING_RAMPED_BUS,
+    .procs      = kSteeringProcs,
+    .procCount  = static_cast<uint8_t>(std::size(kSteeringProcs)),
     .chainOwner = kSimOwner,
   },
 
-  { .name      = "dump",
-    .optInCh   = AnalogComBusID::DUMP_BUS,
-    .optOutCh  = AnalogComBusID::DUMP_RAMPED_BUS,
-    .procs     = kDumpProcs,
-    .procCount = static_cast<uint8_t>(std::size(kDumpProcs)),
+  { .name       = "dump",
+    .optInCh    = AnalogComBusID::DUMP_BUS,
+    .optOutCh   = AnalogComBusID::DUMP_RAMPED_BUS,
+    .procs      = kDumpProcs,
+    .procCount  = static_cast<uint8_t>(std::size(kDumpProcs)),
     .chainOwner = kSimOwner,
   },
 };
 
+#endif  // IS_MAINBOARD
 
-// EOF sim_config.cpp
+// EOF dumper_truck_proc_config.cpp
