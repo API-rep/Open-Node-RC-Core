@@ -83,16 +83,16 @@ int8_t sim_gear_fsm_update(GearFsmState*           state,
  *     (forces gear 1 — no conversion from ComBus position needed).
  *   - Runs the N-gear FSM (upshift / downshift / sub-gear toggle and step).
  *   - Sets `value = gear` — written to outCh (= GEAR) by the channel mechanism.
- *   - Writes per-gear ramp time (ms) to `TRACTION_RAMP_BUS` (side effect).
  *   - Writes sub-gear index (0 = inactive) to `SUBGEAR_BUS` (side effect).
  *
  *   Does NOT set `claimed` — not applicable when used as sole proc.
+ *   Ramp-time update is handled by the following `sim_gear_ramp_fn` proc.
  *
  * @param proc    SimProc descriptor — `cfg` cast to `GearProcCfg*`,
  *                `state` cast to `GearFsmState*`.  Neither may be nullptr.
  * @param value   In: RPM magnitude from RPM_BUS [0..maxRpm].  Out: active gear (1..N).
  * @param bus     Read for DRIVE_STATE_BUS + SUBGEAR_* digital channels;
- *                written for TRACTION_RAMP_BUS / SUBGEAR_BUS.
+ *                written for SUBGEAR_BUS.
  * @param claimed Not modified.
  */
 void sim_gear_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed, ChanOwner chanOwner);
@@ -175,5 +175,27 @@ void sim_apply_ratio_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claim
  * @param claimed Not modified.
  */
 void sim_rpm_to_speed_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed, ChanOwner chanOwner);
+
+/**
+ * @brief Gear→ramp bridge — updates per-gear ramp time in a linked SimRampCfg.
+ *
+ * @details Placed immediately after `sim_gear_fn` in the gear pipeline.
+ *   Reads the current gear (`value`) and `SUBGEAR_BUS` from the bus, looks up
+ *   the matching `rampTime` in the shift profile, and writes it to the paired
+ *   traction ramp `dynCfg`.  Sets `resetRamp = true` only on change —
+ *   `sim_ramp_fn` picks this up on the next cycle.
+ *
+ *   Passes `value` through unchanged (gear flows on to `sim_write_fn`).
+ *
+ *   cfg    = `const GearProcCfg*` — shared with `sim_gear_fn`.
+ *   dynCfg = `SimRampCfg*` (RAM) — the traction ramp dynCfg to update.
+ *   state  = nullptr — change detection via `dyn->rampTimeMs != newRampTime`.
+ *
+ * @param proc    SimProc descriptor.  `cfg` and `dynCfg` must not be nullptr.
+ * @param value   In/out: current gear (1..N) — passed through unchanged.
+ * @param bus     Read for SUBGEAR_BUS.
+ * @param claimed Not modified.
+ */
+void sim_gear_ramp_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed, ChanOwner chanOwner);
 
 // EOF sim_gear.h

@@ -8,18 +8,22 @@
 
 #include "sim_bypass.h"
 
+#include "core/system/combus/combus_access.h"  // combus_set_analog
+
 
 // =============================================================================
 // 1. PROC FUNCTION
 // =============================================================================
 
 /** @brief Conditional bypass gate — see sim_bypass.h for full contract. */
-void sim_bypass_fn(SimProc* proc, uint16_t& /*value*/, ComBus& bus, bool& claimed, ChanOwner /*chanOwner*/)
+void sim_bypass_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed, ChanOwner chanOwner)
 {
     const SimBypassCfg* cfg = static_cast<const SimBypassCfg*>(proc->cfg);
-    if (bus.digitalBus[static_cast<uint8_t>(cfg->condCh)].value)
-        claimed = true;
-    // value untouched — sim_channel_update writes raw inCh to outCh when claimed.
+    if (!bus.digitalBus[static_cast<uint8_t>(cfg->condCh)].value)
+        return;  // condCh LOW — no bypass.
+
+    combus_set_analog(bus, cfg->outCh, value, chanOwner);
+    claimed = true;
 }
 
 // EOF sim_bypass.cpp

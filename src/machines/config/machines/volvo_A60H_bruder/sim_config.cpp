@@ -6,7 +6,7 @@
  *
  *   Channel pipelines (each proc array is fully self-describing: read → … → write):
  *     SIM_THROTTLE : read(THROTTLE_BUS) → ramp → drive-state(→DRIVE_STATE_BUS) → center → abs → scale → bypass(DIRECT_DRIVE→RPM_BUS) → ratio → write(RPM_BUS)
- *     SIM_GEAR     : read(RPM_BUS)      → bypass(DIRECT_DRIVE→GEAR,=1) → gear-fsm → write(GEAR)
+ *     SIM_GEAR     : read(RPM_BUS)      → bypass(DIRECT_DRIVE→GEAR,=1) → gear-fsm → gear-ramp(→TractionRampDyn) → write(GEAR)
  *     SIM_TRACTION : read(RPM_BUS)      → rpm_to_speed → write(ESC_SPEED_BUS)
  *     SIM_STEERING : read(STEERING_BUS) → bypass(DIRECT_DRIVE→STEERING_RAMPED_BUS) → ramp → write(STEERING_RAMPED_BUS)
  *     SIM_DUMP     : read(DUMP_BUS)     → bypass(DIRECT_DRIVE→DUMP_RAMPED_BUS) → ramp → write(DUMP_RAMPED_BUS)
@@ -58,8 +58,7 @@ static constexpr SimRampCfg kTractionRamp {
     .neutralBand = 0u,
 };
 
-//  Traction ramp — RAM copy, mutated by sim_gear_fn on each gear change.
-//  dynCfg on the traction ramp proc points here; GearFsmState::rampDynCfg also points here.
+//  Traction ramp — RAM copy, mutated by sim_gear_ramp_fn on each gear change.
 static SimRampCfg gTractionRampDyn = kTractionRamp;
 
 
@@ -67,7 +66,7 @@ static SimRampCfg gTractionRampDyn = kTractionRamp;
 // 2. BYPASS CONFIGURATIONS (per-channel — condCh + outCh)
 // =============================================================================
 
-//  Throttle bypass: DIRECT_DRIVE HIGH → skip ramp + ratio, scaled RPM → RPM_BUS direct.
+//  Throttle bypass: DIRECT_DRIVE HIGH → skip ratio, scaled RPM → RPM_BUS direct.
 static constexpr SimBypassCfg kThrottleBypass {
     .condCh = DigitalComBusID::DIRECT_DRIVE,
     .outCh  = AnalogComBusID::RPM_BUS,
@@ -124,7 +123,7 @@ static constexpr GearProcCfg kGearCfg {
 static SimRampState    gSteerRampState          {};
 static SimRampState    gDumpRampState           {};
 static SimRampState    gTractionRampState       {};
-static GearFsmState    gGearFsmState            { .rampDynCfg = &gTractionRampDyn };
+static GearFsmState    gGearFsmState            {};
 static ShiftDeltaState gThrottleShiftDeltaState {};
 
 
@@ -212,6 +211,13 @@ static SimProc kGearProcs[] = {
         .fn      = sim_gear_fn,
         .cfg     = &kGearCfg,
         .state   = &gGearFsmState,
+    },
+    {
+        .name    = "gear-ramp",
+        .fn      = sim_gear_ramp_fn,
+        .cfg     = &kGearCfg,
+        .dynCfg  = &gTractionRampDyn,
+        .state   = nullptr,
     },
     {
         .name    = "write",

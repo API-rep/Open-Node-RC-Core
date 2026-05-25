@@ -8,6 +8,7 @@
 #include "system/utils.h"
 #include <core/config/inputs/PS4_dualshock.h>  // DigitalInputDevID enum
 #include <core/system/simulation/sim.h>
+#include <core/system/input/switch_direct_drive.h>
 #include <core/system/debug/debug.h>
 #include <core/system/debug/dashboard.h>
 #include <core/system/input/input_manager.h>
@@ -233,17 +234,17 @@ void loop() {
 #endif
       }
 
-      // --- 2. Direct-drive push-to-toggle: OPTIONS rising edge flips DIRECT_DRIVE state.
-      // TODO (winter 2026): replace with SwitchDevice lib toggle once available.
+      // --- 2. Direct-drive switch: speed-guarded engage, immediate disengage.
       {
-        const uint8_t  optCh    = static_cast<uint8_t>(DigitalComBusID::DIRECT_DRIVE_BTN);  // raw input
-        static bool    s_toggle  = false;
-        static bool    s_prevBtn = false;
-        const  bool    btnNow    = comBus.digitalBus[optCh].isDrived && comBus.digitalBus[optCh].value;
-        if (btnNow && !s_prevBtn) { s_toggle = !s_toggle; }  // rising edge
-        s_prevBtn = btnNow;
-        combus_set_digital(comBus, DigitalComBusID::DIRECT_DRIVE, s_toggle,
-                           makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
+        static const DirectDriveSwitchCfg kDdCfg {
+            .btnCh        = DigitalComBusID::DIRECT_DRIVE_BTN,
+            .outCh        = DigitalComBusID::DIRECT_DRIVE,
+            .speedCh      = AnalogComBusID::RPM_BUS,
+            .maxEngageSpd = 200u,   // ~10 % of kHeavy3 maxRpm (scale 0..2100)
+        };
+        static DirectDriveSwitchState gDdState {};
+        switch_direct_drive_update(&kDdCfg, &gDdState, comBus,
+                                   makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
       }
 
       // --- 3. Simulation channel update. ---

@@ -2,27 +2,19 @@
  * @file  sim_bypass.h
  * @brief SimProc function — conditional bypass gate.
  *
- * @details `sim_bypass_fn()` implements an early-exit gate for use as the
- *   first SimProc in a SimChannel pipeline.
+ * @details `sim_bypass_fn()` implements a bypass gate for a SimChannel pipeline.
  *
- *   When `SimBypassCfg::condCh` digital channel is HIGH, `claimed` is set
- *   to `true`, skipping all downstream processors for this cycle.  `value`
- *   is left unchanged — the raw `inCh` input passes directly to `outCh`.
- *
- *   When `condCh` is LOW, the function is a no-op and downstream procs
- *   continue normally.
+ *   When `SimBypassCfg::condCh` is HIGH, `value` is written to `outCh` and
+ *   `claimed` is set to `true`, skipping all downstream processors.
+ *   When `condCh` is LOW, the function is always a no-op.
  *
  *   No runtime state: `SimProc::state` must be `nullptr`.
- *   Typically placed at `simProc[0]` of any channel supporting bypass mode.
  *
  *   Typical declaration (in vehicle sim_config.cpp):
  *   @code
  *     static constexpr SimBypassCfg kMyBypass {
- *         .condCh = DigitalComBusID::DIRECT_DRIVE
- *     };
- *     static SimProc kThrottleProcs[] = {
- *         { .name="bypass", .fn=sim_bypass_fn, .cfg=&kMyBypass, .state=nullptr },
- *         // ... other procs follow
+ *         .condCh = DigitalComBusID::DIRECT_DRIVE,
+ *         .outCh  = AnalogComBusID::RPM_BUS,
  *     };
  *   @endcode
  *****************************************************************************/

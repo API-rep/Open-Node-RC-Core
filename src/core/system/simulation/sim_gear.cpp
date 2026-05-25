@@ -142,35 +142,6 @@ void sim_gear_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& /*claimed*/,
     combus_set_analog(bus, AnalogComBusID::SUBGEAR_BUS,
                       static_cast<uint16_t>(state->subGear), ChanOwner::MACHINE_SYSTEM);
 
-      // Per-gear ramp time — written directly to the paired ramp dynCfg (RAM).
-      // resetRamp flag triggers timer restart in sim_ramp_fn next cycle.
-    if (state->rampDynCfg != nullptr)
-    {
-        const bool hasSgRamp = (state->subGear > 0)
-                            && (cfg->profile->subGear != nullptr);
-        uint16_t newRampTime;
-        if (hasSgRamp)
-        {
-            const uint8_t si = static_cast<uint8_t>(
-                constrain(static_cast<int>(state->subGear) - 1,
-                          0, static_cast<int>(cfg->profile->subGearCount) - 1));
-            newRampTime = cfg->profile->subGear[si].rampTime;
-        }
-        else
-        {
-            const uint8_t gi = static_cast<uint8_t>(
-                constrain(static_cast<int>(gear) - 1,
-                          0, static_cast<int>(cfg->profile->gearCount) - 1));
-            newRampTime = cfg->profile->gear[gi].rampTime;
-        }
-
-          // Only signal a reset when the ramp time actually changes.
-        if (state->rampDynCfg->rampTimeMs != newRampTime) {
-            state->rampDynCfg->rampTimeMs = newRampTime;
-            state->rampDynCfg->resetRamp  = true;
-        }
-    }
-
     // --- 5. Output — gear integer becomes the channel value -----------------
     value = static_cast<uint16_t>(gear);
 }
@@ -267,6 +238,49 @@ void sim_rpm_to_speed_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& /*cl
                                  static_cast<int32_t>(CbusNeutral) - static_cast<int32_t>(half),
                                  0, static_cast<int32_t>(CbusMaxVal)));
     else             value = CbusNeutral;
+}
+
+
+// =============================================================================
+// 6. GEAR→RAMP BRIDGE SIMPROC FUNCTION
+// =============================================================================
+
+/** @brief Gear→ramp bridge — see sim_gear.h for contract. */
+void sim_gear_ramp_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& /*claimed*/, ChanOwner /*chanOwner*/)
+{
+    if (proc->dynCfg == nullptr) return;  // No ramp linked — passthrough.
+
+    const GearProcCfg* cfg = static_cast<const GearProcCfg*>(proc->cfg);
+    SimRampCfg*        dyn = static_cast<SimRampCfg*>(proc->dynCfg);
+
+    // --- Resolve gear and sub-gear ------------------------------------------
+    const int8_t  gear       = static_cast<int8_t>(value);
+    const uint8_t subGearIdx = static_cast<uint8_t>(
+        bus.analogBus[static_cast<uint8_t>(AnalogComBusID::SUBGEAR_BUS)].value);
+
+    // --- Look up new ramp time ----------------------------------------------
+    uint16_t newRampTime;
+    if (subGearIdx > 0u && cfg->profile->subGear != nullptr)
+    {
+        const uint8_t si = static_cast<uint8_t>(
+            constrain(static_cast<int>(subGearIdx) - 1,
+                      0, static_cast<int>(cfg->profile->subGearCount) - 1));
+        newRampTime = cfg->profile->subGear[si].rampTime;
+    }
+    else
+    {
+        const uint8_t gi = static_cast<uint8_t>(
+            constrain(static_cast<int>(gear) - 1,
+                      0, static_cast<int>(cfg->profile->gearCount) - 1));
+        newRampTime = cfg->profile->gear[gi].rampTime;
+    }
+
+    // --- Write dynCfg only on change ----------------------------------------
+    if (dyn->rampTimeMs != newRampTime) {
+        dyn->rampTimeMs = newRampTime;
+        dyn->resetRamp  = true;
+    }
+    // value (= gear) passed through unchanged.
 }
 
 // EOF sim_gear.cpp

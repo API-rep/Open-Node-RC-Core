@@ -235,7 +235,6 @@ struct GearSimCfg {
  * @details Assigned to `SimDev::state` (as `void*`); cast back inside
  *   `sim_gear_update()` and `gear_fsm_update()` to `GearFsmState*`.
  */
-struct SimRampCfg;   // Forward declaration — full definition in section 1 (active area).
 struct GearFsmState {
     int8_t   gear;         ///< Current virtual gear (1–N).
     int16_t  prevRpm;      ///< RPM seen last cycle — trend detection (rising = accel, falling = decel).
@@ -245,10 +244,6 @@ struct GearFsmState {
     bool     prevSubGearSet; ///< Previous state of SUBGEAR_SET — rising-edge detection.
     bool     prevSubGearUp;  ///< Previous state of SUBGEAR_UP  — rising-edge detection.
     bool     prevSubGearDn;  ///< Previous state of SUBGEAR_DOWN — rising-edge detection.
-
-    SimRampCfg* rampDynCfg = nullptr; ///< Optional link to the paired traction ramp dynCfg (RAM).
-                                      ///<   When non-null, sim_gear_fn writes rampTimeMs + sets resetRamp on
-                                      ///<   each gear change.  nullptr = no ramp link (gear-only channel).
 };
 
 
@@ -443,7 +438,7 @@ struct SimRampCfg {
                                             ///<   0 = symmetric (falls back to accelSteps).
     uint16_t brakeSteps;                    ///< ComBus units per step when moving toward neutral.
     uint16_t neutralBand;                   ///< ComBus units around CbusNeutral treated as zero (0 = no dead-band).
-    bool     resetRamp = false;       ///< Set by a preceding proc (e.g. sim_gear_fn) on gear change.
+    bool     resetRamp = false;             ///< Set by a preceding proc (e.g. sim_gear_ramp_fn) on gear change.
                                             ///<   sim_ramp_fn resets the ramp timer and clears this flag.
                                             ///<   currentPos is preserved — continuity of position across the reset.
 };
@@ -482,24 +477,26 @@ struct SimRampState {
  *   Typical placement: `simProc[0]` — evaluated before all other processors.
  */
 struct SimBypassCfg {
-    DigitalComBusID condCh;  ///< Digital channel — HIGH → early exit.
+    DigitalComBusID condCh;  ///< Digital channel — HIGH → bypass; LOW → no-op.
     AnalogComBusID  outCh;   ///< Analog channel written (with chanOwner) before claiming.
 };
 
 
 // =============================================================================
-// 5. GEAR FSM PROCESSOR  (sim_gear_fn — ✅ implemented)
+// 5. GEAR FSM PROCESSOR  (sim_gear_fn, sim_gear_ramp_fn — ✅ implemented)
 // =============================================================================
 
 /**
  * @brief Static configuration for a gear-FSM SimProc.
  *
- * @details Shared by `sim_gear_fn` and `sim_apply_ratio_fn`.
+ * @details Shared by `sim_gear_fn`, `sim_gear_ramp_fn`, `sim_apply_ratio_fn`,
+ *   and `sim_rpm_to_speed_fn`.
  *   Assigned to `SimProc::cfg` (as `const void*`); cast back to
  *   `const GearProcCfg*` inside each fn.
  *
  *   `GearFsmState` (mutable runtime for `sim_gear_fn`) is declared in
  *   archive section A2 and is available throughout the active area.
+ *   `sim_gear_ramp_fn` uses `GearProcCfg` as cfg — state = nullptr.
  */
 struct GearProcCfg {
     const GearShiftProfile* profile; ///< Shift threshold profile — pointer via vehicle alias.
