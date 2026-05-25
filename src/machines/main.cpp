@@ -8,7 +8,7 @@
 #include "system/utils.h"
 #include <core/config/inputs/PS4_dualshock.h>  // DigitalInputDevID enum
 #include <core/system/simulation/sim.h>
-#include <core/system/input/switch_direct_drive.h>
+#include <core/system/simulation/ctrl.h>
 #include <core/system/debug/debug.h>
 #include <core/system/debug/dashboard.h>
 #include <core/system/input/input_manager.h>
@@ -234,18 +234,9 @@ void loop() {
 #endif
       }
 
-      // --- 2. Direct-drive switch: speed-guarded engage, immediate disengage.
-      {
-        static const DirectDriveSwitchCfg kDdCfg {
-            .btnCh        = DigitalComBusID::DIRECT_DRIVE_BTN,
-            .outCh        = DigitalComBusID::DIRECT_DRIVE,
-            .speedCh      = AnalogComBusID::RPM_BUS,
-            .maxEngageSpd = 200u,   // ~10 % of kHeavy3 maxRpm (scale 0..2100)
-        };
-        static DirectDriveSwitchState gDdState {};
-        switch_direct_drive_update(&kDdCfg, &gDdState, comBus,
-                                   makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
-      }
+      // --- 2. Ctrl channel update: raw buttons → processed digital states.
+      ctrl_update(machine.ctrlChannel, machine.ctrlChannelCount, comBus,
+                  makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
 
       // --- 3. Simulation channel update. ---
       sim_update(machine.simChannel, machine.simChannelCount, comBus);

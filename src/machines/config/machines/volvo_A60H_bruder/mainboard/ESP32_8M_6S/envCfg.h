@@ -107,7 +107,9 @@ inline constexpr EnvCfg machine {
   .sigDev           = sigDevArray,
   .sigDevCount      = SIG_COUNT,
   .simChannel       = kSimChannels,
-  .simChannelCount  = SIM_CH_COUNT
+  .simChannelCount  = SIM_CH_COUNT,
+  .ctrlChannel      = kCtrlChannels,
+  .ctrlChannelCount = kCtrlChannelCount
 };
 
 
