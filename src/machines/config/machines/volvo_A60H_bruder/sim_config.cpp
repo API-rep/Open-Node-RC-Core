@@ -58,6 +58,10 @@ static constexpr SimRampCfg kTractionRamp {
     .neutralBand = 0u,
 };
 
+//  Traction ramp — RAM copy, mutated by sim_gear_fn on each gear change.
+//  dynCfg on the traction ramp proc points here; GearFsmState::rampDynCfg also points here.
+static SimRampCfg gTractionRampDyn = kTractionRamp;
+
 
 // =============================================================================
 // 2. BYPASS CONFIGURATIONS (per-channel — condCh + outCh)
@@ -120,7 +124,7 @@ static constexpr GearProcCfg kGearCfg {
 static SimRampState    gSteerRampState          {};
 static SimRampState    gDumpRampState           {};
 static SimRampState    gTractionRampState       {};
-static GearFsmState    gGearFsmState            {};
+static GearFsmState    gGearFsmState            { .rampDynCfg = &gTractionRampDyn };
 static ShiftDeltaState gThrottleShiftDeltaState {};
 
 
@@ -140,6 +144,7 @@ static SimProc kThrottleProcs[] = {
         .name  = "ramp",
         .fn    = sim_ramp_fn,
         .cfg   = &kTractionRamp,
+        .dynCfg = &gTractionRampDyn,
         .state = &gTractionRampState,
     },
     {

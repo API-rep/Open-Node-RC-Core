@@ -51,7 +51,7 @@ struct GearStepCfg {
     int16_t  upShift;           ///< RPM threshold to upshift from this gear (= maxRpm for last gear).
     int16_t  downShift;         ///< RPM threshold to downshift to this gear (coasting).
     int16_t  downShiftBraking;  ///< RPM threshold to downshift to this gear (braking — higher → earlier).
-    uint16_t rampTime;          ///< Inertia ramp duration (ms) — written to TRACTION_RAMP_BUS.
+    uint16_t rampTime;          ///< Inertia ramp duration (ms) — written to SimRampCfg::rampTimeMs via GearFsmState::rampDynCfg.
     int16_t  shiftDelta;        ///< RPM drop when upshifting INTO this gear (ignored for gear 1).
 };
 
@@ -184,8 +184,8 @@ namespace DriveStateBus {
  *   `sim_traction_update()` to `const SimTractionCfg*`.
  */
 struct SimTractionCfg {
-    uint16_t defaultRampTime;       ///< Fallback inertia ramp duration (ms) — used when TRACTION_RAMP_BUS is zero
-                                    ///<   (no sim_gear upstream, or first cycle before sim_gear has written).
+    uint16_t defaultRampTime;       ///< Fallback inertia ramp duration (ms) — used by legacy sim_traction when no
+                                    ///<   per-gear ramp source is connected.
     uint16_t brakeSteps;            ///< Deceleration step size (ComBus units per ramp tick).
     uint16_t accelSteps;            ///< Acceleration step size (ComBus units per ramp tick).
     uint16_t neutralBand;           ///< ComBus units around CbusNeutral treated as STAND.
@@ -235,6 +235,7 @@ struct GearSimCfg {
  * @details Assigned to `SimDev::state` (as `void*`); cast back inside
  *   `sim_gear_update()` and `gear_fsm_update()` to `GearFsmState*`.
  */
+struct SimRampCfg;   // Forward declaration — full definition in section 1 (active area).
 struct GearFsmState {
     int8_t   gear;         ///< Current virtual gear (1–N).
     int16_t  prevRpm;      ///< RPM seen last cycle — trend detection (rising = accel, falling = decel).
@@ -244,6 +245,10 @@ struct GearFsmState {
     bool     prevSubGearSet; ///< Previous state of SUBGEAR_SET — rising-edge detection.
     bool     prevSubGearUp;  ///< Previous state of SUBGEAR_UP  — rising-edge detection.
     bool     prevSubGearDn;  ///< Previous state of SUBGEAR_DOWN — rising-edge detection.
+
+    SimRampCfg* rampDynCfg = nullptr; ///< Optional link to the paired traction ramp dynCfg (RAM).
+                                      ///<   When non-null, sim_gear_fn writes rampTimeMs + sets resetRamp on
+                                      ///<   each gear change.  nullptr = no ramp link (gear-only channel).
 };
 
 
@@ -438,9 +443,9 @@ struct SimRampCfg {
                                             ///<   0 = symmetric (falls back to accelSteps).
     uint16_t brakeSteps;                    ///< ComBus units per step when moving toward neutral.
     uint16_t neutralBand;                   ///< ComBus units around CbusNeutral treated as zero (0 = no dead-band).
-    bool     rampTimeFromBus = false; ///< When true, override rampTimeMs with TRACTION_RAMP_BUS value each cycle.
-                                            ///<   TRACTION_RAMP_BUS is written by sim_gear_fn per active gear.
-                                            ///<   Falls back to rampTimeMs when the channel value is 0.
+    bool     resetRamp = false;       ///< Set by a preceding proc (e.g. sim_gear_fn) on gear change.
+                                            ///<   sim_ramp_fn resets the ramp timer and clears this flag.
+                                            ///<   currentPos is preserved — continuity of position across the reset.
 };
 
 /**

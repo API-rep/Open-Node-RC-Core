@@ -38,8 +38,7 @@ enum class AnalogComBusID : uint8_t {
   WIRE_END,
 
   // ---- Machine node local (never transmitted on wire) -----
-  TRACTION_RAMP_BUS = WIRE_END, ///< Per-gear inertia ramp time (ms) — written by sim_gear, read by sim_traction.
-  BRAKE_BUS,                    ///< Brake pedal input (L2, ComBus domain) — written by input_manager, read by sim_brake.
+  BRAKE_BUS = WIRE_END,         ///< Brake pedal input (L2, ComBus domain) — written by input_manager, read by sim_brake.
   SUBGEAR_BUS,                  ///< Active sub-gear index (1..N, 0 = inactive) — written by sim_gear.
   DUMP_RAMPED_BUS,              ///< Inertia-smoothed dump position — written by sim_ramp, read by DUMP_ACTUATOR.
   STEERING_RAMPED_BUS,          ///< Inertia-smoothed steering position — written by sim_ramp, read by STEERING.

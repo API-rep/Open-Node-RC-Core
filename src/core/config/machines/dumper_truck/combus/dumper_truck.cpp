@@ -19,7 +19,6 @@ AnalogComBus AnalogComBusArray[static_cast<uint8_t>(AnalogComBusID::CH_COUNT)] =
   { .infoName = "gear channel",            .owner = ChanOwner::MACHINE_SYSTEM }, ///< Virtual gear (1–3) from motion pipeline; direction in ESC_REVERSE.
   { .infoName = "drive state channel",     .owner = ChanOwner::MACHINE_SYSTEM }, ///< DriveState 3-bit bitmask — see DriveStateBus::encode() in simulation_struct.h.
   // --- Machine-node-local channels (WIRE_END .. CH_COUNT-1) — never transmitted ---
-  { .infoName = "traction ramp channel",   .owner = ChanOwner::MACHINE_SYSTEM }, ///< Per-gear inertia ramp time (ms) — written by sim_gear, read by sim_traction.
   { .infoName = "analog brake channel",    .owner = ChanOwner::MACHINE_INPUT  }, ///< L2 trigger input — written by input_manager, read by sim_brake.
   { .infoName = "sub-gear channel",        .owner = ChanOwner::MACHINE_SYSTEM }, ///< Active sub-gear index — written by sim_gear.
   { .infoName = "dump ramp channel",       .owner = ChanOwner::MACHINE_SYSTEM }, ///< Inertia-smoothed dump position — written by sim_ramp, read by DUMP_ACTUATOR.

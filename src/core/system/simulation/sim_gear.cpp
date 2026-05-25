@@ -4,7 +4,8 @@
  *
  * @details Pure ComBus processor — no hardware calls, no µs domain.
  *   Sets `value = gear` — written to outCh (= GEAR) by the channel mechanism.
- *   TRACTION_RAMP_BUS and SUBGEAR_BUS are still side-effect writes.
+ *   SUBGEAR_BUS is still a side-effect write.
+ *   Per-gear ramp time is written to `state->rampDynCfg` (RAM) when linked.
  *****************************************************************************/
 
 #include "sim_gear.h"
@@ -141,25 +142,32 @@ void sim_gear_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& /*claimed*/,
     combus_set_analog(bus, AnalogComBusID::SUBGEAR_BUS,
                       static_cast<uint16_t>(state->subGear), ChanOwner::MACHINE_SYSTEM);
 
-      // Per-gear ramp time (ms) → read by sim_traction.
+      // Per-gear ramp time — written directly to the paired ramp dynCfg (RAM).
+      // resetRamp flag triggers timer restart in sim_ramp_fn next cycle.
+    if (state->rampDynCfg != nullptr)
     {
         const bool hasSgRamp = (state->subGear > 0)
                             && (cfg->profile->subGear != nullptr);
+        uint16_t newRampTime;
         if (hasSgRamp)
         {
             const uint8_t si = static_cast<uint8_t>(
                 constrain(static_cast<int>(state->subGear) - 1,
                           0, static_cast<int>(cfg->profile->subGearCount) - 1));
-            combus_set_analog(bus, AnalogComBusID::TRACTION_RAMP_BUS,
-                              cfg->profile->subGear[si].rampTime, ChanOwner::MACHINE_SYSTEM);
+            newRampTime = cfg->profile->subGear[si].rampTime;
         }
         else
         {
             const uint8_t gi = static_cast<uint8_t>(
                 constrain(static_cast<int>(gear) - 1,
                           0, static_cast<int>(cfg->profile->gearCount) - 1));
-            combus_set_analog(bus, AnalogComBusID::TRACTION_RAMP_BUS,
-                              cfg->profile->gear[gi].rampTime, ChanOwner::MACHINE_SYSTEM);
+            newRampTime = cfg->profile->gear[gi].rampTime;
+        }
+
+          // Only signal a reset when the ramp time actually changes.
+        if (state->rampDynCfg->rampTimeMs != newRampTime) {
+            state->rampDynCfg->rampTimeMs = newRampTime;
+            state->rampDynCfg->resetRamp  = true;
         }
     }
 

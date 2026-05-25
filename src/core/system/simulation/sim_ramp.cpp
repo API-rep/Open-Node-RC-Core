@@ -15,7 +15,6 @@
 #include <Arduino.h>          // millis()
 
 #include "core/system/combus/combus_res.h"   // CbusNeutral
-#include "core/system/combus/combus_access.h" // AnalogComBusID (TRACTION_RAMP_BUS)
 
 
 // =============================================================================
@@ -51,13 +50,18 @@ void sim_ramp_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& /*claimed*/,
     }
 
     // --- 2. Ramp tick: advance currentPos one step when timer elapses --------
-    //  Per-gear override: read TRACTION_RAMP_BUS when rampTimeFromBus is set.
-    uint16_t rampTimeMs = cfg->rampTimeMs;
-    if (cfg->rampTimeFromBus) {
-        const uint16_t busRamp = bus.analogBus[
-            static_cast<uint8_t>(AnalogComBusID::TRACTION_RAMP_BUS)].value;
-        if (busRamp != 0u) rampTimeMs = busRamp;
+    //  Reset request: a preceding proc (e.g. sim_gear_fn) may set dynCfg->resetRamp
+    //  after updating rampTimeMs for the new gear.  We restart the timer without
+    //  touching currentPos so the position ramp continues from where it was.
+    if (proc->dynCfg != nullptr) {
+        SimRampCfg* dyn = static_cast<SimRampCfg*>(proc->dynCfg);
+        if (dyn->resetRamp) {
+            state->lastUpdateMs = millis();
+            if (state->lastUpdateMs == 0u) state->lastUpdateMs = 1u;
+            dyn->resetRamp = false;
+        }
     }
+    const uint16_t rampTimeMs = cfg->rampTimeMs;
 
     const uint32_t now = millis();
     if (now - state->lastUpdateMs >= rampTimeMs) {

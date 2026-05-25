@@ -40,7 +40,6 @@ static const char* aCh(AnalogComBusID id)
 		case AnalogComBusID::ESC_SPEED_BUS:        return "ESC_SPD";
 		case AnalogComBusID::GEAR:                 return "GEAR";
 		case AnalogComBusID::DRIVE_STATE_BUS:      return "DRV_ST";
-		case AnalogComBusID::TRACTION_RAMP_BUS:    return "T_RAMP";
 		case AnalogComBusID::BRAKE_BUS:            return "BRAKE";
 		case AnalogComBusID::SUBGEAR_BUS:          return "SUBGEAR";
 		case AnalogComBusID::DUMP_RAMPED_BUS:      return "DUMP_R";
