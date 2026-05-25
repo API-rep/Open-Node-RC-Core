@@ -33,12 +33,12 @@
  * @brief Speed-gate CtrlProcFn — suppresses engagement when speed > threshold.
  *
  * @param proc    Proc descriptor: `cfg → const CtrlSpeedGateCfg*`, `state → nullptr`.
- * @param value   Button state (in/out) — set to false when gate blocks engagement.
- * @param bus     Full ComBus — speed channel and active state channel are read here.
+ *                `secInCh[0]` = RPM_BUS (speed); `secInCh[1]` = DIRECT_DRIVE (active).
+ * @param value   Button state (in/out) as uint16_t (0 = off) — set to 0 when blocked.
  * @param claimed Unused.
  * @param owner   Unused.
  */
-void ctrl_speed_gate_fn(CtrlProc* proc, bool& value, ComBus& bus,
+void ctrl_speed_gate_fn(CtrlProc* proc, uint16_t& value,
                         bool& claimed, ChanOwner owner);
 
 // EOF ctrl_speed_gate.h

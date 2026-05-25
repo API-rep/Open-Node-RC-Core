@@ -67,26 +67,19 @@ static const char* dCh(DigitalComBusID id)
 	}
 }
 
-/// @brief Derive the primary input channel from a SimChannel (first proc optInCh, analog).
+/// @brief Derive the primary input channel from a SimChannel (ch.optInCh, analog).
 static AnalogComBusID simChanInCh(const SimChannel& ch)
 {
-	if (ch.simProcCount > 0u && ch.simProc != nullptr) {
-		const auto& opt = ch.simProc[0].optInCh;
-		if (opt.has_value() && std::holds_alternative<AnalogComBusID>(*opt))
-			return std::get<AnalogComBusID>(*opt);
-	}
+	if (ch.optInCh.has_value() && std::holds_alternative<AnalogComBusID>(*ch.optInCh))
+		return std::get<AnalogComBusID>(*ch.optInCh);
 	return static_cast<AnalogComBusID>(0u);
 }
 
-/// @brief Derive the primary output channel from a SimChannel (last proc optOutCh, analog).
+/// @brief Derive the primary output channel from a SimChannel (ch.optOutCh, analog).
 static AnalogComBusID simChanOutCh(const SimChannel& ch)
 {
-	if (ch.simProcCount > 0u && ch.simProc != nullptr) {
-		const SimProc& last = ch.simProc[ch.simProcCount - 1u];
-		const auto& opt = last.optOutCh;
-		if (opt.has_value() && std::holds_alternative<AnalogComBusID>(*opt))
-			return std::get<AnalogComBusID>(*opt);
-	}
+	if (ch.optOutCh.has_value() && std::holds_alternative<AnalogComBusID>(*ch.optOutCh))
+		return std::get<AnalogComBusID>(*ch.optOutCh);
 	return static_cast<AnalogComBusID>(0u);
 }
 
@@ -109,11 +102,13 @@ static void render_proc_row(uint8_t idx, const SimProc* proc)
 	}
 	const char* pname = proc->name ? proc->name : "?";
 
-	if (strcmp(pname, "bypass") == 0 && proc->cfg) {
-		const SimBypassCfg* cfg    = static_cast<const SimBypassCfg*>(proc->cfg);
-		const bool          active = s_bus->digitalBus[static_cast<uint8_t>(cfg->condCh)].value;
+	if (strcmp(pname, "bypass") == 0) {
+		DigitalComBusID condCh = DigitalComBusID{};
+		if (proc->secInCh[0].has_value() && std::holds_alternative<DigitalComBusID>(*proc->secInCh[0]))
+			condCh = std::get<DigitalComBusID>(*proc->secInCh[0]);
+		const bool active = s_bus->digitalBus[static_cast<uint8_t>(condCh)].value;
 		dLine("  Proc %u : bypass    condCh: %-10s  active: %-3s",
-		      (unsigned)idx, dCh(cfg->condCh), active ? "YES" : "no ");
+		      (unsigned)idx, dCh(condCh), active ? "YES" : "no ");
 	}
 	else if (strcmp(pname, "ramp") == 0 && proc->cfg) {
 		const SimRampCfg*   cfg = static_cast<const SimRampCfg*>(proc->cfg);
@@ -216,25 +211,25 @@ static void render_sim_view()
 			snprintf(outDisp, sizeof(outDisp), "%+6d%%", (int)outPct);
 		}
 
-		//  Bypass state: first proc named "bypass" with condCh HIGH.
+		//  Bypass state: first proc named "bypass" with secInCh[0] HIGH.
 		bool chBypass = false;
-		if (ch.simProcCount > 0u && ch.simProc != nullptr
-		    && ch.simProc[0].name != nullptr
-		    && strcmp(ch.simProc[0].name, "bypass") == 0
-		    && ch.simProc[0].cfg != nullptr)
+		if (ch.procCount > 0u && ch.procs != nullptr
+		    && ch.procs[0].name != nullptr
+		    && strcmp(ch.procs[0].name, "bypass") == 0)
 		{
-			const SimBypassCfg* bcfg = static_cast<const SimBypassCfg*>(ch.simProc[0].cfg);
-			chBypass = s_bus->digitalBus[static_cast<uint8_t>(bcfg->condCh)].value;
+			const auto& cond = ch.procs[0].secInCh[0];
+			if (cond.has_value() && std::holds_alternative<DigitalComBusID>(*cond))
+				chBypass = s_bus->digitalBus[static_cast<uint8_t>(std::get<DigitalComBusID>(*cond))].value;
 		}
 
 		//  Proc names — '+'-separated, up to 4 entries, truncated at 26 chars.
 		char procNames[28] = "";
-		if (ch.simProcCount == 0u || ch.simProc == nullptr) {
+		if (ch.procCount == 0u || ch.procs == nullptr) {
 			snprintf(procNames, sizeof(procNames), "(none)");
 		} else {
-			for (uint8_t p = 0u; p < ch.simProcCount && p < 4u; ++p) {
+			for (uint8_t p = 0u; p < ch.procCount && p < 4u; ++p) {
 				if (p > 0u) strncat(procNames, "+", sizeof(procNames) - strlen(procNames) - 1u);
-				const char* pn = ch.simProc[p].name ? ch.simProc[p].name : "?";
+				const char* pn = ch.procs[p].name ? ch.procs[p].name : "?";
 				strncat(procNames, pn, sizeof(procNames) - strlen(procNames) - 1u);
 			}
 		}
@@ -272,13 +267,13 @@ static void render_channel_detail(uint8_t idx)
 
 	//  Bypass state for this channel.
 	bool chBypass = false;
-	if (ch.simProcCount > 0u && ch.simProc != nullptr
-	    && ch.simProc[0].name != nullptr
-	    && strcmp(ch.simProc[0].name, "bypass") == 0
-	    && ch.simProc[0].cfg != nullptr)
+	if (ch.procCount > 0u && ch.procs != nullptr
+	    && ch.procs[0].name != nullptr
+	    && strcmp(ch.procs[0].name, "bypass") == 0)
 	{
-		const SimBypassCfg* bcfg = static_cast<const SimBypassCfg*>(ch.simProc[0].cfg);
-		chBypass = s_bus->digitalBus[static_cast<uint8_t>(bcfg->condCh)].value;
+		const auto& cond = ch.procs[0].secInCh[0];
+		if (cond.has_value() && std::holds_alternative<DigitalComBusID>(*cond))
+			chBypass = s_bus->digitalBus[static_cast<uint8_t>(std::get<DigitalComBusID>(*cond))].value;
 	}
 
 	char upt[12];
@@ -305,8 +300,8 @@ static void render_channel_detail(uint8_t idx)
 	dMidLabel("config");
 	//  Proc rows — always kMaxProcRows lines regardless of proc count (uniform height).
 	for (uint8_t p = 0u; p < kMaxProcRows; ++p) {
-		const SimProc* proc = (ch.simProc != nullptr && p < ch.simProcCount)
-		                      ? &ch.simProc[p]
+		const SimProc* proc = (ch.procs != nullptr && p < ch.procCount)
+		                      ? &ch.procs[p]
 		                      : nullptr;
 		render_proc_row(p, proc);
 	}

@@ -4,24 +4,26 @@
  *
  * @details `sim_bypass_fn()` implements a bypass gate for a SimChannel pipeline.
  *
- *   When `SimBypassCfg::condCh` is HIGH, `value` is written to `outCh` and
- *   `claimed` is set to `true`, skipping all downstream processors.
- *   When `condCh` is LOW, the function is always a no-op.
+ *   When `proc->secInValue[0]` (digital) is nonzero, `claimed` is set to
+ *   `true`, skipping all downstream processors.  The runner always post-writes
+ *   `value` to `ch.optOutCh`, so the raw input passes through to the output.
+ *   When the condition is false, the function is a no-op.
  *
+ *   No config struct needed: `SimProc::cfg` must be `nullptr`.
  *   No runtime state: `SimProc::state` must be `nullptr`.
  *
  *   Typical declaration (in vehicle sim_config.cpp):
  *   @code
- *     static constexpr SimBypassCfg kMyBypass {
- *         .condCh = DigitalComBusID::DIRECT_DRIVE,
- *         .outCh  = AnalogComBusID::RPM_BUS,
- *     };
+ *     { .name="bypass",
+ *       .secInCh = { DigitalComBusID::DIRECT_DRIVE },
+ *       .fn      = sim_bypass_fn,
+ *       .cfg     = nullptr,
+ *       .state   = nullptr },
  *   @endcode
  *****************************************************************************/
 #pragma once
 
-#include <struct/simulation_struct.h>   // SimProc, SimBypassCfg, SimProcFn
-#include <struct/combus_struct.h>       // ComBus
+#include <struct/simulation_struct.h>  // SimProc, CbProcFn
 
 
 // =============================================================================
@@ -31,17 +33,16 @@
 /**
  * @brief Conditional bypass gate — assigned to `SimProc::fn`.
  *
- * @details Matches the `SimProcFn` signature.
- *   Sets `claimed = true` when `cfg->condCh` digital channel is HIGH,
+ * @details Matches the `CbProcFn` (`SimProcFn`) signature.
+ *   Sets `claimed = true` when `proc->secInValue[0]` is nonzero,
  *   causing all downstream processors to be skipped this cycle.
- *   Does not modify `value` — raw inCh value passes through to outCh.
+ *   Does not modify `value` — raw optInCh value passes through to optOutCh.
  *
- * @param proc    SimProc descriptor — `cfg` cast to `const SimBypassCfg*`.
- *                `state` is unused (must be nullptr).
- * @param value   Not modified — raw inCh value passes through to outCh.
- * @param claimed Set to `true` when condCh is HIGH; unchanged otherwise.
- * @param bus     Read-only — reads `digitalBus[condCh].value`.
+ * @param proc    CbProc descriptor — `cfg` and `state` are unused (nullptr).
+ *                `secInCh[0]` = condition digital channel (set in config array).
+ * @param value   Not modified — runner always writes to optOutCh after chain.
+ * @param claimed Set to `true` when secInValue[0] != 0; unchanged otherwise.
  */
-void sim_bypass_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed, ChanOwner chanOwner);
+void sim_bypass_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chanOwner);
 
 // EOF sim_bypass.h

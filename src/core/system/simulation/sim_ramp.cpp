@@ -22,7 +22,7 @@
 // =============================================================================
 
 /** @brief Asymmetric inertia ramp — see sim_ramp.h for full contract. */
-void sim_ramp_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& /*claimed*/, ChanOwner /*chanOwner*/)
+void sim_ramp_fn(SimProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chanOwner*/)
 {
     SimRampState*     state = static_cast<SimRampState*>(proc->state);
     // dynCfg override: a preceding proc (e.g. sim_gear_fn) may write proc->dynCfg

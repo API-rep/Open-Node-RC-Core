@@ -5,65 +5,68 @@
  * @details Defines the CtrlChannel array consumed by ctrl_update() in the
  *   machine main loop.
  *
- *   Channel pipelines:
- *     CTRL_DIRECT_DRIVE : read(DIRECT_DRIVE_BTN) → speed_gate(RPM_BUS,≤200) → toggle → write(DIRECT_DRIVE)
+ *   Channel pipelines (optInCh → procs → optOutCh):
+ *     CTRL_DIRECT_DRIVE : DIRECT_DRIVE_BTN → speed_gate(RPM_BUS,DIRECT_DRIVE), toggle → DIRECT_DRIVE
  *****************************************************************************/
 
 #include "ctrl_config.h"
 
-#include <struct/ctrl_struct.h>                       // CtrlChannel, CtrlProc, cfg/state types
+#include <struct/ctrl_struct.h>                       // CtrlChannel, CtrlProc, CtrlSpeedGateCfg, CtrlToggleState
+#include <struct/combus_struct.h>                     // makeChanOwner, ComBusOwner
 #include <core/config/machines/combus_types.h>        // DigitalComBusID, AnalogComBusID
-#include <core/system/simulation/ctrl_io.h>           // ctrl_read_fn, ctrl_write_fn
 #include <core/system/simulation/ctrl_speed_gate.h>   // ctrl_speed_gate_fn
 #include <core/system/simulation/ctrl_toggle.h>       // ctrl_toggle_fn
 
 
 // =============================================================================
-// 1. I/O CONFIGS
-// =============================================================================
-
-static constexpr CtrlReadCfg  kDirectDriveReadCfg  { .inCh  = DigitalComBusID::DIRECT_DRIVE_BTN };
-static constexpr CtrlWriteCfg kDirectDriveWriteCfg { .outCh = DigitalComBusID::DIRECT_DRIVE };
-
-
-// =============================================================================
-// 2. SPEED GATE CONFIG
+// 1. SPEED GATE CONFIG
 // =============================================================================
 
 //  Engage guard: ~10 % of kHeavy3 maxRpm scale (0..2100).
-//  Bypass when DIRECT_DRIVE is already active (disengagement always allowed).
+//  secInCh[0] = RPM_BUS (speed); secInCh[1] = DIRECT_DRIVE (currently active).
 static constexpr CtrlSpeedGateCfg kDirectDriveGateCfg {
-    .speedCh      = AnalogComBusID::RPM_BUS,
     .maxEngageSpd = 200u,
-    .activeCh     = DigitalComBusID::DIRECT_DRIVE,
 };
 
 
 // =============================================================================
-// 3. TOGGLE STATE
+// 2. TOGGLE STATE
 // =============================================================================
 
 static CtrlToggleState gDirectDriveToggleState {};
 
 
 // =============================================================================
-// 4. PROC ARRAYS
+// 3. PROC ARRAYS
 // =============================================================================
 
 static CtrlProc kDirectDriveProcs[] = {
-    { "read",       ctrl_read_fn,       &kDirectDriveReadCfg,  nullptr                    },
-    { "speed_gate", ctrl_speed_gate_fn, &kDirectDriveGateCfg,  nullptr                    },
-    { "toggle",     ctrl_toggle_fn,     nullptr,               &gDirectDriveToggleState   },
-    { "write",      ctrl_write_fn,      &kDirectDriveWriteCfg, nullptr                    },
+    { .name      = "speed_gate",
+      .secInCh   = { AnalogComBusID::RPM_BUS, DigitalComBusID::DIRECT_DRIVE },
+      .fn        = ctrl_speed_gate_fn,
+      .cfg       = &kDirectDriveGateCfg,
+      .state     = nullptr,
+    },
+    { .name  = "toggle",
+      .fn    = ctrl_toggle_fn,
+      .cfg   = nullptr,
+      .state = &gDirectDriveToggleState,
+    },
 };
 
 
 // =============================================================================
-// 5. CHANNEL ARRAY
+// 4. CHANNEL ARRAY
 // =============================================================================
 
 CtrlChannel kCtrlChannels[] = {
-    { "direct_drive", kDirectDriveProcs, 4u },
+    { .name      = "direct_drive",
+      .optInCh   = DigitalComBusID::DIRECT_DRIVE_BTN,
+      .optOutCh  = DigitalComBusID::DIRECT_DRIVE,
+      .procs     = kDirectDriveProcs,
+      .procCount = static_cast<uint8_t>(std::size(kDirectDriveProcs)),
+      .chanOwner = makeChanOwner(ComBusOwner::GRP_MACHINE, ComBusOwner::PROC_SYSTEM),
+    },
 };
 
 const uint8_t kCtrlChannelCount = sizeof(kCtrlChannels) / sizeof(CtrlChannel);

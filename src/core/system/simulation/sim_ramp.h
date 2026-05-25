@@ -49,6 +49,6 @@
  * @param claimed Not modified — downstream procs continue after this one.
  * @param bus     Not used — ramp is self-contained (reads/writes through `value` only).
  */
-void sim_ramp_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed, ChanOwner chanOwner);
+void sim_ramp_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chanOwner);
 
 // EOF sim_ramp.h

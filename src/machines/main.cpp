@@ -235,8 +235,7 @@ void loop() {
       }
 
       // --- 2. Ctrl channel update: raw buttons → processed digital states.
-      ctrl_update(machine.ctrlChannel, machine.ctrlChannelCount, comBus,
-                  makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
+      ctrl_update(machine.ctrlChannel, machine.ctrlChannelCount, comBus);
 
       // --- 3. Simulation channel update. ---
       sim_update(machine.simChannel, machine.simChannelCount, comBus);

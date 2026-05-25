@@ -29,7 +29,7 @@
  * @param claimed Unused.
  * @param owner   Unused.
  */
-void ctrl_toggle_fn(CtrlProc* proc, bool& value, ComBus& bus,
+void ctrl_toggle_fn(CtrlProc* proc, uint16_t& value,
                     bool& claimed, ChanOwner owner);
 
 // EOF ctrl_toggle.h

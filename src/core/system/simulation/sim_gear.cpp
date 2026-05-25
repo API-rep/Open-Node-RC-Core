@@ -4,14 +4,13 @@
  *
  * @details Pure ComBus processor — no hardware calls, no µs domain.
  *   Sets `value = gear` — written to outCh (= GEAR) by the channel mechanism.
- *   SUBGEAR_BUS is still a side-effect write.
+ *   Sub-gear button handling is now in `sim_subgear_btn_fn` (separate proc).
  *   Per-gear ramp time is written to `state->rampDynCfg` (RAM) when linked.
  *****************************************************************************/
 
 #include "sim_gear.h"
 
 #include "core/system/combus/combus_res.h"    // CbusNeutral
-#include "core/system/combus/combus_access.h" // combus_set_analog
 
 #include <Arduino.h>   // millis(), constrain()
 
@@ -81,7 +80,7 @@ int8_t sim_gear_fsm_update(GearFsmState*           state,
 // =============================================================================
 
 /** @brief Gear FSM side-effect proc — see sim_gear.h for full contract. */
-void sim_gear_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& /*claimed*/, ChanOwner /*chanOwner*/)
+void sim_gear_fn(SimProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chanOwner*/)
 {
     const GearProcCfg* cfg   = static_cast<const GearProcCfg*>(proc->cfg);
     GearFsmState*      state = static_cast<GearFsmState*>(proc->state);
@@ -92,57 +91,21 @@ void sim_gear_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& /*claimed*/,
     }
 
     // --- 1. RPM magnitude from RPM_BUS + DRIVE_STATE_BUS gate ---------------
-    //    `value` is seeded by SimChannel from inCh = RPM_BUS (unsigned, 0..maxRpm).
-    //    Gate to 0 for reverse / standing states — forces gear 1 when not driving
-    //    forward.  DriveStateBus::decode() returns: +2=kDriveFwd, +1=kBrakeFwd,
-    //    0=kStanding, -1=kDriveRev, -2=kBrakeRev.
-    const int8_t  ds  = DriveStateBus::decode(
-        bus.analogBus[static_cast<uint8_t>(AnalogComBusID::DRIVE_STATE_BUS)].value);
+    //    secInCh[0] = DRIVE_STATE_BUS (analog). Runner pre-reads into secInValue[0].
+    //    secInCh[1] = SUBGEAR_BUS (analog). Runner pre-reads into secInValue[1].
+    const int8_t  ds  = DriveStateBus::decode(proc->secInValue[0]);
     const int16_t rpm = (ds > 0) ? static_cast<int16_t>(value) : int16_t(0);
 
     // --- 2. Run gear FSM ------------------------------------------------------
     int8_t gear = sim_gear_fsm_update(state, *cfg->profile, rpm);
 
-    // --- 3. Sub-gear FSM (only when subGearCount > 0) ------------------------
-    if (cfg->profile->subGearCount > 0u)
-    {
-        const bool setNow = bus.digitalBus[static_cast<uint8_t>(DigitalComBusID::SUBGEAR_SET_BTN)].value;
-        const bool upNow  = bus.digitalBus[static_cast<uint8_t>(DigitalComBusID::SUBGEAR_UP_BTN)].value;
-        const bool dnNow  = bus.digitalBus[static_cast<uint8_t>(DigitalComBusID::SUBGEAR_DOWN_BTN)].value;
+    // --- 3. Sub-gear lock (handled by sim_subgear_btn_fn upstream) ----------
+    //    Lock gear at 1 while sub-gear is active.
+    const int8_t subGear = static_cast<int8_t>(proc->secInValue[1]);
+    if (subGear > 0 && gear > 1)
+        gear = 1;
 
-          // Toggle sub-gear mode on rising edge of SUBGEAR_SET.
-        if (setNow && !state->prevSubGearSet) {
-            state->subGear = (state->subGear == 0) ? 1 : 0;
-        }
-
-          // Step up on rising edge: higher index = faster crawl.
-        if (state->subGear > 0 && upNow && !state->prevSubGearUp) {
-            if (state->subGear < static_cast<int8_t>(cfg->profile->subGearCount))
-                state->subGear++;
-        }
-
-          // Step down on rising edge: lower index = slower crawl.
-        if (state->subGear > 0 && dnNow && !state->prevSubGearDn) {
-            if (state->subGear > 1)
-                state->subGear--;
-        }
-
-          // Lock gear at 1 while sub-gear is active.
-        if (state->subGear > 0 && gear > 1)
-            gear = 1;
-
-
-        state->prevSubGearSet = setNow;
-        state->prevSubGearUp  = upNow;
-        state->prevSubGearDn  = dnNow;
-    }
-
-    // --- 4. Side-effect writes -----------------------------------------------
-      // Sub-gear index (0 = inactive, 1..N = active).
-    combus_set_analog(bus, AnalogComBusID::SUBGEAR_BUS,
-                      static_cast<uint16_t>(state->subGear), ChanOwner::MACHINE_SYSTEM);
-
-    // --- 5. Output — gear integer becomes the channel value -----------------
+    // --- 4. Output — gear integer becomes the channel value -----------------
     value = static_cast<uint16_t>(gear);
 }
 
@@ -152,17 +115,16 @@ void sim_gear_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& /*claimed*/,
 // =============================================================================
 
 /** @brief Shift-delta proc — subtracts shiftDelta RPM on upshift. */
-void sim_apply_ratio_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& /*claimed*/, ChanOwner /*chanOwner*/)
+void sim_apply_ratio_fn(SimProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chanOwner*/)
 {
-    // Direct drive = inertia bypassed — skip RPM dip simulation.
-    if (bus.digitalBus[static_cast<uint8_t>(DigitalComBusID::DIRECT_DRIVE)].value)
-        return;
+    // secInCh[0] = DIRECT_DRIVE (digital). secInCh[1] = GEAR (analog).
+    if (proc->secInValue[0] != 0u)
+        return;  // Direct drive — skip RPM dip simulation.
 
     const GearProcCfg* cfg   = static_cast<const GearProcCfg*>(proc->cfg);
     ShiftDeltaState*   state = static_cast<ShiftDeltaState*>(proc->state);
 
-    const int8_t curGear = static_cast<int8_t>(
-        bus.analogBus[static_cast<uint8_t>(AnalogComBusID::GEAR)].value);
+    const int8_t curGear = static_cast<int8_t>(proc->secInValue[1]);
 
     // Upshift detected: subtract the entry delta of the new gear.
     if (curGear > state->prevGear && curGear >= 2) {
@@ -180,9 +142,10 @@ void sim_apply_ratio_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& /*cla
 // =============================================================================
 
 /** @brief Gear direct-drive bypass — see sim_gear.h for contract. */
-void sim_gear_bypass_fn(SimProc* /*proc*/, uint16_t& value, ComBus& bus, bool& claimed, ChanOwner /*chanOwner*/)
+void sim_gear_bypass_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner /*chanOwner*/)
 {
-    if (bus.digitalBus[static_cast<uint8_t>(DigitalComBusID::DIRECT_DRIVE)].value) {
+    // secInCh[0] = DIRECT_DRIVE (digital). Runner pre-reads into secInValue[0].
+    if (proc->secInValue[0] != 0u) {
         value   = 1u;
         claimed = true;
     }
@@ -194,23 +157,18 @@ void sim_gear_bypass_fn(SimProc* /*proc*/, uint16_t& value, ComBus& bus, bool& c
 // =============================================================================
 
 /** @brief RPM → ESC speed proc — see sim_gear.h for full contract. */
-void sim_rpm_to_speed_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& /*claimed*/, ChanOwner /*chanOwner*/)
+void sim_rpm_to_speed_fn(SimProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chanOwner*/)
 {
-    // RPM_BUS always carries post-scale RPM [0..maxRpm].
-    // GEAR = 1 when DIRECT_DRIVE (bypass locked gear 1, cumDelta = 0).
-    // GEAR >= 1: gear-accumulation formula.
-
+    // secInCh[0] = DRIVE_STATE_BUS (analog). secInCh[1] = GEAR (analog).
     const GearProcCfg*      cfg     = static_cast<const GearProcCfg*>(proc->cfg);
     const GearShiftProfile* profile = cfg->profile;
     const uint8_t           nGears  = profile->gearCount;
 
-    // --- Direction from DRIVE_STATE_BUS --------------------------------------
-    const int8_t ds = DriveStateBus::decode(
-        bus.analogBus[static_cast<uint8_t>(AnalogComBusID::DRIVE_STATE_BUS)].value);
+    // --- Direction from secInValue[0] (DRIVE_STATE_BUS) ----------------------
+    const int8_t ds = DriveStateBus::decode(proc->secInValue[0]);
 
-    // --- Resolve current gear ------------------------------------------------
-    const int8_t rawGear = static_cast<int8_t>(
-        bus.analogBus[static_cast<uint8_t>(AnalogComBusID::GEAR)].value);
+    // --- Resolve current gear from secInValue[1] (GEAR) ----------------------
+    const int8_t rawGear = static_cast<int8_t>(proc->secInValue[1]);
 
     // --- Gear-accumulation formula -------------------------------------------
     uint16_t maxAbsRpm = profile->gear[nGears - 1u].upShift;
@@ -246,7 +204,7 @@ void sim_rpm_to_speed_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& /*cl
 // =============================================================================
 
 /** @brief Gear→ramp bridge — see sim_gear.h for contract. */
-void sim_gear_ramp_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& /*claimed*/, ChanOwner /*chanOwner*/)
+void sim_gear_ramp_fn(SimProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chanOwner*/)
 {
     if (proc->dynCfg == nullptr) return;  // No ramp linked — passthrough.
 
@@ -254,9 +212,9 @@ void sim_gear_ramp_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& /*claim
     SimRampCfg*        dyn = static_cast<SimRampCfg*>(proc->dynCfg);
 
     // --- Resolve gear and sub-gear ------------------------------------------
+    //  secInCh[0] = SUBGEAR_BUS (analog). Runner pre-reads into secInValue[0].
     const int8_t  gear       = static_cast<int8_t>(value);
-    const uint8_t subGearIdx = static_cast<uint8_t>(
-        bus.analogBus[static_cast<uint8_t>(AnalogComBusID::SUBGEAR_BUS)].value);
+    const uint8_t subGearIdx = static_cast<uint8_t>(proc->secInValue[0]);
 
     // --- Look up new ramp time ----------------------------------------------
     uint16_t newRampTime;

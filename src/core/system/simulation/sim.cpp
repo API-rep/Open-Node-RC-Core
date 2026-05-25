@@ -4,7 +4,43 @@
  *****************************************************************************/
 
 #include "sim.h"
-#include "sim_io.h"                              // sim_read_fn, sim_write_fn (for helpers)
+
+#include <struct/combus_struct.h>              // ComBus
+#include <core/system/combus/combus_access.h>  // combus_set_analog, combus_set_digital
+
+
+// =============================================================================
+// 0. INTERNAL HELPERS
+// =============================================================================
+
+using ChanOpt = std::optional<std::variant<AnalogComBusID, DigitalComBusID>>;
+
+/** @brief Read a channel variant from the bus into a uint16_t.
+ *
+ *  @param isDrivedGuard  When true, digital channels return 0 unless isDrived.
+ *                        Use true for primary inputs, false for secondary inputs.
+ */
+static uint16_t cbRead(const ComBus& bus, const ChanOpt& ch, bool isDrivedGuard)
+{
+    if (!ch.has_value()) return 0u;
+    if (std::holds_alternative<AnalogComBusID>(*ch)) {
+        return bus.analogBus[static_cast<uint8_t>(std::get<AnalogComBusID>(*ch))].value;
+    }
+    const uint8_t idx = static_cast<uint8_t>(std::get<DigitalComBusID>(*ch));
+    if (isDrivedGuard && !bus.digitalBus[idx].isDrived) return 0u;
+    return bus.digitalBus[idx].value ? 1u : 0u;
+}
+
+/** @brief Write a uint16_t value to a channel variant on the bus. */
+static void cbWrite(ComBus& bus, const ChanOpt& ch, uint16_t value, ChanOwner owner)
+{
+    if (!ch.has_value()) return;
+    if (std::holds_alternative<AnalogComBusID>(*ch)) {
+        combus_set_analog(bus, std::get<AnalogComBusID>(*ch), value, owner);
+    } else {
+        combus_set_digital(bus, std::get<DigitalComBusID>(*ch), value != 0u, owner);
+    }
+}
 
 
 // =============================================================================
@@ -15,9 +51,7 @@
  * @brief Placeholder lifecycle init for the SimChannel array.
  *
  * @details Kept as a symmetric counterpart to dc_dev_init() / srv_dev_init().
- *   Each SimProcFn self-inits on first update call via zero-state detection
- *   (e.g. SimRampState::currentPos == 0 → snap to CbusNeutral).
- *   No explicit pre-flight work is needed at this stage.
+ *   Each SimProcFn self-inits on first update call via zero-state detection.
  */
 void sim_init(SimChannel* /*channels*/, uint8_t /*count*/)
 {
@@ -26,42 +60,50 @@ void sim_init(SimChannel* /*channels*/, uint8_t /*count*/)
 
 
 /**
- * @brief Process a single SimChannel — dispatch processors, owned by sim_read_fn / sim_write_fn.
+ * @brief Process a single SimChannel — pre-read, dispatch processors, post-write.
  *
  * @details Sequence:
- *   1. Iterates `ch.simProc[]`; skips entries where `fn == nullptr` (passthrough).
- *      Stops early when a processor sets `claimed = true`.
- *   2. `sim_read_fn` (first proc) seeds `value` from the input channel.
- *   3. `sim_write_fn` (last proc) writes `value` to the output channel.
- *   4. `sim_bypass_fn` writes directly to its `outCh` and sets `claimed = true`,
- *      skipping all remaining procs including `sim_write_fn`.
+ *   1. Pre-read  : runner reads `ch.optInCh` → seeds `value`.
+ *   2. Proc loop : for each proc (stops on `claimed = true`):
+ *        a. Injects secondary inputs: `proc.secInValue[i]` ← bus[proc.secInCh[i]].
+ *        b. Calls `proc.fn(&proc, value, claimed, ch.chanOwner)`.
+ *        c. Commits secondary output: bus[proc.optSecOutCh] ← proc.secOutValue.
+ *   3. Post-write: runner writes `value` → `ch.optOutCh`.
+ *      Always executes — `claimed` only aborts the proc chain, not the write.
  *
- *   `ch.chanOwner` is forwarded to every `SimProcFn` call so that
- *   `sim_write_fn` and `sim_bypass_fn` can identify the writer.
- *
- * @param ch   Channel descriptor (simProc array, chanOwner).
+ * @param ch   Channel descriptor (procs, chanOwner, optInCh, optOutCh).
  * @param bus  Shared ComBus for this cycle.
  */
 void sim_channel_update(SimChannel& ch, ComBus& bus)
 {
-    // --- Run processors in order, stop when claimed --------------------------
-    uint16_t value   = 0u;
+    // --- 1. Pre-read primary input -------------------------------------------
+    uint16_t value   = cbRead(bus, ch.optInCh, /*isDrivedGuard=*/true);
     bool     claimed = false;
-    for (uint8_t p = 0; p < ch.simProcCount && !claimed; ++p) {
-        SimProc& proc = ch.simProc[p];
-        if (proc.fn != nullptr) {
-            proc.fn(&proc, value, bus, claimed, ch.chanOwner);
+
+    // --- 2. Process chain ----------------------------------------------------
+    for (uint8_t p = 0; p < ch.procCount && !claimed; ++p) {
+        CbProc& proc = ch.procs[p];
+        if (proc.fn == nullptr) continue;
+
+        //  a. Inject secondary inputs (no isDrived guard — internal channels).
+        for (uint8_t i = 0u; i < 3u; ++i) {
+            proc.secInValue[i] = cbRead(bus, proc.secInCh[i], /*isDrivedGuard=*/false);
         }
+
+        //  b. Call proc fn (no bus access inside fn).
+        proc.fn(&proc, value, claimed, ch.chanOwner);
+
+        //  c. Commit secondary output.
+        cbWrite(bus, proc.optSecOutCh, proc.secOutValue, ch.chanOwner);
     }
-    // No seed, no write here — sim_read_fn / sim_write_fn (or sim_bypass_fn) own these.
+
+    // --- 3. Post-write primary output (always) -------------------------------
+    cbWrite(bus, ch.optOutCh, value, ch.chanOwner);
 }
 
 
 /**
  * @brief Update all SimChannels — iterates the array and calls sim_channel_update().
- *
- * @details Called once per loop cycle in the RUNNING runlevel, after input_update().
- *   A nullptr array with count == 0 is a valid no-op configuration.
  *
  * @param channels  Channel array (may be nullptr when count == 0).
  * @param count     Number of channels.
@@ -72,35 +114,6 @@ void sim_update(SimChannel* channels, uint8_t count, ComBus& bus)
     for (uint8_t p = 0; p < count; ++p) {
         sim_channel_update(channels[p], bus);
     }
-}
-
-
-// =============================================================================
-// 2. DASHBOARD HELPERS  (scan proc chain — debug use only)
-// =============================================================================
-
-/** @brief Returns the source channel of the first sim_read_fn proc. */
-AnalogComBusID sim_channel_read_ch(const SimChannel& ch)
-{
-    for (uint8_t p = 0; p < ch.simProcCount; ++p) {
-        const auto& opt = ch.simProc[p].optInCh;
-        if (ch.simProc[p].fn == sim_read_fn && opt.has_value()
-            && std::holds_alternative<AnalogComBusID>(*opt))
-            return std::get<AnalogComBusID>(*opt);
-    }
-    return AnalogComBusID{};
-}
-
-/** @brief Returns the target channel of the last sim_write_fn proc. */
-AnalogComBusID sim_channel_write_ch(const SimChannel& ch)
-{
-    for (uint8_t p = 0; p < ch.simProcCount; ++p) {
-        const auto& opt = ch.simProc[p].optOutCh;
-        if (ch.simProc[p].fn == sim_write_fn && opt.has_value()
-            && std::holds_alternative<AnalogComBusID>(*opt))
-            return std::get<AnalogComBusID>(*opt);
-    }
-    return AnalogComBusID{};
 }
 
 // EOF sim.cpp

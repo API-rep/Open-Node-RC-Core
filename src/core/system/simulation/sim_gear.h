@@ -30,7 +30,6 @@
 #pragma once
 
 #include <struct/simulation_struct.h>   // SimProc, GearProcCfg, ShiftDeltaState, GearFsmState, GearShiftProfile
-#include <struct/combus_struct.h>       // ComBus
 
 
 // =============================================================================
@@ -72,130 +71,73 @@ int8_t sim_gear_fsm_update(GearFsmState*           state,
 // =============================================================================
 
 /**
- * @brief Gear FSM SimProc — reads RPM_BUS magnitude, runs the FSM, sets `value = gear`.
+ * @brief Gear FSM SimProc — reads RPM magnitude, runs the FSM, sets `value = gear`.
  *
- * @details Matches the `SimProcFn` signature.  Self-inits on first call when
- *   `state->gear == 0` (zero-init sentinel).
+ * @details secInCh[0] = DRIVE_STATE_BUS (analog): gates RPM for reverse/standing.
+ *          secInCh[1] = SUBGEAR_BUS (analog): suppresses upshift when active.
  *
- *   Actions per cycle:
- *   - Reads `value` (= RPM_BUS magnitude, seeded by SimChannel from inCh).
- *   - Gates RPM to 0 when `DRIVE_STATE_BUS` indicates reverse or standing
- *     (forces gear 1 — no conversion from ComBus position needed).
- *   - Runs the N-gear FSM (upshift / downshift / sub-gear toggle and step).
- *   - Sets `value = gear` — written to outCh (= GEAR) by the channel mechanism.
- *   - Writes sub-gear index (0 = inactive) to `SUBGEAR_BUS` (side effect).
+ *   Sub-gear button handling is now in `sim_subgear_btn_fn` (separate proc,
+ *   placed BEFORE this one in the gear channel).  This proc only reads the
+ *   current sub-gear index to suppress upshifts.
  *
- *   Does NOT set `claimed` — not applicable when used as sole proc.
- *   Ramp-time update is handled by the following `sim_gear_ramp_fn` proc.
+ *   Does NOT set `claimed`.
+ *   cfg = GearProcCfg*, state = GearFsmState*.
  *
- * @param proc    SimProc descriptor — `cfg` cast to `GearProcCfg*`,
- *                `state` cast to `GearFsmState*`.  Neither may be nullptr.
- * @param value   In: RPM magnitude from RPM_BUS [0..maxRpm].  Out: active gear (1..N).
- * @param bus     Read for DRIVE_STATE_BUS + SUBGEAR_* digital channels;
- *                written for SUBGEAR_BUS.
+ * @param proc    CbProc descriptor.
+ * @param value   In: RPM magnitude [0..maxRpm].  Out: active gear (1..N).
  * @param claimed Not modified.
  */
-void sim_gear_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed, ChanOwner chanOwner);
+void sim_gear_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chanOwner);
 
 /**
  * @brief Gear direct-drive bypass — sets GEAR = 1 and claims when DIRECT_DRIVE is HIGH.
  *
- * @details Placed as the first proc in the SIM_GEAR pipeline.  When
- *   `DIRECT_DRIVE` is HIGH, writes `value = 1` (locks gear to 1, no upshifting)
- *   and sets `claimed = true` to skip `sim_gear_fn`.
+ * @details secInCh[0] = DIRECT_DRIVE (digital).
+ *   cfg = nullptr, state = nullptr.
  *
- *   GEAR = 1 flows into `sim_rpm_to_speed_fn` normally — gear-accumulation
- *   formula applies with cumDelta = 0 (same as gear 1 in simulation mode).
- *
- *   No cfg or state needed: `SimProc::cfg` and `SimProc::state` must be `nullptr`.
- *
- * @param proc    Unused (cfg and state are nullptr).
- * @param value   Set to 1 when DIRECT_DRIVE is HIGH; unchanged otherwise.
- * @param bus     Read for DIRECT_DRIVE digital channel.
+ * @param proc    CbProc descriptor.
+ * @param value   Set to 1 when secInValue[0] != 0; unchanged otherwise.
  * @param claimed Set to `true` when DIRECT_DRIVE is HIGH; unchanged otherwise.
  */
-void sim_gear_bypass_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed, ChanOwner chanOwner);
+void sim_gear_bypass_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chanOwner);
 
 /**
- * @brief Gear shift-delta SimProc — subtracts `shiftDelta` RPM on upshift.
+ * @brief Gear shift-delta SimProc — subtracts shiftDelta RPM on upshift.
  *
- * @details Applied as 4th proc on SIM_THROTTLE, after `sim_scale_fn`, so
- *   `value` is the RPM magnitude [0..maxRpm] at entry.
+ * @details secInCh[0] = DIRECT_DRIVE (digital): early exit when HIGH.
+ *          secInCh[1] = GEAR (analog): current gear from SIM_GEAR channel.
+ *   cfg = GearProcCfg*, state = ShiftDeltaState*.
  *
- *   Early exit when `DIRECT_DRIVE` digital channel is HIGH (inertia bypassed).
- *
- *   On upshift detection (curGear > prevGear):
- *     `value = max(0, value − profile->gear[curGear−1].shiftDelta)`
- *   The result is the RPM after the engine dip on gear change.
- *   The inertia ramp in `SIM_TRACTION` will smooth the dip naturally.
- *
- *   cfg = `GearProcCfg*` (shared with sim_gear_fn if using the same profile).
- *   state = `ShiftDeltaState*` (prevGear only — separate from GearFsmState).
- *
- *   Reads `GEAR` from bus (previous tick — 1-tick lag acceptable at 20 ms).
- *   Does NOT set `claimed`.
- *
- * @param proc    SimProc descriptor — `cfg` cast to `GearProcCfg*`,
- *                `state` cast to `ShiftDeltaState*`.
- * @param value   In: RPM magnitude [0..maxRpm].  Out: RPM after shift dip.
- * @param bus     Read for DIRECT_DRIVE (early exit) and GEAR.
+ * @param proc    CbProc descriptor.
+ * @param value   In: RPM magnitude.  Out: RPM after shift dip.
  * @param claimed Not modified.
  */
-void sim_apply_ratio_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed, ChanOwner chanOwner);
+void sim_apply_ratio_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chanOwner);
 
 /**
  * @brief RPM → ESC speed SimProc — converts RPM_BUS to ESC_SPEED_BUS domain.
  *
- * @details Applied as the sole proc in SIM_TRACTION (inCh = RPM_BUS,
- *   outCh = ESC_SPEED_BUS).
+ * @details secInCh[0] = DRIVE_STATE_BUS (analog): direction encoding.
+ *          secInCh[1] = GEAR (analog): active gear from SIM_GEAR channel.
+ *   cfg = GearProcCfg*, state = nullptr.
  *
- *   Gear-accumulation formula for all cases (DIRECT_DRIVE or not):
- *
- *   **DIRECT_DRIVE HIGH** — `sim_gear_bypass_fn` locked GEAR = 1; cumDelta = 0.
- *   Same formula applies, inertia/shiftDelta were skipped upstream.
- *
- *   **DIRECT_DRIVE LOW** — GEAR reflects the active gear from `sim_gear_fn`.
- *   Same formula applies with per-gear cumDelta.
- *
- *   Gear-accumulation formula:
- *   @code
- *     maxAbsRpm   = upShift[topGear] + sum(shiftDelta[1..N])
- *     cumDelta[g] = sum(shiftDelta[1..g])   (0 for gear 1)
- *     speed_half  = (rpm + cumDelta[gear]) * CbusNeutral / maxAbsRpm
- *   @endcode
- *   Direction from DRIVE_STATE_BUS in both modes.
- *
- *   Stateless: `SimProc::state` must be `nullptr`.
- *   cfg = `GearProcCfg*` (shared with sim_gear_fn and sim_apply_ratio_fn).
- *
- * @param proc    SimProc descriptor — `cfg` cast to `const GearProcCfg*`.
- *                `state` is unused (must be nullptr).
- * @param value   In: RPM_BUS value.  Out: ESC_SPEED_BUS bipolar value.
- * @param bus     Read for DIRECT_DRIVE, GEAR, DRIVE_STATE_BUS.
+ * @param proc    CbProc descriptor.
+ * @param value   In: RPM_BUS magnitude.  Out: ESC_SPEED_BUS bipolar value.
  * @param claimed Not modified.
  */
-void sim_rpm_to_speed_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed, ChanOwner chanOwner);
+void sim_rpm_to_speed_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chanOwner);
 
 /**
  * @brief Gear→ramp bridge — updates per-gear ramp time in a linked SimRampCfg.
  *
- * @details Placed immediately after `sim_gear_fn` in the gear pipeline.
- *   Reads the current gear (`value`) and `SUBGEAR_BUS` from the bus, looks up
- *   the matching `rampTime` in the shift profile, and writes it to the paired
- *   traction ramp `dynCfg`.  Sets `resetRamp = true` only on change —
- *   `sim_ramp_fn` picks this up on the next cycle.
+ * @details secInCh[0] = SUBGEAR_BUS (analog): selects sub-gear ramp when active.
+ *   Passes `value` through unchanged (gear flows to sim_write).
+ *   cfg = GearProcCfg*, dynCfg = SimRampCfg* (RAM), state = nullptr.
  *
- *   Passes `value` through unchanged (gear flows on to `sim_write_fn`).
- *
- *   cfg    = `const GearProcCfg*` — shared with `sim_gear_fn`.
- *   dynCfg = `SimRampCfg*` (RAM) — the traction ramp dynCfg to update.
- *   state  = nullptr — change detection via `dyn->rampTimeMs != newRampTime`.
- *
- * @param proc    SimProc descriptor.  `cfg` and `dynCfg` must not be nullptr.
- * @param value   In/out: current gear (1..N) — passed through unchanged.
- * @param bus     Read for SUBGEAR_BUS.
+ * @param proc    CbProc descriptor.
+ * @param value   In/out: current gear — passed through unchanged.
  * @param claimed Not modified.
  */
-void sim_gear_ramp_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed, ChanOwner chanOwner);
+void sim_gear_ramp_fn(SimProc* proc, uint16_t& value, bool& claimed, ChanOwner chanOwner);
 
 // EOF sim_gear.h

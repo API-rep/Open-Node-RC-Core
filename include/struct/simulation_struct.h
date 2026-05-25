@@ -25,6 +25,7 @@
 
 #include <core/config/machines/combus_ids.h>  // AnalogComBusID, DigitalComBusID
 #include <struct/combus_struct.h>              // ComBus (needed for SimBehaviorFn in archive)
+#include <struct/cb_struct.h>                  // CbProc, CbChannel, CbProcFn
 #include <defs/defs.h>                         // ChanOwner
 #include <core/system/combus/combus_res.h>     // CbusNeutral, CbusMaxVal (SimCenterCfg defaults)
 
@@ -342,79 +343,39 @@ struct SimDev {
 // 3. SIMCHANNEL PIPELINE  (sim.cpp — ✅ implemented)
 // =============================================================================
 
-// Forward declaration — SimProcFn references SimProc by pointer.
-struct SimProc;
-
-/// Processor function — one per SimProc instance, called once per channel per cycle.
-/// @param proc      Processor descriptor (name, cfg, state).
-/// @param value     Channel value (in/out) — seeded by `sim_read_fn` (proc 0), consumed by `sim_write_fn` (last proc).
-/// @param claimed   Set to `true` to short-circuit remaining processors this cycle.
-/// @param bus       Shared ComBus — read/write via cfg channel IDs; do not hardcode channel names.
-/// @param chanOwner Write identity forwarded by the runner from `SimChannel::chanOwner`.
-using SimProcFn = void (*)(SimProc* proc, uint16_t& value, ComBus& bus, bool& claimed, ChanOwner chanOwner);
-
+/**
+ * @brief Simulation processor function — alias of CbProcFn.
+ *
+ * @details Defined in `cb_struct.h`.  Signature:
+ *   `void (*)(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner owner)`
+ *
+ *   No `ComBus& bus` parameter — all bus I/O is handled by the runner via
+ *   `CbChannel::optInCh`/`optOutCh` and `CbProc::secInCh`/`optSecOutCh`.
+ */
+using SimProcFn = CbProcFn;
 
 /**
- * @brief One processing unit within a SimChannel pipeline.
+ * @brief Simulation proc descriptor — alias of CbProc.
  *
- * @details `cfg` is the static flash config for this proc.  `dynCfg` is an
- *   optional runtime-override pointer — `nullptr` means use `cfg`.  A preceding
- *   processor in the same pipeline (e.g. `sim_gear_fn`) can write `proc->dynCfg`
- *   to point at a RAM-resident (non-const) config struct, allowing per-cycle
- *   config mutation without touching flash.
- *   The fn resolves the effective config as:
- *   @code
- *   const MyCfg* effective = proc->dynCfg
- *                                ? static_cast<const MyCfg*>(proc->dynCfg)
- *                                : static_cast<const MyCfg*>(proc->cfg);
- *   @endcode
+ * @details Fields in `cb_struct.h`.  Key change vs. pre-fusion:
+ *   - `optInCh`/`optOutCh` moved to `CbChannel` (primary I/O, runner-owned).
+ *   - `secInCh[3]` / `secInValue[3]` — up to 3 secondary inputs injected by runner.
+ *   - `optSecOutCh` / `secOutValue` — one secondary output committed by runner.
+ *   - Field renames: (none — CbProc is the canonical form).
+ *
+ * @note Config arrays (`kThrottleProcs[]`, etc.) must use `CbProc` directly.
+ *   `read` and `write` procs are removed — primary I/O belongs to the channel.
  */
-struct SimProc {
-    const char* name;    ///< Debug / dashboard label.
-
-    // --- Channels ------------------------------------------------------------
-    /// Input channel — nullopt = none.
-    ///   analog : std::get<AnalogComBusID>(*optInCh)
-    ///   digital: std::get<DigitalComBusID>(*optInCh)
-    std::optional<std::variant<AnalogComBusID, DigitalComBusID>> optInCh;
-
-    /// Output channel — nullopt = none.
-    ///   analog : std::get<AnalogComBusID>(*optOutCh)
-    ///   digital: std::get<DigitalComBusID>(*optOutCh)
-    std::optional<std::variant<AnalogComBusID, DigitalComBusID>> optOutCh;
-
-    SimProcFn    fn;                      ///< Processing function. nullptr = passthrough.
-    const void*  cfg;                     ///< Flash — static config struct. Cast inside fn.
-    void*        dynCfg = nullptr;        ///< Runtime cfg override — nullptr = use cfg (flash).
-                                          ///<   Points at a RAM-resident (non-const) config struct.
-                                          ///<   Written by a preceding proc to switch config per-cycle.
-    void*        state;                   ///< RAM — mutable runtime state. Cast inside fn.
-};
-
+using SimProc = CbProc;
 
 /**
- * @brief One named processing channel — ordered processor list.
+ * @brief Simulation channel descriptor — alias of CbChannel.
  *
- * @details Defines *what* to compute and *where* to write the result.
- *   The ComBus is not stored here — it is provided at call time by
- *   `sim_update()` / `sim_channel_update()`.
- *
- *   Update sequence (sim_channel_update):
- *   1. Iterates `simProc[]` in order; stops early when a processor sets `claimed = true`.
- *   2. `sim_read_fn` (first proc) seeds `value` from the input channel.
- *   3. `sim_write_fn` (last proc) writes `value` to the output channel.
- *   4. `sim_bypass_fn` (optional) writes directly and sets `claimed = true`,
- *      skipping all remaining processors including `sim_write_fn`.
- *
- *   `chanOwner` is passed by the runner to every `SimProcFn` call so that
- *   `sim_write_fn` and `sim_bypass_fn` can identify the writer on the ComBus.
+ * @details Fields in `cb_struct.h`.  Key change vs. pre-fusion:
+ *   - `simProc` renamed to `procs`; `simProcCount` renamed to `procCount`.
+ *   - `optInCh` / `optOutCh` added (primary input/output, runner-owned).
  */
-struct SimChannel {
-    const char*     name;         ///< Human-readable channel name (debug / dashboard).
-    SimProc*        simProc;      ///< Processor array (nullptr when simProcCount == 0).
-    uint8_t         simProcCount; ///< Number of processors in simProc[].
-    ChanOwner       chanOwner;    ///< Identity token forwarded to sim_write_fn / sim_bypass_fn.
-};
+using SimChannel = CbChannel;
 
 
 // =============================================================================
@@ -463,23 +424,20 @@ struct SimRampState {
 // =============================================================================
 
 /**
- * @brief Static configuration for a conditional bypass gate SimProc.
+ * @brief Config for `sim_bypass_fn` — conditional bypass gate.
  *
- * @details When `condCh` digital channel is HIGH, `claimed` is set to `true`
- *   and all downstream processors are skipped for this cycle.  The raw `inCh`
- *   value passes through to `outCh` unchanged (sim_channel_update always
- *   writes after all procs, regardless of `claimed`).
+ * @details When `proc->secInCh[0]` (digital) is HIGH, `claimed` is set to
+ *   `true` and the remaining proc chain is skipped for this cycle.
+ *   The current pipeline `value` flows through unchanged; the runner
+ *   always writes the primary `optOutCh` regardless of `claimed`.
  *
- *   Assign to `SimProc::cfg` (as `const void*`); cast back inside
- *   `sim_bypass_fn()`.  No runtime state required — `SimProc::state` must be
- *   `nullptr`.
+ *   No config struct needed — `SimProc::cfg` must be `nullptr`.
+ *   The condition channel is declared in `proc.secInCh[0]`.
+ *   The output channel is the parent `CbChannel::optOutCh`.
  *
- *   Typical placement: `simProc[0]` — evaluated before all other processors.
+ *   Typical placement: first proc in the chain.
  */
-struct SimBypassCfg {
-    DigitalComBusID condCh;  ///< Digital channel — HIGH → bypass; LOW → no-op.
-    AnalogComBusID  outCh;   ///< Analog channel written (with chanOwner) before claiming.
-};
+struct SimBypassCfg {}; ///< Empty — kept for documentation; cfg = nullptr in practice.
 
 
 // =============================================================================
@@ -565,6 +523,54 @@ struct SimDriveStateCfg {
 struct SimScaleCfg {
     uint16_t inMax;   ///< Input range ceiling (e.g. CbusNeutral after sim_abs_fn).
     uint16_t outMax;  ///< Output range ceiling (e.g. gear[n-1].upShift — init from profile).
+};
+
+
+// =============================================================================
+// 7. SUB-GEAR BUTTON PROCESSOR  (sim_subgear_btn_fn — ✅ implemented)
+// =============================================================================
+
+/**
+ * @brief Static configuration for the sub-gear button proc.
+ *
+ * @details Handles sub-gear mode toggle and step navigation from three digital
+ *   buttons (SET, UP, DOWN).  Button channel IDs are declared in the proc's
+ *   `secInCh[]` array — not in this struct.
+ *
+ *   Assigned to `CbProc::cfg` (as `const void*`); cast back inside
+ *   `sim_subgear_btn_fn()`.
+ *
+ *   Chain placement: insert BEFORE `sim_gear_fn` so the gear FSM reads the
+ *   freshly-written `SUBGEAR_BUS` value via its `secInCh[1]`.
+ *
+ *   Registration in config:
+ *   @code
+ *   {
+ *     .secInCh    = { SUBGEAR_SET_BTN, SUBGEAR_UP_BTN, SUBGEAR_DOWN_BTN },
+ *     .optSecOutCh = AnalogComBusID::SUBGEAR_BUS,
+ *     .fn    = sim_subgear_btn_fn,
+ *     .cfg   = &kSubGearBtnCfg,
+ *     .state = &gSubGearBtnState,
+ *   }
+ *   @endcode
+ */
+struct SimSubGearBtnCfg {
+    uint8_t  subGearCount;  ///< Upper index limit (from GearShiftProfile::subGearCount).
+    uint16_t debounceMs;    ///< Minimum ms between button transitions (0 = disabled).
+};
+
+/**
+ * @brief Mutable runtime state for `sim_subgear_btn_fn`.
+ *
+ * @details Assigned to `CbProc::state` (as `void*`); cast back inside
+ *   `sim_subgear_btn_fn()`.  Zero-initialised by default construction.
+ */
+struct SimSubGearBtnState {
+    int8_t   subGear   = 0;      ///< Active sub-gear index (1..subGearCount). 0 = inactive.
+    bool     prevSet   = false;  ///< Previous SET button state — rising-edge detection.
+    bool     prevUp    = false;  ///< Previous UP button state  — rising-edge detection.
+    bool     prevDn    = false;  ///< Previous DOWN button state — rising-edge detection.
+    uint32_t lastMs    = 0u;     ///< Timestamp of last button event — debounce guard.
 };
 
 
