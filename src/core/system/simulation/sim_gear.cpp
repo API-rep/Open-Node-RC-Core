@@ -106,9 +106,9 @@ void sim_gear_fn(SimProc* proc, uint16_t& value, ComBus& bus, bool& /*claimed*/,
     // --- 3. Sub-gear FSM (only when subGearCount > 0) ------------------------
     if (cfg->profile->subGearCount > 0u)
     {
-        const bool setNow = bus.digitalBus[static_cast<uint8_t>(DigitalComBusID::SUBGEAR_SET)].value;
-        const bool upNow  = bus.digitalBus[static_cast<uint8_t>(DigitalComBusID::SUBGEAR_UP)].value;
-        const bool dnNow  = bus.digitalBus[static_cast<uint8_t>(DigitalComBusID::SUBGEAR_DOWN)].value;
+        const bool setNow = bus.digitalBus[static_cast<uint8_t>(DigitalComBusID::SUBGEAR_SET_BTN)].value;
+        const bool upNow  = bus.digitalBus[static_cast<uint8_t>(DigitalComBusID::SUBGEAR_UP_BTN)].value;
+        const bool dnNow  = bus.digitalBus[static_cast<uint8_t>(DigitalComBusID::SUBGEAR_DOWN_BTN)].value;
 
           // Toggle sub-gear mode on rising edge of SUBGEAR_SET.
         if (setNow && !state->prevSubGearSet) {

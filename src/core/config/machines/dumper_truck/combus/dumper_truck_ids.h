@@ -50,9 +50,9 @@ enum class AnalogComBusID : uint8_t {
 enum class DigitalComBusID : uint8_t {
 
   // ---- Core ------------------------------------------------------
-  HORN = 0,         ///< Horn button — set by machine from operator input.
+  HORN_BTN = 0,     ///< Horn button — raw input from operator.
   LIGHTS,           ///< Light master switch — set by machine from operator input.
-  KEY,              ///< Ignition key. Set to start/rearm the machine.
+  KEY_BTN,          ///< Ignition key — raw button input from operator.
   BATTERY_LOW,      ///< Battery low flag — written by vbat module, read by all receivers.
   CORE_END,         ///< Range marker — first index after core group
 
@@ -75,11 +75,11 @@ enum class DigitalComBusID : uint8_t {
   WIRE_END = MOTION_END,
 
   // ---- Machine node local (never transmitted on wire) ---
-  DIRECT_DRIVE = WIRE_END,  ///< Direct-drive toggle state (inertia bypass) — written by toggle logic in main.cpp, read by sim_bypass_fn.
-  DIRECT_DRIVE_BTN,         ///< Raw OPTIONS button — written by input_update every cycle; read only by toggle logic.
-  SUBGEAR_SET,              ///< Sub-gear mode toggle — activates/deactivates crawl mode (rising edge).
-  SUBGEAR_UP,               ///< Sub-gear increment — momentary, selects faster sub-gear (rising edge).
-  SUBGEAR_DOWN,             ///< Sub-gear decrement — momentary, selects slower sub-gear (rising edge).
+  DIRECT_DRIVE = WIRE_END,  ///< Direct-drive toggle state (inertia bypass) — written by ctrl chain, read by sim_bypass_fn.
+  DIRECT_DRIVE_BTN,         ///< Raw OPTIONS button — written by input_update every cycle; read by ctrl chain.
+  SUBGEAR_SET_BTN,          ///< Raw sub-gear toggle button — written by input_update; processed by ctrl chain.
+  SUBGEAR_UP_BTN,           ///< Raw sub-gear up button — written by input_update; read by sim_gear.
+  SUBGEAR_DOWN_BTN,         ///< Raw sub-gear down button — written by input_update; read by sim_gear.
   MACHINE_END,
 
   // ---- Sound node local (never transmitted on wire) ---

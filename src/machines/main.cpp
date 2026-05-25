@@ -102,7 +102,7 @@ void loop() {
   failsafeActive = false;
 
 	// --- 3. Ignition key derivation ---
-  uint8_t keyCh = static_cast<uint8_t>(DigitalComBusID::KEY); // dedicated ignition channel
+  uint8_t keyCh = static_cast<uint8_t>(DigitalComBusID::KEY_BTN); // dedicated ignition channel
   combus_set_keyon(comBus, comBus.digitalBus[keyCh].isDrived && comBus.digitalBus[keyCh].value, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
 
 // =============================================================================
@@ -183,7 +183,7 @@ void loop() {
 
         // --- 0.2. KEY long press (3 s): manual engine shutdown → IDLE ---
       {
-        const bool keyNow = comBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::KEY)].value;
+        const bool keyNow = comBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::KEY_BTN)].value;
         if (keyNow) {
             if (s_keyLongPressStartMs == 0u) s_keyLongPressStartMs = millis();
             if (millis() - s_keyLongPressStartMs >= kKeyShutdownMs) {

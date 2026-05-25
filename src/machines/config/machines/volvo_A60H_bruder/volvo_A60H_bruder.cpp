@@ -31,7 +31,7 @@ SigDevice sigDevArray[SIG_COUNT] = {
     .ID             = HORN_SIG,
     .infoName       = "horn",
     .usage          = DevUsage::SIG_HORN,
-    .digitalChannel = DigitalComBusID::HORN
+    .digitalChannel = DigitalComBusID::HORN_BTN
   },
   {
     .ID             = LIGHTS_SIG,
@@ -43,7 +43,7 @@ SigDevice sigDevArray[SIG_COUNT] = {
     .ID             = KEY_SIG,
     .infoName       = "ignition key",   ///< interpreted by engine on/off FSM in sound_interpreter
     .usage          = DevUsage::UNDEFINED,
-    .digitalChannel = DigitalComBusID::KEY
+    .digitalChannel = DigitalComBusID::KEY_BTN
   },
   {
     .ID             = INDIC_L_SIG,

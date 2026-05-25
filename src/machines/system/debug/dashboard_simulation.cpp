@@ -53,16 +53,16 @@ static const char* aCh(AnalogComBusID id)
 static const char* dCh(DigitalComBusID id)
 {
 	switch (id) {
-		case DigitalComBusID::HORN:          return "HORN";
+		case DigitalComBusID::HORN_BTN:      return "HORN_BTN";
 		case DigitalComBusID::LIGHTS:        return "LIGHTS";
-		case DigitalComBusID::KEY:           return "KEY";
+		case DigitalComBusID::KEY_BTN:       return "KEY_BTN";
 		case DigitalComBusID::BATTERY_LOW:   return "BAT_LOW";
 		case DigitalComBusID::BRAKING:       return "BRAKING";
 		case DigitalComBusID::DIRECT_DRIVE:     return "DIR_DRV";
 		case DigitalComBusID::DIRECT_DRIVE_BTN: return "DIR_BTN";
-		case DigitalComBusID::SUBGEAR_SET:   return "SG_SET";
-		case DigitalComBusID::SUBGEAR_UP:    return "SG_UP";
-		case DigitalComBusID::SUBGEAR_DOWN:  return "SG_DN";
+		case DigitalComBusID::SUBGEAR_SET_BTN: return "SG_SET";
+		case DigitalComBusID::SUBGEAR_UP_BTN:  return "SG_UP";
+		case DigitalComBusID::SUBGEAR_DOWN_BTN:return "SG_DN";
 		default:                             return "?";
 	}
 }

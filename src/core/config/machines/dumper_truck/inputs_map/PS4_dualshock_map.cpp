@@ -16,12 +16,12 @@ const uint8_t InputAnalogMapCount = sizeof(InputAnalogMapArray) / sizeof(InputAn
 
   // input to combus analog channel mapping
 const InputDigitalMap InputDigitalMapArray[] = {
-  { DigitalInputDevID::CIRCLE_BTN,   DigitalComBusID::HORN,         false },
-  { DigitalInputDevID::TRIANGLE_BTN, DigitalComBusID::KEY,          false },
-  { DigitalInputDevID::OPTIONS_BTN,  DigitalComBusID::DIRECT_DRIVE_BTN, false },  // raw button — toggle logic in main.cpp derives DIRECT_DRIVE state
-  { DigitalInputDevID::SHARE_BTN,    DigitalComBusID::SUBGEAR_SET,  false },  // crawler mode toggle
-  { DigitalInputDevID::UP_ARROW,     DigitalComBusID::SUBGEAR_UP,   false },  // crawler: faster sub-gear
-  { DigitalInputDevID::DOWN_ARROW,   DigitalComBusID::SUBGEAR_DOWN, false }   // crawler: slower sub-gear
+  { DigitalInputDevID::CIRCLE_BTN,   DigitalComBusID::HORN_BTN,         false },
+  { DigitalInputDevID::TRIANGLE_BTN, DigitalComBusID::KEY_BTN,          false },
+  { DigitalInputDevID::OPTIONS_BTN,  DigitalComBusID::DIRECT_DRIVE_BTN, false },  // raw button — ctrl chain derives DIRECT_DRIVE state
+  { DigitalInputDevID::SHARE_BTN,    DigitalComBusID::SUBGEAR_SET_BTN,  false },  // crawler mode toggle
+  { DigitalInputDevID::UP_ARROW,     DigitalComBusID::SUBGEAR_UP_BTN,   false },  // crawler: faster sub-gear
+  { DigitalInputDevID::DOWN_ARROW,   DigitalComBusID::SUBGEAR_DOWN_BTN, false }   // crawler: slower sub-gear
 };
 
   // number of digital mappings in InputDigital Map array

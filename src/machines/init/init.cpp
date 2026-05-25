@@ -72,7 +72,7 @@ void machine_init() {
 	  // --- 7. Post-init pause (compiled in only when -D PAUSE_LOG_AFTER_INIT is set) ---
   if constexpr (PauseAfterInit) {
       // KEY channel index in the digital bus (TRIANGLE on PS4 in dumper-truck layout)
-    uint8_t keyCh = static_cast<uint8_t>(DigitalComBusID::KEY);
+    uint8_t keyCh = static_cast<uint8_t>(DigitalComBusID::KEY_BTN);
     sys_log_info("[SYSTEM] ** Paused ** — press ENTER or IGNITION KEY to continue...\n");
 
     while (true) {
