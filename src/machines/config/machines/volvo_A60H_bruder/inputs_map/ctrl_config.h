@@ -6,7 +6,7 @@
  *   machine main loop.
  *
  *   Channel pipelines:
- *     CTRL_DIRECT_DRIVE : DIRECT_DRIVE_BTN → [toggle (speed-gated)] → DIRECT_DRIVE
+ *     CTRL_DIRECT_DRIVE : read(DIRECT_DRIVE_BTN) → speed_gate → toggle → write(DIRECT_DRIVE)
  *****************************************************************************/
 #pragma once
 
@@ -23,7 +23,7 @@
  * @details `CTRL_CH_COUNT` is the sentinel used as array size and loop bound.
  */
 enum CtrlCh {
-    CTRL_DIRECT_DRIVE = 0,  ///< DIRECT_DRIVE_BTN → [toggle] → DIRECT_DRIVE
+    CTRL_DIRECT_DRIVE = 0,  ///< read(DIRECT_DRIVE_BTN) → speed_gate → toggle → write(DIRECT_DRIVE)
     CTRL_CH_COUNT,
 };
 

@@ -7,11 +7,10 @@
  *   sequence.
  *
  *   Runner contract:
- *   - Reads `inCh` from the bus.  If `!isDrived`, the entire channel is skipped
- *     (all procs and the outCh write are no-ops this cycle).
- *   - Passes `value = bus.digitalBus[inCh].value` to proc[0].
- *   - After all procs, writes `outCh` via `combus_set_digital()` unless any
- *     proc set `claimed = true` (direct-write shortcut).
+ *   - Iterates procs in order, passing `value` and `ComBus& bus` to each.
+ *   - If any proc sets `claimed = true`, the remaining procs are aborted.
+ *   - The runner never reads or writes the bus directly: all bus I/O is
+ *     handled by `ctrl_read_fn` (first proc) and `ctrl_write_fn` (last proc).
  *
  *   Usage:
  *   @code

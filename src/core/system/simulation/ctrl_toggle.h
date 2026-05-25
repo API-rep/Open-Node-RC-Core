@@ -1,26 +1,19 @@
 /*!****************************************************************************
  * @file  ctrl_toggle.h
- * @brief Toggle CtrlProcFn — rising-edge toggle with optional speed-gate on engage.
+ * @brief Toggle CtrlProcFn — pure rising-edge toggle (ON/OFF flip).
  *
- * @details The toggle proc:
- *   - Rising edge of `value`: if `active == false`, engage (speed guard permitting).
- *   - Rising edge of `value`: if `active == true`, disengage immediately.
- *   - `isDrived` guard is enforced upstream by the runner.
- *   - Speed guard: skip engagement when `analogBus[speedCh].value > maxEngageSpd`
- *     (only evaluated when `speedCh` is set and `maxEngageSpd > 0`).
- *
- *   Output: writes `active` into `value` — the runner then propagates it to `outCh`.
+ * @details Flips the `active` state on each rising edge of the button input.
+ *   No speed guard, no bus access — pure button-state logic.
+ *   To add a speed guard, chain `ctrl_speed_gate_fn` before this proc.
  *
  *   @code
- *     static constexpr CtrlToggleCfg kCfg { .speedCh = AnalogComBusID::RPM_BUS,
- *                                            .maxEngageSpd = 200u };
  *     static CtrlToggleState gState {};
- *     CtrlProc myProc { "toggle", ctrl_toggle_fn, &kCfg, &gState };
+ *     { "toggle", ctrl_toggle_fn, nullptr, &gState },
  *   @endcode
  *****************************************************************************/
 #pragma once
 
-#include <struct/ctrl_struct.h>  // CtrlProc, CtrlToggleCfg, CtrlToggleState, CtrlProcFn
+#include <struct/ctrl_struct.h>  // CtrlProc, CtrlToggleState, CtrlProcFn
 
 
 // =============================================================================
@@ -28,13 +21,13 @@
 // =============================================================================
 
 /**
- * @brief Toggle CtrlProcFn — rising-edge toggle with optional speed-gate on engage.
+ * @brief Toggle CtrlProcFn — flips active ON/OFF on each rising button edge.
  *
- * @param proc    Proc descriptor: `cfg → const CtrlToggleCfg*`, `state → CtrlToggleState*`.
+ * @param proc    Proc descriptor: `cfg → nullptr`, `state → CtrlToggleState*`.
  * @param value   Button state (in) — after the call, carries the resulting `active` flag.
- * @param bus     Full ComBus — speed channel read for the engage guard.
- * @param claimed Unused — the runner writes `outCh` after this proc returns.
- * @param owner   Unused — no direct bus writes inside this proc.
+ * @param bus     Unused.
+ * @param claimed Unused.
+ * @param owner   Unused.
  */
 void ctrl_toggle_fn(CtrlProc* proc, bool& value, ComBus& bus,
                     bool& claimed, ChanOwner owner);

@@ -109,7 +109,7 @@ inline constexpr EnvCfg machine {
   .simChannel       = kSimChannels,
   .simChannelCount  = SIM_CH_COUNT,
   .ctrlChannel      = kCtrlChannels,
-  .ctrlChannelCount = kCtrlChannelCount
+  .ctrlChannelCount = CTRL_CH_COUNT
 };
 
 
