@@ -1,16 +1,17 @@
 /******************************************************************************
  * @file simulation_presets.h
- * @brief Ready-made GearShiftProfile and SimRampCfg presets.
+ * @brief Ready-made GearShiftProfile and CbRampCfg presets.
  *
  * @details All MotionConfig presets have been replaced by the SimDev pipeline
- *   (sim_traction, sim_ramp).  Only the GearShiftProfile (section 3) and
- *   SimRampCfg (section 4) presets are kept here.
+ *   (sim_traction, cb_ramp).  Only the GearShiftProfile (section 3) and
+ *   CbRampCfg (section 4) presets are kept here.
  *****************************************************************************/
 #pragma once
 
 #include <iterator>                         // std::size
 
-#include <struct/simulation_struct.h>       // GearShiftProfile, GearStepCfg, SubGearStepCfg, SimRampCfg
+#include <struct/simulation_struct.h>                          // GearShiftProfile, GearStepCfg, SubGearStepCfg
+#include <struct/combus/processors/motion/cb_ramp_struct.h>    // CbRampCfg
 #include <core/system/combus/combus_res.h>  // CbusMaxVal, CbusNeutral, pctToCbus
 
 
@@ -68,7 +69,7 @@ static constexpr GearShiftProfile kGearShift_Heavy3Speed {
 
 
 // =============================================================================
-// 4. RAMP PRESETS  (SimRampCfg — single-axis inertia ramp for hydraulics / steering)
+// 4. RAMP PRESETS  (CbRampCfg — single-axis inertia ramp for hydraulics / steering)
 // =============================================================================
 
 /**
@@ -77,7 +78,7 @@ static constexpr GearShiftProfile kGearShift_Heavy3Speed {
  * @details Conservative: 20 ms period, 1 % per step.
  *   Brake is faster than accel — actuator returns quicker when stick released.
  */
-static constexpr SimRampCfg kDump_HeavyRamp {
+static constexpr CbRampCfg kDump_HeavyRamp {
     .rampTimeMs  = 20u,            ///< 20 ms between steps — smooth, no jerk.
     .accelSteps  = pctToCbus(1),   ///< ~1 % per step extending  (~2 s full travel).
     .brakeSteps  = pctToCbus(2),   ///< ~2 % per step retracting (~1 s full travel).
@@ -88,9 +89,9 @@ static constexpr SimRampCfg kDump_HeavyRamp {
  * @brief Ramp preset for the Volvo A60H steering actuator.
  *
  * @details Mirrors `kSteer_Electric_heavyRamp` from MotionRamp but as a
- *   SimRampCfg for the SimDev pipeline.  Symmetric at 2 % per step.
+ *   CbRampCfg for the cb_ramp proc.  Symmetric at 2 % per step.
  */
-static constexpr SimRampCfg kSteer_HeavyRamp {
+static constexpr CbRampCfg kSteer_HeavyRamp {
     .rampTimeMs  = 30u,            ///< 30 ms between steps.
     .accelSteps  = pctToCbus(2),   ///< ~2 % per step in both directions.
     .brakeSteps  = pctToCbus(2),   ///< Symmetric centering rate.

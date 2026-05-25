@@ -29,7 +29,8 @@
  *****************************************************************************/
 #pragma once
 
-#include <struct/simulation_struct.h>   // CbProc, GearProcCfg, ShiftDeltaState, GearFsmState, GearShiftProfile
+#include <struct/simulation_struct.h>                          // CbProc, GearProcCfg, ShiftDeltaState, GearFsmState, GearShiftProfile
+#include <struct/combus/processors/motion/cb_ramp_struct.h>    // CbRampCfg
 
 
 // =============================================================================
@@ -128,11 +129,11 @@ void sim_apply_ratio_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner 
 void sim_rpm_to_speed_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
 
 /**
- * @brief Gear→ramp bridge — updates per-gear ramp time in a linked SimRampCfg.
+ * @brief Gear→ramp bridge — updates per-gear ramp time in a linked CbRampCfg.
  *
  * @details secInCh[0] = SUBGEAR_BUS (analog): selects sub-gear ramp when active.
  *   Passes `value` through unchanged (gear flows to sim_write).
- *   cfg = GearProcCfg*, dynCfg = SimRampCfg* (RAM), state = nullptr.
+ *   cfg = GearProcCfg*, dynCfg = CbRampCfg* (RAM), state = nullptr.
  *
  * @param proc    CbProc descriptor.
  * @param value   In/out: current gear — passed through unchanged.

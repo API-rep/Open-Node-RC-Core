@@ -8,8 +8,8 @@
 #include "dashboard_simulation.h"
 #include <core/system/debug/dashboard.h>
 #include <struct/simulation_struct.h>
-#include <core/system/simulation/sim_ramp.h>    // SimRampCfg, SimRampState
-#include <core/system/simulation/sim_bypass.h>  // SimBypassCfg
+#include <core/system/combus/processors/motion/cb_ramp.h>  // CbRampCfg, CbRampState
+#include <core/system/combus/processors/base/cb_bypass.h>  // CbBypassCfg
 #include <core/system/simulation/sim_gear.h>    // GearProcCfg, GearFsmState
 #include <core/system/combus/combus_res.h>       // CbusNeutral (RPM computation)
 
@@ -111,8 +111,8 @@ static void render_proc_row(uint8_t idx, const CbProc* proc)
 		      (unsigned)idx, dCh(condCh), active ? "YES" : "no ");
 	}
 	else if (strcmp(pname, "ramp") == 0 && proc->cfg) {
-		const SimRampCfg*   cfg = static_cast<const SimRampCfg*>(proc->cfg);
-		const SimRampState* st  = static_cast<const SimRampState*>(proc->state);
+		const CbRampCfg*   cfg = static_cast<const CbRampCfg*>(proc->cfg);
+		const CbRampState* st  = static_cast<const CbRampState*>(proc->state);
 		const uint16_t      pos = st ? st->currentPos : 0u;
 		const int16_t       pct = st ? dashPctBipolar(pos, s_bus->analogBusMaxVal) : 0;
 		if (cfg->accelDownSteps != 0u) {

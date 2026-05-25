@@ -26,9 +26,12 @@
 #include <core/config/hw/simulation_presets.h>    // kHeavy3_steps, kGearShift_Heavy3Speed
 #include <struct/combus_struct.h>                 // makeChanOwner, ComBusOwner
 #include <core/system/combus/combus_res.h>        // CbusNeutral, pctToCbus
-#include <core/system/simulation/sim_ramp.h>      // sim_ramp_fn, SimRampCfg, SimRampState
-#include <core/system/simulation/sim_bypass.h>    // sim_bypass_fn
-#include <core/system/simulation/sim_math.h>      // sim_center_fn, sim_abs_fn, sim_scale_fn, sim_drive_state_fn
+#include <core/system/combus/processors/motion/cb_ramp.h>  // cb_ramp_fn, CbRampCfg, CbRampState
+#include <core/system/combus/processors/base/cb_bypass.h>  // cb_bypass_fn
+#include <core/system/combus/processors/math/cb_center.h>          // cb_center_fn, CbCenterCfg
+#include <core/system/combus/processors/math/cb_abs.h>              // cb_abs_fn
+#include <core/system/combus/processors/math/cb_scale.h>            // cb_scale_fn, CbScaleCfg
+#include <core/system/combus/processors/motion/cb_dir.h>           // cb_dir_fn, CbDirCfg
 #include <core/system/simulation/sim_gear.h>      // sim_gear_fn, sim_apply_ratio_fn, sim_gear_bypass_fn, sim_rpm_to_speed_fn, sim_gear_ramp_fn
 #include <core/system/simulation/sim_subgear_btn.h>  // sim_subgear_btn_fn
 using namespace DumperTruck;
@@ -39,7 +42,7 @@ using namespace DumperTruck;
 // =============================================================================
 
 //  Steering — progressive start (5 %/tick @ 20 ms), instant stop.
-static constexpr SimRampCfg kSteerAsymRamp {
+static constexpr CbRampCfg kSteerAsymRamp {
     .rampTimeMs  = 20u,
     .accelSteps  = pctToCbus(5),
     .brakeSteps  = CbusNeutral,
@@ -47,7 +50,7 @@ static constexpr SimRampCfg kSteerAsymRamp {
 };
 
 //  Dump body — slow raise, fast lower, instant stop.
-static constexpr SimRampCfg kDumpAsymRamp {
+static constexpr CbRampCfg kDumpAsymRamp {
     .rampTimeMs     = 20u,
     .accelSteps     = pctToCbus(2),
     .accelDownSteps = pctToCbus(4),
@@ -56,7 +59,7 @@ static constexpr SimRampCfg kDumpAsymRamp {
 };
 
 //  Traction — heavy truck inertia.
-static constexpr SimRampCfg kTractionRamp {
+static constexpr CbRampCfg kTractionRamp {
     .rampTimeMs  = 50u,
     .accelSteps  = pctToCbus(3),
     .brakeSteps  = pctToCbus(6),
@@ -64,17 +67,17 @@ static constexpr SimRampCfg kTractionRamp {
 };
 
 //  Traction ramp — RAM copy, mutated by sim_gear_ramp_fn on each gear change.
-static SimRampCfg gTractionRampDyn = kTractionRamp;
+static CbRampCfg gTractionRampDyn = kTractionRamp;
 
 
 // =============================================================================
 // 2. MATH + GEAR CONFIGS
 // =============================================================================
 
-static constexpr SimCenterCfg kThrottleCenter {};
-static constexpr SimDriveStateCfg kThrottleDriveState {};
+static constexpr CbCenterCfg kThrottleCenter {};
+static constexpr CbDirCfg kThrottleDirCfg {};
 
-static constexpr SimScaleCfg kThrottleScale {
+static constexpr CbScaleCfg kThrottleScale {
     .inMax  = CbusNeutral,
     .outMax = static_cast<uint16_t>(kHeavy3_steps[std::size(kHeavy3_steps) - 1u].upShift),
 };
@@ -93,9 +96,9 @@ static constexpr SimSubGearBtnCfg kSubGearBtnCfg {
 // 3. RUNTIME STATES
 // =============================================================================
 
-static SimRampState        gSteerRampState          {};
-static SimRampState        gDumpRampState           {};
-static SimRampState        gTractionRampState       {};
+static CbRampState        gSteerRampState          {};
+static CbRampState        gDumpRampState           {};
+static CbRampState        gTractionRampState       {};
 static GearFsmState        gGearFsmState            {};
 static ShiftDeltaState     gThrottleShiftDeltaState {};
 static SimSubGearBtnState  gSubGearBtnState         {};
@@ -108,40 +111,40 @@ static SimSubGearBtnState  gSubGearBtnState         {};
 static CbProc kThrottleProcs[] = {
     // ramp — heavy-truck inertia on throttle input.
     { .name    = "ramp",
-      .fn      = sim_ramp_fn,
+      .fn      = cb_ramp_fn,
       .cfg     = &kTractionRamp,
       .dynCfg  = &gTractionRampDyn,
       .state   = &gTractionRampState,
     },
-    // drive-state — side-effect: encodes direction → DRIVE_STATE_BUS.
-    { .name         = "drive-state",
+    // dir — side-effect: encodes direction → DRIVE_STATE_BUS.
+    { .name         = "dir",
       .optSecOutCh  = AnalogComBusID::DRIVE_STATE_BUS,
-      .fn           = sim_drive_state_fn,
-      .cfg          = &kThrottleDriveState,
+      .fn           = cb_dir_fn,
+      .cfg          = &kThrottleDirCfg,
       .state        = nullptr,
     },
     // center — signed deviation from CbusNeutral.
     { .name  = "center",
-      .fn    = sim_center_fn,
+      .fn    = cb_center_fn,
       .cfg   = &kThrottleCenter,
       .state = nullptr,
     },
     // abs — magnitude; sign side effect is unused here (direction tracked above).
     { .name  = "abs",
-      .fn    = sim_abs_fn,
+      .fn    = cb_abs_fn,
       .cfg   = nullptr,
       .state = nullptr,
     },
     // scale — RPM magnitude in [0..maxRpm].
     { .name  = "scale",
-      .fn    = sim_scale_fn,
+      .fn    = cb_scale_fn,
       .cfg   = &kThrottleScale,
       .state = nullptr,
     },
     // bypass — DIRECT_DRIVE HIGH → claim (raw magnitude bypasses ratio, flows to RPM_BUS).
     { .name      = "bypass",
       .secInCh   = { DigitalComBusID::DIRECT_DRIVE },
-      .fn        = sim_bypass_fn,
+      .fn        = cb_bypass_fn,
       .cfg       = nullptr,
       .state     = nullptr,
     },
@@ -203,13 +206,13 @@ static CbProc kSteeringProcs[] = {
     // bypass — DIRECT_DRIVE HIGH → claim (raw steering bypasses ramp).
     { .name    = "bypass",
       .secInCh = { DigitalComBusID::DIRECT_DRIVE },
-      .fn      = sim_bypass_fn,
+      .fn      = cb_bypass_fn,
       .cfg     = nullptr,
       .state   = nullptr,
     },
     // ramp — progressive inertia.
     { .name  = "ramp",
-      .fn    = sim_ramp_fn,
+      .fn    = cb_ramp_fn,
       .cfg   = &kSteerAsymRamp,
       .state = &gSteerRampState,
     },
@@ -219,13 +222,13 @@ static CbProc kDumpProcs[] = {
     // bypass — DIRECT_DRIVE HIGH → claim (raw dump bypasses ramp).
     { .name    = "bypass",
       .secInCh = { DigitalComBusID::DIRECT_DRIVE },
-      .fn      = sim_bypass_fn,
+      .fn      = cb_bypass_fn,
       .cfg     = nullptr,
       .state   = nullptr,
     },
     // ramp — progressive asymmetric inertia.
     { .name  = "ramp",
-      .fn    = sim_ramp_fn,
+      .fn    = cb_ramp_fn,
       .cfg   = &kDumpAsymRamp,
       .state = &gDumpRampState,
     },

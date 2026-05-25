@@ -1,5 +1,5 @@
 /******************************************************************************
- * @file  sim_ramp.cpp
+ * @file  cb_ramp.cpp
  * @brief CbProc function — single-axis inertia ramp (hydraulics, steering).
  *
  * @details Pure ComBus simulation processor — no hardware calls, no µs domain.
@@ -10,31 +10,29 @@
  *   to `value` every call — CbChain owns the final bus write.
  *****************************************************************************/
 
-#include "sim_ramp.h"
+#include "cb_ramp.h"
 
-#include <Arduino.h>          // millis()
-
-#include "core/system/combus/combus_res.h"   // CbusNeutral
+#include <Arduino.h>                             // millis()
+#include "core/system/combus/combus_res.h"       // CbusNeutral
 
 
 // =============================================================================
 // 1. PROC FUNCTION
 // =============================================================================
 
-/** @brief Asymmetric inertia ramp — see sim_ramp.h for full contract. */
-void sim_ramp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)
+/** @brief Asymmetric inertia ramp — see cb_ramp.h for full contract. */
+void cb_ramp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)
 {
-    SimRampState*     state = static_cast<SimRampState*>(proc->state);
-    // dynCfg override: a preceding proc (e.g. sim_gear_fn) may write proc->dynCfg
+    CbRampState*     state = static_cast<CbRampState*>(proc->state);
+    // dynCfg override: a preceding proc (e.g. cb_gear_fn) may write proc->dynCfg
     // to select a per-cycle ramp config without touching flash.
-    const SimRampCfg* cfg   = (proc->dynCfg != nullptr)
-                                  ? static_cast<const SimRampCfg*>(proc->dynCfg)
-                                  : static_cast<const SimRampCfg*>(proc->cfg);
+    const CbRampCfg* cfg   = (proc->dynCfg != nullptr)
+                                 ? static_cast<const CbRampCfg*>(proc->dynCfg)
+                                 : static_cast<const CbRampCfg*>(proc->cfg);
 
     // --- 0. Self-init on first call ------------------------------------------
     // Sentinel: both fields are zero-initialised at construction; after init,
     // lastUpdateMs is set to millis() (always > 0 after boot).
-    // Do NOT use currentPos == 0 alone — 0 is a valid position (full negative).
     if (state->lastUpdateMs == 0u) {
         state->currentPos   = CbusNeutral;
         state->lastUpdateMs = millis();
@@ -50,11 +48,11 @@ void sim_ramp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*c
     }
 
     // --- 2. Ramp tick: advance currentPos one step when timer elapses --------
-    //  Reset request: a preceding proc (e.g. sim_gear_fn) may set dynCfg->resetRamp
+    //  Reset request: a preceding proc (e.g. cb_gear_fn) may set dynCfg->resetRamp
     //  after updating rampTimeMs for the new gear.  We restart the timer without
     //  touching currentPos so the position ramp continues from where it was.
     if (proc->dynCfg != nullptr) {
-        SimRampCfg* dyn = static_cast<SimRampCfg*>(proc->dynCfg);
+        CbRampCfg* dyn = static_cast<CbRampCfg*>(proc->dynCfg);
         if (dyn->resetRamp) {
             state->lastUpdateMs = millis();
             if (state->lastUpdateMs == 0u) state->lastUpdateMs = 1u;
@@ -98,4 +96,4 @@ void sim_ramp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*c
     value = state->currentPos;
 }
 
-// EOF sim_ramp.cpp
+// EOF cb_ramp.cpp

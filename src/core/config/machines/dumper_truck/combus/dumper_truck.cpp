@@ -42,7 +42,7 @@ DigitalComBus DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::CH_COUNT)
   { .infoName = "low beam channel",        .value = false, .owner = ChanOwner::MACHINE_INPUT },
   { .infoName = "braking channel",         .value = false, .owner = ChanOwner::MACHINE_SYSTEM },
   // --- Machine-node-local channels (WIRE_END .. MACHINE_END-1) — never transmitted ---
-  { .infoName = "direct drive (local)",    .value = false, .owner = ChanOwner::MACHINE_SYSTEM }, ///< Toggle state — written by main.cpp toggle logic, read by sim_bypass_fn.
+  { .infoName = "direct drive (local)",    .value = false, .owner = ChanOwner::MACHINE_SYSTEM }, ///< Toggle state — written by main.cpp toggle logic, read by cb_bypass_fn.
   { .infoName = "direct drive btn (local)", .value = false, .owner = ChanOwner::MACHINE_INPUT }, ///< Raw OPTIONS button — written by input_update every cycle.
   // --- Sound-node-local channels (MACHINE_END .. CH_COUNT-1) — never transmitted ---
   { .infoName = "always on (local)",       .value = true,  .owner = ChanOwner::NONE }, ///< Stays true: continuous sources driven by volMod.

@@ -8,9 +8,10 @@
  *
  *   Active area (sections 1+, below the separator) — CbChain pipeline.
  *   Already validated: `CbProc/CbChain` (sim.cpp ✅, section 3),
- *   `SimRampCfg/State` (sim_ramp_fn ✅, section 1), `DriveState` (✅, section 2),
- *   `SimBypassCfg` (sim_bypass_fn ✅, section 4).
- *   `GearProcCfg` (sim_gear_fn ✅, section 5).
+ *   `DriveState` (✅, section 2).
+ *   `CbBypassCfg` → moved to `include/struct/combus/processors/base/cb_bypass_struct.h`.
+ *   `CbRampCfg/State` → moved to `include/struct/combus/processors/motion/cb_ramp_struct.h`.
+ *   `GearProcCfg` (sim_gear_fn ✅, section 5 → future cb_gear_fn).
  *
  *   **Adding a new CbProcFn:**
  *   1. Add `MyProcCfg` and `MyProcState` in the active area (sections 1+).
@@ -27,7 +28,6 @@
 #include <struct/combus_struct.h>              // ComBus (needed for SimBehaviorFn in archive)
 #include <struct/combus_proc_struct.h>                  // CbProc, CbChain, CbProcFn
 #include <defs/defs.h>                         // ChanOwner
-#include <core/system/combus/combus_res.h>     // CbusNeutral, CbusMaxVal (SimCenterCfg defaults)
 
 
 // =============================================================================
@@ -52,7 +52,7 @@ struct GearStepCfg {
     int16_t  upShift;           ///< RPM threshold to upshift from this gear (= maxRpm for last gear).
     int16_t  downShift;         ///< RPM threshold to downshift to this gear (coasting).
     int16_t  downShiftBraking;  ///< RPM threshold to downshift to this gear (braking — higher → earlier).
-    uint16_t rampTime;          ///< Inertia ramp duration (ms) — written to SimRampCfg::rampTimeMs via GearFsmState::rampDynCfg.
+    uint16_t rampTime;          ///< Inertia ramp duration (ms) — written to CbRampCfg::rampTimeMs via GearFsmState::rampDynCfg.
     int16_t  shiftDelta;        ///< RPM drop when upshifting INTO this gear (ignored for gear 1).
 };
 
@@ -379,69 +379,7 @@ using CbChain = CbChain;
 
 
 // =============================================================================
-// 1. RAMP PROCESSOR  (sim_ramp_fn — ✅ implemented)
-// =============================================================================
-
-/**
- * @brief Static configuration for a single-axis inertia ramp CbProc.
- *
- * @details Assigned to `CbProc::cfg` (as `const void*`); cast back to
- *   `const SimRampCfg*` inside `sim_ramp_fn()`.
- *
- *   Multi-instance: one CbProc entry per axis that needs inertia
- *   (e.g. DUMP_BUS → DUMP_RAMPED_BUS, STEERING_BUS → STEERING_RAMPED_BUS).
- *   The downstream `DcDevice` reads the ramped output channel.
- */
-struct SimRampCfg {
-    uint16_t rampTimeMs;                    ///< Default period between ramp steps (ms).
-    uint16_t accelSteps;                    ///< ComBus units per step when moving away from neutral (both directions if accelDownSteps == 0).
-    uint16_t accelDownSteps = 0u;           ///< ComBus units per step when moving in the NEGATIVE direction away from neutral.
-                                            ///<   0 = symmetric (falls back to accelSteps).
-    uint16_t brakeSteps;                    ///< ComBus units per step when moving toward neutral.
-    uint16_t neutralBand;                   ///< ComBus units around CbusNeutral treated as zero (0 = no dead-band).
-    bool     resetRamp = false;             ///< Set by a preceding proc (e.g. sim_gear_ramp_fn) on gear change.
-                                            ///<   sim_ramp_fn resets the ramp timer and clears this flag.
-                                            ///<   currentPos is preserved — continuity of position across the reset.
-};
-
-/**
- * @brief Mutable runtime state for a ramp CbProc.
- *
- * @details Written exclusively by `sim_ramp_fn()`.
- *   Zero-initialised by default construction — `currentPos == 0` triggers
- *   a self-init to CbusNeutral on the first call.
- */
-struct SimRampState {
-    uint16_t          currentPos;       ///< Current inertial position in ComBus domain [0..CbusMaxVal].
-    uint32_t          lastUpdateMs;     ///< millis() timestamp of last ramp step.
-                                        ///<   Also used as first-call sentinel: 0 = never initialised.
-                                        ///<   Do NOT use currentPos == 0 — 0 is a valid position (full negative).
-};
-
-
-// =============================================================================
-// 4. BYPASS PROCESSOR  (sim_bypass_fn — ✅ implemented)
-// =============================================================================
-
-/**
- * @brief Config for `sim_bypass_fn` — conditional bypass gate.
- *
- * @details When `proc->secInCh[0]` (digital) is HIGH, `claimed` is set to
- *   `true` and the remaining proc chain is skipped for this cycle.
- *   The current pipeline `value` flows through unchanged; the runner
- *   always writes the primary `optOutCh` regardless of `claimed`.
- *
- *   No config struct needed — `CbProc::cfg` must be `nullptr`.
- *   The condition channel is declared in `proc.secInCh[0]`.
- *   The output channel is the parent `CbChain::optOutCh`.
- *
- *   Typical placement: first proc in the chain.
- */
-struct SimBypassCfg {}; ///< Empty — kept for documentation; cfg = nullptr in practice.
-
-
-// =============================================================================
-// 5. GEAR FSM PROCESSOR  (sim_gear_fn, sim_gear_ramp_fn — ✅ implemented)
+// 4. GEAR FSM PROCESSOR  (sim_gear_fn, sim_gear_ramp_fn — ✅ implemented)
 // =============================================================================
 
 /**
@@ -473,57 +411,11 @@ struct ShiftDeltaState {
 
 
 // =============================================================================
-// 6. GENERIC ARITHMETIC PROC CONFIGS  (sim_math.h — ✅ implemented)
+// 6. GENERIC ARITHMETIC PROC CONFIGS  — moved to combus/processors/math/
 // =============================================================================
-
-/**
- * @brief Configuration for `sim_center_fn` — neutral reference for signed deviation.
- *
- * @details `value = (uint16_t)(int16_t)(value − cfg->neutral)`.
- *   Defaults to CbusNeutral = 32767 (standard ComBus bipolar center).
- *   cfg = &SimCenterCfg, state = nullptr.
- */
-struct SimCenterCfg {
-    uint16_t neutral = CbusNeutral;  ///< Center reference (default = CbusNeutral = 32767).
-};
-
-/**
- * @brief Configuration for `sim_drive_state_fn` — direction detection thresholds.
- *
- * @details Reads a post-ramp bipolaire value, determines direction vs. cfg->neutral,
- *   encodes via DriveStateBus::encode() and writes to proc->optOutCh.
- *   cfg = &SimDriveStateCfg, state = nullptr.
- */
-struct SimDriveStateCfg {
-    uint16_t neutral = CbusNeutral;  ///< Standing threshold (default = CbusNeutral = 32767).
-};
-
-/**
- * @brief Configuration for `sim_scale_fn` — linear domain rescale.
- *
- * @details `value = value × outMax / inMax`.
- *
- *   `sim_center_fn` and `sim_abs_fn` are **cfg-free** (`CbProc::cfg = nullptr`):
- *   - `sim_center_fn`: pure signed deviation from CbusNeutral — no config needed.
- *   - `sim_abs_fn`: sign side effect declared via `CbProc::optOutCh`
- *     (nullopt = skip, otherwise writes HIGH/LOW to the digital channel).
- *
- *   Typical three-proc chain for THROTTLE_BUS → RPM_BUS:
- *   @code
- *     sim_center_fn  { optInCh = nullopt, optOutCh = nullopt, cfg = nullptr }
- *     sim_abs_fn     { optOutCh = nullopt,                  cfg = nullptr }
- *     sim_scale_fn   { cfg = &{ inMax = CbusNeutral, outMax = gear[n-1].upShift } }
- *   @endcode
- *
- *   For a pipeline that also captures direction as a digital side effect:
- *   @code
- *     sim_abs_fn     { optOutCh = DigitalComBusID::ESC_REVERSE_BUS }  // HIGH=FWD LOW=REV
- *   @endcode
- */
-struct SimScaleCfg {
-    uint16_t inMax;   ///< Input range ceiling (e.g. CbusNeutral after sim_abs_fn).
-    uint16_t outMax;  ///< Output range ceiling (e.g. gear[n-1].upShift — init from profile).
-};
+//   CbCenterCfg  →  include/struct/combus/processors/math/cb_center_struct.h
+//   CbScaleCfg   →  include/struct/combus/processors/math/cb_scale_struct.h
+//   cb_abs_fn: cfg = nullptr (no struct needed)
 
 
 // =============================================================================

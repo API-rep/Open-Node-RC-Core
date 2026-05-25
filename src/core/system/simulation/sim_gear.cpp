@@ -209,7 +209,7 @@ void sim_gear_ramp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwne
     if (proc->dynCfg == nullptr) return;  // No ramp linked — passthrough.
 
     const GearProcCfg* cfg = static_cast<const GearProcCfg*>(proc->cfg);
-    SimRampCfg*        dyn = static_cast<SimRampCfg*>(proc->dynCfg);
+    CbRampCfg*        dyn = static_cast<CbRampCfg*>(proc->dynCfg);
 
     // --- Resolve gear and sub-gear ------------------------------------------
     //  secInCh[0] = SUBGEAR_BUS (analog). Runner pre-reads into secInValue[0].
