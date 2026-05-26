@@ -208,27 +208,14 @@ void sim_gear_ramp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwne
     const GearProcCfg* cfg = static_cast<const GearProcCfg*>(proc->cfg);
     CbRampCfg*        dyn = static_cast<CbRampCfg*>(proc->dynCfg);
 
-    // --- Resolve gear and sub-gear ------------------------------------------
-    //  inCh[0] = SUBGEAR_BUS (analog). Runner pre-reads into inValue[0].
-    const int8_t  gear       = static_cast<int8_t>(value);
-    const uint8_t subGearIdx = static_cast<uint8_t>(proc->inValue[0]);
+    // --- Resolve gear (value = current gear from gear-fsm) -----------------
+    const int8_t gear = static_cast<int8_t>(value);
 
-    // --- Look up new ramp time ----------------------------------------------
-    uint16_t newRampTime;
-    if (subGearIdx > 0u && cfg->profile->subGear != nullptr)
-    {
-        const uint8_t si = static_cast<uint8_t>(
-            constrain(static_cast<int>(subGearIdx) - 1,
-                      0, static_cast<int>(cfg->profile->subGearCount) - 1));
-        newRampTime = cfg->profile->subGear[si].rampTime;
-    }
-    else
-    {
-        const uint8_t gi = static_cast<uint8_t>(
-            constrain(static_cast<int>(gear) - 1,
-                      0, static_cast<int>(cfg->profile->gearCount) - 1));
-        newRampTime = cfg->profile->gear[gi].rampTime;
-    }
+    // --- Look up ramp time for this gear -----------------------------------
+    const uint8_t gi = static_cast<uint8_t>(
+        constrain(static_cast<int>(gear) - 1,
+                  0, static_cast<int>(cfg->profile->gearCount) - 1));
+    const uint16_t newRampTime = cfg->profile->gear[gi].rampTime;
 
     // --- Write dynCfg only on change ----------------------------------------
     if (dyn->rampTimeMs != newRampTime) {

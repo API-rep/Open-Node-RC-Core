@@ -7,10 +7,11 @@
 #include "init/init.h"
 #include "system/utils.h"
 #include <core/config/inputs/PS4_dualshock.h>  // DigitalInputDevID enum
+#include <core/system/simulation/sim.h>
+#include <core/system/simulation/ctrl.h>
 #include <core/system/debug/debug.h>
 #include <core/system/debug/dashboard.h>
 #include <core/system/input/input_manager.h>
-#include <core/system/combus/processors/proc_chain.h>
 #include <core/system/output/output_manager.h>
 #include <core/system/combus/combus_manager.h>
 #include <core/system/combus/combus_access.h>
