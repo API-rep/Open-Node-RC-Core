@@ -3,7 +3,7 @@
  * @brief CbProc function — single-axis inertia ramp (hydraulics, steering).
  *
  * @details Pure ComBus simulation processor — no hardware calls, no µs domain.
- *   Reads the target from `value` (seeded by sim_chain_update from
+ *   Reads the target from `value` (seeded by proc_chain_step from
  *   CbChain::inCh).  Advances `state->currentPos` toward the target by
  *   `accelSteps` (moving away from neutral) or `brakeSteps` (moving toward
  *   neutral) on each `rampTimeMs` tick.  Writes the filtered position back

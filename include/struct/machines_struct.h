@@ -18,8 +18,8 @@
 // could create include cycles.
 #include <core/config/machines/combus_ids.h>
 
-#include <core/system/combus/combus_res.h>  // SrvHwAngle, pct#include <struct/simulation_struct.h>   // CbChain, SimDevCtx, SimDev, SimBehaviorFn, SimTractionCfg/State
-#include <struct/ctrl_struct.h>          // CbChain, CbProc, CbProcFn
+#include <core/system/combus/combus_res.h>  // SrvHwAngle, pct
+#include <struct/simulation_struct.h>   // CbChain, SimDevCtx, SimDev, SimBehaviorFn, SimTractionCfg/State
 
 
 /**

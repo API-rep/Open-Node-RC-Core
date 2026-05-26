@@ -1,9 +1,9 @@
 /******************************************************************************
- * @file  sim.cpp
+ * @file  proc_chain.cpp
  * @brief CbChain dispatcher — init and update implementation.
  *****************************************************************************/
 
-#include "sim.h"
+#include "proc_chain.h"
 
 #include <struct/combus_struct.h>              // ComBus
 #include <core/system/combus/combus_access.h>  // combus_set_analog, combus_set_digital
@@ -53,7 +53,7 @@ static void cbWrite(ComBus& bus, const ChanOpt& ch, uint16_t value, ChanOwner ow
  * @details Kept as a symmetric counterpart to dc_dev_init() / srv_dev_init().
  *   Each CbProcFn self-inits on first update call via zero-state detection.
  */
-void sim_init(CbChain* /*channels*/, uint8_t /*count*/)
+void proc_chain_init(CbChain* /*channels*/, uint8_t /*count*/)
 {
     // Stages self-init on first update call (zero-state detection).
 }
@@ -74,7 +74,7 @@ void sim_init(CbChain* /*channels*/, uint8_t /*count*/)
  * @param ch   Channel descriptor (procs, chainOwner, optInCh, outCh).
  * @param bus  Shared ComBus for this cycle.
  */
-void sim_chain_update(CbChain& ch, ComBus& bus)
+void proc_chain_step(CbChain& ch, ComBus& bus)
 {
     // --- 1. Pre-read primary input -------------------------------------------
     uint16_t value   = cbRead(bus, ch.optInCh, /*isDrivedGuard=*/true);
@@ -103,17 +103,17 @@ void sim_chain_update(CbChain& ch, ComBus& bus)
 
 
 /**
- * @brief Update all SimChannels — iterates the array and calls sim_chain_update().
+ * @brief Update all channels — iterates the array and calls proc_chain_step().
  *
  * @param channels  Channel array (may be nullptr when count == 0).
  * @param count     Number of channels.
- * @param bus       Shared ComBus — forwarded to each sim_chain_update().
+ * @param bus       Shared ComBus — forwarded to each proc_chain_step().
  */
-void sim_update(CbChain* channels, uint8_t count, ComBus& bus)
+void proc_chain_update(CbChain* channels, uint8_t count, ComBus& bus)
 {
     for (uint8_t p = 0; p < count; ++p) {
-        sim_chain_update(channels[p], bus);
+        proc_chain_step(channels[p], bus);
     }
 }
 
-// EOF sim.cpp
+// EOF proc_chain.cpp

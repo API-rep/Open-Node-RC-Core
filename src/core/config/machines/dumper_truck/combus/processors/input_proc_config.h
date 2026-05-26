@@ -15,7 +15,7 @@
  *   Each proc reads a digital button, modifies the channel value, and passes
  *   it to the next proc.  Final runner commits to the same output channel.
  *
- *   Processed BEFORE sim_update() — button state changes are immediately
+ *   Processed BEFORE proc_chain_update() — button state changes are immediately
  *   visible to the gear FSM in the SIM chain.
  *******************************************************************************
  */

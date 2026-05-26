@@ -46,7 +46,7 @@ enum SimCh {
 // 2. CHANNEL ARRAY
 // =============================================================================
 
-/// CbChain pipeline array — consumed by sim_update() in the machine main loop.
+/// CbChain pipeline array — consumed by proc_chain_update() in the machine main loop.
 extern CbChain kSimChannels[SIM_CH_COUNT];
 
 
