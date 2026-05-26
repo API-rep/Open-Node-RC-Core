@@ -14,7 +14,7 @@
 void cb_abs_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)
 {
     const int16_t sv   = static_cast<int16_t>(value);
-    proc->secOutValue  = static_cast<uint16_t>(sv >= 0 ? 1u : 0u);  // runner commits to optSecOutCh
+    proc->outValue  = static_cast<uint16_t>(sv >= 0 ? 1u : 0u);  // runner commits to outCh
     value              = static_cast<uint16_t>(sv >= 0 ? sv : -sv);
 }
 

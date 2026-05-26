@@ -24,7 +24,7 @@
 // 1. COMBUS  (always)
 // =============================================================================
 
-#include <core/config/machines/dumper_truck/combus/dumper_truck.h>
+#include <core/config/machines/dumper_truck/combus/combus.h>
 
 
 // =============================================================================

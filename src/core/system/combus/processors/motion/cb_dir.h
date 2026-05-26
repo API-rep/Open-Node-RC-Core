@@ -10,8 +10,8 @@
  *   - value > cfg->neutral  → DriveState::kDriveFwd
  *   - value < cfg->neutral  → DriveState::kDriveRev
  *   - value == cfg->neutral → DriveState::kStanding
- *   Result written via `DriveStateBus::encode()` to `proc->secOutValue`;
- *   the runner then commits it to `proc->optSecOutCh` (e.g. DRIVE_STATE_BUS).
+ *   Result written via `DriveStateBus::encode()` to `proc->outValue`;
+ *   the runner then commits it to `proc->outCh` (e.g. DRIVE_STATE_BUS).
  *
  *   Does NOT set `claimed`.  cfg = &CbDirCfg, state = nullptr.
  *
@@ -19,7 +19,7 @@
  *   @code
  *     { .fn = cb_bypass_fn, ... }
  *     { .fn = cb_ramp_fn,   ... }
- *     { .fn = cb_dir_fn,    .optSecOutCh = AnalogComBusID::DRIVE_STATE_BUS, ... }
+ *     { .fn = cb_dir_fn,    .outCh = AnalogComBusID::DRIVE_STATE_BUS, ... }
  *     { .fn = cb_gear_fn,   ... }
  *   @endcode
  *****************************************************************************/
@@ -37,7 +37,7 @@
  * @brief Direction detector — assigned to `CbProc::fn`.
  *
  * @param proc    CbProc descriptor — `cfg` cast to `const CbDirCfg*`.
- *                `optSecOutCh` = target analog channel (e.g. DRIVE_STATE_BUS).
+ *                `outCh` = target analog channel (e.g. DRIVE_STATE_BUS).
  * @param value   Read-only — post-ramp bipolaire position; NOT modified.
  * @param claimed Not modified.
  * @param chainOwner  Not used.

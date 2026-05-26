@@ -24,7 +24,7 @@
 
 
 #if MACHINE == VOLVO_A60_H_BRUDER
-  #include <core/config/machines/dumper_truck/combus/dumper_truck_ids.h>
+  #include <core/config/machines/dumper_truck/combus/combus_ids.h>
   using namespace DumperTruck;
 
 // #elif MACHINE == FUTURE_EXCAVATOR_VEHICLE     // TODO winter 2026

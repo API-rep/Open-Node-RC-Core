@@ -8,15 +8,15 @@
  *   Does NOT set `claimed`.
  *
  *   Sign side effect (direction flag) via:
- *   - `proc->secOutValue` = 1 (FWD/positive) or 0 (REV/negative)
- *   - `proc->optSecOutCh` = digital channel; runner commits after fn
+ *   - `proc->outValue` = 1 (FWD/positive) or 0 (REV/negative)
+ *   - `proc->outCh` = digital channel; runner commits after fn
  *     (nullopt = no side effect).
  *
  *   Typical use: second proc in a THROTTLE_BUS → RPM_BUS pipeline:
  *   @code
  *     { .fn = cb_center_fn, .cfg = &kCenter }
  *     { .fn = cb_abs_fn,    .cfg = nullptr,
- *       .optSecOutCh = DigitalComBusID::ESC_REVERSE_BUS }  // HIGH=FWD LOW=REV
+ *       .outCh = DigitalComBusID::ESC_REVERSE_BUS }  // HIGH=FWD LOW=REV
  *     { .fn = cb_scale_fn,  .cfg = &kScale  }
  *   @endcode
  *****************************************************************************/
@@ -33,7 +33,7 @@
  * @brief Absolute value with sign side effect — assigned to `CbProc::fn`.
  *
  * @param proc    CbProc descriptor — cfg = nullptr.
- *                `optSecOutCh` = optional digital channel for sign side effect.
+ *                `outCh` = optional digital channel for sign side effect.
  * @param value   In: signed-packed int16.  Out: magnitude [0..CbusNeutral].
  * @param claimed Not modified.
  * @param chainOwner  Not used.

@@ -1,5 +1,5 @@
 /*!****************************************************************************
- * @file  dumper_truck_ids.h
+ * @file  combus_ids.h
  * @brief Dumper truck com-bus channel ID enumerations
  *
  * Contains ONLY the AnalogComBusID / DigitalComBusID enums inside
@@ -7,7 +7,7 @@
  * from any header without risk of include cycles.
  *
  * Consumers:
- *   - dumper_truck.h   — include these IDs as part of the full layout
+ *   - combus.h   — include these IDs as part of the full layout
  *   - combus_ids.h     — umbrella dispatcher for struct headers (src/core/config/machines/combus_ids.h)
  *
  * On machine builds, combus_ids.h and combus_types.h adds using namespace DumperTruck;
@@ -102,4 +102,4 @@ enum class DigitalComBusID : uint8_t {
 
 }  // namespace DumperTruck
 
-// EOF dumper_truck_ids.h
+// EOF combus_ids.h

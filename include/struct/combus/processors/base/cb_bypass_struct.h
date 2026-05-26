@@ -4,7 +4,7 @@
  *
  * @details Retained for type safety and future extension.
  *   In practice `CbProc::cfg` is `nullptr` for this processor — the gate
- *   condition is fully described by `CbProc::secInCh[0]`.
+ *   condition is fully described by `CbProc::inCh[0]`.
  *****************************************************************************/
 #pragma once
 
@@ -17,7 +17,7 @@
  * @brief Config for `cb_bypass_fn` — conditional bypass gate.
  *
  * @details Empty struct — `CbProc::cfg` must be `nullptr` for this processor.
- *   The condition channel is declared in `CbProc::secInCh[0]`.
+ *   The condition channel is declared in `CbProc::inCh[0]`.
  *   Kept as a named type for documentation and future extension.
  */
 struct CbBypassCfg {};

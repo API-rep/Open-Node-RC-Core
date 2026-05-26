@@ -350,7 +350,7 @@ struct SimDev {
  *   `void (*)(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner owner)`
  *
  *   No `ComBus& bus` parameter — all bus I/O is handled by the runner via
- *   `CbChain::optInCh`/`optOutCh` and `CbProc::secInCh`/`optSecOutCh`.
+ *   `CbChain::optInCh`/`outCh` and `CbProc::inCh`/`outCh`.
  */
 using CbProcFn = CbProcFn;
 
@@ -358,9 +358,9 @@ using CbProcFn = CbProcFn;
  * @brief Simulation proc descriptor — alias of CbProc.
  *
  * @details Fields in `cb_struct.h`.  Key change vs. pre-fusion:
- *   - `optInCh`/`optOutCh` moved to `CbChain` (primary I/O, runner-owned).
- *   - `secInCh[3]` / `secInValue[3]` — up to 3 secondary inputs injected by runner.
- *   - `optSecOutCh` / `secOutValue` — one secondary output committed by runner.
+ *   - `optInCh`/`outCh` moved to `CbChain` (primary I/O, runner-owned).
+ *   - `inCh[3]` / `inValue[3]` — up to 3 secondary inputs injected by runner.
+ *   - `outCh` / `outValue` — one proc output committed by runner.
  *   - Field renames: (none — CbProc is the canonical form).
  *
  * @note Config arrays (`kThrottleProcs[]`, etc.) must use `CbProc` directly.
@@ -373,7 +373,7 @@ using CbProc = CbProc;
  *
  * @details Fields in `cb_struct.h`.  Key change vs. pre-fusion:
  *   - `simProc` renamed to `procs`; `simProcCount` renamed to `procCount`.
- *   - `optInCh` / `optOutCh` added (primary input/output, runner-owned).
+ *   - `optInCh` / `outCh` added (primary input/output, runner-owned).
  */
 using CbChain = CbChain;
 
@@ -419,51 +419,11 @@ struct ShiftDeltaState {
 
 
 // =============================================================================
-// 7. SUB-GEAR BUTTON PROCESSOR  (sim_subgear_btn_fn — ✅ implemented)
+// 7. SUB-GEAR BUTTON PROCESSOR — RETIRED (replaced by cb_btn.h INPUT chains)
 // =============================================================================
 
-/**
- * @brief Static configuration for the sub-gear button proc.
- *
- * @details Handles sub-gear mode toggle and step navigation from three digital
- *   buttons (SET, UP, DOWN).  Button channel IDs are declared in the proc's
- *   `secInCh[]` array — not in this struct.
- *
- *   Assigned to `CbProc::cfg` (as `const void*`); cast back inside
- *   `sim_subgear_btn_fn()`.
- *
- *   Chain placement: insert BEFORE `sim_gear_fn` so the gear FSM reads the
- *   freshly-written `SUBGEAR_BUS` value via its `secInCh[1]`.
- *
- *   Registration in config:
- *   @code
- *   {
- *     .secInCh    = { SUBGEAR_SET_BTN, SUBGEAR_UP_BTN, SUBGEAR_DOWN_BTN },
- *     .optSecOutCh = AnalogComBusID::SUBGEAR_BUS,
- *     .fn    = sim_subgear_btn_fn,
- *     .cfg   = &kSubGearBtnCfg,
- *     .state = &gSubGearBtnState,
- *   }
- *   @endcode
- */
-struct SimSubGearBtnCfg {
-    uint8_t  subGearCount;  ///< Upper index limit (from GearShiftProfile::subGearCount).
-    uint16_t debounceMs;    ///< Minimum ms between button transitions (0 = disabled).
-};
-
-/**
- * @brief Mutable runtime state for `sim_subgear_btn_fn`.
- *
- * @details Assigned to `CbProc::state` (as `void*`); cast back inside
- *   `sim_subgear_btn_fn()`.  Zero-initialised by default construction.
- */
-struct SimSubGearBtnState {
-    int8_t   subGear   = 0;      ///< Active sub-gear index (1..subGearCount). 0 = inactive.
-    bool     prevSet   = false;  ///< Previous SET button state — rising-edge detection.
-    bool     prevUp    = false;  ///< Previous UP button state  — rising-edge detection.
-    bool     prevDn    = false;  ///< Previous DOWN button state — rising-edge detection.
-    uint32_t lastMs    = 0u;     ///< Timestamp of last button event — debounce guard.
-};
+// Sub-gear button handling now lives in combus_input_config.cpp (INPUT chains).
+// SimSubGearBtnCfg / SimSubGearBtnState removed — replaced by CbBtnCfg / CbBtnState.
 
 
 // EOF simulation_struct.h

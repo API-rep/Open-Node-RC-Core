@@ -65,13 +65,13 @@ void sim_init(CbChain* /*channels*/, uint8_t /*count*/)
  * @details Sequence:
  *   1. Pre-read  : runner reads `ch.optInCh` → seeds `value`.
  *   2. Proc loop : for each proc (stops on `claimed = true`):
- *        a. Injects secondary inputs: `proc.secInValue[i]` ← bus[proc.secInCh[i]].
+ *        a. Injects secondary inputs: `proc.inValue[i]` ← bus[proc.inCh[i]].
  *        b. Calls `proc.fn(&proc, value, claimed, ch.chainOwner)`.
- *        c. Commits secondary output: bus[proc.optSecOutCh] ← proc.secOutValue.
- *   3. Post-write: runner writes `value` → `ch.optOutCh`.
+ *        c. Commits proc output: bus[proc.outCh] ← proc.outValue.
+ *   3. Post-write: runner writes `value` → `ch.outCh`.
  *      Always executes — `claimed` only aborts the proc chain, not the write.
  *
- * @param ch   Channel descriptor (procs, chainOwner, optInCh, optOutCh).
+ * @param ch   Channel descriptor (procs, chainOwner, optInCh, outCh).
  * @param bus  Shared ComBus for this cycle.
  */
 void sim_chain_update(CbChain& ch, ComBus& bus)
@@ -87,18 +87,18 @@ void sim_chain_update(CbChain& ch, ComBus& bus)
 
         //  a. Inject secondary inputs (no isDrived guard — internal channels).
         for (uint8_t i = 0u; i < 3u; ++i) {
-            proc.secInValue[i] = cbRead(bus, proc.secInCh[i], /*isDrivedGuard=*/false);
+            proc.inValue[i] = cbRead(bus, proc.inCh[i], /*isDrivedGuard=*/false);
         }
 
         //  b. Call proc fn (no bus access inside fn).
         proc.fn(&proc, value, claimed, ch.chainOwner);
 
-        //  c. Commit secondary output.
-        cbWrite(bus, proc.optSecOutCh, proc.secOutValue, ch.chainOwner);
+        //  c. Commit proc output.
+        cbWrite(bus, proc.outCh, proc.outValue, ch.chainOwner);
     }
 
     // --- 3. Post-write primary output (always) -------------------------------
-    cbWrite(bus, ch.optOutCh, value, ch.chainOwner);
+    cbWrite(bus, ch.outCh, value, ch.chainOwner);
 }
 
 

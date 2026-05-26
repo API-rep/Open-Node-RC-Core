@@ -16,7 +16,7 @@
  * @brief Configuration for `cb_dir_fn` — direction detection thresholds.
  *
  * @details Reads a post-ramp bipolaire value, determines direction vs. cfg->neutral,
- *   encodes via DriveStateBus::encode() and writes to proc->optSecOutCh.
+ *   encodes via DriveStateBus::encode() and writes to proc->outValue.
  *   cfg = &CbDirCfg, state = nullptr.
  */
 struct CbDirCfg {

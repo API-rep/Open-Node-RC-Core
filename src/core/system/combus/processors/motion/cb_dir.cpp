@@ -21,7 +21,7 @@ void cb_dir_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*cha
                     : (value < cfg->neutral) ? DriveState::kDriveRev
                     :                          DriveState::kStanding;
 
-    proc->secOutValue = DriveStateBus::encode(ds);  // runner commits to proc->optSecOutCh
+    proc->outValue = DriveStateBus::encode(ds);  // runner commits to proc->outCh
     (void)value;  // observer — does not modify value
 }
 

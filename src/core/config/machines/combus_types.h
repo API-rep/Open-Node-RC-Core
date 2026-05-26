@@ -32,7 +32,7 @@
 #include <defs/defs.h>
 
 #if MACHINE == VOLVO_A60_H_BRUDER
-  #include <core/config/machines/dumper_truck/combus/dumper_truck.h>
+  #include <core/config/machines/dumper_truck/combus/combus.h>
   using namespace DumperTruck;
 
 // #elif MACHINE == FUTURE_EXCAVATOR_VEHICLE     // TODO winter 2026

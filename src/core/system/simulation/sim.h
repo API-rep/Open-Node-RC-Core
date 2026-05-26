@@ -8,8 +8,8 @@
  *
  *   Runner contract:
  *   - Pre-reads `ch.optInCh` to seed `value`.
- *   - Iterates procs: injects `secInValue[]`, calls fn, commits `secOutValue`.
- *   - Post-writes `ch.optOutCh` after the chain (regardless of `claimed`).
+ *   - Iterates procs: injects `inValue[]`, calls fn, commits `outValue`.
+ *   - Post-writes `ch.outCh` after the chain (regardless of `claimed`).
  *
  *   Usage:
  *   @code
@@ -51,7 +51,7 @@ void sim_init(CbChain* channels, uint8_t count);
  * @brief Process a single CbChain.
  *
  * @details Pre-reads optInCh, dispatches procs with secIn injection and
- *   secOut commit, then post-writes optOutCh.  May be called directly when
+ *   secOut commit, then post-writes outCh.  May be called directly when
  *   only one channel needs to be refreshed out-of-order.
  *
  * @param ch   Channel to process.

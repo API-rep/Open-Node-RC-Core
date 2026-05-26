@@ -7,8 +7,8 @@
  *
  *   Runner contract (same as sim runner):
  *   - Pre-reads `ch.optInCh` (with isDrived guard) to seed `value`.
- *   - For each proc: injects `secInValue[]`, calls fn, commits `secOutValue`.
- *   - Post-writes `ch.optOutCh` after the chain (regardless of `claimed`).
+ *   - For each proc: injects `inValue[]`, calls fn, commits `outValue`.
+ *   - Post-writes `ch.outCh` after the chain (regardless of `claimed`).
  *   - `ChanOwner` comes from `ch.chainOwner` — no external owner parameter.
  *
  *   Usage:

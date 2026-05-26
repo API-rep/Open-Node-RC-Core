@@ -1,19 +1,20 @@
 /*!****************************************************************************
- * @file  dumper_truck_proc_config.h
- * @brief Dumper truck — CbChain pipeline declaration.
+ * @file  sim_proc_config.h
+ * @brief Dumper truck — CbChain pipeline declaration (SIM layer, class-level).
  *
- * @details Exposes the CbChain array consumed by sim_update() in the
+ * @details Exposes the SIM CbChain array consumed by sim_update() in the
  *   machine main loop.  Included from the vehicle header (IS_MAINBOARD block)
  *   so that board-specific envCfg.h can reference kSimChannels[] directly.
  *
- *   Channel pipelines (optInCh → procs → optOutCh):
+ *   Channel pipelines (optInCh → procs → outCh):
  *     SIM_THROTTLE : THROTTLE_BUS → [ramp, drive-state, center, abs, scale,
  *                                     bypass, ratio] → RPM_BUS
- *     SIM_GEAR     : RPM_BUS      → [bypass, subgear-btn, gear-fsm, gear-ramp]
- *                                     → GEAR
+ *     SIM_GEAR     : RPM_BUS      → [bypass, gear-fsm, gear-ramp] → GEAR
  *     SIM_TRACTION : RPM_BUS      → [rpm_to_speed] → ESC_SPEED_BUS
  *     SIM_STEERING : STEERING_BUS → [bypass, ramp]  → STEERING_RAMPED_BUS
  *     SIM_DUMP     : DUMP_BUS     → [bypass, ramp]  → DUMP_RAMPED_BUS
+ *
+ *   SUBGEAR_BUS is written by INPUT chain (cb_btn procs) — see input_proc_config.h.
  *******************************************************************************
  */
 #pragma once
@@ -49,4 +50,4 @@ enum SimCh {
 extern CbChain kSimChannels[SIM_CH_COUNT];
 
 
-// EOF dumper_truck_proc_config.h
+// EOF sim_proc_config.h

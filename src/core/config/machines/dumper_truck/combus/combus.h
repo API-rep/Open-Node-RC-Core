@@ -1,5 +1,5 @@
 /*!****************************************************************************
- * @file  dumper_truck.h
+ * @file  combus.h
  * @brief Dumper truck com-bus — channel IDs, externs and input mapping
  *
  * This single file covers three scopes:
@@ -28,7 +28,7 @@
 // 1. COM-BUS CHANNEL IDs  (available in all build environments)
 // =============================================================================
 
-#include "dumper_truck_ids.h"   ///< AnalogComBusID / DigitalComBusID inside namespace DumperTruck
+#include "combus_ids.h"   ///< AnalogComBusID / DigitalComBusID inside namespace DumperTruck
 
 
 // =============================================================================
@@ -68,4 +68,4 @@ extern ComBus comBus;
 #include "../inputs_map/inputs_map.h"
 #endif  // INPUT_MODULE
 
-// EOF dumper_truck.h
+// EOF combus.h

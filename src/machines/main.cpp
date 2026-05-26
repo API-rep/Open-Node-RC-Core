@@ -234,11 +234,9 @@ void loop() {
 #endif
       }
 
-      // --- 2. Ctrl channel update: raw buttons → processed digital states.
-      ctrl_update(machine.ctrlChain, machine.ctrlChainCount, comBus);
-
-      // --- 3. Simulation channel update. ---
-      sim_update(machine.simChain, machine.simChainCount, comBus);
+      // --- 2. CbChain 2-layer pipeline (INPUT → SIM) ---
+      sim_update(machine.inputChain, machine.inputChainCount, comBus);  // niveau 1: btn → counters (subgear, direct-drive)
+      sim_update(machine.simChain,   machine.simChainCount,   comBus);  // niveau 2: physics (gear, ramp, bypass, …)
       break;
     }
 

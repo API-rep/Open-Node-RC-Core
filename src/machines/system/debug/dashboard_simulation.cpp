@@ -75,11 +75,11 @@ static AnalogComBusID simChanInCh(const CbChain& ch)
 	return static_cast<AnalogComBusID>(0u);
 }
 
-/// @brief Derive the primary output channel from a CbChain (ch.optOutCh, analog).
+/// @brief Derive the primary output channel from a CbChain (ch.outCh, analog).
 static AnalogComBusID simChanOutCh(const CbChain& ch)
 {
-	if (ch.optOutCh.has_value() && std::holds_alternative<AnalogComBusID>(*ch.optOutCh))
-		return std::get<AnalogComBusID>(*ch.optOutCh);
+	if (ch.outCh.has_value() && std::holds_alternative<AnalogComBusID>(*ch.outCh))
+		return std::get<AnalogComBusID>(*ch.outCh);
 	return static_cast<AnalogComBusID>(0u);
 }
 
@@ -104,8 +104,8 @@ static void render_proc_row(uint8_t idx, const CbProc* proc)
 
 	if (strcmp(pname, "bypass") == 0) {
 		DigitalComBusID condCh = DigitalComBusID{};
-		if (proc->secInCh[0].has_value() && std::holds_alternative<DigitalComBusID>(*proc->secInCh[0]))
-			condCh = std::get<DigitalComBusID>(*proc->secInCh[0]);
+		if (proc->inCh[0].has_value() && std::holds_alternative<DigitalComBusID>(*proc->inCh[0]))
+			condCh = std::get<DigitalComBusID>(*proc->inCh[0]);
 		const bool active = s_bus->digitalBus[static_cast<uint8_t>(condCh)].value;
 		dLine("  Proc %u : bypass    condCh: %-10s  active: %-3s",
 		      (unsigned)idx, dCh(condCh), active ? "YES" : "no ");
@@ -211,13 +211,13 @@ static void render_sim_view()
 			snprintf(outDisp, sizeof(outDisp), "%+6d%%", (int)outPct);
 		}
 
-		//  Bypass state: first proc named "bypass" with secInCh[0] HIGH.
+		//  Bypass state: first proc named "bypass" with inCh[0] HIGH.
 		bool chBypass = false;
 		if (ch.procCount > 0u && ch.procs != nullptr
 		    && ch.procs[0].name != nullptr
 		    && strcmp(ch.procs[0].name, "bypass") == 0)
 		{
-			const auto& cond = ch.procs[0].secInCh[0];
+			const auto& cond = ch.procs[0].inCh[0];
 			if (cond.has_value() && std::holds_alternative<DigitalComBusID>(*cond))
 				chBypass = s_bus->digitalBus[static_cast<uint8_t>(std::get<DigitalComBusID>(*cond))].value;
 		}
@@ -271,7 +271,7 @@ static void render_channel_detail(uint8_t idx)
 	    && ch.procs[0].name != nullptr
 	    && strcmp(ch.procs[0].name, "bypass") == 0)
 	{
-		const auto& cond = ch.procs[0].secInCh[0];
+		const auto& cond = ch.procs[0].inCh[0];
 		if (cond.has_value() && std::holds_alternative<DigitalComBusID>(*cond))
 			chBypass = s_bus->digitalBus[static_cast<uint8_t>(std::get<DigitalComBusID>(*cond))].value;
 	}

@@ -74,8 +74,8 @@ int8_t sim_gear_fsm_update(GearFsmState*           state,
 /**
  * @brief Gear FSM CbProc — reads RPM magnitude, runs the FSM, sets `value = gear`.
  *
- * @details secInCh[0] = DRIVE_STATE_BUS (analog): gates RPM for reverse/standing.
- *          secInCh[1] = SUBGEAR_BUS (analog): suppresses upshift when active.
+ * @details inCh[0] = DRIVE_STATE_BUS (analog): gates RPM for reverse/standing.
+ *          inCh[1] = SUBGEAR_BUS (analog): suppresses upshift when active.
  *
  *   Sub-gear button handling is now in `sim_subgear_btn_fn` (separate proc,
  *   placed BEFORE this one in the gear channel).  This proc only reads the
@@ -93,11 +93,11 @@ void sim_gear_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOw
 /**
  * @brief Gear direct-drive bypass — sets GEAR = 1 and claims when DIRECT_DRIVE is HIGH.
  *
- * @details secInCh[0] = DIRECT_DRIVE (digital).
+ * @details inCh[0] = DIRECT_DRIVE (digital).
  *   cfg = nullptr, state = nullptr.
  *
  * @param proc    CbProc descriptor.
- * @param value   Set to 1 when secInValue[0] != 0; unchanged otherwise.
+ * @param value   Set to 1 when inValue[0] != 0; unchanged otherwise.
  * @param claimed Set to `true` when DIRECT_DRIVE is HIGH; unchanged otherwise.
  */
 void sim_gear_bypass_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
@@ -105,8 +105,7 @@ void sim_gear_bypass_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner 
 /**
  * @brief Gear shift-delta CbProc — subtracts shiftDelta RPM on upshift.
  *
- * @details secInCh[0] = DIRECT_DRIVE (digital): early exit when HIGH.
- *          secInCh[1] = GEAR (analog): current gear from SIM_GEAR channel.
+ * @details inCh[0] = GEAR (analog): current gear from SIM_GEAR channel.
  *   cfg = GearProcCfg*, state = ShiftDeltaState*.
  *
  * @param proc    CbProc descriptor.
@@ -118,8 +117,8 @@ void sim_apply_ratio_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner 
 /**
  * @brief RPM → ESC speed CbProc — converts RPM_BUS to ESC_SPEED_BUS domain.
  *
- * @details secInCh[0] = DRIVE_STATE_BUS (analog): direction encoding.
- *          secInCh[1] = GEAR (analog): active gear from SIM_GEAR channel.
+ * @details inCh[0] = DRIVE_STATE_BUS (analog): direction encoding.
+ *          inCh[1] = GEAR (analog): active gear from SIM_GEAR channel.
  *   cfg = GearProcCfg*, state = nullptr.
  *
  * @param proc    CbProc descriptor.
@@ -131,7 +130,7 @@ void sim_rpm_to_speed_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner
 /**
  * @brief Gear→ramp bridge — updates per-gear ramp time in a linked CbRampCfg.
  *
- * @details secInCh[0] = SUBGEAR_BUS (analog): selects sub-gear ramp when active.
+ * @details inCh[0] = SUBGEAR_BUS (analog): selects sub-gear ramp when active.
  *   Passes `value` through unchanged (gear flows to sim_write).
  *   cfg = GearProcCfg*, dynCfg = CbRampCfg* (RAM), state = nullptr.
  *

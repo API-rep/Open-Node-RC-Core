@@ -59,18 +59,18 @@ void ctrl_update(CbChain* channels, uint8_t count, ComBus& bus)
 
             //  Inject secondary inputs (no isDrived guard — internal channels).
             for (uint8_t i = 0u; i < 3u; ++i) {
-                proc.secInValue[i] = cbRead(bus, proc.secInCh[i], /*isDrivedGuard=*/false);
+                proc.inValue[i] = cbRead(bus, proc.inCh[i], /*isDrivedGuard=*/false);
             }
 
             //  Call proc fn.
             proc.fn(&proc, value, claimed, chan.chainOwner);
 
-            //  Commit secondary output.
-            cbWrite(bus, proc.optSecOutCh, proc.secOutValue, chan.chainOwner);
+            //  Commit proc output.
+            cbWrite(bus, proc.outCh, proc.outValue, chan.chainOwner);
         }
 
         // --- Post-write primary output (always) -------------------------------
-        cbWrite(bus, chan.optOutCh, value, chan.chainOwner);
+        cbWrite(bus, chan.outCh, value, chan.chainOwner);
     }
 }
 

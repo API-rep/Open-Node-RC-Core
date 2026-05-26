@@ -72,8 +72,8 @@ enum SigDev {
 /// Array definitions in `volvo_A60H_bruder.cpp`.
 extern SigDevice sigDevArray[SIG_COUNT];
 
-#include <core/config/machines/dumper_truck/combus/dumper_truck_proc_config.h>   ///< kSimChannels[], SimCh enum — dumper-truck class.
-#include "inputs_map/ctrl_config.h"   ///< kCtrlChains[], kCtrlChainCount — vehicle-level, board-independent.
+#include <core/config/machines/dumper_truck/combus/processors/input_proc_config.h>  ///< kInputChains[], InputCh enum — dumper-truck class.
+#include <core/config/machines/dumper_truck/combus/processors/sim_proc_config.h>    ///< kSimChannels[], SimCh enum — dumper-truck class.
 
 // --- Board dispatch ---
   #include "mainboard/mainboard.h"
