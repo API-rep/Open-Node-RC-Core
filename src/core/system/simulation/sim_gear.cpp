@@ -92,20 +92,13 @@ void sim_gear_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*c
 
     // --- 1. RPM magnitude from RPM_BUS + DRIVE_STATE_BUS gate ---------------
     //    inCh[0] = DRIVE_STATE_BUS (analog). Runner pre-reads into inValue[0].
-    //    inCh[1] = SUBGEAR_BUS (analog). Runner pre-reads into inValue[1].
     const int8_t  ds  = DriveStateBus::decode(proc->inValue[0]);
     const int16_t rpm = (ds > 0) ? static_cast<int16_t>(value) : int16_t(0);
 
     // --- 2. Run gear FSM ------------------------------------------------------
-    int8_t gear = sim_gear_fsm_update(state, *cfg->profile, rpm);
+    const int8_t gear = sim_gear_fsm_update(state, *cfg->profile, rpm);
 
-    // --- 3. Sub-gear lock (handled by sim_subgear_btn_fn upstream) ----------
-    //    Lock gear at 1 while sub-gear is active.
-    const int8_t subGear = static_cast<int8_t>(proc->inValue[1]);
-    if (subGear > 0 && gear > 1)
-        gear = 1;
-
-    // --- 4. Output — gear integer becomes the channel value -----------------
+    // --- 3. Output — gear integer becomes the channel value -----------------
     value = static_cast<uint16_t>(gear);
 }
 
@@ -208,7 +201,7 @@ void sim_gear_ramp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwne
     const GearProcCfg* cfg = static_cast<const GearProcCfg*>(proc->cfg);
     CbRampCfg*        dyn = static_cast<CbRampCfg*>(proc->dynCfg);
 
-    // --- Resolve gear (value = current gear from gear-fsm) -----------------
+    // --- Resolve gear from value (= gear after claim cascade) ---------------
     const int8_t gear = static_cast<int8_t>(value);
 
     // --- Look up ramp time for this gear -----------------------------------
@@ -223,6 +216,22 @@ void sim_gear_ramp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwne
         dyn->resetRamp  = true;
     }
     // value (= gear) passed through unchanged.
+}
+
+// =============================================================================
+// 7. MANUAL GEAR CLAIM SIMPROC FUNCTION
+// =============================================================================
+
+/** @brief Manual gear claim — see sim_gear.h for contract. */
+void sim_manual_gear_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner /*chainOwner*/)
+{
+    // inCh[0] = MANUAL_GEAR_SET (digital). Runner pre-reads into inValue[0].
+    const bool manualActive = (proc->inValue[0] != 0u);
+
+    if (manualActive) {
+        claimed = true;  // Stop chain — GEAR already set by INPUT (cb_btn procs).
+    }
+    // value unchanged — passthrough in all cases.
 }
 
 // EOF sim_gear.cpp

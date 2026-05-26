@@ -49,6 +49,24 @@
 void sim_gear_fsm_init(GearFsmState* state);
 
 /**
+ * @brief Manual gear claim — passthrough proc for manual gear mode.
+ *
+ * @details CbProc function — reads MANUAL_GEAR_SET (inCh[0]).
+ *   If HIGH → claim (stops chain), value unchanged (GEAR already written by INPUT).
+ *   If LOW  → passthrough (no claim), auto-FSM continues.
+ *
+ *   Rationale: Manual mode takes priority over auto-FSM. GEAR is already set
+ *   by INPUT chain (cb_btn_inc/dec on UP/DOWN buttons), so this proc just
+ *   guards against auto-FSM overwriting it.
+ *
+ * @param proc       CbProc descriptor (inCh[0] = MANUAL_GEAR_SET).
+ * @param value      Current gear (unchanged — already set by INPUT).
+ * @param claimed    Set to true if MANUAL_GEAR_SET HIGH.
+ * @param chainOwner Chain owner (unused).
+ */
+void sim_manual_gear_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+
+/**
  * @brief Advance the N-gear FSM by one cycle.
  *
  * @details Compares `rpm` to the shift thresholds in `profile`:
@@ -130,9 +148,13 @@ void sim_rpm_to_speed_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner
 /**
  * @brief Gear→ramp bridge — updates per-gear ramp time in a linked CbRampCfg.
  *
- * @details inCh[0] = SUBGEAR_BUS (analog): selects sub-gear ramp when active.
- *   Passes `value` through unchanged (gear flows to sim_write).
+ * @details Passes `value` through unchanged (gear flows to final write).
  *   cfg = GearProcCfg*, dynCfg = CbRampCfg* (RAM), state = nullptr.
+ *   No inCh — reads gear from `value` (= gear after claim cascade).
+ *
+ *   Intended placement: LAST proc in GEAR chain (after all claim/FSM procs).
+ *   Updates gTractionRampDyn based on final gear; THROTTLE chain uses the
+ *   updated rampTime at NEXT cycle (1 cycle latency — acceptable).
  *
  * @param proc    CbProc descriptor.
  * @param value   In/out: current gear — passed through unchanged.

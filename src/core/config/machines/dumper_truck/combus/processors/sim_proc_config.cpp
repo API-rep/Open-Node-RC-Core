@@ -9,9 +9,9 @@
  *     SIM_THROTTLE : THROTTLE_BUS → ramp, drive-state(→DRIVE_STATE_BUS),
  *                    center, abs, scale, bypass(DIRECT_DRIVE),
  *                    ratio(DIRECT_DRIVE, GEAR) → RPM_BUS
- *     SIM_GEAR     : RPM_BUS → bypass(DIRECT_DRIVE),
- *                    gear-fsm(DRIVE_STATE_BUS, SUBGEAR_BUS),
- *                    gear-ramp(SUBGEAR_BUS) → GEAR
+ *     SIM_GEAR     : RPM_BUS → subgear-claim(SUBGEAR_BUS),
+ *                    manual-claim(MANUAL_GEAR_SET), direct-claim(DIRECT_DRIVE),
+ *                    gear-fsm(DRIVE_STATE_BUS), gear-ramp → GEAR
  *     SIM_TRACTION : RPM_BUS → rpm_to_speed(DRIVE_STATE_BUS, GEAR) → ESC_SPEED_BUS
  *     SIM_STEERING : STEERING_BUS → bypass(DIRECT_DRIVE), ramp → STEERING_RAMPED_BUS
  *     SIM_DUMP     : DUMP_BUS     → bypass(DIRECT_DRIVE), ramp → DUMP_RAMPED_BUS
@@ -104,7 +104,8 @@ static ShiftDeltaState     gThrottleShiftDeltaState {};
 // =============================================================================
 
 static CbProc kThrottleProcs[] = {
-    // ramp — heavy-truck inertia on throttle input.
+    // ramp — heavy-truck inertia on throttle input (uses gTractionRampDyn).
+    //   rampTimeMs is updated by gear-ramp proc in GEAR chain (1 cycle latency).
     { .name    = "ramp",
       .fn      = cb_ramp_fn,
       .cfg     = &kTractionRamp,
@@ -146,21 +147,57 @@ static CbProc kThrottleProcs[] = {
 };
 
 static CbProc kGearProcs[] = {
-    // bypass — DIRECT_DRIVE HIGH → set gear=1, claim (skips gear-fsm).
-    { .name      = "bypass",
-      .inCh   = { DigitalComBusID::DIRECT_DRIVE },
-      .fn        = sim_gear_bypass_fn,
+    // =========================================================================
+    // CLAIM CASCADE — first claim wins, later procs skipped.
+    // Priority: SubGear > Manual > Direct > Auto (FSM).
+    // =========================================================================
+
+    // 1. SubGear claim — SUBGEAR_BUS > CbusNeutral → force gear=1, claim.
+    //    Rationale: Crawl mode active (slow speed, manual control via UP/DOWN).
+    //    SubGear index written by INPUT chain (cb_btn procs on SUBGEAR_UP/DOWN).
+    //    Blocks manual/direct/auto modes — exclusive control.
+    { .name      = "subgear-claim",
+      .inCh   = { AnalogComBusID::SUBGEAR_BUS },
+      .fn        = cb_bypass_fn,  // reuse: if inCh > neutral → claim, value=1
     },
-    // gear-fsm — RPM → gear FSM; reads DRIVE_STATE_BUS + SUBGEAR_BUS.
+
+    // 2. Manual claim — MANUAL_GEAR_SET HIGH → passthrough GEAR, claim.
+    //    Rationale: Manual mode active. GEAR already set by INPUT chain
+    //    (cb_btn_inc/dec on UP/DOWN buttons). This proc prevents auto-FSM
+    //    from overwriting the manual selection.
+    //    NOTE: COMMENTED OUT — MANUAL_GEAR_SET not yet written by INPUT chain.
+    //    Reading uninitialized digital channel causes random claims → saccades.
+    //    TODO: Implement INPUT chain procs that write MANUAL_GEAR_SET before enabling.
+    /*
+    { .name      = "manual-claim",
+      .inCh   = { DigitalComBusID::MANUAL_GEAR_SET },
+      .fn        = sim_manual_gear_fn,  // claim if flag HIGH, value unchanged
+    },
+    */
+
+    // 3. Direct Drive claim — DIRECT_DRIVE HIGH → force gear=1, claim.
+    //    Rationale: Direct-drive bypass mode (inertia disabled on throttle).
+    //    Fixed 1st gear for predictable direct ESC control.
+    { .name      = "direct-claim",
+      .inCh   = { DigitalComBusID::DIRECT_DRIVE },
+      .fn        = sim_gear_bypass_fn,  // force gear=1, claim
+    },
+
+    // 4. Auto FSM — RPM + direction → automatic gear (if no claim above).
+    //    Rationale: Default mode. Hysteresis-based upshift/downshift driven
+    //    by RPM thresholds and DRIVE_STATE (accel vs. decel detection).
     { .name      = "gear-fsm",
-      .inCh   = { AnalogComBusID::DRIVE_STATE_BUS, AnalogComBusID::SUBGEAR_BUS },
+      .inCh   = { AnalogComBusID::DRIVE_STATE_BUS },
       .fn        = sim_gear_fn,
       .cfg       = &kGearCfg,
       .state     = &gGearFsmState,
     },
-    // gear-ramp — updates traction ramp dynCfg for new gear; reads SUBGEAR_BUS.
+
+    // 5. Gear→ramp bridge — updates gTractionRampDyn based on final gear.
+    //    Rationale: Per-gear ramp time. Reads `value` (= gear after claim cascade),
+    //    writes gTractionRampDyn.rampTimeMs. THROTTLE chain uses updated rampTime
+    //    at NEXT cycle (1 cycle latency — acceptable, avoids circular dependency).
     { .name      = "gear-ramp",
-      .inCh   = { AnalogComBusID::SUBGEAR_BUS },
       .fn        = sim_gear_ramp_fn,
       .cfg       = &kGearCfg,
       .dynCfg    = &gTractionRampDyn,
