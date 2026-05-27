@@ -16,6 +16,7 @@
 #include "dashboard_simulation.h"
 #include <core/system/debug/dashboard.h>
 #include <core/system/vbat/vbat_sense.h>
+#include <struct/simulation_struct.h>   // DriveStateBus
 
 #include <Arduino.h>
 #include <stdio.h>
@@ -42,19 +43,28 @@ static uint8_t        s_digitalCh = 0;
  * @details Reduces the digital channel section from one row per channel to
  *   one row per four channels, keeping the overview within terminal height.
  */
-static void renderDigitalCompact(const ComBus* bus, uint8_t n)
+static void renderDigitalSummary(const ComBus* bus, uint8_t n)
 {
-	for (uint8_t r = 0u; r < n; r += 4u) {
-		char buf[DashInnerW + 4];
-		int  p = snprintf(buf, sizeof(buf), "  ");
-		for (uint8_t j = r; j < r + 4u && j < n; ++j) {
-			const char* nm  = bus->digitalBus[j].infoName ? bus->digitalBus[j].infoName : "?";
-			const char* val = bus->digitalBus[j].value    ? "ON " : "off";
-			const char  drv = bus->digitalBus[j].isDrived ? '*' : ' ';
-			p += snprintf(buf + p, sizeof(buf) - (size_t)p,
-			              "#%-2u %-14.14s:%-3s%c  ", j, nm, val, drv);
+	uint8_t activeCount = 0;
+	char    activeNames[80] = "";
+	int     p = 0;
+
+	for (uint8_t i = 0; i < n; i++) {
+		if (bus->digitalBus[i].value) {
+			activeCount++;
+			if (activeCount <= 4 && p < 60) {  // max 4 names, leave room
+				const char* nm = bus->digitalBus[i].infoName ? bus->digitalBus[i].infoName : "?";
+				if (activeCount > 1) p += snprintf(activeNames + p, sizeof(activeNames) - (size_t)p, ", ");
+				p += snprintf(activeNames + p, sizeof(activeNames) - (size_t)p, "%s", nm);
+			}
 		}
-		dLine("%s", buf);
+	}
+	if (activeCount > 4) snprintf(activeNames + p, sizeof(activeNames) - (size_t)p, ", ...");
+
+	if (activeCount > 0) {
+		dLine("  Digital: %u/%u active  (%s)", activeCount, n, activeNames);
+	} else {
+		dLine("  Digital: 0/%u active", n);
 	}
 }
 
@@ -115,21 +125,37 @@ static void render_overview() {
 		s_bus->keyOn ? "ON" : "OFF"
 	);
 
-		// --- 3. Channel summary ---
+		// --- 3. Channel summary (wire channels only: 0..WIRE_END-1) ---
 	dMid();
-	for (uint8_t i = 0; i < s_analogCh; i++) {
+	const uint8_t wireEnd = static_cast<uint8_t>(AnalogComBusID::WIRE_END);
+	for (uint8_t i = 0; i < wireEnd && i < s_analogCh; i++) {
 		uint16_t    raw  = s_bus->analogBus[i].value;
 		int16_t     pct  = dashPctBipolar(raw, s_bus->analogBusMaxVal);
 		bool        drv  = s_bus->analogBus[i].isDrived;
 		const char* name = s_bus->analogBus[i].infoName ? s_bus->analogBus[i].infoName : "?";
-		dLine("  %2u  %-44.44s  %5u  %+4d%%  %s",
-			i, name, raw, pct, drv ? "DRV" : "---");
+
+		// Special decoding for DRIVE_STATE_BUS (index 5) — display readable text
+		if (i == static_cast<uint8_t>(AnalogComBusID::DRIVE_STATE_BUS)) {
+			const int8_t ds = DriveStateBus::decode(raw);
+			const char* stateStr;
+			switch (ds) {
+				case -2: stateStr = "BRAKE_REV"; break;  // kBrakeRev
+				case -1: stateStr = "REV";       break;  // kDriveRev
+				case  0: stateStr = "STAND";     break;  // kStanding
+				case +1: stateStr = "BRAKE_FWD"; break;  // kBrakeFwd
+				case +2: stateStr = "FWD";       break;  // kDriveFwd
+				default: stateStr = "???";       break;
+			}
+			dLine("  %2u  %-44.44s  %-10s       %s",
+				i, name, stateStr, drv ? "DRV" : "---");
+		} else {
+			dLine("  %2u  %-44.44s  %5u  %+4d%%  %s",
+				i, name, raw, pct, drv ? "DRV" : "---");
+		}
 	}
 	if (s_digitalCh > 0u) {
 		dMid();
-		dLine("  digital  (* = driven)");
-		dMid();
-		renderDigitalCompact(s_bus, s_digitalCh);
+		renderDigitalSummary(s_bus, s_digitalCh);
 	}
 
 		// --- 4. Serial log tail ---
