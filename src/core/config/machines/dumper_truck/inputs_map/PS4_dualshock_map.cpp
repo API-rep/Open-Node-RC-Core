@@ -20,8 +20,8 @@ const InputDigitalMap InputDigitalMapArray[] = {
   { DigitalInputDevID::TRIANGLE_BTN, DigitalComBusID::KEY_BTN,          false },
   { DigitalInputDevID::OPTIONS_BTN,  DigitalComBusID::DIRECT_DRIVE_BTN, false },  // raw button — ctrl chain derives DIRECT_DRIVE state
   { DigitalInputDevID::SHARE_BTN,    DigitalComBusID::SUBGEAR_SET_BTN,  false },  // crawler mode toggle
-  { DigitalInputDevID::UP_ARROW,     DigitalComBusID::SUBGEAR_UP_BTN,   false },  // crawler: faster sub-gear
-  { DigitalInputDevID::DOWN_ARROW,   DigitalComBusID::SUBGEAR_DOWN_BTN, false }   // crawler: slower sub-gear
+  { DigitalInputDevID::UP_ARROW,     DigitalComBusID::GEAR_UP_BTN,   false },  // gear up (manual mode) / subgear faster (crawl mode)
+  { DigitalInputDevID::DOWN_ARROW,   DigitalComBusID::GEAR_DOWN_BTN, false }   // gear down (manual mode) / subgear slower (crawl mode)
 };
 
   // number of digital mappings in InputDigital Map array

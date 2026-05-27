@@ -34,7 +34,7 @@
 #include <core/system/combus/processors/math/cb_abs.h>              // cb_abs_fn
 #include <core/system/combus/processors/math/cb_scale.h>            // cb_scale_fn, CbScaleCfg
 #include <core/system/combus/processors/motion/cb_dir.h>           // cb_dir_fn, CbDirCfg
-#include <core/system/simulation/sim_gear.h>      // sim_gear_fn, sim_apply_ratio_fn, sim_gear_bypass_fn, sim_rpm_to_speed_fn, sim_gear_ramp_fn
+#include <core/system/combus/processors/modules/gear/cb_gear.h>    // gear_fsm_fn, gear_upshift_drop_fn, gear_rpm_to_speed_fn, gear_dyn_ramp_fn
 using namespace DumperTruck;
 
 
@@ -67,7 +67,7 @@ static constexpr CbRampCfg kTractionRamp {
     .neutralBand = 0u,
 };
 
-//  Traction ramp — RAM copy, mutated by sim_gear_ramp_fn on each gear change.
+//  Traction ramp — RAM copy, mutated by gear_dyn_ramp_fn on each gear change.
 static CbRampCfg gTractionRampDyn = kTractionRamp;
 
 
@@ -85,6 +85,10 @@ static constexpr CbScaleCfg kThrottleScale {
 
 static constexpr GearProcCfg kGearCfg {
     .profile = &kGearShift_Heavy3Speed,
+};
+
+static constexpr CbBypassCfg kDirectDriveGearBypass {
+    .forceValue = 1u,  // Force GEAR = 1 on DIRECT_DRIVE claim.
 };
 
 
@@ -140,7 +144,7 @@ static CbProc kThrottleProcs[] = {
     // ratio — subtract shiftDelta RPM on upshift.
     { .name      = "ratio",
       .inCh   = { AnalogComBusID::GEAR },
-      .fn        = sim_apply_ratio_fn,
+      .fn        = gear_upshift_drop_fn,
       .cfg       = &kGearCfg,
       .state     = &gThrottleShiftDeltaState,
     },
@@ -171,7 +175,7 @@ static CbProc kGearProcs[] = {
     /*
     { .name      = "manual-claim",
       .inCh   = { DigitalComBusID::MANUAL_GEAR_SET },
-      .fn        = sim_manual_gear_fn,  // claim if flag HIGH, value unchanged
+      .fn        = cb_bypass_fn,  // claim if flag HIGH, value unchanged (GEAR set by INPUT)
     },
     */
 
@@ -180,7 +184,8 @@ static CbProc kGearProcs[] = {
     //    Fixed 1st gear for predictable direct ESC control.
     { .name      = "direct-claim",
       .inCh   = { DigitalComBusID::DIRECT_DRIVE },
-      .fn        = sim_gear_bypass_fn,  // force gear=1, claim
+      .fn        = cb_bypass_fn,
+      .cfg       = &kDirectDriveGearBypass,  // force gear=1, claim
     },
 
     // 4. Auto FSM — RPM + direction → automatic gear (if no claim above).
@@ -188,7 +193,7 @@ static CbProc kGearProcs[] = {
     //    by RPM thresholds and DRIVE_STATE (accel vs. decel detection).
     { .name      = "gear-fsm",
       .inCh   = { AnalogComBusID::DRIVE_STATE_BUS },
-      .fn        = sim_gear_fn,
+      .fn        = gear_fsm_fn,
       .cfg       = &kGearCfg,
       .state     = &gGearFsmState,
     },
@@ -198,7 +203,7 @@ static CbProc kGearProcs[] = {
     //    writes gTractionRampDyn.rampTimeMs. THROTTLE chain uses updated rampTime
     //    at NEXT cycle (1 cycle latency — acceptable, avoids circular dependency).
     { .name      = "gear-ramp",
-      .fn        = sim_gear_ramp_fn,
+      .fn        = gear_dyn_ramp_fn,
       .cfg       = &kGearCfg,
       .dynCfg    = &gTractionRampDyn,
     },
@@ -208,7 +213,7 @@ static CbProc kTractionProcs[] = {
     // rpm_to_speed — RPM + gear → ESC_SPEED_BUS bipolar.
     { .name      = "rpm_to_speed",
       .inCh   = { AnalogComBusID::DRIVE_STATE_BUS, AnalogComBusID::GEAR },
-      .fn        = sim_rpm_to_speed_fn,
+      .fn        = gear_rpm_to_speed_fn,
       .cfg       = &kGearCfg,
     },
 };

@@ -14,7 +14,7 @@ using namespace DumperTruck;
 AnalogComBus AnalogComBusArray[static_cast<uint8_t>(AnalogComBusID::CH_COUNT)] = {
   // --- Wire channels (0 .. WIRE_END-1) --- transmitted over UART ---
   { .infoName = "steering channel",        .value = CbusNeutral, .owner = ChanOwner::MACHINE_INPUT  },
-  { .infoName = "rpm channel",              .value = 0u,          .owner = ChanOwner::MACHINE_SYSTEM }, ///< Engine RPM — written by SIM_RPM pipeline, transmitted to sound node.
+  { .infoName = "rpm channel",             .value = 0u,          .owner = ChanOwner::MACHINE_SYSTEM }, ///< Engine RPM — written by SIM_RPM pipeline, transmitted to sound node.
   { .infoName = "dump actuators channel",  .value = CbusNeutral, .owner = ChanOwner::MACHINE_INPUT  },
   { .infoName = "esc speed channel",       .value = CbusNeutral, .owner = ChanOwner::MACHINE_SYSTEM },
   { .infoName = "gear channel",            .value = 1u,          .owner = ChanOwner::MACHINE_SYSTEM }, ///< Virtual gear (1–3) from motion pipeline; direction in ESC_REVERSE.
@@ -45,10 +45,10 @@ DigitalComBus DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::CH_COUNT)
   // --- Machine-node-local channels (WIRE_END .. MACHINE_END-1) — never transmitted ---
   { .infoName = "direct drive (local)",    .value = false, .owner = ChanOwner::MACHINE_SYSTEM }, ///< Toggle state — written by main.cpp toggle logic, read by cb_bypass_fn.
   { .infoName = "direct drive btn (local)", .value = false, .owner = ChanOwner::MACHINE_INPUT }, ///< Raw OPTIONS button — written by input_update every cycle.
-  { .infoName = "manual gear set (local)", .value = false, .owner = ChanOwner::MACHINE_SYSTEM }, ///< Manual gear mode active — written by INPUT chain, read by sim_manual_gear_fn.
+  { .infoName = "manual gear set (local)", .value = false, .owner = ChanOwner::MACHINE_SYSTEM }, ///< Manual gear mode active — written by INPUT chain, read by cb_bypass_fn (GEAR claim guard).
   { .infoName = "subgear set btn (local)", .value = false, .owner = ChanOwner::MACHINE_INPUT  }, ///< Raw sub-gear toggle button — written by input_update; processed by ctrl chain.
-  { .infoName = "subgear up btn (local)",  .value = false, .owner = ChanOwner::MACHINE_INPUT  }, ///< Raw sub-gear up button — written by input_update; read by INPUT chain.
-  { .infoName = "subgear down btn (local)", .value = false, .owner = ChanOwner::MACHINE_INPUT  }, ///< Raw sub-gear down button — written by input_update; read by INPUT chain.
+  { .infoName = "gear up btn (local)",     .value = false, .owner = ChanOwner::MACHINE_INPUT  }, ///< Gear up button — written by input_update; read by INPUT chain.
+  { .infoName = "gear down btn (local)",   .value = false, .owner = ChanOwner::MACHINE_INPUT  }, ///< Gear down button — written by input_update; read by INPUT chain.
   // --- Sound-node-local channels (MACHINE_END .. CH_COUNT-1) — never transmitted ---
   { .infoName = "always on (local)",       .value = true,  .owner = ChanOwner::NONE }, ///< Stays true: continuous sources driven by volMod.
   { .infoName = "siren (local)",           .value = false, .owner = ChanOwner::NONE }, ///< Siren/cannon mode toggle.

@@ -7,8 +7,8 @@
  *
  *   INPUT pipelines:
  *     INPUT_SUBGEAR      : SUBGEAR_BUS      → toggle(SUBGEAR_SET_BTN, bound=1),
- *                                             inc(SUBGEAR_UP_BTN, bound=subGearCount),
- *                                             dec(SUBGEAR_DOWN_BTN, bound=1)
+ *                                             inc(GEAR_UP_BTN, bound=subGearCount),
+ *                                             dec(GEAR_DOWN_BTN, bound=1)
  *                                           → SUBGEAR_BUS
  *     INPUT_DIRECT_DRIVE : DIRECT_DRIVE_BTN → toggle(bound=1) → DIRECT_DRIVE
  *
@@ -89,14 +89,14 @@ static CbProc kSubGearProcs[] = {
     },
     // inc — L1 button: val++, max=subGearCount
     { .name    = "subgear_inc",
-      .inCh    = { DigitalComBusID::SUBGEAR_UP_BTN },
+      .inCh    = { DigitalComBusID::GEAR_UP_BTN },
       .fn      = cb_btn_inc_fn,
       .cfg     = &kSubGearIncCfg,
       .state   = &gSubGearIncState,
     },
     // dec — L2 button: val--, min=1
     { .name    = "subgear_dec",
-      .inCh    = { DigitalComBusID::SUBGEAR_DOWN_BTN },
+      .inCh    = { DigitalComBusID::GEAR_DOWN_BTN },
       .fn      = cb_btn_dec_fn,
       .cfg     = &kSubGearDecCfg,
       .state   = &gSubGearDecState,

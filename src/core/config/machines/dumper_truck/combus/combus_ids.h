@@ -77,10 +77,10 @@ enum class DigitalComBusID : uint8_t {
   // ---- Machine node local (never transmitted on wire) ---
   DIRECT_DRIVE = WIRE_END,  ///< Direct-drive toggle state (inertia bypass) — written by ctrl chain, read by sim_bypass_fn.
   DIRECT_DRIVE_BTN,         ///< Raw OPTIONS button — written by input_update every cycle; read by ctrl chain.
-  MANUAL_GEAR_SET,          ///< Manual gear mode active — written by INPUT chain, read by sim_manual_gear_fn (claim guard).
+  MANUAL_GEAR_SET,          ///< Manual gear mode active — written by INPUT chain, read by cb_bypass_fn (claim guard).
   SUBGEAR_SET_BTN,          ///< Raw sub-gear toggle button — written by input_update; processed by ctrl chain.
-  SUBGEAR_UP_BTN,           ///< Raw sub-gear up button — written by input_update; read by sim_gear.
-  SUBGEAR_DOWN_BTN,         ///< Raw sub-gear down button — written by input_update; read by sim_gear.
+  GEAR_UP_BTN,              ///< Gear up button — written by input_update; read by INPUT chain (manual gear + subgear inc).
+  GEAR_DOWN_BTN,            ///< Gear down button — written by input_update; read by INPUT chain (manual gear + subgear dec).
   MACHINE_END,
 
   // ---- Sound node local (never transmitted on wire) ---

@@ -11,7 +11,7 @@
  *   `DriveState` (✅, section 2).
  *   `CbBypassCfg` → moved to `include/struct/combus/processors/base/cb_bypass_struct.h`.
  *   `CbRampCfg/State` → moved to `include/struct/combus/processors/motion/cb_ramp_struct.h`.
- *   `GearProcCfg` (sim_gear_fn ✅, section 5 → future cb_gear_fn).
+ *   `GearProcCfg` (gear_fsm_fn ✅, gear module in processors/modules/gear/).
  *
  *   **Adding a new CbProcFn:**
  *   1. Add `MyProcCfg` and `MyProcState` in the active area (sections 1+).
@@ -27,74 +27,12 @@
 #include <core/config/machines/combus_ids.h>  // AnalogComBusID, DigitalComBusID
 #include <struct/combus_struct.h>              // ComBus (needed for SimBehaviorFn in archive)
 #include <struct/combus_proc_struct.h>                  // CbProc, CbChain, CbProcFn
-#include <defs/defs.h>                         // ChanOwner
+#include <defs/defs.h>                                         // ChanOwner
+#include <struct/combus/processors/modules/gear_struct.h>      // GearStepCfg, GearShiftProfile, GearFsmState, GearProcCfg (migrated)
 
 
 // =============================================================================
-// 0. VIRTUAL GEAR PROFILE  (shared between sim_gear and motion presets)
-// =============================================================================
-
-/**
- * @brief Threshold and inertia config for one virtual gear.
- *
- * @details `upShift` is the RPM at which the FSM transitions from this gear to
- *   the next.  `downShift` / `downShiftBraking` are the thresholds below which
- *   the FSM drops back one gear (coasting / braking respectively).
- *   Hysteresis requirement: `upShift > downShift` — prevents gear hunting.
- *
- *   `shiftDelta` is the RPM drop applied when upshifting INTO this gear:
- *   the virtual RPM used by the FSM drops by this amount at the moment of
- *   the shift, simulating the engine RPM fall as the new ratio takes effect.
- *   gear[0].shiftDelta is ignored (no upshift into gear 1).
- *   `maxRpm` of the profile equals the last gear's `upShift` by convention.
- */
-struct GearStepCfg {
-    int16_t  upShift;           ///< RPM threshold to upshift from this gear (= maxRpm for last gear).
-    int16_t  downShift;         ///< RPM threshold to downshift to this gear (coasting).
-    int16_t  downShiftBraking;  ///< RPM threshold to downshift to this gear (braking — higher → earlier).
-    uint16_t rampTime;          ///< Inertia ramp duration (ms) — written to CbRampCfg::rampTimeMs via GearFsmState::rampDynCfg.
-    int16_t  shiftDelta;        ///< RPM drop when upshifting INTO this gear (ignored for gear 1).
-};
-
-/**
- * @brief Config for one sub-gear step.
- *
- * @details Index 0 = slowest crawl, index N-1 = fastest crawl.
- *   All sub-gear ramp times are slower than normal gear-1 `rampTime`.
- *   `maxPct` caps the RPM input to the gear FSM while this sub-gear is active:
- *   expressed as a percentage (0–100) of `gear[0].upShift` (the gear-1 RPM ceiling).
- *   Full throttle in sub-gear n maps to `gear[0].upShift × maxPct / 100`.
- */
-struct SubGearStepCfg {
-    uint16_t rampTime;  ///< Inertia ramp duration (ms) for this sub-gear.
-    uint8_t  maxPct;   ///< RPM ceiling as % of gear[0].upShift (0–100).
-};
-
-/**
- * @brief Speed-threshold profile for a virtual N-speed gearbox FSM.
- *
- * @details All speed values are in RPM units.
- *   `gear[n]` covers the (n+1)-th gear (0-based index).
- *   `gear[n].upShift` is the RPM threshold to shift from gear n+1 to n+2.
- *   `gear[gearCount-1].upShift` is the maximum RPM (scaling reference).
- *   Hysteresis requirement: `gear[n].upShift > gear[n].downShift`.
- *
- *   Presets are declared `constexpr` in `simulation_presets.h` and exposed
- *   via vehicle aliases (`*_motion.h`).
- *   The gear FSM lives inside `sim_gear.cpp` — no separate `gear_fsm.h`.
- */
-struct GearShiftProfile {
-    uint8_t               gearCount;    ///< Number of active gears (= std::size(gear[])).
-    const GearStepCfg*    gear;         ///< Per-gear config — array[gearCount].
-    uint16_t              shiftGuardMs; ///< Minimum interval between consecutive shifts (ms).
-
-    uint8_t               subGearCount; ///< Number of sub-gears in gear 1 (0 = sub-gear disabled).
-    const SubGearStepCfg* subGear;      ///< Per-sub-gear config — array[subGearCount]; nullptr when subGearCount == 0.
-};
-
-
-// =============================================================================
-// 2. DRIVE STATE  (DriveStateBus wire encoding — ✅ implemented)
+// 1. DRIVE STATE  (DriveStateBus wire encoding — ✅ implemented)
 // =============================================================================
 
 /**
@@ -217,35 +155,11 @@ struct SimTractionState {
 
 
 // =============================================================================
-// A2. GEAR FSM  (sim_gear — ⚠ non migré, winter 2026)
+// A2. GEAR FSM — migrated to combus/processors/modules/gear_struct.h
 // =============================================================================
-
-/**
- * @brief Static configuration for a gear-FSM SimDev.
- *
- * @details Assigned to `SimDev::cfg` (as `const void*`); cast back inside
- *   `sim_gear_update()` to `const GearSimCfg*`.
- */
-struct GearSimCfg {
-    const GearShiftProfile* profile; ///< Shift threshold profile — pointer via vehicle alias.
-};
-
-/**
- * @brief Mutable runtime state for a gear-FSM SimDev.
- *
- * @details Assigned to `SimDev::state` (as `void*`); cast back inside
- *   `sim_gear_update()` and `gear_fsm_update()` to `GearFsmState*`.
- */
-struct GearFsmState {
-    int8_t   gear;         ///< Current virtual gear (1–N).
-    int16_t  prevRpm;      ///< RPM seen last cycle — trend detection (rising = accel, falling = decel).
-    uint32_t lastShiftMs;  ///< Timestamp of last shift — anti-hunting guard.
-
-    int8_t   subGear;        ///< Active sub-gear index (1..subGearCount). 0 = sub-gear mode inactive.
-    bool     prevSubGearSet; ///< Previous state of SUBGEAR_SET — rising-edge detection.
-    bool     prevSubGearUp;  ///< Previous state of SUBGEAR_UP  — rising-edge detection.
-    bool     prevSubGearDn;  ///< Previous state of SUBGEAR_DOWN — rising-edge detection.
-};
+//   GearSimCfg   (legacy SimDev — archived)
+//   GearFsmState →  include/struct/combus/processors/modules/gear_struct.h
+//   (struct imported via top-level include)
 
 
 // =============================================================================
@@ -379,35 +293,12 @@ using CbChain = CbChain;
 
 
 // =============================================================================
-// 4. GEAR FSM PROCESSOR  (sim_gear_fn, sim_gear_ramp_fn — ✅ implemented)
+// 4. GEAR FSM PROCESSOR — migrated to combus/processors/modules/gear_struct.h
 // =============================================================================
-
-/**
- * @brief Static configuration for a gear-FSM CbProc.
- *
- * @details Shared by `sim_gear_fn`, `sim_gear_ramp_fn`, `sim_apply_ratio_fn`,
- *   and `sim_rpm_to_speed_fn`.
- *   Assigned to `CbProc::cfg` (as `const void*`); cast back to
- *   `const GearProcCfg*` inside each fn.
- *
- *   `GearFsmState` (mutable runtime for `sim_gear_fn`) is declared in
- *   archive section A2 and is available throughout the active area.
- *   `sim_gear_ramp_fn` uses `GearProcCfg` as cfg — state = nullptr.
- */
-struct GearProcCfg {
-    const GearShiftProfile* profile; ///< Shift threshold profile — pointer via vehicle alias.
-};
-
-/**
- * @brief Mutable runtime state for `sim_apply_ratio_fn`.
- *
- * @details Assigned to `CbProc::state` (as `void*`); cast back inside
- *   `sim_apply_ratio_fn()`.  Zero-init is valid (·prevGear = 0· means
- *   no upshift on first cycle).
- */
-struct ShiftDeltaState {
-    int8_t prevGear; ///< Gear seen last cycle — upshift edge detection.
-};
+//   GearProcCfg      →  include/struct/combus/processors/modules/gear_struct.h
+//   GearFsmState     →  include/struct/combus/processors/modules/gear_struct.h
+//   ShiftDeltaState  →  include/struct/combus/processors/modules/gear_struct.h
+//   (structs imported via top-level include)
 
 
 // =============================================================================

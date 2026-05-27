@@ -8,10 +8,10 @@
 #include "dashboard_simulation.h"
 #include <core/system/debug/dashboard.h>
 #include <struct/simulation_struct.h>
-#include <core/system/combus/processors/motion/cb_ramp.h>  // CbRampCfg, CbRampState
-#include <core/system/combus/processors/base/cb_bypass.h>  // CbBypassCfg
-#include <core/system/simulation/sim_gear.h>    // GearProcCfg, GearFsmState
-#include <core/system/combus/combus_res.h>       // CbusNeutral (RPM computation)
+#include <core/system/combus/processors/motion/cb_ramp.h>    // CbRampCfg, CbRampState
+#include <core/system/combus/processors/base/cb_bypass.h>    // CbBypassCfg
+#include <struct/combus/processors/modules/gear_struct.h>    // GearProcCfg, GearFsmState
+#include <core/system/combus/combus_res.h>                   // CbusNeutral (RPM computation)
 
 #include <Arduino.h>
 #include <stdio.h>
@@ -61,8 +61,8 @@ static const char* dCh(DigitalComBusID id)
 		case DigitalComBusID::DIRECT_DRIVE:     return "DIR_DRV";
 		case DigitalComBusID::DIRECT_DRIVE_BTN: return "DIR_BTN";
 		case DigitalComBusID::SUBGEAR_SET_BTN: return "SG_SET";
-		case DigitalComBusID::SUBGEAR_UP_BTN:  return "SG_UP";
-		case DigitalComBusID::SUBGEAR_DOWN_BTN:return "SG_DN";
+		case DigitalComBusID::GEAR_UP_BTN:     return "GR_UP";
+		case DigitalComBusID::GEAR_DOWN_BTN:   return "GR_DN";
 		default:                             return "?";
 	}
 }

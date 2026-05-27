@@ -10,7 +10,7 @@
 
 #include <iterator>                         // std::size
 
-#include <struct/simulation_struct.h>                          // GearShiftProfile, GearStepCfg, SubGearStepCfg
+#include <struct/combus/processors/modules/gear_struct.h>      // GearShiftProfile, GearStepCfg, SubGearStepCfg
 #include <struct/combus/processors/motion/cb_ramp_struct.h>    // CbRampCfg
 #include <core/system/combus/combus_res.h>  // CbusMaxVal, CbusNeutral, pctToCbus
 

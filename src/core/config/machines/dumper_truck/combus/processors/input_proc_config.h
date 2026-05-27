@@ -8,8 +8,8 @@
  *
  *   INPUT pipelines (optInCh → procs → outCh):
  *     INPUT_SUBGEAR      : SUBGEAR_BUS      → [toggle(SUBGEAR_SET_BTN),
- *                                              inc(SUBGEAR_UP_BTN),
- *                                              dec(SUBGEAR_DOWN_BTN)] → SUBGEAR_BUS
+ *                                              inc(GEAR_UP_BTN),
+ *                                              dec(GEAR_DOWN_BTN)] → SUBGEAR_BUS
  *     INPUT_DIRECT_DRIVE : DIRECT_DRIVE_BTN → [toggle] → DIRECT_DRIVE
  *
  *   Each proc reads a digital button, modifies the channel value, and passes

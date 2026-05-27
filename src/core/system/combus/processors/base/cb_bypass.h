@@ -5,20 +5,28 @@
  * @details `cb_bypass_fn()` implements a bypass gate for a CbChain pipeline.
  *
  *   When `proc->inValue[0]` (digital) is nonzero, `claimed` is set to
- *   `true`, skipping all downstream processors.  The runner always post-writes
- *   `value` to `ch.outCh`, so the raw input passes through to the output.
- *   When the condition is false, the function is a no-op.
+ *   `true`, skipping all downstream processors.
  *
- *   No config struct needed: `CbProc::cfg` must be `nullptr`.
- *   No runtime state: `CbProc::state` must be `nullptr`.
+ *   Optional force value: when `CbProc::cfg` points to `CbBypassCfg` with
+ *   `forceValue` set, `value` is overwritten on claim (e.g. force gear=1).
+ *   When `cfg = nullptr` or `forceValue = nullopt`, `value` passes through.
  *
- *   Typical declaration (in vehicle proc_config.cpp):
+ *   Typical declarations (in vehicle proc_config.cpp):
  *   @code
- *     { .name    = "bypass",
+ *     // Pure bypass — value passthrough
+ *     { .name = "bypass",
  *       .inCh = { DigitalComBusID::DIRECT_DRIVE },
- *       .fn      = cb_bypass_fn,
- *       .cfg     = nullptr,
- *       .state   = nullptr },
+ *       .fn   = cb_bypass_fn,
+ *       // cfg omitted = nullptr → value unchanged
+ *     },
+ *
+ *     // Bypass + force value
+ *     static constexpr CbBypassCfg kGearDirectCfg { .forceValue = 1u };
+ *     { .name = "direct-claim",
+ *       .inCh = { DigitalComBusID::DIRECT_DRIVE },
+ *       .fn   = cb_bypass_fn,
+ *       .cfg  = &kGearDirectCfg,  // force gear=1 on claim
+ *     },
  *   @endcode
  *****************************************************************************/
 #pragma once
@@ -37,11 +45,15 @@
  * @details Matches the `CbProcFn` signature.
  *   Sets `claimed = true` when `proc->inValue[0]` is nonzero,
  *   causing all downstream processors to be skipped this cycle.
- *   Does not modify `value` — raw optInCh value passes through to outCh.
  *
- * @param proc    CbProc descriptor — `cfg` and `state` are unused (nullptr).
+ *   If `cfg` points to `CbBypassCfg` with `forceValue` set, `value` is
+ *   overwritten on claim.  Otherwise, `value` passes through unchanged.
+ *
+ * @param proc    CbProc descriptor.
  *                `inCh[0]` = condition digital channel (set in config array).
- * @param value   Not modified — runner always writes to outCh after chain.
+ *                `cfg` = optional `CbBypassCfg*` (nullptr = passthrough mode).
+ *                `state` = unused (nullptr).
+ * @param value   In: current value.  Out: unchanged OR forceValue (if cfg set).
  * @param claimed Set to `true` when inValue[0] != 0; unchanged otherwise.
  */
 void cb_bypass_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
