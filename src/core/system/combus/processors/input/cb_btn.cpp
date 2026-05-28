@@ -23,6 +23,7 @@
  */
 static inline bool btn_should_fire(bool pressed, CbBtnState* state, const CbBtnCfg* cfg) {
     const uint32_t now = millis();
+    bool risingEdge = false;
 
     // Rising edge detection
     if (pressed && !state->prevPressed) {
@@ -33,13 +34,16 @@ static inline bool btn_should_fire(bool pressed, CbBtnState* state, const CbBtnC
         }
         state->lastPressMs = now;
         state->holdFired = false;  // Reset hold flag on new press
+        risingEdge = true;
     }
 
     state->prevPressed = pressed;
 
-    // No hold configured → fire on rising edge
+    // No hold configured → fire exactly once on rising edge.
+    // NOTE: the previous `return pressed && elapsed < 50` was wrong — it fired
+    // multiple times per press (once per loop cycle within the 50 ms window).
     if (cfg->holdMs == 0) {
-        return pressed && (now - state->lastPressMs) < 50;  // within 50 ms of press
+        return risingEdge;
     }
 
     // Long-press mode

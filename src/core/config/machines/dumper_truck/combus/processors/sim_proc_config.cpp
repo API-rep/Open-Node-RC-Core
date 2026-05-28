@@ -34,7 +34,7 @@
 #include <core/system/combus/processors/math/cb_abs.h>              // cb_abs_fn
 #include <core/system/combus/processors/math/cb_scale.h>            // cb_scale_fn, CbScaleCfg
 #include <core/system/combus/processors/motion/cb_dir.h>           // cb_dir_fn, CbDirCfg
-#include <core/system/combus/processors/modules/gear/cb_gear.h>    // gear_fsm_fn, gear_upshift_drop_fn, gear_rpm_to_speed_fn, gear_dyn_ramp_fn
+#include <core/system/combus/processors/modules/gear/cb_gear.h>    // gear_fsm_fn, gear_upshift_drop_fn, gear_rpm_to_speed_fn, gear_dyn_ramp_fn, gear_subgear_rpm_cap_fn
 using namespace DumperTruck;
 
 
@@ -64,7 +64,8 @@ static constexpr CbRampCfg kTractionRamp {
     .rampTimeMs  = 50u,
     .accelSteps  = pctToCbus(3),
     .brakeSteps  = pctToCbus(6),
-    .neutralBand = 0u,
+    .neutralBand = pctToCbus(3),   ///< 1% deadzone — absorbs PS4 stick noise (±~0.4%) at neutral,
+                                   ///<   preventing cb_dir_fn from oscillating FWD↔REV at rest.
 };
 
 //  Traction ramp — RAM copy, mutated by gear_dyn_ramp_fn on each gear change.
@@ -85,6 +86,11 @@ static constexpr CbScaleCfg kThrottleScale {
 
 static constexpr GearProcCfg kGearCfg {
     .profile = &kGearShift_Heavy3Speed,
+};
+
+static constexpr CbBypassCfg kSubGearClaimBypass {
+    .forceValue = 1u,  ///< Force GEAR = 1 when sub gear mode active.
+                       ///< Without this, RPM value is passed as gear — garbage → saccade.
 };
 
 static constexpr CbBypassCfg kDirectDriveGearBypass {
@@ -136,6 +142,13 @@ static CbProc kThrottleProcs[] = {
       .fn    = cb_scale_fn,
       .cfg   = &kThrottleScale,
     },
+    // subgear-cap — if SUBGEAR_BUS != 0, clamp RPM to subGear[idx-1].maxPct% of gear[0].upShift.
+    //   e.g. sub-1 → 28% of 650 RPM = 182 RPM max.  Passthrough in normal mode.
+    { .name  = "subgear-cap",
+      .inCh  = { AnalogComBusID::SUBGEAR_BUS },
+      .fn    = gear_subgear_rpm_cap_fn,
+      .cfg   = &kGearCfg,
+    },
     // bypass — DIRECT_DRIVE HIGH → claim (raw magnitude bypasses ratio, flows to RPM_BUS).
     { .name      = "bypass",
       .inCh   = { DigitalComBusID::DIRECT_DRIVE },
@@ -156,13 +169,14 @@ static CbProc kGearProcs[] = {
     // Priority: SubGear > Manual > Direct > Auto (FSM).
     // =========================================================================
 
-    // 1. SubGear claim — SUBGEAR_BUS > CbusNeutral → force gear=1, claim.
-    //    Rationale: Crawl mode active (slow speed, manual control via UP/DOWN).
-    //    SubGear index written by INPUT chain (cb_btn procs on SUBGEAR_UP/DOWN).
-    //    Blocks manual/direct/auto modes — exclusive control.
+    // 1. SubGear claim — SUBGEAR_BUS != 0 → force gear=1, claim.
+    //    Rationale: Crawl mode active. Blocks manual/direct/auto modes — exclusive control.
+    //    NOTE: kSubGearClaimBypass (forceValue=1) is mandatory — without it, the RPM value
+    //    is passed unchanged as gear number (garbage) → rpm_to_speed overflow → saccade.
     { .name      = "subgear-claim",
       .inCh   = { AnalogComBusID::SUBGEAR_BUS },
-      .fn        = cb_bypass_fn,  // reuse: if inCh > neutral → claim, value=1
+      .fn        = cb_bypass_fn,
+      .cfg       = &kSubGearClaimBypass,
     },
 
     // 2. Manual claim — MANUAL_GEAR_SET HIGH → passthrough GEAR, claim.

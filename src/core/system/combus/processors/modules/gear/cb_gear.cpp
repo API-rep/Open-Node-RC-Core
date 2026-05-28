@@ -137,4 +137,34 @@ void gear_dyn_ramp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwne
     // value (= gear) passed through unchanged.
 }
 
+
+// =============================================================================
+// 5. SUB-GEAR RPM CAP
+// =============================================================================
+
+void gear_subgear_rpm_cap_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)
+{
+    const GearProcCfg*      cfg     = static_cast<const GearProcCfg*>(proc->cfg);
+    const GearShiftProfile* profile = cfg->profile;
+
+    // No sub-gear steps configured — passthrough.
+    if (profile->subGear == nullptr || profile->subGearCount == 0u) return;
+
+    // Read sub-gear index from SUBGEAR_BUS (0 = inactive).
+    const uint8_t subIdx = static_cast<uint8_t>(proc->inValue[0]);
+    if (subIdx == 0u) return;  // Sub-gear mode inactive — passthrough.
+
+    // Clamp to valid range (1-based index → 0-based array).
+    const uint8_t gi = static_cast<uint8_t>(
+        constrain(static_cast<int>(subIdx) - 1, 0, static_cast<int>(profile->subGearCount) - 1));
+
+    // Cap RPM to gear[0].upShift × maxPct / 100.
+    const uint32_t cap = static_cast<uint32_t>(profile->gear[0].upShift)
+                       * static_cast<uint32_t>(profile->subGear[gi].maxPct) / 100u;
+
+    if (value > static_cast<uint16_t>(cap)) {
+        value = static_cast<uint16_t>(cap);
+    }
+}
+
 // EOF cb_gear.cpp

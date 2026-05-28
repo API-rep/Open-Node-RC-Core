@@ -53,4 +53,18 @@ void gear_rpm_to_speed_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwne
  */
 void gear_dyn_ramp_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
 
+/**
+ * @brief Sub-gear RPM cap — clamps RPM magnitude when sub-gear mode is active.
+ *
+ * @details Reads SUBGEAR_BUS index from inCh[0].  If non-zero, caps `value` to
+ *   `profile->gear[0].upShift × subGear[idx-1].maxPct / 100`.
+ *   Passthrough when sub-gear mode is inactive (SUBGEAR_BUS == 0) or when the
+ *   profile has no sub-gear steps.
+ *
+ *   Intended placement: THROTTLE chain, immediately after the `scale` proc.
+ *   inCh[0] = SUBGEAR_BUS (analog).
+ *   cfg = GearProcCfg*, state = nullptr.
+ */
+void gear_subgear_rpm_cap_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+
 // EOF cb_gear.h
