@@ -44,14 +44,15 @@ struct GearStepCfg {
  * @brief Config for one sub-gear step.
  *
  * @details Index 0 = slowest crawl, index N-1 = fastest crawl.
- *   All sub-gear ramp times are slower than normal gear-1 `rampTime`.
- *   `maxPct` caps the RPM input to the gear FSM while this sub-gear is active:
- *   expressed as a percentage (0–100) of `gear[0].upShift` (the gear-1 RPM ceiling).
- *   Full throttle in sub-gear n maps to `gear[0].upShift × maxPct / 100`.
+ *   `maxSpeedPct` caps the wheel speed output via the `subgear-speed` proc.
+ *   RPM (sound) flows freely from stick by default.
+ *
+ *   Cruise-control mode (hold+nudge) is a proc-level option — see `CbCruiseCfg`
+ *   in `cb_cruise.h` (motion proc layer, independent of the gear module).
  */
 struct SubGearStepCfg {
-    uint16_t rampTime;  ///< Inertia ramp duration (ms) for this sub-gear.
-    uint8_t  maxPct;    ///< RPM ceiling as % of gear[0].upShift (0–100).
+    uint16_t rampTime;    ///< Inertia ramp duration (ms) for this sub-gear.
+    uint8_t  maxSpeedPct; ///< Wheel speed ceiling as % of full-range max speed (0–100).
 };
 
 /**

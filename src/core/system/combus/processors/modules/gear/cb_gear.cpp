@@ -80,6 +80,9 @@ void gear_rpm_to_speed_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, Chan
     // --- Resolve current gear from inValue[1] (GEAR) ------------------------
     const int8_t rawGear = static_cast<int8_t>(proc->inValue[1]);
 
+    // GEAR = 0 sentinel: sub-gear mode active — sub-gear speed proc handles output.
+    if (rawGear == 0) { value = CbusNeutral; return; }
+
     // --- Gear-accumulation formula -------------------------------------------
     uint16_t maxAbsRpm = profile->gear[nGears - 1u].upShift;
     for (uint8_t i = 1u; i < nGears; ++i)
@@ -139,31 +142,51 @@ void gear_dyn_ramp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwne
 
 
 // =============================================================================
-// 5. SUB-GEAR RPM CAP
+// 5. SUB-GEAR SPEED OUTPUT
 // =============================================================================
 
-void gear_subgear_rpm_cap_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)
+void gear_subgear_speed_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)
 {
+    // inValue[0] = SUBGEAR_BUS (0 = inactive, 1..N = sub-gear index).
+    const uint8_t subIdx = static_cast<uint8_t>(proc->inValue[0]);
+    if (subIdx == 0u) return;  // Normal mode — passthrough, rpm_to_speed result stands.
+
     const GearProcCfg*      cfg     = static_cast<const GearProcCfg*>(proc->cfg);
     const GearShiftProfile* profile = cfg->profile;
 
-    // No sub-gear steps configured — passthrough.
-    if (profile->subGear == nullptr || profile->subGearCount == 0u) return;
+    if (profile->subGear == nullptr || profile->subGearCount == 0u) {
+        value = CbusNeutral;
+        return;
+    }
 
-    // Read sub-gear index from SUBGEAR_BUS (0 = inactive).
-    const uint8_t subIdx = static_cast<uint8_t>(proc->inValue[0]);
-    if (subIdx == 0u) return;  // Sub-gear mode inactive — passthrough.
-
-    // Clamp to valid range (1-based index → 0-based array).
+    // Clamp sub-gear index to valid range (1-based → 0-based).
     const uint8_t gi = static_cast<uint8_t>(
         constrain(static_cast<int>(subIdx) - 1, 0, static_cast<int>(profile->subGearCount) - 1));
 
-    // Cap RPM to gear[0].upShift × maxPct / 100.
-    const uint32_t cap = static_cast<uint32_t>(profile->gear[0].upShift)
-                       * static_cast<uint32_t>(profile->subGear[gi].maxPct) / 100u;
+    // Direction from inValue[1] = DRIVE_STATE_BUS.
+    const int8_t ds = DriveStateBus::decode(proc->inValue[1]);
 
-    if (value > static_cast<uint16_t>(cap)) {
-        value = static_cast<uint16_t>(cap);
+    // RPM magnitude from inValue[2] = RPM_BUS (re-read by runner, independent of value).
+    const uint32_t rpm = static_cast<uint32_t>(proc->inValue[2]);
+
+    // Max RPM = last gear upShift (same reference as kThrottleScale.outMax).
+    const uint32_t maxRpm = static_cast<uint32_t>(profile->gear[profile->gearCount - 1u].upShift);
+
+    // Speed half = rpm × (CbusNeutral × maxSpeedPct / 100) / maxRpm.
+    const uint32_t maxHalf = static_cast<uint32_t>(CbusNeutral)
+                           * static_cast<uint32_t>(profile->subGear[gi].maxSpeedPct) / 100u;
+    const uint32_t half    = (maxRpm > 0u) ? (rpm * maxHalf / maxRpm) : 0u;
+
+    if (ds > 0) {
+        value = static_cast<uint16_t>(constrain(
+                    static_cast<int32_t>(CbusNeutral) + static_cast<int32_t>(half),
+                    0, static_cast<int32_t>(CbusMaxVal)));
+    } else if (ds < 0) {
+        value = static_cast<uint16_t>(constrain(
+                    static_cast<int32_t>(CbusNeutral) - static_cast<int32_t>(half),
+                    0, static_cast<int32_t>(CbusMaxVal)));
+    } else {
+        value = CbusNeutral;
     }
 }
 

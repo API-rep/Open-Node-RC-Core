@@ -48,15 +48,15 @@ static constexpr GearStepCfg kHeavy3_steps[] = {
     {     2100,        650,              800,        70,        400 },  // gear 3 — RPM drops 400 on 2→3
 };
 
-///< Sub-gear ramp times (ms) and RPM ceilings.
-///< Index 0 = slowest crawl, index 2 = fastest crawl.
-///< All ramp times are slower than normal gear-1 (30 ms).
-///< maxPct ceiling: full throttle in that sub-gear maps to `gear[0].upShift × maxPct / 100`.
+///< Sub-gear steps: ramp times and speed ceilings.
+///< RPM (sound) flows freely from stick in all steps (MICROSPEED default).
+///< maxSpeedPct caps the wheel speed output (subgear-speed proc in TRACTION chain).
+///< Cruise-control mode (hold+nudge) is toggled via CbSubGearCruiseCfg in proc dynCfg — not here.
 static constexpr SubGearStepCfg kHeavy3_subSteps[] = {
-    //  rampTime  maxPct
-    {  500,   28 },  // sub-1: ~28 % of 650 RPM = ~182 RPM  (slow crawl)
-    {  200,   62 },  // sub-2: ~62 % of 650 RPM = ~403 RPM  (medium crawl)
-    {   80,   89 },  // sub-3: ~89 % of 650 RPM = ~579 RPM  (barely slower than G1)
+    //  rampTime  maxSpeedPct
+    {  500,   20 },  // sub-1: slow crawl    — 20 % of max speed
+    {  200,   50 },  // sub-2: medium crawl  — 50 % of max speed
+    {   80,   80 },  // sub-3: fast crawl    — 80 % of max speed
 };
 
 static constexpr GearShiftProfile kGearShift_Heavy3Speed {

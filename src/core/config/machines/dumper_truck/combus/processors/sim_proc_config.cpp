@@ -12,7 +12,11 @@
  *     SIM_GEAR     : RPM_BUS → subgear-claim(SUBGEAR_BUS),
  *                    manual-claim(MANUAL_GEAR_SET), direct-claim(DIRECT_DRIVE),
  *                    gear-fsm(DRIVE_STATE_BUS), gear-ramp → GEAR
- *     SIM_TRACTION : RPM_BUS → rpm_to_speed(DRIVE_STATE_BUS, GEAR) → ESC_SPEED_BUS
+ *                    NOTE: subgear-claim forces GEAR=0 when sub-gear active.
+ *     SIM_TRACTION : RPM_BUS → rpm_to_speed(DRIVE_STATE_BUS, GEAR),
+ *                    subgear-speed(SUBGEAR_BUS, DRIVE_STATE_BUS, RPM_BUS) → ESC_SPEED_BUS
+ *                    NOTE: rpm_to_speed outputs CbusNeutral when GEAR=0;
+ *                    subgear-speed overrides with capped speed when SUBGEAR_BUS != 0.
  *     SIM_STEERING : STEERING_BUS → bypass(DIRECT_DRIVE), ramp → STEERING_RAMPED_BUS
  *     SIM_DUMP     : DUMP_BUS     → bypass(DIRECT_DRIVE), ramp → DUMP_RAMPED_BUS
  *
@@ -34,7 +38,7 @@
 #include <core/system/combus/processors/math/cb_abs.h>              // cb_abs_fn
 #include <core/system/combus/processors/math/cb_scale.h>            // cb_scale_fn, CbScaleCfg
 #include <core/system/combus/processors/motion/cb_dir.h>           // cb_dir_fn, CbDirCfg
-#include <core/system/combus/processors/modules/gear/cb_gear.h>    // gear_fsm_fn, gear_upshift_drop_fn, gear_rpm_to_speed_fn, gear_dyn_ramp_fn, gear_subgear_rpm_cap_fn
+#include <core/system/combus/processors/modules/gear/cb_gear.h>    // gear_fsm_fn, gear_upshift_drop_fn, gear_rpm_to_speed_fn, gear_dyn_ramp_fn, gear_subgear_speed_fn
 using namespace DumperTruck;
 
 
@@ -89,8 +93,9 @@ static constexpr GearProcCfg kGearCfg {
 };
 
 static constexpr CbBypassCfg kSubGearClaimBypass {
-    .forceValue = 1u,  ///< Force GEAR = 1 when sub gear mode active.
-                       ///< Without this, RPM value is passed as gear — garbage → saccade.
+    .forceValue = 0u,  ///< Force GEAR = 0 (sub-gear sentinel) when sub-gear mode active.
+                       ///< gear_rpm_to_speed_fn outputs CbusNeutral for GEAR=0;
+                       ///< subgear-speed proc in TRACTION chain handles actual wheel speed.
 };
 
 static constexpr CbBypassCfg kDirectDriveGearBypass {
@@ -141,13 +146,6 @@ static CbProc kThrottleProcs[] = {
     { .name  = "scale",
       .fn    = cb_scale_fn,
       .cfg   = &kThrottleScale,
-    },
-    // subgear-cap — if SUBGEAR_BUS != 0, clamp RPM to subGear[idx-1].maxPct% of gear[0].upShift.
-    //   e.g. sub-1 → 28% of 650 RPM = 182 RPM max.  Passthrough in normal mode.
-    { .name  = "subgear-cap",
-      .inCh  = { AnalogComBusID::SUBGEAR_BUS },
-      .fn    = gear_subgear_rpm_cap_fn,
-      .cfg   = &kGearCfg,
     },
     // bypass — DIRECT_DRIVE HIGH → claim (raw magnitude bypasses ratio, flows to RPM_BUS).
     { .name      = "bypass",
@@ -225,10 +223,22 @@ static CbProc kGearProcs[] = {
 
 static CbProc kTractionProcs[] = {
     // rpm_to_speed — RPM + gear → ESC_SPEED_BUS bipolar.
-    { .name      = "rpm_to_speed",
+    //   When GEAR = 0 (sub-gear sentinel), outputs CbusNeutral directly.
+    { .name   = "rpm_to_speed",
       .inCh   = { AnalogComBusID::DRIVE_STATE_BUS, AnalogComBusID::GEAR },
-      .fn        = gear_rpm_to_speed_fn,
-      .cfg       = &kGearCfg,
+      .fn     = gear_rpm_to_speed_fn,
+      .cfg    = &kGearCfg,
+    },
+    // subgear-speed — overrides ESC_SPEED_BUS with sub-gear-capped speed.
+    //   Passthrough (value unchanged) when SUBGEAR_BUS == 0 (normal mode).
+    //   RPM_BUS is re-read via inCh[2] for the sub-gear speed calculation,
+    //   independently of the CbusNeutral already in value from rpm_to_speed.
+    { .name   = "subgear-speed",
+      .inCh   = { AnalogComBusID::SUBGEAR_BUS,
+                  AnalogComBusID::DRIVE_STATE_BUS,
+                  AnalogComBusID::RPM_BUS },
+      .fn     = gear_subgear_speed_fn,
+      .cfg    = &kGearCfg,
     },
 };
 
@@ -271,7 +281,7 @@ CbChain kSimChannels[SIM_CH_COUNT] = {
 
   { .name       = "throttle",
     .optInCh    = AnalogComBusID::THROTTLE_BUS,
-    .outCh   = AnalogComBusID::RPM_BUS,
+    .outCh      = AnalogComBusID::RPM_BUS,
     .procs      = kThrottleProcs,
     .procCount  = static_cast<uint8_t>(std::size(kThrottleProcs)),
     .chainOwner = kSimOwner,
