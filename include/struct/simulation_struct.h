@@ -256,40 +256,10 @@ struct SimDev {
 // =============================================================================
 // 3. SIMCHANNEL PIPELINE  (sim.cpp — ✅ implemented)
 // =============================================================================
-
-/**
- * @brief Simulation processor function — alias of CbProcFn.
- *
- * @details Defined in `cb_struct.h`.  Signature:
- *   `void (*)(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner owner)`
- *
- *   No `ComBus& bus` parameter — all bus I/O is handled by the runner via
- *   `CbChain::optInCh`/`outCh` and `CbProc::inCh`/`outCh`.
- */
-using CbProcFn = CbProcFn;
-
-/**
- * @brief Simulation proc descriptor — alias of CbProc.
- *
- * @details Fields in `cb_struct.h`.  Key change vs. pre-fusion:
- *   - `optInCh`/`outCh` moved to `CbChain` (primary I/O, runner-owned).
- *   - `inCh[3]` / `inValue[3]` — up to 3 secondary inputs injected by runner.
- *   - `outCh` / `outValue` — one proc output committed by runner.
- *   - Field renames: (none — CbProc is the canonical form).
- *
- * @note Config arrays (`kThrottleProcs[]`, etc.) must use `CbProc` directly.
- *   `read` and `write` procs are removed — primary I/O belongs to the channel.
- */
-using CbProc = CbProc;
-
-/**
- * @brief Simulation channel descriptor — alias of CbChain.
- *
- * @details Fields in `cb_struct.h`.  Key change vs. pre-fusion:
- *   - `simProc` renamed to `procs`; `simProcCount` renamed to `procCount`.
- *   - `optInCh` / `outCh` added (primary input/output, runner-owned).
- */
-using CbChain = CbChain;
+//   CbProcFn  →  include/struct/combus_proc_struct.h
+//   CbProc    →  include/struct/combus_proc_struct.h
+//   CbChain   →  include/struct/combus_proc_struct.h
+//   (structs imported via top-level include)
 
 
 // =============================================================================
