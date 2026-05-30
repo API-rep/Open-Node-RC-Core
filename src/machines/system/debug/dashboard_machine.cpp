@@ -117,12 +117,13 @@ static void render_overview() {
 
 	bool drvEnabled = (s_bus->runLevel == RunLevel::RUNNING ||
 	                   s_bus->runLevel == RunLevel::STARTING);
+	const bool keyActive = s_bus->digitalBus[static_cast<uint8_t>(DigitalComBusID::KEY_ACTIVE)].value;
 
 	dLine("  BAT: %-8s  CTRL: %-4s  DRV: %-3s (%u dev)  KEY: %-3s",
 		batStr,
 		ctrlConn ? "CONN" : "DISC",
 		drvEnabled ? "ENB" : "DIS", s_mach->dcDevCount,
-		s_bus->keyOn ? "ON" : "OFF"
+		keyActive ? "ON" : "OFF"
 	);
 
 		// --- 3. Channel summary (wire channels only: 0..WIRE_END-1) ---

@@ -7,16 +7,17 @@
  *   block) so that board-specific envCfg.h can reference kInputChains[] directly.
  *
  *   INPUT pipelines (optInCh → procs → outCh):
- *     INPUT_SUBGEAR      : SUBGEAR_BUS      → [toggle(SUBGEAR_SET_BTN),
- *                                              inc(GEAR_UP_BTN),
- *                                              dec(GEAR_DOWN_BTN)] → SUBGEAR_BUS
- *     INPUT_DIRECT_DRIVE : DIRECT_DRIVE_BTN → [toggle] → DIRECT_DRIVE
+ *     INPUT_SUBGEAR        : SUBGEAR_BUS      → [toggle(SUBGEAR_SET_BTN),
+ *                                                inc(GEAR_UP_BTN),
+ *                                                dec(GEAR_DOWN_BTN)] → SUBGEAR_BUS
+ *     INPUT_DIRECT_DRIVE   : DIRECT_DRIVE_BTN → [toggle] → DIRECT_DRIVE
+ *     INPUT_KEY_RUNLEVEL   : KEY_BTN          → [key_runlevel] → KEY_ACTIVE
  *
  *   Each proc reads a digital button, modifies the channel value, and passes
  *   it to the next proc.  Final runner commits to the same output channel.
  *
- *   Processed BEFORE proc_chain_update() — button state changes are immediately
- *   visible to the gear FSM in the SIM chain.
+ *   Processed BEFORE the RunLevel FSM — key transitions are immediately
+ *   visible to the state machine in the same loop cycle.
  *******************************************************************************
  */
 #pragma once
@@ -35,9 +36,10 @@
  *   `INPUT_CH_COUNT` is the sentinel used as array size and loop bound.
  */
 enum InputCh {
-    INPUT_SUBGEAR = 0,      ///< SUBGEAR_BUS → [toggle+inc+dec] → SUBGEAR_BUS
-    INPUT_DIRECT_DRIVE = 1, ///< DIRECT_DRIVE_BTN → [toggle] → DIRECT_DRIVE
-    INPUT_CH_COUNT          ///< Sentinel — number of CbChain entries.
+    INPUT_SUBGEAR = 0,          ///< SUBGEAR_BUS → [toggle+inc+dec] → SUBGEAR_BUS
+    INPUT_DIRECT_DRIVE = 1,     ///< DIRECT_DRIVE_BTN → [toggle] → DIRECT_DRIVE
+    INPUT_KEY_RUNLEVEL = 2,     ///< KEY_BTN → [key_runlevel] → KEY_ACTIVE + runLevel write
+    INPUT_CH_COUNT              ///< Sentinel — number of CbChain entries.
 };
 
 

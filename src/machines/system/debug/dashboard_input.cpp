@@ -6,6 +6,7 @@
 #ifdef DEBUG_DASHBOARD
 
 #include "dashboard_input.h"
+#include <core/config/machines/combus_types.h>  // DigitalComBusID, AnalogComBusID (via machine dispatch)
 #include <core/system/debug/dashboard.h>
 #include <core/system/input/input_manager.h>
 
@@ -94,7 +95,7 @@ static void render_input_view() {
 	dMid();
 	dLine("  RunLevel: %-14s  keyOn: %-5s  battLow: %-5s  analogBusMax: %-7u  %u analog + %u digital ch",
 	      dashRunLevelStr(s_bus->runLevel),
-	      s_bus->keyOn        ? "YES" : "NO",
+	      s_bus->digitalBus[static_cast<uint8_t>(DigitalComBusID::KEY_ACTIVE)].value ? "YES" : "NO",
 	      s_bus->batteryIsLow ? "YES" : "NO",
 	      (unsigned)s_bus->analogBusMaxVal, s_analogCh, s_digitalCh);
 

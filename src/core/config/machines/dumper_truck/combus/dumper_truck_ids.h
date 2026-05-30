@@ -67,6 +67,7 @@ enum class DigitalComBusID : uint8_t {
 
   // ---- Motion ---------------------------------------------------
   BRAKING = LIGHT_END,        ///< ESC / inertia pipeline is in a braking state — written by motion (MotionOutput::isBraking).
+  KEY_ACTIVE,                 ///< Processed ignition key state — 1=engine active, 0=inactive. Written by key_runlevel chain. Transmitted to sound node.
   MOTION_END,                 ///< Range marker — first index after motion group
 
   /// Wire frontier — channels below this index are transmitted over UART.

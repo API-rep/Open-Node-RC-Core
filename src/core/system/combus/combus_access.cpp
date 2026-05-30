@@ -118,16 +118,6 @@ bool combus_set_runlevel(ComBus& bus, RunLevel rl, ChanOwner caller) {
 }
 
 
-bool combus_set_keyon(ComBus& bus, bool val, ChanOwner caller) {
-    if (!_owner_ok(bus.keyOnOwner, caller)) {
-        _warn_denied("keyOn", 0xFF, caller, bus.keyOnOwner);
-        return false;
-    }
-    bus.keyOn = val;
-    return true;
-}
-
-
 bool combus_set_battlow(ComBus& bus, bool val, ChanOwner caller) {
     if (!_owner_ok(bus.battLowOwner, caller)) {
         _warn_denied("battLow", 0xFF, caller, bus.battLowOwner);

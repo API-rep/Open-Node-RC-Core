@@ -32,19 +32,10 @@ void setup() {
 /// @brief Timestamp of the last operator activity (analog stick moved or button pressed).
 static uint32_t s_lastActivityMs = 0u;
 
-/// @brief Timestamp when the KEY button was first pressed in RUNNING state (long-press shutdown).
-/// 0 = KEY currently released.
-static uint32_t s_keyLongPressStartMs = 0u;
-
-/// @brief Previous keyOn state — rising-edge detection in IDLE to prevent auto-restart after long-press shutdown.
-static bool s_keyPrev = false;
-
 /// RUNNING → IDLE after 2 min of no stick/button input.
 static constexpr uint32_t kEngineOffTimeoutMs = 2u  * 60u * 1000u;
 /// IDLE → SLEEPING after 15 min in IDLE state (key off).
 static constexpr uint32_t kSleepTimeoutMs     = 15u * 60u * 1000u;
-/// RUNNING → IDLE on 3-second continuous KEY press.
-static constexpr uint32_t kKeyShutdownMs      = 3000u;
 
 
 /**
@@ -100,12 +91,14 @@ void loop() {
   }
   failsafeActive = false;
 
-	// --- 3. Ignition key derivation ---
-  uint8_t keyCh = static_cast<uint8_t>(DigitalComBusID::KEY_BTN); // dedicated ignition channel
-  combus_set_keyon(comBus, comBus.digitalBus[keyCh].isDrived && comBus.digitalBus[keyCh].value, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
+// =============================================================================
+// 2. INPUT CHAIN (always — before RunLevel FSM)
+// =============================================================================
+
+  proc_chain_update(machine.inputChain, machine.inputChainCount, comBus);  // btn → KEY_ACTIVE + counters (subgear, direct-drive)
 
 // =============================================================================
-// 2. RUNLEVEL STATE MACHINE
+// 3. RUNLEVEL STATE MACHINE
 // =============================================================================
 
 	// --- 1. RunLevel tracking and timing tokens ---
@@ -131,15 +124,9 @@ void loop() {
         disableAllDcDrivers(machine);
       }
 
-        // --- 2. Transition trigger check: rising edge only — prevents auto-restart if key still held after long-press shutdown ---
-      const bool keyRisingEdge = comBus.keyOn && !s_keyPrev;
-      s_keyPrev = comBus.keyOn;
-      if (keyRisingEdge) {
-        sys_log_info("[SYSTEM][EVENT] input=KEY_ON action=enter_STARTING\n");
-        combus_set_runlevel(comBus, RunLevel::STARTING, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
-      }
-        // --- 3. Sleep timeout: prolonged idle (key off) → SLEEPING ---
-      if (!comBus.keyOn && (millis() - stateTM >= kSleepTimeoutMs)) {
+        // --- 2. Sleep timeout: prolonged idle (key inactive) → SLEEPING ---
+      const bool keyActive = comBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::KEY_ACTIVE)].value;
+      if (!keyActive && (millis() - stateTM >= kSleepTimeoutMs)) {
           sys_log_info("[SYSTEM][EVENT] reason=sleep_timeout action=enter_SLEEPING\n");
           combus_set_runlevel(comBus, RunLevel::SLEEPING, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
       }
@@ -180,22 +167,6 @@ void loop() {
 #endif
       }
 
-        // --- 0.2. KEY long press (3 s): manual engine shutdown → IDLE ---
-      {
-        const bool keyNow = comBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::KEY_BTN)].value;
-        if (keyNow) {
-            if (s_keyLongPressStartMs == 0u) s_keyLongPressStartMs = millis();
-            if (millis() - s_keyLongPressStartMs >= kKeyShutdownMs) {
-                sys_log_info("[SYSTEM][EVENT] input=KEY_LONGPRESS action=enter_IDLE\n");
-                s_keyLongPressStartMs = 0u;
-                combus_set_runlevel(comBus, RunLevel::IDLE, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
-                break;
-            }
-        } else {
-            s_keyLongPressStartMs = 0u;
-        }
-      }
-
         // --- 0.5. Idle timeout: no stick/button input for kEngineOffTimeoutMs → IDLE ---
       {
         const int32_t kIdleBand = static_cast<int32_t>(CbusNeutral) / 20;  // ±5 % threshold
@@ -233,9 +204,8 @@ void loop() {
 #endif
       }
 
-      // --- 2. CbChain 2-layer pipeline (INPUT → SIM) ---
-      proc_chain_update(machine.inputChain, machine.inputChainCount, comBus);  // niveau 1: btn → counters (subgear, direct-drive)
-      proc_chain_update(machine.simChain,   machine.simChainCount,   comBus);  // niveau 2: physics (gear, ramp, bypass, …)
+      // --- 2. CbChain SIM pipeline ---
+      proc_chain_update(machine.simChain,   machine.simChainCount,   comBus);  // physics (gear, ramp, bypass, …)
       break;
     }
 
@@ -248,11 +218,6 @@ void loop() {
         stopAllDcDrivers(machine);
         sleepAllDcDrivers(machine);
         disableAllDcDrivers(machine);     
-      }
-
-      if (comBus.keyOn) {
-        sys_log_info("[SYSTEM][EVENT] input=KEY_ON action=rearm_from_SLEEPING\n");
-        combus_set_runlevel(comBus, RunLevel::STARTING, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
       }
       break;
     }

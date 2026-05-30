@@ -24,10 +24,11 @@
 
 #include "input_proc_config.h"
 
-#include <core/config/machines/dumper_truck/combus/combus.h>           // AnalogComBusID, DigitalComBusID
+#include <core/config/machines/dumper_truck/combus/combus.h>           // AnalogComBusID, DigitalComBusID, comBus
 #include <core/config/machines/dumper_truck/motion/dumper_truck_motion.h>  // kDumperTruckGearShift
 #include <struct/combus_struct.h>                                      // makeChanOwner, ComBusOwner
 #include <core/system/combus/processors/input/cb_btn.h>                // cb_btn_toggle_fn, cb_btn_inc_fn, cb_btn_dec_fn, CbBtnCfg, CbBtnState
+#include <core/system/combus/processors/input/cb_key_runlevel.h>       // cb_key_runlevel_fn, CbKeyRunlevelCfg, CbKeyRunlevelState
 #include <core/system/combus/processors/base/cb_io.h>                  // cb_in_fn, cb_out_fn
 #include <core/system/combus/processors/base/cb_bypass.h>              // cb_bypass_fn
 using namespace DumperTruck;
@@ -78,6 +79,15 @@ static CbBtnState gSubGearToggleState    {};
 static CbBtnState gSubGearIncState       {};
 static CbBtnState gSubGearDecState       {};
 static CbBtnState gDirectDriveToggleState {};
+
+//  KEY_RUNLEVEL — ignition key state: &comBus set at startup (non-constexpr pointer).
+static CbKeyRunlevelState gKeyRunlevelState {
+    .bus         = &comBus,   ///< Resolved at startup (global — zero-init order safe for a pointer).
+    .prevPressed = false,
+    .holdStartMs = 0u,
+    .holdFired   = false,
+    .keyActive   = false,
+};
 
 
 // =============================================================================
@@ -136,7 +146,7 @@ static constexpr ChanOwner kInputOwner = makeChanOwner(ComBusOwner::GRP_MACHINE,
 
 
 // =============================================================================
-// 5. CHANNEL ARRAY
+// 5. DIRECT DRIVE PROCESSOR ARRAY
 // =============================================================================
 
 static CbProc kDirectDriveProcs[] = {
@@ -161,7 +171,37 @@ static CbProc kDirectDriveProcs[] = {
 
 
 // =============================================================================
-// 5. CHANNEL ARRAY
+// 6. KEY RUNLEVEL PROCESSOR ARRAY
+// =============================================================================
+
+//  KEY_RUNLEVEL — ignition key: 3-second hold shuts engine down.
+static constexpr CbKeyRunlevelCfg kKeyRunlevelCfg {
+    .shutdownHoldMs = 3000u,  ///< 3 s continuous press in RUNNING → IDLE.
+};
+
+static CbProc kKeyRunlevelProcs[] = {
+    // in — seed pipeline from raw KEY_BTN state.
+    { .name  = "in",
+      .inCh  = DigitalComBusID::KEY_BTN,
+      .fn    = cb_in_fn,
+    },
+    // key_runlevel — rising edge → STARTING; 3 s hold → IDLE.
+    { .name  = "key_runlevel",
+      .inCh  = DigitalComBusID::KEY_BTN,  // runner injects KEY_BTN into proc->inValue each cycle
+      .fn    = cb_key_runlevel_fn,
+      .cfg   = &kKeyRunlevelCfg,
+      .state = &gKeyRunlevelState,
+    },
+    // out — commit persistent KEY_ACTIVE flag to wire.
+    { .name  = "out",
+      .outCh = DigitalComBusID::KEY_ACTIVE,
+      .fn    = cb_out_fn,
+    },
+};
+
+
+// =============================================================================
+// 7. CHAIN ARRAY
 // =============================================================================
 
 CbChain kInputChains[INPUT_CH_COUNT] = {
@@ -175,6 +215,12 @@ CbChain kInputChains[INPUT_CH_COUNT] = {
   { .name       = "direct_drive",
     .procs      = kDirectDriveProcs,
     .procCount  = static_cast<uint8_t>(std::size(kDirectDriveProcs)),
+    .chainOwner = kInputOwner,
+  },
+
+  { .name       = "key_runlevel",
+    .procs      = kKeyRunlevelProcs,
+    .procCount  = static_cast<uint8_t>(std::size(kKeyRunlevelProcs)),
     .chainOwner = kInputOwner,
   },
 

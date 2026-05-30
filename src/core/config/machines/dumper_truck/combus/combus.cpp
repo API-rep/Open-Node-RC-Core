@@ -42,6 +42,7 @@ DigitalComBus DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::CH_COUNT)
   { .infoName = "roof light channel",      .value = false, .owner = ChanOwner::MACHINE_INPUT },
   { .infoName = "low beam channel",        .value = false, .owner = ChanOwner::MACHINE_INPUT },
   { .infoName = "braking channel",         .value = false, .owner = ChanOwner::MACHINE_SYSTEM },
+  { .infoName = "key active channel",      .value = false, .owner = ChanOwner::MACHINE_SYSTEM }, ///< Processed ignition key state — written by key_runlevel chain, transmitted to sound node.
   // --- Machine-node-local channels (WIRE_END .. MACHINE_END-1) — never transmitted ---
   { .infoName = "direct drive (local)",    .value = false, .owner = ChanOwner::MACHINE_SYSTEM }, ///< Toggle state — written by main.cpp toggle logic, read by cb_bypass_fn.
   { .infoName = "direct drive btn (local)", .value = false, .owner = ChanOwner::MACHINE_INPUT }, ///< Raw OPTIONS button — written by input_update every cycle.
@@ -77,7 +78,6 @@ DigitalComBus DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::CH_COUNT)
 ComBus comBus {
   .runLevel       = RunLevel::NOT_YET_SET,
   .runLevelOwner  = ChanOwner::MACHINE_SYSTEM,
-  .keyOnOwner     = ChanOwner::MACHINE_SYSTEM,
   .analogBus      = AnalogComBusArray,
   .digitalBus     = DigitalComBusArray,
   .analogBusMaxVal = (1UL << (sizeof(decltype(AnalogComBus::value)) * 8)) - 1

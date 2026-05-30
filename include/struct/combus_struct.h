@@ -163,8 +163,6 @@ typedef struct {
   ChanOwner runLevelOwner = ChanOwner::NONE;    // module allowed to write runLevel — set at init
   bool batteryIsLow = false;                    // true when any vbat channel reports low — written by vbat module, read by all
   ChanOwner battLowOwner = ChanOwner::NONE;     // module allowed to write batteryIsLow — set at init
-  bool keyOn = false;                           // operator ignition consent — derived from input, used by state machine transitions
-  ChanOwner keyOnOwner = ChanOwner::NONE;       // module allowed to write keyOn — set at init
     // --- Transport ---
   uint32_t lastFrameMs = 0;                     // millis() of the last successful combus_frame_apply — used by watchdog
     // --- Channel arrays ---

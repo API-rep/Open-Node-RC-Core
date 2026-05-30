@@ -102,20 +102,6 @@ bool combus_set_runlevel(ComBus& bus, RunLevel rl, ChanOwner caller);
 
 
 /**
- * @brief Write the ComBus keyOn flag.
- * 
- * @param bus    Target ComBus instance.
- * @param val    New keyOn value.
- * @param caller Identity of the calling module — checked against bus.keyOnOwner.
- * 
- * @return true if the write was accepted, false if ownership mismatch.
- */
-
-bool combus_set_keyon(ComBus& bus, bool val, ChanOwner caller);
-
-
-
-/**
  * @brief Write the ComBus batteryIsLow flag.
  * 
  * @param bus    Target ComBus instance.
