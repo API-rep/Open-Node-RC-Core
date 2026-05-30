@@ -133,7 +133,7 @@ static CbProc kDirectDriveProcs[] = {
 CbChain kInputChains[INPUT_CH_COUNT] = {
 
   { .name       = "subgear",
-    .optInCh    = AnalogComBusID::SUBGEAR_BUS,  // read current value
+    .inCh       = AnalogComBusID::SUBGEAR_BUS,  // read current value
     .outCh      = AnalogComBusID::SUBGEAR_BUS,  // write modified value
     .procs      = kSubGearProcs,
     .procCount  = static_cast<uint8_t>(std::size(kSubGearProcs)),
@@ -141,7 +141,7 @@ CbChain kInputChains[INPUT_CH_COUNT] = {
   },
 
   { .name       = "direct_drive",
-    .optInCh    = DigitalComBusID::DIRECT_DRIVE_BTN,  // read button
+    .inCh       = DigitalComBusID::DIRECT_DRIVE_BTN,  // read button
     .outCh      = DigitalComBusID::DIRECT_DRIVE,      // write flag
     .procs      = kDirectDriveProcs,
     .procCount  = static_cast<uint8_t>(std::size(kDirectDriveProcs)),

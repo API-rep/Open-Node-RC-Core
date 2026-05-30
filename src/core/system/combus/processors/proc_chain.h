@@ -7,8 +7,8 @@
  *   CbProcFn in sequence.
  *
  *   Runner contract:
- *   - Pre-reads `ch.optInCh` to seed `value`.
- *   - Iterates procs: injects `inValue[]`, calls fn, commits `outValue`.
+   * - Pre-reads `ch.inCh` to seed `value`.
+   * - Iterates procs: injects `inValue`, calls fn, commits `outValue`.
  *   - Post-writes `ch.outCh` after the chain (regardless of `claimed`).
  *
  *   Usage:

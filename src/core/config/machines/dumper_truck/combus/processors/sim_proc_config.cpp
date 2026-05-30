@@ -5,18 +5,19 @@
  * @details Defines the SIM CbChain array for the dumper-truck machine class.
  *   Compiled only in machine-node builds (IS_MAINBOARD guard).
  *
- *   Channel pipelines (optInCh → procs → outCh):
+ *   Channel pipelines (inCh → procs → outCh):
  *     SIM_THROTTLE : THROTTLE_BUS → ramp, drive-state(→DRIVE_STATE_BUS),
  *                    center, abs, scale, bypass(DIRECT_DRIVE),
- *                    ratio(DIRECT_DRIVE, GEAR) → RPM_BUS
+ *                    ratio(GEAR) → RPM_BUS
  *     SIM_GEAR     : RPM_BUS → subgear-claim(SUBGEAR_BUS),
  *                    manual-claim(MANUAL_GEAR_SET), direct-claim(DIRECT_DRIVE),
  *                    gear-fsm(DRIVE_STATE_BUS), gear-ramp → GEAR
- *                    NOTE: subgear-claim forces GEAR=0 when sub-gear active.
- *     SIM_TRACTION : RPM_BUS → rpm_to_speed(DRIVE_STATE_BUS, GEAR),
- *                    subgear-speed(SUBGEAR_BUS, DRIVE_STATE_BUS, RPM_BUS) → ESC_SPEED_BUS
- *                    NOTE: rpm_to_speed outputs CbusNeutral when GEAR=0;
- *                    subgear-speed overrides with capped speed when SUBGEAR_BUS != 0.
+ *                    NOTE: subgear-claim forces GEAR=1 when sub-gear active.
+ *     SIM_TRACTION : RPM_BUS → gear-ratio(GEAR), subgear-cap(SUBGEAR_BUS),
+ *                    gear-dir(DRIVE_STATE_BUS) → ESC_SPEED_BUS
+ *                    NOTE: gear-ratio passes through when GEAR=0 (neutral);
+ *                    gear-subgear-cap caps magnitude in RPM domain;
+ *                    gear-dir applies direction once at end.
  *     SIM_STEERING : STEERING_BUS → bypass(DIRECT_DRIVE), ramp → STEERING_RAMPED_BUS
  *     SIM_DUMP     : DUMP_BUS     → bypass(DIRECT_DRIVE), ramp → DUMP_RAMPED_BUS
  *
@@ -38,7 +39,7 @@
 #include <core/system/combus/processors/math/cb_abs.h>              // cb_abs_fn
 #include <core/system/combus/processors/math/cb_scale.h>            // cb_scale_fn, CbScaleCfg
 #include <core/system/combus/processors/motion/cb_dir.h>           // cb_dir_fn, CbDirCfg
-#include <core/system/combus/processors/modules/gear/cb_gear.h>    // gear_fsm_fn, gear_upshift_drop_fn, gear_rpm_to_speed_fn, gear_dyn_ramp_fn, gear_subgear_speed_fn
+#include <core/system/combus/processors/modules/gear/cb_gear.h>    // gear_fsm_fn, gear_upshift_drop_fn, gear_ratio_fn, gear_subgear_cap_fn, gear_dir_fn, gear_dyn_ramp_fn
 using namespace DumperTruck;
 
 
@@ -93,9 +94,9 @@ static constexpr GearProcCfg kGearCfg {
 };
 
 static constexpr CbBypassCfg kSubGearClaimBypass {
-    .forceValue = 0u,  ///< Force GEAR = 0 (sub-gear sentinel) when sub-gear mode active.
-                       ///< gear_rpm_to_speed_fn outputs CbusNeutral for GEAR=0;
-                       ///< subgear-speed proc in TRACTION chain handles actual wheel speed.
+    .forceValue = 1u,  ///< Force GEAR = 1 when sub-gear mode active.
+                       ///< gear_ratio_fn passes through (GEAR=1 → neutral cumDelta);
+                       ///< gear_subgear_cap_fn handles the actual speed cap.
 };
 
 static constexpr CbBypassCfg kDirectDriveGearBypass {
@@ -149,12 +150,12 @@ static CbProc kThrottleProcs[] = {
     },
     // bypass — DIRECT_DRIVE HIGH → claim (raw magnitude bypasses ratio, flows to RPM_BUS).
     { .name      = "bypass",
-      .inCh   = { DigitalComBusID::DIRECT_DRIVE },
+      .inCh      = DigitalComBusID::DIRECT_DRIVE,
       .fn        = cb_bypass_fn,
     },
     // ratio — subtract shiftDelta RPM on upshift.
     { .name      = "ratio",
-      .inCh   = { AnalogComBusID::GEAR },
+      .inCh      = AnalogComBusID::GEAR,
       .fn        = gear_upshift_drop_fn,
       .cfg       = &kGearCfg,
       .state     = &gThrottleShiftDeltaState,
@@ -169,10 +170,8 @@ static CbProc kGearProcs[] = {
 
     // 1. SubGear claim — SUBGEAR_BUS != 0 → force gear=1, claim.
     //    Rationale: Crawl mode active. Blocks manual/direct/auto modes — exclusive control.
-    //    NOTE: kSubGearClaimBypass (forceValue=1) is mandatory — without it, the RPM value
-    //    is passed unchanged as gear number (garbage) → rpm_to_speed overflow → saccade.
     { .name      = "subgear-claim",
-      .inCh   = { AnalogComBusID::SUBGEAR_BUS },
+      .inCh      = AnalogComBusID::SUBGEAR_BUS,
       .fn        = cb_bypass_fn,
       .cfg       = &kSubGearClaimBypass,
     },
@@ -195,7 +194,7 @@ static CbProc kGearProcs[] = {
     //    Rationale: Direct-drive bypass mode (inertia disabled on throttle).
     //    Fixed 1st gear for predictable direct ESC control.
     { .name      = "direct-claim",
-      .inCh   = { DigitalComBusID::DIRECT_DRIVE },
+      .inCh      = DigitalComBusID::DIRECT_DRIVE,
       .fn        = cb_bypass_fn,
       .cfg       = &kDirectDriveGearBypass,  // force gear=1, claim
     },
@@ -204,7 +203,7 @@ static CbProc kGearProcs[] = {
     //    Rationale: Default mode. Hysteresis-based upshift/downshift driven
     //    by RPM thresholds and DRIVE_STATE (accel vs. decel detection).
     { .name      = "gear-fsm",
-      .inCh   = { AnalogComBusID::DRIVE_STATE_BUS },
+      .inCh      = AnalogComBusID::DRIVE_STATE_BUS,
       .fn        = gear_fsm_fn,
       .cfg       = &kGearCfg,
       .state     = &gGearFsmState,
@@ -222,30 +221,30 @@ static CbProc kGearProcs[] = {
 };
 
 static CbProc kTractionProcs[] = {
-    // rpm_to_speed — RPM + gear → ESC_SPEED_BUS bipolar.
-    //   When GEAR = 0 (sub-gear sentinel), outputs CbusNeutral directly.
-    { .name   = "rpm_to_speed",
-      .inCh   = { AnalogComBusID::DRIVE_STATE_BUS, AnalogComBusID::GEAR },
-      .fn     = gear_rpm_to_speed_fn,
-      .cfg    = &kGearCfg,
+    // gear-ratio — RPM + cumDelta[gear] → adjustedRpm; GEAR=0 → passthrough.
+    { .name  = "gear-ratio",
+      .inCh  = AnalogComBusID::GEAR,
+      .fn    = gear_ratio_fn,
+      .cfg   = &kGearCfg,
     },
-    // subgear-speed — overrides ESC_SPEED_BUS with sub-gear-capped speed.
-    //   Passthrough (value unchanged) when SUBGEAR_BUS == 0 (normal mode).
-    //   RPM_BUS is re-read via inCh[2] for the sub-gear speed calculation,
-    //   independently of the CbusNeutral already in value from rpm_to_speed.
-    { .name   = "subgear-speed",
-      .inCh   = { AnalogComBusID::SUBGEAR_BUS,
-                  AnalogComBusID::DRIVE_STATE_BUS,
-                  AnalogComBusID::RPM_BUS },
-      .fn     = gear_subgear_speed_fn,
-      .cfg    = &kGearCfg,
+    // subgear-cap — cap magnitude to maxSpeedPct when SUBGEAR active; passthrough if 0.
+    { .name  = "subgear-cap",
+      .inCh  = AnalogComBusID::SUBGEAR_BUS,
+      .fn    = gear_subgear_cap_fn,
+      .cfg   = &kGearCfg,
+    },
+    // gear-dir — apply direction (DRIVE_STATE_BUS) → bipolar ESC_SPEED_BUS.
+    { .name  = "gear-dir",
+      .inCh  = AnalogComBusID::DRIVE_STATE_BUS,
+      .fn    = gear_dir_fn,
+      .cfg   = &kGearCfg,
     },
 };
 
 static CbProc kSteeringProcs[] = {
     // bypass — DIRECT_DRIVE HIGH → claim (raw steering bypasses ramp).
     { .name    = "bypass",
-      .inCh = { DigitalComBusID::DIRECT_DRIVE },
+      .inCh    = DigitalComBusID::DIRECT_DRIVE,
       .fn      = cb_bypass_fn,
     },
     // ramp — progressive inertia.
@@ -259,7 +258,7 @@ static CbProc kSteeringProcs[] = {
 static CbProc kDumpProcs[] = {
     // bypass — DIRECT_DRIVE HIGH → claim (raw dump bypasses ramp).
     { .name    = "bypass",
-      .inCh = { DigitalComBusID::DIRECT_DRIVE },
+      .inCh    = DigitalComBusID::DIRECT_DRIVE,
       .fn      = cb_bypass_fn,
     },
     // ramp — progressive asymmetric inertia.
@@ -280,7 +279,7 @@ static constexpr ChanOwner kSimOwner = makeChanOwner(ComBusOwner::GRP_MACHINE, C
 CbChain kSimChannels[SIM_CH_COUNT] = {
 
   { .name       = "throttle",
-    .optInCh    = AnalogComBusID::THROTTLE_BUS,
+    .inCh       = AnalogComBusID::THROTTLE_BUS,
     .outCh      = AnalogComBusID::RPM_BUS,
     .procs      = kThrottleProcs,
     .procCount  = static_cast<uint8_t>(std::size(kThrottleProcs)),
@@ -288,7 +287,7 @@ CbChain kSimChannels[SIM_CH_COUNT] = {
   },
 
   { .name       = "gear",
-    .optInCh    = AnalogComBusID::RPM_BUS,
+    .inCh       = AnalogComBusID::RPM_BUS,
     .outCh   = AnalogComBusID::GEAR,
     .procs      = kGearProcs,
     .procCount  = static_cast<uint8_t>(std::size(kGearProcs)),
@@ -296,7 +295,7 @@ CbChain kSimChannels[SIM_CH_COUNT] = {
   },
 
   { .name       = "traction",
-    .optInCh    = AnalogComBusID::RPM_BUS,
+    .inCh       = AnalogComBusID::RPM_BUS,
     .outCh   = AnalogComBusID::ESC_SPEED_BUS,
     .procs      = kTractionProcs,
     .procCount  = static_cast<uint8_t>(std::size(kTractionProcs)),
@@ -304,7 +303,7 @@ CbChain kSimChannels[SIM_CH_COUNT] = {
   },
 
   { .name       = "steering",
-    .optInCh    = AnalogComBusID::STEERING_BUS,
+    .inCh       = AnalogComBusID::STEERING_BUS,
     .outCh   = AnalogComBusID::STEERING_RAMPED_BUS,
     .procs      = kSteeringProcs,
     .procCount  = static_cast<uint8_t>(std::size(kSteeringProcs)),
@@ -312,7 +311,7 @@ CbChain kSimChannels[SIM_CH_COUNT] = {
   },
 
   { .name       = "dump",
-    .optInCh    = AnalogComBusID::DUMP_BUS,
+    .inCh       = AnalogComBusID::DUMP_BUS,
     .outCh   = AnalogComBusID::DUMP_RAMPED_BUS,
     .procs      = kDumpProcs,
     .procCount  = static_cast<uint8_t>(std::size(kDumpProcs)),

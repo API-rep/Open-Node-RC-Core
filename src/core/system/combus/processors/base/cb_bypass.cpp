@@ -17,8 +17,8 @@
 /** @brief Conditional bypass gate — see cb_bypass.h for full contract. */
 void cb_bypass_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner /*chainOwner*/)
 {
-    // inCh[0] = condition channel (digital). Runner pre-reads into inValue[0].
-    if (proc->inValue[0] != 0u) {
+    // inCh = condition channel (digital). Runner pre-reads into inValue.
+    if (proc->inValue != 0u) {
         // Optional force value — overwrite on claim.
         if (proc->cfg != nullptr) {
             const CbBypassCfg* cfg = static_cast<const CbBypassCfg*>(proc->cfg);

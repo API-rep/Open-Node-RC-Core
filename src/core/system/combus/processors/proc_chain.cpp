@@ -63,21 +63,21 @@ void proc_chain_init(CbChain* /*channels*/, uint8_t /*count*/)
  * @brief Process a single CbChain — pre-read, dispatch processors, post-write.
  *
  * @details Sequence:
- *   1. Pre-read  : runner reads `ch.optInCh` → seeds `value`.
+ *   1. Pre-read  : runner reads `ch.inCh` → seeds `value`.
  *   2. Proc loop : for each proc (stops on `claimed = true`):
- *        a. Injects secondary inputs: `proc.inValue[i]` ← bus[proc.inCh[i]].
+ *        a. Injects secondary input: `proc.inValue` ← bus[proc.inCh].
  *        b. Calls `proc.fn(&proc, value, claimed, ch.chainOwner)`.
  *        c. Commits proc output: bus[proc.outCh] ← proc.outValue.
  *   3. Post-write: runner writes `value` → `ch.outCh`.
  *      Always executes — `claimed` only aborts the proc chain, not the write.
  *
- * @param ch   Channel descriptor (procs, chainOwner, optInCh, outCh).
+ * @param ch   Channel descriptor (procs, chainOwner, inCh, outCh).
  * @param bus  Shared ComBus for this cycle.
  */
 void proc_chain_step(CbChain& ch, ComBus& bus)
 {
     // --- 1. Pre-read primary input -------------------------------------------
-    uint16_t value   = cbRead(bus, ch.optInCh, /*isDrivedGuard=*/true);
+    uint16_t value   = cbRead(bus, ch.inCh, /*isDrivedGuard=*/true);
     bool     claimed = false;
 
     // --- 2. Process chain ----------------------------------------------------
@@ -85,10 +85,8 @@ void proc_chain_step(CbChain& ch, ComBus& bus)
         CbProc& proc = ch.procs[p];
         if (proc.fn == nullptr) continue;
 
-        //  a. Inject secondary inputs (no isDrived guard — internal channels).
-        for (uint8_t i = 0u; i < 3u; ++i) {
-            proc.inValue[i] = cbRead(bus, proc.inCh[i], /*isDrivedGuard=*/false);
-        }
+        //  a. Inject secondary input (no isDrived guard — internal channel).
+        proc.inValue = cbRead(bus, proc.inCh, /*isDrivedGuard=*/false);
 
         //  b. Call proc fn (no bus access inside fn).
         proc.fn(&proc, value, claimed, ch.chainOwner);

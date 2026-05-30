@@ -67,11 +67,11 @@ static const char* dCh(DigitalComBusID id)
 	}
 }
 
-/// @brief Derive the primary input channel from a CbChain (ch.optInCh, analog).
+/// @brief Derive the primary input channel from a CbChain (ch.inCh, analog).
 static AnalogComBusID simChanInCh(const CbChain& ch)
 {
-	if (ch.optInCh.has_value() && std::holds_alternative<AnalogComBusID>(*ch.optInCh))
-		return std::get<AnalogComBusID>(*ch.optInCh);
+	if (ch.inCh.has_value() && std::holds_alternative<AnalogComBusID>(*ch.inCh))
+		return std::get<AnalogComBusID>(*ch.inCh);
 	return static_cast<AnalogComBusID>(0u);
 }
 
@@ -104,8 +104,8 @@ static void render_proc_row(uint8_t idx, const CbProc* proc)
 
 	if (strcmp(pname, "bypass") == 0) {
 		DigitalComBusID condCh = DigitalComBusID{};
-		if (proc->inCh[0].has_value() && std::holds_alternative<DigitalComBusID>(*proc->inCh[0]))
-			condCh = std::get<DigitalComBusID>(*proc->inCh[0]);
+		if (proc->inCh.has_value() && std::holds_alternative<DigitalComBusID>(*proc->inCh))
+			condCh = std::get<DigitalComBusID>(*proc->inCh);
 		const bool active = s_bus->digitalBus[static_cast<uint8_t>(condCh)].value;
 		dLine("  Proc %u : bypass    condCh: %-10s  active: %-3s",
 		      (unsigned)idx, dCh(condCh), active ? "YES" : "no ");
@@ -217,7 +217,7 @@ static void render_sim_view()
 		    && ch.procs[0].name != nullptr
 		    && strcmp(ch.procs[0].name, "bypass") == 0)
 		{
-			const auto& cond = ch.procs[0].inCh[0];
+			const auto& cond = ch.procs[0].inCh;
 			if (cond.has_value() && std::holds_alternative<DigitalComBusID>(*cond))
 				chBypass = s_bus->digitalBus[static_cast<uint8_t>(std::get<DigitalComBusID>(*cond))].value;
 		}
@@ -271,7 +271,7 @@ static void render_channel_detail(uint8_t idx)
 	    && ch.procs[0].name != nullptr
 	    && strcmp(ch.procs[0].name, "bypass") == 0)
 	{
-		const auto& cond = ch.procs[0].inCh[0];
+		const auto& cond = ch.procs[0].inCh;
 		if (cond.has_value() && std::holds_alternative<DigitalComBusID>(*cond))
 			chBypass = s_bus->digitalBus[static_cast<uint8_t>(std::get<DigitalComBusID>(*cond))].value;
 	}

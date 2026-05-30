@@ -6,11 +6,11 @@
  *   machine main loop.  Included from the vehicle header (IS_MAINBOARD block)
  *   so that board-specific envCfg.h can reference kSimChannels[] directly.
  *
- *   Channel pipelines (optInCh → procs → outCh):
+ *   Channel pipelines (inCh → procs → outCh):
  *     SIM_THROTTLE : THROTTLE_BUS → [ramp, drive-state, center, abs, scale,
  *                                     bypass, ratio] → RPM_BUS
  *     SIM_GEAR     : RPM_BUS      → [bypass, gear-fsm, gear-ramp] → GEAR
- *     SIM_TRACTION : RPM_BUS      → [rpm_to_speed] → ESC_SPEED_BUS
+ *     SIM_TRACTION : RPM_BUS      → [gear-ratio, subgear-cap, gear-dir] → ESC_SPEED_BUS
  *     SIM_STEERING : STEERING_BUS → [bypass, ramp]  → STEERING_RAMPED_BUS
  *     SIM_DUMP     : DUMP_BUS     → [bypass, ramp]  → DUMP_RAMPED_BUS
  *

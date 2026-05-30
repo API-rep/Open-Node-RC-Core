@@ -72,7 +72,7 @@ void cb_btn_push_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chai
     const auto* cfg   = static_cast<const CbBtnCfg*>(proc->cfg);
     auto*       state = static_cast<CbBtnState*>(proc->state);
 
-    const bool pressed = proc->inValue[0];
+    const bool pressed = proc->inValue;
 
     if (btn_should_fire(pressed, state, cfg)) {
         value   = cfg->bound;
@@ -86,7 +86,7 @@ void cb_btn_inc_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chain
     const auto* cfg   = static_cast<const CbBtnCfg*>(proc->cfg);
     auto*       state = static_cast<CbBtnState*>(proc->state);
 
-    const bool pressed = proc->inValue[0];
+    const bool pressed = proc->inValue;
 
     if (btn_should_fire(pressed, state, cfg)) {
         if (value < cfg->bound) {
@@ -102,7 +102,7 @@ void cb_btn_dec_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chain
     const auto* cfg   = static_cast<const CbBtnCfg*>(proc->cfg);
     auto*       state = static_cast<CbBtnState*>(proc->state);
 
-    const bool pressed = proc->inValue[0];
+    const bool pressed = proc->inValue;
 
     if (btn_should_fire(pressed, state, cfg)) {
         if (value > cfg->bound) {
@@ -118,7 +118,7 @@ void cb_btn_toggle_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner ch
     const auto* cfg   = static_cast<const CbBtnCfg*>(proc->cfg);
     auto*       state = static_cast<CbBtnState*>(proc->state);
 
-    const bool pressed = proc->inValue[0];
+    const bool pressed = proc->inValue;
 
     if (btn_should_fire(pressed, state, cfg)) {
         value   = (value > 0) ? 0 : cfg->bound;

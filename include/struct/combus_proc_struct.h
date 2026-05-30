@@ -7,20 +7,17 @@
  *
  *   **Key architectural rules:**
  *   - `CbProcFn` has NO `ComBus& bus` parameter.
- *     Bus access is handled exclusively by the runner via `optInCh` /
- *     `outCh` (channel level) and `inCh` / `outCh` (proc level).
- *   - Each proc declares all its bus dependencies in its struct fields.
- *     No bus channel ID may be hidden inside a `cfg` struct.
- *     Exception: `AnalogComBusID` / `DigitalComBusID` in cfg are allowed
- *     only for procs that are explicitly designated as multi-input bus
- *     readers (e.g. `sim_subgear_btn_fn` — inCh covers all 3 inputs).
+ *     Bus access is handled exclusively by the runner via `CbChain::inCh` /
+ *     `outCh` (channel level) and `CbProc::inCh` / `outCh` (proc level).
+ *   - Each proc declares exactly one secondary input (`inCh`) and at most
+ *     one output (`outCh`) — both optional.  No channel IDs inside `cfg`.
  *   - `ChanOwner` flows from `CbChain::chainOwner` to the runner — never
  *     from an external parameter on the update function.
  *
  *   **Runner contract (cb_chain_update):**
- *   1. Pre-read  — runner reads `ch.optInCh` → seeds `value`.
+ *   1. Pre-read  — runner reads `ch.inCh` → seeds `value`.
  *   2. Proc loop — for each proc (stops on `claimed = true`):
- *        a. Inject secondary inputs: `inValue[i]` ← `bus[inCh[i]]`.
+ *        a. Inject secondary input: `inValue` ← `bus[inCh]`.
  *        b. Call `proc.fn(&proc, value, claimed, ch.chainOwner)`.
  *        c. Commit proc output: `bus[outCh]` ← `outValue`.
  *   3. Post-write — runner writes `value` → `ch.outCh`.
@@ -61,11 +58,11 @@ struct CbProc;  ///< Forward — allows CbProcFn to reference CbProc by pointer.
  *
  * @details Called once per channel per runner cycle.  The function must NOT
  *   access `ComBus` directly — all bus I/O is injected/committed by the
- *   via `CbProc::inValue[]` and `CbProc::outValue`.
+ *   runner via `CbProc::inValue` and `CbProc::outValue`.
  *
  * @param proc     Processor descriptor — cast `cfg`/`state` to concrete types.
- *                 May also read `proc->inValue[]` and write `proc->outValue`.
- * @param value    Pipeline value (in/out) — seeded by runner from `CbChain::optInCh`;
+ *                 May also read `proc->inValue` and write `proc->outValue`.
+ * @param value    Pipeline value (in/out) — seeded by runner from `CbChain::inCh`;
  *                 committed by runner to `CbChain::outCh` after all procs.
  * @param claimed  Set to `true` to abort the remaining proc chain.
  *                 Does NOT suppress the final channel write.
@@ -81,8 +78,8 @@ using CbProcFn = void (*)(CbProc* proc, uint16_t& value, bool& claimed, ChanOwne
 /**
  * @brief One processing unit within a CbChain pipeline.
  *
- * @details All ComBus dependencies must be declared as `inCh[i]` or
- *   `outCh` — never read directly from a bus parameter.
+ * @details One optional secondary input (`inCh`) and one optional output
+ *   (`outCh`) — never read from a bus parameter directly.
  *
  *   `dynCfg` is an optional runtime-override for `cfg`: a preceding proc
  *   may write `proc->dynCfg` to point at a RAM-resident (mutable) config
@@ -94,7 +91,7 @@ using CbProcFn = void (*)(CbProc* proc, uint16_t& value, bool& claimed, ChanOwne
  *                          : static_cast<const MyCfg*>(proc->cfg);
  *   @endcode
  *
- * @note `inValue[]` and `outValue` are written/read by the runner —
+ * @note `inValue` and `outValue` are written/read by the runner —
  *   they are mutable even though the rest of the struct may be `constexpr`.
  *   In practice the proc array is declared `static` (non-const) so the
  *   runner can update these fields each cycle.
@@ -102,10 +99,10 @@ using CbProcFn = void (*)(CbProc* proc, uint16_t& value, bool& claimed, ChanOwne
 struct CbProc {
     const char*  name;   ///< Human-readable stage label (debug / dashboard).
 
-    // --- Secondary bus inputs (injected by runner before fn call) ------------
-    /// Up to 3 secondary input channels — nullopt slots are skipped.
-    std::optional<std::variant<AnalogComBusID, DigitalComBusID>> inCh[3] = {};
-    uint16_t     inValue[3] = {};  ///< Populated by runner from inCh[i] before fn.
+    // --- Secondary bus input (injected by runner before fn call) -------------
+    /// Single secondary input channel — nullopt = no read.
+    std::optional<std::variant<AnalogComBusID, DigitalComBusID>> inCh = {};
+    uint16_t     inValue = 0u;     ///< Populated by runner from inCh before fn call.
 
     // --- Proc output (committed by runner after fn call) ----------------------
     /// Optional proc output channel — nullopt = no write.
@@ -128,7 +125,7 @@ struct CbProc {
  * @brief One named combus processing chain — ordered CbProc list with I/O declaration.
  *
  * @details The chain declares its primary input and output channels.
- *   The runner pre-reads `optInCh` before the proc chain and post-writes
+ *   The runner pre-reads `inCh` before the proc chain and post-writes
  *   `outCh` after (regardless of `claimed`).
  *
  *   `chainOwner` is forwarded to every fn call and to all bus writes
@@ -139,7 +136,7 @@ struct CbChain {
 
     // --- Primary I/O (runner-owned — no read/write proc needed) --------------
     /// Primary input channel — nullopt = no pre-read (value starts at 0).
-    std::optional<std::variant<AnalogComBusID, DigitalComBusID>> optInCh  = {};
+    std::optional<std::variant<AnalogComBusID, DigitalComBusID>> inCh  = {};
     /// Primary output channel — nullopt = no post-write.
     std::optional<std::variant<AnalogComBusID, DigitalComBusID>> outCh = {};
 
