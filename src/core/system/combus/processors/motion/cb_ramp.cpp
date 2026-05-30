@@ -81,7 +81,7 @@ void cb_ramp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*ch
         const bool isNegDir   = (target < CbusNeutral);
         const bool useDownCfg = isAccel && isNegDir && (cfg->accelDownSteps != 0u);
         const uint16_t step = isAccel ? (useDownCfg ? cfg->accelDownSteps : cfg->accelSteps)
-                                      : cfg->brakeSteps;
+                                      : static_cast<uint16_t>(cfg->brakeSteps + cfg->extBrakeSteps);
 
         if (state->currentPos < target) {
             const uint16_t delta = static_cast<uint16_t>(target - state->currentPos);

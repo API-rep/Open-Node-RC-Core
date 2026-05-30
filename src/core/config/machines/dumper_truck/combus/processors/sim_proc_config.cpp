@@ -7,6 +7,7 @@
  *
  *   Channel pipelines (in → procs → out):
  *     SIM_THROTTLE : in(THROTTLE_BUS) → ramp, dir(→DRIVE_STATE_BUS),
+ *                    b-in(BRAKE_BUS→state), brake(THROTTLE_BUS→BRAKE_BUS merged+ramp),
  *                    center, abs, scale, bypass(DIRECT_DRIVE),
  *                    ratio(GEAR) → out(RPM_BUS)
  *     SIM_GEAR     : in(RPM_BUS) → subgear-claim(SUBGEAR_BUS),
@@ -40,6 +41,7 @@
 #include <core/system/combus/processors/math/cb_abs.h>              // cb_abs_fn
 #include <core/system/combus/processors/math/cb_scale.h>            // cb_scale_fn, CbScaleCfg
 #include <core/system/combus/processors/motion/cb_dir.h>           // cb_dir_fn, CbDirCfg
+#include <core/system/combus/processors/motion/cb_brake.h>         // cb_brake_fn, cb_rev_brake_fn
 #include <core/system/combus/processors/modules/gear/cb_gear.h>    // gear_fsm_fn, gear_upshift_drop_fn, gear_ratio_fn, gear_subgear_cap_fn, gear_dir_fn, gear_dyn_ramp_fn
 using namespace DumperTruck;
 
@@ -69,9 +71,10 @@ static constexpr CbRampCfg kDumpAsymRamp {
 static constexpr CbRampCfg kTractionRamp {
     .rampTimeMs  = 50u,
     .accelSteps  = pctToCbus(3),
-    .brakeSteps  = pctToCbus(6),
-    .neutralBand = pctToCbus(8),   ///< 1% deadzone — absorbs PS4 stick noise (±~0.4%) at neutral,
+    .brakeSteps  = pctToCbus(1),   ///< Near-zero natural decel — vehicle coasts freely; active braking via cb_rev_brake_fn.
+    .neutralBand = pctToCbus(8),   ///< 8 % deadzone — absorbs PS4 stick noise (±~0.4%) at neutral,
                                    ///<   preventing cb_dir_fn from oscillating FWD↔REV at rest.
+                                   ///<   Also used as revBrakeDeadBand in kBrakeCfg.
 };
 
 //  Traction ramp — RAM copy, mutated by gear_dyn_ramp_fn on each gear change.
@@ -94,6 +97,17 @@ static constexpr GearProcCfg kGearCfg {
     .profile = &kGearShift_Heavy3Speed,
 };
 
+static constexpr CbBrakeCfg kBrakeCfg {
+    .maxBrake          = CbusNeutral,       ///< Full opposing stick → full stop.
+    .reverseHoldMs     = 400u,              ///< 400 ms hold at standstill before direction reversal allowed.
+    .dynRampCfg        = &gTractionRampDyn,
+    .maxBrakeStep      = pctToCbus(25),     ///< extBrakeSteps ceiling at full brake — tune on hardware.
+    .brakeScalePct     = 50u,              ///< Brake-input max deflection = 50 % of maxBrake.
+    .revBrakeScalePct  = 150u,             ///< Reverse-stick 1.5× amplification — tune on hardware.
+    .revBrakeDeadBand  = kTractionRamp.neutralBand, ///< Must match ramp neutralBand — stick within the ramp dead zone
+                                           ///<   must not arm revBraking.
+};
+
 static constexpr CbBypassCfg kSubGearClaimBypass {
     .forceValue = 1u,  ///< Force GEAR = 1 when sub-gear mode active.
                        ///< gear_ratio_fn passes through (GEAR=1 → neutral cumDelta);
@@ -112,6 +126,7 @@ static constexpr CbBypassCfg kDirectDriveGearBypass {
 static CbRampState        gSteerRampState          {};
 static CbRampState        gDumpRampState           {};
 static CbRampState        gTractionRampState       {};
+static CbBrakeState       gBrakeState              {};
 static GearFsmState        gGearFsmState            {};
 static ShiftDeltaState     gThrottleShiftDeltaState {};
 
@@ -139,6 +154,25 @@ static CbProc kThrottleProcs[] = {
       .outCh  = AnalogComBusID::DRIVE_STATE_BUS,
       .fn        = cb_dir_fn,
       .cfg       = &kThrottleDirCfg,
+    },
+    // b-in — cache normalized brake input from BRAKE_BUS into gBrakeState.brakeVal each cycle.
+    //   Observer; does not modify value.
+    { .name  = "b-in",
+      .inCh  = AnalogComBusID::BRAKE_BUS,
+      .fn    = cb_brake_fn,
+      .state = &gBrakeState,
+    },
+    // brake — merge reverse-brake (opposing stick vs ramp) with brake input, write BRAKE_BUS.
+    //   Also dynamically scales ramp brakeSteps (naturalBrakeStep → maxBrakeStep at full force).
+    //   maxBrake = CbusNeutral; brakeScalePct = 50 (brake-input max = 50 % of maxBrake).
+    //   reverseHoldMs = 400 ms hold at standstill before direction reversal allowed.
+    //   Observer: does not modify value; side-effect writes to BRAKE_BUS and dynRampCfg.
+    { .name  = "brake",
+      .inCh  = AnalogComBusID::THROTTLE_BUS,
+      .outCh = AnalogComBusID::BRAKE_BUS,
+      .fn    = cb_rev_brake_fn,
+      .cfg   = &kBrakeCfg,
+      .state = &gBrakeState,
     },
     // center — signed deviation from CbusNeutral.
     { .name  = "center",
