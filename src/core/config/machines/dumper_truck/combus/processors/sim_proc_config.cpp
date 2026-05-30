@@ -70,7 +70,7 @@ static constexpr CbRampCfg kTractionRamp {
     .rampTimeMs  = 50u,
     .accelSteps  = pctToCbus(3),
     .brakeSteps  = pctToCbus(6),
-    .neutralBand = pctToCbus(3),   ///< 1% deadzone — absorbs PS4 stick noise (±~0.4%) at neutral,
+    .neutralBand = pctToCbus(8),   ///< 1% deadzone — absorbs PS4 stick noise (±~0.4%) at neutral,
                                    ///<   preventing cb_dir_fn from oscillating FWD↔REV at rest.
 };
 

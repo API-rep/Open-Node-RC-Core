@@ -14,8 +14,9 @@
  *                          neutral-gate blocks toggle/inc/dec when driving
  *                          (DRIVE_STATE_BUS != 0 → claim, value unchanged).
  *     INPUT_DIRECT_DRIVE : in(DIRECT_DRIVE_BTN) → toggle(bound=1) → out(DIRECT_DRIVE)
- *     INPUT_KEY_RUNLEVEL : in(KEY_BTN) → latch(holdMs=3000) → out(KEY_ACTIVE)
- *                                       → runlevel(KEY_ACTIVE → STARTING / TURNING_OFF)
+ *     INPUT_KEY_RUNLEVEL : in(KEY_ACTIVE) -> key_on(ON_PRESS, 0ms) -> key_off(ON_PRESS, 3000ms)
+ *                                         -> runlevel(KEY_ACTIVE) -> out(KEY_ACTIVE)
+ *                          key_on fires on press-down; key_off fires WHILE held >= 3 s.
  *
  *   Read-modify-write pattern: each proc reads current value, modifies it,
  *   passes to next proc.  Last proc (cb_out_fn) commits to the output channel.
@@ -29,8 +30,7 @@
 #include <core/config/machines/dumper_truck/combus/combus.h>           // AnalogComBusID, DigitalComBusID, comBus
 #include <core/config/machines/dumper_truck/motion/dumper_truck_motion.h>  // kDumperTruckGearShift
 #include <struct/combus_struct.h>                                      // makeChanOwner, ComBusOwner
-#include <core/system/combus/processors/input/cb_btn.h>                // cb_btn_toggle_fn, cb_btn_inc_fn, cb_btn_dec_fn, CbBtnCfg, CbBtnState
-#include <core/system/combus/processors/input/cb_btn_latch.h>           // cb_btn_latch_fn, CbBtnLatchCfg, CbBtnLatchState
+#include <core/system/combus/processors/input/cb_btn.h>  // cb_btn_push_fn, cb_btn_toggle_fn, cb_btn_inc_fn, cb_btn_dec_fn, CbBtnCfg, CbBtnState, CbBtnTrigger
 #include <core/system/combus/processors/base/cb_runlevel.h>              // cb_runlevel_fn, CbRunlevelCfg, CbRunlevelState
 #include <core/system/combus/processors/base/cb_io.h>                  // cb_in_fn, cb_out_fn
 #include <core/system/combus/processors/base/cb_bypass.h>              // cb_bypass_fn
@@ -44,33 +44,33 @@ using namespace DumperTruck;
 //  SUBGEAR toggle — enable/disable sub-gear mode (SHARE button).
 //  bound=1 : when toggling "on", SUBGEAR_BUS is set to 1 (first sub-gear).
 static constexpr CbBtnCfg kSubGearToggleCfg {
-    .bound      = 1u,     ///< "On" value — first sub-gear index.
-    .debounceMs = 50u,    ///< 50 ms debounce.
-    .holdMs     = 0u,     ///< Rising-edge trigger (no long-press).
+    .bound   = 1u,                          ///< "On" value — first sub-gear index.
+    .holdMs  = 0u,                          ///< Immediate press.
+    .trigger = CbBtnTrigger::ON_PRESS,
 };
 
 //  SUBGEAR increment — up through sub-gears (L1 trigger).
 //  bound = runtime subGearCount from the active GearShiftProfile.
 static constexpr CbBtnCfg kSubGearIncCfg {
-    .bound      = kDumperTruckGearShift->subGearCount,  ///< Upper limit (3 for kHeavy3).
-    .debounceMs = 50u,                                  ///< 50 ms debounce.
-    .holdMs     = 0u,                                   ///< Rising-edge trigger.
+    .bound   = kDumperTruckGearShift->subGearCount,  ///< Upper limit (3 for kHeavy3).
+    .holdMs  = 0u,                                   ///< Immediate press.
+    .trigger = CbBtnTrigger::ON_PRESS,
 };
 
 //  SUBGEAR decrement — down through sub-gears (L2 trigger).
 //  bound=1 : cannot decrement below first sub-gear index.
 static constexpr CbBtnCfg kSubGearDecCfg {
-    .bound      = 1u,     ///< Lower limit.
-    .debounceMs = 50u,    ///< 50 ms debounce.
-    .holdMs     = 0u,     ///< Rising-edge trigger.
+    .bound   = 1u,                          ///< Lower limit.
+    .holdMs  = 0u,                          ///< Immediate press.
+    .trigger = CbBtnTrigger::ON_PRESS,
 };
 
 //  DIRECT_DRIVE toggle — enable/disable direct-drive mode (OPTIONS button).
 //  bound=1 : when toggling "on", DIRECT_DRIVE is set to 1 (active).
 static constexpr CbBtnCfg kDirectDriveToggleCfg {
-    .bound      = 1u,     ///< "On" value — direct-drive active.
-    .debounceMs = 50u,    ///< 50 ms debounce.
-    .holdMs     = 0u,     ///< Rising-edge trigger (no long-press).
+    .bound   = 1u,                          ///< "On" value — direct-drive active.
+    .holdMs  = 0u,                          ///< Immediate press.
+    .trigger = CbBtnTrigger::ON_PRESS,
 };
 
 
@@ -83,8 +83,9 @@ static CbBtnState gSubGearIncState       {};
 static CbBtnState gSubGearDecState       {};
 static CbBtnState gDirectDriveToggleState {};
 
-//  KEY latch state (non-constexpr: runtime init only).
-static CbBtnLatchState gKeyLatchState {};
+//  KEY button states — key_on: immediate ON; key_off: 3 s hold → OFF.
+static CbBtnState gKeyOnState  {};
+static CbBtnState gKeyOffState {};
 
 //  KEY runlevel state — &comBus resolved at startup (pointer init is zero-init safe).
 static CbRunlevelState gKeyRunlevelState {
@@ -177,41 +178,58 @@ static CbProc kDirectDriveProcs[] = {
 // 6. KEY RUNLEVEL PROCESSOR ARRAY
 // =============================================================================
 
-//  Latch config — short press to activate; 3 s hold to deactivate.
-static constexpr CbBtnLatchCfg kKeyLatchCfg {
-    .holdMs = 3000u,  ///< 3 s continuous hold clears the latch.
+//  key_on  — immediate ON_PRESS (holdMs=0): fires on rising edge → KEY_ACTIVE = 1.
+static constexpr CbBtnCfg kKeyOnCfg {
+    .bound   = 1u,
+    .holdMs  = 0u,                    ///< Fires on press-down.
+    .trigger = CbBtnTrigger::ON_PRESS,
 };
 
-//  RunLevel config — latch ON → STARTING; latch OFF → TURNING_OFF (graceful shutdown).
+//  key_off — long ON_PRESS (holdMs=3000): fires WHILE held >= 3 s → KEY_ACTIVE = 0.
+static constexpr CbBtnCfg kKeyOffCfg {
+    .bound   = 0u,
+    .holdMs  = 3000u,                 ///< 3 s continuous hold → shutdown.
+    .trigger = CbBtnTrigger::ON_PRESS,
+};
+
+//  RunLevel config — KEY_ACTIVE 0→1 → STARTING; 1→0 → TURNING_OFF.
 static constexpr CbRunlevelCfg kKeyRunlevelCfg {
-    .activeLevel  = RunLevel::STARTING,     ///< Set when KEY_ACTIVE goes 0→1.
-    .defaultLevel = RunLevel::TURNING_OFF,  ///< Set when KEY_ACTIVE goes 1→0 — FSM drives IDLE from there.
+    .activeLevel  = RunLevel::STARTING,
+    .defaultLevel = RunLevel::TURNING_OFF,
 };
 
 static CbProc kKeyRunlevelProcs[] = {
-    // in — seed pipeline from raw KEY_BTN state.
+    // in — seed from persistent KEY_ACTIVE (read-modify-write latch on the bus channel).
     { .name  = "in",
-      .inCh  = DigitalComBusID::KEY_BTN,
+      .inCh  = DigitalComBusID::KEY_ACTIVE,
       .fn    = cb_in_fn,
     },
-    // latch — rising edge → ON; hold 3 s → OFF.
-    { .name  = "key_latch",
+    // key_on — press-down → KEY_ACTIVE = 1.  Once per press (repeat-guarded).
+    { .name  = "key_on",
       .inCh  = DigitalComBusID::KEY_BTN,
-      .fn    = cb_btn_latch_fn,
-      .cfg   = &kKeyLatchCfg,
-      .state = &gKeyLatchState,
+      .fn    = cb_btn_push_fn,
+      .cfg   = &kKeyOnCfg,
+      .state = &gKeyOnState,
     },
-    // out — commit latch state to KEY_ACTIVE wire channel.
-    { .name  = "out",
-      .outCh = DigitalComBusID::KEY_ACTIVE,
-      .fn    = cb_out_fn,
+    // key_off — hold >= 3 s WHILE pressed → KEY_ACTIVE = 0.  Fires before release.
+    { .name  = "key_off",
+      .inCh  = DigitalComBusID::KEY_BTN,
+      .fn    = cb_btn_push_fn,
+      .cfg   = &kKeyOffCfg,
+      .state = &gKeyOffState,
     },
-    // runlevel — KEY_ACTIVE transitions drive RunLevel changes.
+    // runlevel — edge detection on KEY_ACTIVE → drives RunLevel.
+    //   Skipped one frame when key_on/key_off claims; 1-frame (~10 ms) delay is imperceptible.
     { .name  = "runlevel",
       .inCh  = DigitalComBusID::KEY_ACTIVE,
       .fn    = cb_runlevel_fn,
       .cfg   = &kKeyRunlevelCfg,
       .state = &gKeyRunlevelState,
+    },
+    // out — LAST: always runs (claimed-exempt).  Commits updated KEY_ACTIVE to bus.
+    { .name  = "out",
+      .outCh = DigitalComBusID::KEY_ACTIVE,
+      .fn    = cb_out_fn,
     },
 };
 

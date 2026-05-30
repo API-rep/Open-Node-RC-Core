@@ -10,55 +10,59 @@
 
 
 // =============================================================================
-// INTERNAL HELPERS
+// INTERNAL HELPER
 // =============================================================================
 
 /**
- * @brief Detect rising edge + debounce + long-press guard.
+ * @brief Evaluate trigger condition and return true exactly once per qualified press or release.
  *
- * @param pressed      Current button state (true = pressed).
- * @param state        Button state tracker.
- * @param cfg          Button config.
- * @return true if the button condition is met (rising edge or hold threshold).
+ * @details Updates @p state in-place; @p state->prevPressed is set before return.
+ *
+ *   ON_PRESS trigger: fires on (or while) pressed once elapsed >= holdMs. Repeat-guarded
+ *     by fired flag — cleared on release so each new press can fire at most once.
+ *   ON_RELEASE trigger: fires on falling edge if press duration >= holdMs.
+ *
+ * @param pressed  Current button state (true = pressed).
+ * @param state    Button runtime state.
+ * @param cfg      Button config.
+ * @return true when the trigger condition is satisfied.
  */
-static inline bool btn_should_fire(bool pressed, CbBtnState* state, const CbBtnCfg* cfg) {
+static inline bool btn_check_fire(bool pressed, CbBtnState* state, const CbBtnCfg* cfg)
+{
     const uint32_t now = millis();
-    bool risingEdge = false;
 
-    // Rising edge detection
+    // --- Rising edge: start hold timer, reset repeat guard ---
     if (pressed && !state->prevPressed) {
-        // Debounce guard
-        if (cfg->debounceMs > 0 && (now - state->lastPressMs) < cfg->debounceMs) {
-            state->prevPressed = pressed;
-            return false;
+        state->pressMs = now;
+        state->fired   = false;
+    }
+
+    bool fire = false;
+
+    if (cfg->trigger == CbBtnTrigger::ON_PRESS) {
+        // Fire once per press: immediately (holdMs==0) or while held >= holdMs.
+        if (pressed && !state->fired
+                    && (now - state->pressMs) >= (uint32_t)cfg->holdMs) {
+            fire = true;
         }
-        state->lastPressMs = now;
-        state->holdFired = false;  // Reset hold flag on new press
-        risingEdge = true;
+        // Release: clear repeat guard so the next press can fire.
+        if (!pressed) {
+            state->fired = false;
+        }
+    } else {
+        // ON_RELEASE: fire on falling edge if press duration >= holdMs.
+        if (!pressed && state->prevPressed
+                     && (now - state->pressMs) >= (uint32_t)cfg->holdMs) {
+            fire = true;
+        }
+    }
+
+    if (fire) {
+        state->fired = true;
     }
 
     state->prevPressed = pressed;
-
-    // No hold configured → fire exactly once on rising edge.
-    // NOTE: the previous `return pressed && elapsed < 50` was wrong — it fired
-    // multiple times per press (once per loop cycle within the 50 ms window).
-    if (cfg->holdMs == 0) {
-        return risingEdge;
-    }
-
-    // Long-press mode
-    if (!pressed) {
-        state->holdFired = false;  // Reset when button released
-        return false;
-    }
-
-    // Button is held — check if threshold reached and not already fired
-    if (!state->holdFired && (now - state->lastPressMs) >= cfg->holdMs) {
-        state->holdFired = true;
-        return true;
-    }
-
-    return false;
+    return fire;
 }
 
 
@@ -68,13 +72,9 @@ static inline bool btn_should_fire(bool pressed, CbBtnState* state, const CbBtnC
 
 void cb_btn_push_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner) {
     (void)chainOwner;
-
     const auto* cfg   = static_cast<const CbBtnCfg*>(proc->cfg);
     auto*       state = static_cast<CbBtnState*>(proc->state);
-
-    const bool pressed = proc->inValue;
-
-    if (btn_should_fire(pressed, state, cfg)) {
+    if (btn_check_fire((bool)proc->inValue, state, cfg)) {
         value   = cfg->bound;
         claimed = true;
     }
@@ -82,13 +82,9 @@ void cb_btn_push_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chai
 
 void cb_btn_inc_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner) {
     (void)chainOwner;
-
     const auto* cfg   = static_cast<const CbBtnCfg*>(proc->cfg);
     auto*       state = static_cast<CbBtnState*>(proc->state);
-
-    const bool pressed = proc->inValue;
-
-    if (btn_should_fire(pressed, state, cfg)) {
+    if (btn_check_fire((bool)proc->inValue, state, cfg)) {
         if (value < cfg->bound) {
             value++;
         }
@@ -98,13 +94,9 @@ void cb_btn_inc_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chain
 
 void cb_btn_dec_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner) {
     (void)chainOwner;
-
     const auto* cfg   = static_cast<const CbBtnCfg*>(proc->cfg);
     auto*       state = static_cast<CbBtnState*>(proc->state);
-
-    const bool pressed = proc->inValue;
-
-    if (btn_should_fire(pressed, state, cfg)) {
+    if (btn_check_fire((bool)proc->inValue, state, cfg)) {
         if (value > cfg->bound) {
             value--;
         }
@@ -114,14 +106,10 @@ void cb_btn_dec_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chain
 
 void cb_btn_toggle_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner) {
     (void)chainOwner;
-
     const auto* cfg   = static_cast<const CbBtnCfg*>(proc->cfg);
     auto*       state = static_cast<CbBtnState*>(proc->state);
-
-    const bool pressed = proc->inValue;
-
-    if (btn_should_fire(pressed, state, cfg)) {
-        value   = (value > 0) ? 0 : cfg->bound;
+    if (btn_check_fire((bool)proc->inValue, state, cfg)) {
+        value   = (value > 0u) ? 0u : cfg->bound;
         claimed = true;
     }
 }

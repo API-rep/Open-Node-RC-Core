@@ -210,6 +210,21 @@ void loop() {
     }
 
     // ---------------------------------------------------------
+    case RunLevel::TURNING_OFF : {
+    // ---------------------------------------------------------
+      if (isNewRunLevel) {
+        sys_log_info("[SYSTEM][STATE] runlevel=TURNING_OFF\n");
+        stateTM = millis();
+        stopAllDcDrivers(machine);
+        wakeupAllDcDrivers(machine);
+        disableAllDcDrivers(machine);
+      }
+        // Auto-transition to IDLE — no shutdown sequence implemented yet (winter 2026).
+        combus_set_runlevel(comBus, RunLevel::IDLE, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
+      break;
+    }
+
+    // ---------------------------------------------------------
     case RunLevel::SLEEPING : {
     // ---------------------------------------------------------
       if (isNewRunLevel) {
