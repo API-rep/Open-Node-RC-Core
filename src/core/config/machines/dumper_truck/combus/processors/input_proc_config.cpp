@@ -6,10 +6,13 @@
  *   Compiled only in machine-node builds (IS_MAINBOARD guard).
  *
  *   INPUT pipelines:
- *     INPUT_SUBGEAR      : in(SUBGEAR_BUS) → toggle(SUBGEAR_SET_BTN, bound=1),
+ *     INPUT_SUBGEAR      : in(SUBGEAR_BUS) → neutral-gate(DRIVE_STATE_BUS),
+ *                                              toggle(SUBGEAR_SET_BTN, bound=1),
  *                                              inc(GEAR_UP_BTN, bound=subGearCount),
  *                                              dec(GEAR_DOWN_BTN, bound=1)
  *                                            → out(SUBGEAR_BUS)
+ *                          neutral-gate blocks toggle/inc/dec when driving
+ *                          (DRIVE_STATE_BUS != 0 → claim, value unchanged).
  *     INPUT_DIRECT_DRIVE : in(DIRECT_DRIVE_BTN) → toggle(bound=1) → out(DIRECT_DRIVE)
  *
  *   Read-modify-write pattern: each proc reads current value, modifies it,
@@ -26,6 +29,7 @@
 #include <struct/combus_struct.h>                                      // makeChanOwner, ComBusOwner
 #include <core/system/combus/processors/input/cb_btn.h>                // cb_btn_toggle_fn, cb_btn_inc_fn, cb_btn_dec_fn, CbBtnCfg, CbBtnState
 #include <core/system/combus/processors/base/cb_io.h>                  // cb_in_fn, cb_out_fn
+#include <core/system/combus/processors/base/cb_bypass.h>              // cb_bypass_fn
 using namespace DumperTruck;
 
 
@@ -85,6 +89,15 @@ static CbProc kSubGearProcs[] = {
     { .name  = "in",
       .inCh  = AnalogComBusID::SUBGEAR_BUS,
       .fn    = cb_in_fn,
+    },
+    // neutral-gate — block subgear changes while the vehicle is moving.
+    //   DRIVE_STATE_BUS != 0 (FWD / REV / BRAKING) → claim, value unchanged.
+    //   DRIVE_STATE_BUS == 0 (STANDING) → no action, toggle/inc/dec proceed.
+    //   Prevents abrupt gear/subgear transitions mid-drive.
+    { .name  = "neutral-gate",
+      .inCh  = AnalogComBusID::DRIVE_STATE_BUS,
+      .fn    = cb_bypass_fn,
+      // cfg = nullptr → value unchanged on claim (preserve current SUBGEAR_BUS).
     },
     // toggle — SHARE button: 0 ↔ 1
     { .name    = "subgear_toggle",
