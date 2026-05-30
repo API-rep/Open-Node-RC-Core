@@ -60,43 +60,44 @@ void proc_chain_init(CbChain* /*channels*/, uint8_t /*count*/)
 
 
 /**
- * @brief Process a single CbChain — pre-read, dispatch processors, post-write.
+ * @brief Process a single CbChain — dispatch all processors.
  *
  * @details Sequence:
- *   1. Pre-read  : runner reads `ch.inCh` → seeds `value`.
- *   2. Proc loop : for each proc (stops on `claimed = true`):
- *        a. Injects secondary input: `proc.inValue` ← bus[proc.inCh].
- *        b. Calls `proc.fn(&proc, value, claimed, ch.chainOwner)`.
- *        c. Commits proc output: bus[proc.outCh] ← proc.outValue.
- *   3. Post-write: runner writes `value` → `ch.outCh`.
- *      Always executes — `claimed` only aborts the proc chain, not the write.
+ *   1. Value starts at 0 — the first proc (`cb_in_fn`) seeds it.
+ *   2. Proc loop — all procs, in order:
+ *        a. Inject input: `proc.inValue` ← bus[proc.inCh].
+ *        b. Skip when `claimed = true` — EXCEPT the last proc, which always
+ *           runs to allow `cb_out_fn` to commit the final value after a bypass.
+ *        c. Call `proc.fn(&proc, value, claimed, ch.chainOwner)`.
+ *        d. Commit proc output: bus[proc.outCh] ← proc.outValue.
  *
- * @param ch   Channel descriptor (procs, chainOwner, inCh, outCh).
+ * @param ch   Channel descriptor (procs, chainOwner).
  * @param bus  Shared ComBus for this cycle.
  */
 void proc_chain_step(CbChain& ch, ComBus& bus)
 {
-    // --- 1. Pre-read primary input -------------------------------------------
-    uint16_t value   = cbRead(bus, ch.inCh, /*isDrivedGuard=*/true);
+    // --- 1. Init pipeline ----------------------------------------------------
+    uint16_t value   = 0u;
     bool     claimed = false;
 
     // --- 2. Process chain ----------------------------------------------------
-    for (uint8_t p = 0; p < ch.procCount && !claimed; ++p) {
+    for (uint8_t p = 0; p < ch.procCount; ++p) {
         CbProc& proc = ch.procs[p];
         if (proc.fn == nullptr) continue;
 
-        //  a. Inject secondary input (no isDrived guard — internal channel).
+        //  a. Inject input from proc.inCh.
         proc.inValue = cbRead(bus, proc.inCh, /*isDrivedGuard=*/false);
 
-        //  b. Call proc fn (no bus access inside fn).
+        //  b. Skip when claimed — last proc always runs (cb_out_fn commits).
+        const bool isLast = (p == ch.procCount - 1u);
+        if (claimed && !isLast) continue;
+
+        //  c. Call proc fn (no bus access inside fn).
         proc.fn(&proc, value, claimed, ch.chainOwner);
 
-        //  c. Commit proc output.
+        //  d. Commit proc output.
         cbWrite(bus, proc.outCh, proc.outValue, ch.chainOwner);
     }
-
-    // --- 3. Post-write primary output (always) -------------------------------
-    cbWrite(bus, ch.outCh, value, ch.chainOwner);
 }
 
 

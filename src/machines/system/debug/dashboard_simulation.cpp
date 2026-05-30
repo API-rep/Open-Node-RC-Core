@@ -67,19 +67,25 @@ static const char* dCh(DigitalComBusID id)
 	}
 }
 
-/// @brief Derive the primary input channel from a CbChain (ch.inCh, analog).
+/// @brief Derive the primary input channel from first proc's inCh (analog).
 static AnalogComBusID simChanInCh(const CbChain& ch)
 {
-	if (ch.inCh.has_value() && std::holds_alternative<AnalogComBusID>(*ch.inCh))
-		return std::get<AnalogComBusID>(*ch.inCh);
+	if (ch.procCount > 0u && ch.procs != nullptr) {
+		const auto& ich = ch.procs[0].inCh;
+		if (ich.has_value() && std::holds_alternative<AnalogComBusID>(*ich))
+			return std::get<AnalogComBusID>(*ich);
+	}
 	return static_cast<AnalogComBusID>(0u);
 }
 
-/// @brief Derive the primary output channel from a CbChain (ch.outCh, analog).
+/// @brief Derive the primary output channel from last proc's outCh (analog).
 static AnalogComBusID simChanOutCh(const CbChain& ch)
 {
-	if (ch.outCh.has_value() && std::holds_alternative<AnalogComBusID>(*ch.outCh))
-		return std::get<AnalogComBusID>(*ch.outCh);
+	if (ch.procCount > 0u && ch.procs != nullptr) {
+		const auto& och = ch.procs[ch.procCount - 1u].outCh;
+		if (och.has_value() && std::holds_alternative<AnalogComBusID>(*och))
+			return std::get<AnalogComBusID>(*och);
+	}
 	return static_cast<AnalogComBusID>(0u);
 }
 
@@ -211,15 +217,17 @@ static void render_sim_view()
 			snprintf(outDisp, sizeof(outDisp), "%+6d%%", (int)outPct);
 		}
 
-		//  Bypass state: first proc named "bypass" with inCh[0] HIGH.
+		//  Bypass state: scan for proc named "bypass" with digital inCh HIGH.
 		bool chBypass = false;
-		if (ch.procCount > 0u && ch.procs != nullptr
-		    && ch.procs[0].name != nullptr
-		    && strcmp(ch.procs[0].name, "bypass") == 0)
-		{
-			const auto& cond = ch.procs[0].inCh;
-			if (cond.has_value() && std::holds_alternative<DigitalComBusID>(*cond))
-				chBypass = s_bus->digitalBus[static_cast<uint8_t>(std::get<DigitalComBusID>(*cond))].value;
+		if (ch.procs != nullptr) {
+			for (uint8_t p = 0; p < ch.procCount; ++p) {
+				if (ch.procs[p].name && strcmp(ch.procs[p].name, "bypass") == 0) {
+					const auto& cond = ch.procs[p].inCh;
+					if (cond.has_value() && std::holds_alternative<DigitalComBusID>(*cond))
+						chBypass = s_bus->digitalBus[static_cast<uint8_t>(std::get<DigitalComBusID>(*cond))].value;
+					break;
+				}
+			}
 		}
 
 		//  Proc names — '+'-separated, up to 4 entries, truncated at 26 chars.
@@ -267,13 +275,15 @@ static void render_channel_detail(uint8_t idx)
 
 	//  Bypass state for this channel.
 	bool chBypass = false;
-	if (ch.procCount > 0u && ch.procs != nullptr
-	    && ch.procs[0].name != nullptr
-	    && strcmp(ch.procs[0].name, "bypass") == 0)
-	{
-		const auto& cond = ch.procs[0].inCh;
-		if (cond.has_value() && std::holds_alternative<DigitalComBusID>(*cond))
-			chBypass = s_bus->digitalBus[static_cast<uint8_t>(std::get<DigitalComBusID>(*cond))].value;
+	if (ch.procs != nullptr) {
+		for (uint8_t p = 0; p < ch.procCount; ++p) {
+			if (ch.procs[p].name && strcmp(ch.procs[p].name, "bypass") == 0) {
+				const auto& cond = ch.procs[p].inCh;
+				if (cond.has_value() && std::holds_alternative<DigitalComBusID>(*cond))
+					chBypass = s_bus->digitalBus[static_cast<uint8_t>(std::get<DigitalComBusID>(*cond))].value;
+				break;
+			}
+		}
 	}
 
 	char upt[12];

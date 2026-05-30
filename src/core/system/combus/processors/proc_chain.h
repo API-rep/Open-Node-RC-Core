@@ -7,9 +7,10 @@
  *   CbProcFn in sequence.
  *
  *   Runner contract:
-   * - Pre-reads `ch.inCh` to seed `value`.
-   * - Iterates procs: injects `inValue`, calls fn, commits `outValue`.
- *   - Post-writes `ch.outCh` after the chain (regardless of `claimed`).
+ *   - Value starts at 0 — first proc (`cb_in_fn`) seeds it.
+ *   - Iterates procs: injects `inValue`, calls fn, commits `outValue`.
+ *   - Skips intermediate procs when `claimed = true`.
+ *   - Last proc always runs (allows `cb_out_fn` to commit after a bypass).
  *
  *   Usage:
  *   @code
@@ -48,11 +49,12 @@
 void proc_chain_init(CbChain* channels, uint8_t count);
 
 /**
- * @brief Process a single CbChain.
+ * @brief Process a single CbChain — dispatch all procs, last always runs.
  *
- * @details Pre-reads optInCh, dispatches procs with inValue injection and
- *   outValue commit, then post-writes outCh.  May be called directly when
- *   only one channel needs to be refreshed out-of-order.
+ * @details Iterates all procs with inValue injection and outValue commit.
+ *   Skips intermediate procs when `claimed = true`; the last proc always
+ *   runs so that `cb_out_fn` commits the final value even after a bypass.
+ *   May be called directly when only one channel needs out-of-order refresh.
  *
  * @param ch   Channel to process.
  * @param bus  Shared ComBus for this channel.

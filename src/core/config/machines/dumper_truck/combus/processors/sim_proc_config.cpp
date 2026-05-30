@@ -5,21 +5,21 @@
  * @details Defines the SIM CbChain array for the dumper-truck machine class.
  *   Compiled only in machine-node builds (IS_MAINBOARD guard).
  *
- *   Channel pipelines (inCh → procs → outCh):
- *     SIM_THROTTLE : THROTTLE_BUS → ramp, drive-state(→DRIVE_STATE_BUS),
+ *   Channel pipelines (in → procs → out):
+ *     SIM_THROTTLE : in(THROTTLE_BUS) → ramp, dir(→DRIVE_STATE_BUS),
  *                    center, abs, scale, bypass(DIRECT_DRIVE),
- *                    ratio(GEAR) → RPM_BUS
- *     SIM_GEAR     : RPM_BUS → subgear-claim(SUBGEAR_BUS),
+ *                    ratio(GEAR) → out(RPM_BUS)
+ *     SIM_GEAR     : in(RPM_BUS) → subgear-claim(SUBGEAR_BUS),
  *                    manual-claim(MANUAL_GEAR_SET), direct-claim(DIRECT_DRIVE),
- *                    gear-fsm(DRIVE_STATE_BUS), gear-ramp → GEAR
+ *                    gear-fsm(DRIVE_STATE_BUS), gear-ramp → out(GEAR)
  *                    NOTE: subgear-claim forces GEAR=1 when sub-gear active.
- *     SIM_TRACTION : RPM_BUS → gear-ratio(GEAR), subgear-cap(SUBGEAR_BUS),
- *                    gear-dir(DRIVE_STATE_BUS) → ESC_SPEED_BUS
+ *     SIM_TRACTION : in(RPM_BUS) → gear-ratio(GEAR), subgear-cap(SUBGEAR_BUS),
+ *                    gear-dir(DRIVE_STATE_BUS) → out(ESC_SPEED_BUS)
  *                    NOTE: gear-ratio passes through when GEAR=0 (neutral);
  *                    gear-subgear-cap caps magnitude in RPM domain;
  *                    gear-dir applies direction once at end.
- *     SIM_STEERING : STEERING_BUS → bypass(DIRECT_DRIVE), ramp → STEERING_RAMPED_BUS
- *     SIM_DUMP     : DUMP_BUS     → bypass(DIRECT_DRIVE), ramp → DUMP_RAMPED_BUS
+ *     SIM_STEERING : in(STEERING_BUS) → bypass(DIRECT_DRIVE), ramp → out(STEERING_RAMPED_BUS)
+ *     SIM_DUMP     : in(DUMP_BUS) → bypass(DIRECT_DRIVE), ramp → out(DUMP_RAMPED_BUS)
  *
  *   SUBGEAR_BUS is written by INPUT chain (cb_btn procs) — see input_proc_config.cpp.
  *******************************************************************************
@@ -35,6 +35,7 @@
 #include <core/system/combus/combus_res.h>        // CbusNeutral, pctToCbus
 #include <core/system/combus/processors/motion/cb_ramp.h>  // cb_ramp_fn, CbRampCfg, CbRampState
 #include <core/system/combus/processors/base/cb_bypass.h>  // cb_bypass_fn
+#include <core/system/combus/processors/base/cb_io.h>       // cb_in_fn, cb_out_fn
 #include <core/system/combus/processors/math/cb_center.h>          // cb_center_fn, CbCenterCfg
 #include <core/system/combus/processors/math/cb_abs.h>              // cb_abs_fn
 #include <core/system/combus/processors/math/cb_scale.h>            // cb_scale_fn, CbScaleCfg
@@ -120,6 +121,11 @@ static ShiftDeltaState     gThrottleShiftDeltaState {};
 // =============================================================================
 
 static CbProc kThrottleProcs[] = {
+    // in — seed pipeline from THROTTLE_BUS.
+    { .name  = "in",
+      .inCh  = AnalogComBusID::THROTTLE_BUS,
+      .fn    = cb_in_fn,
+    },
     // ramp — heavy-truck inertia on throttle input (uses gTractionRampDyn).
     //   rampTimeMs is updated by gear-ramp proc in GEAR chain (1 cycle latency).
     { .name    = "ramp",
@@ -160,9 +166,19 @@ static CbProc kThrottleProcs[] = {
       .cfg       = &kGearCfg,
       .state     = &gThrottleShiftDeltaState,
     },
+    // out — commit pipeline value to RPM_BUS.
+    { .name  = "out",
+      .outCh = AnalogComBusID::RPM_BUS,
+      .fn    = cb_out_fn,
+    },
 };
 
 static CbProc kGearProcs[] = {
+    // in — seed pipeline from RPM_BUS.
+    { .name  = "in",
+      .inCh  = AnalogComBusID::RPM_BUS,
+      .fn    = cb_in_fn,
+    },
     // =========================================================================
     // CLAIM CASCADE — first claim wins, later procs skipped.
     // Priority: SubGear > Manual > Direct > Auto (FSM).
@@ -185,7 +201,7 @@ static CbProc kGearProcs[] = {
     //    TODO: Implement INPUT chain procs that write MANUAL_GEAR_SET before enabling.
     /*
     { .name      = "manual-claim",
-      .inCh   = { DigitalComBusID::MANUAL_GEAR_SET },
+      .inCh      = { DigitalComBusID::MANUAL_GEAR_SET },
       .fn        = cb_bypass_fn,  // claim if flag HIGH, value unchanged (GEAR set by INPUT)
     },
     */
@@ -218,9 +234,19 @@ static CbProc kGearProcs[] = {
       .cfg       = &kGearCfg,
       .dynCfg    = &gTractionRampDyn,
     },
+    // out — commit pipeline value to GEAR.
+    { .name  = "out",
+      .outCh = AnalogComBusID::GEAR,
+      .fn    = cb_out_fn,
+    },
 };
 
 static CbProc kTractionProcs[] = {
+    // in — seed pipeline from RPM_BUS.
+    { .name  = "in",
+      .inCh  = AnalogComBusID::RPM_BUS,
+      .fn    = cb_in_fn,
+    },
     // gear-ratio — RPM + cumDelta[gear] → adjustedRpm; GEAR=0 → passthrough.
     { .name  = "gear-ratio",
       .inCh  = AnalogComBusID::GEAR,
@@ -239,9 +265,19 @@ static CbProc kTractionProcs[] = {
       .fn    = gear_dir_fn,
       .cfg   = &kGearCfg,
     },
+    // out — commit pipeline value to ESC_SPEED_BUS.
+    { .name  = "out",
+      .outCh = AnalogComBusID::ESC_SPEED_BUS,
+      .fn    = cb_out_fn,
+    },
 };
 
 static CbProc kSteeringProcs[] = {
+    // in — seed pipeline from STEERING_BUS.
+    { .name  = "in",
+      .inCh  = AnalogComBusID::STEERING_BUS,
+      .fn    = cb_in_fn,
+    },
     // bypass — DIRECT_DRIVE HIGH → claim (raw steering bypasses ramp).
     { .name    = "bypass",
       .inCh    = DigitalComBusID::DIRECT_DRIVE,
@@ -253,9 +289,19 @@ static CbProc kSteeringProcs[] = {
       .cfg   = &kSteerAsymRamp,
       .state = &gSteerRampState,
     },
+    // out — commit pipeline value to STEERING_RAMPED_BUS.
+    { .name  = "out",
+      .outCh = AnalogComBusID::STEERING_RAMPED_BUS,
+      .fn    = cb_out_fn,
+    },
 };
 
 static CbProc kDumpProcs[] = {
+    // in — seed pipeline from DUMP_BUS.
+    { .name  = "in",
+      .inCh  = AnalogComBusID::DUMP_BUS,
+      .fn    = cb_in_fn,
+    },
     // bypass — DIRECT_DRIVE HIGH → claim (raw dump bypasses ramp).
     { .name    = "bypass",
       .inCh    = DigitalComBusID::DIRECT_DRIVE,
@@ -266,6 +312,11 @@ static CbProc kDumpProcs[] = {
       .fn    = cb_ramp_fn,
       .cfg   = &kDumpAsymRamp,
       .state = &gDumpRampState,
+    },
+    // out — commit pipeline value to DUMP_RAMPED_BUS.
+    { .name  = "out",
+      .outCh = AnalogComBusID::DUMP_RAMPED_BUS,
+      .fn    = cb_out_fn,
     },
 };
 
@@ -279,40 +330,30 @@ static constexpr ChanOwner kSimOwner = makeChanOwner(ComBusOwner::GRP_MACHINE, C
 CbChain kSimChannels[SIM_CH_COUNT] = {
 
   { .name       = "throttle",
-    .inCh       = AnalogComBusID::THROTTLE_BUS,
-    .outCh      = AnalogComBusID::RPM_BUS,
     .procs      = kThrottleProcs,
     .procCount  = static_cast<uint8_t>(std::size(kThrottleProcs)),
     .chainOwner = kSimOwner,
   },
 
   { .name       = "gear",
-    .inCh       = AnalogComBusID::RPM_BUS,
-    .outCh   = AnalogComBusID::GEAR,
     .procs      = kGearProcs,
     .procCount  = static_cast<uint8_t>(std::size(kGearProcs)),
     .chainOwner = kSimOwner,
   },
 
   { .name       = "traction",
-    .inCh       = AnalogComBusID::RPM_BUS,
-    .outCh   = AnalogComBusID::ESC_SPEED_BUS,
     .procs      = kTractionProcs,
     .procCount  = static_cast<uint8_t>(std::size(kTractionProcs)),
     .chainOwner = kSimOwner,
   },
 
   { .name       = "steering",
-    .inCh       = AnalogComBusID::STEERING_BUS,
-    .outCh   = AnalogComBusID::STEERING_RAMPED_BUS,
     .procs      = kSteeringProcs,
     .procCount  = static_cast<uint8_t>(std::size(kSteeringProcs)),
     .chainOwner = kSimOwner,
   },
 
   { .name       = "dump",
-    .inCh       = AnalogComBusID::DUMP_BUS,
-    .outCh   = AnalogComBusID::DUMP_RAMPED_BUS,
     .procs      = kDumpProcs,
     .procCount  = static_cast<uint8_t>(std::size(kDumpProcs)),
     .chainOwner = kSimOwner,

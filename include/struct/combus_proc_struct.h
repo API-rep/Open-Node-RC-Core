@@ -7,22 +7,23 @@
  *
  *   **Key architectural rules:**
  *   - `CbProcFn` has NO `ComBus& bus` parameter.
- *     Bus access is handled exclusively by the runner via `CbChain::inCh` /
- *     `outCh` (channel level) and `CbProc::inCh` / `outCh` (proc level).
+ *     Bus access is handled exclusively by the runner via `CbProc::inCh` /
+ *     `outCh` — use `cb_in_fn` (first proc) and `cb_out_fn` (last proc)
+ *     for primary I/O; intermediate procs use secondary channels.
  *   - Each proc declares exactly one secondary input (`inCh`) and at most
  *     one output (`outCh`) — both optional.  No channel IDs inside `cfg`.
  *   - `ChanOwner` flows from `CbChain::chainOwner` to the runner — never
  *     from an external parameter on the update function.
  *
  *   **Runner contract (cb_chain_update):**
- *   1. Pre-read  — runner reads `ch.inCh` → seeds `value`.
- *   2. Proc loop — for each proc (stops on `claimed = true`):
- *        a. Inject secondary input: `inValue` ← `bus[inCh]`.
- *        b. Call `proc.fn(&proc, value, claimed, ch.chainOwner)`.
- *        c. Commit proc output: `bus[outCh]` ← `outValue`.
- *   3. Post-write — runner writes `value` → `ch.outCh`.
- *      The post-write happens ALWAYS (even when `claimed = true`).
- *      `claimed` only aborts the remaining proc chain — never the write.
+ *   1. Value starts at 0 — the first proc (`cb_in_fn`) seeds it.
+ *   2. Proc loop — all procs, in order:
+ *        a. Inject input: `inValue` ← `bus[inCh]`.
+ *        b. Skip when `claimed = true` — EXCEPT the last proc.
+ *        c. Call `proc.fn(&proc, value, claimed, ch.chainOwner)`.
+ *        d. Commit proc output: `bus[outCh]` ← `outValue`.
+ *      The last proc always runs, allowing `cb_out_fn` to commit the
+ *      final value even after a bypass.
  *
  *   **Adding a new CbProcFn:**
  *   1. Add cfg + state structs in the appropriate layer struct file
@@ -99,14 +100,14 @@ using CbProcFn = void (*)(CbProc* proc, uint16_t& value, bool& claimed, ChanOwne
 struct CbProc {
     const char*  name;   ///< Human-readable stage label (debug / dashboard).
 
-    // --- Secondary bus input (injected by runner before fn call) -------------
-    /// Single secondary input channel — nullopt = no read.
-    std::optional<std::variant<AnalogComBusID, DigitalComBusID>> inCh = {};
+    // --- Bus input (injected by runner before fn call) -------------------------
+    /// Input channel — nullopt = no read.
+    std::optional<std::variant<AnalogComBusID, DigitalComBusID>> inCh;
     uint16_t     inValue = 0u;     ///< Populated by runner from inCh before fn call.
 
     // --- Proc output (committed by runner after fn call) ----------------------
-    /// Optional proc output channel — nullopt = no write.
-    std::optional<std::variant<AnalogComBusID, DigitalComBusID>> outCh = {};
+    /// Optional output channel — nullopt = no write.
+    std::optional<std::variant<AnalogComBusID, DigitalComBusID>> outCh;
     uint16_t     outValue = 0u;       ///< Written by fn; committed by runner to outCh.
 
     // --- Behaviour -----------------------------------------------------------
@@ -122,23 +123,18 @@ struct CbProc {
 // =============================================================================
 
 /**
- * @brief One named combus processing chain — ordered CbProc list with I/O declaration.
+ * @brief One named combus processing chain — ordered CbProc list.
  *
- * @details The chain declares its primary input and output channels.
- *   The runner pre-reads `inCh` before the proc chain and post-writes
- *   `outCh` after (regardless of `claimed`).
+ * @details Primary I/O is handled by the first (`cb_in_fn`) and last
+ *   (`cb_out_fn`) procs in the array.  The runner iterates all procs;
+ *   intermediate procs are skipped when `claimed = true`, but the last
+ *   proc always runs to commit the final value.
  *
  *   `chainOwner` is forwarded to every fn call and to all bus writes
- *   (primary + secondary) — no external owner parameter on the runner.
+ *   — no external owner parameter on the runner.
  */
 struct CbChain {
     const char*  name;  ///< Human-readable chain name (debug / dashboard).
-
-    // --- Primary I/O (runner-owned — no read/write proc needed) --------------
-    /// Primary input channel — nullopt = no pre-read (value starts at 0).
-    std::optional<std::variant<AnalogComBusID, DigitalComBusID>> inCh  = {};
-    /// Primary output channel — nullopt = no post-write.
-    std::optional<std::variant<AnalogComBusID, DigitalComBusID>> outCh = {};
 
     // --- Proc chain ----------------------------------------------------------
     CbProc*  procs;      ///< Processor array (nullptr when procCount == 0).

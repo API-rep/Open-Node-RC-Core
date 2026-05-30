@@ -15,7 +15,7 @@
  *   @code
  *     // Pure bypass — value passthrough
  *     { .name = "bypass",
- *       .inCh = { DigitalComBusID::DIRECT_DRIVE },
+ *       .inCh = DigitalComBusID::DIRECT_DRIVE,
  *       .fn   = cb_bypass_fn,
  *       // cfg omitted = nullptr → value unchanged
  *     },
@@ -23,7 +23,7 @@
  *     // Bypass + force value
  *     static constexpr CbBypassCfg kGearDirectCfg { .forceValue = 1u };
  *     { .name = "direct-claim",
- *       .inCh = { DigitalComBusID::DIRECT_DRIVE },
+ *       .inCh = DigitalComBusID::DIRECT_DRIVE,
  *       .fn   = cb_bypass_fn,
  *       .cfg  = &kGearDirectCfg,  // force gear=1 on claim
  *     },
