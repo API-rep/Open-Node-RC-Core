@@ -14,6 +14,8 @@
  *                          neutral-gate blocks toggle/inc/dec when driving
  *                          (DRIVE_STATE_BUS != 0 → claim, value unchanged).
  *     INPUT_DIRECT_DRIVE : in(DIRECT_DRIVE_BTN) → toggle(bound=1) → out(DIRECT_DRIVE)
+ *     INPUT_KEY_RUNLEVEL : in(KEY_BTN) → latch(holdMs=3000) → out(KEY_ACTIVE)
+ *                                       → runlevel(KEY_ACTIVE → STARTING / TURNING_OFF)
  *
  *   Read-modify-write pattern: each proc reads current value, modifies it,
  *   passes to next proc.  Last proc (cb_out_fn) commits to the output channel.
@@ -28,7 +30,8 @@
 #include <core/config/machines/dumper_truck/motion/dumper_truck_motion.h>  // kDumperTruckGearShift
 #include <struct/combus_struct.h>                                      // makeChanOwner, ComBusOwner
 #include <core/system/combus/processors/input/cb_btn.h>                // cb_btn_toggle_fn, cb_btn_inc_fn, cb_btn_dec_fn, CbBtnCfg, CbBtnState
-#include <core/system/combus/processors/input/cb_key_runlevel.h>       // cb_key_runlevel_fn, CbKeyRunlevelCfg, CbKeyRunlevelState
+#include <core/system/combus/processors/input/cb_btn_latch.h>           // cb_btn_latch_fn, CbBtnLatchCfg, CbBtnLatchState
+#include <core/system/combus/processors/base/cb_runlevel.h>              // cb_runlevel_fn, CbRunlevelCfg, CbRunlevelState
 #include <core/system/combus/processors/base/cb_io.h>                  // cb_in_fn, cb_out_fn
 #include <core/system/combus/processors/base/cb_bypass.h>              // cb_bypass_fn
 using namespace DumperTruck;
@@ -80,13 +83,13 @@ static CbBtnState gSubGearIncState       {};
 static CbBtnState gSubGearDecState       {};
 static CbBtnState gDirectDriveToggleState {};
 
-//  KEY_RUNLEVEL — ignition key state: &comBus set at startup (non-constexpr pointer).
-static CbKeyRunlevelState gKeyRunlevelState {
-    .bus         = &comBus,   ///< Resolved at startup (global — zero-init order safe for a pointer).
-    .prevPressed = false,
-    .holdStartMs = 0u,
-    .holdFired   = false,
-    .keyActive   = false,
+//  KEY latch state (non-constexpr: runtime init only).
+static CbBtnLatchState gKeyLatchState {};
+
+//  KEY runlevel state — &comBus resolved at startup (pointer init is zero-init safe).
+static CbRunlevelState gKeyRunlevelState {
+    .bus       = &comBus,
+    .prevValue = false,
 };
 
 
@@ -174,9 +177,15 @@ static CbProc kDirectDriveProcs[] = {
 // 6. KEY RUNLEVEL PROCESSOR ARRAY
 // =============================================================================
 
-//  KEY_RUNLEVEL — ignition key: 3-second hold shuts engine down.
-static constexpr CbKeyRunlevelCfg kKeyRunlevelCfg {
-    .shutdownHoldMs = 3000u,  ///< 3 s continuous press in RUNNING → IDLE.
+//  Latch config — short press to activate; 3 s hold to deactivate.
+static constexpr CbBtnLatchCfg kKeyLatchCfg {
+    .holdMs = 3000u,  ///< 3 s continuous hold clears the latch.
+};
+
+//  RunLevel config — latch ON → STARTING; latch OFF → TURNING_OFF (graceful shutdown).
+static constexpr CbRunlevelCfg kKeyRunlevelCfg {
+    .activeLevel  = RunLevel::STARTING,     ///< Set when KEY_ACTIVE goes 0→1.
+    .defaultLevel = RunLevel::TURNING_OFF,  ///< Set when KEY_ACTIVE goes 1→0 — FSM drives IDLE from there.
 };
 
 static CbProc kKeyRunlevelProcs[] = {
@@ -185,17 +194,24 @@ static CbProc kKeyRunlevelProcs[] = {
       .inCh  = DigitalComBusID::KEY_BTN,
       .fn    = cb_in_fn,
     },
-    // key_runlevel — rising edge → STARTING; 3 s hold → IDLE.
-    { .name  = "key_runlevel",
-      .inCh  = DigitalComBusID::KEY_BTN,  // runner injects KEY_BTN into proc->inValue each cycle
-      .fn    = cb_key_runlevel_fn,
-      .cfg   = &kKeyRunlevelCfg,
-      .state = &gKeyRunlevelState,
+    // latch — rising edge → ON; hold 3 s → OFF.
+    { .name  = "key_latch",
+      .inCh  = DigitalComBusID::KEY_BTN,
+      .fn    = cb_btn_latch_fn,
+      .cfg   = &kKeyLatchCfg,
+      .state = &gKeyLatchState,
     },
-    // out — commit persistent KEY_ACTIVE flag to wire.
+    // out — commit latch state to KEY_ACTIVE wire channel.
     { .name  = "out",
       .outCh = DigitalComBusID::KEY_ACTIVE,
       .fn    = cb_out_fn,
+    },
+    // runlevel — KEY_ACTIVE transitions drive RunLevel changes.
+    { .name  = "runlevel",
+      .inCh  = DigitalComBusID::KEY_ACTIVE,
+      .fn    = cb_runlevel_fn,
+      .cfg   = &kKeyRunlevelCfg,
+      .state = &gKeyRunlevelState,
     },
 };
 
