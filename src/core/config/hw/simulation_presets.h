@@ -20,16 +20,15 @@
 // =============================================================================
 
 /**
- * @brief Virtual 6-speed gearbox preset — heavy wheeled construction vehicle.
+ * @brief Virtual 6-speed gearbox preset — Volvo D16J engine (A60H ADT).
  *
- * @details Calibrated against the CAT 3408 operating band (~700–2100 RPM).
- *   Suitable for ADTs and heavy haulers.  Assign via `kDumperTruckGearShift`
- *   in `dumper_truck_motion.h`.
+ * @details Calibrated against the Volvo D16J operating band (~700–2100 RPM).
+ *   Assign via `kDumperTruckGearShift` in `dumper_truck_motion.h`.
  *
  *   gear[0].downShift = 700 — idle RPM floor (repurposed field; gear_fsm
  *     never downshifts from gear 1 due to the `gear > 1` guard).
- *   upShift thresholds and shiftDelta values from real-vehicle data.
- *   maxRpm = gear[5].upShift = 2100 (CAT 3408 ceiling).
+ *   upShift thresholds from real-vehicle data.
+ *   maxRpm = gear[5].upShift = 2100 (D16J ceiling).
  *
  *   Shift summary (upShift → land RPM after shiftDelta drop):
  *     1→2 : 1750 → 1200  (−550)    4→5 : 1800 → 1350  (−450)
@@ -39,7 +38,7 @@
  *   downShiftBraking values are +150 RPM above coasting downShift — tune on hardware.
  *   shiftGuardMs = 2000 — 2 s minimum between consecutive shifts.
  */
-static constexpr GearStepCfg kHeavy6_steps[] = {
+static constexpr GearStepCfg kVolvoD16J_steps[] = {
     //  upShift  downShift  downShiftBraking  rampTime  shiftDelta
     {     1750,        700,                0,        30,          0 },  // gear 1 — downShift = idle RPM floor; no upshift into it
     {     1750,       1100,             1250,        40,        550 },  // gear 2 — RPM drops 550 on 1→2 (land 1200)
@@ -53,19 +52,19 @@ static constexpr GearStepCfg kHeavy6_steps[] = {
 ///< RPM (sound) flows freely from stick in all steps (MICROSPEED default).
 ///< maxSpeedPct caps the wheel speed output (subgear-speed proc in TRACTION chain).
 ///< Cruise-control mode (hold+nudge) is toggled via CbSubGearCruiseCfg in proc dynCfg — not here.
-static constexpr SubGearStepCfg kHeavy6_subSteps[] = {
+static constexpr SubGearStepCfg kVolvoD16J_subSteps[] = {
     //  rampTime  maxSpeedPct
     {  500,   20 },  // sub-1: slow crawl    — 20 % of max speed
     {  300,   40 },  // sub-2: medium crawl  — 40 % of max speed
     {  150,   60 },  // sub-3: fast crawl    — 60 % of max speed
 };
 
-static constexpr GearShiftProfile kGearShift_Heavy6Speed {
-    .gearCount        = uint8_t(std::size(kHeavy6_steps)),
-    .gear             = kHeavy6_steps,
+static constexpr GearShiftProfile kGearShift_VolvoD16J {
+    .gearCount        = uint8_t(std::size(kVolvoD16J_steps)),
+    .gear             = kVolvoD16J_steps,
     .shiftGuardMs     = 2000u,
-    .subGearCount     = uint8_t(std::size(kHeavy6_subSteps)),
-    .subGear          = kHeavy6_subSteps,
+    .subGearCount     = uint8_t(std::size(kVolvoD16J_subSteps)),
+    .subGear          = kVolvoD16J_subSteps,
 };
 
 
