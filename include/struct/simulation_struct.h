@@ -1,4 +1,4 @@
-/*!****************************************************************************
+﻿/*!****************************************************************************
  * @file  simulation_struct.h
  * @brief Simulation layer structures — archived SimDev + active CbChain pipeline.
  *
@@ -267,7 +267,7 @@ struct SimDev {
 // =============================================================================
 //   GearProcCfg      →  include/struct/combus/processors/modules/gear_struct.h
 //   GearFsmState     →  include/struct/combus/processors/modules/gear_struct.h
-//   ShiftDeltaState  →  include/struct/combus/processors/modules/gear_struct.h
+
 //   (structs imported via top-level include)
 
 

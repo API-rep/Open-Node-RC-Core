@@ -41,7 +41,7 @@ Toute nouvelle donnée partagée entre cores → champ `volatile` dans `gEngineS
 - `GearShiftProfile` : struct plat avec pointeurs `const int16_t*` + champ `gears` — aucune limite de rapport.
   Les tableaux de seuils sont définis séparément dans `motion_presets.h` (ex. `kHeavy3_upShift[]`).
 - `gear_fsm` déplacé dans `src/core/system/simulation/` (accessible machine + sound node).
-- Preset `kGearShift_Heavy3Speed` dans `motion_presets.h` ; alias `kDumperTruckGearShift` (`const GearShiftProfile*`) dans `dumper_truck_motion.h`.
+- Preset `kGearShift_VolvoD16J` (tableaux `kVolvoD16J_steps[]` / `kVolvoD16J_subSteps[]`) dans `simulation_presets.h` ; alias `kDumperTruckGearShift` (`const GearShiftProfile*`) dans `dumper_truck_motion.h`.
 - `VehicleSoundProfile::upShift/downShift/downShiftBraking` = `const int16_t*` pointant vers le preset (plus de copie).
 - Seuils en RPM (0–2100 CAT 3408). Conversion machine-side : `rpm = |pos − CbusNeutral| × maxRpm / CbusNeutral`.
 

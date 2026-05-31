@@ -7,7 +7,6 @@
  *   - GearStepCfg / SubGearStepCfg / GearShiftProfile — shift threshold profiles
  *   - GearFsmState — runtime FSM state (gear, prevRpm, shift guard, sub-gear)
  *   - GearProcCfg — CbProc config (profile pointer)
- *   - ShiftDeltaState — shift-delta runtime (upshift edge detection)
  *****************************************************************************/
 #pragma once
 
@@ -26,10 +25,10 @@
  *   the FSM drops back one gear (coasting / braking respectively).
  *   Hysteresis requirement: `upShift > downShift` — prevents gear hunting.
  *
- *   `shiftDelta` is the RPM drop applied when upshifting INTO this gear:
- *   the virtual RPM used by the FSM drops by this amount at the moment of
- *   the shift, simulating the engine RPM fall as the new ratio takes effect.
- *   gear[0].shiftDelta is ignored (no upshift into gear 1).
+ *   `gearRatio` (in ‰) encodes the mechanical gear ratio relative to top gear:
+ *   `gearRatio = round(topBoxRatio / thisBoxRatio × 1000)`.
+ *   `gear_ratio_fn` applies: `value = value × gearRatio / 1000`.
+ *   gear[last].gearRatio = 1000 (direct drive / 1:1 reference).
  *   `maxRpm` of the profile equals the last gear's `upShift` by convention.
  */
 struct GearStepCfg {
@@ -37,7 +36,7 @@ struct GearStepCfg {
     int16_t  downShift;         ///< RPM threshold to downshift to this gear (coasting).
     int16_t  downShiftBraking;  ///< RPM threshold to downshift to this gear (braking — higher → earlier).
     uint16_t rampTime;          ///< Inertia ramp duration (ms) — written to CbRampCfg::rampTimeMs via dynCfg.
-    int16_t  shiftDelta;        ///< RPM drop when upshifting INTO this gear (ignored for gear 1).
+    uint16_t gearRatio;         ///< Gear ratio in ‰ — gear_ratio_fn scales: value × gearRatio / 1000.
 };
 
 /**
@@ -109,22 +108,11 @@ struct GearFsmState {
  * @details Assigned to `CbProc::cfg` (as `const void*`); cast back to
  *   `const GearProcCfg*` inside each fn.
  *
- *   Used by: `gear_fsm_fn`, `gear_upshift_drop_fn`, `gear_rpm_to_speed_fn`,
- *   `gear_dyn_ramp_fn`.
+ *   Used by: `gear_fsm_fn`, `gear_ratio_fn`, `gear_subgear_cap_fn`,
+ *   `gear_dir_fn`, `gear_dyn_ramp_fn`.
  */
 struct GearProcCfg {
     const GearShiftProfile* profile; ///< Shift threshold profile — pointer via vehicle alias.
-};
-
-/**
- * @brief Mutable runtime state for `gear_upshift_drop_fn`.
- *
- * @details Assigned to `CbProc::state` (as `void*`); cast back inside
- *   `gear_upshift_drop_fn()`.  Zero-init is valid (prevGear = 0 means
- *   no upshift on first cycle).
- */
-struct ShiftDeltaState {
-    int8_t prevGear; ///< Gear seen last cycle — upshift edge detection.
 };
 
 // EOF gear_struct.h

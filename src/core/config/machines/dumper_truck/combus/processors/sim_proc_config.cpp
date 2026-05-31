@@ -8,8 +8,7 @@
  *   Channel pipelines (in → procs → out):
  *     SIM_THROTTLE : in(THROTTLE_BUS) → ramp, dir(→DRIVE_STATE_BUS),
  *                    b-in(BRAKE_BUS→state), brake(THROTTLE_BUS→BRAKE_BUS merged+ramp),
- *                    center, abs, scale, bypass(DIRECT_DRIVE),
- *                    ratio(GEAR) → out(ESC_RPM_BUS)
+ *                    center, abs, scale, bypass(DIRECT_DRIVE) → out(ESC_RPM_BUS)
  *     SIM_GEAR     : in(ESC_RPM_BUS) → subgear-claim(SUBGEAR_BUS),
  *                    manual-claim(MANUAL_GEAR_SET), direct-claim(DIRECT_DRIVE),
  *                    gear-fsm(DRIVE_STATE_BUS), gear-ramp → out(GEAR)
@@ -42,7 +41,7 @@
 #include <core/system/combus/processors/math/cb_scale.h>            // cb_scale_fn, CbScaleCfg
 #include <core/system/combus/processors/motion/cb_dir.h>           // cb_dir_fn, CbDirCfg
 #include <core/system/combus/processors/motion/cb_brake.h>         // cb_brake_fn, cb_rev_brake_fn
-#include <core/system/combus/processors/modules/gear/cb_gear.h>    // gear_fsm_fn, gear_upshift_drop_fn, gear_ratio_fn, gear_subgear_cap_fn, gear_dir_fn, gear_dyn_ramp_fn
+#include <core/system/combus/processors/modules/gear/cb_gear.h>    // gear_fsm_fn, gear_ratio_fn, gear_subgear_cap_fn, gear_dir_fn, gear_dyn_ramp_fn
 using namespace DumperTruck;
 
 
@@ -111,8 +110,8 @@ static constexpr CbBrakeCfg kBrakeCfg {
 
 static constexpr CbBypassCfg kSubGearClaimBypass {
     .forceValue = 1u,  ///< Force GEAR = 1 when sub-gear mode active.
-                       ///< gear_ratio_fn passes through (GEAR=1 → neutral cumDelta);
-                       ///< gear_subgear_cap_fn handles the actual speed cap.
+                       ///< gear_ratio_fn applies gearRatio[0] ‰ to limit wheel speed;
+                       ///< gear_subgear_cap_fn applies an additional % cap.
 };
 
 static constexpr CbBypassCfg kDirectDriveGearBypass {
@@ -129,7 +128,6 @@ static CbRampState        gDumpRampState           {};
 static CbRampState        gTractionRampState       {};
 static CbBrakeState       gBrakeState              {};
 static GearFsmState        gGearFsmState            {};
-static ShiftDeltaState     gThrottleShiftDeltaState {};
 
 
 // =============================================================================
@@ -193,13 +191,6 @@ static CbProc kThrottleProcs[] = {
     { .name      = "bypass",
       .inCh      = DigitalComBusID::DIRECT_DRIVE,
       .fn        = cb_bypass_fn,
-    },
-    // ratio — subtract shiftDelta RPM on upshift.
-    { .name      = "ratio",
-      .inCh      = AnalogComBusID::GEAR,
-      .fn        = gear_upshift_drop_fn,
-      .cfg       = &kGearCfg,
-      .state     = &gThrottleShiftDeltaState,
     },
     // out — commit pipeline value to ESC_RPM_BUS.
     { .name  = "out",
@@ -282,7 +273,7 @@ static CbProc kTractionProcs[] = {
       .inCh  = AnalogComBusID::ESC_RPM_BUS,
       .fn    = cb_in_fn,
     },
-    // gear-ratio — RPM + cumDelta[gear] → adjustedRpm; GEAR=0 → passthrough.
+    // gear-ratio — RPM × gearRatio[gear]/1000 → wheel-speed RPM; GEAR=0 → passthrough.
     { .name  = "gear-ratio",
       .inCh  = AnalogComBusID::GEAR,
       .fn    = gear_ratio_fn,

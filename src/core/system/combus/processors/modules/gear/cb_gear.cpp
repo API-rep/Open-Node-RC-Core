@@ -41,34 +41,12 @@ void gear_fsm_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*c
 }
 
 
-// =============================================================================
-// 2. SHIFT-DELTA PROCESSOR
-// =============================================================================
-
-void gear_upshift_drop_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)
-{
-    const GearProcCfg* cfg   = static_cast<const GearProcCfg*>(proc->cfg);
-    ShiftDeltaState*   state = static_cast<ShiftDeltaState*>(proc->state);
-
-    // inCh = GEAR (analog).
-    const int8_t curGear = static_cast<int8_t>(proc->inValue);
-
-    // Upshift detected: subtract the entry delta of the new gear.
-    if (curGear > state->prevGear && curGear >= 2) {
-        const int16_t delta  = cfg->profile->gear[curGear - 1].shiftDelta;
-        const int32_t result = static_cast<int32_t>(value) - static_cast<int32_t>(delta);
-        value = static_cast<uint16_t>(result < 0 ? 0 : result);
-    }
-
-    state->prevGear = curGear;
-}
-
 
 // =============================================================================
-// 3. RPM â†’ GEAR-ADJUSTED MAGNITUDE
+// 2. RPM x GEAR RATIO (MULTIPLICATIVE)
 // =============================================================================
 
-/** @brief Add cumulative shiftDelta of current gear to RPM magnitude (RPM domain). */
+/** @brief Scale RPM magnitude by gearRatio[gear] / 1000 -- stays in RPM domain. */
 void gear_ratio_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)
 {
     const GearProcCfg*      cfg     = static_cast<const GearProcCfg*>(proc->cfg);
@@ -83,18 +61,16 @@ void gear_ratio_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /
     const uint8_t gearIdx = static_cast<uint8_t>(
         constrain(static_cast<int>(rawGear) - 1, 0, static_cast<int>(nGears) - 1));
 
-    uint16_t cumDelta = 0u;
-    for (uint8_t i = 1u; i <= gearIdx; ++i)
-        cumDelta += profile->gear[i].shiftDelta;
-
-    // Add cumulative shiftDelta â€” stays in RPM domain for gear_dir_fn.
-    const uint32_t adjusted = static_cast<uint32_t>(value) + static_cast<uint32_t>(cumDelta);
-    value = adjusted > 0xFFFFu ? uint16_t(0xFFFFu) : static_cast<uint16_t>(adjusted);
+    // value x gearRatio/1000 -- stays in RPM domain for gear_dir_fn.
+    const uint32_t scaled = static_cast<uint32_t>(value)
+                          * static_cast<uint32_t>(profile->gear[gearIdx].gearRatio)
+                          / 1000u;
+    value = scaled > 0xFFFFu ? uint16_t(0xFFFFu) : static_cast<uint16_t>(scaled);
 }
 
 
 // =============================================================================
-// 4. SUB-GEAR SPEED CAP
+// 3. SUB-GEAR SPEED CAP
 // =============================================================================
 
 /** @brief Cap RPM magnitude to maxSpeedPct when sub-gear is active. */
@@ -112,10 +88,8 @@ void gear_subgear_cap_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanO
         return;
     }
 
-    // Compute maxAbsRpm â€” same denominator used by gear_dir_fn.
-    uint16_t maxAbsRpm = profile->gear[profile->gearCount - 1u].upShift;
-    for (uint8_t i = 1u; i < profile->gearCount; ++i)
-        maxAbsRpm += profile->gear[i].shiftDelta;
+    // maxAbsRpm = top gear upShift — same denominator as gear_dir_fn.
+    const uint16_t maxAbsRpm = profile->gear[profile->gearCount - 1u].upShift;
 
     // Clamp sub-gear index (1-based â†’ 0-based).
     const uint8_t gi = static_cast<uint8_t>(
@@ -130,7 +104,7 @@ void gear_subgear_cap_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanO
 
 
 // =============================================================================
-// 5. MAGNITUDE â†’ BIPOLAR (DIRECTION APPLICATION)
+// 4. MAGNITUDE â†’ BIPOLAR (DIRECTION APPLICATION)
 // =============================================================================
 
 /** @brief Scale RPM magnitude to ComBus half range and apply direction. */
@@ -140,10 +114,8 @@ void gear_dir_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*c
     const GearShiftProfile* profile = cfg->profile;
     const uint8_t           nGears  = profile->gearCount;
 
-    // Compute maxAbsRpm â€” denominator for the ComBus half scale.
-    uint16_t maxAbsRpm = profile->gear[nGears - 1u].upShift;
-    for (uint8_t i = 1u; i < nGears; ++i)
-        maxAbsRpm += profile->gear[i].shiftDelta;
+    // maxAbsRpm — denominator for the ComBus half scale.
+    const uint16_t maxAbsRpm = profile->gear[nGears - 1u].upShift;
 
     // inCh = DRIVE_STATE_BUS (analog).
     const int8_t ds = DriveStateBus::decode(proc->inValue);
@@ -169,7 +141,7 @@ void gear_dir_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*c
 
 
 // =============================================================================
-// 6. GEAR â†’ RAMP BRIDGE
+// 5. GEAR â†’ RAMP BRIDGE
 // =============================================================================
 
 void gear_dyn_ramp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)

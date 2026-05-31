@@ -30,22 +30,22 @@
  *   upShift thresholds from real-vehicle data.
  *   maxRpm = gear[5].upShift = 2100 (D16J ceiling).
  *
- *   Shift summary (upShift → land RPM after shiftDelta drop):
- *     1→2 : 1750 → 1200  (−550)    4→5 : 1800 → 1350  (−450)
- *     2→3 : 1750 → 1300  (−450)    5→6 : 1850 → 1300  (−550)
- *     3→4 : 1800 → 1250  (−550)
+ *   Gear ratios (Volvo A60H / D16J-F + Allison AT4500):
+ *     4.00 / 2.68 / 2.01 / 1.35 / 1.00 / 0.67
+ *   gearRatio ‰ = round(0.67 / boxRatio × 1000):
+ *     168 / 250 / 333 / 496 / 670 / 1000
  *
  *   downShiftBraking values are +150 RPM above coasting downShift — tune on hardware.
  *   shiftGuardMs = 2000 — 2 s minimum between consecutive shifts.
  */
 static constexpr GearStepCfg kVolvoD16J_steps[] = {
-    //  upShift  downShift  downShiftBraking  rampTime  shiftDelta
-    {     1750,        700,                0,        30,          0 },  // gear 1 — downShift = idle RPM floor; no upshift into it
-    {     1750,       1100,             1250,        40,        550 },  // gear 2 — RPM drops 550 on 1→2 (land 1200)
-    {     1800,       1150,             1300,        50,        450 },  // gear 3 — RPM drops 450 on 2→3 (land 1300)
-    {     1800,       1150,             1300,        55,        550 },  // gear 4 — RPM drops 550 on 3→4 (land 1250)
-    {     1850,       1200,             1350,        60,        450 },  // gear 5 — RPM drops 450 on 4→5 (land 1350)
-    {     2100,       1200,             1350,        70,        550 },  // gear 6 — RPM drops 550 on 5→6 (land 1300); upShift = maxRpm
+    //  upShift  downShift  downShiftBraking  rampTime  gearRatio ‰
+    {     1750,        700,                0,        30,       168 },  // gear 1 — 4.00:1  downShift = idle RPM floor
+    {     1750,       1100,             1250,        40,       250 },  // gear 2 — 2.68:1
+    {     1800,       1150,             1300,        50,       333 },  // gear 3 — 2.01:1
+    {     1800,       1150,             1300,        55,       496 },  // gear 4 — 1.35:1
+    {     1850,       1200,             1350,        60,       670 },  // gear 5 — 1.00:1  (direct)
+    {     2100,       1200,             1350,        70,      1000 },  // gear 6 — 0.67:1  (overdrive); upShift = maxRpm
 };
 
 ///< Sub-gear steps: ramp times and speed ceilings.

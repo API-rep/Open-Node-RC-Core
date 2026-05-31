@@ -155,15 +155,15 @@ static void render_proc_row(uint8_t idx, const CbProc* proc)
 		      (unsigned)ramp,
 		      (unsigned)rpm,  (unsigned)maxRpm);
 	}
-	else if (strcmp(pname, "ratio") == 0 && proc->cfg) {
+	else if (strcmp(pname, "gear-ratio") == 0 && proc->cfg) {
 		const GearProcCfg* cfg  = static_cast<const GearProcCfg*>(proc->cfg);
 		const uint16_t     curG = s_bus->analogBus[static_cast<uint8_t>(AnalogComBusID::GEAR)].value;
 		{
 			char rbuf[48]; int rp = 0;
 			for (uint8_t g = 0u; g < cfg->profile->gearCount && rp < 40; ++g)
 				rp += snprintf(rbuf + rp, sizeof(rbuf) - (size_t)rp,
-				               "G%u:Δ%-4d  ", g + 1u, (int)cfg->profile->gear[g].shiftDelta);
-			dLine("  Proc %u : shift-Δ  G%u active  |  %s",
+				               "G%u:R%-4u  ", g + 1u, (unsigned)cfg->profile->gear[g].gearRatio);
+			dLine("  Proc %u : gear-ratio  G%u active  |  %s",
 			      (unsigned)idx, (unsigned)curG, rbuf);
 		}
 	}
