@@ -42,14 +42,14 @@
  *      cfg = GearProcCfg*, dynCfg = CbRampCfg* (RAM), state = nullptr.
  *      Intended placement: LAST proc in GEAR chain.
  *
- *   7. `gear_upshift_damp_fn` -- detect upshift; freeze traction ramp + signal GEAR_SHIFTING.
+ *   7. `gear_upshift_damp_fn` -- detect upshift; freeze traction accel + signal GEAR_SHIFTING.
  *      Placed LAST in GEAR chain (after gear_dyn_ramp_fn, before `out`).
  *      Reads current gear directly from `value` (no inCh needed).
- *      On upshift: sets dynCfg->rampTimeMs = UINT16_MAX — ramp never ticks while
- *      freeze is active, holding RPM at the upshift point.
- *      gear_dyn_ramp_fn restores rampTimeMs automatically on expiry
- *      (detects UINT16_MAX ≠ gear rampTime → writes correct value + resetRamp).
- *      Does NOT touch extAccelSteps or extBrakeSteps.
+ *      On upshift: sets dynCfg->extAccelSteps = INT16_MIN — effective accel step
+ *      = max(1, accelSteps + INT16_MIN) ≈ 1 unit/tick, negligible over the window.
+ *      Only the acceleration direction is damped; extBrakeSteps is never touched
+ *      so braking (L2) remains functional.  rampTimeMs is not modified.
+ *      On expiry: resets extAccelSteps = 0 (restores normal acceleration).
  *      Sets proc->outValue = 1 while freeze active — runner commits to
  *      outCh = GEAR_SHIFTING (machine-local digital).
  *      cfg = GearProcCfg* (upshiftDampMs), dynCfg = CbRampCfg* (traction ramp, RAM),

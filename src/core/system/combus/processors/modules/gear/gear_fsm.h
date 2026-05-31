@@ -27,9 +27,12 @@ void gear_fsm_init(GearFsmState* state);
  * @brief Advance the N-gear FSM by one cycle.
  *
  * @details Compares `rpm` to the shift thresholds in `profile`:
- *   - Rising RPM trend above `gear[n].upShift`  → upshift (guarded).
- *   - Falling RPM below `gear[n].downShiftBraking` (or `gear[n].downShift`
- *     when not decelerating) → downshift (guarded).
+ *   - Rising RPM trend above `gear[n].upShift`  → upshift by 1 (guarded).
+ *   - Falling RPM below threshold → multi-step downshift: scans from current
+ *     gear downward and lands on the first gear whose threshold is satisfied,
+ *     skipping intermediate gears in a single call if warranted.  Both
+ *     `gear[n].downShiftBraking` (decelerating) and `gear[n].downShift`
+ *     (coasting) are supported; the `decreasing` flag is evaluated once.
  *   - `rpm <= 0` forces gear 1 immediately (reverse or standing).
  *
  * @param state    Mutable FSM state (gear, prevRpm, lastShiftMs).

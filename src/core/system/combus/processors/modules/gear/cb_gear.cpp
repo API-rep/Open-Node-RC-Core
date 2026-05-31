@@ -246,12 +246,12 @@ void gear_dyn_ramp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwne
  * @details Placed in GEAR chain (after gear_dyn_ramp_fn, before out).
  *   Reads current gear from `value` (= gear computed in this GEAR-chain pass).
  *   On upshift (curGear > prevGear, excluding first-init): arms a timer and
- *   sets dynCfg->rampTimeMs = UINT16_MAX — the ramp proc never ticks while
- *   this value is set, freezing RPM at the upshift point.
- *   gear_dyn_ramp_fn (runs before this proc in the GEAR chain) detects
- *   UINT16_MAX ≠ gear rampTime on the first cycle after expiry and restores
- *   the correct value + sets resetRamp = true automatically.
- *   Does NOT touch extAccelSteps or extBrakeSteps.
+ *   sets dynCfg->extAccelSteps = INT16_MIN — effective accel step is
+ *   max(1, accelSteps + INT16_MIN) ≈ 1 unit/tick, negligible over the window.
+ *   Only the acceleration direction is damped; extBrakeSteps is never touched,
+ *   so braking (L2) remains fully functional during the freeze.
+ *   rampTimeMs is not modified (gear_dyn_ramp_fn keeps the per-gear value).
+ *   On expiry: resets extAccelSteps = 0, restoring normal acceleration.
  *   Sets proc->outValue = 1 while freeze active, 0 otherwise;
  *   runner commits outValue to outCh = GEAR_SHIFTING (machine-local digital).
  *   Does NOT modify the pipeline `value` (gear passes through unchanged).
@@ -286,15 +286,14 @@ void gear_upshift_damp_fn(CbProc* proc, uint16_t& value,
         state->dampEndMs   = now + static_cast<uint32_t>(profile->upshiftDampMs);
     }
 
-    // Freeze: hold rampTimeMs at UINT16_MAX while window is active so the ramp
-    // proc never ticks.  gear_dyn_ramp_fn restores the correct value next cycle
-    // after expiry (it detects UINT16_MAX ≠ gear rampTime and sets resetRamp).
+    // Block acceleration only: INT16_MIN drives effective accel step to max(1, 1).
+    // extBrakeSteps is untouched — braking (L2) remains fully functional.
     if (state->dampEndMs > 0u) {
         if (now >= state->dampEndMs) {
-            state->dampEndMs = 0u;
-            // gear_dyn_ramp_fn will restore rampTimeMs and set resetRamp = true next cycle.
+            state->dampEndMs    = 0u;
+            ramp->extAccelSteps = 0;         // restore normal acceleration
         } else {
-            ramp->rampTimeMs = UINT16_MAX;
+            ramp->extAccelSteps = INT16_MIN; // freeze accel; braking direction free
         }
     }
 

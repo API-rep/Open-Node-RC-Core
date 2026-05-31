@@ -47,14 +47,24 @@ int8_t gear_fsm_update(GearFsmState*           state,
         state->gear++;
         state->lastShiftMs = now;
     }
-    // Downshift: falling RPM below hysteresis threshold, guard elapsed.
+    // Downshift (multi-step): scan down from current gear until RPM no longer
+    // falls below the threshold.  Allows skipping multiple gears in one call
+    // (e.g. 6 → 3 on heavy braking) instead of cascading across cycles.
     else if (state->gear > 1 && elapsed > profile.shiftGuardMs)
     {
-        const int16_t thr = decreasing
-                          ? profile.gear[state->gear - 1].downShiftBraking
-                          : profile.gear[state->gear - 1].downShift;
-        if (rpm < thr) {
-            state->gear--;
+        int8_t target = state->gear;
+        while (target > 1) {
+            const int16_t thr = decreasing
+                              ? profile.gear[target - 1].downShiftBraking
+                              : profile.gear[target - 1].downShift;
+            if (rpm < thr) {
+                target--;
+            } else {
+                break;
+            }
+        }
+        if (target != state->gear) {
+            state->gear        = target;
             state->lastShiftMs = now;
         }
     }
