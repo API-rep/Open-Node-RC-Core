@@ -52,7 +52,7 @@ static constexpr CbBtnCfg kSubGearToggleCfg {
 //  SUBGEAR increment — up through sub-gears (L1 trigger).
 //  bound = runtime subGearCount from the active GearShiftProfile.
 static constexpr CbBtnCfg kSubGearIncCfg {
-    .bound   = kDumperTruckGearShift->subGearCount,  ///< Upper limit (3 for kHeavy3).
+    .bound   = kDumperTruckGearShift->subGearCount,  ///< Upper limit (3 for kHeavy6 subgears).
     .holdMs  = 0u,                                   ///< Immediate press.
     .trigger = CbBtnTrigger::ON_PRESS,
 };

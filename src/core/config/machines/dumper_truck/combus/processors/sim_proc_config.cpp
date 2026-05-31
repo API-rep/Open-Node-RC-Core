@@ -31,7 +31,7 @@
 #include "sim_proc_config.h"
 
 #include <core/config/machines/dumper_truck/combus/combus.h>  // AnalogComBusID, DigitalComBusID
-#include <core/config/hw/simulation_presets.h>    // kHeavy3_steps, kGearShift_Heavy3Speed
+#include <core/config/hw/simulation_presets.h>    // kHeavy6_steps, kGearShift_Heavy6Speed
 #include <struct/combus_struct.h>                 // makeChanOwner, ComBusOwner
 #include <core/system/combus/combus_res.h>        // CbusNeutral, pctToCbus
 #include <core/system/combus/processors/motion/cb_ramp.h>  // cb_ramp_fn, CbRampCfg, CbRampState
@@ -90,11 +90,12 @@ static constexpr CbDirCfg kThrottleDirCfg {};
 
 static constexpr CbScaleCfg kThrottleScale {
     .inMax  = CbusNeutral,
-    .outMax = static_cast<uint16_t>(kHeavy3_steps[std::size(kHeavy3_steps) - 1u].upShift),
+    .outMax = static_cast<uint16_t>(kHeavy6_steps[std::size(kHeavy6_steps) - 1u].upShift),
+    .outMin = static_cast<uint16_t>(kHeavy6_steps[0].downShift),  ///< Idle RPM floor (700) — gear[0].downShift repurposed storage.
 };
 
 static constexpr GearProcCfg kGearCfg {
-    .profile = &kGearShift_Heavy3Speed,
+    .profile = &kGearShift_Heavy6Speed,
 };
 
 static constexpr CbBrakeCfg kBrakeCfg {

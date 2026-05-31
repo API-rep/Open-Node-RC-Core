@@ -20,51 +20,52 @@
 // =============================================================================
 
 /**
- * @brief Virtual 3-speed gearbox preset — heavy wheeled construction vehicle.
+ * @brief Virtual 6-speed gearbox preset — heavy wheeled construction vehicle.
  *
- * @details Calibrated against the CAT 3408 operating band (~650–2100 RPM).
- *   Suitable for ADTs and heavy haulers paired with the VIRTUAL_3SPEED gearbox
- *   type.  Assign via `kDumperTruckGearShift` in `dumper_truck_motion.h`.
+ * @details Calibrated against the CAT 3408 operating band (~700–2100 RPM).
+ *   Suitable for ADTs and heavy haulers.  Assign via `kDumperTruckGearShift`
+ *   in `dumper_truck_motion.h`.
  *
- *   Callers convert their speed signal to simulated RPM before calling
- *   `gear_fsm_update()`:
- *     `rpm = |currentPos − CbusNeutral| × maxRpm / CbusNeutral`
- *   where `maxRpm = gear[gearCount-1].upShift` = 2100.
+ *   gear[0].downShift = 700 — idle RPM floor (repurposed field; gear_fsm
+ *     never downshifts from gear 1 due to the `gear > 1` guard).
+ *   upShift thresholds and shiftDelta values from real-vehicle data.
+ *   maxRpm = gear[5].upShift = 2100 (CAT 3408 ceiling).
  *
- *   gear[0].upShift    =  650 — shift 1→2 at ~31 % speed
- *   gear[1].upShift    = 1300 — shift 2→3 at ~62 % speed
- *   gear[1].shiftDelta =  250 — RPM drop on 1→2 shift (land ~400 RPM in G2)
- *   gear[2].shiftDelta =  400 — RPM drop on 2→3 shift (land ~900 RPM in G3)
- *   gear[1].downShift  =  250 — shift 3→2 coasting when RPM < 250
- *   gear[1].downShiftBraking = 400 — shift 3→2 braking when RPM < 400
+ *   Shift summary (upShift → land RPM after shiftDelta drop):
+ *     1→2 : 1750 → 1200  (−550)    4→5 : 1800 → 1350  (−450)
+ *     2→3 : 1750 → 1300  (−450)    5→6 : 1850 → 1300  (−550)
+ *     3→4 : 1800 → 1250  (−550)
  *
- *   shiftGuardMs       = 2000 — 2 s minimum between consecutive shifts
- *   shiftDelta values are initial estimates — tune on hardware.
+ *   downShiftBraking values are +150 RPM above coasting downShift — tune on hardware.
+ *   shiftGuardMs = 2000 — 2 s minimum between consecutive shifts.
  */
-static constexpr GearStepCfg kHeavy3_steps[] = {
+static constexpr GearStepCfg kHeavy6_steps[] = {
     //  upShift  downShift  downShiftBraking  rampTime  shiftDelta
-    {      650,          0,                0,        30,          0 },  // gear 1 — no upshift into it
-    {     1300,        250,              400,        50,        250 },  // gear 2 — RPM drops 250 on 1→2
-    {     2100,        650,              800,        70,        400 },  // gear 3 — RPM drops 400 on 2→3
+    {     1750,        700,                0,        30,          0 },  // gear 1 — downShift = idle RPM floor; no upshift into it
+    {     1750,       1100,             1250,        40,        550 },  // gear 2 — RPM drops 550 on 1→2 (land 1200)
+    {     1800,       1150,             1300,        50,        450 },  // gear 3 — RPM drops 450 on 2→3 (land 1300)
+    {     1800,       1150,             1300,        55,        550 },  // gear 4 — RPM drops 550 on 3→4 (land 1250)
+    {     1850,       1200,             1350,        60,        450 },  // gear 5 — RPM drops 450 on 4→5 (land 1350)
+    {     2100,       1200,             1350,        70,        550 },  // gear 6 — RPM drops 550 on 5→6 (land 1300); upShift = maxRpm
 };
 
 ///< Sub-gear steps: ramp times and speed ceilings.
 ///< RPM (sound) flows freely from stick in all steps (MICROSPEED default).
 ///< maxSpeedPct caps the wheel speed output (subgear-speed proc in TRACTION chain).
 ///< Cruise-control mode (hold+nudge) is toggled via CbSubGearCruiseCfg in proc dynCfg — not here.
-static constexpr SubGearStepCfg kHeavy3_subSteps[] = {
+static constexpr SubGearStepCfg kHeavy6_subSteps[] = {
     //  rampTime  maxSpeedPct
     {  500,   20 },  // sub-1: slow crawl    — 20 % of max speed
-    {  200,   50 },  // sub-2: medium crawl  — 50 % of max speed
-    {   80,   80 },  // sub-3: fast crawl    — 80 % of max speed
+    {  300,   40 },  // sub-2: medium crawl  — 40 % of max speed
+    {  150,   60 },  // sub-3: fast crawl    — 60 % of max speed
 };
 
-static constexpr GearShiftProfile kGearShift_Heavy3Speed {
-    .gearCount        = uint8_t(std::size(kHeavy3_steps)),
-    .gear             = kHeavy3_steps,
+static constexpr GearShiftProfile kGearShift_Heavy6Speed {
+    .gearCount        = uint8_t(std::size(kHeavy6_steps)),
+    .gear             = kHeavy6_steps,
     .shiftGuardMs     = 2000u,
-    .subGearCount     = uint8_t(std::size(kHeavy3_subSteps)),
-    .subGear          = kHeavy3_subSteps,
+    .subGearCount     = uint8_t(std::size(kHeavy6_subSteps)),
+    .subGear          = kHeavy6_subSteps,
 };
 
 
