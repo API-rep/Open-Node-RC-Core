@@ -5,21 +5,25 @@
  * @details Defines the SIM CbChain array for the dumper-truck machine class.
  *   Compiled only in machine-node builds (IS_MAINBOARD guard).
  *
- *   Channel pipelines (in → procs → out):
- *     SIM_THROTTLE : in(THROTTLE_BUS) → ramp, dir(→DRIVE_STATE_BUS),
- *                    b-in(BRAKE_BUS→state), brake(THROTTLE_BUS→BRAKE_BUS merged+ramp),
- *                    center, abs, scale, bypass(DIRECT_DRIVE) → out(ESC_RPM_BUS)
- *     SIM_GEAR     : in(ESC_RPM_BUS) → subgear-claim(SUBGEAR_BUS),
- *                    manual-claim(MANUAL_GEAR_SET), direct-claim(DIRECT_DRIVE),
- *                    gear-fsm(DRIVE_STATE_BUS), gear-ramp → out(GEAR)
- *                    NOTE: subgear-claim forces GEAR=1 when sub-gear active.
- *     SIM_TRACTION : in(ESC_RPM_BUS) → gear-ratio(GEAR), subgear-cap(SUBGEAR_BUS),
- *                    gear-dir(DRIVE_STATE_BUS) → out(ESC_SPEED_BUS)
- *                    NOTE: gear-ratio passes through when GEAR=0 (neutral);
- *                    gear-subgear-cap caps magnitude in RPM domain;
- *                    gear-dir applies direction once at end.
- *     SIM_STEERING : in(STEERING_BUS) → bypass(DIRECT_DRIVE), ramp → out(STEERING_RAMPED_BUS)
- *     SIM_DUMP     : in(DUMP_BUS) → bypass(DIRECT_DRIVE), ramp → out(DUMP_RAMPED_BUS)
+ *   Channel pipelines (in -> procs -> out), execution order:
+ *     SIM_THROTTLE : in(THROTTLE_BUS) -> ramp, dir(->DRIVE_STATE_BUS),
+ *                    b-in(BRAKE_BUS->state), brake(THROTTLE_BUS->BRAKE_BUS merged+ramp),
+ *                    center, abs, scale, bypass(DIRECT_DRIVE) -> out(ESC_RPM_BUS)
+ *                    ESC_RPM_BUS carries wheel_speed in RPM domain after THROTTLE.
+ *
+ *     SIM_TRACTION : in(ESC_RPM_BUS) -> upshift-damp(GEAR), subgear-cap(SUBGEAR_BUS),
+ *                    gear-dir(DRIVE_STATE_BUS) -> out(ESC_SPEED_BUS)
+ *                    Runs BEFORE GEAR so it reads wheel_speed from ESC_RPM_BUS
+ *                    before gear_ratio_inv_fn overwrites it with engine_rpm.
+ *
+ *     SIM_GEAR     : in(ESC_RPM_BUS) -> gear-inv-ratio(->ESC_RPM_BUS side-effect),
+ *                    subgear-claim(SUBGEAR_BUS), direct-claim(DIRECT_DRIVE),
+ *                    gear-fsm(DRIVE_STATE_BUS), gear-ramp -> out(GEAR)
+ *                    gear-inv-ratio: wheel_speed * 1000 / gearRatio[prevGear] = engine_rpm;
+ *                    writes engine_rpm to ESC_RPM_BUS (sound node reads engine RPM).
+ *
+ *     SIM_STEERING : in(STEERING_BUS) -> bypass(DIRECT_DRIVE), ramp -> out(STEERING_RAMPED_BUS)
+ *     SIM_DUMP     : in(DUMP_BUS) -> bypass(DIRECT_DRIVE), ramp -> out(DUMP_RAMPED_BUS)
  *
  *   SUBGEAR_BUS is written by INPUT chain (cb_btn procs) — see input_proc_config.cpp.
  *******************************************************************************
@@ -41,7 +45,7 @@
 #include <core/system/combus/processors/math/cb_scale.h>            // cb_scale_fn, CbScaleCfg
 #include <core/system/combus/processors/motion/cb_dir.h>           // cb_dir_fn, CbDirCfg
 #include <core/system/combus/processors/motion/cb_brake.h>         // cb_brake_fn, cb_rev_brake_fn
-#include <core/system/combus/processors/modules/gear/cb_gear.h>    // gear_fsm_fn, gear_ratio_fn, gear_subgear_cap_fn, gear_dir_fn, gear_dyn_ramp_fn
+#include <core/system/combus/processors/modules/gear/cb_gear.h>    // gear_fsm_fn, gear_ratio_inv_fn, gear_ratio_fn, gear_subgear_cap_fn, gear_dir_fn, gear_dyn_ramp_fn, gear_upshift_damp_fn
 using namespace DumperTruck;
 
 
@@ -90,7 +94,8 @@ static constexpr CbDirCfg kThrottleDirCfg {};
 static constexpr CbScaleCfg kThrottleScale {
     .inMax  = CbusNeutral,
     .outMax = static_cast<uint16_t>(kVolvoD16J_steps[std::size(kVolvoD16J_steps) - 1u].upShift),
-    .outMin = static_cast<uint16_t>(kVolvoD16J_steps[0].downShift),  ///< Idle RPM floor (700) — gear[0].downShift repurposed storage.
+    // outMin not set (= 0): wheel_speed = 0 at neutral stick in wheel-speed-primary model.
+    // Sound node handles idle RPM internally.
 };
 
 static constexpr GearProcCfg kGearCfg {
@@ -128,6 +133,7 @@ static CbRampState        gDumpRampState           {};
 static CbRampState        gTractionRampState       {};
 static CbBrakeState       gBrakeState              {};
 static GearFsmState        gGearFsmState            {};
+static GearDampState       gGearDampState           {};
 
 
 // =============================================================================
@@ -205,6 +211,18 @@ static CbProc kGearProcs[] = {
       .inCh  = AnalogComBusID::ESC_RPM_BUS,
       .fn    = cb_in_fn,
     },
+    // gear-inv-ratio — wheel_speed * 1000 / gearRatio[prevGear] = engine_rpm.
+    //   Reads wheel_speed from `value` (seed from ESC_RPM_BUS above).
+    //   Writes engine_rpm to ESC_RPM_BUS via proc->outValue (sound node reads RPM from there).
+    //   Passes engine_rpm downstream in `value` for gear_fsm_fn (RPM thresholds in RPM domain).
+    //   Uses gGearFsmState.gear from previous tick (1-cycle latency — same as gear_dyn_ramp_fn).
+    //   Gear 0 (uninitialised) -> passthrough.
+    { .name    = "gear-inv-ratio",
+      .outCh   = AnalogComBusID::ESC_RPM_BUS,
+      .fn      = gear_ratio_inv_fn,
+      .cfg     = &kGearCfg,
+      .state   = &gGearFsmState,   // read-only here; gear_fsm_fn writes it later in this chain
+    },
     // =========================================================================
     // CLAIM CASCADE — first claim wins, later procs skipped.
     // Priority: SubGear > Manual > Direct > Auto (FSM).
@@ -268,16 +286,21 @@ static CbProc kGearProcs[] = {
 };
 
 static CbProc kTractionProcs[] = {
-    // in — seed pipeline from ESC_RPM_BUS.
+    // in — seed pipeline from ESC_RPM_BUS (= wheel_speed; GEAR chain hasn't run yet).
     { .name  = "in",
       .inCh  = AnalogComBusID::ESC_RPM_BUS,
       .fn    = cb_in_fn,
     },
-    // gear-ratio — RPM × gearRatio[gear]/1000 → wheel-speed RPM; GEAR=0 → passthrough.
-    { .name  = "gear-ratio",
-      .inCh  = AnalogComBusID::GEAR,
-      .fn    = gear_ratio_fn,
-      .cfg   = &kGearCfg,
+    // upshift-damp — detect upshift, damp traction accel for upshiftDampMs.
+    //   Observer: does not modify value.  Side-effect writes gTractionRampDyn.extAccelSteps.
+    //   inCh = GEAR (from previous GEAR tick — 1-cycle latency, same as gear_dyn_ramp_fn).
+    //   prevGear > 0 guard prevents false upshift on first-init 0->1 transition.
+    { .name    = "upshift-damp",
+      .inCh    = AnalogComBusID::GEAR,
+      .fn      = gear_upshift_damp_fn,
+      .cfg     = &kGearCfg,
+      .dynCfg  = &gTractionRampDyn,
+      .state   = &gGearDampState,
     },
     // subgear-cap — cap magnitude to maxSpeedPct when SUBGEAR active; passthrough if 0.
     { .name  = "subgear-cap",
@@ -361,15 +384,15 @@ CbChain kSimChannels[SIM_CH_COUNT] = {
     .chainOwner = kSimOwner,
   },
 
-  { .name       = "gear",
-    .procs      = kGearProcs,
-    .procCount  = static_cast<uint8_t>(std::size(kGearProcs)),
-    .chainOwner = kSimOwner,
-  },
-
   { .name       = "traction",
     .procs      = kTractionProcs,
     .procCount  = static_cast<uint8_t>(std::size(kTractionProcs)),
+    .chainOwner = kSimOwner,
+  },
+
+  { .name       = "gear",
+    .procs      = kGearProcs,
+    .procCount  = static_cast<uint8_t>(std::size(kGearProcs)),
     .chainOwner = kSimOwner,
   },
 

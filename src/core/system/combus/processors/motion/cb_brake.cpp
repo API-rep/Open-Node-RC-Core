@@ -116,7 +116,7 @@ void cb_rev_brake_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner
     //  cb_sym_ramp_fn adds this to the static brakeSteps (coasting baseline) each tick.
     //  When brake is released extBrakeSteps → 0; brakeSteps reverts to coasting.
     if (cfg->dynRampCfg != nullptr) {
-        cfg->dynRampCfg->extBrakeSteps = static_cast<uint16_t>(
+        cfg->dynRampCfg->extBrakeSteps = static_cast<int16_t>(
             (static_cast<uint32_t>(cfg->maxBrakeStep) * finalBrake) / CbusNeutral);
     }
     (void)value;                    // observer — does not modify pipeline

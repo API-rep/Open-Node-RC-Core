@@ -29,10 +29,15 @@ struct CbRampCfg {
     uint16_t accelSteps;                    ///< ComBus units per step when moving away from neutral (both directions if accelDownSteps == 0).
     uint16_t accelDownSteps = 0u;           ///< ComBus units per step when moving in the NEGATIVE direction away from neutral.
                                             ///<   0 = symmetric (falls back to accelSteps).
+    int16_t extAccelSteps = 0;              ///< Live accel modifier (signed). Written each cycle by a preceding proc.
+                                            ///<   Positive = boost; negative = damp.
+                                            ///<   cb_sym_ramp_fn applies  max(1, accelSteps + extAccelSteps)
+                                            ///<   as the effective acceleration step.
     uint16_t brakeSteps;                    ///< ComBus units per step when moving toward neutral (coasting baseline).
-    uint16_t extBrakeSteps = 0u;            ///< Live brake modifier written by cb_rev_brake_fn each cycle.
-                                            ///<   cb_sym_ramp_fn applies  brakeSteps + extBrakeSteps  as the effective
-                                            ///<   deceleration step while brake force is held.
+    int16_t extBrakeSteps = 0;              ///< Live brake modifier (signed). Written each cycle by a preceding proc.
+                                            ///<   Positive = increase braking; negative = decrease.
+                                            ///<   cb_sym_ramp_fn applies  max(1, brakeSteps + extBrakeSteps)
+                                            ///<   as the effective deceleration step.
     uint16_t neutralBand;                   ///< ComBus units around CbusNeutral treated as zero (0 = no dead-band).
     bool     resetRamp = false;             ///< Set by a preceding proc (e.g. cb_gear_ramp_fn) on gear change.
                                             ///<   cb_sym_ramp_fn resets the ramp timer and clears this flag.

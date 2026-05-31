@@ -73,6 +73,11 @@ struct GearShiftProfile {
 
     uint8_t               subGearCount; ///< Number of sub-gears in gear 1 (0 = sub-gear disabled).
     const SubGearStepCfg* subGear;      ///< Per-sub-gear config — array[subGearCount]; nullptr when subGearCount == 0.
+
+    uint16_t upshiftDampSteps = 0u;     ///< extAccelSteps applied to traction ramp on upshift (0 = disabled).
+                                        ///<   gear_upshift_damp_fn writes this value to CbRampCfg::extAccelSteps
+                                        ///<   for upshiftDampMs after each upshift event.
+    uint16_t upshiftDampMs    = 0u;     ///< Duration of upshift accel damping (ms). 0 = no damping.
 };
 
 
@@ -84,7 +89,8 @@ struct GearShiftProfile {
  * @brief Mutable runtime state for the gear FSM.
  *
  * @details Zero-init is valid (gear = 0 sentinel triggers auto-init to gear 1).
- *   Assigned to `CbProc::state` for `gear_fsm_fn`; cast back inside the proc.
+ *   Assigned to `CbProc::state` for `gear_fsm_fn` and `gear_ratio_inv_fn`
+ *   (shared — `gear_ratio_inv_fn` reads `gear` read-only).
  */
 struct GearFsmState {
     int8_t   gear;         ///< Current virtual gear (1–N).
@@ -99,7 +105,23 @@ struct GearFsmState {
 
 
 // =============================================================================
-// 3. CBPROC CONFIGS
+// 3. DAMP STATE
+// =============================================================================
+
+/**
+ * @brief Runtime state for the upshift accel-damping proc.
+ *
+ * @details Zero-init is valid.  Assigned to `CbProc::state` for
+ *   `gear_upshift_damp_fn`; cast back inside the proc.
+ */
+struct GearDampState {
+    uint8_t  prevGear  = 0u;   ///< Gear seen last cycle — upshift detection.
+    uint32_t dampEndMs = 0u;   ///< millis() when damping window expires. 0 = no active window.
+};
+
+
+// =============================================================================
+// 4. CBPROC CONFIGS
 // =============================================================================
 
 /**
@@ -108,8 +130,9 @@ struct GearFsmState {
  * @details Assigned to `CbProc::cfg` (as `const void*`); cast back to
  *   `const GearProcCfg*` inside each fn.
  *
- *   Used by: `gear_fsm_fn`, `gear_ratio_fn`, `gear_subgear_cap_fn`,
- *   `gear_dir_fn`, `gear_dyn_ramp_fn`.
+ *   Used by: `gear_fsm_fn`, `gear_ratio_inv_fn`, `gear_ratio_fn`,
+ *   `gear_subgear_cap_fn`, `gear_dir_fn`, `gear_dyn_ramp_fn`,
+ *   `gear_upshift_damp_fn`.
  */
 struct GearProcCfg {
     const GearShiftProfile* profile; ///< Shift threshold profile — pointer via vehicle alias.

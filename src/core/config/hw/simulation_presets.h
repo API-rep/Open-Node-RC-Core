@@ -60,11 +60,13 @@ static constexpr SubGearStepCfg kVolvoD16J_subSteps[] = {
 };
 
 static constexpr GearShiftProfile kGearShift_VolvoD16J {
-    .gearCount        = uint8_t(std::size(kVolvoD16J_steps)),
-    .gear             = kVolvoD16J_steps,
-    .shiftGuardMs     = 2000u,
-    .subGearCount     = uint8_t(std::size(kVolvoD16J_subSteps)),
-    .subGear          = kVolvoD16J_subSteps,
+    .gearCount         = uint8_t(std::size(kVolvoD16J_steps)),
+    .gear              = kVolvoD16J_steps,
+    .shiftGuardMs      = 2000u,
+    .subGearCount      = uint8_t(std::size(kVolvoD16J_subSteps)),
+    .subGear           = kVolvoD16J_subSteps,
+    .upshiftDampSteps  = pctToCbus(2),   ///< Reduces accel to ~1 % for 300 ms after upshift — tune on hardware.
+    .upshiftDampMs     = 300u,           ///<   kTractionRamp.accelSteps = 3 % ; effective = max(1, 3-2) = 1 %.
 };
 
 

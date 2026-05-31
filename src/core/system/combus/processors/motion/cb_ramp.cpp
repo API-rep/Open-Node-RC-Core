@@ -75,13 +75,19 @@ void cb_sym_ramp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner 
         const uint32_t targDist = (target >= CbusNeutral)
                                   ? static_cast<uint32_t>(target - CbusNeutral)
                                   : static_cast<uint32_t>(CbusNeutral - target);
-        //  accelDownSteps: asymmetric accel for negative direction (e.g. dump descent).
-        //  Active when accelDownSteps != 0 AND target is below neutral AND moving away.
+        //  extAccelSteps / extBrakeSteps: signed live modifiers (positive = boost, negative = damp).
+        //  Effective step floored at 1 to guarantee forward progress.
         const bool isAccel    = (targDist > currDist);
         const bool isNegDir   = (target < CbusNeutral);
         const bool useDownCfg = isAccel && isNegDir && (cfg->accelDownSteps != 0u);
-        const uint16_t step = isAccel ? (useDownCfg ? cfg->accelDownSteps : cfg->accelSteps)
-                                      : static_cast<uint16_t>(cfg->brakeSteps + cfg->extBrakeSteps);
+        const int32_t  rawAccel       = static_cast<int32_t>(cfg->accelSteps)
+                                      + static_cast<int32_t>(cfg->extAccelSteps);
+        const uint16_t effectiveAccel = (rawAccel > 1) ? static_cast<uint16_t>(rawAccel) : 1u;
+        const int32_t  rawBrake       = static_cast<int32_t>(cfg->brakeSteps)
+                                      + static_cast<int32_t>(cfg->extBrakeSteps);
+        const uint16_t effectiveBrake = (rawBrake > 1) ? static_cast<uint16_t>(rawBrake) : 1u;
+        const uint16_t step = isAccel ? (useDownCfg ? cfg->accelDownSteps : effectiveAccel)
+                                      : effectiveBrake;
 
         if (state->currentPos < target) {
             const uint16_t delta = static_cast<uint16_t>(target - state->currentPos);
