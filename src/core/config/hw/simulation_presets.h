@@ -36,16 +36,17 @@
  *     168 / 250 / 333 / 496 / 670 / 1000
  *
  *   downShiftBraking values are +150 RPM above coasting downShift — tune on hardware.
- *   shiftGuardMs = 2000 — 2 s minimum between consecutive shifts.
+ *   shiftGuardMs = 0 — guard disabled; downshifts are immediate (guard introduced
+ *     un-natural delayed downshifts at deceleration, causing gear 3+ re-entry on restart).
  */
 static constexpr GearStepCfg kVolvoD16J_steps[] = {
     //  upShift  downShift  downShiftBraking  rampTime  gearRatio ‰
-    {     1750,        700,                0,        30,       168 },  // gear 1 — 4.00:1  downShift = idle RPM floor
-    {     1750,       1100,             1250,        40,       250 },  // gear 2 — 2.68:1
-    {     1800,       1150,             1300,        50,       333 },  // gear 3 — 2.01:1
-    {     1800,       1150,             1300,        55,       496 },  // gear 4 — 1.35:1
-    {     1850,       1200,             1350,        60,       670 },  // gear 5 — 1.00:1  (direct)
-    {     2100,       1200,             1350,        70,      1000 },  // gear 6 — 0.67:1  (overdrive); upShift = maxRpm
+    {     1750,        700,                0,       150,       168 },  // gear 1 — 4.00:1  downShift = idle RPM floor
+    {     1750,       1100,             1250,       200,       250 },  // gear 2 — 2.68:1
+    {     1800,       1150,             1300,       250,       333 },  // gear 3 — 2.01:1
+    {     1800,       1150,             1300,       300,       496 },  // gear 4 — 1.35:1
+    {     1850,       1200,             1350,       350,       670 },  // gear 5 — 1.00:1  (direct)
+    {     2100,       1200,             1350,       450,      1000 },  // gear 6 — 0.67:1  (overdrive); upShift = maxRpm
 };
 
 ///< Sub-gear steps: ramp times and speed ceilings.
@@ -62,11 +63,10 @@ static constexpr SubGearStepCfg kVolvoD16J_subSteps[] = {
 static constexpr GearShiftProfile kGearShift_VolvoD16J {
     .gearCount         = uint8_t(std::size(kVolvoD16J_steps)),
     .gear              = kVolvoD16J_steps,
-    .shiftGuardMs      = 2000u,
+    .shiftGuardMs      = 0u,
     .subGearCount      = uint8_t(std::size(kVolvoD16J_subSteps)),
     .subGear           = kVolvoD16J_subSteps,
-    .upshiftDampSteps  = pctToCbus(2),   ///< Reduces accel to ~1 % for 300 ms after upshift — tune on hardware.
-    .upshiftDampMs     = 300u,           ///<   kTractionRamp.accelSteps = 3 % ; effective = max(1, 3-2) = 1 %.
+    .upshiftDampMs     = 1000u,          ///< Freeze duration — rampTimeMs = UINT16_MAX during this window; tune on hardware.
 };
 
 

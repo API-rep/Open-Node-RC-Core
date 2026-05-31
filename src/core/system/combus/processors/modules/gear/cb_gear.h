@@ -42,20 +42,38 @@
  *      cfg = GearProcCfg*, dynCfg = CbRampCfg* (RAM), state = nullptr.
  *      Intended placement: LAST proc in GEAR chain.
  *
- *   7. `gear_upshift_damp_fn` -- detect upshift; damp traction accel for a timed window.
- *      Observer in TRACTION chain -- does NOT modify `value` (wheel_speed passes through).
- *      Reads current gear via inCh = GEAR (analog).
- *      On upshift: writes profile->upshiftDampSteps to dynCfg->extAccelSteps for
- *      profile->upshiftDampMs.  Clears extAccelSteps when window expires.
- *      cfg = GearProcCfg*, dynCfg = CbRampCfg* (traction ramp, RAM),
+ *   7. `gear_upshift_damp_fn` -- detect upshift; freeze traction ramp + signal GEAR_SHIFTING.
+ *      Placed LAST in GEAR chain (after gear_dyn_ramp_fn, before `out`).
+ *      Reads current gear directly from `value` (no inCh needed).
+ *      On upshift: sets dynCfg->rampTimeMs = UINT16_MAX — ramp never ticks while
+ *      freeze is active, holding RPM at the upshift point.
+ *      gear_dyn_ramp_fn restores rampTimeMs automatically on expiry
+ *      (detects UINT16_MAX ≠ gear rampTime → writes correct value + resetRamp).
+ *      Does NOT touch extAccelSteps or extBrakeSteps.
+ *      Sets proc->outValue = 1 while freeze active — runner commits to
+ *      outCh = GEAR_SHIFTING (machine-local digital).
+ *      cfg = GearProcCfg* (upshiftDampMs), dynCfg = CbRampCfg* (traction ramp, RAM),
  *      state = GearDampState*.
+ *      Rationale for GEAR placement: disabling the gear chain disables the freeze
+ *      automatically — no stale rampTimeMs override on the THROTTLE chain.
+ *      @todo winter 2026: promote GEAR_SHIFTING to WIRE region.
+ *
+ *   8. `gear_upshift_rpm_fade_fn` -- smoothly interpolate ESC_RPM_BUS rpmAtShift -> natural RPM.
+ *      Placed BETWEEN gear-inv-ratio and gear-fsm in GEAR chain.
+ *      Every cycle: stores state->lastRpm = value (ref for rpmAtShift on next upshift).
+ *      During damp window: linearly interpolates ESC_RPM_BUS from rpmAtShift to natural
+ *      engine_rpm over upshiftDampMs; passes `value` through unchanged for gear_fsm_fn.
+ *      Outside window: write-through (proc->outValue = value).
+ *      outCh = ESC_RPM_BUS,  cfg = GearProcCfg*,  state = GearDampState* (shared with 7).
  *
  *   Pipeline pattern for GEAR chain (wheel-speed-primary mode):
- *      gear_ratio_inv_fn  ->  gear_fsm_fn  ->  gear_dyn_ramp_fn
- *      (wheel_speed in; engine_rpm -> ESC_RPM_BUS side-effect; gear -> GEAR out).
+ *      gear_ratio_inv_fn  ->  gear_upshift_rpm_fade_fn  ->  [claim cascade]  ->
+ *      gear_fsm_fn  ->  gear_dyn_ramp_fn  ->  gear_upshift_damp_fn
+ *      (wheel_speed in; engine_rpm -> ESC_RPM_BUS side-effect via fade fn;
+ *       gear -> GEAR out; GEAR_SHIFTING digital written by gear_upshift_damp_fn).
  *
  *   Pipeline pattern for TRACTION chain:
- *      upshift-damp  ->  gear_subgear_cap_fn  ->  gear_dir_fn
+ *      gear_subgear_cap_fn  ->  gear_dir_fn
  *      (wheel_speed magnitude domain; direction applied once at the end).
  *****************************************************************************/
 #pragma once
@@ -111,15 +129,33 @@ void gear_dir_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOw
 void gear_dyn_ramp_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
 
 /**
- * @brief Observer: detect upshift, damp traction accel ramp for a timed window.
+ * @brief Detect upshift; freeze traction ramp for upshiftDampMs + signal GEAR_SHIFTING.
  *
- * @details Placed in TRACTION chain (after `in` proc).  Does NOT modify `value`.
- *   Reads current gear via proc->inValue (inCh = GEAR).
- *   On upshift: writes profile->upshiftDampSteps to dynCfg->extAccelSteps and
- *   arms a timer for profile->upshiftDampMs.  Clears extAccelSteps on expiry.
+ * @details Placed in GEAR chain (after gear_dyn_ramp_fn, before out).  Reads current gear
+ *   from `value`.  Does NOT modify `value`.
+ *   On upshift: sets dynCfg->rampTimeMs = UINT16_MAX — the ramp proc never ticks
+ *   while this value is set, freezing RPM at the upshift point.
+ *   gear_dyn_ramp_fn (runs before this proc) restores the correct rampTimeMs on
+ *   the first cycle after expiry (detects UINT16_MAX ≠ gear rampTime → resetRamp).
+ *   Does NOT touch extAccelSteps or extBrakeSteps.
+ *   Sets proc->outValue = 1 while freeze active; runner commits to GEAR_SHIFTING digital.
  *   dynCfg = CbRampCfg* (traction ramp, mutable),  state = GearDampState*.
  */
 void gear_upshift_damp_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+
+/**
+ * @brief Progressive RPM interpolation on ESC_RPM_BUS during upshift damp window.
+ *
+ * @details Placed AFTER gear-inv-ratio, BEFORE gear-fsm in GEAR chain.
+ *   Every cycle: stores `state->lastRpm = value` (natural engine_rpm from gear-inv-ratio).
+ *   During damp window: linearly interpolates ESC_RPM_BUS from `state->rpmAtShift`
+ *   (RPM at the upshift moment) to the current natural RPM over `profile->upshiftDampMs`.
+ *   Outside window or when upshiftDampMs == 0: pass-through (proc->outValue = value).
+ *   Does NOT modify `value` — gear_fsm_fn downstream sees true natural RPM.
+ *   outCh = ESC_RPM_BUS,  cfg = GearProcCfg*,  state = GearDampState* (shared with
+ *   gear_upshift_damp_fn; both procs must reference the same GearDampState instance).
+ */
+void gear_upshift_rpm_fade_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
 
 // EOF cb_gear.h
 

@@ -82,6 +82,9 @@ enum class DigitalComBusID : uint8_t {
   SUBGEAR_SET_BTN,          ///< Raw sub-gear toggle button — written by input_update; processed by ctrl chain.
   GEAR_UP_BTN,              ///< Gear up button — written by input_update; read by INPUT chain (manual gear + subgear inc).
   GEAR_DOWN_BTN,            ///< Gear down button — written by input_update; read by INPUT chain (manual gear + subgear dec).
+  GEAR_SHIFTING,             ///< Upshift accel-damp window active — set/cleared by gear_upshift_damp_fn.
+                            ///<   @todo winter 2026: promote to WIRE region (before WIRE_END) during
+                            ///<   TRACTION_BUS rework — sound node can then read it directly.
   MACHINE_END,
 
   // ---- Sound node local (never transmitted on wire) ---

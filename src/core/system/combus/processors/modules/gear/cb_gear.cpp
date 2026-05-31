@@ -237,25 +237,35 @@ void gear_dyn_ramp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwne
 }
 
 // =============================================================================
-// 7. UPSHIFT ACCEL DAMP
+// 7. UPSHIFT FREEZE
 // =============================================================================
 
 /**
- * @brief Detect upshift; set extAccelSteps in traction ramp for a timed window.
+ * @brief Detect upshift; freeze traction ramp for upshiftDampMs + signal GEAR_SHIFTING.
  *
- * @details Observer proc placed in TRACTION chain (after `in`, before subgear-cap).
- *   Reads current gear from `proc->inValue` (inCh = GEAR).
- *   On upshift (curGear > prevGear, excluding first-init): writes
- *   `GearShiftProfile::upshiftDampSteps` to `dynCfg->extAccelSteps` and arms
- *   a timer.  When the window expires, clears `extAccelSteps`.
- *   Does NOT modify the pipeline `value` (wheel_speed passes through unchanged).
+ * @details Placed in GEAR chain (after gear_dyn_ramp_fn, before out).
+ *   Reads current gear from `value` (= gear computed in this GEAR-chain pass).
+ *   On upshift (curGear > prevGear, excluding first-init): arms a timer and
+ *   sets dynCfg->rampTimeMs = UINT16_MAX — the ramp proc never ticks while
+ *   this value is set, freezing RPM at the upshift point.
+ *   gear_dyn_ramp_fn (runs before this proc in the GEAR chain) detects
+ *   UINT16_MAX ≠ gear rampTime on the first cycle after expiry and restores
+ *   the correct value + sets resetRamp = true automatically.
+ *   Does NOT touch extAccelSteps or extBrakeSteps.
+ *   Sets proc->outValue = 1 while freeze active, 0 otherwise;
+ *   runner commits outValue to outCh = GEAR_SHIFTING (machine-local digital).
+ *   Does NOT modify the pipeline `value` (gear passes through unchanged).
  *
- *   cfg    = GearProcCfg*    (profile for damping parameters).
- *   dynCfg = CbRampCfg*      (traction ramp — extAccelSteps written here).
+ *   Rationale for GEAR chain placement: if the gear chain is disabled,
+ *   no upshift occurs and rampTimeMs is never overridden.
+ *
+ *   cfg    = GearProcCfg*    (profile — upshiftDampMs).
+ *   dynCfg = CbRampCfg*      (traction ramp — rampTimeMs frozen here).
  *   state  = GearDampState*  (prevGear + dampEndMs).
- *   inCh   = GEAR.
+ *   outCh  = GEAR_SHIFTING   (machine-local digital).
+ *   @todo winter 2026: promote GEAR_SHIFTING to WIRE region so sound node reads directly.
  */
-void gear_upshift_damp_fn(CbProc* proc, uint16_t& /*value*/,
+void gear_upshift_damp_fn(CbProc* proc, uint16_t& value,
                            bool& /*claimed*/, ChanOwner /*chainOwner*/)
 {
     if (proc->dynCfg == nullptr) return;  // No ramp linked — passthrough.
@@ -265,23 +275,95 @@ void gear_upshift_damp_fn(CbProc* proc, uint16_t& /*value*/,
     GearDampState*          state   = static_cast<GearDampState*>(proc->state);
     CbRampCfg*              ramp    = static_cast<CbRampCfg*>(proc->dynCfg);
 
-    // inCh = GEAR (analog): current gear from the previous GEAR-chain tick.
-    const uint8_t  curGear = static_cast<uint8_t>(proc->inValue);
+    // In GEAR chain: read current gear from pipeline value (= gear after claim cascade).
+    const uint8_t  curGear = static_cast<uint8_t>(value);
     const uint32_t now     = millis();
 
     // Upshift detected (prevGear > 0 guards against first-init 0→1 pseudo-shift).
     if (curGear > state->prevGear && state->prevGear > 0u) {
-        ramp->extAccelSteps = -static_cast<int16_t>(profile->upshiftDampSteps);
-        state->dampEndMs    = now + static_cast<uint32_t>(profile->upshiftDampMs);
+        state->rpmAtShift  = state->lastRpm;   // snapshot from gear_upshift_rpm_fade_fn (prev cycle)
+        state->dampStartMs = now;
+        state->dampEndMs   = now + static_cast<uint32_t>(profile->upshiftDampMs);
     }
 
-    // Decay: clear extAccelSteps when window expires.
-    if (state->dampEndMs > 0u && now >= state->dampEndMs) {
-        ramp->extAccelSteps = 0;
-        state->dampEndMs    = 0u;
+    // Freeze: hold rampTimeMs at UINT16_MAX while window is active so the ramp
+    // proc never ticks.  gear_dyn_ramp_fn restores the correct value next cycle
+    // after expiry (it detects UINT16_MAX ≠ gear rampTime and sets resetRamp).
+    if (state->dampEndMs > 0u) {
+        if (now >= state->dampEndMs) {
+            state->dampEndMs = 0u;
+            // gear_dyn_ramp_fn will restore rampTimeMs and set resetRamp = true next cycle.
+        } else {
+            ramp->rampTimeMs = UINT16_MAX;
+        }
     }
 
     state->prevGear = curGear;
+
+    // Signal via ComBus — runner commits outValue to outCh = GEAR_SHIFTING.
+    proc->outValue = (state->dampEndMs > 0u) ? 1u : 0u;
+}
+
+
+// =============================================================================
+// 8. RPM FADE  (upshift interpolation on ESC_RPM_BUS)
+// =============================================================================
+
+/**
+ * @brief Smoothly interpolate ESC_RPM_BUS from rpmAtShift to natural engine_rpm
+ *        over the upshift damp window.
+ *
+ * @details Placed AFTER gear-inv-ratio and BEFORE gear-fsm in the GEAR chain.
+ *   Every cycle: records `state->lastRpm = value` (= natural engine_rpm from
+ *   gear_ratio_inv_fn) so that gear_upshift_damp_fn can snapshot it as
+ *   `rpmAtShift` at the moment of an upshift.
+ *
+ *   When a damp window is active (`dampEndMs > 0`):
+ *     - Computes elapsed = now − dampStartMs.
+ *     - If elapsed < upshiftDampMs: writes linearly interpolated RPM to
+ *       proc->outValue → runner commits to outCh = ESC_RPM_BUS, overriding
+ *       gear-inv-ratio's earlier write.  Does NOT modify `value` (gear_fsm_fn
+ *       downstream needs the true natural engine_rpm for shift decisions).
+ *     - If elapsed >= upshiftDampMs: window has ended — falls through to
+ *       pass-through (gear_upshift_damp_fn will clear dampEndMs this cycle).
+ *
+ *   Outside any window: pass-through — writes `value` to proc->outValue so
+ *   this proc remains the authoritative writer of ESC_RPM_BUS (gear-inv-ratio
+ *   still runs first but its outValue is superseded).
+ *
+ *   cfg   = GearProcCfg*   (needs profile->upshiftDampMs).
+ *   state = GearDampState* (shared with gear_upshift_damp_fn).
+ *   outCh = ESC_RPM_BUS.
+ */
+void gear_upshift_rpm_fade_fn(CbProc* proc, uint16_t& value,
+                      bool& /*claimed*/, ChanOwner /*chainOwner*/)
+{
+    const GearProcCfg*      cfg     = static_cast<const GearProcCfg*>(proc->cfg);
+    const GearShiftProfile* profile = cfg->profile;
+    GearDampState*          state   = static_cast<GearDampState*>(proc->state);
+
+    // Record natural RPM every cycle — used as rpmAtShift snapshot by gear_upshift_damp_fn.
+    state->lastRpm = static_cast<uint16_t>(value);
+
+    // Interpolate while a damp window is active.
+    if (state->dampEndMs > 0u && profile->upshiftDampMs > 0u) {
+        const uint32_t elapsed  = millis() - state->dampStartMs;
+        const uint32_t duration = static_cast<uint32_t>(profile->upshiftDampMs);
+
+        if (elapsed < duration) {
+            const int32_t delta  = static_cast<int32_t>(value)
+                                 - static_cast<int32_t>(state->rpmAtShift);
+            const int32_t interp = static_cast<int32_t>(state->rpmAtShift)
+                                 + delta * static_cast<int32_t>(elapsed)
+                                 / static_cast<int32_t>(duration);
+            proc->outValue = static_cast<uint16_t>(constrain(interp, 0,
+                                                              static_cast<int32_t>(CbusMaxVal)));
+            return;
+        }
+    }
+
+    // Outside damp window: mirror gear-inv-ratio's natural RPM output.
+    proc->outValue = value;
 }
 
 // EOF cb_gear.cpp

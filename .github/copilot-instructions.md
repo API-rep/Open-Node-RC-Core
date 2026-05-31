@@ -13,6 +13,7 @@ These instructions are loaded for every coding session in this workspace.
 | 2026-05-16 | Backup commits (parent + sound_module) | **En attente** |
 | 2026-05-17 | `DRIVE_STATE_BUS` — DriveState 3-bit sur le fil | ✅ Implémenté |
 | 2026-05-17 | `TRACTION_BUS` packed [bit15:BRAKE\|bit14:FWD\|13-bit magnitude] | Architecture décidée — winter 2026 (ComBus v2) |
+| 2026-05-31 | `GEAR_SHIFTING` — machine-local digital; rampTimeMs freeze pendant `upshiftDampMs` sur upshift | ✅ Implémenté — **⚠️ winter 2026 : promouvoir en canal WIRE** (avant `WIRE_END`, avant `MOTION_END`) lors du rework `TRACTION_BUS` pour que le sound node puisse le lire directement — remplace la détection heuristique dans le FSM son. Voir `combus_ids.h` → `GEAR_SHIFTING` + `@todo` en place. |
 
 ### État validé
 - Tous les bugs son (horn/volume, engine key, hydraulique) ✅ corrigés et validés hardware (2026-03-22/23)

@@ -69,15 +69,12 @@ struct SubGearStepCfg {
 struct GearShiftProfile {
     uint8_t               gearCount;    ///< Number of active gears (= std::size(gear[])).
     const GearStepCfg*    gear;         ///< Per-gear config — array[gearCount].
-    uint16_t              shiftGuardMs; ///< Minimum interval between consecutive shifts (ms).
+    uint16_t              shiftGuardMs; ///< Minimum interval between consecutive single-step shifts (ms); 0 = disabled.
 
     uint8_t               subGearCount; ///< Number of sub-gears in gear 1 (0 = sub-gear disabled).
     const SubGearStepCfg* subGear;      ///< Per-sub-gear config — array[subGearCount]; nullptr when subGearCount == 0.
 
-    uint16_t upshiftDampSteps = 0u;     ///< extAccelSteps applied to traction ramp on upshift (0 = disabled).
-                                        ///<   gear_upshift_damp_fn writes this value to CbRampCfg::extAccelSteps
-                                        ///<   for upshiftDampMs after each upshift event.
-    uint16_t upshiftDampMs    = 0u;     ///< Duration of upshift accel damping (ms). 0 = no damping.
+    uint16_t upshiftDampMs    = 1000u;     ///< Duration of ramp freeze on upshift (ms). 0 = disabled.
 };
 
 
@@ -112,11 +109,16 @@ struct GearFsmState {
  * @brief Runtime state for the upshift accel-damping proc.
  *
  * @details Zero-init is valid.  Assigned to `CbProc::state` for
- *   `gear_upshift_damp_fn`; cast back inside the proc.
+ *   `gear_upshift_damp_fn` and `gear_upshift_rpm_fade_fn`; cast back inside each proc.
+ *   Both procs share the same instance (inserted consecutively in the GEAR chain).
  */
 struct GearDampState {
-    uint8_t  prevGear  = 0u;   ///< Gear seen last cycle — upshift detection.
-    uint32_t dampEndMs = 0u;   ///< millis() when damping window expires. 0 = no active window.
+    uint8_t  prevGear    = 0u;   ///< Gear seen last cycle — upshift detection.
+    uint32_t dampEndMs   = 0u;   ///< millis() when damping window expires. 0 = no active window.
+    uint16_t lastRpm     = 0u;   ///< engine_rpm seen last cycle — stored by gear_upshift_rpm_fade_fn each cycle;
+                                 ///<   read by gear_upshift_damp_fn as rpmAtShift on upshift.
+    uint16_t rpmAtShift  = 0u;   ///< engine_rpm at upshift cycle — interpolation start value.
+    uint32_t dampStartMs = 0u;   ///< millis() at start of damp window — interpolation time reference.
 };
 
 

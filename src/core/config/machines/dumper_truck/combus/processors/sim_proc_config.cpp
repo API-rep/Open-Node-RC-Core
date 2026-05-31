@@ -73,7 +73,7 @@ static constexpr CbRampCfg kDumpAsymRamp {
 //  Traction — heavy truck inertia.
 static constexpr CbRampCfg kTractionRamp {
     .rampTimeMs  = 50u,
-    .accelSteps  = pctToCbus(3),
+    .accelSteps  = pctToCbus(1),
     .brakeSteps  = pctToCbus(1),   ///< Near-zero natural decel — vehicle coasts freely; active braking via cb_rev_brake_fn.
     .neutralBand = pctToCbus(8),   ///< 8 % deadzone — absorbs PS4 stick noise (±~0.4%) at neutral,
                                    ///<   preventing cb_dir_fn from oscillating FWD↔REV at rest.
@@ -213,8 +213,8 @@ static CbProc kGearProcs[] = {
     },
     // gear-inv-ratio — wheel_speed * 1000 / gearRatio[prevGear] = engine_rpm.
     //   Reads wheel_speed from `value` (seed from ESC_RPM_BUS above).
-    //   Writes engine_rpm to ESC_RPM_BUS via proc->outValue (sound node reads RPM from there).
-    //   Passes engine_rpm downstream in `value` for gear_fsm_fn (RPM thresholds in RPM domain).
+    //   Writes engine_rpm to ESC_RPM_BUS via proc->outValue (initial write; rpm-fade overrides).
+    //   Passes engine_rpm downstream in `value` for downstream procs (RPM thresholds).
     //   Uses gGearFsmState.gear from previous tick (1-cycle latency — same as gear_dyn_ramp_fn).
     //   Gear 0 (uninitialised) -> passthrough.
     { .name    = "gear-inv-ratio",
@@ -222,6 +222,19 @@ static CbProc kGearProcs[] = {
       .fn      = gear_ratio_inv_fn,
       .cfg     = &kGearCfg,
       .state   = &gGearFsmState,   // read-only here; gear_fsm_fn writes it later in this chain
+    },
+    // rpm-fade — progressive ESC_RPM_BUS interpolation during upshift damp window.
+    //   Stores state->lastRpm = value every cycle (rpmAtShift reference for upshift-damp).
+    //   Active damp window: interpolates ESC_RPM_BUS from rpmAtShift to natural RPM over
+    //   upshiftDampMs; does NOT modify `value` — gear_fsm_fn sees true engine_rpm.
+    //   Inactive: pass-through (proc->outValue = value) — overrides gear-inv-ratio's write
+    //   so this proc is the sole authoritative writer of ESC_RPM_BUS in the GEAR chain.
+    //   state = GearDampState* — shared with upshift-damp (same instance, gGearDampState).
+    { .name    = "rpm-fade",
+      .outCh   = AnalogComBusID::ESC_RPM_BUS,
+      .fn      = gear_upshift_rpm_fade_fn,
+      .cfg     = &kGearCfg,
+      .state   = &gGearDampState,
     },
     // =========================================================================
     // CLAIM CASCADE — first claim wins, later procs skipped.
@@ -278,6 +291,20 @@ static CbProc kGearProcs[] = {
       .cfg       = &kGearCfg,
       .dynCfg    = &gTractionRampDyn,
     },
+
+    // 6. Upshift accel-damp — detect upshift; freeze traction ramp + signal GEAR_SHIFTING.
+    //    Reads `value` (= gear after gear_dyn_ramp_fn). Observer: does NOT modify value.
+    //    Side-effect: writes gTractionRampDyn.extAccelSteps for profile->upshiftDampMs.
+    //    outCh = GEAR_SHIFTING (machine-local) — runner commits 1 while damp active, 0 otherwise.
+    //    In GEAR chain: automatically disabled when gear chain is off (no stale side-effects).
+    //    @todo winter 2026: promote GEAR_SHIFTING to WIRE region for sound node access.
+    { .name    = "upshift-damp",
+      .outCh   = DigitalComBusID::GEAR_SHIFTING,
+      .fn      = gear_upshift_damp_fn,
+      .cfg     = &kGearCfg,
+      .dynCfg  = &gTractionRampDyn,
+      .state   = &gGearDampState,
+    },
     // out — commit pipeline value to GEAR.
     { .name  = "out",
       .outCh = AnalogComBusID::GEAR,
@@ -290,17 +317,6 @@ static CbProc kTractionProcs[] = {
     { .name  = "in",
       .inCh  = AnalogComBusID::ESC_RPM_BUS,
       .fn    = cb_in_fn,
-    },
-    // upshift-damp — detect upshift, damp traction accel for upshiftDampMs.
-    //   Observer: does not modify value.  Side-effect writes gTractionRampDyn.extAccelSteps.
-    //   inCh = GEAR (from previous GEAR tick — 1-cycle latency, same as gear_dyn_ramp_fn).
-    //   prevGear > 0 guard prevents false upshift on first-init 0->1 transition.
-    { .name    = "upshift-damp",
-      .inCh    = AnalogComBusID::GEAR,
-      .fn      = gear_upshift_damp_fn,
-      .cfg     = &kGearCfg,
-      .dynCfg  = &gTractionRampDyn,
-      .state   = &gGearDampState,
     },
     // subgear-cap — cap magnitude to maxSpeedPct when SUBGEAR active; passthrough if 0.
     { .name  = "subgear-cap",
