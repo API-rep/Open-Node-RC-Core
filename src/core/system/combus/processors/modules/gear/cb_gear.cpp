@@ -28,7 +28,7 @@ void gear_fsm_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*c
         gear_fsm_init(state);
     }
 
-    // --- RPM magnitude from RPM_BUS + DRIVE_STATE_BUS gate -------------------
+    // --- RPM magnitude from ESC_RPM_BUS + DRIVE_STATE_BUS gate -------------------
     //     inCh = DRIVE_STATE_BUS (analog). Runner pre-reads into inValue.
     const int8_t  ds  = DriveStateBus::decode(proc->inValue);
     const int16_t rpm = (ds > 0) ? static_cast<int16_t>(value) : int16_t(0);

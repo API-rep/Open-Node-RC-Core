@@ -34,7 +34,7 @@ static const EnvCfg*  s_mach = nullptr;
 static const char* aCh(AnalogComBusID id)
 {
 	switch (id) {
-		case AnalogComBusID::RPM_BUS:              return "RPM";
+		case AnalogComBusID::ESC_RPM_BUS:              return "RPM";
 		case AnalogComBusID::STEERING_BUS:         return "STEER_IN";
 		case AnalogComBusID::DUMP_BUS:             return "DUMP_IN";
 		case AnalogComBusID::ESC_SPEED_BUS:        return "ESC_SPD";
@@ -145,8 +145,8 @@ static void render_proc_row(uint8_t idx, const CbProc* proc)
 		const int8_t        sg   = st ? st->subGear : 0;
 		const uint16_t      ramp = (gear >= 1)
 		                         ? cfg->profile->gear[gear - 1].rampTime : 0u;
-		//  RPM is now fed directly from RPM_BUS (seeded from inCh); read live from bus.
-		const uint16_t rpm = s_bus->analogBus[static_cast<uint8_t>(AnalogComBusID::RPM_BUS)].value;
+		//  RPM is now fed directly from ESC_RPM_BUS (seeded from inCh); read live from bus.
+		const uint16_t rpm = s_bus->analogBus[static_cast<uint8_t>(AnalogComBusID::ESC_RPM_BUS)].value;
 		const uint16_t maxRpm = cfg->profile->gear[cfg->profile->gearCount - 1].upShift;
 		dLine("  Proc %u : gear-fsm  gear: %d/%d  sub: %d/%d  ramp: %4u ms  rpm: %4u/%u",
 		      (unsigned)idx,

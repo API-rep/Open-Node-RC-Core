@@ -15,10 +15,10 @@
  *
  *   Does NOT set `claimed`.  cfg = &CbDirCfg, state = nullptr.
  *
- *   Typical placement: after cb_ramp_fn, before cb_gear_fn:
+ *   Typical placement: after cb_sym_ramp_fn, before cb_gear_fn:
  *   @code
  *     { .fn = cb_bypass_fn, ... }
- *     { .fn = cb_ramp_fn,   ... }
+ *     { .fn = cb_sym_ramp_fn,   ... }
  *     { .fn = cb_dir_fn,    .outCh = AnalogComBusID::DRIVE_STATE_BUS, ... }
  *     { .fn = cb_gear_fn,   ... }
  *   @endcode

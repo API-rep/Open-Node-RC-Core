@@ -12,7 +12,7 @@
  *   - `proc->outCh` = digital channel; runner commits after fn
  *     (nullopt = no side effect).
  *
- *   Typical use: second proc in a THROTTLE_BUS → RPM_BUS pipeline:
+ *   Typical use: second proc in a THROTTLE_BUS → ESC_RPM_BUS pipeline:
  *   @code
  *     { .fn = cb_center_fn, .cfg = &kCenter }
  *     { .fn = cb_abs_fn,    .cfg = nullptr,

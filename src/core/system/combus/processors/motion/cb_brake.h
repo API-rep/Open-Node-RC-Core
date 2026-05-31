@@ -8,7 +8,7 @@
  *
  *   Typical chain placement (inside kThrottleProcs):
  *   @code
- *     // After cb_ramp_fn + cb_dir_fn:
+ *     // After cb_sym_ramp_fn + cb_dir_fn:
  *     { .name="b-in",   .inCh=BRAKE_BUS,    .fn=cb_brake_fn,  .state=&gBrakeState          },
  *     { .name="brake",  .inCh=THROTTLE_BUS, .fn=cb_rev_brake_fn, .cfg=&kBrakeCfg,
  *                       .outCh=BRAKE_BUS,                         .state=&gBrakeState          },

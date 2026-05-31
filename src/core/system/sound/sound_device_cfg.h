@@ -220,7 +220,7 @@ struct TriggerCfg {
 // =============================================================================
 
 /**
- * @brief Configuration for `throttle_behaviorFn` when `RPM_BUS` carries
+ * @brief Configuration for `throttle_behaviorFn` when `ESC_RPM_BUS` carries
  *   engine RPM magnitude [0..maxRpm] (unipolar, 0 = idle).
  *
  * @details The behavior fn converts RPM to ComBus domain [0..CbusMaxVal]

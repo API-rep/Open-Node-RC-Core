@@ -25,7 +25,7 @@ namespace DumperTruck {
 /// @brief Com-bus analog channel identifiers
 enum class AnalogComBusID : uint8_t {
   STEERING_BUS = 0,
-  RPM_BUS,             ///< Engine RPM magnitude [0..maxRpm], pre-inertia, post-ratio — written by SIM_THROTTLE. Transmitted to sound node.
+  ESC_RPM_BUS,             ///< Engine RPM magnitude [0..maxRpm], pre-inertia, post-ratio — written by SIM_THROTTLE. Transmitted to sound node.
   DUMP_BUS,
   ESC_SPEED_BUS,       ///< Inertia-smoothed speed — drives ESC output + currentSpeed (owner: SYSTEM_EXT)
   GEAR,              ///< Active virtual gear (1–3) — derived from ESC_SPEED_BUS deviation by motion pipeline. Never 0; direction encoded separately in ESC_REVERSE.

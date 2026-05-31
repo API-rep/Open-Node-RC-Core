@@ -9,12 +9,12 @@
  *     SIM_THROTTLE : in(THROTTLE_BUS) → ramp, dir(→DRIVE_STATE_BUS),
  *                    b-in(BRAKE_BUS→state), brake(THROTTLE_BUS→BRAKE_BUS merged+ramp),
  *                    center, abs, scale, bypass(DIRECT_DRIVE),
- *                    ratio(GEAR) → out(RPM_BUS)
- *     SIM_GEAR     : in(RPM_BUS) → subgear-claim(SUBGEAR_BUS),
+ *                    ratio(GEAR) → out(ESC_RPM_BUS)
+ *     SIM_GEAR     : in(ESC_RPM_BUS) → subgear-claim(SUBGEAR_BUS),
  *                    manual-claim(MANUAL_GEAR_SET), direct-claim(DIRECT_DRIVE),
  *                    gear-fsm(DRIVE_STATE_BUS), gear-ramp → out(GEAR)
  *                    NOTE: subgear-claim forces GEAR=1 when sub-gear active.
- *     SIM_TRACTION : in(RPM_BUS) → gear-ratio(GEAR), subgear-cap(SUBGEAR_BUS),
+ *     SIM_TRACTION : in(ESC_RPM_BUS) → gear-ratio(GEAR), subgear-cap(SUBGEAR_BUS),
  *                    gear-dir(DRIVE_STATE_BUS) → out(ESC_SPEED_BUS)
  *                    NOTE: gear-ratio passes through when GEAR=0 (neutral);
  *                    gear-subgear-cap caps magnitude in RPM domain;
@@ -34,7 +34,7 @@
 #include <core/config/hw/simulation_presets.h>    // kHeavy6_steps, kGearShift_Heavy6Speed
 #include <struct/combus_struct.h>                 // makeChanOwner, ComBusOwner
 #include <core/system/combus/combus_res.h>        // CbusNeutral, pctToCbus
-#include <core/system/combus/processors/motion/cb_ramp.h>  // cb_ramp_fn, CbRampCfg, CbRampState
+#include <core/system/combus/processors/motion/cb_ramp.h>  // cb_sym_ramp_fn, CbRampCfg, CbRampState
 #include <core/system/combus/processors/base/cb_bypass.h>  // cb_bypass_fn
 #include <core/system/combus/processors/base/cb_io.h>       // cb_in_fn, cb_out_fn
 #include <core/system/combus/processors/math/cb_center.h>          // cb_center_fn, CbCenterCfg
@@ -145,7 +145,7 @@ static CbProc kThrottleProcs[] = {
     // ramp — heavy-truck inertia on throttle input (uses gTractionRampDyn).
     //   rampTimeMs is updated by gear-ramp proc in GEAR chain (1 cycle latency).
     { .name    = "ramp",
-      .fn      = cb_ramp_fn,
+      .fn      = cb_sym_ramp_fn,
       .cfg     = &kTractionRamp,
       .dynCfg  = &gTractionRampDyn,
       .state   = &gTractionRampState,
@@ -189,7 +189,7 @@ static CbProc kThrottleProcs[] = {
       .fn    = cb_scale_fn,
       .cfg   = &kThrottleScale,
     },
-    // bypass — DIRECT_DRIVE HIGH → claim (raw magnitude bypasses ratio, flows to RPM_BUS).
+    // bypass — DIRECT_DRIVE HIGH → claim (raw magnitude bypasses ratio, flows to ESC_RPM_BUS).
     { .name      = "bypass",
       .inCh      = DigitalComBusID::DIRECT_DRIVE,
       .fn        = cb_bypass_fn,
@@ -201,17 +201,17 @@ static CbProc kThrottleProcs[] = {
       .cfg       = &kGearCfg,
       .state     = &gThrottleShiftDeltaState,
     },
-    // out — commit pipeline value to RPM_BUS.
+    // out — commit pipeline value to ESC_RPM_BUS.
     { .name  = "out",
-      .outCh = AnalogComBusID::RPM_BUS,
+      .outCh = AnalogComBusID::ESC_RPM_BUS,
       .fn    = cb_out_fn,
     },
 };
 
 static CbProc kGearProcs[] = {
-    // in — seed pipeline from RPM_BUS.
+    // in — seed pipeline from ESC_RPM_BUS.
     { .name  = "in",
-      .inCh  = AnalogComBusID::RPM_BUS,
+      .inCh  = AnalogComBusID::ESC_RPM_BUS,
       .fn    = cb_in_fn,
     },
     // =========================================================================
@@ -277,9 +277,9 @@ static CbProc kGearProcs[] = {
 };
 
 static CbProc kTractionProcs[] = {
-    // in — seed pipeline from RPM_BUS.
+    // in — seed pipeline from ESC_RPM_BUS.
     { .name  = "in",
-      .inCh  = AnalogComBusID::RPM_BUS,
+      .inCh  = AnalogComBusID::ESC_RPM_BUS,
       .fn    = cb_in_fn,
     },
     // gear-ratio — RPM + cumDelta[gear] → adjustedRpm; GEAR=0 → passthrough.
@@ -320,7 +320,7 @@ static CbProc kSteeringProcs[] = {
     },
     // ramp — progressive inertia.
     { .name  = "ramp",
-      .fn    = cb_ramp_fn,
+      .fn    = cb_sym_ramp_fn,
       .cfg   = &kSteerAsymRamp,
       .state = &gSteerRampState,
     },
@@ -344,7 +344,7 @@ static CbProc kDumpProcs[] = {
     },
     // ramp — progressive asymmetric inertia.
     { .name  = "ramp",
-      .fn    = cb_ramp_fn,
+      .fn    = cb_sym_ramp_fn,
       .cfg   = &kDumpAsymRamp,
       .state = &gDumpRampState,
     },

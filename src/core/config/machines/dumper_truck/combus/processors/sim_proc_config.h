@@ -8,9 +8,9 @@
  *
  *   Channel pipelines (inCh → procs → outCh):
  *     SIM_THROTTLE : THROTTLE_BUS → [ramp, drive-state, center, abs, scale,
- *                                     bypass, ratio] → RPM_BUS
- *     SIM_GEAR     : RPM_BUS      → [bypass, gear-fsm, gear-ramp] → GEAR
- *     SIM_TRACTION : RPM_BUS      → [gear-ratio, subgear-cap, gear-dir] → ESC_SPEED_BUS
+ *                                     bypass, ratio] → ESC_RPM_BUS
+ *     SIM_GEAR     : ESC_RPM_BUS      → [bypass, gear-fsm, gear-ramp] → GEAR
+ *     SIM_TRACTION : ESC_RPM_BUS      → [gear-ratio, subgear-cap, gear-dir] → ESC_SPEED_BUS
  *     SIM_STEERING : STEERING_BUS → [bypass, ramp]  → STEERING_RAMPED_BUS
  *     SIM_DUMP     : DUMP_BUS     → [bypass, ramp]  → DUMP_RAMPED_BUS
  *
@@ -33,9 +33,9 @@
  *   `SIM_CH_COUNT` is the sentinel used as array size and loop bound.
  */
 enum SimCh {
-    SIM_THROTTLE = 0,  ///< THROTTLE_BUS → [center+abs+scale+ratio] → RPM_BUS
-    SIM_GEAR,          ///< RPM_BUS       → [gear-fsm]               → GEAR
-    SIM_TRACTION,      ///< RPM_BUS       → [rpm_to_speed]           → ESC_SPEED_BUS
+    SIM_THROTTLE = 0,  ///< THROTTLE_BUS → [center+abs+scale+ratio] → ESC_RPM_BUS
+    SIM_GEAR,          ///< ESC_RPM_BUS       → [gear-fsm]               → GEAR
+    SIM_TRACTION,      ///< ESC_RPM_BUS       → [rpm_to_speed]           → ESC_SPEED_BUS
     SIM_STEERING,      ///< STEERING_BUS  → [bypass + ramp]          → STEERING_RAMPED_BUS
     SIM_DUMP,          ///< DUMP_BUS      → [bypass + ramp]          → DUMP_RAMPED_BUS
     SIM_CH_COUNT       ///< Sentinel — number of CbChain entries.

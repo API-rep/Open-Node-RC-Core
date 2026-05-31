@@ -113,7 +113,7 @@ void cb_rev_brake_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner
     // Step 4 — Write extBrakeSteps: proportional live modifier for the ramp.
     // -----------------------------------------------------------------
     //  Linear map: finalBrake 0..maxBrake → extBrakeSteps 0..maxBrakeStep.
-    //  cb_ramp_fn adds this to the static brakeSteps (coasting baseline) each tick.
+    //  cb_sym_ramp_fn adds this to the static brakeSteps (coasting baseline) each tick.
     //  When brake is released extBrakeSteps → 0; brakeSteps reverts to coasting.
     if (cfg->dynRampCfg != nullptr) {
         cfg->dynRampCfg->extBrakeSteps = static_cast<uint16_t>(

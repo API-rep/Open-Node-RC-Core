@@ -21,7 +21,7 @@
 // =============================================================================
 
 /** @brief Asymmetric inertia ramp — see cb_ramp.h for full contract. */
-void cb_ramp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)
+void cb_sym_ramp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)
 {
     CbRampState*     state = static_cast<CbRampState*>(proc->state);
     // dynCfg override: a preceding proc (e.g. cb_gear_fn) may write proc->dynCfg

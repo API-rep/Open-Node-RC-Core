@@ -1,6 +1,6 @@
 /******************************************************************************
  * @file  cb_ramp_struct.h
- * @brief Config and state structs for cb_ramp_fn — single-axis inertia ramp.
+ * @brief Config and state structs for cb_sym_ramp_fn — single-axis inertia ramp.
  *****************************************************************************/
 #pragma once
 
@@ -12,10 +12,13 @@
 // =============================================================================
 
 /**
- * @brief Static configuration for a single-axis inertia ramp CbProc.
+ * @brief Static configuration for a bipolar inertia ramp CbProc.
  *
  * @details Assigned to `CbProc::cfg` (as `const void*`); cast back to
- *   `const CbRampCfg*` inside `cb_ramp_fn()`.
+ *   `const CbRampCfg*` inside `cb_sym_ramp_fn()`.
+ *
+ *   `cb_sym_ramp_fn` operates symmetrically around `CbusNeutral` on a bipolar
+ *   ComBus channel [0..CbusMaxVal].  Accel and brake step rates may differ.
  *
  *   Multi-instance: one CbProc entry per axis that needs inertia
  *   (e.g. DUMP_BUS → DUMP_RAMPED_BUS, STEERING_BUS → STEERING_RAMPED_BUS).
@@ -28,11 +31,11 @@ struct CbRampCfg {
                                             ///<   0 = symmetric (falls back to accelSteps).
     uint16_t brakeSteps;                    ///< ComBus units per step when moving toward neutral (coasting baseline).
     uint16_t extBrakeSteps = 0u;            ///< Live brake modifier written by cb_rev_brake_fn each cycle.
-                                            ///<   cb_ramp_fn applies  brakeSteps + extBrakeSteps  as the effective
+                                            ///<   cb_sym_ramp_fn applies  brakeSteps + extBrakeSteps  as the effective
                                             ///<   deceleration step while brake force is held.
     uint16_t neutralBand;                   ///< ComBus units around CbusNeutral treated as zero (0 = no dead-band).
     bool     resetRamp = false;             ///< Set by a preceding proc (e.g. cb_gear_ramp_fn) on gear change.
-                                            ///<   cb_ramp_fn resets the ramp timer and clears this flag.
+                                            ///<   cb_sym_ramp_fn resets the ramp timer and clears this flag.
                                             ///<   currentPos is preserved — continuity of position across the reset.
 };
 
@@ -44,7 +47,7 @@ struct CbRampCfg {
 /**
  * @brief Mutable runtime state for a ramp CbProc.
  *
- * @details Written exclusively by `cb_ramp_fn()`.
+ * @details Written exclusively by `cb_sym_ramp_fn()`.
  *   Zero-initialised by default construction — `lastUpdateMs == 0` triggers
  *   a self-init to CbusNeutral on the first call.
  *   Do NOT use `currentPos == 0` as sentinel — 0 is a valid position (full negative).

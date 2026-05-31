@@ -9,7 +9,7 @@
  *   Positive result = FWD side, negative = REV side (two's complement).
  *   Does NOT set `claimed`.  cfg = &CbCenterCfg, state = nullptr.
  *
- *   Typical use: first proc in a THROTTLE_BUS → RPM_BUS pipeline:
+ *   Typical use: first proc in a THROTTLE_BUS → ESC_RPM_BUS pipeline:
  *   @code
  *     { .fn = cb_center_fn, .cfg = &kCenter }   // signed deviation
  *     { .fn = cb_abs_fn,    .cfg = nullptr  }   // magnitude

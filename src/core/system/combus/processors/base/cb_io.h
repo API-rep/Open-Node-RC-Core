@@ -18,7 +18,7 @@
  *   @code
  *     { .name="in",  .inCh=AnalogComBusID::THROTTLE_BUS, .fn=cb_in_fn  },
  *     // ... intermediate processing procs ...
- *     { .name="out", .outCh=AnalogComBusID::RPM_BUS,     .fn=cb_out_fn },
+ *     { .name="out", .outCh=AnalogComBusID::ESC_RPM_BUS,     .fn=cb_out_fn },
  *   @endcode
  *****************************************************************************/
 #pragma once

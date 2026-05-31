@@ -27,7 +27,7 @@ const VehicleSoundProfile kVehicleSoundDynamics = {
 
     // --- ESC inertia ramp ---
     // Machine node already applies inertia (sim_ramp ~1.7 s).  Set esc() ramp
-    // to near-instant so the engine sound tracks RPM_BUS directly, same as the
+    // to near-instant so the engine sound tracks ESC_RPM_BUS directly, same as the
     // motors.  escRampTime=1 ms + max steps → escPulseWidth snaps to pw3 in
     // one call; the remaining sound inertia is the machine's sim_ramp only.
     .escRampTime             = {  1u,  1u,  1u },  // near-instant, all gears
