@@ -39,7 +39,6 @@
 #include <core/system/combus/combus_res.h>        // CbusNeutral, pctToCbus
 #include <core/system/combus/processors/motion/cb_ramp.h>  // cb_sym_ramp_fn, CbRampCfg, CbRampState
 #include <core/system/combus/processors/base/cb_bypass.h>  // cb_bypass_fn
-#include <core/system/combus/processors/base/cb_io.h>       // cb_in_fn, cb_out_fn
 #include <core/system/combus/processors/math/cb_center.h>          // cb_center_fn, CbCenterCfg
 #include <core/system/combus/processors/math/cb_abs.h>              // cb_abs_fn
 #include <core/system/combus/processors/math/cb_scale.h>            // cb_scale_fn, CbScaleCfg
@@ -141,11 +140,6 @@ static GearDampState       gGearDampState           {};
 // =============================================================================
 
 static CbProc kThrottleProcs[] = {
-    // in — seed pipeline from THROTTLE_BUS.
-    { .name  = "in",
-      .inCh  = AnalogComBusID::THROTTLE_BUS,
-      .fn    = cb_in_fn,
-    },
     // ramp — heavy-truck inertia on throttle input (uses gTractionRampDyn).
     //   rampTimeMs is updated by gear-ramp proc in GEAR chain (1 cycle latency).
     { .name    = "ramp",
@@ -198,19 +192,9 @@ static CbProc kThrottleProcs[] = {
       .inCh      = DigitalComBusID::DIRECT_DRIVE,
       .fn        = cb_bypass_fn,
     },
-    // out — commit pipeline value to ESC_RPM_BUS.
-    { .name  = "out",
-      .outCh = AnalogComBusID::ESC_RPM_BUS,
-      .fn    = cb_out_fn,
-    },
 };
 
 static CbProc kGearProcs[] = {
-    // in — seed pipeline from ESC_RPM_BUS.
-    { .name  = "in",
-      .inCh  = AnalogComBusID::ESC_RPM_BUS,
-      .fn    = cb_in_fn,
-    },
     // gear-inv-ratio — wheel_speed * 1000 / gearRatio[prevGear] = engine_rpm.
     //   Reads wheel_speed from `value` (seed from ESC_RPM_BUS above).
     //   Writes engine_rpm to ESC_RPM_BUS via proc->outValue (initial write; rpm-fade overrides).
@@ -305,19 +289,9 @@ static CbProc kGearProcs[] = {
       .dynCfg  = &gTractionRampDyn,
       .state   = &gGearDampState,
     },
-    // out — commit pipeline value to GEAR.
-    { .name  = "out",
-      .outCh = AnalogComBusID::GEAR,
-      .fn    = cb_out_fn,
-    },
 };
 
 static CbProc kTractionProcs[] = {
-    // in — seed pipeline from ESC_RPM_BUS (= wheel_speed; GEAR chain hasn't run yet).
-    { .name  = "in",
-      .inCh  = AnalogComBusID::ESC_RPM_BUS,
-      .fn    = cb_in_fn,
-    },
     // subgear-cap — cap magnitude to maxSpeedPct when SUBGEAR active; passthrough if 0.
     { .name  = "subgear-cap",
       .inCh  = AnalogComBusID::SUBGEAR_BUS,
@@ -330,19 +304,9 @@ static CbProc kTractionProcs[] = {
       .fn    = gear_dir_fn,
       .cfg   = &kGearCfg,
     },
-    // out — commit pipeline value to ESC_SPEED_BUS.
-    { .name  = "out",
-      .outCh = AnalogComBusID::ESC_SPEED_BUS,
-      .fn    = cb_out_fn,
-    },
 };
 
 static CbProc kSteeringProcs[] = {
-    // in — seed pipeline from STEERING_BUS.
-    { .name  = "in",
-      .inCh  = AnalogComBusID::STEERING_BUS,
-      .fn    = cb_in_fn,
-    },
     // bypass — DIRECT_DRIVE HIGH → claim (raw steering bypasses ramp).
     { .name    = "bypass",
       .inCh    = DigitalComBusID::DIRECT_DRIVE,
@@ -354,19 +318,9 @@ static CbProc kSteeringProcs[] = {
       .cfg   = &kSteerAsymRamp,
       .state = &gSteerRampState,
     },
-    // out — commit pipeline value to STEERING_RAMPED_BUS.
-    { .name  = "out",
-      .outCh = AnalogComBusID::STEERING_RAMPED_BUS,
-      .fn    = cb_out_fn,
-    },
 };
 
 static CbProc kDumpProcs[] = {
-    // in — seed pipeline from DUMP_BUS.
-    { .name  = "in",
-      .inCh  = AnalogComBusID::DUMP_BUS,
-      .fn    = cb_in_fn,
-    },
     // bypass — DIRECT_DRIVE HIGH → claim (raw dump bypasses ramp).
     { .name    = "bypass",
       .inCh    = DigitalComBusID::DIRECT_DRIVE,
@@ -377,11 +331,6 @@ static CbProc kDumpProcs[] = {
       .fn    = cb_sym_ramp_fn,
       .cfg   = &kDumpAsymRamp,
       .state = &gDumpRampState,
-    },
-    // out — commit pipeline value to DUMP_RAMPED_BUS.
-    { .name  = "out",
-      .outCh = AnalogComBusID::DUMP_RAMPED_BUS,
-      .fn    = cb_out_fn,
     },
 };
 
@@ -395,30 +344,40 @@ static constexpr ChanOwner kSimOwner = makeChanOwner(ComBusOwner::GRP_MACHINE, C
 CbChain kSimChannels[SIM_CH_COUNT] = {
 
   { .name       = "throttle",
+    .inCh       = AnalogComBusID::THROTTLE_BUS,
+    .outCh      = AnalogComBusID::ESC_RPM_BUS,
     .procs      = kThrottleProcs,
     .procCount  = static_cast<uint8_t>(std::size(kThrottleProcs)),
     .chainOwner = kSimOwner,
   },
 
   { .name       = "traction",
+    .inCh       = AnalogComBusID::ESC_RPM_BUS,
+    .outCh      = AnalogComBusID::ESC_SPEED_BUS,
     .procs      = kTractionProcs,
     .procCount  = static_cast<uint8_t>(std::size(kTractionProcs)),
     .chainOwner = kSimOwner,
   },
 
   { .name       = "gear",
+    .inCh       = AnalogComBusID::ESC_RPM_BUS,
+    .outCh      = AnalogComBusID::GEAR,
     .procs      = kGearProcs,
     .procCount  = static_cast<uint8_t>(std::size(kGearProcs)),
     .chainOwner = kSimOwner,
   },
 
   { .name       = "steering",
+    .inCh       = AnalogComBusID::STEERING_BUS,
+    .outCh      = AnalogComBusID::STEERING_RAMPED_BUS,
     .procs      = kSteeringProcs,
     .procCount  = static_cast<uint8_t>(std::size(kSteeringProcs)),
     .chainOwner = kSimOwner,
   },
 
   { .name       = "dump",
+    .inCh       = AnalogComBusID::DUMP_BUS,
+    .outCh      = AnalogComBusID::DUMP_RAMPED_BUS,
     .procs      = kDumpProcs,
     .procCount  = static_cast<uint8_t>(std::size(kDumpProcs)),
     .chainOwner = kSimOwner,

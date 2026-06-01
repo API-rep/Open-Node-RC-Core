@@ -32,7 +32,6 @@
 #include <struct/combus_struct.h>                                      // makeChanOwner, ComBusOwner
 #include <core/system/combus/processors/input/cb_btn.h>  // cb_btn_push_fn, cb_btn_toggle_fn, cb_btn_inc_fn, cb_btn_dec_fn, CbBtnCfg, CbBtnState, CbBtnTrigger
 #include <core/system/combus/processors/base/cb_runlevel.h>              // cb_runlevel_fn, CbRunlevelCfg, CbRunlevelState
-#include <core/system/combus/processors/base/cb_io.h>                  // cb_in_fn, cb_out_fn
 #include <core/system/combus/processors/base/cb_bypass.h>              // cb_bypass_fn
 using namespace DumperTruck;
 
@@ -99,11 +98,6 @@ static CbRunlevelState gKeyRunlevelState {
 // =============================================================================
 
 static CbProc kSubGearProcs[] = {
-    // in — seed pipeline from current SUBGEAR_BUS value (read-modify-write).
-    { .name  = "in",
-      .inCh  = AnalogComBusID::SUBGEAR_BUS,
-      .fn    = cb_in_fn,
-    },
     // neutral-gate — block subgear changes while the vehicle is moving.
     //   DRIVE_STATE_BUS != 0 (FWD / REV / BRAKING) → claim, value unchanged.
     //   DRIVE_STATE_BUS == 0 (STANDING) → no action, toggle/inc/dec proceed.
@@ -134,11 +128,6 @@ static CbProc kSubGearProcs[] = {
       .cfg     = &kSubGearDecCfg,
       .state   = &gSubGearDecState,
     },
-    // out — commit modified value back to SUBGEAR_BUS.
-    { .name  = "out",
-      .outCh = AnalogComBusID::SUBGEAR_BUS,
-      .fn    = cb_out_fn,
-    },
 };
 
 
@@ -154,22 +143,12 @@ static constexpr ChanOwner kInputOwner = makeChanOwner(ComBusOwner::GRP_MACHINE,
 // =============================================================================
 
 static CbProc kDirectDriveProcs[] = {
-    // in — seed pipeline from DIRECT_DRIVE_BTN state.
-    { .name  = "in",
-      .inCh  = DigitalComBusID::DIRECT_DRIVE_BTN,
-      .fn    = cb_in_fn,
-    },
     // toggle — OPTIONS button: 0 ↔ 1
     { .name    = "direct_drive_toggle",
       .inCh    = DigitalComBusID::DIRECT_DRIVE_BTN,
       .fn      = cb_btn_toggle_fn,
       .cfg     = &kDirectDriveToggleCfg,
       .state   = &gDirectDriveToggleState,
-    },
-    // out — commit result to DIRECT_DRIVE.
-    { .name  = "out",
-      .outCh = DigitalComBusID::DIRECT_DRIVE,
-      .fn    = cb_out_fn,
     },
 };
 
@@ -199,11 +178,6 @@ static constexpr CbRunlevelCfg kKeyRunlevelCfg {
 };
 
 static CbProc kKeyRunlevelProcs[] = {
-    // in — seed from persistent KEY_ACTIVE (read-modify-write latch on the bus channel).
-    { .name  = "in",
-      .inCh  = DigitalComBusID::KEY_ACTIVE,
-      .fn    = cb_in_fn,
-    },
     // key_on — press-down → KEY_ACTIVE = 1.  Once per press (repeat-guarded).
     { .name  = "key_on",
       .inCh  = DigitalComBusID::KEY_BTN,
@@ -226,11 +200,6 @@ static CbProc kKeyRunlevelProcs[] = {
       .cfg   = &kKeyRunlevelCfg,
       .state = &gKeyRunlevelState,
     },
-    // out — LAST: always runs (claimed-exempt).  Commits updated KEY_ACTIVE to bus.
-    { .name  = "out",
-      .outCh = DigitalComBusID::KEY_ACTIVE,
-      .fn    = cb_out_fn,
-    },
 };
 
 
@@ -241,18 +210,24 @@ static CbProc kKeyRunlevelProcs[] = {
 CbChain kInputChains[INPUT_CH_COUNT] = {
 
   { .name       = "subgear",
+    .inCh       = AnalogComBusID::SUBGEAR_BUS,
+    .outCh      = AnalogComBusID::SUBGEAR_BUS,
     .procs      = kSubGearProcs,
     .procCount  = static_cast<uint8_t>(std::size(kSubGearProcs)),
     .chainOwner = kInputOwner,
   },
 
   { .name       = "direct_drive",
+    .inCh       = DigitalComBusID::DIRECT_DRIVE_BTN,
+    .outCh      = DigitalComBusID::DIRECT_DRIVE,
     .procs      = kDirectDriveProcs,
     .procCount  = static_cast<uint8_t>(std::size(kDirectDriveProcs)),
     .chainOwner = kInputOwner,
   },
 
   { .name       = "key_runlevel",
+    .inCh       = DigitalComBusID::KEY_ACTIVE,
+    .outCh      = DigitalComBusID::KEY_ACTIVE,
     .procs      = kKeyRunlevelProcs,
     .procCount  = static_cast<uint8_t>(std::size(kKeyRunlevelProcs)),
     .chainOwner = kInputOwner,

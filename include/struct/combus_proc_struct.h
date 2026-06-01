@@ -7,23 +7,22 @@
  *
  *   **Key architectural rules:**
  *   - `CbProcFn` has NO `ComBus& bus` parameter.
- *     Bus access is handled exclusively by the runner via `CbProc::inCh` /
- *     `outCh` — use `cb_in_fn` (first proc) and `cb_out_fn` (last proc)
- *     for primary I/O; intermediate procs use secondary channels.
+ *     Primary I/O: runner seeds / commits via `CbChain::inCh` / `outCh`.
+ *     `cb_in_fn` / `cb_out_fn` remain available for secondary read-modify-write
+ *     patterns; intermediate procs use `CbProc::inCh` / `outCh`.
  *   - Each proc declares exactly one secondary input (`inCh`) and at most
  *     one output (`outCh`) — both optional.  No channel IDs inside `cfg`.
  *   - `ChanOwner` flows from `CbChain::chainOwner` to the runner — never
  *     from an external parameter on the update function.
  *
  *   **Runner contract (cb_chain_update):**
- *   1. Value starts at 0 — the first proc (`cb_in_fn`) seeds it.
+ *   1. Seed `value` from `CbChain::inCh` (0 when inCh = nullopt).
  *   2. Proc loop — all procs, in order:
- *        a. Inject input: `inValue` ← `bus[inCh]`.
- *        b. Skip when `claimed = true` — EXCEPT the last proc.
+ *        a. Inject secondary input: `inValue` ← `bus[inCh]`.
+ *        b. Skip when `claimed = true`.
  *        c. Call `proc.fn(&proc, value, claimed, ch.chainOwner)`.
- *        d. Commit proc output: `bus[outCh]` ← `outValue`.
- *      The last proc always runs, allowing `cb_out_fn` to commit the
- *      final value even after a bypass.
+ *        d. Commit proc side-output: `bus[outCh]` ← `outValue`.
+ *   3. Commit `value` to `CbChain::outCh`.
  *
  *   **Adding a new CbProcFn:**
  *   1. Add cfg + state structs in the appropriate layer struct file
@@ -125,16 +124,24 @@ struct CbProc {
 /**
  * @brief One named combus processing chain — ordered CbProc list.
  *
- * @details Primary I/O is handled by the first (`cb_in_fn`) and last
- *   (`cb_out_fn`) procs in the array.  The runner iterates all procs;
- *   intermediate procs are skipped when `claimed = true`, but the last
- *   proc always runs to commit the final value.
+ * @details Primary I/O: the runner seeds `value` from `inCh` before the first
+ *   proc, and commits `value` to `outCh` after the last proc.
+ *   `cb_in_fn` / `cb_out_fn` are no longer needed for primary I/O; they remain
+ *   available for secondary read-modify-write patterns inside a proc array.
+ *   Remaining procs are skipped when `claimed = true`; the final commit to
+ *   `outCh` still happens (value = claimed value).
  *
  *   `chainOwner` is forwarded to every fn call and to all bus writes
  *   — no external owner parameter on the runner.
  */
 struct CbChain {
     const char*  name;  ///< Human-readable chain name (debug / dashboard).
+
+    // --- Primary I/O (seeded / committed by runner) --------------------------
+    /// Primary source — runner seeds pipeline value from this channel before first proc.
+    std::optional<std::variant<AnalogComBusID, DigitalComBusID>> inCh;
+    /// Primary sink — runner commits final pipeline value to this channel after last proc.
+    std::optional<std::variant<AnalogComBusID, DigitalComBusID>> outCh;
 
     // --- Proc chain ----------------------------------------------------------
     CbProc*  procs;      ///< Processor array (nullptr when procCount == 0).

@@ -2,24 +2,14 @@
  * @file  cb_io.h
  * @brief CbProc functions — pipeline source and sink.
  *
- * @details Two terminal procs that replace the old CbChain primary I/O fields.
- *   Place them as the first and last entries in every CbProc array:
+ * @details Two utility procs for explicit pipeline I/O within a CbProc array.
+ *   Primary chain I/O is handled by `CbChain::inCh` / `outCh` in the runner —
+ *   these functions are kept for read-modify-write patterns or nested sub-chains.
  *
- *   - `cb_in_fn`  — seeds the pipeline `value` from `proc->inValue`.
- *                   Set `proc.inCh` to the source channel; the runner
- *                   pre-reads it into `proc->inValue` before the call.
- *   - `cb_out_fn` — copies the pipeline `value` to `proc->outValue`.
- *                   Set `proc.outCh` to the destination channel; the runner
- *                   commits `proc->outValue` to the bus after the call.
- *                   The runner always executes the last proc regardless of
- *                   `claimed`, so `cb_out_fn` commits even after a bypass.
- *
- *   Typical array layout:
- *   @code
- *     { .name="in",  .inCh=AnalogComBusID::THROTTLE_BUS, .fn=cb_in_fn  },
- *     // ... intermediate processing procs ...
- *     { .name="out", .outCh=AnalogComBusID::ESC_RPM_BUS,     .fn=cb_out_fn },
- *   @endcode
+ *   - `cb_in_fn`  — seeds the pipeline `value` from `proc->inValue`
+ *                   (pre-filled by the runner from `proc.inCh`).
+ *   - `cb_out_fn` — copies the pipeline `value` to `proc->outValue`
+ *                   (committed by the runner to `proc.outCh`).
  *****************************************************************************/
 #pragma once
 

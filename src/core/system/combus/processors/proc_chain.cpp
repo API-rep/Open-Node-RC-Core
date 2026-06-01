@@ -63,21 +63,21 @@ void proc_chain_init(CbChain* /*channels*/, uint8_t /*count*/)
  * @brief Process a single CbChain — dispatch all processors.
  *
  * @details Sequence:
- *   1. Value starts at 0 — the first proc (`cb_in_fn`) seeds it.
+ *   1. Seed value from chain.inCh (0 when inCh = nullopt).
  *   2. Proc loop — all procs, in order:
- *        a. Inject input: `proc.inValue` ← bus[proc.inCh].
- *        b. Skip when `claimed = true` — EXCEPT the last proc, which always
- *           runs to allow `cb_out_fn` to commit the final value after a bypass.
+ *        a. Inject secondary input: `proc.inValue` ← bus[proc.inCh].
+ *        b. Skip when `claimed = true`.
  *        c. Call `proc.fn(&proc, value, claimed, ch.chainOwner)`.
- *        d. Commit proc output: bus[proc.outCh] ← proc.outValue.
+ *        d. Commit proc side-output: bus[proc.outCh] ← proc.outValue.
+ *   3. Commit final value to chain.outCh.
  *
  * @param ch   Channel descriptor (procs, chainOwner).
  * @param bus  Shared ComBus for this cycle.
  */
 void proc_chain_step(CbChain& ch, ComBus& bus)
 {
-    // --- 1. Init pipeline ----------------------------------------------------
-    uint16_t value   = 0u;
+    // --- 1. Seed pipeline from chain.inCh ------------------------------------
+    uint16_t value   = cbRead(bus, ch.inCh, /*isDrivedGuard=*/false);
     bool     claimed = false;
 
     // --- 2. Process chain ----------------------------------------------------
@@ -85,19 +85,21 @@ void proc_chain_step(CbChain& ch, ComBus& bus)
         CbProc& proc = ch.procs[p];
         if (proc.fn == nullptr) continue;
 
-        //  a. Inject input from proc.inCh.
+        //  a. Inject secondary input from proc.inCh.
         proc.inValue = cbRead(bus, proc.inCh, /*isDrivedGuard=*/false);
 
-        //  b. Skip when claimed — last proc always runs (cb_out_fn commits).
-        const bool isLast = (p == ch.procCount - 1u);
-        if (claimed && !isLast) continue;
+        //  b. Skip when claimed.
+        if (claimed) continue;
 
         //  c. Call proc fn (no bus access inside fn).
         proc.fn(&proc, value, claimed, ch.chainOwner);
 
-        //  d. Commit proc output.
+        //  d. Commit proc side-output.
         cbWrite(bus, proc.outCh, proc.outValue, ch.chainOwner);
     }
+
+    // --- 3. Commit final pipeline value to chain.outCh -----------------------
+    cbWrite(bus, ch.outCh, value, ch.chainOwner);
 }
 
 
