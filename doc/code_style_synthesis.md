@@ -154,6 +154,35 @@ Step comments (`// N.`) and inline section comments (`// <label>`) are indented
 This visual offset makes step boundaries scannable at a glance without relying
 on blank lines alone. The rule applies at every nesting level.
 
+The same rule applies to **annotated aggregate arrays** (`CbProc[]`, `SoundDevice[]`, etc.):
+each `//` entry label is indented 2 spaces more than the opening `{` of the entry it annotates.
+Each `//` entry label is also prefixed with its step number from `@details Steps:`
+(`// N. name —`). Structural group dividers (`// ===`) are replaced by a numbered group
+entry in `@details` (e.g. `5  Claim cascade : ...` with sub-steps `5.1`, `5.3`) —
+no structural divider needed in code; the sub-numbers alone mark the group boundary:
+
+Brief labels in **CONFIG sections** (one-line introductory comments above a named constant or
+variable) use `///` instead of `//` — they are Doxygen single-line documentation for that
+declaration:
+
+```cpp
+  /// Traction — heavy truck inertia.
+static constexpr CbRampCfg kTractionRamp { ... };
+
+  ///  Traction ramp — RAM copy, mutated by gear_dyn_ramp_fn on each gear change.
+static CbRampCfg gTractionRampDyn = kTractionRamp;
+```
+
+```cpp
+      // 1. gear-inv-ratio — wheel_speed → engine_rpm.      ← 6 spaces (4 + 2), step number first
+    { .name = "gear-inv-ratio", .fn = gear_ratio_inv_fn, }, ← 4 spaces
+      // 5.1. subgear-claim — SUBGEAR_BUS != 0 → gear=1.   ← sub-number shows group membership
+    { .name = "subgear-claim",  .fn = cb_bypass_fn, },
+      // 5.3. direct-claim  — DIRECT_DRIVE HIGH → gear=1.
+    { .name = "direct-claim",   .fn = cb_bypass_fn, },
+```
+
+
 ### `@brief` + `@details` for sequential functions
 
 When a function is a sequential pipeline, `@brief` stays on one line (role-first) and the numbered sequence goes in `@details`:

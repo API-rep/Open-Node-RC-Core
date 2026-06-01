@@ -1,5 +1,5 @@
 /*!****************************************************************************
- * @file  input_proc_config.h
+ * @file  proc_config.h
  * @brief Dumper truck — INPUT chain declarations (class-level, button processors).
  *
  * @details Exposes the INPUT CbChain array consumed by the first runner
@@ -51,4 +51,4 @@ enum InputCh {
 extern CbChain kInputChains[INPUT_CH_COUNT];
 
 
-// EOF input_proc_config.h
+// EOF proc_config.h

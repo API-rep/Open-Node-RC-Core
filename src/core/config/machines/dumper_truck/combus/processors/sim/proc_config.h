@@ -1,5 +1,5 @@
 /*!****************************************************************************
- * @file  sim_proc_config.h
+ * @file  proc_config.h
  * @brief Dumper truck — CbChain pipeline declaration (SIM layer, class-level).
  *
  * @details Exposes the SIM CbChain array consumed by sim_update() in the
@@ -57,4 +57,4 @@ enum SimCh {
 extern CbChain kSimChannels[SIM_CH_COUNT];
 
 
-// EOF sim_proc_config.h
+// EOF proc_config.h
