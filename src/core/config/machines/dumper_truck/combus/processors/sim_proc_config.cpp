@@ -26,6 +26,20 @@
  *     SIM_DUMP     : in(DUMP_BUS) -> bypass(DIRECT_DRIVE), ramp -> out(DUMP_RAMPED_BUS)
  *
  *   SUBGEAR_BUS is written by INPUT chain (cb_btn procs) — see input_proc_config.cpp.
+ *
+ *   Chain map (§1 configs / §2 math+gear / §3 states → §4 proc array):
+ *
+ *     throttle  kTractionRamp, gTractionRampDyn, kBrakeCfg,
+ *               kThrottleCenter, kThrottleDirCfg, kThrottleScale
+ *               gTractionRampState, gBrakeState              → kThrottleProcs[]
+ *
+ *     gear      kGearCfg, kSubGearClaimBypass, kDirectDriveGearBypass
+ *               gGearFsmState, gGearDampState                → kGearProcs[]
+ *               [§2/§3 declared before traction — kTractionProcs refs kGearCfg]
+ *
+ *     traction  (no own cfg/state — uses kGearCfg from gear) → kTractionProcs[]
+ *     steering  kSteerAsymRamp | gSteerRampState             → kSteeringProcs[]
+ *     dump      kDumpAsymRamp  | gDumpRampState              → kDumpProcs[]
  *******************************************************************************
  */
 
