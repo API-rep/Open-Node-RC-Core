@@ -40,45 +40,39 @@ void combus_set_node_group(uint8_t group);
 
 /**
  * @brief Write a value to an analog ComBus channel.
- * @param bus         Target ComBus instance.
- * @param ch          Channel index (typed enum, machine-specific).
- * @param val         New value to write.
- * @param caller      Identity of the calling module — checked against ch.owner.
- * @param setIsDrived If true (default), marks the channel as actively driven.
- *                    Pass false to update the value without claiming the drive flag
- *                    (e.g. watchdog reset path, passthrough bridge).
+ * @param bus     Target ComBus instance.
+ * @param ch      Channel index (typed enum, machine-specific).
+ * @param val     New value to write.
+ * @param caller  Identity of the calling module — checked against ch.owner.
  * @return true if the write was accepted, false if ownership mismatch.
  */
-bool combus_set_analog(ComBus& bus, AnalogComBusID ch, uint16_t val, ChanOwner caller,
-                       bool setIsDrived = true);
+bool combus_set_analog(ComBus& bus, AnalogComBusID ch, uint16_t val, ChanOwner caller);
 
 /// Write an optional analog channel — no-op (returns false) if absent.
 inline bool combus_set_analog(ComBus& bus, const std::optional<AnalogComBusID>& ch,
-                              uint16_t val, ChanOwner caller, bool setIsDrived = true)
+                              uint16_t val, ChanOwner caller)
 {
     if (!ch.has_value()) return false;
-    return combus_set_analog(bus, ch.value(), val, caller, setIsDrived);
+    return combus_set_analog(bus, ch.value(), val, caller);
 }
 
 
 /**
  * @brief Write a value to a digital ComBus channel.
- * @param bus         Target ComBus instance.
- * @param ch          Channel index (typed enum, machine-specific).
- * @param val         New value to write.
- * @param caller      Identity of the calling module — checked against ch.owner.
- * @param setIsDrived If true (default), marks the channel as actively driven.
+ * @param bus     Target ComBus instance.
+ * @param ch      Channel index (typed enum, machine-specific).
+ * @param val     New value to write.
+ * @param caller  Identity of the calling module — checked against ch.owner.
  * @return true if the write was accepted, false if ownership mismatch.
  */
-bool combus_set_digital(ComBus& bus, DigitalComBusID ch, bool val, ChanOwner caller,
-                        bool setIsDrived = true);
+bool combus_set_digital(ComBus& bus, DigitalComBusID ch, bool val, ChanOwner caller);
 
 /// Write an optional digital channel — no-op (returns false) if absent.
 inline bool combus_set_digital(ComBus& bus, const std::optional<DigitalComBusID>& ch,
-                               bool val, ChanOwner caller, bool setIsDrived = true)
+                               bool val, ChanOwner caller)
 {
     if (!ch.has_value()) return false;
-    return combus_set_digital(bus, ch.value(), val, caller, setIsDrived);
+    return combus_set_digital(bus, ch.value(), val, caller);
 }
 
 

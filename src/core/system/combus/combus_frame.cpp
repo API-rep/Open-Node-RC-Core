@@ -292,7 +292,7 @@ void combus_frame_apply( const ComBusFrameCfg& cfg,
 
       // --- 2. RunLevel + watchdog timestamp ---
     combus_set_runlevel(*combus, (RunLevel)inputFrame->header.runLevel, caller);
-    combus->lastFrameMs = millis();   // combus_watchdog uses this to detect frame loss and clear isDrived
+    combus->lastFrameMs = millis();   // used by sound node liveness check
 
       // --- 3. Flags (transport status only) ---
 
@@ -314,6 +314,9 @@ void combus_frame_apply( const ComBusFrameCfg& cfg,
             combus_set_digital(*combus, (DigitalComBusID)i, inputFrame->digital[i], caller);
         }
     }
+
+      // --- 6. Mark bus as actively driven by this frame ---
+    combus->isDrived = true;
 }
 
 // EOF combus_frame.cpp

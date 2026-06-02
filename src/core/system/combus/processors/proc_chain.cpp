@@ -29,16 +29,16 @@ static uint16_t cbRead(const ComBus& bus, const ChanOpt& ch)
 /** @brief Write a uint16_t value to a channel variant on the bus.
  *
  *  @note  Proc-chain outputs are internal computed values, not physical inputs.
- *         setIsDrived is explicitly false to preserve the isDrived = "active
- *         physical input source" invariant checked by the failsafe logic.
+ *         They do not set bus.isDrived — that flag is managed exclusively by
+ *         sys_manager_reset() (pre-clear) and active input sources (re-assert).
  */
 static void cbWrite(ComBus& bus, const ChanOpt& ch, uint16_t value, ChanOwner owner)
 {
     if (!ch.has_value()) return;
     if (std::holds_alternative<AnalogComBusID>(*ch)) {
-        combus_set_analog(bus, std::get<AnalogComBusID>(*ch), value, owner, /*setIsDrived=*/false);
+        combus_set_analog(bus, std::get<AnalogComBusID>(*ch), value, owner);
     } else {
-        combus_set_digital(bus, std::get<DigitalComBusID>(*ch), value != 0u, owner, /*setIsDrived=*/false);
+        combus_set_digital(bus, std::get<DigitalComBusID>(*ch), value != 0u, owner);
     }
 }
 

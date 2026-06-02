@@ -144,7 +144,6 @@ constexpr ChanOwner makeChanOwner(uint8_t grp, uint8_t proc) {
  typedef struct {
   const char* infoName;                    // analog bus short description
   uint16_t value;                          // analog bus current value
-  bool isDrived   = false;                 // true if the AnalogComBus have a driving source
   ChanOwner owner = ChanOwner::NONE;       // authoritative writer — see ChanOwner
 } AnalogComBus;
 
@@ -152,7 +151,6 @@ constexpr ChanOwner makeChanOwner(uint8_t grp, uint8_t proc) {
  typedef struct {
   const char* infoName;                     // digital bus short description
   bool value;                               // digital bus current value (true of false)
-  bool isDrived   = false;                  // true if the DigitalComBus have a driving source
   ChanOwner owner = ChanOwner::NONE;        // authoritative writer — see ChanOwner
 } DigitalComBus;
 
@@ -163,8 +161,11 @@ typedef struct {
   ChanOwner runLevelOwner = ChanOwner::NONE;    // module allowed to write runLevel — set at init
   bool batteryIsLow = false;                    // true when any vbat channel reports low — written by vbat module, read by all
   ChanOwner battLowOwner = ChanOwner::NONE;     // module allowed to write batteryIsLow — set at init
+    // --- Input drive flag ---
+  bool isDrived = false;                        // true when at least one physical input source refreshed this bus this cycle
+                                                // Pre-cleared by sys_manager_reset() each loop; re-asserted by each active source.
     // --- Transport ---
-  uint32_t lastFrameMs = 0;                     // millis() of the last successful combus_frame_apply — used by watchdog
+  uint32_t lastFrameMs = 0;                     // millis() of the last successful combus_frame_apply
     // --- Channel arrays ---
   AnalogComBus* analogBus;                      // analogic bus channels
   DigitalComBus* digitalBus;                    // digital bus channels

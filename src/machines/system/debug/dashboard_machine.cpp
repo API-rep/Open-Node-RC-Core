@@ -107,13 +107,7 @@ static void render_overview() {
 		snprintf(batStr, sizeof(batStr), "N/A    ");
 	}
 
-	bool ctrlConn = false;
-	for (uint8_t i = 0; i < s_analogCh && !ctrlConn; i++) {
-		if (s_bus->analogBus[i].isDrived)  ctrlConn = true;
-	}
-	for (uint8_t i = 0; i < s_digitalCh && !ctrlConn; i++) {
-		if (s_bus->digitalBus[i].isDrived) ctrlConn = true;
-	}
+	bool ctrlConn = s_bus->isDrived;
 
 	bool drvEnabled = (s_bus->runLevel == RunLevel::RUNNING ||
 	                   s_bus->runLevel == RunLevel::STARTING);
@@ -132,7 +126,7 @@ static void render_overview() {
 	for (uint8_t i = 0; i < wireEnd && i < s_analogCh; i++) {
 		uint16_t    raw  = s_bus->analogBus[i].value;
 		int16_t     pct  = dashPctBipolar(raw, s_bus->analogBusMaxVal);
-		bool        drv  = s_bus->analogBus[i].isDrived;
+		bool        drv  = s_bus->isDrived;
 		const char* name = s_bus->analogBus[i].infoName ? s_bus->analogBus[i].infoName : "?";
 
 		// Special decoding for DRIVE_STATE_BUS (index 5) — display readable text

@@ -5,7 +5,6 @@
 
 #include "input_manager.h"
 #include <core/config/machines/combus_types.h>
-#include <core/system/combus/combus_manager.h>
 #include <core/system/combus/combus_access.h>
 #include <PS4Controller.h>
 
@@ -36,8 +35,24 @@ void input_update(ComBus &bus) {
 // ==========================================================
 
   if (!PS4.isConnected()) {
-    resetComBusDriveFlags(bus);
-    return;
+      // Clear all mapped channels to their safe neutral values.
+      // Prevents stale non-neutral stick values from persisting across a
+      // disconnect/reconnect cycle and driving motors on the first RUNNING tick.
+    for (uint8_t i = 0; i < InputAnalogMapCount; i++) {
+      const InputAnalogMap&  m   = InputAnalogMapArray[i];
+      const AnalogInputDev&  dev = inputDev.analogInputDev[static_cast<uint8_t>(m.devID)];
+        // ANALOG_BUTTON (trigger): rest position = minVal → maps to 0.
+        // ANALOG_STICK:            rest position = center  → maps to CbusNeutral.
+      int16_t  restRaw = (dev.type == RemoteComp::ANALOG_BUTTON)
+                         ? (int16_t)dev.minVal
+                         : (int16_t)((dev.minVal + dev.maxVal) / 2);
+      uint16_t neutral = (uint16_t)map(restRaw, dev.minVal, dev.maxVal, 0, bus.analogBusMaxVal);
+      combus_set_analog(bus, m.busChannel, neutral, ChanOwner::MACHINE_INPUT);
+    }
+    for (uint8_t i = 0; i < InputDigitalMapCount; i++) {
+      combus_set_digital(bus, InputDigitalMapArray[i].busChannel, false, ChanOwner::MACHINE_INPUT);
+    }
+    return;   // source inactive — isDrived remains false from sys_manager pre-clear
   }
 
 // ==========================================================
@@ -129,8 +144,9 @@ void input_update(ComBus &bus) {
     combus_set_digital(bus, static_cast<DigitalComBusID>(ch), finalState, ChanOwner::MACHINE_INPUT);
   }
 
-  // Keep combus watchdog alive
-  bus.lastFrameMs = millis();
+    // --- Mark bus as driven by this physical source ---
+  bus.isDrived      = true;
+  bus.lastFrameMs   = millis();   // liveness timestamp (shared with UART path)
 
 #endif
 }

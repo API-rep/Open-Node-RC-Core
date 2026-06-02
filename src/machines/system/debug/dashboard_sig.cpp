@@ -75,11 +75,8 @@ static void sigValFmt(const SigDevice& d, char* out, size_t sz) {
  * @brief Return true if the ComBus channel backing @p d is presently driven.
  */
 static bool sigIsDriven(const SigDevice& d) {
-	if (d.digitalChannel.has_value())
-		return s_bus->digitalBus[static_cast<uint8_t>(d.digitalChannel.value())].isDrived;
-	if (d.analogChannel.has_value())
-		return s_bus->analogBus[static_cast<uint8_t>(d.analogChannel.value())].isDrived;
-	return false;
+	(void)d;   // channel granularity removed — isDrived is bus-level
+	return s_bus ? s_bus->isDrived : false;
 }
 
 

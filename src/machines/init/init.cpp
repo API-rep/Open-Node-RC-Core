@@ -85,7 +85,7 @@ void machine_init() {
         if (c == '\r' || c == '\n') goto pause_exit;
       }
         // Exit via remote KEY channel
-      if (comBus.digitalBus[keyCh].isDrived && comBus.digitalBus[keyCh].value) break;
+      if (comBus.isDrived && comBus.digitalBus[keyCh].value) break;
 
       vTaskDelay(10);  // yield — avoid starving the scheduler
     }

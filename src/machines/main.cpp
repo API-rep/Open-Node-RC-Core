@@ -9,9 +9,8 @@
 #include <core/config/inputs/PS4_dualshock.h>  // DigitalInputDevID enum
 #include <core/system/debug/debug.h>
 #include <core/system/debug/dashboard.h>
-#include <core/system/input/input_manager.h>
+#include <core/system/sys_manager.h>
 #include <core/system/output/output_manager.h>
-#include <core/system/combus/combus_manager.h>
 #include <core/system/combus/combus_access.h>
 #include <core/system/combus/processors/proc_chain.h>
 #include <core/system/vbat/vbat_sense.h>
@@ -44,61 +43,38 @@ static constexpr uint32_t kSleepTimeoutMs     = 15u * 60u * 1000u;
 void loop() {
 
 // =============================================================================
-// 1. INPUTS UPDATE TO COMBUS
+// 1. SYSTEM TICK
 // =============================================================================
 
-	// --- 1. Sync remote inputs with bus ---
-  input_update(comBus);
+	// --- Input + battery + failsafe evaluation ---
+  static bool s_failsafeWasActive = false;
 
-	// --- 1.5. Battery tick (unconditional) ---
-	// Called before the failsafe early-return so the dashboard always shows
-	// a fresh voltage regardless of controller state or runlevel.
-	// The result (any isLow transition this tick) is stored and consumed by
-	// the battery state-machine block in section 3 to avoid calling tick twice.
-  bool vbatChanged = vbat_sense_tick();
+  SysResult sys = sys_manager_update(comBus);
 
-	// --- 2. Input watchdog/failsafe ---
-  combus_watchdog(comBus, ComBusDisconnectTimeoutMs);
-
-  // isDrived is set only by physical input sources (input_manager, combus_frame).
-  // Proc-chain and internal writes use setIsDrived=false, so scanning CH_COUNT
-  // is safe and symmetric — no input-mapped channel filtering needed.
-  bool inputIsDrived = false;
-
-  for (uint8_t i = 0; i < static_cast<uint8_t>(AnalogComBusID::CH_COUNT); i++) {
-    if (comBus.analogBus[i].isDrived) {
-      inputIsDrived = true;
-      break;
-    }
-  }
-  if (!inputIsDrived) {
-    for (uint8_t i = 0; i < static_cast<uint8_t>(DigitalComBusID::CH_COUNT); i++) {
-      if (comBus.digitalBus[i].isDrived) {
-        inputIsDrived = true;
-        break;
-      }
-    }
-  }
-
-  static bool failsafeActive = false;
-  if (!inputIsDrived) {
-    if (!failsafeActive) {
+  if (sys.failsafeActive) {
+    if (!s_failsafeWasActive) {
       sys_log_warn("[SYSTEM][SAFE] reason=no_input_source action=force_idle_and_lock\n");
       stopAllDcDrivers(machine);
       sleepAllDcDrivers(machine);
       disableAllDcDrivers(machine);
-      failsafeActive = true;
+        // Clear KEY_ACTIVE so cb_runlevel can detect a fresh rising edge on reconnect.
+        // Without this, prevValue stays true (last engine-on state) and the rising
+        // edge is never re-armed — the machine would be stuck in IDLE after reconnect.
+      combus_set_digital(comBus, DigitalComBusID::KEY_ACTIVE, false,
+                         makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
+      s_failsafeWasActive = true;
     }
     combus_set_runlevel(comBus, RunLevel::IDLE, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
     return;  // dashboard runs on its own FreeRTOS task (Core 0)
   }
-  failsafeActive = false;
+  s_failsafeWasActive = false;
 
 // =============================================================================
 // 2. INPUT CHAIN (always — before RunLevel FSM)
 // =============================================================================
 
   proc_chain_update(machine.inputChain, machine.inputChainCount, comBus);  // btn → KEY_ACTIVE + counters (subgear, direct-drive)
+  proc_chain_update(machine.simChain,   machine.simChainCount,   comBus);  // physics (gear, ramp, bypass, …) — runs unconditionally so inertia converges to neutral during IDLE
 
 // =============================================================================
 // 3. RUNLEVEL STATE MACHINE
@@ -194,11 +170,7 @@ void loop() {
         uint8_t  chIdx    = static_cast<uint8_t>(machine.dcDev[i].comChannel.value());
         uint16_t busVal   = comBus.analogBus[chIdx].value;  ///< read-only — ComBus is never modified here
 
-        uint16_t motorCmd = comBus.analogBus[chIdx].isDrived
-                          ? busVal
-                          : (machine.dcDev[i].signal == DcDrvSignal::PWM_TWO_WAY_NEUTRAL_CENTER
-                          || machine.dcDev[i].signal == DcDrvSignal::SERVO_SIG_NEUTRAL_CENTER)
-                          ? (comBus.analogBusMaxVal / 2) : 0u;
+        uint16_t motorCmd = busVal;   // isDrived always true when RUNNING is reached (failsafe returned above)
 
 #ifndef PATCH_MOTORS_FORCE_SLEEP
         float finalSpeed = (float)map(motorCmd, 0, comBus.analogBusMaxVal, -PERCENT_MAX, PERCENT_MAX);
@@ -207,8 +179,6 @@ void loop() {
 #endif
       }
 
-      // --- 2. CbChain SIM pipeline ---
-      proc_chain_update(machine.simChain,   machine.simChainCount,   comBus);  // physics (gear, ramp, bypass, …)
       break;
     }
 
@@ -245,15 +215,15 @@ void loop() {
   }
   
 // =============================================================================
-// 3. SYSTEM TASKS (Battery, etc.)
+// 3. SYSTEM TASKS (Battery)
 // =============================================================================
 
-	// --- 1. Battery low-state transition (tick already called above, result reused) ---
-  if (vbatChanged) {
+	// --- 1. Battery low-state transition ---
+  if (sys.vbatChanged) {
     for (uint8_t i = 0; i < vbat_channel_count(); i++) {
       if (vbat_is_low(i)) { 
         combus_set_battlow(comBus, true, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_VBAT));
-        combus_set_digital(comBus, DigitalComBusID::BATTERY_LOW, true, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_VBAT), /*setIsDrived=*/false);
+        combus_set_digital(comBus, DigitalComBusID::BATTERY_LOW, true, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_VBAT));
         break;
       }
     }
@@ -264,7 +234,7 @@ void loop() {
   }
 
 	// --- 2. Output dispatch (sound TX, …) ---
-  output_update(comBus, failsafeActive);
+  output_update(comBus, false);
 
 	// dashboard_update() removed — handled by dedicated FreeRTOS task on Core 0.
 	// See dashboard_start_task() called from dashboard_machine_setup().
