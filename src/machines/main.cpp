@@ -60,6 +60,9 @@ void loop() {
 	// --- 2. Input watchdog/failsafe ---
   combus_watchdog(comBus, ComBusDisconnectTimeoutMs);
 
+  // isDrived is set only by physical input sources (input_manager, combus_frame).
+  // Proc-chain and internal writes use setIsDrived=false, so scanning CH_COUNT
+  // is safe and symmetric — no input-mapped channel filtering needed.
   bool inputIsDrived = false;
 
   for (uint8_t i = 0; i < static_cast<uint8_t>(AnalogComBusID::CH_COUNT); i++) {
@@ -250,7 +253,7 @@ void loop() {
     for (uint8_t i = 0; i < vbat_channel_count(); i++) {
       if (vbat_is_low(i)) { 
         combus_set_battlow(comBus, true, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_VBAT));
-        combus_set_digital(comBus, DigitalComBusID::BATTERY_LOW, true, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_VBAT));
+        combus_set_digital(comBus, DigitalComBusID::BATTERY_LOW, true, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_VBAT), /*setIsDrived=*/false);
         break;
       }
     }

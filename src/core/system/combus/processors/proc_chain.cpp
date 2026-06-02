@@ -15,30 +15,30 @@
 
 using ChanOpt = std::optional<std::variant<AnalogComBusID, DigitalComBusID>>;
 
-/** @brief Read a channel variant from the bus into a uint16_t.
- *
- *  @param isDrivedGuard  When true, digital channels return 0 unless isDrived.
- *                        Use true for primary inputs, false for secondary inputs.
- */
-static uint16_t cbRead(const ComBus& bus, const ChanOpt& ch, bool isDrivedGuard)
+/** @brief Read a channel variant from the bus into a uint16_t. */
+static uint16_t cbRead(const ComBus& bus, const ChanOpt& ch)
 {
     if (!ch.has_value()) return 0u;
     if (std::holds_alternative<AnalogComBusID>(*ch)) {
         return bus.analogBus[static_cast<uint8_t>(std::get<AnalogComBusID>(*ch))].value;
     }
     const uint8_t idx = static_cast<uint8_t>(std::get<DigitalComBusID>(*ch));
-    if (isDrivedGuard && !bus.digitalBus[idx].isDrived) return 0u;
     return bus.digitalBus[idx].value ? 1u : 0u;
 }
 
-/** @brief Write a uint16_t value to a channel variant on the bus. */
+/** @brief Write a uint16_t value to a channel variant on the bus.
+ *
+ *  @note  Proc-chain outputs are internal computed values, not physical inputs.
+ *         setIsDrived is explicitly false to preserve the isDrived = "active
+ *         physical input source" invariant checked by the failsafe logic.
+ */
 static void cbWrite(ComBus& bus, const ChanOpt& ch, uint16_t value, ChanOwner owner)
 {
     if (!ch.has_value()) return;
     if (std::holds_alternative<AnalogComBusID>(*ch)) {
-        combus_set_analog(bus, std::get<AnalogComBusID>(*ch), value, owner);
+        combus_set_analog(bus, std::get<AnalogComBusID>(*ch), value, owner, /*setIsDrived=*/false);
     } else {
-        combus_set_digital(bus, std::get<DigitalComBusID>(*ch), value != 0u, owner);
+        combus_set_digital(bus, std::get<DigitalComBusID>(*ch), value != 0u, owner, /*setIsDrived=*/false);
     }
 }
 
@@ -77,7 +77,7 @@ void proc_chain_init(CbChain* /*channels*/, uint8_t /*count*/)
 void proc_chain_step(CbChain& ch, ComBus& bus)
 {
     // --- 1. Seed pipeline from chain.inCh ------------------------------------
-    uint16_t value   = cbRead(bus, ch.inCh, /*isDrivedGuard=*/false);
+    uint16_t value   = cbRead(bus, ch.inCh);
     bool     claimed = false;
 
     // --- 2. Process chain ----------------------------------------------------
@@ -86,7 +86,7 @@ void proc_chain_step(CbChain& ch, ComBus& bus)
         if (proc.fn == nullptr) continue;
 
         //  a. Inject secondary input from proc.inCh.
-        proc.inValue = cbRead(bus, proc.inCh, /*isDrivedGuard=*/false);
+        proc.inValue = cbRead(bus, proc.inCh);
 
         //  b. Skip when claimed.
         if (claimed) continue;

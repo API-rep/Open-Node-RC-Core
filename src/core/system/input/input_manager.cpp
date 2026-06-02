@@ -83,8 +83,6 @@ void input_update(ComBus &bus) {
     uint16_t busVal = m.isInverted ? (bus.analogBusMaxVal - val) : val;
 
     combus_set_analog(bus, static_cast<AnalogComBusID>(ch), busVal, ChanOwner::MACHINE_INPUT);
-
-    bus.analogBus[ch].isDrived = true;
   }
 
 // ==========================================================
@@ -129,8 +127,6 @@ void input_update(ComBus &bus) {
     uint8_t ch = static_cast<uint8_t>(m.busChannel);
 
     combus_set_digital(bus, static_cast<DigitalComBusID>(ch), finalState, ChanOwner::MACHINE_INPUT);
-    
-    bus.digitalBus[ch].isDrived = true;
   }
 
   // Keep combus watchdog alive
