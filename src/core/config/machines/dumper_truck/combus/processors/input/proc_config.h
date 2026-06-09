@@ -12,6 +12,7 @@
  *                                                dec(GEAR_DOWN_BTN)] → SUBGEAR_BUS
  *     INPUT_DIRECT_DRIVE   : DIRECT_DRIVE_BTN → [toggle] → DIRECT_DRIVE
  *     INPUT_KEY_RUNLEVEL   : KEY_BTN          → [key_runlevel] → KEY_ACTIVE
+ *     INPUT_CRUISE_NORMAL  : CRUISE_ACTIVE    → [gate(SUBGEAR), toggle(□)] → CRUISE_ACTIVE
  *
  *   Each proc reads a digital button, modifies the channel value, and passes
  *   it to the next proc.  Final runner commits to the same output channel.
@@ -39,6 +40,7 @@ enum InputCh {
     INPUT_SUBGEAR = 0,          ///< SUBGEAR_BUS → [toggle+inc+dec] → SUBGEAR_BUS
     INPUT_DIRECT_DRIVE = 1,     ///< DIRECT_DRIVE_BTN → [toggle] → DIRECT_DRIVE
     INPUT_KEY_RUNLEVEL = 2,     ///< KEY_BTN → [key_runlevel] → KEY_ACTIVE + runLevel write
+    INPUT_CRUISE_NORMAL = 3,    ///< CRUISE_ACTIVE → [gate(SUBGEAR), toggle(□)] → CRUISE_ACTIVE
     INPUT_CH_COUNT              ///< Sentinel — number of CbChain entries.
 };
 

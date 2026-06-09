@@ -102,4 +102,71 @@ void cb_sym_ramp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner 
     value = state->currentPos;
 }
 
+// =============================================================================
+// 2. UNIPOLAR RAMP
+// =============================================================================
+
+/** @brief Unipolar inertia ramp — see cb_ramp.h for full contract. */
+void cb_uni_ramp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)
+{
+    CbRampState*     state = static_cast<CbRampState*>(proc->state);
+    const CbRampCfg* cfg   = (proc->dynCfg != nullptr)
+                                 ? static_cast<const CbRampCfg*>(proc->dynCfg)
+                                 : static_cast<const CbRampCfg*>(proc->cfg);
+
+    // --- 0. Self-init on first call ------------------------------------------
+    // Unipolar: 0 = stopped (not CbusNeutral).
+    if (state->lastUpdateMs == 0u) {
+        state->currentPos   = 0u;
+        state->lastUpdateMs = millis();
+        if (state->lastUpdateMs == 0u) state->lastUpdateMs = 1u;
+    }
+
+    // --- 1. Read target, apply neutral band ----------------------------------
+    // Snap to 0 when target falls within the near-zero deadzone.
+    uint16_t target = value;
+    if (cfg->neutralBand > 0u && target <= cfg->neutralBand) {
+        target = 0u;
+    }
+
+    // --- 2. Ramp tick: advance currentPos one step when timer elapses --------
+    if (proc->dynCfg != nullptr) {
+        CbRampCfg* dyn = static_cast<CbRampCfg*>(proc->dynCfg);
+        if (dyn->resetRamp) {
+            state->lastUpdateMs = millis();
+            if (state->lastUpdateMs == 0u) state->lastUpdateMs = 1u;
+            dyn->resetRamp = false;
+        }
+    }
+
+    const uint32_t now = millis();
+    if (now - state->lastUpdateMs >= cfg->rampTimeMs) {
+        state->lastUpdateMs = now;
+
+        //  Step size: accelSteps when moving away from 0 (speeding up),
+        //             brakeSteps when moving toward 0 (slowing down).
+        //  No accelDownSteps path — magnitude has no direction concept.
+        const bool isAccel = (target > state->currentPos);
+
+        const int32_t  rawAccel       = static_cast<int32_t>(cfg->accelSteps)
+                                      + static_cast<int32_t>(cfg->extAccelSteps);
+        const uint16_t effectiveAccel = (rawAccel > 1) ? static_cast<uint16_t>(rawAccel) : 1u;
+        const int32_t  rawBrake       = static_cast<int32_t>(cfg->brakeSteps)
+                                      + static_cast<int32_t>(cfg->extBrakeSteps);
+        const uint16_t effectiveBrake = (rawBrake > 1) ? static_cast<uint16_t>(rawBrake) : 1u;
+        const uint16_t step           = isAccel ? effectiveAccel : effectiveBrake;
+
+        if (state->currentPos < target) {
+            const uint16_t delta = static_cast<uint16_t>(target - state->currentPos);
+            state->currentPos = (delta > step) ? state->currentPos + step : target;
+        } else if (state->currentPos > target) {
+            const uint16_t delta = static_cast<uint16_t>(state->currentPos - target);
+            state->currentPos = (delta > step) ? state->currentPos - step : target;
+        }
+    }
+
+    // --- 3. Output filtered position -----------------------------------------
+    value = state->currentPos;
+}
+
 // EOF cb_ramp.cpp

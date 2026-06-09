@@ -85,6 +85,9 @@ enum class DigitalComBusID : uint8_t {
   GEAR_SHIFTING,             ///< Upshift accel-damp window active — set/cleared by gear_upshift_damp_fn.
                             ///<   @todo winter 2026: promote to WIRE region (before WIRE_END) during
                             ///<   TRACTION_BUS rework — sound node can then read it directly.
+  CRUISE_TOGGLE_BTN,         ///< Raw □ button — written by input_manager every cycle; processed by INPUT cruise chain.
+  CRUISE_UPDATE_BTN,         ///< Raw L3 (left-stick click) button — written by input_manager; triggers cruise speed update.
+  CRUISE_ACTIVE,             ///< Normal cruise active state — maintained by INPUT cruise chain (□ AND NOT SUBGEAR).
   MACHINE_END,
 
   // ---- Sound node local (never transmitted on wire) ---

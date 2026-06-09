@@ -1,11 +1,14 @@
 /******************************************************************************
  * @file  cb_ramp.h
- * @brief CbProc function — symmetric (bipolar) inertia ramp around CbusNeutral.
+ * @brief CbProc functions — inertia ramps (bipolar and unipolar variants).
  *
- * @details `cb_sym_ramp_fn()` implements an inertia ramp that operates
- *   symmetrically in BOTH directions around CbusNeutral on a bipolar ComBus
- *   channel [0..CbusMaxVal].  "Symmetric" refers to the bipolar axis, not to
- *   the accel/brake rates — those may differ (see `CbRampCfg::accelDownSteps`).
+ * @details Two variants:
+ *   - `cb_sym_ramp_fn()` — bipolar, operates around CbusNeutral [0..CbusMaxVal].
+ *     "Symmetric" refers to the bipolar axis, not to the accel/brake rates
+ *     (see `CbRampCfg::accelDownSteps` for asymmetric reverse acceleration).
+ *   - `cb_uni_ramp_fn()` — unipolar, operates on magnitude [0..CbusMaxVal]
+ *     where 0 = stopped and CbusMaxVal = full speed.  Direction is not encoded
+ *     in the value — the caller must track it separately (e.g. DRIVE_STATE_BUS).
  *
  *   The function:
  *   - Reads `value` (target already seeded from CbChain::inCh before proc 0).
@@ -53,5 +56,25 @@
  * @param chainOwner  Not used — ramp is self-contained (reads/writes through `value` only).
  */
 void cb_sym_ramp_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+
+/**
+ * @brief Unipolar inertia ramp — magnitude domain [0..CbusMaxVal], 0 = stopped.
+ *
+ * @details Variant of `cb_sym_ramp_fn` for channels where direction has already
+ *   been extracted.  Differences vs bipolar variant:
+ *   - Self-init snaps to 0 (stopped), not CbusNeutral.
+ *   - `neutralBand`: target snapped to 0 when `target <= neutralBand`
+ *     (small deadzone near zero prevents creep on stick release).
+ *   - No `accelDownSteps` path — magnitude has no negative direction concept.
+ *   - `extBrakeSteps` / `extAccelSteps` modifiers still apply.
+ *   - Does not set `claimed`.
+ *
+ * @param proc    CbProc descriptor — `cfg` cast to `CbRampCfg*`,
+ *                `state` cast to `CbRampState*`.  Neither may be nullptr.
+ * @param value   Channel value (in/out) — magnitude target on entry; ramped magnitude on return.
+ * @param claimed Not modified.
+ * @param chainOwner  Not used.
+ */
+void cb_uni_ramp_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
 
 // EOF cb_ramp.h

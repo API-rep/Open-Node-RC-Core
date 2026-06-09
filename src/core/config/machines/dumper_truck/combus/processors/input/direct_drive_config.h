@@ -48,7 +48,12 @@ static CbBtnState gDirectDriveToggleState {};
  *   1  toggle : OPTIONS button — 0 ↔ 1 (enable/disable direct-drive mode).
  */
 static CbProc kDirectDriveProcs[] = {
-      // 1. toggle — OPTIONS button: 0 ↔ 1
+      // 1. neutral-gate - Force sim ↔ direct-drive transitions at neutral point.
+    { .name = "neutral-gate",
+      .inCh = AnalogComBusID::DRIVE_STATE_BUS,
+      .fn   = cb_bypass_fn,
+    },
+      // 2. toggle — OPTIONS button: 0 ↔ 1
     { .name  = "direct_drive_toggle",
       .inCh  = DigitalComBusID::DIRECT_DRIVE_BTN,
       .fn    = cb_btn_toggle_fn,

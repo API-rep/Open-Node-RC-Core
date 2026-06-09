@@ -21,7 +21,9 @@ const InputDigitalMap InputDigitalMapArray[] = {
   { DigitalInputDevID::OPTIONS_BTN,  DigitalComBusID::DIRECT_DRIVE_BTN, false },  // raw button — ctrl chain derives DIRECT_DRIVE state
   { DigitalInputDevID::SHARE_BTN,    DigitalComBusID::SUBGEAR_SET_BTN,  false },  // crawler mode toggle
   { DigitalInputDevID::UP_ARROW,     DigitalComBusID::GEAR_UP_BTN,   false },  // gear up (manual mode) / subgear faster (crawl mode)
-  { DigitalInputDevID::DOWN_ARROW,   DigitalComBusID::GEAR_DOWN_BTN, false }   // gear down (manual mode) / subgear slower (crawl mode)
+  { DigitalInputDevID::DOWN_ARROW,   DigitalComBusID::GEAR_DOWN_BTN, false },  // gear down (manual mode) / subgear slower (crawl mode)
+  { DigitalInputDevID::SQUARE_BTN,   DigitalComBusID::CRUISE_TOGGLE_BTN, false },  // normal cruise toggle (classic gear only — gate applied in INPUT chain)
+  { DigitalInputDevID::L_STICK_BTN,  DigitalComBusID::CRUISE_UPDATE_BTN, false },  // update cruise held speed to current value
 };
 
   // number of digital mappings in InputDigital Map array

@@ -16,8 +16,11 @@
  *     INPUT_DIRECT_DRIVE : in(DIRECT_DRIVE_BTN) → toggle(bound=1) → out(DIRECT_DRIVE)
  *     INPUT_KEY_RUNLEVEL : in(KEY_ACTIVE) -> key_on(ON_PRESS, 0ms) -> key_off(ON_PRESS, 3000ms)
  *                                         -> runlevel(KEY_ACTIVE) -> out(KEY_ACTIVE)
- *                          key_on fires on press-down; key_off fires WHILE held >= 3 s.
- *
+ *                          key_on fires on press-down; key_off fires WHILE held >= 3 s. *
+ *     INPUT_CRUISE_NORMAL : in(CRUISE_ACTIVE) -> gate(SUBGEAR_BUS != 0 → force 0)
+ *                                              -> toggle(CRUISE_TOGGLE_BTN)
+ *                                            → out(CRUISE_ACTIVE)
+ *                          gate forces CRUISE_ACTIVE=0 while in subgear/crawler mode. *
  *   Read-modify-write pattern: each proc reads current value, modifies it,
  *   passes to next proc.  Last proc (cb_out_fn) commits to the output channel.
  *******************************************************************************
@@ -37,9 +40,10 @@ using namespace DumperTruck;
 
 // Chain configs — included in any order (no cross-dependencies between input chains).
 // All types and function pointers are resolved by the common includes above.
-#include "subgear_config.h"       // kSubGearProcs — neutral-gate + toggle + inc + dec
-#include "direct_drive_config.h"  // kDirectDriveProcs — toggle
-#include "key_runlevel_config.h"  // kKeyRunlevelProcs — key_on + key_off + runlevel
+#include "subgear_config.h"        // kSubGearProcs — neutral-gate + toggle + inc + dec
+#include "direct_drive_config.h"   // kDirectDriveProcs — toggle
+#include "key_runlevel_config.h"   // kKeyRunlevelProcs — key_on + key_off + runlevel
+#include "cruise_input_config.h"   // kCruiseInputProcs — gate(SUBGEAR) + toggle(□)
 
 
 // =============================================================================
@@ -64,7 +68,7 @@ CbChain kInputChains[INPUT_CH_COUNT] = {
   },
 
   { .name       = "direct_drive",
-    .inCh       = DigitalComBusID::DIRECT_DRIVE_BTN,
+    .inCh       = DigitalComBusID::DIRECT_DRIVE,      // current mode state — seeded into value for toggle
     .outCh      = DigitalComBusID::DIRECT_DRIVE,
     .procs      = kDirectDriveProcs,
     .procCount  = static_cast<uint8_t>(std::size(kDirectDriveProcs)),
@@ -76,6 +80,14 @@ CbChain kInputChains[INPUT_CH_COUNT] = {
     .outCh      = DigitalComBusID::KEY_ACTIVE,
     .procs      = kKeyRunlevelProcs,
     .procCount  = static_cast<uint8_t>(std::size(kKeyRunlevelProcs)),
+    .chainOwner = kInputOwner,
+  },
+
+  { .name       = "cruise_normal",
+    .inCh       = DigitalComBusID::CRUISE_ACTIVE,   // seeds current toggle state into value
+    .outCh      = DigitalComBusID::CRUISE_ACTIVE,
+    .procs      = kCruiseInputProcs,
+    .procCount  = static_cast<uint8_t>(std::size(kCruiseInputProcs)),
     .chainOwner = kInputOwner,
   },
 

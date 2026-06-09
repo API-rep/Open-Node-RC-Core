@@ -44,6 +44,7 @@
 #include <core/system/combus/processors/math/cb_scale.h>            // cb_scale_fn, CbScaleCfg
 #include <core/system/combus/processors/motion/cb_dir.h>           // cb_dir_fn, CbDirCfg
 #include <core/system/combus/processors/motion/cb_brake.h>         // cb_brake_fn, cb_rev_brake_fn
+#include <core/system/combus/processors/motion/cb_cruise.h>         // cb_cruise_fn, CbCruiseCfg, CbCruiseState
 #include <core/system/combus/processors/modules/gear/cb_gear.h>    // gear_fsm_fn, gear_ratio_inv_fn, gear_ratio_fn, gear_subgear_cap_fn, gear_dir_fn, gear_dyn_ramp_fn, gear_upshift_damp_fn
 using namespace DumperTruck;
 

@@ -41,11 +41,11 @@
  */
 static constexpr GearStepCfg kVolvoD16J_steps[] = {
     //  upShift  downShift  downShiftBraking  rampTime  gearRatio ‰
-    {     1750,        700,                0,        75,       168 },  // gear 1 — 4.00:1  downShift = idle RPM floor
-    {     1750,       1100,             1250,       100,       250 },  // gear 2 — 2.68:1
-    {     1800,       1150,             1300,       125,       333 },  // gear 3 — 2.01:1
-    {     1800,       1150,             1300,       150,       496 },  // gear 4 — 1.35:1
-    {     1850,       1200,             1350,       175,       670 },  // gear 5 — 1.00:1  (direct)
+    {     1750,        700,                0,         5,       168 },  // gear 1 — 4.00:1  downShift = idle RPM floor
+    {     1750,       1100,             1250,         9,       250 },  // gear 2 — 2.68:1
+    {     1800,       1150,             1300,        22,       333 },  // gear 3 — 2.01:1
+    {     1800,       1150,             1300,        49,       496 },  // gear 4 — 1.35:1
+    {     1850,       1200,             1350,       114,       670 },  // gear 5 — 1.00:1  (direct)
     {     2100,       1200,             1350,       225,      1000 },  // gear 6 — 0.67:1  (overdrive); upShift = maxRpm
 };
 

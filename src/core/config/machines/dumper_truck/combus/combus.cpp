@@ -49,7 +49,11 @@ DigitalComBus DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::CH_COUNT)
   { .infoName = "manual gear set (local)", .value = false, .owner = ChanOwner::MACHINE_SYSTEM }, ///< Manual gear mode active — written by INPUT chain, read by cb_bypass_fn (GEAR claim guard).
   { .infoName = "subgear set btn (local)", .value = false, .owner = ChanOwner::MACHINE_INPUT  }, ///< Raw sub-gear toggle button — written by input_update; processed by ctrl chain.
   { .infoName = "gear up btn (local)",     .value = false, .owner = ChanOwner::MACHINE_INPUT  }, ///< Gear up button — written by input_update; read by INPUT chain.
-  { .infoName = "gear down btn (local)",   .value = false, .owner = ChanOwner::MACHINE_INPUT  }, ///< Gear down button — written by input_update; read by INPUT chain.
+  { .infoName = "gear down btn (local)",    .value = false, .owner = ChanOwner::MACHINE_INPUT  }, ///< Gear down button — written by input_update; read by INPUT chain.
+  { .infoName = "gear shifting (local)",    .value = false, .owner = ChanOwner::MACHINE_SYSTEM }, ///< Upshift damp window — set/cleared by gear_upshift_damp_fn.
+  { .infoName = "cruise toggle btn (local)",.value = false, .owner = ChanOwner::MACHINE_INPUT  }, ///< Raw □ button — written by input_manager every cycle.
+  { .infoName = "cruise update btn (local)",.value = false, .owner = ChanOwner::MACHINE_INPUT  }, ///< Raw L3 button — written by input_manager every cycle.
+  { .infoName = "cruise active (local)",    .value = false, .owner = ChanOwner::MACHINE_SYSTEM }, ///< Normal cruise active — maintained by INPUT cruise chain.
   // --- Sound-node-local channels (MACHINE_END .. CH_COUNT-1) — never transmitted ---
   { .infoName = "always on (local)",       .value = true,  .owner = ChanOwner::NONE }, ///< Stays true: continuous sources driven by volMod.
   { .infoName = "siren (local)",           .value = false, .owner = ChanOwner::NONE }, ///< Siren/cannon mode toggle.
