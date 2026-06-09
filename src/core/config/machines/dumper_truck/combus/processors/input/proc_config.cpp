@@ -91,6 +91,16 @@ CbChain kInputChains[INPUT_CH_COUNT] = {
     .chainOwner = kInputOwner,
   },
 
+  // INPUT_THROTTLE — passthrough: THROTTLE_STICK (raw bipolar) → THROTTLE_BUS.
+  // No procs yet — conditioning (center+abs+scale+dir) added in the next migration step.
+  { .name       = "throttle",
+    .inCh       = AnalogComBusID::THROTTLE_STICK,
+    .outCh      = AnalogComBusID::THROTTLE_BUS,
+    .procs      = nullptr,
+    .procCount  = 0u,
+    .chainOwner = kInputOwner,
+  },
+
 };
 
 #endif  // IS_MAINBOARD

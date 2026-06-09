@@ -3,7 +3,7 @@
   // input to combus analog channel mapping
 const InputAnalogMap InputAnalogMapArray[] = {
   // { Index manette, Canal ComBus, Inversion }
-  { AnalogInputDevID::LY_STICK,  AnalogComBusID::THROTTLE_BUS,   false },
+  { AnalogInputDevID::LY_STICK,  AnalogComBusID::THROTTLE_STICK, false },
   { AnalogInputDevID::LX_STICK,  AnalogComBusID::STEERING_BUS,   false },
   { AnalogInputDevID::RY_STICK,  AnalogComBusID::DUMP_BUS,       false },
   { AnalogInputDevID::L2_BUTTON, AnalogComBusID::BRAKE_BUS,      false }

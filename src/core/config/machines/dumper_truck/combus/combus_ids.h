@@ -42,7 +42,10 @@ enum class AnalogComBusID : uint8_t {
   SUBGEAR_BUS,                  ///< Active sub-gear index (1..N, 0 = inactive) — written by sim_gear.
   DUMP_RAMPED_BUS,              ///< Inertia-smoothed dump position — written by sim_ramp, read by DUMP_ACTUATOR.
   STEERING_RAMPED_BUS,          ///< Inertia-smoothed steering position — written by sim_ramp, read by STEERING.
-  THROTTLE_BUS,                 ///< Throttle stick position — written by input_manager, read by SIM_THROTTLE pipeline.
+  THROTTLE_STICK,               ///< Raw throttle stick (bipolar, 0..CbusNeutral..CbusMaxVal) — written by input_manager.
+                                ///<   Conditioned by INPUT_THROTTLE chain → THROTTLE_BUS.
+  THROTTLE_BUS,                 ///< Conditioned throttle — INPUT_THROTTLE output, read by SIM_THROTTLE pipeline.
+                                ///<   Currently passthrough (bipolar). Future: unipolar magnitude after center+abs+scale.
   CH_COUNT                      ///< Total channel count (wire + local) — drives AnalogComBusArray size.
 };
 

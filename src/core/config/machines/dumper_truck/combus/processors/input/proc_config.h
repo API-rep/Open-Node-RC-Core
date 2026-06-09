@@ -41,6 +41,8 @@ enum InputCh {
     INPUT_DIRECT_DRIVE = 1,     ///< DIRECT_DRIVE_BTN → [toggle] → DIRECT_DRIVE
     INPUT_KEY_RUNLEVEL = 2,     ///< KEY_BTN → [key_runlevel] → KEY_ACTIVE + runLevel write
     INPUT_CRUISE_NORMAL = 3,    ///< CRUISE_ACTIVE → [gate(SUBGEAR), toggle(□)] → CRUISE_ACTIVE
+    INPUT_THROTTLE = 4,         ///< THROTTLE_STICK (raw bipolar) → [passthrough for now] → THROTTLE_BUS.
+                                ///<   Future: center+abs+scale+dir — splits conditioning from SIM chain.
     INPUT_CH_COUNT              ///< Sentinel — number of CbChain entries.
 };
 

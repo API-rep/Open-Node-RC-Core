@@ -24,7 +24,8 @@ AnalogComBus AnalogComBusArray[static_cast<uint8_t>(AnalogComBusID::CH_COUNT)] =
   { .infoName = "sub-gear channel",        .value = 0u,          .owner = ChanOwner::MACHINE_SYSTEM }, ///< Active sub-gear index — written by sim_gear.
   { .infoName = "dump ramp channel",       .value = CbusNeutral, .owner = ChanOwner::MACHINE_SYSTEM }, ///< Inertia-smoothed dump position — written by sim_ramp, read by DUMP_ACTUATOR.
   { .infoName = "steering ramp channel",   .value = CbusNeutral, .owner = ChanOwner::MACHINE_SYSTEM }, ///< Inertia-smoothed steering position — written by sim_ramp, read by STEERING.
-  { .infoName = "throttle channel",        .value = CbusNeutral, .owner = ChanOwner::MACHINE_INPUT  }, ///< Throttle stick — written by input_manager, read by SIM_THROTTLE.
+  { .infoName = "throttle stick (raw)",    .value = CbusNeutral, .owner = ChanOwner::MACHINE_INPUT  }, ///< Raw throttle stick — written by input_manager, conditioned by INPUT_THROTTLE chain.
+  { .infoName = "throttle bus (cond)",     .value = CbusNeutral, .owner = ChanOwner::MACHINE_SYSTEM }, ///< Conditioned throttle — INPUT_THROTTLE output, read by SIM_THROTTLE pipeline.
 };
 
 
