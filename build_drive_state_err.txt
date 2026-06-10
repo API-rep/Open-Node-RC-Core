@@ -1,5 +1,0 @@
-.pio/libdeps/volvo_A60H_bruder/PS4_Controller_Host/src/ps4.c: In function 'ps4Deinit':
-.pio/libdeps/volvo_A60H_bruder/PS4_Controller_Host/src/ps4.c:70:4: warning: implicit declaration of function 'spp_deinit'; did you mean 'sppInit'? [-Wimplicit-function-declaration]
-    spp_deinit();
-    ^~~~~~~~~~
-    sppInit

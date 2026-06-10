@@ -31,6 +31,7 @@
  * @brief Set the NodeGroup of this node — must be called once in combus_init().
  * @param group  One of ComBusOwner::GRP_MACHINE, ComBusOwner::GRP_SOUND, ComBusOwner::GRP_REMOTE, …
  */
+
 void combus_set_node_group(uint8_t group);
 
 
@@ -46,6 +47,7 @@ void combus_set_node_group(uint8_t group);
  * @param caller  Identity of the calling module — checked against ch.owner.
  * @return true if the write was accepted, false if ownership mismatch.
  */
+
 bool combus_set_analog(ComBus& bus, AnalogComBusID ch, uint16_t val, ChanOwner caller);
 
 /// Write an optional analog channel — no-op (returns false) if absent.
@@ -106,5 +108,37 @@ bool combus_set_runlevel(ComBus& bus, RunLevel rl, ChanOwner caller);
  */
 
 bool combus_set_battlow(ComBus& bus, bool val, ChanOwner caller);
+
+
+// =============================================================================
+// 3. SIGN-MAGNITUDE HELPERS
+// =============================================================================
+
+/**
+ * @brief Helpers for sign-magnitude ComBus channel encoding.
+ *
+ * @details Encodes direction + speed magnitude into a single `uint16_t`:
+ *   - bit 15 : direction (1 = REV, 0 = FWD)
+ *   - bits 14–0 : magnitude (0..32767)
+ *
+ *   Used by processors that work in a sign-magnitude pipeline
+ *   (e.g. CbAnalog-encoded channels before the direction-strip step).
+ */
+struct CbAnalog {
+    static constexpr uint16_t kDirBit  = 0x8000u; ///< Direction bit (bit 15): 1 = REV, 0 = FWD.
+    static constexpr uint16_t kMagMask = 0x7FFFu; ///< Magnitude mask (bits 14-0): 0..32767.
+
+    /// Extract magnitude (0..32767) — independent of direction bit.
+    static constexpr uint16_t getSpeed(uint16_t v)              { return v & kMagMask; }
+
+    /// True when the REV direction bit is set.
+    static constexpr bool     isRev(uint16_t v)            { return (v & kDirBit) != 0u; }
+
+    /// Encode direction + magnitude into a sign-magnitude uint16_t.
+    static constexpr uint16_t encode(bool rev, uint16_t m) { return (rev ? kDirBit : 0u) | (m & kMagMask); }
+
+    /// Convenience: standing value (stopped, FWD direction by default).
+    static constexpr uint16_t kStopped = 0u;
+};
 
 // EOF combus_access.h

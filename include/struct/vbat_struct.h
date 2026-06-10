@@ -54,6 +54,7 @@ struct VBatSenseConfig {
  *   Zeroed by default construction; disabled is set at init if channel is
  *   found unpowered (pull-down → voltage < 0.5 V).
  */
+
 struct VBatSenseState {
   float         voltage;                ///< Last averaged battery voltage (V).
   float         voltageAtInit;          ///< Voltage (V) captured at init — baseline for drift detection.
