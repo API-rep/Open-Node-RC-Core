@@ -26,6 +26,8 @@ L'objectif n'est pas de proposer une solution clé en main, mais une boîte à o
 
 Un minimum de connaissances en électronique, en systèmes embarqués et en configuration logicielle reste nécessaire, mais l'architecture cherche à limiter autant que possible le développement spécifique au profit d'une approche basée sur des configurations entièrement éditables, naturellement compatibles avec les outils d'assistance modernes, y compris les IA génératives.
 
+Les concepts fondamentaux et les différents composants du projet sont progressivement documentés au sein du dépôt afin de faciliter la prise en main et la compréhension de l'écosystème Open RC Node.
+
 ---
 
 ## ComBus : la colonne vertébrale du système
@@ -83,3 +85,15 @@ Le projet est développé sur le temps libre de son auteur, dans une démarche d
 Il faudra cependant encore du temps, des essais et de nombreuses itérations avant d'aboutir à un écosystème pleinement fonctionnel et mature.
 
 Le projet évolue progressivement au travers d'expérimentations concrètes, avec pour objectif de construire un environnement RC cohérent, extensible et agréable à utiliser pour les passionnés de DIY.
+
+---
+
+## Documentation
+
+La documentation du projet est organisée autour d'un point d'entrée central :
+
+* **[Documentation générale](docs/README.md)**
+
+Vous y trouverez les concepts fondamentaux d'Open RC Node ainsi que des liens vers les différentes documentations thématiques.
+
+La plupart des composants, modules et sous-systèmes du projet disposent également de leur propre fichier README afin de documenter leur rôle, leur fonctionnement et leurs interfaces au plus près du code.
