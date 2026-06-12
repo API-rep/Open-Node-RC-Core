@@ -1,8 +1,12 @@
 /******************************************************************************
- * @file template_module.h
- * [Short module purpose]
+ * @file module.h
+ * Template module header.
  *
- * @details [Optional: architecture role, constraints, usage scope]
+ * @details Exposes the public API and configuration types for TemplateModule.
+ *   The module can be enabled or disabled at runtime, and its output polarity
+ *   can be inverted through `TemplateConfig`.
+ *
+ *   Typical lifecycle: construct -> begin() -> enable() -> update() in loop.
  *****************************************************************************/
 #pragma once
 
@@ -19,10 +23,13 @@
 // 2. CONSTANTS AND ENUMS
 // =============================================================================
 
+	/// Default working frequency in Hz.
+static constexpr uint32_t kDefaultFrequencyHz = 1000;
+
 	/// Operating mode for this module.
 enum class TemplateMode : uint8_t {
-  MODE_A = 0,
-  MODE_B
+  MODE_A = 0,   ///< Standard two-quadrant operation.
+  MODE_B        ///< Four-quadrant operation with inversion.
 };
 
 
@@ -35,6 +42,7 @@ enum class TemplateMode : uint8_t {
 struct TemplateConfig {
   uint32_t frequencyHz;   ///< Working frequency in Hz.
   bool invertPolarity;    ///< Set true to invert output polarity.
+  TemplateMode mode;      ///< Selected operating mode.
 };
 
 
@@ -45,9 +53,10 @@ struct TemplateConfig {
 
 /**
  * @class TemplateModule
- * [One-line API purpose]
+ * Minimal runtime module template.
  *
- * @details [Optional short class behavior overview]
+ * @details Demonstrates sectioned layout, Doxygen one-line API docs, member
+ *   inline docs, and private state kept in lowerCamelCase with leading `_`.
  */
 
 class TemplateModule {
@@ -75,12 +84,16 @@ public:
     /// Return true if module is enabled.
   bool isEnabled() const;
 
+    /// Return the configured operating mode.
+  TemplateMode mode() const;
+
 
 private:
 
 	bool _isEnabled;              ///< Current enabled state.
 	uint32_t _frequencyHz;        ///< Runtime frequency in Hz.
 	bool _invertPolarity;         ///< Runtime polarity inversion flag.
+	TemplateMode _mode;           ///< Current operating mode.
 };
 
-// EOF template_module.h
+// EOF module.h
