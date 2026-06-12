@@ -1,10 +1,6 @@
 # Open RC Node Architecture
 
-This document provides a high-level overview of how Open RC Node is structured.
-
-It focuses on concepts rather than implementation details.
-
-If you are discovering the project, this is the best place to understand how the different pieces fit together before diving into the code.
+This document provides a high-level overview of how Open RC Node is structured. It focuses on concepts rather than implementation details.
 
 ---
 

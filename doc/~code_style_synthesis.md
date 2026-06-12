@@ -1,13 +1,4 @@
-# Code Style Synthesis (Project + PwmBroker)
 
-## 1) Goal
-This style merges:
-- project readability and section layout from `doc/Code formating template`
-- library-oriented API clarity and Doxygen quality from `PwmBroker`
-
-The objective is a clean, stable, educational style for both app code and reusable modules.
-
----
 
 ## 2) Core rules
 
