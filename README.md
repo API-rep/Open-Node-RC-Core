@@ -2,15 +2,11 @@
 
 Open RC Node is an open-source project aiming to create a more flexible, modular and modern RC environment for DIY projects.
 
-The idea was born during simple family play sessions. Like many RC enthusiasts, we quickly found ourselves managing multiple vehicles, multiple controllers and a growing collection of independent systems.
-
-Traditional RC systems generally follow a simple model: one controller is paired with one or more vehicles, with limited interaction between the different devices.
-
-This approach works perfectly for many use cases, but it quickly reaches its limits when several users need to share and operate the same fleet of machines.
+The idea was born during simple family play sessions. Like many RC enthusiasts, we quickly found ourselves managing multiple vehicles, multiple controllers and a growing collection of independent systems. Traditional RC setups work perfectly for many situations, but they can quickly become limiting when several users need to share and operate the same fleet of machines.
 
 Open RC Node explores a different approach by treating all equipment as components of a shared RC ecosystem.
 
-Controllers, vehicles, electronic boards, extension modules and software services can communicate within a common architecture while keeping the flexibility and creativity that make DIY projects so appealing.
+Controllers, vehicles, electronic boards, extension modules and software services can communicate within a common architecture while preserving the flexibility and creativity that make DIY projects so appealing.
 
 Open RC Node does not aim to reinvent RC hobbying. Its goal is to provide a common architecture that allows multiple devices, users and services to collaborate within the same environment, free from many of the limitations traditionally imposed by conventional RC systems.
 
@@ -24,67 +20,59 @@ It is intended for people who enjoy understanding, modifying and building their 
 
 The goal is not to provide a turnkey solution, but rather a toolbox that allows users to design RC equipment tailored to their own needs.
 
-Basic knowledge of electronics, embedded systems and software configuration is still required. However, the architecture is designed to minimize custom development by relying on fully editable configuration files, naturally compatible with modern assistance tools, including generative AI.
+Whether you simply want to add realistic lighting to a vehicle, build a fully custom transmitter, create an autonomous extension module or design your own electronic boards from scratch, Open RC Node aims to provide the foundations to support that journey.
 
-The project's core concepts and components are progressively documented throughout the repository to make Open RC Node easier to discover, understand and extend.
+Basic knowledge of electronics and embedded systems is still helpful. However, the project intentionally favors configuration over custom coding, allowing users to assemble and adapt systems by editing a relatively small number of definitions rather than rewriting application logic.
 
----
-
-## ComBus: The Backbone of the System
-
-At the heart of the project lies **ComBus**, a communication protocol specifically designed for Open RC Node and around which the entire architecture is built.
-
-It is used both for communication between devices and for communication between internal components of a single node.
-
-A battery monitoring module, motor controller, operating mode manager, controller or vehicle all rely on the same communication mechanisms: ComBus.
-
-It serves as the backbone of the project, transporting information, commands and status data between all system components. Fully configurable, it adapts its structure to the needs of each device and network architecture, without being constrained by the communication models or channel limitations commonly found in traditional RC systems.
+The project's concepts and components are progressively documented throughout the repository, making Open RC Node easier to discover, understand and extend — both for makers and for the AI tools increasingly accompanying them.
 
 ---
 
-## A Configuration-Driven Architecture
+## More Than Driving
 
-One of the project's main goals is to favor configuration over custom development.
+Open RC Node is not only about moving vehicles from point A to point B.
 
-Devices are described through configuration files that define:
+The architecture makes it possible to enrich RC experiences with behaviors that would traditionally require substantial custom development.
 
-* ComBus configuration;
-* machine definitions;
-* hardware configuration;
-* software modules;
-* operating modes;
-* general system behavior.
+Examples include:
 
-The idea is that a new vehicle, controller or extension board can be created primarily through assembly and configuration of existing components.
+* Realistic motion simulation (vehicle inertia, gearbox, cruise control...),
+* Advanced lighting behaviors,
+* Sound integration,
+* Safety features,
+* Cooperative interactions between multiple devices (trailers...).
+
+These features are designed to remain modular and reusable, encouraging experimentation and creativity rather than one-off implementations.
 
 ---
 
-## An Open and Scalable Architecture
+## Open by Nature
 
-Open RC Node currently runs on ESP32 hardware and its Arduino ecosystem, but the architecture itself is not tied to any specific microcontroller. Any platform capable of running the system's core components could theoretically host an Open RC Node implementation.
+Open RC Node embraces both open-source software and open hardware principles.
 
-As a result, ESP-NOW is currently a natural candidate for wireless communication between nodes, but the architecture is designed to remain as independent as possible from the underlying transport layer.
+The project is designed to be explored, modified and extended by its users.
 
-Likewise, control sources can take many forms:
+Its modular architecture and abstraction layers make it easier to integrate new communication methods, hardware modules, machine definitions and capabilities as the project evolves.
 
-* custom controllers;
-* gamepads;
-* web interfaces;
-* or any device capable of producing or consuming ComBus messages.
+Today, Open RC Node primarily targets Arduino-compatible ESP32 platforms, benefiting from an accessible ecosystem of boards, tools and libraries.
 
-This flexibility makes it possible to build anything from a simple RC vehicle to more advanced systems involving multiple machines, multiple operators and different levels of automation.
+The concepts themselves, however, remain independent from any specific technology.
+
+Whether using custom transmitters, gamepads, web interfaces or entirely new hardware, the objective remains the same: to give makers the freedom to build the RC systems they imagine.
 
 ---
 
 ## Project Status
 
-Open RC Node is currently under active development. The foundations of the architecture are in place and the project's main concepts are now clearly established.
+Open RC Node is currently under active development.
 
-The project is developed during the author's free time as an ongoing hobby and experimentation effort. Modern AI tools play an important role in this journey, assisting with design, documentation and the exploration of new ideas.
+The foundations of the architecture are in place and the project's core concepts are now well established, but many ideas continue to evolve through practical experimentation.
 
-However, significant work, testing and iteration will still be required before reaching a fully mature and complete ecosystem.
+The project is developed during the author's free time as an ongoing hobby and learning journey.
 
-The project continues to evolve through practical experimentation, with the goal of building a coherent, extensible and enjoyable RC environment for DIY enthusiasts.
+Modern AI tools play an increasingly important role in this process, assisting with design, documentation and the exploration of new ideas.
+
+Significant work, testing and iteration still lie ahead before reaching a fully mature ecosystem, but the objective remains unchanged: building a coherent, extensible and enjoyable RC environment for DIY enthusiasts.
 
 ---
 
@@ -92,8 +80,8 @@ The project continues to evolve through practical experimentation, with the goal
 
 Project documentation is organized around a central entry point:
 
-* **[General Documentation](docs/README.md)**
+* **[General Documentation](doc/README.md)**
 
-There you will find Open RC Node's core concepts as well as links to the various thematic documentation sections.
+There you will find introductory guides, conceptual documentation and links to the various thematic sections of the project.
 
-Most components, modules and subsystems also include their own README files, documenting their purpose, behavior and interfaces as close to the code as possible.
+Most components, modules and subsystems also include their own `README.md` files, documenting their purpose and behavior as close to the code as possible.

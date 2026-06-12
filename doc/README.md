@@ -78,18 +78,11 @@ Most systems can be created and customized through configuration files without m
 Topics include:
 
 * Machine configuration
-
 * Remote configuration
-
 * ComBus configuration
-
 * Module configuration
-
 * Operating modes
-
 * Configuration examples and reference
-
-* [Configuration Reference](configuration_reference.md)
 
 ---
 
