@@ -27,7 +27,41 @@
 - Use `/* ... */` for file headers, with a line of asterisks at 80 characters.
 - Include `@file` and `@brief` in the header.
 
-### 1.7. End of File
+### 1.7. Vertical Spacing
+
+A "block" consists of: Doxygen documentation + its associated code (function, class, struct, etc.).
+
+**Within a block** (Doxygen → code): **1 empty line**
+```cpp
+/**
+ * @brief Description.
+ */
+
+void function() {  // 1 empty line between Doxygen and its code
+```
+
+**Between blocks**: **2 empty lines**
+```cpp
+void function() {
+    // code
+}
+
+
+/**
+ * @brief Next function.  // 2 empty lines after previous block ends
+ */
+```
+
+**Section separators** (`// ===`) are part of the block that follows them.
+
+Complete rules:
+- **1 empty line** after include blocks.
+- **1 empty line** between Doxygen documentation and the code it documents (same block).
+- **2 empty lines** between the end of one block and the start of the next block.
+- **1 empty line** before class access sections (`public:`, `private:`).
+- **1 to 2 empty lines** between function implementations in a `.cpp`.
+
+### 1.8. End of File
 - Use `// EOF <file>` at the end of each file.
 
 ## 2. Code Formatting

@@ -1,122 +1,12 @@
-# Coding conventions
 
-Ce document définit la manière d'écrire le code C/C++ du projet : nommage, casse, découpe des fonctions en étapes, structure des fichiers, et conventions spécifiques au code.
 
----
+## 7. Serial Debug Output Formatting
 
-## 1. Naming and layout
+### 7.1 Log System API (`debug.h`)
 
-| Élément | Convention | Exemple |
-|---|---|---|
-| Classes / types | `PascalCase` | `TemplateModule`, `TemplateConfig` |
-| Types `enum` | `PascalCase` | `TemplateMode` |
-| Valeurs d'`enum` | `UPPER_SNAKE_CASE` | `MODE_A`, `MODE_B` |
-| Fonctions libres (API module C) | `snake_case` | `pin_reg_init`, `combus_tx_init` |
-| Méthodes de classe | `lowerCamelCase` | `setDuty`, `isEnabled` |
-| Macros `#define` | `UPPER_SNAKE_CASE` | `MAX_RETRIES` |
-| Constantes `constexpr` | `PascalCase` | `kTractionRamp` |
-| Champs de structure / variables | `lowerCamelCase` | `pinRegEntry`, `pinEntryCursor` |
+The active logging system is based on templates (`log_impl<Level, ModuleEnabled>`). No preprocessor guards are needed around the code: all dead branches are removed at compile time via `if constexpr`.
 
-- Les noms de variables doivent être explicites et lisibles, sauf pour les indices de boucles courts (`i`, `j`, `k`).
-
----
-
-## 2. Structure des fichiers
-
-### Ordre des includes
-
-1. Le header correspondant (dans un `.cpp`).
-2. Les headers du projet.
-3. Les headers externes / bibliothèques.
-4. Les headers standards C/C++.
-
-### Espacement vertical
-
-- **1 ligne vide** après les blocs d'include.
-- **1 ligne vide supplémentaire** avant chaque bloc de section majeur (`// ===`).
-- **1 ligne vide** avant les sections d'accès d'une classe (`public:`, `private:`).
-- **2 lignes vides** entre la fin d'un bloc de code et le prochain bloc Doxygen (3 si le bloc précédent dépasse 40 lignes).
-- **1 à 2 lignes vides** entre les implémentations de fonctions dans un `.cpp`.
-
----
-
-## 3. Découpage des fonctions en étapes
-
-- Découper les fonctions en étapes logiques.
-- Chaque étape est introduite par un commentaire `// N. Step description` (un espace après `//`).
-- Si une seule étape suffit, la numérotation est optionnelle.
-- Une seule profondeur de sous-étape est autorisée : `// N.M Sub-step description`.
-- La numérotation des étapes dans `@details` doit refléter la numérotation des commentaires `// N.` dans le corps de la fonction.
-- Les commentaires d'étape sont indentés d'une tabulation de plus que la ligne de code suivante.
-
-Exemple dans un `.cpp` :
-
-```cpp
-bool TemplateModule::begin(const TemplateConfig &config) {
-// Basic guards
-	if (config.frequencyHz == 0) {
-		return false;
-	}
-
-// Save configuration
-	_frequencyHz = config.frequencyHz;
-	_invertPolarity = config.invertPolarity;
-
-// Keep disabled until explicit enable
-	_isEnabled = false;
-
-	return true;
-}
-```
-
----
-
-## 4. Checklist template header (`.h`)
-
-Un fichier d'en-tête doit contenre, dans l'ordre :
-
-1. Bloc Doxygen de fichier.
-2. `#pragma once`.
-3. Includes.
-4. Sections majeures (`// ===`).
-5. Lignes vides lisibles entre les blocs de déclaration.
-6. Déclarations de types / classes.
-7. Documentation API avec `///`.
-8. Documentation membres avec `///<`.
-9. Marqueur `// EOF <file>`.
-
----
-
-## 5. Checklist template source (`.cpp`)
-
-Un fichier source doit contenre, dans l'ordre :
-
-1. Bloc Doxygen de fichier.
-2. Include du header correspondant en premier.
-3. Sections majeures par sujet.
-4. Corps de fonction indentés avec des tabulations.
-5. Fonctions non triviales documentées avec `/** ... */`.
-6. Commentaires d'étape locaux (`// N. ...`).
-7. Lignes vides lisibles entre les fonctions.
-8. Marqueur `// EOF <file>`.
-
----
-
-## 6. Conventions pratiques pour ce dépôt
-
-- Conserver le style de section existant des fichiers `machine/` et `core/`.
-- Garder des `@details` riches pour les bibliothèques réutilisables et la logique complexe.
-- Préférer des commentaires concis pour le code évident et des notes détaillées pour les comportements non triviaux.
-
----
-
-## 7. Formatage des sorties debug série
-
-### 7.1 API du système de log (`debug.h`)
-
-Le système de log actif est basé sur des templates (`log_impl<Level, ModuleEnabled>`). Aucune garde préprocesseur n'est nécessaire autour du code : toutes les branches mortes sont supprimées à la compilation via `if constexpr`.
-
-**Wrappers génériques** (toujours actifs, filtrés par niveau uniquement) :
+**Generic wrappers** (always active, filtered by level only):
 
 ```cpp
 log_err(fmt, ...);
@@ -125,56 +15,57 @@ log_info(fmt, ...);
 log_dbg(fmt, ...);
 ```
 
-**Wrappers filtrés par module** (aussi filtrés par un flag module, retirés du binaire quand le flag n'est pas défini) :
+**Module-filtered wrappers** (also filtered by a module flag, removed from binary when the flag is not defined):
 
 ```
-hw_log_*(...)      → actif quand -D DEBUG_HW     (ou DEBUG_ALL)
-input_log_*(...)   → actif quand -D DEBUG_INPUT  (ou DEBUG_ALL)
-sys_log_*(...)     → actif quand -D DEBUG_SYSTEM (ou DEBUG_ALL)
-combus_log_*(...)  → actif quand -D DEBUG_COMBUS (ou DEBUG_ALL)
+hw_log_*(...)      → active when -D DEBUG_HW     (or DEBUG_ALL)
+input_log_*(...)   → active when -D DEBUG_INPUT  (or DEBUG_ALL)
+sys_log_*(...)     → active when -D DEBUG_SYSTEM (or DEBUG_ALL)
+combus_log_*(...)  → active when -D DEBUG_COMBUS (or DEBUG_ALL)
 ```
 
-**Niveaux** : `LogNone=0`, `LogError=1`, `LogWarn=2`, `LogInfo=3`, `LogDebug=4`. Seuil actif via `-D LOG_LEVEL=3` (défaut = 3 = info).
+**Levels**: `LogNone=0`, `LogError=1`, `LogWarn=2`, `LogInfo=3`, `LogDebug=4`. Active threshold via `-D LOG_LEVEL=3` (default = 3 = info).
 
-- Utiliser `hw_log_*` / `sys_log_*` / etc. pour toutes les traces liées à un module.
-- Utiliser les wrappers génériques `log_err` / `log_info` uniquement pour des sorties non attachées à un module.
-- Privilégier un texte lisible par un humain, puis machine-grep friendly quand c'est pertinent.
-- Cette section est évolutive : ajouter des règles concrètes au fur et à mesure que les modules debug convergent.
+- Use `hw_log_*` / `sys_log_*` / etc. for all module-related traces.
+- Use generic wrappers `log_err` / `log_info` only for outputs not attached to a module.
+- Prefer human-readable text, then machine-grep friendly when relevant.
+- This section is evolving: add concrete rules as debug modules converge.
 
-### 7.2 Préfixe de ligne
+### 7.2 Line Prefix
 
-Chaque ligne de debug doit commencer par un préfixe de module fixe :
+Each debug line must start with a fixed module prefix:
 
 ```
 [<MODULE>] <message>
 ```
 
-- `<MODULE>` : identifiant court en majuscules (exemples : `INPUT`, `COMBUS`, `HW`, `SYSTEM`).
-- Le tagging sous-module abandonne le module externe quand le contexte est déjà établi par l'indentation ou une ligne d'en-tête parente :
-  - Ligne de premier niveau : `[HW] Hardware init start`
-  - Ligne de sous-niveau (indentée) : `[DRV] DC drivers config check ... OK` (pas de répétition `[HW]`)
-  - Utiliser `[MODULE][SUBMODULE]` uniquement quand la ligne apparaît isolée sans contexte parent (par exemple des lignes d'erreur pouvant être grepées hors contexte).
-- Garder un style cohérent sur tout le projet quand c'est possible (préférer `[MODULE][SUBMODULE]` pour les lignes isolées).
-- Ne pas inclure `<STAGE>` dans chaque ligne ; le contexte d'étape est fourni par l'introduction / l'en-tête de séquence.
-- La sévérité (`INFO` / `WARN` / `ERROR`) est transmise par la couleur ANSI quand `SerialAnsi` est actif :
-  - couleur par défaut : `INFO`
-  - jaune (`\033[33m`) : `WARN`
-  - rouge (`\033[31m`) : `ERROR`
-- Si la couleur terminal n'est pas disponible (`SerialAnsi=0`), utiliser des tags explicites dans le corps du message (`[WARN]`, `[ERROR]`).
-- Garder les tags de module stables et en majuscules pour simplifier le filtrage série et le grep.
+- `<MODULE>`: short uppercase identifier (examples: `INPUT`, `COMBUS`, `HW`, `SYSTEM`).
+- Sub-module tagging drops the external module when the context is already established by indentation or a parent header line:
+  - Top-level line: `[HW] Hardware init start`
+  - Sub-level line (indented): `[DRV] DC drivers config check ... OK` (no `[HW]` repetition)
+  - Use `[MODULE][SUBMODULE]` only when the line appears isolated without parent context (for example, error lines that can be grepped out of context).
+- Keep a consistent style across the project when possible (prefer `[MODULE][SUBMODULE]` for isolated lines).
+- Do not include `<STAGE>` in each line; stage context is provided by the introduction / sequence header.
+- Severity (`INFO` / `WARN` / `ERROR`) is conveyed by ANSI color when `SerialAnsi` is active:
+  - default color: `INFO`
+  - yellow (`\033[33m`): `WARN`
+  - red (`\033[31m`): `ERROR`
+- If terminal color is not available (`SerialAnsi=0`), use explicit tags in the message body (`[WARN]`, `[ERROR]`).
+- Keep module tags stable and uppercase to simplify serial filtering and grep.
 
-Exemples :
+Examples:
 
 ```
 [INPUT] PS4 controller setup started
 [HW][DRV] Driver wakeup sequence started
-[HW] Servo count exceeds recommended limit   (tag jaune)
-[COMBUS] Invalid channel index               (tag rouge)
+[HW] Servo count exceeds recommended limit   (yellow tag)
+[COMBUS] Invalid channel index               (red tag)
 ```
 
-### 7.3 Formatage des appels de log
+### 7.3 Log Call Formatting
 
-Chaque appel de log doit tenir sur **une seule ligne** — ne jamais couper la chaîne de format et ses arguments sur plusieurs lignes. Cela s'applique quelle que soit la longueur de ligne ; la lisibilité de l'appel de log prime sur la limite de colonnes.
+Each log call must fit on **a single line** — never split the format string and its arguments across multiple lines.
+This applies regardless of line length; log call readability takes precedence over column limits.
 
 ```cpp
 // correct
@@ -185,39 +76,39 @@ sys_log_warn("[VBAT] \"%s\" low! %.2f V < %.2f V\n",
   vBatSense->cfg[idx].infoName, vBatSense->state[idx].voltage, cutoff);
 ```
 
-### 7.4 Carte des sous-modules recommandée (premier draft)
+### 7.4 Recommended Sub-module Map (first draft)
 
-| Module | Sous-modules recommandés | Usage typique |
+| Module | Recommended Sub-modules | Typical Usage |
 |---|---|---|
-| `INPUT` | `PS4`, `MAP`, `WATCHDOG` | lecture device, mapping entrée, perte signal / failsafe |
-| `COMBUS` | `AN`, `DG`, `SYNC` | bus analogique, bus digital, chemins sync/reset |
-| `HW` | `DRV`, `SRV`, `CFG` | drivers DC, servos, vérifications config matérielle |
-| `SYSTEM` | `BOOT`, `STATE`, `LOOP` | séquence démarrage, transitions runlevel, snapshots runtime |
+| `INPUT` | `PS4`, `MAP`, `WATCHDOG` | device reading, input mapping, signal loss / failsafe |
+| `COMBUS` | `AN`, `DG`, `SYNC` | analog bus, digital bus, sync/reset paths |
+| `HW` | `DRV`, `SRV`, `CFG` | DC drivers, servos, hardware config checks |
+| `SYSTEM` | `BOOT`, `STATE`, `LOOP` | startup sequence, runlevel transitions, runtime snapshots |
 
-- Garder les tags de sous-module courts, en majuscules et stables dans le temps.
-- Si un nouveau sous-module est introduit, l'ajouter ici pour garder une nomenclature cohérente.
+- Keep sub-module tags short, uppercase, and stable over time.
+- If a new sub-module is introduced, add it here to maintain consistent nomenclature.
 
-### 7.5 Sortie hybride (mode normal uniquement)
+### 7.5 Hybrid Output (normal mode only)
 
-- Pour l'instant, ne définir que le format de sortie en mode normal.
-- Reporter les règles super-verbeuses à une itération ultérieure.
-- Garder l'ordre des champs stable pour la lisibilité :
+- For now, only define the output format for normal mode.
+- Defer super-verbose rules to a later iteration.
+- Keep field order stable for readability:
   1. title line
   2. board/parent
   3. config
   4. pins
   5. max speed
   6. Com channel
-- `Mode` doit inclure un nom lisible plus la valeur numérique (exemple : `TWO_WAY_NEUTRAL_CENTER (1)`).
-- `Parent` est optionnel et n'est affiché que s'il est présent.
-- Les valeurs héritées doivent être marquées avec ` [INHERITED]` (et peuvent être grisées quand la couleur est disponible).
-- Pour les lignes d'attachement d'init DRV, préférer un format de phrase lisible plutôt qu'un bloc compact clé/valeur.
-  - Préféré : `[DRV] DRV_0 attached to pin 32 at 16000Hz frequency`
-  - Suffixe clone : n'ajouter que ` (clone mode)`
-  - Garder les lignes de détails matériels optionnels (états enable/sleep) hors du flux d'init ; les réserver pour un bloc final / verbeux.
-- Pour l'installation du helper LEDC fade (`ledc_fade_func_install`), l'installer une seule fois par runtime (état statique gardé) pour éviter le spam d'erreur `fade function already installed`.
+- `Mode` must include a readable name plus the numeric value (example: `TWO_WAY_NEUTRAL_CENTER (1)`).
+- `Parent` is optional and only displayed if present.
+- Inherited values must be marked with ` [INHERITED]` (and can be grayed out when color is available).
+- For DRV init attachment lines, prefer a readable sentence format over a compact key/value block.
+  - Preferred: `[DRV] DRV_0 attached to pin 32 at 16000Hz frequency`
+  - Clone suffix: only add ` (clone mode)`
+  - Keep optional hardware detail lines (enable/sleep states) out of the init flow; reserve them for a final / verbose block.
+- For LEDC fade helper installation (`ledc_fade_func_install`), install it only once per runtime (static state kept) to avoid `fade function already installed` error spam.
 
-Exemple (mode normal) :
+Example (normal mode):
 
 ```
 [HW][DRV] DC_DEV #6 - trailer rear left motor
@@ -230,6 +121,6 @@ Exemple (mode normal) :
 
 ---
 
-## 8. Langue
 
-- Tous les commentaires, la documentation Doxygen et les messages de log sont rédigés en **anglais**.
+
+// EOF coding-conventions.md

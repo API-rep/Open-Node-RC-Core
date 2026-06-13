@@ -1,14 +1,14 @@
-# Doxygen conventions
+# Doxygen Conventions
 
-Ce document décrit les conventions internes de documentation Doxygen du projet, avec un focus particulier sur la différence de contenu et de profondeur entre les fichiers `.h` (perspective appelant) et `.cpp` (perspective mainteneur).
+This document describes the internal Doxygen documentation conventions of the project, with a particular focus on the difference in content and depth between `.h` files (caller perspective) and `.cpp` files (maintainer perspective).
 
 ---
 
-## 1. En-tête de fichier
+## 1. File Header
 
-- Tout fichier commence par un bloc Doxygen court.
-- `@brief` est optionnel : quand il est omis, Doxygen utilise la première phrase/paragraphe comme brief.
-- `@details` n'est utilisé que s'il apporte une information utile.
+- Every file starts with a short Doxygen block.
+- `@brief` is optional: when omitted, Doxygen uses the first sentence/paragraph as the brief.
+- `@details` is only used when it adds useful information.
 
 ```c
 /******************************************************************************
@@ -21,44 +21,44 @@ Ce document décrit les conventions internes de documentation Doxygen du projet,
 
 ---
 
-## 2. Politique Doxygen par type de fichier
+## 2. Doxygen Policy by File Type
 
-### Fichiers `.h`
+### `.h` Files
 
-- Utiliser des sections majeures pour séparer les parties principales.
-- Utiliser `///` pour les documentations d'API d'une ligne ou les petits blocs de déclaration.
-- Utiliser `///<` pour les membres et les getters/setters inline.
-- Utiliser `/** ... */` pour les documentations de classe ou les déclarations principales.
+- Use major sections to separate main parts.
+- Use `///` for one-line API documentation or small declaration blocks.
+- Use `///<` for members and inline getters/setters.
+- Use `/** ... */` for class documentation or main declarations.
 
-### Fichiers `.cpp`
+### `.cpp` Files
 
-- Utiliser `/** ... */` pour décrire les comportements de fonctions non triviales (`@details`, `@param`, `@return` quand pertinent).
-- Garder les commentaires internes uniquement là où la logique nécessite une clarification.
-- Laisser **une ligne vide** entre le bloc Doxygen et le code qu'il documente.
-- Entre la fin d'un bloc de code et le prochain bloc Doxygen :
-  - **2 lignes vides** par défaut.
-  - **3 lignes vides** si le bloc de code précédent dépasse 40 lignes.
+- Use `/** ... */` to describe behaviors of non-trivial functions (`@details`, `@param`, `@return` when relevant).
+- Keep internal comments only where logic requires clarification.
+- Leave **one empty line** between the Doxygen block and the code it documents.
+- Between the end of a code block and the next Doxygen block:
+  - **2 empty lines** by default.
+  - **3 empty lines** if the previous code block exceeds 40 lines.
 
 ---
 
-## 3. Style d'écriture du `@brief` — rôle d'abord, détail ensuite
+## 3. `@brief` Writing Style — Role First, Detail After
 
-Chaque `@brief` (dans `.h` ou `.cpp`) suit le même modèle :
+Every `@brief` (in `.h` or `.cpp`) follows the same pattern:
 
 ```
 <Role noun/phrase>. <One-sentence explanation of what it contributes in context.>
 ```
 
-Règles :
+Rules:
 
-- Commencer par un **nom ou une courte phrase nominale** nommant le rôle, pas par un verbe.
+- Start with a **noun or short nominal phrase** naming the role, not a verb.
   - ✓ `Upper travel limit selector. Use software margin when configured, otherwise hw hard stop.`
   - ✗ `Returns the upper limit.`
-- Une seule phrase après le point — expliquer *pourquoi* cet élément existe dans le contexte du module, pas seulement *ce qu'il fait*.
-- Pas de jargon technique qu'un lecteur non anglophone devrait chercher dans un dictionnaire (`clamp` est acceptable, `saturate` ne l'est pas).
-- Tenir sur **une seule ligne** — si ce n'est pas possible, le `@brief` est trop long.
+- Only one sentence after the period — explain *why* this element exists in the module context, not just *what it does*.
+- No technical jargon that a non-native English speaker would need to look up (`clamp` is acceptable, `saturate` is not).
+- Fit on **a single line** — if not possible, the `@brief` is too long.
 
-Exemples :
+Examples:
 
 ```cpp
 /** @brief Upper travel limit selector. Use software margin when configured, otherwise hw hard stop. */
@@ -66,26 +66,26 @@ Exemples :
 /** @brief Value clamper. Keep @p val within [@p lo, @p hi] to stay within travel limits. */
 ```
 
-Anti-patterns à éviter :
+Anti-patterns to avoid:
 
 ```cpp
-/** @brief Effective upper limit — margin when present, otherwise hw. */   // ✗ pas de nom de rôle, passif
-/** @brief Returns the clamped value. */                                    // ✗ verbe en premier, pas de contexte
+/** @brief Effective upper limit — margin when present, otherwise hw. */   // ✗ no role name, passive
+/** @brief Returns the clamped value. */                                    // ✗ verb first, no context
 /** @brief Saturate @p val within range. */                                 // ✗ jargon (saturate)
 ```
 
 ---
 
-## 4. Profondeur Doxygen : `.h` vs `.cpp`
+## 4. Doxygen Depth: `.h` vs `.cpp`
 
-Une fonction est documentée **deux fois** : une fois pour l'appelant, une fois pour le mainteneur.
+A function is documented **twice**: once for the caller, once for the maintainer.
 
-### Dans `.h` — perspective appelant (what and why)
+### In `.h` — Caller Perspective (what and why)
 
-- `@brief` sur une ligne : rôle + but en une phrase.
-- `@details` optionnel : table de sélection d'algorithme, règles de pointeurs, matrice de mode — tout ce qui aide l'appelant à configurer correctement la fonction sans lire l'implémentation.
-- `@param` / `@return` : signification de chaque paramètre pour l'appelant ; unités, règles null, ownership.
-- Pas de structure de code, pas de séquence d'étapes, pas de noms de variables internes.
+- `@brief` on one line: role + purpose in one sentence.
+- `@details` optional: algorithm selection table, pointer rules, mode matrix — anything that helps the caller configure the function correctly without reading the implementation.
+- `@param` / `@return`: meaning of each parameter for the caller; units, null rules, ownership.
+- No code structure, no step sequence, no internal variable names.
 
 ```cpp
 /**
@@ -106,12 +106,12 @@ Une fonction est documentée **deux fois** : une fois pour l'appelant, une fois 
 bool motion_check(const MotionConfig* cfg);
 ```
 
-### Dans `.cpp` — perspective mainteneur (how and why it works)
+### In `.cpp` — Maintainer Perspective (how and why it works)
 
-- Même `@brief` que dans `.h` — cela garde les deux fichiers auto-contenus.
-- `@details` **obligatoire pour les fonctions non triviales** : séquence d'étapes numérotées correspondant aux commentaires `// N.` du corps. Lire ce bloc seul doit donner une carte mentale complète de la fonction sans ouvrir le code.
-- Les détails techniques vont ici : arithmétique de pointeurs, modèle de timing, transitions de machine à états, hooks moteur sonore, etc.
-- Objectif : naviguer dans le code d'un coup d'œil, même pour quelqu'un qui ne connaît pas le module.
+- Same `@brief` as in `.h` — this keeps both files self-contained.
+- `@details` **required for non-trivial functions**: numbered step sequence matching the `// N.` comments in the body. Reading this block alone should give a complete mental map of the function without opening the code.
+- Technical details go here: pointer arithmetic, timing model, state machine transitions, sound engine hooks, etc.
+- Goal: navigate the code at a glance, even for someone unfamiliar with the module.
 
 ```cpp
 /**
@@ -130,13 +130,13 @@ bool motion_check(const MotionConfig* cfg)
 }
 ```
 
-La liste numérotée reflète les commentaires `// N.` à l'intérieur du corps de la fonction — le lecteur peut passer de la documentation au code sans friction.
+The numbered list reflects the `// N.` comments inside the function body — the reader can switch from documentation to code without friction.
 
 ---
 
-## 5. `@brief` + `@details` pour les fonctions séquentielles
+## 5. `@brief` + `@details` for Sequential Functions
 
-Quand une fonction est un pipeline séquentiel, le `@brief` reste sur une ligne (rôle d'abord) et la séquence numérotée va dans `@details` :
+When a function is a sequential pipeline, the `@brief` stays on one line (role first) and the numbered sequence goes in `@details`:
 
 ```cpp
 /**
@@ -153,23 +153,23 @@ Quand une fonction est un pipeline séquentiel, le `@brief` reste sur une ligne 
 
 ---
 
-## 6. `@details` dans l'en-tête de fichier (`.h` uniquement) — vue d'ensemble module
+## 6. `@details` in File Header (`.h` only) — Module Overview
 
-Le `@details` au niveau fichier (en haut d'un `.h`) décrit le module dans son ensemble : son thème, son intention de design, son architecture et ses concepts clés. C'est le point d'entrée pour quiconque ouvre le fichier pour la première fois.
+The `@details` at file level (top of a `.h`) describes the module as a whole: its theme, design intent, architecture, and key concepts. This is the entry point for anyone opening the file for the first time.
 
-- Mettre l'accent sur les **responsabilités et les relations entre composants**, pas sur les détails d'implémentation.
-- Structurer en courts paragraphes de prose, un par sujet, dans l'ordre de lecture naturel :
-  1. **Paragraphe 1 — But / thème** : ce que fait ce module et pourquoi il existe.
-  2. **Paragraphe 2 — Architecture / concepts** : types clés, règles d'ownership, patterns utilisés (pattern de pointeur, registre, machine à états…).
-  3. **Paragraphe 3 — Usage / contraintes** : qui appelle quoi, dans quel ordre, règles de cycle de vie.
+- Focus on **responsibilities and relationships between components**, not implementation details.
+- Structure in short prose paragraphs, one per topic, in natural reading order:
+  1. **Paragraph 1 — Purpose / Theme**: what this module does and why it exists.
+  2. **Paragraph 2 — Architecture / Concepts**: key types, ownership rules, patterns used (pointer pattern, registry, state machine...).
+  3. **Paragraph 3 — Usage / Constraints**: who calls what, in what order, lifecycle rules.
 
-Règles :
+Rules:
 
-- Toujours utiliser des `` `backticks` `` pour les identifiants (fonctions, champs, types, tableaux).
-- Pas de listes à puces — rédiger des phrases en prose.
-- Ne pas décrire *comment* le code fonctionne ligne par ligne ; décrire *quel rôle il joue* et *qui en dépend*.
+- Always use `` `backticks` `` for identifiers (functions, fields, types, arrays).
+- No bullet lists — write prose sentences.
+- Do not describe *how* the code works line by line; describe *what role it plays* and *who depends on it*.
 
-Exemple :
+Example:
 
 ```cpp
 /**
@@ -186,6 +186,8 @@ Exemple :
 
 ---
 
-## 7. Langue
+## 7. Language
 
-- Toute la documentation Doxygen est rédigée en **anglais**.
+- All Doxygen documentation is written in **English**.
+
+// EOF doxygen-conventions.md

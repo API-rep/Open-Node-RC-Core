@@ -1,116 +1,106 @@
-# IA guidelines
+# AI Guidelines
 
-Fichier de démarrage obligatoire pour tout agent IA générant ou modifiant du code, des commentaires ou de la documentation dans ce projet.
+Mandatory startup file for any AI agent generating or modifying code, comments, or documentation in this project.
 
-**Principe** : ce fichier résume ce qu'une IA doit faire et ne pas faire. Il renvoie systématiquement vers les documents détaillés pour les règles de formatage, de code et de Doxygen. Les seuls contenus propres à ce fichier sont les instructions de comportement spécifiques aux agents IA.
-
----
-
-## 1. Hiérarchie des documents
-
-Lire et appliquer les documents dans cet ordre :
-
-1. **`formatting.md`** — tout ce qui est visuel : en-têtes, sections, espaces, indentation, commentaires, fin de fichier.
-2. **`coding-conventions.md`** — tout ce qui est code C/C++ : nommage, découpe en étapes, structure des fichiers, logs debug.
-3. **`doxygen-conventions.md`** — tout ce qui est documentation Doxygen : `@brief`, `@details`, focus `.h` vs `.cpp`.
-4. **`ia-guidelines.md`** (ce fichier) — comportement attendu d'un agent IA et résolution des ambiguïtés.
+**Principle**: This file summarizes what an AI must and must not do. It systematically refers to detailed documents for formatting, code, and Doxygen rules. The only content specific to this file is AI agent behavior instructions.
 
 ---
 
-## 2. Consignes absolues (non négociables)
+## 1. Document Hierarchy
 
-Ces points ne sont pas redétaillés ici ; ils sont développés dans les documents ci-dessus. Un agent IA les applique systématiquement.
+Read and apply documents in this order:
 
-- **Langue** : tout est en anglais (commentaires, documentation, messages de log).
-- **Indentation** : tabulations, y compris dans les blocs préprocesseur.
-- **En-tête** : bloc `/* ... */` avec ligne d'astérisques à 80 caractères, contenant `@file` et `@brief`.
-- **Sections** : séparateurs `// ===` à 80 caractères, titres en majuscules.
-- **commentaires** : `// Step description`, indentés d'une tabulation de plus que le code suivant.
-- **Étapes** : commentaires `// N. Step description`, indentés d'une tabulation de plus que le code suivant.
-- **Doxygen** :
-  - `.h` : `///` pour l'API, `///<` pour les membres.
-  - `.cpp` : `/** ... */` pour les fonctions non triviales.
-- **`@brief`** : style "rôle d'abord", une ligne, pas de verbe en premier.
-- **Fin de fichier** : marqueur `// EOF <file>`.
-
-> Pour les détails et les exemples, voir `formatting.md`, `coding-conventions.md` et `doxygen-conventions.md`.
+1. **`formatting.md`** — everything visual: headers, sections, spacing, indentation, comments, end of file.
+2. **`coding-conventions.md`** — everything C/C++ code: naming, step breakdown, file structure, debug logs.
+3. **`doxygen-conventions.md`** — everything Doxygen documentation: `@brief`, `@details`, `.h` vs `.cpp` focus.
+4. **`ia-guidelines.md`** (this file) — expected AI agent behavior and ambiguity resolution.
 
 ---
 
-## 3. Règles spécifiques aux agents IA
+## 2. Absolute Requirements (Non-Negotiable)
 
-Ces règles ne figurent pas dans les autres documents. Elles concernent exclusivement le comportement d'un agent IA.
+These points are not detailed here; they are developed in the documents above. An AI agent applies them systematically.
 
-### 3.1 Ne pas inventer
-
-- Ne pas inventer de nom de fonction, de type, de macro ou de constante qui n'existe pas déjà dans le fichier modifié ou dans ses headers inclus.
-- Ne pas inventer de sous-module de log non listé dans `coding-conventions.md` §7.4.
-- Ne pas inventer de valeur d'`enum` ou de champ de `struct` : utiliser ceux déjà définis.
-
-### 3.2 Préserver le style existant
-
-- Quand un fichier existant est modifié, adopter le style déjà en place (tabulations, nommage, style de commentaires, ordre des sections).
-- Ne pas convertir du code existant d'un style correct vers un autre style, même si ce dernier est aussi valide.
-- Ne pas réorganiser un fichier sans demande explicite.
-
-### 3.3 Priorité en cas de conflit
-
-Si deux règles semblent contradictoires, appliquer cet ordre de priorité :
-
-1. Style déjà présent dans le fichier modifié.
-2. `formatting.md` et `coding-conventions.md` pour les règles de base.
-3. `doxygen-conventions.md` pour la documentation.
-4. Ce fichier (`ia-guidelines.md`) pour les consignes de comportement IA.
-
-### 3.4 Cas d'ambiguïté
-
-- **Nommage inconnu** : choisir la convention la plus proche définie dans `coding-conventions.md` §1 ; si le contexte est un module existant, suivre le style du module.
-- **Longueur de ligne** : les lignes de log debug ne sont jamais coupées (voir `coding-conventions.md` §7.3). Pour le reste, préférer la lisibilité à une limite stricte, sans dépasser massivement 80-100 caractères.
-- **Commentaire utile ou superflu** : si le code est évident, ne pas ajouter de commentaire. Si le comportement est non trivial, ajouter un commentaire d'étape ou un `@details`.
-- **Documentation d'une fonction existante non documentée** : documenter selon `doxygen-conventions.md`. Si la fonction est triviale, un `@brief` suffit ; si elle est non triviale, ajouter `@details` et `@param`/`@return` pertinents.
-
-### 3.5 Fichiers générés
-
-- Ne jamais écrire de code sans bloc d'en-tête Doxygen.
-- Ne jamais laisser de sections vides sans marqueur de section approprié.
-- Toujours terminer par `// EOF <file>`.
+> For details and examples, see `formatting.md`, `coding-conventions.md`, and `doxygen-conventions.md`.
 
 ---
 
-## 4. Checklist IA simplifiée
+## 3. AI-Specific Rules
 
-Avant de valider une modification, vérifier au minimum :
+These rules do not appear in other documents. They exclusively concern AI agent behavior.
 
-- [ ] En-tête `/* ... */` à 80 caractères avec `@file` et `@brief`.
-- [ ] `#pragma once` dans les `.h`.
-- [ ] Sections `// ===` à 80 caractères si le fichier en contient.
-- [ ] Tabulations pour l'indentation.
-- [ ] `@brief` correct : nom de rôle d'abord, une ligne.
-- [ ] Pas de doublon de documentation inutile.
-- [ ] Pas d'information inventée.
-- [ ] Style du fichier existant respecté.
-- [ ] `// EOF <file>` en fin de fichier.
+### 3.1 Do Not Invent
 
-> Pour les détails complets, voir :
+- Do not invent function, type, macro, or constant names that do not already exist in the modified file or its included headers.
+- Do not invent log sub-modules not listed in `coding-conventions.md` §7.4.
+- Do not invent `enum` values or `struct` fields: use those already defined.
+
+### 3.2 Preserve Existing Style
+
+- When modifying an existing file, adopt the style already in place (tabs, naming, comment style, section order).
+- Do not convert existing correctly-styled code to another style, even if the latter is also valid.
+- Do not reorganize a file without explicit request.
+
+### 3.3 Priority in Case of Conflict
+
+If two rules seem contradictory, apply this priority order:
+
+1. Style already present in the modified file.
+2. `formatting.md` and `coding-conventions.md` for base rules.
+3. `doxygen-conventions.md` for documentation.
+4. This file (`ia-guidelines.md`) for AI behavior guidelines.
+
+### 3.4 Ambiguity Cases
+
+- **Unknown naming**: choose the closest convention defined in `coding-conventions.md` §1; if the context is an existing module, follow the module's style.
+- **Line length**: debug log lines are never split (see `coding-conventions.md` §7.3). For the rest, prefer readability to a strict limit, without massively exceeding 80-100 characters.
+- **Useful or superfluous comment**: if the code is obvious, do not add a comment. If the behavior is non-trivial, add a step comment or `@details`.
+- **Documentation for an existing undocumented function**: document according to `doxygen-conventions.md`. If the function is trivial, a `@brief` is sufficient; if it is non-trivial, add `@details` and relevant `@param`/`@return`.
+
+### 3.5 Generated Files
+
+- Never write code without a Doxygen header block.
+- Never leave empty sections without an appropriate section marker.
+- Always end with `// EOF <file>`.
+
+---
+
+## 4. Simplified AI Checklist
+
+Before validating a modification, check at minimum:
+
+- [ ] Header `/* ... */` at 80 characters with `@file` and `@brief`.
+- [ ] `#pragma once` in `.h` files.
+- [ ] Sections `// ===` at 80 characters if the file contains them.
+- [ ] Tabs for indentation.
+- [ ] Correct `@brief`: role name first, one line.
+- [ ] No useless documentation duplication.
+- [ ] No invented information.
+- [ ] Existing file style respected.
+- [ ] `// EOF <file>` at end of file.
+
+> For complete details, see:
 > - `formatting.md` §1, §2, §5, §8
 > - `coding-conventions.md` §1, §2, §3
 > - `doxygen-conventions.md` §3, §4
 
 ---
 
-## 5. Exemples visuels de référence
+## 5. Visual Reference Examples
 
-Les templates complets se trouvent dans le même dossier :
+Complete templates are in the same folder:
 
 - `template_module.h`
 - `template_module.cpp`
 
-Ces fichiers illustrent un rendu conforme. Un agent IA peut s'y référer pour comprendre l'application concrète des règles.
+These files illustrate compliant rendering. An AI agent can refer to them to understand the concrete application of rules.
 
 ---
 
-## 6. Ce qu'il faut éviter
+## 6. What to Avoid
 
-- Ne pas répéter dans un fichier les règles déjà présentes dans `formatting.md`, `coding-conventions.md` ou `doxygen-conventions.md`.
-- Ne pas ajouter de sections génériques non spécifiques à l'IA dans ce fichier.
-- Ne pas ignorer le style déjà en place dans un fichier existant.
+- Do not repeat in a file rules already present in `formatting.md`, `coding-conventions.md`, or `doxygen-conventions.md`.
+- Do not add generic sections not specific to AI in this file.
+- Do not ignore the style already in place in an existing file.
+
+// EOF ia-guidelines.md

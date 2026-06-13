@@ -36,7 +36,7 @@ TemplateModule::TemplateModule()
 }
 
 TemplateModule::~TemplateModule() {
-  // Optional cleanup sequence
+	// Optional cleanup sequence
 }
 
 
@@ -60,20 +60,20 @@ TemplateModule::~TemplateModule() {
  */
 
 bool TemplateModule::begin(const TemplateConfig &config) {
-	  // 1. Validate configuration
+	// 1. Validate configuration
 	if (config.frequencyHz == 0) {
 		return false;
 	}
 
-	  // 2. Commit internal state
+	// 2. Commit internal state
 	_frequencyHz = config.frequencyHz;
 	_invertPolarity = config.invertPolarity;
 	_mode = config.mode;
 
-	  // 3. Dependency setup
+	// 3. Dependency setup
 	TM_LOG_INFO("init complete");
 
-	  // 4. Keep disabled until explicit enable()
+	// 4. Keep disabled until explicit enable()
 	_isEnabled = false;
 
 	return true;
@@ -99,27 +99,27 @@ bool TemplateModule::begin(const TemplateConfig &config) {
  */
 
 void TemplateModule::update() {
-	  // 1. Exit early if module is disabled
+	// 1. Exit early if module is disabled
 	if (!_isEnabled) {
 		return;
 	}
 
-	  // 2. Compute signed output value
+	// 2. Compute signed output value
 	int32_t output = static_cast<int32_t>(_frequencyHz);
 
-		  // 2.1 Apply polarity inversion when configured
+		// 2.1 Apply polarity inversion when configured
 	if (_invertPolarity) {
 		output = -output;
 	}
 
-		  // 2.2 Clamp to safe hardware range
+		// 2.2 Clamp to safe hardware range
 	if (output < 0) {
 		output = 0;
 	} else if (output > static_cast<int32_t>(_frequencyHz)) {
 		output = static_cast<int32_t>(_frequencyHz);
 	}
 
-	  // 3. Write to hardware abstraction layer
+	// 3. Write to hardware abstraction layer
 	// hal_write_pwm(static_cast<uint32_t>(output));
 }
 
