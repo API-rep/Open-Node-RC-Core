@@ -7,7 +7,7 @@
 
 #include <machines/config/config.h>
 #include <core/system/hw/transport/uart_com.h>
-#include <core/system/debug/debug.h>
+#include <core/system/debug/logging/debug.h>
 #include "../sys/sys_init.h"
 
 

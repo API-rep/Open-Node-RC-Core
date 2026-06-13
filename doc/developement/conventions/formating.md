@@ -8,7 +8,12 @@ These non-semantic guidelines ensure pixel-perfect consistency across the reposi
 - **Line Length Limits:** Rules regarding maximum column width and single-line execution blocks.
 - **Inline Elements Style:** Spaces inside comments, around keywords, and bracket positioning.
 
-
+### 1.3. Comments
+- Use `//` for single-line comments.
+- Use `/* ... */` for multi-line comments.
+- Use `///` for Doxygen comments in `.h` files.
+- Use `///<` for Doxygen comments for struct members in `.h` files.
+- Use `/** ... */` for detailed Doxygen comments in `.cpp` files.
 
 ### Step Comments
 
@@ -27,6 +32,7 @@ ex :
 `// 1. MAJOR SECTION`
 `// =============================================================================`
 
+
 ### EOF Marker
 
 Every source and header file should terminate with an EOF marker.
@@ -34,12 +40,20 @@ Every source and header file should terminate with an EOF marker.
 Example:
 // EOF module.cpp4
 
-### Debug Log Call Formatting
+### Debug Prefixes
 
-Debug Log calls should remain on a single source line.
+Bracketed prefixes such as:
 
-Avoid splitting format strings and arguments across multiple lines.
-+ ref vers le readme 
+```text
+[HW]
+[COMBUS]
+[SYSTEM]
+```
+
+are reserved for the debug logging system and should not be reused for unrelated code annotations.
+
+See the dedicated Debug documentation for logging conventions and subsystem naming.
+
  
 ## Step Comment Formatting - The "Step Comment" Object
 

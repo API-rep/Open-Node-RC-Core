@@ -2,20 +2,7 @@
 
 The debug logging system provides textual diagnostics through the serial interface.
 
-It is primarily intended for developers during bring-up, initialization and troubleshooting.
-
-Unlike the dashboard, which exposes runtime state to the operator, debug logs explain what the software is doing internally.
-
----
-
-## Philosophy
-
-Open RC Node debugging is split into two complementary systems:
-
-* **Initialization Logging**
-* **Runtime Dashboard**
-
-This document focuses on initialization logging and developer diagnostics.
+It is intended for initialization traces, troubleshooting and developer-oriented diagnostics.
 
 Initialization logs remain available throughout runtime but are normally silent once startup is complete.
 
@@ -93,10 +80,10 @@ LogDebug
 
 ## Logging Rules
 
-* Prefer subsystem wrappers whenever ownership is clear.
-* Reserve generic wrappers for cross-cutting messages.
-* Prefer concise, human-readable wording.
-* Include technical details only when they improve diagnostics.
+* Prefer subsystem wrappers whenever ownership is clear;
+* Reserve generic wrappers for cross-cutting messages;
+* Prefer concise, human-readable wording;
+* Include technical details only when they improve diagnostics;
 * Avoid excessive runtime verbosity.
 
 ---
@@ -141,9 +128,9 @@ Examples:
 
 Sub-module names should remain:
 
-* Short;
-* Uppercase;
-* Stable over time.
+* short;
+* uppercase;
+* stable over time.
 
 ---
 
@@ -221,23 +208,3 @@ Example:
   > Max Speed FW:100.0% | BK:100.0%
   > Com Ch: THROTTLE (ID:1)
 ```
-
----
-
-## Dashboard Interaction
-
-Debug logs and the dashboard coexist but serve different purposes.
-
-Debug logging owns:
-
-* Startup diagnostics;
-* Developer traces;
-* Internal explanations.
-
-The dashboard owns:
-
-* Runtime monitoring;
-* Operator visibility;
-* Interactive inspection.
-
-Both systems should evolve together while remaining decoupled from application logic.

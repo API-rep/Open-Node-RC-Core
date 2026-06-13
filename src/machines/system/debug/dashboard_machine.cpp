@@ -14,7 +14,7 @@
 #include "dashboard_vbat.h"
 #include "dashboard_sig.h"
 #include "dashboard_simulation.h"
-#include <core/system/debug/dashboard.h>
+#include <core/system/debug/dashboard/dashboard.h>
 #include <core/system/vbat/vbat_sense.h>
 #include <struct/simulation_struct.h>   // DriveStateBus
 

@@ -12,7 +12,7 @@
  *****************************************************************************/
 
 #include "esc_dev.h"
-#include <core/system/debug/debug.h>
+#include <core/system/debug/logging/debug.h>
 
 #ifdef ESC_OUTPUT_ENABLED
 #  include <config/config.h>       // EscPwmFreq — resolved per environment (-I src/machines or -I src/sound_module)

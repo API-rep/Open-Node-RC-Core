@@ -20,4 +20,4 @@ Source Documentation (.cpp)
 
 Non-trivial functions should be documented using Doxygen blocks describing their purpose and execution flow.
 
-Trivial implementations may rely on the documentation provided in the corresponding header.
+Trivial implementations may rely on the documentation provided in the corresponding header

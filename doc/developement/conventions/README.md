@@ -16,4 +16,5 @@ This separation avoids mixing concerns and keeps each document focused on a sing
 -> Why is it written this way? --> `coding.md`
 -> How should it be documented? -> `doxygen.md`
 
-As a result, a single concept may be described from several complementary perspectives. This is intentional. The objective is not to eliminate every overlap, but to ensure that each document remains clear, focused, and easy to navigate.
+As a result, a single concept may be described from several complementary perspectives. This is intentional.
+The objective is not to eliminate every overlap, but to ensure that each document remains clear, focused, and easy to navigate.

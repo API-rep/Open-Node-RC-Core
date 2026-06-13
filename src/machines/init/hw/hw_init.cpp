@@ -5,7 +5,7 @@
 
 #include "hw_init.h"
 #include <core/config/machines/combus_types.h>
-#include <core/system/debug/debug.h>
+#include <core/system/debug/logging/debug.h>
 #include <core/system/vbat/vbat.h>
 
 // =============================================================================

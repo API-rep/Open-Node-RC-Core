@@ -5,7 +5,7 @@
 
 #include "drv_control.h"
 #include <init/hw/hw_init_drv.h> // Required for dcDevObj access
-#include <core/system/debug/debug.h>
+#include <core/system/debug/logging/debug.h>
 
 // =============================================================================
 // 1. DRIVER STATE LOGIC

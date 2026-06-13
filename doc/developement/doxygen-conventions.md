@@ -190,4 +190,18 @@ Example:
 
 - All Doxygen documentation is written in **English**.
 
++++ (à ajouter/vérifier si présent)
+
+### Header vs Source Documentation
+
+Header documentation should describe the public contract:
+
+* purpose;
+* parameters;
+* return values;
+* usage expectations.
+
+Source documentation should explain implementation choices and non-obvious behaviors.
+
+
 // EOF doxygen-conventions.md

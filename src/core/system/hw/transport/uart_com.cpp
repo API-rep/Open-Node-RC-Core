@@ -6,7 +6,7 @@
 #include <config/config.h>
 #include "uart_com.h"
 
-#include <core/system/debug/debug.h>
+#include <core/system/debug/logging/debug.h>
 #include <core/system/hw/pin_reg.h>
 #include <struct/uart_struct.h>
 

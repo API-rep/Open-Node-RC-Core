@@ -1,6 +1,6 @@
-﻿/******************************************************************************
+/******************************************************************************
  * @file  cb_gear.cpp
- * @brief Virtual gearbox CbProc wrappers â€” implementation.
+ * @brief Virtual gearbox CbProc wrappers — implementation.
  *****************************************************************************/
 
 #include "cb_gear.h"
@@ -36,36 +36,36 @@ void gear_fsm_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*c
     int8_t gear;
     if (ds == DriveState::kStanding) {
         // At rest: output neutral gear (0). FSM internal state preserved for
-        // smooth resume (state->gear stays at 1 — last engaged gear).
+        // smooth resume (state->gear stays at 1 � last engaged gear).
         gear = 0;
     } else {
         // Active drive or reverse: pass RPM to FSM.
         // ds > 0 (forward/braking-fwd): actual engine_rpm after gear_ratio_inv_fn.
-        // ds < 0 (reverse/braking-rev): rpm = 0 → FSM stays at gear 1.
+        // ds < 0 (reverse/braking-rev): rpm = 0 ? FSM stays at gear 1.
         const int16_t rpm = (ds > 0) ? static_cast<int16_t>(value) : int16_t(0);
         gear = gear_fsm_update(state, *cfg->profile, rpm);
     }
 
-    // --- Output — gear integer becomes the channel value ---------------------
+    // --- Output � gear integer becomes the channel value ---------------------
     value = static_cast<uint16_t>(gear);
 }
 
 
 
 // =============================================================================
-// 2. INVERSE GEAR RATIO  (wheel-speed → engine RPM)
+// 2. INVERSE GEAR RATIO  (wheel-speed ? engine RPM)
 // =============================================================================
 
 /**
- * @brief wheel_speed × 1000 / gearRatio[prevGear] = engine_rpm.
+ * @brief wheel_speed � 1000 / gearRatio[prevGear] = engine_rpm.
  *
  * @details Placed FIRST in the GEAR chain (before FSM) in wheel-speed-primary mode.
  *   Reads `value` = wheel_speed (seeded from ESC_RPM_BUS by the `in` proc).
- *   Reads `state->gear` (GearFsmState) from the PREVIOUS tick — 1-cycle latency,
- *   same as gear_dyn_ramp_fn.  Gear 0 (uninitialised) → passthrough.
+ *   Reads `state->gear` (GearFsmState) from the PREVIOUS tick � 1-cycle latency,
+ *   same as gear_dyn_ramp_fn.  Gear 0 (uninitialised) ? passthrough.
  *
  *   Side-effect: writes engine_rpm to `proc->outValue` so the chain runner
- *   commits it to `proc->outCh` (= ESC_RPM_BUS) — the sound node reads RPM from there.
+ *   commits it to `proc->outCh` (= ESC_RPM_BUS) � the sound node reads RPM from there.
  *
  *   Also passes engine_rpm downstream in `value` for gear_fsm_fn so RPM
  *   thresholds work in engine-RPM domain (unchanged from old model).
@@ -79,7 +79,7 @@ void gear_ratio_inv_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwn
     const GearFsmState*     state   = static_cast<const GearFsmState*>(proc->state);
 
     // state->gear is from the previous tick (written by gear_fsm_fn last cycle).
-    // Gear 0 = FSM not yet initialised — passthrough.
+    // Gear 0 = FSM not yet initialised � passthrough.
     if (state->gear <= 0) {
         proc->outValue = value;
         return;
@@ -94,15 +94,15 @@ void gear_ratio_inv_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwn
         return;
     }
 
-    // engine_rpm = wheel_speed × 1000 / gearRatio.
-    // At upshift: gear changes next tick → engine_rpm drops automatically (ratio increases).
+    // engine_rpm = wheel_speed � 1000 / gearRatio.
+    // At upshift: gear changes next tick ? engine_rpm drops automatically (ratio increases).
     const uint32_t engineRpm = static_cast<uint32_t>(value) * 1000u
                              / static_cast<uint32_t>(ratio);
     const uint16_t result    = engineRpm > 0xFFFFu
                                ? uint16_t(0xFFFFu)
                                : static_cast<uint16_t>(engineRpm);
 
-    // Commit engine_rpm to outCh (ESC_RPM_BUS) — sound node reads RPM from there.
+    // Commit engine_rpm to outCh (ESC_RPM_BUS) � sound node reads RPM from there.
     proc->outValue = result;
 
     // Pass engine_rpm downstream so gear_fsm_fn compares against engine-RPM thresholds.
@@ -111,7 +111,7 @@ void gear_ratio_inv_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwn
 
 
 // =============================================================================
-// 3. RPM × GEAR RATIO (MULTIPLICATIVE — forward, RPM-primary mode)
+// 3. RPM � GEAR RATIO (MULTIPLICATIVE � forward, RPM-primary mode)
 // =============================================================================
 
 /** @brief Scale RPM magnitude by gearRatio[gear] / 1000 -- stays in RPM domain. */
@@ -124,7 +124,7 @@ void gear_ratio_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /
     // inCh = GEAR (analog).
     const int8_t rawGear = static_cast<int8_t>(proc->inValue);
 
-    if (rawGear == 0) return;  // GEAR=0 sentinel â€” passthrough.
+    if (rawGear == 0) return;  // GEAR=0 sentinel — passthrough.
 
     const uint8_t gearIdx = static_cast<uint8_t>(
         constrain(static_cast<int>(rawGear) - 1, 0, static_cast<int>(nGears) - 1));
@@ -146,7 +146,7 @@ void gear_subgear_cap_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanO
 {
     // inCh = SUBGEAR_BUS (0 = inactive, 1..N = sub-gear index).
     const uint8_t subIdx = static_cast<uint8_t>(proc->inValue);
-    if (subIdx == 0u) return;  // Normal mode â€” passthrough.
+    if (subIdx == 0u) return;  // Normal mode — passthrough.
 
     const GearProcCfg*      cfg     = static_cast<const GearProcCfg*>(proc->cfg);
     const GearShiftProfile* profile = cfg->profile;
@@ -156,14 +156,14 @@ void gear_subgear_cap_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanO
         return;
     }
 
-    // maxAbsRpm = top gear upShift — same denominator as gear_dir_fn.
+    // maxAbsRpm = top gear upShift � same denominator as gear_dir_fn.
     const uint16_t maxAbsRpm = profile->gear[profile->gearCount - 1u].upShift;
 
-    // Clamp sub-gear index (1-based â†’ 0-based).
+    // Clamp sub-gear index (1-based → 0-based).
     const uint8_t gi = static_cast<uint8_t>(
         constrain(static_cast<int>(subIdx) - 1, 0, static_cast<int>(profile->subGearCount) - 1));
 
-    // cappedRpm = maxAbsRpm Ã— maxSpeedPct / 100 â€” cap in RPM domain.
+    // cappedRpm = maxAbsRpm × maxSpeedPct / 100 — cap in RPM domain.
     const uint32_t cappedRpm = static_cast<uint32_t>(maxAbsRpm)
                              * static_cast<uint32_t>(profile->subGear[gi].maxSpeedPct) / 100u;
     if (value > static_cast<uint16_t>(cappedRpm))
@@ -172,7 +172,7 @@ void gear_subgear_cap_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanO
 
 
 // =============================================================================
-// 5. MAGNITUDE â†’ BIPOLAR (DIRECTION APPLICATION)
+// 5. MAGNITUDE → BIPOLAR (DIRECTION APPLICATION)
 // =============================================================================
 
 /** @brief Scale RPM magnitude to ComBus half range and apply direction. */
@@ -182,7 +182,7 @@ void gear_dir_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*c
     const GearShiftProfile* profile = cfg->profile;
     const uint8_t           nGears  = profile->gearCount;
 
-    // maxAbsRpm — denominator for the ComBus half scale.
+    // maxAbsRpm � denominator for the ComBus half scale.
     const uint16_t maxAbsRpm = profile->gear[nGears - 1u].upShift;
 
     // inCh = DRIVE_STATE_BUS (analog).
@@ -209,12 +209,12 @@ void gear_dir_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*c
 
 
 // =============================================================================
-// 6. GEAR → RAMP BRIDGE
+// 6. GEAR ? RAMP BRIDGE
 // =============================================================================
 
 void gear_dyn_ramp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)
 {
-    if (proc->dynCfg == nullptr) return;  // No ramp linked â€” passthrough.
+    if (proc->dynCfg == nullptr) return;  // No ramp linked — passthrough.
 
     const GearProcCfg* cfg = static_cast<const GearProcCfg*>(proc->cfg);
     CbRampCfg*        dyn = static_cast<CbRampCfg*>(proc->dynCfg);
@@ -246,8 +246,8 @@ void gear_dyn_ramp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwne
  * @details Placed in GEAR chain (after gear_dyn_ramp_fn, before out).
  *   Reads current gear from `value` (= gear computed in this GEAR-chain pass).
  *   On upshift (curGear > prevGear, excluding first-init): arms a timer and
- *   sets dynCfg->extAccelSteps = INT16_MIN — effective accel step is
- *   max(1, accelSteps + INT16_MIN) ≈ 1 unit/tick, negligible over the window.
+ *   sets dynCfg->extAccelSteps = INT16_MIN � effective accel step is
+ *   max(1, accelSteps + INT16_MIN) � 1 unit/tick, negligible over the window.
  *   Only the acceleration direction is damped; extBrakeSteps is never touched,
  *   so braking (L2) remains fully functional during the freeze.
  *   rampTimeMs is not modified (gear_dyn_ramp_fn keeps the per-gear value).
@@ -259,8 +259,8 @@ void gear_dyn_ramp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwne
  *   Rationale for GEAR chain placement: if the gear chain is disabled,
  *   no upshift occurs and rampTimeMs is never overridden.
  *
- *   cfg    = GearProcCfg*    (profile — upshiftDampMs).
- *   dynCfg = CbRampCfg*      (traction ramp — rampTimeMs frozen here).
+ *   cfg    = GearProcCfg*    (profile � upshiftDampMs).
+ *   dynCfg = CbRampCfg*      (traction ramp � rampTimeMs frozen here).
  *   state  = GearDampState*  (prevGear + dampEndMs).
  *   outCh  = GEAR_SHIFTING   (machine-local digital).
  *   @todo winter 2026: promote GEAR_SHIFTING to WIRE region so sound node reads directly.
@@ -268,7 +268,7 @@ void gear_dyn_ramp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwne
 void gear_upshift_damp_fn(CbProc* proc, uint16_t& value,
                            bool& /*claimed*/, ChanOwner /*chainOwner*/)
 {
-    if (proc->dynCfg == nullptr) return;  // No ramp linked — passthrough.
+    if (proc->dynCfg == nullptr) return;  // No ramp linked � passthrough.
 
     const GearProcCfg*      cfg     = static_cast<const GearProcCfg*>(proc->cfg);
     const GearShiftProfile* profile = cfg->profile;
@@ -279,7 +279,7 @@ void gear_upshift_damp_fn(CbProc* proc, uint16_t& value,
     const uint8_t  curGear = static_cast<uint8_t>(value);
     const uint32_t now     = millis();
 
-    // Upshift detected (prevGear > 0 guards against first-init 0→1 pseudo-shift).
+    // Upshift detected (prevGear > 0 guards against first-init 0?1 pseudo-shift).
     if (curGear > state->prevGear && state->prevGear > 0u) {
         state->rpmAtShift  = state->lastRpm;   // snapshot from gear_upshift_rpm_fade_fn (prev cycle)
         state->dampStartMs = now;
@@ -287,7 +287,7 @@ void gear_upshift_damp_fn(CbProc* proc, uint16_t& value,
     }
 
     // Block acceleration only: INT16_MIN drives effective accel step to max(1, 1).
-    // extBrakeSteps is untouched — braking (L2) remains fully functional.
+    // extBrakeSteps is untouched � braking (L2) remains fully functional.
     if (state->dampEndMs > 0u) {
         if (now >= state->dampEndMs) {
             state->dampEndMs    = 0u;
@@ -299,7 +299,7 @@ void gear_upshift_damp_fn(CbProc* proc, uint16_t& value,
 
     state->prevGear = curGear;
 
-    // Signal via ComBus — runner commits outValue to outCh = GEAR_SHIFTING.
+    // Signal via ComBus � runner commits outValue to outCh = GEAR_SHIFTING.
     proc->outValue = (state->dampEndMs > 0u) ? 1u : 0u;
 }
 
@@ -318,15 +318,15 @@ void gear_upshift_damp_fn(CbProc* proc, uint16_t& value,
  *   `rpmAtShift` at the moment of an upshift.
  *
  *   When a damp window is active (`dampEndMs > 0`):
- *     - Computes elapsed = now − dampStartMs.
+ *     - Computes elapsed = now - dampStartMs.
  *     - If elapsed < upshiftDampMs: writes linearly interpolated RPM to
- *       proc->outValue → runner commits to outCh = ESC_RPM_BUS, overriding
+ *       proc->outValue ? runner commits to outCh = ESC_RPM_BUS, overriding
  *       gear-inv-ratio's earlier write.  Does NOT modify `value` (gear_fsm_fn
  *       downstream needs the true natural engine_rpm for shift decisions).
- *     - If elapsed >= upshiftDampMs: window has ended — falls through to
+ *     - If elapsed >= upshiftDampMs: window has ended � falls through to
  *       pass-through (gear_upshift_damp_fn will clear dampEndMs this cycle).
  *
- *   Outside any window: pass-through — writes `value` to proc->outValue so
+ *   Outside any window: pass-through � writes `value` to proc->outValue so
  *   this proc remains the authoritative writer of ESC_RPM_BUS (gear-inv-ratio
  *   still runs first but its outValue is superseded).
  *
@@ -341,7 +341,7 @@ void gear_upshift_rpm_fade_fn(CbProc* proc, uint16_t& value,
     const GearShiftProfile* profile = cfg->profile;
     GearDampState*          state   = static_cast<GearDampState*>(proc->state);
 
-    // Record natural RPM every cycle — used as rpmAtShift snapshot by gear_upshift_damp_fn.
+    // Record natural RPM every cycle � used as rpmAtShift snapshot by gear_upshift_damp_fn.
     state->lastRpm = static_cast<uint16_t>(value);
 
     // Interpolate while a damp window is active.

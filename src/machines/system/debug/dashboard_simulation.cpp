@@ -6,7 +6,7 @@
 #ifdef DEBUG_DASHBOARD
 
 #include "dashboard_simulation.h"
-#include <core/system/debug/dashboard.h>
+#include <core/system/debug/dashboard/dashboard.h>
 #include <struct/simulation_struct.h>
 #include <core/system/combus/processors/motion/cb_ramp.h>    // CbRampCfg, CbRampState
 #include <core/system/combus/processors/base/cb_bypass.h>    // CbBypassCfg

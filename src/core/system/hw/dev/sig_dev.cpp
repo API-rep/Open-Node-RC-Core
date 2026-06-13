@@ -5,7 +5,7 @@
 
 #include <core/config/machines/combus_types.h>
 #include <struct/struct.h>
-#include <core/system/debug/debug.h>
+#include <core/system/debug/logging/debug.h>
 
 #include "sig_dev.h"
 

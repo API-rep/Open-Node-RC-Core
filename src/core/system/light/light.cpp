@@ -5,7 +5,7 @@
 
 #include "light.h"
 #include <core/system/hw/pin_reg.h>
-#include <core/system/debug/debug.h>
+#include <core/system/debug/logging/debug.h>
 #include <PwmBroker.h>
 #include <memory>
 

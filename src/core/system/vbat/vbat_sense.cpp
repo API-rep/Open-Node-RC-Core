@@ -17,7 +17,7 @@
 
 #include <Arduino.h>
 #include <const.h>
-#include <core/system/debug/debug.h>
+#include <core/system/debug/logging/debug.h>
 
 
 	/// Vbat sensing datas — set once by vbat_sense_init(), used by all accessors and tick.

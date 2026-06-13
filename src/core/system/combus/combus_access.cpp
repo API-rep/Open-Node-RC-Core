@@ -9,7 +9,7 @@
 
 #include "combus_access.h"
 
-#include <core/system/debug/debug.h>
+#include <core/system/debug/logging/debug.h>
 
 
 // =============================================================================

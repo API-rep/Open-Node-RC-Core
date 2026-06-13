@@ -51,7 +51,7 @@ namespace ComBusOwner {
     static constexpr uint8_t GRP_SOUND   = 0x20u;   ///< 0010 — sound node
     static constexpr uint8_t GRP_REMOTE  = 0x30u;   ///< 0011 — remote controller
     static constexpr uint8_t GRP_EXT     = 0x40u;   ///< 0100 — extension board
-    //                                     ...       ///< 0101..1110 — reserved
+    //                                     ...      ///< 0101..1110 — reserved
     static constexpr uint8_t GRP_ANY     = 0xF0u;   ///< 1111 — wildcard: process match only
 
     // --- ProcessRole nibble (bits 3..0) ---
@@ -61,7 +61,7 @@ namespace ComBusOwner {
     static constexpr uint8_t PROC_INPUT  = 0x02u;   ///< 0010 — input layer (PS4, SBUS, …)
     static constexpr uint8_t PROC_VBAT   = 0x03u;   ///< 0011 — battery monitor
     static constexpr uint8_t PROC_BRIDGE = 0x04u;   ///< 0100 — UART RX bridge (combus_frame_apply)
-    //                                     ...       ///< 0101..1110 — reserved
+    //                                     ...      ///< 0101..1110 — reserved
     static constexpr uint8_t PROC_ANY    = 0x0Fu;   ///< 1111 — wildcard (only valid in NONE/ANY slots)
 
 } // namespace ComBusOwner

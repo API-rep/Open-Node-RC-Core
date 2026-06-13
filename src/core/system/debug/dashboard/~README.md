@@ -1,31 +1,12 @@
 # Dashboard System
 
-This directory contains the **Layer 1 core** of the ANSI terminal dashboard.
+The dashboard provides an interactive runtime view of the system through an ANSI terminal interface.
 
-The dashboard provides a runtime view of the system through an interactive terminal interface. Unlike serial debug logs, which explain what the software is doing internally, the dashboard exposes what the system is doing right now.
-
----
-
-## Philosophy
-
-Open RC Node debugging is split into two complementary systems:
-
-* **Initialization Logging**, used during startup and diagnostics;
-* **Runtime Dashboard**, used to monitor the system while it is running.
-
-The dashboard focuses on operational visibility.
-
-It helps answer questions such as:
-
-* What is the current state of the machine?
-* Which modules are active?
-* What values are changing?
-* Are abnormal situations occurring?
-* What happened recently?
+Its purpose is to expose the current state of the application, allowing operators and developers to inspect the system while it is running.
 
 ---
 
-## Dashboard Responsibilities
+## Responsibilities
 
 The dashboard is responsible for:
 
@@ -35,7 +16,7 @@ The dashboard is responsible for:
 * Detail inspection;
 * Runtime event reporting.
 
-It should expose runtime state without leaking application logic into the user interface.
+It should expose runtime information without introducing dashboard logic into application code.
 
 ---
 
@@ -63,8 +44,6 @@ Core components:
 ```text
 dashboard.h       Public dashboard API
 dashboard.cpp     Rendering engine and runtime core
-debug.h           Bridge wrappers shared with serial logging
-debug.cpp         Logging backend integration
 ```
 
 ---
@@ -137,7 +116,7 @@ Characteristics:
 * Started after hardware initialization;
 * Started after the operator pause block.
 
-The canonical startup location is:
+Canonical startup location:
 
 ```text
 src/machines/init/init.cpp
@@ -153,7 +132,7 @@ The dashboard owns terminal rendering.
 
 A dedicated render mutex protects frame integrity.
 
-Serial diagnostics may coexist with dashboard rendering, but must never corrupt the displayed interface.
+Serial output must coexist without corrupting dashboard frames.
 
 ---
 
@@ -186,9 +165,9 @@ Application files should remain dashboard-agnostic.
 
 Files such as:
 
-* `main.cpp`
-* `loop()`
-* domain modules
+* `main.cpp`;
+* `loop()`;
+* domain modules;
 
 must not contain dashboard-specific rendering logic.
 
@@ -231,17 +210,3 @@ N/C
 instead of hiding rows.
 
 This avoids layout shifts during navigation.
-
----
-
-## Debug vs Dashboard
-
-Debug logging answers:
-
-> "What is the software doing internally?"
-
-The dashboard answers:
-
-> "What is the system doing right now?"
-
-Together, both systems provide complete visibility throughout startup, validation and operation.

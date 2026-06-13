@@ -31,21 +31,15 @@
 // =============================================================================
 
 /**
- * @brief Working resolution type for all ComBus channel values.
+ * @brief Combus analog value resolution
  *
- * @details Unsigned integer type used throughout the motion processing chain
- *   and ComBus read/write operations.  Changing this alias propagates to
- *   every module that processes ComBus data without touching individual files.
+ * @details Changing this alias propagates to all modules relying on ComBus
+ *   analog channels.
  *
- *   Supported widths and their characteristics:
- *   - `uint8_t`  — lite mode   (256 levels, minimal RAM and bandwidth)
- *   - `uint16_t` — standard    (65 536 levels — default, matches hardware ComBus)
- *   - `uint32_t` — extended    (future: high-resolution encoders)
- *
- *   Standard uint16_t mapping used throughout the project:
- *   - `0`      → full reverse / minimum  (≈ 1000 µs servo pulse)
- *   - `32767`  → neutral / center        (≈ 1500 µs servo pulse)
- *   - `65535`  → full forward / maximum  (≈ 2000 µs servo pulse)
+ *   Standard mapping:
+ *   - 0      → minimum
+ *   - 32767  → neutral
+ *   - 65535  → maximum
  */
 using combus_t = uint16_t;
 

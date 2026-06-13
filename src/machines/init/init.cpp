@@ -13,7 +13,7 @@
 #include <core/system/input/input_manager.h>
 #include <core/system/combus/combus_access.h>
 #include <machines/system/debug/dashboard_machine.h>
-#include <core/system/debug/dashboard.h>
+#include <core/system/debug/dashboard/dashboard.h>
 
 
 // =============================================================================

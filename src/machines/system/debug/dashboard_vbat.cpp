@@ -6,7 +6,7 @@
 #ifdef DEBUG_DASHBOARD
 
 #include "dashboard_vbat.h"
-#include <core/system/debug/dashboard.h>
+#include <core/system/debug/dashboard/dashboard.h>
 #include <core/system/vbat/vbat_sense.h>
 
 #include <Arduino.h>

@@ -7,7 +7,7 @@
 
 #include "dashboard_input.h"
 #include <core/config/machines/combus_types.h>  // DigitalComBusID, AnalogComBusID (via machine dispatch)
-#include <core/system/debug/dashboard.h>
+#include <core/system/debug/dashboard/dashboard.h>
 #include <core/system/input/input_manager.h>
 
 #include <Arduino.h>

@@ -11,7 +11,7 @@
 #include <core/config/outputs/combus_uart.h>         // ComBusUartBaud, ComBusUartTxHz, UartMaxBaud
 #include <core/system/combus/protocol/combus_protocol.h>
 #include <core/system/hw/transport/uart_com.h>
-#include <core/system/debug/debug.h>
+#include <core/system/debug/logging/debug.h>
 
 
 // =============================================================================

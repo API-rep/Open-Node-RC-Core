@@ -6,7 +6,7 @@
 #ifdef DEBUG_DASHBOARD
 
 #include "dashboard_sig.h"
-#include <core/system/debug/dashboard.h>
+#include <core/system/debug/dashboard/dashboard.h>
 
 #include <Arduino.h>
 #include <stdio.h>

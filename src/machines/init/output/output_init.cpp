@@ -6,7 +6,7 @@
 #include "output_init.h"
 #include "../com/com_init.h"
 #include <machines/config/config.h>
-#include <core/system/debug/debug.h>
+#include <core/system/debug/logging/debug.h>
 
 
 // =============================================================================

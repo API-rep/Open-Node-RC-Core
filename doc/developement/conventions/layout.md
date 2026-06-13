@@ -8,6 +8,12 @@ It provides the mandatory layout blocks and structural order that developers mus
 - **Block Layout & Separators:** Mandatory sequence of sections, major block markers, and file termination tags.
 - **Structural Spacing:** Vertical empty lines required between major structural blocks or sections.
 
+### Line Length
+- Lines should not exceed 80-100 characters for readability, except for debug log lines which should not be split.
+
+### 1.1. Indentation
+- Use tabulations for indentation, including in preprocessor blocks.
+
 # 1. Header and File Layout
 
 ## Header File Blueprint (`.h`)

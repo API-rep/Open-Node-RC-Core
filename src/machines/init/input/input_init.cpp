@@ -4,7 +4,7 @@
  *****************************************************************************/
 
 #include "input_init.h"
-#include <core/system/debug/debug.h>
+#include <core/system/debug/logging/debug.h>
 #include <core/system/input/input_manager.h>
 
 
