@@ -6,7 +6,6 @@ Unlike implementation-specific headers located next to their corresponding modul
 
 The goal is to provide a stable and centralized reference for types, structures and constants that describe the RC environment itself.
 
----
 
 ## Contents
 
@@ -17,7 +16,6 @@ The goal is to provide a stable and centralized reference for types, structures 
 * `const.h`
   Global constants and project-wide aliases used by multiple modules.
 
----
 
 ## Design Philosophy
 

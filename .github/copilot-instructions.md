@@ -1,7 +1,7 @@
 # Copilot Session Rules
-
+!!!! A modifier suivant rework doc!!!!
 > Chargé à chaque session. Lire §0 puis §1.
-Pour les détails d'architecture → `doc/architecture.md`.
+Pour les détails d'architecture
 
 ## 0. Orientation rapide
 
@@ -27,7 +27,7 @@ Build : PlatformIO `espressif32@6.7.0` (IDF 4.4). Env actif : `volvo_A60H_bruder
 7. `TRACTION_BUS` packed + `GEAR_SHIFTING` wire — ComBus v2 (voir `doc/deferred_features.md §2–4`)
 8. `SimDev` + `SrvDevType::ESC_RC` (voir `doc/deferred_features.md §1`)
 9. `SoundDevice` table-driven — après DiYGuy removal (voir `doc/deferred_features.md §5`)
-10. Excavator / Loader combus + motion + inputs_map (stubs en place, voir `doc/architecture.md §3`)
+10. Excavator / Loader combus + motion + inputs_map (stubs en place)
 11. Migration RPM-primary motion model (voir `doc/deferred_features.md §8`)
 
 ---
@@ -36,7 +36,6 @@ Build : PlatformIO `espressif32@6.7.0` (IDF 4.4). Env actif : `volvo_A60H_bruder
 
 | Fichier | Contenu |
 |---------|---------|
-| `doc/architecture.md` | Hiérarchie véhicule + machine-class, transport, ComBus, pipeline processors, dashboard, règles cross-core |
 | `doc/code_style_synthesis.md` | Style C++ du projet — **lire avant tout code** |
 | `doc/template_module.h` / `.cpp` | Templates fichiers — **lire avant tout nouveau fichier** |
 | `doc/deferred_features.md` | Toutes les features différées avec struct et plan de migration |
@@ -50,7 +49,7 @@ Build : PlatformIO `espressif32@6.7.0` (IDF 4.4). Env actif : `volvo_A60H_bruder
 Avant de créer ou modifier du code C/C++ :
 1. Lire `doc/code_style_synthesis.md`
 2. Lire `doc/template_module.h` et `doc/template_module.cpp`
-3. Si le fichier modifié appartient à une architecture documentée → lire la section concernée dans `doc/architecture.md`
+3. Si le fichier modifié appartient à une architecture documentée → lire la section concernée dans ...
 
 Si un fichier généré ne correspond pas au style documenté, corriger avant de finaliser.
 
@@ -82,7 +81,7 @@ Pas de flag ad-hoc par module. Centralisation dans `src/core/system/debug/debug.
 1. Proposer un message de commit (convention ci-dessus).
 2. Si build exit 0 valide : *"Le dernier build (Xs, exit 0) est valide — tu peux uploader directement."*
 3. PS4 lib check (voir ci-dessous).
-4. Si nouvelle règle d'architecture arrêtée : proposer ajout minimal dans `doc/architecture.md`.
+
 
 ### PS4_Controller_Host — vérification périodique
 Fork `API-rep/PS4_Controller_Host` @ `b58a05d` — fix BT init IDF 4.4.  

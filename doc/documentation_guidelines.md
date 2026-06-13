@@ -17,9 +17,9 @@ These documents should remain technology-agnostic whenever possible and focus on
 
 Examples:
 
-* ecosystem.md
+* core_architecture.md
 * build_a_system.md
-* architecture.md
+* concepts.md
 
 ---
 
