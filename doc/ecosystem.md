@@ -1,4 +1,4 @@
-# Open RC Node Architecture
+# Open RC Node Ecosystem
 
 This document provides a high-level overview of how Open RC Node is structured. It focuses on concepts rather than implementation details.
 

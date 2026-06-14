@@ -6,137 +6,116 @@ It focuses on programming practices, naming conventions and implementation choic
 
 ### Scope
 
-- **Naming Rules:** Exact casing and nomenclature for variables, classes and functions.
-- **Programming Conventions:** Preferred ways of expressing logic and decomposing code.
-- **File Organization:** High-level organization principles for different file categories.
-- **Implementation Guidance:** Rules intended to improve readability, maintainability and consistency.
+* **Naming Rules:** Exact casing and nomenclature for variables, classes and functions.
+* **Programming Conventions:** Preferred ways of expressing logic and decomposing code.
+* **File Categories:** Entry point to file-type specific coding conventions.
+* **Implementation Guidance:** Rules intended to improve readability, maintainability and consistency.
 
 ---
 
 ## 1. Naming
 
-| Element                        | Convention          | Example                            |
-| ------------------------------ | ------------------- | ---------------------------------- |
-| Classes / types                | `PascalCase`        | `TemplateModule`, `TemplateConfig` |
-| `enum` types                   | `PascalCase`        | `TemplateMode`                     |
-| `enum` values                  | `UPPER_SNAKE_CASE`  | `MODE_A`, `MODE_B`                 |
-| Free functions (C module API)  | `snake_case`        | `pin_reg_init`, `combus_tx_init`   |
-| Class methods                  | `lowerCamelCase`    | `setDuty`, `isEnabled`             |
-| `#define` macros               | `UPPER_SNAKE_CASE`  | `MAX_RETRIES`                      |
-| `constexpr` constants          | `PascalCase`        | `SamplingDepth`, `AdcRefVoltage`   |
-| Structure fields / variables   | `lowerCamelCase`    | `pinRegEntry`, `lastTickMs`        |
+| Element                       | Convention         | Example                            |
+| ----------------------------- | ------------------ | ---------------------------------- |
+| Classes / types               | `PascalCase`       | `TemplateModule`, `TemplateConfig` |
+| `enum` types                  | `PascalCase`       | `TemplateMode`                     |
+| `enum` values                 | `UPPER_SNAKE_CASE` | `MODE_A`, `MODE_B`                 |
+| Free functions (C module API) | `snake_case`       | `pin_reg_init`, `combus_tx_init`   |
+| Class methods                 | `lowerCamelCase`   | `setDuty`, `isEnabled`             |
+| `#define` macros              | `UPPER_SNAKE_CASE` | `MAX_RETRIES`                      |
+| `constexpr` constants         | `PascalCase`       | `SamplingDepth`, `AdcRefVoltage`   |
+| Structure fields / variables  | `lowerCamelCase`   | `pinRegEntry`, `lastTickMs`        |
 
-- Variable names should be explicit whenever practical.
-- Short names such as `i`, `j` and `k` are acceptable for simple loop indices.
-- Naming conventions defined here take precedence over examples found elsewhere in the repository.
+* Variable names should be explicit whenever practical.
+* Short names such as `i`, `j` and `k` are acceptable for simple loop indices.
+* Naming conventions defined here take precedence over examples found elsewhere in the repository.
 
 ---
 
-## 2. File Organization
+## 2. General Coding Principles
 
-Different file categories serve different purposes and should remain focused on their intended responsibility.
+### Fixed-Width Types
 
-### 2.1 Definition Files
+Prefer architecture-independent types such as `uint8_t`, `uint16_t`, etc. instead of processor-dependent types such as `int`, `long`, or `unsigned`.
 
-Definition files describe shared concepts and identifiers.
+Fixed-width types guarantee consistent layouts and value ranges across supported platforms.
 
-Typical contents include:
+---
 
-- enums;
-- aliases;
-- constants;
-- lightweight compile-time definitions.
+### Meaningful Default Values
 
-Examples:
+Provide default initialization only when a safe and meaningful state exists.
 
-```text
-include/defs/
+Typical examples include:
+
+```cpp
+bool enabled = false;
+Foo* ptr = nullptr;
+uint8_t count = 0;
 ```
 
+Avoid arbitrary defaults that do not represent a valid initial state.
+
 ---
 
-### 2.2 Structure Files
+### Explicit Sentinel Values
 
-Structure files define shared data layouts.
+Prefer explicit sentinel values over undocumented conventions.
 
-Typical contents include:
+Common project conventions include:
 
-- configuration structures;
-- runtime state structures;
-- container structures.
+* `UNDEFINED` → valid type not configured;
+* `NOT_YET_SET` → value not yet determined;
+* `nullptr` → reference not assigned;
+* `COUNT` → number of indexable entries.
 
-Examples:
+---
+
+## 3. File Categories
+
+Different file categories follow additional coding conventions specific to their purpose.
+
+When designing new code, the preferred progression is generally:
 
 ```text
-include/struct/
+Simple structures
+        ↓
+Structures with lightweight helpers
+        ↓
+Local runtime engines (when behaviour becomes significant)
 ```
 
-Refer to `include/struct/README.md` for structure-specific design guidelines.
+Refer to the dedicated documents for both the underlying concepts and their associated coding conventions.
+
+### Structures
+
+Describe shared data and relationships.
+
+* Concepts → `include/struct/README.md`
+* Coding conventions → `coding_structs.md`
+
+### Local Runtime Engines
+
+Introduce local execution behaviour when structures alone are no longer sufficient.
+
+* Concepts → `runtime_engines.md`
+* Coding conventions → `coding_modules.md`
+
+### Configuration Files
+
+Describe static definitions assembled to build a system.
+
+* Coding conventions → `coding_configs.md`
+
+### Umbrella Files
+
+Select and assemble project variants through compile-time dispatch.
+
+* Coding conventions → `coding_umbrella.md`
 
 ---
 
-### 2.3 Configuration Files
-
-Configuration files describe a particular environment without implementing behavior.
-
-Typical contents include:
-
-- board descriptions;
-- machine declarations;
-- feature selection;
-- static wiring definitions.
-
-Examples:
-
-```text
-src/*/config/
-```
-
----
-
-### 2.4 Runtime Modules
-
-Runtime modules implement behavior.
-
-Typical contents include:
-
-- initialization routines;
-- processing logic;
-- drivers;
-- services;
-- module APIs.
-
-Examples:
-
-```text
-src/core/system/
-src/machines/system/
-```
-
----
-
-### 2.5 Umbrella Files
-
-Umbrella files expose a simplified entry point by gathering and dispatching lower-level definitions.
-
-Typical contents include:
-
-- aggregated includes;
-- configuration selectors;
-- environment dispatch;
-- compatibility layers.
-
-Examples:
-
-```text
-defs.h
-struct.h
-config.h
-```
-
----
-
-## 3. Logical Decomposition
+## 4. Logical Decomposition
 
 Non-trivial functions should be decomposed into explicit logical steps when doing so improves readability and maintainability.
 
@@ -144,9 +123,9 @@ Step comments are intended to expose the reasoning flow of the implementation ra
 
 Prefer:
 
-- meaningful phases;
-- clear transitions between responsibilities;
-- small coherent processing stages.
+* meaningful phases;
+* clear transitions between responsibilities;
+* small coherent processing stages.
 
 Avoid excessive decomposition when it does not improve understanding.
 
@@ -154,26 +133,26 @@ Refer to the layout guidelines for the visual representation of steps.
 
 ---
 
-## 4. General Recommendations
+## 5. General Recommendations
 
-- Prefer clarity over cleverness.
-- Keep functions focused on a single responsibility whenever practical.
-- Favor explicit code over implicit side effects.
-- Avoid unnecessary abstraction.
-- Write code intended to be understood by both humans and tooling.
-
----
-
-## 5. Compile-Time Definitions
-
-- Prefer `constexpr` over `#define` for typed compile-time constants.
-- Favor compile-time evaluation whenever possible.
-- Keep definitions strongly typed.
-- Reserve macros for cases where language constructs cannot be used.
+* Prefer clarity over cleverness.
+* Keep functions focused on a single responsibility whenever practical.
+* Favor explicit code over implicit side effects.
+* Avoid unnecessary abstraction.
+* Write code intended to be understood by both humans and tooling.
 
 ---
 
-## 6. Debug Facilities
+## 6. Compile-Time Definitions
+
+* Prefer `constexpr` over `#define` for typed compile-time constants.
+* Favor compile-time evaluation whenever possible.
+* Keep definitions strongly typed.
+* Reserve macros for cases where language constructs cannot be used.
+
+---
+
+## 7. Debug Facilities
 
 A dedicated debug infrastructure exists for initialization diagnostics and runtime monitoring.
 

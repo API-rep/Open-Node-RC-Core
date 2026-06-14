@@ -29,7 +29,7 @@ Topics include:
 
 Future documentation will also include diagrams and animations illustrating how remotes, machines and services exchange information across the network.
 
-* [Open RC Node Ecosystem](concepts.md)
+* [Open RC Node Ecosystem](ecosystem.md)
 
 ---
 

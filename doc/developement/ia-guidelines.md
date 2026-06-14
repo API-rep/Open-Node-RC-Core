@@ -103,4 +103,15 @@ These files illustrate compliant rendering. An AI agent can refer to them to und
 - Do not add generic sections not specific to AI in this file.
 - Do not ignore the style already in place in an existing file.
 
+!!! A reformuler !!!
+
+AI-generated code acceptance rule
+
+L'IA peut introduire de nouveaux mécanismes internes lorsqu'ils simplifient une implémentation locale.
+
+En revanche, ces mécanismes ne doivent pas modifier les concepts fondamentaux du projet sans validation explicite.
+
+Les concepts partagés du projet (structures, définitions, séparation cfg/state, organisation mémoire) restent prioritaires sur les abstractions proposées automatiquement.
+
+
 // EOF ia-guidelines.md
