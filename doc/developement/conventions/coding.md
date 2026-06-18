@@ -75,15 +75,19 @@ Common project conventions include:
 
 Different file categories follow additional coding conventions specific to their purpose.
 
-When designing new code, the preferred progression is generally:
+When designing new functionality, the preferred progression is generally:
 
 ```text
-Simple structures
+Shared structures
         ↓
-Structures with lightweight helpers
+Configured instances
         ↓
-Local runtime engines (when behaviour becomes significant)
+Runtime Engines (when execution behaviour is required)
 ```
+
+Shared structures define what exists.
+
+Runtime Engines define how it behaves.
 
 Refer to the dedicated documents for both the underlying concepts and their associated coding conventions.
 
@@ -91,15 +95,20 @@ Refer to the dedicated documents for both the underlying concepts and their asso
 
 Describe shared data and relationships.
 
-* Concepts → `include/struct/README.md`
-* Coding conventions → `coding_structs.md`
+Used throughout configurations, communication contracts, dashboards, simulations, and Runtime Engines.
 
-### Local Runtime Engines
+* [Structure concepts](/include/struct/README.md)
+* [Structure Coding conventions](coding_structures.md)
 
-Introduce local execution behaviour when structures alone are no longer sufficient.
+### Runtime Engines
 
-* Concepts → `runtime_engines.md`
-* Coding conventions → `coding_modules.md`
+Introduce localized execution behaviour operating on existing structures.
+
+They combine shared data definitions with execution logic while preserving explicit ownership, memory placement, and execution flow.
+
+* [Runtime Engines concepts](runners.md)*
+* [Runtime Engines Coding conventions](coding_runners.md)*
+
 
 ### Configuration Files
 
@@ -159,3 +168,23 @@ A dedicated debug infrastructure exists for initialization diagnostics and runti
 When diagnostics are required, use the project's debug facilities rather than introducing ad-hoc `Serial.print()` statements.
 
 Refer to the dedicated debug documentation for logging conventions, APIs and dashboard integration.
+
+ +++ to add +++
+
+ Design Philosophy
+
+Local Runtime Engines should only be introduced when shared structures alone are no longer sufficient.
+
+The preferred progression remains:
+
+Describe the data
+        ↓
+Instantiate the data
+        ↓
+Adapt behaviour through dynamic configuration
+        ↓
+Execute only what must be executed
+
+Data remains the foundation of the system.
+
+Execution is introduced only as the final layer required to bring that data to life.
