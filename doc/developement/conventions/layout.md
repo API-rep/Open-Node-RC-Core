@@ -1,56 +1,262 @@
-# File Layout and Structural Architecture
+# Layout Rules
 
-This document defines the macro-visual organization and skeleton blueprints for files based on their functional role.
-It provides the mandatory layout blocks and structural order that developers must follow when creating new files.
+This document defines how formatting elements are assembled and organised within files.
 
-### Scope
-- **File Blueprints:** Specific structural patterns for Umbrella, Classic C++, and Config files.
-- **Block Layout & Separators:** Mandatory sequence of sections, major block markers, and file termination tags.
-- **Structural Spacing:** Vertical empty lines required between major structural blocks or sections.
+If `formatting.md` defines the visual vocabulary, this document defines the rules used to compose it, similarly to paragraphs and tabulations in a word processor.
 
-### Line Length
-- Lines should not exceed 80-100 characters for readability, except for debug log lines which should not be split.
+This document intentionally avoids semantic C/C++ decisions. Those belong to `coding-conventions.md`.
 
-### 1.1. Indentation
-- Use tabulations for indentation, including in preprocessor blocks.
+Whenever practical, these rules should remain simple and compatible with automated formatting tools.
 
-# 1. Header and File Layout
+---
 
-## Header File Blueprint (`.h`)
+## 1. General Principles
 
-Header files should follow this general structure:
+The layout of a file shall prioritise:
 
-1. `#pragma once`
-2. Includes
-3. Major declaration sections
-4. Type and class declarations
-5. Public API declarations
-6. EOF marker
+* consistency;
+* readability;
+* predictable navigation;
+* minimal visual noise.
 
-## Source File Blueprint (`.cpp`)
+---
 
-Source files should follow this general structure:
+## 2. Global Spacing
 
-1. Includes
-2. Major implementation sections
-3. Function implementations
-4. Empty lines between functions
-5. EOF marker
+* Indentation uses tabs.
+* Maximum line length is 120 columns.
 
+Blank lines shall be used consistently:
 
-# 2. Règles de composition (à traduire)
+* One blank line separates a Doxygen block from the code it documents.
+* Two blank lines separate major logical blocks (e.g. functions, declarations, Doxygen+code groups).
+* At least one blank line shall appear before and after a section separator.
+* One blank line shall precede a code comment introducing a logical step.
+* No blank line separates such comments from the code they describe.
 
-### Vertical Spacing
+Refer to the example files for representative spacing patterns.
 
-- **1 empty line** after include blocks.
-- **1 additional empty line** before each major section block (`// ===`).
-- **1 empty line** before class access sections (`public:`, `private:`).
-- **2 empty lines** between the end of a code block and the+ next Doxygen block (3 if the previous block exceeds 40 lines).
-- **1 to 2 empty lines** between function implementations in a `.cpp`.
+---
 
+## 3. Header File Layout (`.h`)
 
-### Step Layout
+Recommended order:
 
-- Step comments are indented one level deeper than the code they describe.
-- Nested steps follow the same indentation rules.
-- Only one level of nested steps is allowed.
+```text
+{file_banner}
+
+#pragma once
+
+{system_includes}
+{project_includes}
+
+{forward_declarations}
+
+{declarations}
+
+{eof_marker}
+```
+
+---
+
+## 4. Source File Layout (`.cpp`)
+
+Recommended order:
+
+```text
+{file_banner}
+
+{system_includes}
+{project_includes}
+
+{definitions}
+
+{eof_marker}
+```
+
+Source files should mirror the semantic order of their associated headers whenever practical.
+
+---
+
+## 5. Section Separators
+
+Rules:
+
+* Section separators delimit major themes within a file.
+* At least one blank line shall appear before and after a separator.
+* In practice, two blank lines will often precede a separator because the previous logical block already ends with its own separation.
+* Consecutive separators are forbidden.
+* Numbering is strongly encouraged when a natural progression exists.
+* Numbering remains optional.
+
+Visual form:
+
+```cpp
+// =============================================================================
+// 1. CONFIGURATION
+// =============================================================================
+```
+
+Refer to the example files for typical usage patterns.
+
+---
+
+## 6. Code Comments
+
+Rules:
+
+* Code comments immediately precede the code they describe.
+* No blank line separates a comment from its associated code.
+* One blank line shall precede a logical step comment.
+* Sub-steps are limited to one nesting level.
+* Step numbering may be omitted when a function naturally consists of a single logical phase.
+* Step comments shall be indented exactly one tab deeper than the code block they describe.
+
+Example:
+
+```cpp
+	  // Read current state
+	readState();
+```
+
+Step identifiers may be referenced by Doxygen documentation describing algorithm flow.
+
+Refer to the example files for complete step layouts.
+
+---
+
+## 7. Documentation Placement
+
+Rules:
+
+* Documentation immediately precedes its target.
+* No unrelated code may separate them.
+* Rich documentation uses Doxygen blocks.
+* Compact Doxygen blocks may be used when extensive documentation would reduce readability.
+
+Refer to `doxygen-conventions.md`.
+
+---
+
+## 8. Include Organisation
+
+Rules:
+
+* Separate system and project includes.
+* Include annotations are encouraged whenever they improve understanding.
+* Include comments explain purpose rather than repeating filenames.
+
+Example:
+
+```cpp
+#include <PS4Controller.h>  // DualShock 4 Bluetooth protocol support.
+```
+
+---
+
+## 9. Vertical Alignment
+
+Vertical alignment is encouraged whenever it improves scanability.
+
+Typical candidates include:
+
+* structure members;
+* container fields;
+* enum values;
+* designated initialisers.
+
+Examples:
+
+```cpp
+const char* infoName;
+uint8_t     count;
+State*      state;
+```
+
+```cpp
+UNDEFINED = 0,
+STARTING  = 1,
+RUNNING   = 2,
+```
+
+Alignment decisions shall favour readability over mechanical consistency.
+
+---
+
+## 10. Configuration Arrays
+
+Rules:
+
+* Preserve enum declaration order.
+* Group entries according to the associated enum structure.
+* Entry identification comments are encouraged.
+* Compact and expanded entry layouts may coexist within the same file when readability benefits.
+
+Example:
+
+```cpp
+// LX_STICK
+{
+	.infoName    = "Left X stick",
+	.type        = RemoteComp::ANALOG_STICK,
+	.minVal      = StickMinVal,
+	.maxVal      = StickMaxVal,
+	.isInverted  = false
+},
+
+// LY_STICK
+{
+	.infoName    = "Left Y stick",
+	.type        = RemoteComp::ANALOG_STICK,
+	.minVal      = StickMinVal,
+	.maxVal      = StickMaxVal,
+	.isInverted  = false
+},
+```
+
+---
+
+## 11. Enum Grouping
+
+Long enumerations may be subdivided using enum group separators.
+
+Example:
+
+```cpp
+// --- Traction (0x10–0x1F) ---
+TRACT_WHEEL = 0x10,
+TRACT_TRACK = 0x11,
+```
+
+Use only when meaningful categories improve readability.
+
+---
+
+## 12. Debug Log Placement
+
+Debug statements follow the indentation level of the surrounding scope.
+
+Example:
+
+```cpp
+if (ready)
+{
+	LOG_DEBUG("[HW] Initialised.");
+}
+```
+
+Refer to `debug-logging.md`.
+
+---
+
+## 13. EOF Marker Placement
+
+The EOF marker shall be the final non-empty line of the file.
+
+No additional content may follow it.
+
+Example:
+
+```cpp
+// EOF module.cpp
+```

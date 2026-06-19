@@ -8,7 +8,7 @@ It focuses on programming practices, naming conventions and implementation choic
 
 * **Naming Rules:** Exact casing and nomenclature for variables, classes and functions.
 * **Programming Conventions:** Preferred ways of expressing logic and decomposing code.
-* **File Categories:** Entry point to file-type specific coding conventions.
+* **File Categories:** Entry points to file-type specific conventions.
 * **Implementation Guidance:** Rules intended to improve readability, maintainability and consistency.
 
 ---
@@ -22,13 +22,15 @@ It focuses on programming practices, naming conventions and implementation choic
 | `enum` values                 | `UPPER_SNAKE_CASE` | `MODE_A`, `MODE_B`                 |
 | Free functions (C module API) | `snake_case`       | `pin_reg_init`, `combus_tx_init`   |
 | Class methods                 | `lowerCamelCase`   | `setDuty`, `isEnabled`             |
-| `#define` macros              | `UPPER_SNAKE_CASE` | `MAX_RETRIES`                      |
+| `#define` macros              | `UPPER_SNAKE_CASE` | `FEATURE_SIMULATION`               |
 | `constexpr` constants         | `PascalCase`       | `SamplingDepth`, `AdcRefVoltage`   |
 | Structure fields / variables  | `lowerCamelCase`   | `pinRegEntry`, `lastTickMs`        |
 
-* Variable names should be explicit whenever practical.
+Guidelines:
+
+* Prefer explicit names whenever practical.
 * Short names such as `i`, `j` and `k` are acceptable for simple loop indices.
-* Naming conventions defined here take precedence over examples found elsewhere in the repository.
+* These conventions take precedence over examples found elsewhere in the repository.
 
 ---
 
@@ -36,7 +38,7 @@ It focuses on programming practices, naming conventions and implementation choic
 
 ### Fixed-Width Types
 
-Prefer architecture-independent types such as `uint8_t`, `uint16_t`, etc. instead of processor-dependent types such as `int`, `long`, or `unsigned`.
+Prefer architecture-independent types such as `uint8_t`, `uint16_t`, etc. instead of processor-dependent types such as `int`, `long` or `unsigned`.
 
 Fixed-width types guarantee consistent layouts and value ranges across supported platforms.
 
@@ -71,56 +73,75 @@ Common project conventions include:
 
 ---
 
-## 3. File Categories
+### Compile-Time Constants
 
-Different file categories follow additional coding conventions specific to their purpose.
+Avoid `#define` for typed constants.
 
-When designing new functionality, the preferred progression is generally:
+Use `constexpr` instead.
 
-```text
-Shared structures
-        ↓
-Configured instances
-        ↓
-Runtime Engines (when execution behaviour is required)
+Preferred usages include:
+
+* numeric limits;
+* protocol values;
+* default thresholds;
+* configuration defaults.
+
+Example:
+
+```cpp
+constexpr int8_t StickMinVal = -127;
+constexpr int8_t StickMaxVal = 127;
 ```
 
-Shared structures define what exists.
+`#define` should be reserved for build-time feature selection driven by the build system.
 
-Runtime Engines define how it behaves.
+Typical examples include:
 
-Refer to the dedicated documents for both the underlying concepts and their associated coding conventions.
+```cpp
+#if defined(FEATURE_SIMULATION)
+    ...
+#endif
+```
+
+or compiler flags passed through `-D`.
+
+---
+
+## 3. File Categories
+
+Different file categories follow additional conventions specific to their purpose.
+
+Refer to the dedicated documents when working within these domains.
 
 ### Structures
 
 Describe shared data and relationships.
 
-Used throughout configurations, communication contracts, dashboards, simulations, and Runtime Engines.
+Used throughout configurations, communication contracts, dashboards, simulations and Runtime Engines.
 
-* [Structure concepts](/include/struct/README.md)
-* [Structure Coding conventions](coding_structures.md)
-
-### Runtime Engines
-
-Introduce localized execution behaviour operating on existing structures.
-
-They combine shared data definitions with execution logic while preserving explicit ownership, memory placement, and execution flow.
-
-* [Runtime Engines concepts](runners.md)*
-* [Runtime Engines Coding conventions](coding_runners.md)*
-
+* Structure concepts → `README.md`
+* Structure conventions → `coding_structures.md`
 
 ### Configuration Files
 
 Describe static definitions assembled to build a system.
 
-* Coding conventions → `coding_configs.md`
+* Configuration conventions → `coding_configs.md`
+
+### Runtime Engines
+
+Introduce localized execution behaviour operating on existing structures.
+
+They combine shared data definitions with execution logic while preserving explicit ownership, memory placement and execution flow.
+
+* Runtime Engine concepts → `runners.md`
+* Runtime Engine conventions → `coding_runners.md`
 
 ### Umbrella Files
 
 Select and assemble project variants through compile-time dispatch.
 
-* Coding conventions → `coding_umbrella.md`
+* Umbrella conventions → `coding_umbrella.md`
 
 ---
 
@@ -152,12 +173,29 @@ Refer to the layout guidelines for the visual representation of steps.
 
 ---
 
-## 6. Compile-Time Definitions
+## 6. Design Philosophy
 
-* Prefer `constexpr` over `#define` for typed compile-time constants.
-* Favor compile-time evaluation whenever possible.
-* Keep definitions strongly typed.
-* Reserve macros for cases where language constructs cannot be used.
+The project follows a data-first approach.
+
+The preferred progression is:
+
+```text
+Describe the data
+        ↓
+Instantiate the data
+        ↓
+Adapt behaviour through dynamic configuration
+        ↓
+Execute only what must be executed
+```
+
+Shared structures form the foundation of the system.
+
+Configuration assembles those structures into concrete instances.
+
+Runtime Engines are introduced only when execution behaviour becomes necessary.
+
+Execution is therefore treated as the final layer added to bring data to life, rather than the starting point of the design.
 
 ---
 
@@ -169,22 +207,4 @@ When diagnostics are required, use the project's debug facilities rather than in
 
 Refer to the dedicated debug documentation for logging conventions, APIs and dashboard integration.
 
- +++ to add +++
-
- Design Philosophy
-
-Local Runtime Engines should only be introduced when shared structures alone are no longer sufficient.
-
-The preferred progression remains:
-
-Describe the data
-        ↓
-Instantiate the data
-        ↓
-Adapt behaviour through dynamic configuration
-        ↓
-Execute only what must be executed
-
-Data remains the foundation of the system.
-
-Execution is introduced only as the final layer required to bring that data to life.
+// EOF coding.md
