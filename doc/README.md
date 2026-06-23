@@ -30,6 +30,7 @@ Topics include:
 Future documentation will also include diagrams and animations illustrating how remotes, machines and services exchange information across the network.
 
 * [Open RC Node Ecosystem](ecosystem.md)
+* [Core Architecture](core_architecture.md)
 
 ---
 
@@ -39,7 +40,9 @@ Ready to build your own Open RC Node setup?
 
 This section covers the practical aspects of creating and deploying a system.
 
-Topics include:
+#### Quick Start
+
+* [Building an Open RC Node System](~build_a_system.md) — Step-by-step guide
 
 #### Hardware
 
@@ -66,6 +69,15 @@ Topics include:
 * Testing communications
 * Debugging tools
 * Dashboard overview
+
+---
+
+### Project Roadmap & Evolution
+
+Track the project's evolution and upcoming features.
+
+* [Roadmap](roadmap.md) — Current development direction
+* [Deferred Features](deferred_features.md) — Backlog and future improvements
 
 ---
 
@@ -97,7 +109,12 @@ Topics include:
 * Modules
 * Internal services
 * Software architecture
-* Development guidelines
+* [Development Guidelines](developement/README.md)
+
+See also:
+
+* [Documentation Guidelines](documentation_guidelines.md) — How we structure documentation
+* [IA Guidelines](ia-guidelines.md) — Guidelines for AI-assisted development
 
 ---
 

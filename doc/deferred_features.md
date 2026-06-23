@@ -39,11 +39,38 @@ Voir @todo existant dans combus_ids.h → GEAR_SHIFTING.
 
 ---
 
-## 3. ComBus v2 — architecture en couches
+## 3. DynConfig structure implementation
+
+**Objectif :** Finaliser l'architecture DynConfig conformément au document de référence.
+
+**Travaux identifiés :**
+
+* Scinder les structures existantes en trois sous-ensembles :
+
+  * `config` : configuration persistante ;
+  * `dynconfig` : configuration dynamique ;
+  * `state` : état d'exécution.
+* Généraliser l'utilisation des variantes allégées de `dynconfig` afin de réduire l'empreinte RAM :
+
+  * suppression des métadonnées inutiles à l'exécution ;
+  * conservation des seules informations nécessaires au runtime.
+* Adapter les consommateurs existants :
+
+  * ComBus processors ;
+  * autres modules utilisant directement les structures de configuration.
+* Vérifier l'alignement entre la documentation DynConfig et les implémentations actuelles.
+
+**Statut :** Roadmap / Technical debt
+
+Cette évolution vise principalement à clarifier la séparation entre configuration et état runtime tout en réduisant la consommation mémoire.
+
+---
+
+## 4. ComBus v2 — architecture en couches
 
 L'usage du ComBus a progressivement dépassé son rôle initial de simple liaison entre télécommande et machine.
 
-ComBus v2 formalise les différents niveaux d'utilisation déjà intruduits dans l'architecture actuelle :
+ComBus v2 formalise les différents niveaux d'utilisation déjà introduits dans l'architecture actuelle :
 
 ```text
 Inter-node    ← échanges entre nœuds distincts
@@ -56,23 +83,107 @@ Intra-device  ← données locales partagées au sein d'un firmware
                (VBAT, RunLevel, états simulés, valeurs intermédiaires...)
 ```
 
-**Règle dure :** chaque canal appartient explicitement à l'une de ces couches, qui détermine sa portée et ses mécanismes de propagation.
+**Règle dure :** chaque canal appartient explicitement à l'une de ces couches,
+qui détermine sa portée et ses mécanismes de propagation.
 
 ### Conséquences
 
-Cette séparation devra se refléter dans les structures ComBus, le transport des trames et la configuration :
+Cette séparation devra se refléter dans les structures ComBus, le transport des
+trames et la configuration :
 
 * les données inter-node définiront les échanges externes ;
 * les données inter-device structureront les extensions matérielles ;
 * les données intra-device resteront privées au firmware.
 
-Aucune décision n'est prise à ce stade concernant un typage plus fort des canaux. La simplicité du ComBus reste une priorité ; l'expérience de `TRACTION_BUS` montre qu'une abstraction trop riche devient rapidement contre-productive.
+Aucune décision n'est prise à ce stade concernant un typage plus fort des
+canaux. La simplicité du ComBus reste une priorité ; l'expérience de
+`TRACTION_BUS` montre qu'une abstraction trop riche devient rapidement
+contre-productive.
 
-Un réarrangement interne par domaines fonctionnels (`light`, `sound`, `motion`, etc.) reste envisageable si cela améliore la lisibilité sans alourdir le modèle.
+### Typed channel groups (piste d'évolution)
+
+Une évolution possible consisterait à regrouper les canaux par domaines
+fonctionnels au lieu de les maintenir dans un espace plat unique :
+
+```cpp
+MotionComBus motion;
+LightComBus  light;
+CoreComBus   core;
+```
+
+Chaque domaine disposerait de ses propres identifiants et de son propre
+stockage, permettant à un nœud de n'embarquer que les groupes réellement
+nécessaires.
+
+Les bénéfices potentiels seraient :
+
+* groupes fonctionnels réellement optionnels ;
+* dépendances plus explicites entre modules ;
+* disparition des emplacements inutilisés dans certaines configurations.
+
+Cette approche impliquerait toutefois une évolution du protocole de transport
+afin de supporter plusieurs types de trames ou un mécanisme de multiplexage.
+
+Aucune décision n'est prise à ce stade. Cette piste ne sera réévaluée que si
+plusieurs modules indépendants nécessitent des ensembles de canaux réellement
+distincts.
 
 ---
 
-## 5. SoundDevice — moteur audio table-driven
+## 5. ComBus transport v2 — architecture dual-frame
+
+### Objectif
+
+Séparer les échanges temps réel des données de configuration à faible
+fréquence.
+
+Le modèle actuel transporte l'ensemble des informations dans une trame unique
+émise à fréquence constante. Cette approche reste adaptée tant que le volume de
+données demeure limité.
+
+Une évolution future pourrait introduire deux classes de trafic :
+
+```text
+Control frame   ← commandes temps réel
+                  (sticks, boutons, états critiques)
+
+Config frame    ← paramètres peu fréquents
+                  (luminosité, trims, réglages persistants...)
+```
+
+Cette approche est comparable à la séparation PDO/SDO utilisée dans CANopen.
+
+### Bénéfices potentiels
+
+* réduction de la charge sur les trames temps réel ;
+* transport de paramètres occasionnels sans augmenter la taille des trames de contrôle ;
+* meilleure évolutivité pour les futurs nœuds spécialisés.
+
+### Implémentation envisagée
+
+La solution la plus simple consisterait à utiliser un multiplexage périodique :
+
+```text
+Frame 1  → Control
+Frame 2  → Control
+Frame 3  → Control
+Frame 4  → Config
+```
+
+Cette approche pourrait être réalisée sans modification majeure du protocole
+actuel, via un compteur de trames côté émission.
+
+### Statut
+
+Aucun besoin concret ne justifie actuellement cette complexité.
+
+Cette évolution ne sera envisagée qu'en présence d'un cas d'usage réel,
+par exemple le transport de paramètres utilisateur vers des nœuds spécialisés
+sans surcharge permanente des trames de contrôle.
+
+---
+
+## 6. SoundDevice — moteur audio table-driven
 
 **Objectif :** remplacer le monolithe `main.cpp` (≈1600 lignes, `pulseWidth[]`, `#ifdef`, logique dispersée) par une architecture déclarative basée sur des descripteurs de périphériques.
 

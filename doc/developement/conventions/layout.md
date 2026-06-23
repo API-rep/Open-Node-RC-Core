@@ -103,25 +103,58 @@ Refer to the example files for typical usage patterns.
 
 ## 6. Code Comments
 
-Rules:
+### 6.1 Descriptive Comments
 
-* Code comments immediately precede the code they describe.
-* No blank line separates a comment from its associated code.
-* One blank line shall precede a logical step comment.
-* Sub-steps are limited to one nesting level.
-* Step numbering may be omitted when a function naturally consists of a single logical phase.
-* Step comments shall be indented exactly one tab deeper than the code block they describe.
+Any standalone `//` comment that describes the code immediately following it shall be indented exactly one tab deeper than that code.
 
-Example:
+This convention visually associates the comment with the statement or block it introduces and makes comment ownership immediately obvious.
+
+The comment must remain directly attached to the code it describes. No blank line shall separate a descriptive comment from its target code.
+
+This rule applies to:
+
+* Step comments (`// 1. Description`)
+* Sub-step comments (`// 1.1 Description`)
+* Phase comments (`// Resolve effective configuration`)
+* Block descriptions (`// Internal bookkeeping`)
+* Multi-line descriptive comment groups
+
+This rule does **not** apply to:
+
+* End-of-line comments (`code;  // explanation`)
+* Section separators (`// === SECTION ===`)
+* Configuration entry labels (`// LX_STICK`)
+* File banners and Doxygen blocks
+
+### Example
 
 ```cpp
-	  // Read current state
-	readState();
+void function()
+{
+		// 1. Validate inputs
+	if (!ptr) {
+		return;
+	}
+
+		// 2. Resolve effective configuration
+		//    dynCfg takes precedence when active
+	const Cfg* eff = dynActive ? dynCfg : cfg;
+
+		// 3. Apply behaviour
+		// 3.1 Compute delta
+	uint32_t dt = now - last;
+
+		// 3.2 Update accumulator
+	accumulator += dt;
+}
 ```
 
-Step identifiers may be referenced by Doxygen documentation describing algorithm flow.
+### Rationale
 
-Refer to the example files for complete step layouts.
+The additional indentation level distinguishes descriptive comments from executable code while preserving their visual attachment to the block they document.
+
+Comments should be read as annotations of the following code, not as independent statements.
+
 
 ---
 

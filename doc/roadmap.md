@@ -11,11 +11,3 @@ Les développements récents montrent cependant que les environnements *machine*
 **Orientation retenue :** faire converger progressivement les deux environnements vers une architecture commune, où le son et la lumière deviennent des modules spécialisés plutôt que des projets indépendants.
 
 Jusqu'à cette convergence, les deux projets évolueront en miroir afin de limiter le coût d'une fusion ultérieure.
-
-
-### System improvement roadmap ###
-## DynConfig structure implementation ##
-Following structure readme file :
-- Split existing config into config/dynconfig/state sub structure
-- "norm" dynconfig usage for a minimal RAM footprint (ex : skip title, etc)
-- Adapt existing dynconfig consumer (combus processor, ...S)
