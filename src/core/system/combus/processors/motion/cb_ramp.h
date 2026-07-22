@@ -32,7 +32,7 @@
  *****************************************************************************/
 #pragma once
 
-#include <struct/combus_proc_struct.h>                         // CbProc, CbProcFn, ChanOwner
+#include <struct/combus_proc_struct.h>  // CbProc, CbProcFn
 #include <struct/combus/processors/motion/cb_ramp_struct.h>    // CbRampCfg, CbRampState
 
 
@@ -55,7 +55,7 @@
  * @param claimed Not modified — downstream procs continue after this one.
  * @param chainOwner  Not used — ramp is self-contained (reads/writes through `value` only).
  */
-void cb_sym_ramp_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void cb_sym_ramp_fn(CbProc* proc, uint16_t& value, bool& claimed);
 
 /**
  * @brief Unipolar inertia ramp — magnitude domain [0..CbusMaxVal], 0 = stopped.
@@ -75,6 +75,6 @@ void cb_sym_ramp_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chai
  * @param claimed Not modified.
  * @param chainOwner  Not used.
  */
-void cb_uni_ramp_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void cb_uni_ramp_fn(CbProc* proc, uint16_t& value, bool& claimed);
 
 // EOF cb_ramp.h

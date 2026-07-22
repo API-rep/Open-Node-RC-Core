@@ -11,7 +11,7 @@
 // =============================================================================
 
 /** @brief Absolute value with sign side effect — see cb_abs.h for contract. */
-void cb_abs_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)
+void cb_abs_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/)
 {
     const int16_t sv   = static_cast<int16_t>(value);
     proc->outValue  = static_cast<uint16_t>(sv >= 0 ? 1u : 0u);  // runner commits to outCh

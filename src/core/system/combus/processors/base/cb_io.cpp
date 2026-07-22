@@ -11,14 +11,14 @@
 // =============================================================================
 
 /** @brief Pipeline source — see cb_io.h for full contract. */
-void cb_in_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*owner*/)
+void cb_in_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/)
 {
     value = proc->inValue;
 }
 
 
 /** @brief Pipeline sink — see cb_io.h for full contract. */
-void cb_out_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*owner*/)
+void cb_out_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/)
 {
     proc->outValue = value;
 }

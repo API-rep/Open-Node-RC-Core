@@ -18,7 +18,7 @@
 // 1. FSM WRAPPER
 // =============================================================================
 
-void gear_fsm_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)
+void gear_fsm_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/)
 {
     const GearProcCfg* cfg   = static_cast<const GearProcCfg*>(proc->cfg);
     GearFsmState*      state = static_cast<GearFsmState*>(proc->state);
@@ -72,7 +72,7 @@ void gear_fsm_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*c
  *
  *   state = GearFsmState* (shared with gear_fsm_fn, read-only here).
  */
-void gear_ratio_inv_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)
+void gear_ratio_inv_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/)
 {
     const GearProcCfg*      cfg     = static_cast<const GearProcCfg*>(proc->cfg);
     const GearShiftProfile* profile = cfg->profile;
@@ -115,7 +115,7 @@ void gear_ratio_inv_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwn
 // =============================================================================
 
 /** @brief Scale RPM magnitude by gearRatio[gear] / 1000 -- stays in RPM domain. */
-void gear_ratio_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)
+void gear_ratio_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/)
 {
     const GearProcCfg*      cfg     = static_cast<const GearProcCfg*>(proc->cfg);
     const GearShiftProfile* profile = cfg->profile;
@@ -142,7 +142,7 @@ void gear_ratio_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /
 // =============================================================================
 
 /** @brief Cap RPM magnitude to maxSpeedPct when sub-gear is active. */
-void gear_subgear_cap_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)
+void gear_subgear_cap_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/)
 {
     // inCh = SUBGEAR_BUS (0 = inactive, 1..N = sub-gear index).
     const uint8_t subIdx = static_cast<uint8_t>(proc->inValue);
@@ -176,7 +176,7 @@ void gear_subgear_cap_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanO
 // =============================================================================
 
 /** @brief Scale RPM magnitude to ComBus half range and apply direction. */
-void gear_dir_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)
+void gear_dir_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/)
 {
     const GearProcCfg*      cfg     = static_cast<const GearProcCfg*>(proc->cfg);
     const GearShiftProfile* profile = cfg->profile;
@@ -212,7 +212,7 @@ void gear_dir_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*c
 // 6. GEAR ? RAMP BRIDGE
 // =============================================================================
 
-void gear_dyn_ramp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)
+void gear_dyn_ramp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/)
 {
     if (proc->dynCfg == nullptr) return;  // No ramp linked â€” passthrough.
 
@@ -265,8 +265,7 @@ void gear_dyn_ramp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwne
  *   outCh  = GEAR_SHIFTING   (machine-local digital).
  *   @todo winter 2026: promote GEAR_SHIFTING to WIRE region so sound node reads directly.
  */
-void gear_upshift_damp_fn(CbProc* proc, uint16_t& value,
-                           bool& /*claimed*/, ChanOwner /*chainOwner*/)
+void gear_upshift_damp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/)
 {
     if (proc->dynCfg == nullptr) return;  // No ramp linked — passthrough.
 
@@ -334,8 +333,7 @@ void gear_upshift_damp_fn(CbProc* proc, uint16_t& value,
  *   state = GearDampState* (shared with gear_upshift_damp_fn).
  *   outCh = ESC_RPM_BUS.
  */
-void gear_upshift_rpm_fade_fn(CbProc* proc, uint16_t& value,
-                      bool& /*claimed*/, ChanOwner /*chainOwner*/)
+void gear_upshift_rpm_fade_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/)
 {
     const GearProcCfg*      cfg     = static_cast<const GearProcCfg*>(proc->cfg);
     const GearShiftProfile* profile = cfg->profile;

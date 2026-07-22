@@ -13,7 +13,7 @@
  *****************************************************************************/
 #pragma once
 
-#include <struct/combus_proc_struct.h>  // CbProc, CbProcFn, ChanOwner
+#include <struct/combus_proc_struct.h>  // CbProc, CbProcFn
 
 
 // =============================================================================
@@ -21,10 +21,10 @@
 // =============================================================================
 
 /// @brief Pipeline source — copies `proc->inValue` into the pipeline `value`.
-void cb_in_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner owner);
+void cb_in_fn(CbProc* proc, uint16_t& value, bool& claimed);
 
 /// @brief Pipeline sink — copies the pipeline `value` to `proc->outValue`.
-void cb_out_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner owner);
+void cb_out_fn(CbProc* proc, uint16_t& value, bool& claimed);
 
 
 // EOF cb_io.h

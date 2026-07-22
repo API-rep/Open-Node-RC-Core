@@ -25,7 +25,7 @@
  *****************************************************************************/
 #pragma once
 
-#include <struct/combus_proc_struct.h>                            // CbProc, CbProcFn, ChanOwner
+#include <struct/combus_proc_struct.h>  // CbProc, CbProcFn
 #include <struct/combus/processors/motion/cb_dir_struct.h>       // CbDirCfg
 
 
@@ -42,6 +42,6 @@
  * @param claimed Not modified.
  * @param chainOwner  Not used.
  */
-void cb_dir_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void cb_dir_fn(CbProc* proc, uint16_t& value, bool& claimed);
 
 // EOF cb_dir.h

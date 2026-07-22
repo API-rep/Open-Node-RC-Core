@@ -61,10 +61,10 @@ void loop() {
         // Without this, prevValue stays true (last engine-on state) and the rising
         // edge is never re-armed — the machine would be stuck in IDLE after reconnect.
       combus_set_digital(comBus, DigitalComBusID::KEY_ACTIVE, false,
-                         makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
+                         ChanLayer::LOCAL);
       s_failsafeWasActive = true;
     }
-    combus_set_runlevel(comBus, RunLevel::IDLE, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
+    combus_set_runlevel(comBus, RunLevel::IDLE);
     return;  // dashboard runs on its own FreeRTOS task (Core 0)
   }
   s_failsafeWasActive = false;
@@ -107,7 +107,7 @@ void loop() {
       const bool keyActive = comBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::KEY_ACTIVE)].value;
       if (!keyActive && (millis() - stateTM >= kSleepTimeoutMs)) {
           sys_log_info("[SYSTEM][EVENT] reason=sleep_timeout action=enter_SLEEPING\n");
-          combus_set_runlevel(comBus, RunLevel::SLEEPING, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
+          combus_set_runlevel(comBus, RunLevel::SLEEPING);
       }
       break;
     }
@@ -124,7 +124,7 @@ void loop() {
       }
 
         // --- 1. Auto-transition to RUNNING ---
-        combus_set_runlevel(comBus, RunLevel::RUNNING, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
+        combus_set_runlevel(comBus, RunLevel::RUNNING);
       break;
     }
 
@@ -160,7 +160,7 @@ void loop() {
         if (active) s_lastActivityMs = millis();
         if (millis() - s_lastActivityMs >= kEngineOffTimeoutMs) {
             sys_log_info("[SYSTEM][EVENT] reason=idle_timeout action=enter_IDLE\n");
-            combus_set_runlevel(comBus, RunLevel::IDLE, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
+            combus_set_runlevel(comBus, RunLevel::IDLE);
             break;
         }
       }
@@ -193,7 +193,7 @@ void loop() {
         disableAllDcDrivers(machine);
       }
         // Auto-transition to IDLE — no shutdown sequence implemented yet (winter 2026).
-        combus_set_runlevel(comBus, RunLevel::IDLE, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
+        combus_set_runlevel(comBus, RunLevel::IDLE);
       break;
     }
 
@@ -222,14 +222,14 @@ void loop() {
   if (sys.vbatChanged) {
     for (uint8_t i = 0; i < vbat_channel_count(); i++) {
       if (vbat_is_low(i)) { 
-        combus_set_battlow(comBus, true, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_VBAT));
-        combus_set_digital(comBus, DigitalComBusID::BATTERY_LOW, true, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_VBAT));
+        combus_set_battlow(comBus, true);
+        combus_set_digital(comBus, DigitalComBusID::BATTERY_LOW, true);
         break;
       }
     }
 
     if (comBus.batteryIsLow) {
-        combus_set_runlevel(comBus, RunLevel::SLEEPING, makeChanOwner(EnvNodeGroup, ComBusOwner::PROC_SYSTEM));
+        combus_set_runlevel(comBus, RunLevel::SLEEPING);
       sys_log_warn("[SYSTEM][SAFE] reason=low_battery action=enter_SLEEPING\n");}
   }
 

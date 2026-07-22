@@ -11,7 +11,7 @@
 // =============================================================================
 
 /** @brief Linear scale — see cb_scale.h for contract. */
-void cb_scale_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)
+void cb_scale_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/)
 {
     const CbScaleCfg* cfg   = static_cast<const CbScaleCfg*>(proc->cfg);
     const uint16_t    range = static_cast<uint16_t>(cfg->outMax - cfg->outMin);

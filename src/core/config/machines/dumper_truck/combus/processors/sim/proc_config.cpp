@@ -35,7 +35,7 @@
 
 #include <core/config/machines/dumper_truck/combus/combus.h>  // AnalogComBusID, DigitalComBusID
 #include <core/config/hw/simulation_presets.h>    // kVolvoD16J_steps, kGearShift_VolvoD16J
-#include <struct/combus_struct.h>                 // makeChanOwner, ComBusOwner
+#include <struct/combus_struct.h>                 // ChanLayer
 #include <core/system/combus/combus_res.h>        // CbusNeutral, pctToCbus
 #include <core/system/combus/processors/motion/cb_ramp.h>  // cb_sym_ramp_fn, CbRampCfg, CbRampState
 #include <core/system/combus/processors/base/cb_bypass.h>  // cb_bypass_fn
@@ -61,8 +61,6 @@ using namespace DumperTruck;
 // 1. CHANNEL ARRAY
 // =============================================================================
 
-static constexpr ChanOwner kSimOwner = makeChanOwner(ComBusOwner::GRP_MACHINE, ComBusOwner::PROC_SYSTEM);
-
 CbChain kSimChannels[SIM_CH_COUNT] = {
 
   { .name       = "throttle",
@@ -70,7 +68,6 @@ CbChain kSimChannels[SIM_CH_COUNT] = {
     .outCh      = AnalogComBusID::ESC_RPM_BUS,
     .procs      = kThrottleProcs,
     .procCount  = static_cast<uint8_t>(std::size(kThrottleProcs)),
-    .chainOwner = kSimOwner,
   },
 
   { .name       = "traction",
@@ -78,7 +75,6 @@ CbChain kSimChannels[SIM_CH_COUNT] = {
     .outCh      = AnalogComBusID::ESC_SPEED_BUS,
     .procs      = kTractionProcs,
     .procCount  = static_cast<uint8_t>(std::size(kTractionProcs)),
-    .chainOwner = kSimOwner,
   },
 
   { .name       = "gear",
@@ -86,7 +82,6 @@ CbChain kSimChannels[SIM_CH_COUNT] = {
     .outCh      = AnalogComBusID::GEAR,
     .procs      = kGearProcs,
     .procCount  = static_cast<uint8_t>(std::size(kGearProcs)),
-    .chainOwner = kSimOwner,
   },
 
   { .name       = "steering",
@@ -94,7 +89,6 @@ CbChain kSimChannels[SIM_CH_COUNT] = {
     .outCh      = AnalogComBusID::STEERING_RAMPED_BUS,
     .procs      = kSteeringProcs,
     .procCount  = static_cast<uint8_t>(std::size(kSteeringProcs)),
-    .chainOwner = kSimOwner,
   },
 
   { .name       = "dump",
@@ -102,7 +96,6 @@ CbChain kSimChannels[SIM_CH_COUNT] = {
     .outCh      = AnalogComBusID::DUMP_RAMPED_BUS,
     .procs      = kDumpProcs,
     .procCount  = static_cast<uint8_t>(std::size(kDumpProcs)),
-    .chainOwner = kSimOwner,
   },
 };
 

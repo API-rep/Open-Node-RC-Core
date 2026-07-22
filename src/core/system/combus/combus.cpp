@@ -13,11 +13,10 @@
 // 1. COMBUS INIT
 // =============================================================================
 
-void combus_init(uint8_t nAnalog, uint8_t nDigital, uint8_t nodeGroup)
+void combus_init(uint8_t nAnalog, uint8_t nDigital)
 {
-    combus_set_node_group(nodeGroup);
-    sys_log_info("[COMBUS] ComBus ready — group:0x%02X  analog:%u  digital:%u channels.\n",
-                 nodeGroup, nAnalog, nDigital);
+    sys_log_info("[COMBUS] ComBus ready — analog:%u  digital:%u channels.\n",
+                 nAnalog, nDigital);
 }
 
 // EOF combus.cpp

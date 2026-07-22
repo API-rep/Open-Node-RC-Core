@@ -31,7 +31,7 @@
  *****************************************************************************/
 #pragma once
 
-#include <struct/combus_proc_struct.h>                  // CbProc, CbProcFn, ChanOwner
+#include <struct/combus_proc_struct.h>                  // CbProc, CbProcFn
 #include <struct/combus/processors/base/cb_bypass_struct.h>  // CbBypassCfg
 
 
@@ -56,6 +56,6 @@
  * @param value   In: current value.  Out: unchanged OR forceValue (if cfg set).
  * @param claimed Set to `true` when inValue[0] != 0; unchanged otherwise.
  */
-void cb_bypass_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void cb_bypass_fn(CbProc* proc, uint16_t& value, bool& claimed);
 
 // EOF cb_bypass.h

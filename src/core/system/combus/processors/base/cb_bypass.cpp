@@ -15,7 +15,7 @@
 // =============================================================================
 
 /** @brief Conditional bypass gate — see cb_bypass.h for full contract. */
-void cb_bypass_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner /*chainOwner*/)
+void cb_bypass_fn(CbProc* proc, uint16_t& value, bool& claimed)
 {
     // inCh = condition channel (digital). Runner pre-reads into inValue.
     if (proc->inValue != 0u) {

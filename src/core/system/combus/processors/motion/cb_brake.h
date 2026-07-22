@@ -17,7 +17,7 @@
  *****************************************************************************/
 #pragma once
 
-#include <struct/combus_proc_struct.h>                               // CbProc, CbProcFn, ChanOwner
+#include <struct/combus_proc_struct.h>  // CbProc, CbProcFn
 #include <struct/combus/processors/motion/cb_brake_struct.h>        // CbBrakeCfg, CbBrakeState
 
 
@@ -38,7 +38,7 @@
  * @param claimed Not modified.
  * @param owner   Not used.
  */
-void cb_brake_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner owner);
+void cb_brake_fn(CbProc* proc, uint16_t& value, bool& claimed);
 
 /**
  * @brief Reverse-brake merger — compute and commit BRAKE_BUS.
@@ -59,6 +59,6 @@ void cb_brake_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner owner);
  * @param claimed Not modified.
  * @param owner   Not used.
  */
-void cb_rev_brake_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner owner);
+void cb_rev_brake_fn(CbProc* proc, uint16_t& value, bool& claimed);
 
 // EOF cb_brake.h

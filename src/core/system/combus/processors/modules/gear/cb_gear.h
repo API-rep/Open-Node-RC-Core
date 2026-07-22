@@ -1,4 +1,4 @@
-ï»¿/******************************************************************************
+/******************************************************************************
  * @file  cb_gear.h
  * @brief Virtual gearbox CbProc wrappers.
  *
@@ -45,17 +45,17 @@
  *   7. `gear_upshift_damp_fn` -- detect upshift; freeze traction accel + signal GEAR_SHIFTING.
  *      Placed LAST in GEAR chain (after gear_dyn_ramp_fn, before `out`).
  *      Reads current gear directly from `value` (no inCh needed).
- *      On upshift: sets dynCfg->extAccelSteps = INT16_MIN â€” effective accel step
- *      = max(1, accelSteps + INT16_MIN) â‰ˆ 1 unit/tick, negligible over the window.
+ *      On upshift: sets dynCfg->extAccelSteps = INT16_MIN — effective accel step
+ *      = max(1, accelSteps + INT16_MIN) ˜ 1 unit/tick, negligible over the window.
  *      Only the acceleration direction is damped; extBrakeSteps is never touched
  *      so braking (L2) remains functional.  rampTimeMs is not modified.
  *      On expiry: resets extAccelSteps = 0 (restores normal acceleration).
- *      Sets proc->outValue = 1 while freeze active â€” runner commits to
+ *      Sets proc->outValue = 1 while freeze active — runner commits to
  *      outCh = GEAR_SHIFTING (machine-local digital).
  *      cfg = GearProcCfg* (upshiftDampMs), dynCfg = CbRampCfg* (traction ramp, RAM),
  *      state = GearDampState*.
  *      Rationale for GEAR placement: disabling the gear chain disables the freeze
- *      automatically â€” no stale rampTimeMs override on the THROTTLE chain.
+ *      automatically — no stale rampTimeMs override on the THROTTLE chain.
  *      @todo winter 2026: promote GEAR_SHIFTING to WIRE region.
  *
  *   8. `gear_upshift_rpm_fade_fn` -- smoothly interpolate ESC_RPM_BUS rpmAtShift -> natural RPM.
@@ -83,9 +83,9 @@
 
 
 /**
- * @brief Gear FSM CbProc â€” reads RPM magnitude, runs the FSM, sets `value = gear`.
+ * @brief Gear FSM CbProc — reads RPM magnitude, runs the FSM, sets `value = gear`.
  */
-void gear_fsm_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void gear_fsm_fn(CbProc* proc, uint16_t& value, bool& claimed);
 
 /**
  * @brief Wheel-speed-primary inverse transform: wheel_speed / gearRatio = engine_rpm.
@@ -96,52 +96,52 @@ void gear_fsm_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOw
  *   Gear 0 (uninitialised) -> passthrough.
  *   state = GearFsmState* (read-only, shared with gear_fsm_fn).
  */
-void gear_ratio_inv_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void gear_ratio_inv_fn(CbProc* proc, uint16_t& value, bool& claimed);
 
 /**
- * @brief RPM Ã— gearRatio[gear]/1000 â†’ wheel-speed RPM (RPM domain).
+ * @brief RPM × gearRatio[gear]/1000 ? wheel-speed RPM (RPM domain).
  *
- * @details GEAR=0 â†’ passthrough.  Result stays in RPM domain for `gear_dir_fn`.
+ * @details GEAR=0 ? passthrough.  Result stays in RPM domain for `gear_dir_fn`.
  *   inCh = GEAR (analog).
  */
-void gear_ratio_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void gear_ratio_fn(CbProc* proc, uint16_t& value, bool& claimed);
 
 /**
- * @brief Sub-gear speed cap â€” caps magnitude to maxSpeedPct when SUBGEAR active.
+ * @brief Sub-gear speed cap — caps magnitude to maxSpeedPct when SUBGEAR active.
  *
  * @details Passthrough when SUBGEAR_BUS == 0.  Operates in RPM domain.
  *   inCh = SUBGEAR_BUS (analog).
  */
-void gear_subgear_cap_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void gear_subgear_cap_fn(CbProc* proc, uint16_t& value, bool& claimed);
 
 /**
- * @brief Apply direction â€” converts unsigned RPM magnitude to bipolar ComBus.
+ * @brief Apply direction — converts unsigned RPM magnitude to bipolar ComBus.
  *
  * @details Scales `value` against maxAbsRpm, then offsets by CbusNeutral.
- *   value == 0 â†’ CbusNeutral.
+ *   value == 0 ? CbusNeutral.
  *   inCh = DRIVE_STATE_BUS (analog).
  */
-void gear_dir_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void gear_dir_fn(CbProc* proc, uint16_t& value, bool& claimed);
 
 /**
- * @brief Gear â†’ ramp bridge â€” updates per-gear ramp time in a linked CbRampCfg.
+ * @brief Gear ? ramp bridge — updates per-gear ramp time in a linked CbRampCfg.
  */
-void gear_dyn_ramp_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void gear_dyn_ramp_fn(CbProc* proc, uint16_t& value, bool& claimed);
 
 /**
  * @brief Detect upshift; freeze traction ramp for upshiftDampMs + signal GEAR_SHIFTING.
  *
  * @details Placed in GEAR chain (after gear_dyn_ramp_fn, before out).  Reads current gear
  *   from `value`.  Does NOT modify `value`.
- *   On upshift: sets dynCfg->rampTimeMs = UINT16_MAX â€” the ramp proc never ticks
+ *   On upshift: sets dynCfg->rampTimeMs = UINT16_MAX — the ramp proc never ticks
  *   while this value is set, freezing RPM at the upshift point.
  *   gear_dyn_ramp_fn (runs before this proc) restores the correct rampTimeMs on
- *   the first cycle after expiry (detects UINT16_MAX â‰  gear rampTime â†’ resetRamp).
+ *   the first cycle after expiry (detects UINT16_MAX ? gear rampTime ? resetRamp).
  *   Does NOT touch extAccelSteps or extBrakeSteps.
  *   Sets proc->outValue = 1 while freeze active; runner commits to GEAR_SHIFTING digital.
  *   dynCfg = CbRampCfg* (traction ramp, mutable),  state = GearDampState*.
  */
-void gear_upshift_damp_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void gear_upshift_damp_fn(CbProc* proc, uint16_t& value, bool& claimed);
 
 /**
  * @brief Progressive RPM interpolation on ESC_RPM_BUS during upshift damp window.
@@ -151,11 +151,11 @@ void gear_upshift_damp_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwne
  *   During damp window: linearly interpolates ESC_RPM_BUS from `state->rpmAtShift`
  *   (RPM at the upshift moment) to the current natural RPM over `profile->upshiftDampMs`.
  *   Outside window or when upshiftDampMs == 0: pass-through (proc->outValue = value).
- *   Does NOT modify `value` â€” gear_fsm_fn downstream sees true natural RPM.
+ *   Does NOT modify `value` — gear_fsm_fn downstream sees true natural RPM.
  *   outCh = ESC_RPM_BUS,  cfg = GearProcCfg*,  state = GearDampState* (shared with
  *   gear_upshift_damp_fn; both procs must reference the same GearDampState instance).
  */
-void gear_upshift_rpm_fade_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void gear_upshift_rpm_fade_fn(CbProc* proc, uint16_t& value, bool& claimed);
 
 // EOF cb_gear.h
 

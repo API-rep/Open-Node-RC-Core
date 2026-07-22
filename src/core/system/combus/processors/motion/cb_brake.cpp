@@ -23,7 +23,7 @@
  *   Full brake-input deflection therefore saturates at CbusNeutral.
  *   CbBrakeCfg::brakeScalePct is applied downstream in cb_rev_brake_fn.
  */
-void cb_brake_fn(CbProc* proc, uint16_t& /*value*/, bool& /*claimed*/, ChanOwner /*owner*/)
+void cb_brake_fn(CbProc* proc, uint16_t& /*value*/, bool& /*claimed*/)
 {
     auto* st = static_cast<CbBrakeState*>(proc->state);
 
@@ -57,7 +57,7 @@ void cb_brake_fn(CbProc* proc, uint16_t& /*value*/, bool& /*claimed*/, ChanOwner
  *
  *   Final result = max(l2Brake, revBrake, holdBrake), capped at maxBrake.
  */
-void cb_rev_brake_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*owner*/)
+void cb_rev_brake_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/)
 {
     const auto* cfg    = static_cast<const CbBrakeCfg*>(proc->cfg);
     auto*       st     = static_cast<CbBrakeState*>(proc->state);

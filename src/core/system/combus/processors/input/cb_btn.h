@@ -99,9 +99,8 @@ struct CbBtnState {
  *                   `cfg` cast to `const CbBtnCfg*`, `state` cast to `CbBtnState*`.
  * @param value      [in/out] Current channel value.
  * @param claimed    [in/out] Set to true if button fired.
- * @param chainOwner Owner info (unused).
  */
-void cb_btn_push_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void cb_btn_push_fn(CbProc* proc, uint16_t& value, bool& claimed);
 
 /**
  * @brief Button processor — INCREMENT (value := min(value + 1, cfg.bound)).
@@ -113,9 +112,8 @@ void cb_btn_push_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chai
  *                   `cfg` cast to `const CbBtnCfg*`, `state` cast to `CbBtnState*`.
  * @param value      [in/out] Current channel value.
  * @param claimed    [in/out] Set to true if button fired.
- * @param chainOwner Owner info (unused).
  */
-void cb_btn_inc_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void cb_btn_inc_fn(CbProc* proc, uint16_t& value, bool& claimed);
 
 /**
  * @brief Button processor — DECREMENT (value := max(value - 1, cfg.bound)).
@@ -127,9 +125,8 @@ void cb_btn_inc_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chain
  *                   `cfg` cast to `const CbBtnCfg*`, `state` cast to `CbBtnState*`.
  * @param value      [in/out] Current channel value.
  * @param claimed    [in/out] Set to true if button fired.
- * @param chainOwner Owner info (unused).
  */
-void cb_btn_dec_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void cb_btn_dec_fn(CbProc* proc, uint16_t& value, bool& claimed);
 
 /**
  * @brief Button processor — TOGGLE (value := (value > 0) ? 0 : cfg.bound).
@@ -141,9 +138,8 @@ void cb_btn_dec_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chain
  *                   `cfg` cast to `const CbBtnCfg*`, `state` cast to `CbBtnState*`.
  * @param value      [in/out] Current channel value.
  * @param claimed    [in/out] Set to true if button fired.
- * @param chainOwner Owner info (unused).
  */
-void cb_btn_toggle_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void cb_btn_toggle_fn(CbProc* proc, uint16_t& value, bool& claimed);
 
 
 // EOF cb_btn.h

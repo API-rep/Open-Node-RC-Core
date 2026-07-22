@@ -12,7 +12,7 @@
 // 1. PROCESSOR FUNCTION
 // =============================================================================
 
-void cb_runlevel_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner) {
+void cb_runlevel_fn(CbProc* proc, uint16_t& value, bool& claimed) {
     (void)value;    // pass-through — intentionally not modified.
     (void)claimed;  // never claims the channel.
 
@@ -25,14 +25,14 @@ void cb_runlevel_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chai
     // --- Rising edge: activate ---
     if (active && !state->prevValue) {
         if (rl == RunLevel::IDLE || rl == RunLevel::SLEEPING) {
-            combus_set_runlevel(*state->bus, cfg->activeLevel, chainOwner);
+            combus_set_runlevel(*state->bus, cfg->activeLevel);
         }
     }
 
     // --- Falling edge: deactivate ---
     if (!active && state->prevValue) {
         if (rl == RunLevel::STARTING || rl == RunLevel::RUNNING) {
-            combus_set_runlevel(*state->bus, cfg->defaultLevel, chainOwner);
+            combus_set_runlevel(*state->bus, cfg->defaultLevel);
         }
     }
 

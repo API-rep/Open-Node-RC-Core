@@ -16,7 +16,7 @@
  *****************************************************************************/
 #pragma once
 
-#include <struct/combus_proc_struct.h>                         // CbProc, CbProcFn, ChanOwner
+#include <struct/combus_proc_struct.h>  // CbProc, CbProcFn
 #include <struct/combus/processors/math/cb_scale_struct.h>    // CbScaleCfg
 
 
@@ -32,6 +32,6 @@
  * @param claimed Not modified.
  * @param chainOwner  Not used.
  */
-void cb_scale_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void cb_scale_fn(CbProc* proc, uint16_t& value, bool& claimed);
 
 // EOF cb_scale.h

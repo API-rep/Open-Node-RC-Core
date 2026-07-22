@@ -1,10 +1,10 @@
 /******************************************************************************
  * @file combus_access.cpp
- * @brief Ownership-checked write accessors for ComBus channels.
+ * @brief Layer-checked write accessors for ComBus channels.
  *
- * @details Write is skipped when the caller's ChanOwner does not match the
- *   channel's declared owner, unless the channel is NONE (unguarded) or ANY.
- *   In DEBUG_COMBUS builds a warning line is printed on every denied write.
+ * @details Write is skipped when the caller's ChanLayer does not have sufficient
+ *   privileges for the channel's declared layer. In DEBUG_COMBUS builds a warning
+ *   line is printed on every denied write.
  *****************************************************************************/
 
 #include "combus_access.h"
@@ -13,60 +13,60 @@
 
 
 // =============================================================================
-// 1. NODE GROUP STATE  (set once at combus_init)
-// =============================================================================
-
-/** NodeGroup of the current build environment — set by combus_set_node_group(). */
-static uint8_t s_envNodeGroup = ComBusOwner::GRP_NONE;
-
-void combus_set_node_group(uint8_t group) {
-    s_envNodeGroup = group;
-}
-
-
-// =============================================================================
-// 2. INTERNAL HELPERS
+// 1. INTERNAL HELPERS
 // =============================================================================
 
 /**
- * @brief Returns true when @p caller is authorised to write a slot with the given @p owner.
+ * @brief Returns true when @p caller is authorised to write a slot with the given @p layer.
  *
  * @details Rules (in priority order):
- *   1. NONE (0x00)            — unclaimed; deny all.
- *   2. ANY  (0xFF)            — unrestricted; allow all.
- *   3. GRP_ANY, PROC != ANY   — wildcard group: any node's matching process.
- *   4. slot.group == my group — local domain: full byte match required.
- *   5. otherwise              — foreign domain: PROC_BRIDGE only.
+ *   1. UNDEFINED → write denied for all callers (safety)
+ *   2. SYSTEM    → only local firmware caller may write
+ *   3. LOCAL     → local firmware caller + extension boards caller of same node
+ *   4. REMOTE    → any source (local + extensions + remote nodes caller)
  */
-static inline bool _owner_ok(ChanOwner slot, ChanOwner caller) {
-    using namespace ComBusOwner;
-    const uint8_t raw_s = static_cast<uint8_t>(slot);
-    const uint8_t raw_c = static_cast<uint8_t>(caller);
-    const uint8_t s_grp = raw_s & GRP_MASK;
-    const uint8_t s_prc = raw_s & PROC_MASK;
-    const uint8_t c_prc = raw_c & PROC_MASK;
-
-    if (raw_s == 0x00u)       return false;           // NONE — unclaimed, deny all
-    if (raw_s == 0xFFu)       return true;            // ANY  — unrestricted, allow all
-    if (s_grp == GRP_ANY)     return s_prc == c_prc;  // wildcard group — match process only
-    if (s_grp == s_envNodeGroup)  return raw_s == raw_c;  // local domain — full byte match
-    return c_prc == PROC_BRIDGE;                      // foreign domain — bridge only
+static inline bool _layer_ok(ChanLayer slot_layer, ChanLayer caller_layer) {
+    const uint8_t raw_slot = static_cast<uint8_t>(slot_layer);
+    const uint8_t raw_caller = static_cast<uint8_t>(caller_layer);
+    
+      // UNDEFINED → deny all writes (safety)
+    if (raw_slot == static_cast<uint8_t>(ChanLayer::UNDEFINED)) {
+        return false;
+    }
+    
+      // REMOTE → allow all writes
+    if (slot_layer == ChanLayer::REMOTE) {
+        return true;
+    }
+    
+      // LOCAL → allow LOCAL and SYSTEM callers (local firmware + extensions)
+    if (slot_layer == ChanLayer::LOCAL) {
+        return (caller_layer == ChanLayer::LOCAL) || (caller_layer == ChanLayer::SYSTEM);
+    }
+    
+      // SYSTEM → only SYSTEM callers (local firmware only)
+    if (slot_layer == ChanLayer::SYSTEM) {
+        return caller_layer == ChanLayer::SYSTEM;
+    }
+    
+      // Should never reach here
+    return false;
 }
 
 #ifdef DEBUG_COMBUS
 
 static void _warn_denied(const char* label, uint8_t ch,
-                          ChanOwner caller, ChanOwner slot_owner) {
-    sys_log_warn("[COMBUS] write denied: %s ch=%u caller=%u owner=%u\n",
+                          ChanLayer caller, ChanLayer slot_layer) {
+    sys_log_warn("[COMBUS] write denied: %s ch=%u caller=%u layer=%u\n",
                  label,
                  static_cast<unsigned>(ch),
                  static_cast<unsigned>(caller),
-                 static_cast<unsigned>(slot_owner));
+                 static_cast<unsigned>(slot_layer));
 }
 
 #else
-  // No-op in release builds — ownership check still runs, logs are suppressed.
-  #define _warn_denied(label, ch, caller, slot_owner)  ((void)0)
+  // No-op in release builds — layer check still runs, logs are suppressed.
+  #define _warn_denied(label, ch, caller, slot_layer)  ((void)0)
 #endif
 
 
@@ -74,30 +74,30 @@ static void _warn_denied(const char* label, uint8_t ch,
 // 2. CHANNEL WRITE ACCESSORS
 // =============================================================================
 
-bool combus_set_analog(ComBus& bus, AnalogComBusID ch, uint16_t val, ChanOwner caller) {
+bool combus_set_analog(ComBus& bus, AnalogComBusID ch, uint16_t val, ChanLayer caller) {
     auto& slot = bus.analogBus[static_cast<uint8_t>(ch)];
 
-    if (!_owner_ok(slot.owner, caller)) {
+    if (!_layer_ok(slot.layer, caller)) {
           // --- Write denied ---
-        _warn_denied("analog", static_cast<uint8_t>(ch), caller, slot.owner);
+        _warn_denied("analog", static_cast<uint8_t>(ch), caller, slot.layer);
         return false;
     }
 
-    slot.value    = val;
+    slot.value = val;
     return true;
 }
 
 
-bool combus_set_digital(ComBus& bus, DigitalComBusID ch, bool val, ChanOwner caller) {
+bool combus_set_digital(ComBus& bus, DigitalComBusID ch, bool val, ChanLayer caller) {
     auto& slot = bus.digitalBus[static_cast<uint8_t>(ch)];
 
-    if (!_owner_ok(slot.owner, caller)) {
+    if (!_layer_ok(slot.layer, caller)) {
           // --- Write denied ---
-        _warn_denied("digital", static_cast<uint8_t>(ch), caller, slot.owner);
+        _warn_denied("digital", static_cast<uint8_t>(ch), caller, slot.layer);
         return false;
     }
 
-    slot.value    = val;
+    slot.value = val;
     return true;
 }
 
@@ -106,9 +106,9 @@ bool combus_set_digital(ComBus& bus, DigitalComBusID ch, bool val, ChanOwner cal
 // 3. HEADER FIELD WRITE ACCESSORS
 // =============================================================================
 
-bool combus_set_runlevel(ComBus& bus, RunLevel rl, ChanOwner caller) {
-    if (!_owner_ok(bus.runLevelOwner, caller)) {
-        _warn_denied("runLevel", 0xFF, caller, bus.runLevelOwner);
+bool combus_set_runlevel(ComBus& bus, RunLevel rl, ChanLayer caller) {
+    if (!_layer_ok(bus.runLevelLayer, caller)) {
+        _warn_denied("runLevel", 0xFF, caller, bus.runLevelLayer);
         return false;
     }
     bus.runLevel = rl;
@@ -116,9 +116,9 @@ bool combus_set_runlevel(ComBus& bus, RunLevel rl, ChanOwner caller) {
 }
 
 
-bool combus_set_battlow(ComBus& bus, bool val, ChanOwner caller) {
-    if (!_owner_ok(bus.battLowOwner, caller)) {
-        _warn_denied("battLow", 0xFF, caller, bus.battLowOwner);
+bool combus_set_battlow(ComBus& bus, bool val, ChanLayer caller) {
+    if (!_layer_ok(bus.battLowLayer, caller)) {
+        _warn_denied("battLow", 0xFF, caller, bus.battLowLayer);
         return false;
     }
     bus.batteryIsLow = val;

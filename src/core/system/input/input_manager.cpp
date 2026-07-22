@@ -47,10 +47,10 @@ void input_update(ComBus &bus) {
                          ? (int16_t)dev.minVal
                          : (int16_t)((dev.minVal + dev.maxVal) / 2);
       uint16_t neutral = (uint16_t)map(restRaw, dev.minVal, dev.maxVal, 0, bus.analogBusMaxVal);
-      combus_set_analog(bus, m.busChannel, neutral, ChanOwner::MACHINE_INPUT);
+      combus_set_analog(bus, m.busChannel, neutral, ChanLayer::REMOTE);
     }
     for (uint8_t i = 0; i < InputDigitalMapCount; i++) {
-      combus_set_digital(bus, InputDigitalMapArray[i].busChannel, false, ChanOwner::MACHINE_INPUT);
+      combus_set_digital(bus, InputDigitalMapArray[i].busChannel, false, ChanLayer::REMOTE);
     }
     return;   // source inactive — isDrived remains false from sys_manager pre-clear
   }
@@ -97,7 +97,7 @@ void input_update(ComBus &bus) {
     uint8_t ch = static_cast<uint8_t>(m.busChannel);
     uint16_t busVal = m.isInverted ? (bus.analogBusMaxVal - val) : val;
 
-    combus_set_analog(bus, static_cast<AnalogComBusID>(ch), busVal, ChanOwner::MACHINE_INPUT);
+    combus_set_analog(bus, static_cast<AnalogComBusID>(ch), busVal, ChanLayer::REMOTE);
   }
 
 // ==========================================================
@@ -141,7 +141,7 @@ void input_update(ComBus &bus) {
       // --- ComBus Injection ---
     uint8_t ch = static_cast<uint8_t>(m.busChannel);
 
-    combus_set_digital(bus, static_cast<DigitalComBusID>(ch), finalState, ChanOwner::MACHINE_INPUT);
+    combus_set_digital(bus, static_cast<DigitalComBusID>(ch), finalState, ChanLayer::REMOTE);
   }
 
     // --- Mark bus as driven by this physical source ---

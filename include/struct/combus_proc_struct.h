@@ -12,15 +12,14 @@
  *     patterns; intermediate procs use `CbProc::inCh` / `outCh`.
  *   - Each proc declares exactly one secondary input (`inCh`) and at most
  *     one output (`outCh`) — both optional.  No channel IDs inside `cfg`.
- *   - `ChanOwner` flows from `CbChain::chainOwner` to the runner — never
- *     from an external parameter on the update function.
+ *   - Processors run with SYSTEM-level access (local firmware).
  *
  *   **Runner contract (cb_chain_update):**
  *   1. Seed `value` from `CbChain::inCh` (0 when inCh = nullopt).
  *   2. Proc loop — all procs, in order:
  *        a. Inject secondary input: `inValue` ← `bus[inCh]`.
  *        b. Skip when `claimed = true`.
- *        c. Call `proc.fn(&proc, value, claimed, ch.chainOwner)`.
+ *        c. Call `proc.fn(&proc, value, claimed)`.
  *        d. Commit proc side-output: `bus[outCh]` ← `outValue`.
  *   3. Commit `value` to `CbChain::outCh`.
  *
@@ -39,7 +38,7 @@
 #include <variant>
 
 #include <core/config/machines/combus_ids.h>  // AnalogComBusID, DigitalComBusID
-#include <struct/combus_struct.h>              // ChanOwner
+#include <struct/combus_struct.h>              // ChanLayer
 
 
 // =============================================================================
@@ -66,9 +65,8 @@ struct CbProc;  ///< Forward — allows CbProcFn to reference CbProc by pointer.
  *                 committed by runner to `CbChain::outCh` after all procs.
  * @param claimed  Set to `true` to abort the remaining proc chain.
  *                 Does NOT suppress the final channel write.
- * @param owner    Identity forwarded from `CbChain::chainOwner`.
  */
-using CbProcFn = void (*)(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner owner);
+using CbProcFn = void (*)(CbProc* proc, uint16_t& value, bool& claimed);
 
 
 // =============================================================================
@@ -131,8 +129,7 @@ struct CbProc {
  *   Remaining procs are skipped when `claimed = true`; the final commit to
  *   `outCh` still happens (value = claimed value).
  *
- *   `chainOwner` is forwarded to every fn call and to all bus writes
- *   — no external owner parameter on the runner.
+ *   Processors run with SYSTEM-level access (local firmware).
  */
 struct CbChain {
     const char*  name;  ///< Human-readable chain name (debug / dashboard).
@@ -146,9 +143,6 @@ struct CbChain {
     // --- Proc chain ----------------------------------------------------------
     CbProc*  procs;      ///< Processor array (nullptr when procCount == 0).
     uint8_t  procCount;  ///< Number of processors in procs[].
-
-    // --- Identity ------------------------------------------------------------
-    ChanOwner  chainOwner;  ///< Identity forwarded to every fn call and bus write.
 };
 
 

@@ -54,7 +54,7 @@
  *   cfg   = nullptr (unused).
  *   state = `CbCruiseState*`.
  */
-void cb_cruise_sync_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void cb_cruise_sync_fn(CbProc* proc, uint16_t& value, bool& claimed);
 
 /**
  * @brief Set cruise speed-update request from ComBus — assigned to `CbProc::fn`.
@@ -66,7 +66,7 @@ void cb_cruise_sync_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner c
  *   cfg   = nullptr (unused).
  *   state = `CbCruiseState*`.
  */
-void cb_cruise_upd_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void cb_cruise_upd_fn(CbProc* proc, uint16_t& value, bool& claimed);
 
 /**
  * @brief Throttle hold proc — assigned to `CbProc::fn`.
@@ -76,6 +76,6 @@ void cb_cruise_upd_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner ch
  * @param claimed    Not modified.
  * @param chainOwner Not used.
  */
-void cb_cruise_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void cb_cruise_fn(CbProc* proc, uint16_t& value, bool& claimed);
 
 // EOF cb_cruise.h

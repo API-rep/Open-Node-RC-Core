@@ -41,7 +41,7 @@ static void syncRamp(const CbCruiseCfg* cfg, uint16_t heldValue)
 // =============================================================================
 
 /** @brief Throttle hold — see cb_cruise.h for full contract. */
-void cb_cruise_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)
+void cb_cruise_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/)
 {
     const CbCruiseCfg* cfg   = static_cast<const CbCruiseCfg*>(proc->cfg);
     CbCruiseState*     state = static_cast<CbCruiseState*>(proc->state);
@@ -117,14 +117,14 @@ void cb_cruise_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*
 // =============================================================================
 
 /** @brief Sync state->active from CRUISE_ACTIVE ComBus channel — see cb_cruise.h. */
-void cb_cruise_sync_fn(CbProc* proc, uint16_t& /*value*/, bool& /*claimed*/, ChanOwner /*chainOwner*/)
+void cb_cruise_sync_fn(CbProc* proc, uint16_t& /*value*/, bool& /*claimed*/)
 {
     CbCruiseState* state = static_cast<CbCruiseState*>(proc->state);
     state->active = (proc->inValue != 0u);
 }
 
 /** @brief Set state->updateReq when CRUISE_UPDATE_BTN pressed — see cb_cruise.h. */
-void cb_cruise_upd_fn(CbProc* proc, uint16_t& /*value*/, bool& /*claimed*/, ChanOwner /*chainOwner*/)
+void cb_cruise_upd_fn(CbProc* proc, uint16_t& /*value*/, bool& /*claimed*/)
 {
     CbCruiseState* state = static_cast<CbCruiseState*>(proc->state);
     if (proc->inValue != 0u) {

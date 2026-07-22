@@ -32,13 +32,13 @@ static uint16_t cbRead(const ComBus& bus, const ChanOpt& ch)
  *         They do not set bus.isDrived — that flag is managed exclusively by
  *         sys_manager_reset() (pre-clear) and active input sources (re-assert).
  */
-static void cbWrite(ComBus& bus, const ChanOpt& ch, uint16_t value, ChanOwner owner)
+static void cbWrite(ComBus& bus, const ChanOpt& ch, uint16_t value)
 {
     if (!ch.has_value()) return;
     if (std::holds_alternative<AnalogComBusID>(*ch)) {
-        combus_set_analog(bus, std::get<AnalogComBusID>(*ch), value, owner);
+        combus_set_analog(bus, std::get<AnalogComBusID>(*ch), value);
     } else {
-        combus_set_digital(bus, std::get<DigitalComBusID>(*ch), value != 0u, owner);
+        combus_set_digital(bus, std::get<DigitalComBusID>(*ch), value != 0u);
     }
 }
 
@@ -67,11 +67,11 @@ void proc_chain_init(CbChain* /*channels*/, uint8_t /*count*/)
  *   2. Proc loop — all procs, in order:
  *        a. Inject secondary input: `proc.inValue` ← bus[proc.inCh].
  *        b. Skip when `claimed = true`.
- *        c. Call `proc.fn(&proc, value, claimed, ch.chainOwner)`.
+ *        c. Call `proc.fn(&proc, value, claimed)`.
  *        d. Commit proc side-output: bus[proc.outCh] ← proc.outValue.
  *   3. Commit final value to chain.outCh.
  *
- * @param ch   Channel descriptor (procs, chainOwner).
+ * @param ch   Channel descriptor (procs).
  * @param bus  Shared ComBus for this cycle.
  */
 void proc_chain_step(CbChain& ch, ComBus& bus)
@@ -92,14 +92,14 @@ void proc_chain_step(CbChain& ch, ComBus& bus)
         if (claimed) continue;
 
         //  c. Call proc fn (no bus access inside fn).
-        proc.fn(&proc, value, claimed, ch.chainOwner);
+        proc.fn(&proc, value, claimed);
 
         //  d. Commit proc side-output.
-        cbWrite(bus, proc.outCh, proc.outValue, ch.chainOwner);
+        cbWrite(bus, proc.outCh, proc.outValue);
     }
 
     // --- 3. Commit final pipeline value to chain.outCh -----------------------
-    cbWrite(bus, ch.outCh, value, ch.chainOwner);
+    cbWrite(bus, ch.outCh, value);
 }
 
 

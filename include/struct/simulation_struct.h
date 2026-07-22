@@ -27,7 +27,7 @@
 #include <core/config/machines/combus_ids.h>  // AnalogComBusID, DigitalComBusID
 #include <struct/combus_struct.h>              // ComBus (needed for SimBehaviorFn in archive)
 #include <struct/combus_proc_struct.h>                  // CbProc, CbChain, CbProcFn
-#include <defs/defs.h>                                         // ChanOwner
+#include <defs/defs.h>                                         // ChanLayer
 #include <struct/combus/processors/modules/gear_struct.h>      // GearStepCfg, GearShiftProfile, GearFsmState, GearProcCfg (migrated)
 
 
@@ -240,7 +240,7 @@ struct SimDev {
 
     // --- Behaviour -----------------------------------------------------------
     SimBehaviorFn  behaviorFn;                           ///< Processing function. nullptr = no-op.
-    ChanOwner      chainOwner = ChanOwner::MACHINE_SYSTEM; ///< Identity passed to combus_set_* when writing output channels.
+    ChanLayer      chainLayer = ChanLayer::LOCAL;        ///< Propagation layer passed to combus_set_* when writing output channels.
 };
 
 

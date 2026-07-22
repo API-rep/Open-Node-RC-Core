@@ -1,20 +1,21 @@
 /******************************************************************************
  * @file combus_access.h
- * @brief Ownership-checked write accessors for ComBus channels.
+ * @brief Layer-checked write accessors for ComBus channels.
  *
- * @details Each write function compares the caller's `ChanOwner` identity
- *   against the channel's declared `owner` before writing. If they do not
- *   match, the write is skipped and the function returns `false`.
+ * @details Each write function compares the caller's `ChanLayer` against the
+ *   channel's declared `layer` before writing. If the caller's layer does not
+ *   have sufficient privileges, the write is skipped and returns `false`.
  *   In DEBUG_COMBUS builds a warning is also printed.
  *
  *   This layer is optional — existing direct field writes remain valid during
- *   the migration. New code should use these accessors so ownership violations
+ *   the migration. New code should use these accessors so layer violations
  *   are visible at runtime.
  *
  *   Rules:
- *   - `ChanOwner::NONE`  — no module is mandated; write is denied for all callers.
- *   - `ChanOwner::ANY`   — all modules are mandated; any caller may write.
- *   - Any other value    — only the caller whose identity matches may write.
+ *   - UNDEFINED → write denied for all callers (safety)
+ *   - SYSTEM    → only local firmware caller may write
+ *   - LOCAL     → local firmware caller + extension boards caller of same node)
+ *   - REMOTE    → any source (local + extensions + remote nodes caller)
  *****************************************************************************/
 #pragma once
 
@@ -24,19 +25,7 @@
 
 
 // =============================================================================
-// 1. NODE GROUP
-// =============================================================================
-
-/**
- * @brief Set the NodeGroup of this node — must be called once in combus_init().
- * @param group  One of ComBusOwner::GRP_MACHINE, ComBusOwner::GRP_SOUND, ComBusOwner::GRP_REMOTE, …
- */
-
-void combus_set_node_group(uint8_t group);
-
-
-// =============================================================================
-// 2. CHANNEL WRITE ACCESSORS
+// 1. CHANNEL WRITE ACCESSORS
 // =============================================================================
 
 /**
@@ -44,17 +33,18 @@ void combus_set_node_group(uint8_t group);
  * @param bus     Target ComBus instance.
  * @param ch      Channel index (typed enum, machine-specific).
  * @param val     New value to write.
- * @param caller  Identity of the calling module — checked against ch.owner.
- * @return true if the write was accepted, false if ownership mismatch.
+ * @param caller  Layer of the calling module — checked against ch.layer.
+ * @return true if the write was accepted, false if layer mismatch.
  */
 
-bool combus_set_analog(ComBus& bus, AnalogComBusID ch, uint16_t val, ChanOwner caller);
+bool combus_set_analog(ComBus& bus, AnalogComBusID ch, uint16_t val, ChanLayer caller);
 
-/// Write an optional analog channel — no-op (returns false) if absent.
+  /// Write an optional analog channel — no-op (returns false) if absent.
 inline bool combus_set_analog(ComBus& bus, const std::optional<AnalogComBusID>& ch,
-                              uint16_t val, ChanOwner caller)
+                              uint16_t val, ChanLayer caller)
 {
     if (!ch.has_value()) return false;
+
     return combus_set_analog(bus, ch.value(), val, caller);
 }
 
@@ -64,16 +54,18 @@ inline bool combus_set_analog(ComBus& bus, const std::optional<AnalogComBusID>& 
  * @param bus     Target ComBus instance.
  * @param ch      Channel index (typed enum, machine-specific).
  * @param val     New value to write.
- * @param caller  Identity of the calling module — checked against ch.owner.
- * @return true if the write was accepted, false if ownership mismatch.
+ * @param caller  Layer of the calling module — checked against ch.layer.
+ * @return true if the write was accepted, false if layer mismatch.
  */
-bool combus_set_digital(ComBus& bus, DigitalComBusID ch, bool val, ChanOwner caller);
 
-/// Write an optional digital channel — no-op (returns false) if absent.
+bool combus_set_digital(ComBus& bus, DigitalComBusID ch, bool val, ChanLayer caller);
+
+  /// Write an optional digital channel — no-op (returns false) if absent.
 inline bool combus_set_digital(ComBus& bus, const std::optional<DigitalComBusID>& ch,
-                               bool val, ChanOwner caller)
+                               bool val, ChanLayer caller)
 {
     if (!ch.has_value()) return false;
+
     return combus_set_digital(bus, ch.value(), val, caller);
 }
 
@@ -88,12 +80,12 @@ inline bool combus_set_digital(ComBus& bus, const std::optional<DigitalComBusID>
  * 
  * @param bus    Target ComBus instance.
  * @param rl     New RunLevel value.
- * @param caller Identity of the calling module — checked against bus.runLevelOwner.
+ * @param caller Layer of the calling module — checked against bus.runLevelLayer.
  * 
- * @return true if the write was accepted, false if ownership mismatch.
+ * @return true if the write was accepted, false if layer mismatch.
  */
 
-bool combus_set_runlevel(ComBus& bus, RunLevel rl, ChanOwner caller);
+bool combus_set_runlevel(ComBus& bus, RunLevel rl, ChanLayer caller);
 
 
 
@@ -102,12 +94,12 @@ bool combus_set_runlevel(ComBus& bus, RunLevel rl, ChanOwner caller);
  * 
  * @param bus    Target ComBus instance.
  * @param val    New batteryIsLow value.
- * @param caller Identity of the calling module — checked against bus.battLowOwner.
+ * @param caller Layer of the calling module — checked against bus.battLowLayer.
  * 
- * @return true if the write was accepted, false if ownership mismatch.
+ * @return true if the write was accepted, false if layer mismatch.
  */
 
-bool combus_set_battlow(ComBus& bus, bool val, ChanOwner caller);
+bool combus_set_battlow(ComBus& bus, bool val, ChanLayer caller);
 
 
 // =============================================================================
@@ -140,5 +132,41 @@ struct CbAnalog {
     /// Convenience: standing value (stopped, FWD direction by default).
     static constexpr uint16_t kStopped = 0u;
 };
+
+// =============================================================================
+// 4. INTERNAL USAGE OVERLOADS (SYSTEM-level access)
+// =============================================================================
+
+/**
+ * @brief Internal overload for processors running with SYSTEM-level access.
+ * @details Used by CbProcFn implementations (local firmware).
+ */
+inline bool combus_set_analog(ComBus& bus, AnalogComBusID ch, uint16_t val) {
+    return combus_set_analog(bus, ch, val, ChanLayer::SYSTEM);
+}
+
+/**
+ * @brief Internal overload for processors running with SYSTEM-level access.
+ * @details Used by CbProcFn implementations (local firmware).
+ */
+inline bool combus_set_digital(ComBus& bus, DigitalComBusID ch, bool val) {
+    return combus_set_digital(bus, ch, val, ChanLayer::SYSTEM);
+}
+
+/**
+ * @brief Internal overload for processors running with SYSTEM-level access.
+ * @details Used by CbProcFn implementations (local firmware).
+ */
+inline bool combus_set_runlevel(ComBus& bus, RunLevel rl) {
+    return combus_set_runlevel(bus, rl, ChanLayer::SYSTEM);
+}
+
+/**
+ * @brief Internal overload for processors running with SYSTEM-level access.
+ * @details Used by CbProcFn implementations (local firmware).
+ */
+inline bool combus_set_battlow(ComBus& bus, bool val) {
+    return combus_set_battlow(bus, val, ChanLayer::SYSTEM);
+}
 
 // EOF combus_access.h

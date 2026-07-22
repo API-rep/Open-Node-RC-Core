@@ -19,7 +19,7 @@
 #pragma once
 
 #include <defs/machines_defs.h>         // RunLevel
-#include <struct/combus_struct.h>        // ComBus
+#include <struct/combus_struct.h>        // ComBus, ChanLayer
 #include <struct/combus_proc_struct.h>   // CbProc
 
 
@@ -67,9 +67,8 @@ struct CbRunlevelState {
  *                    `state` = CbRunlevelState*, `inCh` = monitored channel.
  * @param value       Pipeline value — unchanged (pass-through).
  * @param claimed     Unused — this processor never claims the channel.
- * @param chainOwner  Forwarded to `combus_set_runlevel` as the caller identity.
  */
-void cb_runlevel_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void cb_runlevel_fn(CbProc* proc, uint16_t& value, bool& claimed);
 
 
 // EOF cb_runlevel.h

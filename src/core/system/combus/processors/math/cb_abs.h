@@ -22,7 +22,7 @@
  *****************************************************************************/
 #pragma once
 
-#include <struct/combus_proc_struct.h>   // CbProc, CbProcFn, ChanOwner
+#include <struct/combus_proc_struct.h>  // CbProc, CbProcFn
 
 
 // =============================================================================
@@ -38,6 +38,6 @@
  * @param claimed Not modified.
  * @param chainOwner  Not used.
  */
-void cb_abs_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void cb_abs_fn(CbProc* proc, uint16_t& value, bool& claimed);
 
 // EOF cb_abs.h

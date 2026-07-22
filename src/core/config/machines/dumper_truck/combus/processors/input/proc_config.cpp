@@ -32,7 +32,7 @@
 
 #include <core/config/machines/dumper_truck/combus/combus.h>               // AnalogComBusID, DigitalComBusID, comBus
 #include <core/config/machines/dumper_truck/motion/dumper_truck_motion.h>  // kDumperTruckGearShift
-#include <struct/combus_struct.h>                                          // makeChanOwner, ComBusOwner
+#include <struct/combus_struct.h>                                          // ChanLayer
 #include <core/system/combus/processors/input/cb_btn.h>    // cb_btn_push_fn, cb_btn_toggle_fn, cb_btn_inc_fn, cb_btn_dec_fn, CbBtnCfg, CbBtnState, CbBtnTrigger
 #include <core/system/combus/processors/base/cb_runlevel.h>               // cb_runlevel_fn, CbRunlevelCfg, CbRunlevelState
 #include <core/system/combus/processors/base/cb_bypass.h>                 // cb_bypass_fn
@@ -47,14 +47,8 @@ using namespace DumperTruck;
 
 
 // =============================================================================
-// 1. CHANNEL OWNER
 // =============================================================================
-
-static constexpr ChanOwner kInputOwner = makeChanOwner(ComBusOwner::GRP_MACHINE, ComBusOwner::PROC_SYSTEM);
-
-
-// =============================================================================
-// 2. CHAIN ARRAY
+// 1. CHAIN ARRAY
 // =============================================================================
 
 CbChain kInputChains[INPUT_CH_COUNT] = {
@@ -64,7 +58,6 @@ CbChain kInputChains[INPUT_CH_COUNT] = {
     .outCh      = AnalogComBusID::SUBGEAR_BUS,
     .procs      = kSubGearProcs,
     .procCount  = static_cast<uint8_t>(std::size(kSubGearProcs)),
-    .chainOwner = kInputOwner,
   },
 
   { .name       = "direct_drive",
@@ -72,7 +65,6 @@ CbChain kInputChains[INPUT_CH_COUNT] = {
     .outCh      = DigitalComBusID::DIRECT_DRIVE,
     .procs      = kDirectDriveProcs,
     .procCount  = static_cast<uint8_t>(std::size(kDirectDriveProcs)),
-    .chainOwner = kInputOwner,
   },
 
   { .name       = "key_runlevel",
@@ -80,7 +72,6 @@ CbChain kInputChains[INPUT_CH_COUNT] = {
     .outCh      = DigitalComBusID::KEY_ACTIVE,
     .procs      = kKeyRunlevelProcs,
     .procCount  = static_cast<uint8_t>(std::size(kKeyRunlevelProcs)),
-    .chainOwner = kInputOwner,
   },
 
   { .name       = "cruise_normal",
@@ -88,7 +79,6 @@ CbChain kInputChains[INPUT_CH_COUNT] = {
     .outCh      = DigitalComBusID::CRUISE_ACTIVE,
     .procs      = kCruiseInputProcs,
     .procCount  = static_cast<uint8_t>(std::size(kCruiseInputProcs)),
-    .chainOwner = kInputOwner,
   },
 
   // INPUT_THROTTLE — passthrough: THROTTLE_STICK (raw bipolar) → THROTTLE_BUS.
@@ -98,7 +88,6 @@ CbChain kInputChains[INPUT_CH_COUNT] = {
     .outCh      = AnalogComBusID::THROTTLE_BUS,
     .procs      = nullptr,
     .procCount  = 0u,
-    .chainOwner = kInputOwner,
   },
 
 };

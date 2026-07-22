@@ -80,38 +80,76 @@ Communication is therefore just one of the many uses of the ComBus.
 
 ---
 
-# Data Scope
+# Channel Layers
 
-Not all information has the same visibility.
+The ComBus organizes channels into three distinct layers, each with a specific propagation scope:
 
-The ComBus distinguishes three propagation levels:
+| Layer | Scope | Description |
+|---|---|---|
+| **REMOTE** | Inter-node | Data exchanged between distinct nodes (remote↔machine, machine↔sound) |
+| **LOCAL** | Intra-node | Data shared between all boards of the same system |
+| **SYSTEM** | Intra-device | Private data within a single board's firmware |
 
-| Level | Purpose |
-|---|---|
-| **Inter-node** | Communication between multiple nodes |
-| **Inter-device** | Communication between multiple boards within the same system |
-| **Intra-device** | Internal data within a firmware |
+## Layer Definitions
 
-Examples:
+### REMOTE (Inter-node)
+- **Purpose**: Universal commands known to all nodes
+- **Example**: Steering, throttle, basic vehicle controls
+- **Characteristics**:
+  - Minimal service set for each vehicle type
+  - Remote controllers send commands blindly
+  - Standardized across vehicle variants
+  - Transmitted between nodes via communication bridges
 
-```text
-Inter-node
-Remote Controller ↔ Machine
+### LOCAL (Intra-node)  
+- **Purpose**: Vehicle-specific features shared within a system
+- **Example**: Special lighting sequences, dump bed controls
+- **Characteristics**:
+  - Includes all REMOTE channels automatically
+  - Specific to vehicle model (MAN vs VOLVO features)
+  - Shared between main board and extension boards
+  - Never transmitted to remote controllers
 
+### SYSTEM (Intra-device)
+- **Purpose**: Private data for internal board management
+- **Example**: Intermediate values between processors, internal states
+- **Characteristics**:
+  - Never shared between boards
+  - Used for communication between processors on same board
+  - No reason to propagate beyond local firmware
 
-Inter-device
-Main Board ↔ Expansion Board
+## Access Rules
 
+Each layer defines who may write to its channels:
 
-Intra-device
-Motion Simulation ↔ Sound Module
+1. **SYSTEM** → Only the local firmware may write
+2. **LOCAL** → Local firmware + extension boards (same system)
+3. **REMOTE** → Any source (local + extensions + remote nodes)
+
+## Configuration Example
+
+```cpp
+// REMOTE channels (inter-node)
+{ .infoName = "steering", .value = CbusNeutral, .layer = ChanLayer::REMOTE },
+{ .infoName = "throttle", .value = CbusNeutral, .layer = ChanLayer::REMOTE },
+
+// LOCAL channels (intra-node)  
+{ .infoName = "man_light_sequence", .value = 0u, .layer = ChanLayer::LOCAL },
+{ .infoName = "dump_bed_control", .value = CbusNeutral, .layer = ChanLayer::LOCAL },
+
+// SYSTEM channels (intra-device)
+{ .infoName = "throttle_ramp_state", .value = 0u, .layer = ChanLayer::SYSTEM },
+{ .infoName = "gear_shift_timer", .value = 0u, .layer = ChanLayer::SYSTEM },
 ```
 
-Each channel explicitly belongs to one layer.
+## Layer Inheritance
 
-This layer defines how far a piece of information may propagate.
+The ComBus follows a natural hierarchy:
+- **SYSTEM** data can be promoted to **LOCAL** if needed
+- **LOCAL** data includes all **REMOTE** channels
+- **REMOTE** represents the minimal universal set
 
-Local data remains local until it is explicitly published to a higher propagation level.
+This layered approach ensures clean separation of concerns while maintaining flexibility for future expansions.
 
 ---
 

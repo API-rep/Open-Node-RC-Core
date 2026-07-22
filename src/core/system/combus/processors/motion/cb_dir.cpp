@@ -13,7 +13,7 @@
 // =============================================================================
 
 /** @brief Direction detector — see cb_dir.h for full contract. */
-void cb_dir_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/, ChanOwner /*chainOwner*/)
+void cb_dir_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/)
 {
     const CbDirCfg* cfg = static_cast<const CbDirCfg*>(proc->cfg);
 

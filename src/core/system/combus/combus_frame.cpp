@@ -274,12 +274,12 @@ bool combus_frame_decode( const ComBusFrameCfg& cfg,
  * @param[in]  cfg         Layout descriptor used as upper clamp (nAnalog, nDigital).
  * @param[out] combus      Target ComBus instance to update.
  * @param[in]  inputFrame  Populated frame from combus_frame_decode().
- * @param[in]  caller      Ownership identity forwarded to combus_set_*() guards.
+ * @param[in]  caller      Propagation layer forwarded to combus_set_*() guards.
  */
 void combus_frame_apply( const ComBusFrameCfg& cfg,
-                         ComBus*               combus,
-                         const ComBusFrame*    inputFrame,
-                         ChanOwner             caller ) {
+                          ComBus*               combus,
+                          const ComBusFrame*    inputFrame,
+                          ChanLayer             caller ) {
 
       //  Analog and digital channels upper clamp
     const uint8_t nAnalog  = cfg.nAnalog;    // analog channels bus capacity

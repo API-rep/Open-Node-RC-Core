@@ -18,7 +18,7 @@
  *****************************************************************************/
 #pragma once
 
-#include <struct/combus_proc_struct.h>                          // CbProc, CbProcFn, ChanOwner
+#include <struct/combus_proc_struct.h>  // CbProc, CbProcFn
 #include <struct/combus/processors/math/cb_center_struct.h>    // CbCenterCfg
 
 
@@ -34,6 +34,6 @@
  * @param claimed Not modified.
  * @param chainOwner  Not used.
  */
-void cb_center_fn(CbProc* proc, uint16_t& value, bool& claimed, ChanOwner chainOwner);
+void cb_center_fn(CbProc* proc, uint16_t& value, bool& claimed);
 
 // EOF cb_center.h
