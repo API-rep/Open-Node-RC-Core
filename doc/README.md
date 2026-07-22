@@ -30,7 +30,6 @@ Topics include:
 Future documentation will also include diagrams and animations illustrating how remotes, machines and services exchange information across the network.
 
 * [Open RC Node Ecosystem](ecosystem.md)
-* [Core Architecture](core_architecture.md)
 
 ---
 
@@ -72,15 +71,6 @@ This section covers the practical aspects of creating and deploying a system.
 
 ---
 
-### Project Roadmap & Evolution
-
-Track the project's evolution and upcoming features.
-
-* [Roadmap](roadmap.md) — Current development direction
-* [Deferred Features](deferred_features.md) — Backlog and future improvements
-
----
-
 ### Need a Custom Configuration?
 
 One of the key strengths of Open RC Node is its configuration-driven architecture.
@@ -105,7 +95,7 @@ If you plan to contribute to Open RC Node or understand its internal architectur
 Topics include:
 
 * ComBus
-* Core architecture
+* [Core Architecture](core_architecture.md)
 * Modules
 * Internal services
 * Software architecture
@@ -117,5 +107,12 @@ See also:
 * [IA Guidelines](ia-guidelines.md) — Guidelines for AI-assisted development
 
 ---
+
+### Project Roadmap & Evolution
+
+Track the project's evolution and upcoming features.
+
+* [Roadmap](roadmap.md) — Current development direction
+* [Deferred Features](deferred_features.md) — Backlog and future improvements
 
 Open RC Node is an evolving project. Documentation will continue to grow alongside the architecture and implementation.

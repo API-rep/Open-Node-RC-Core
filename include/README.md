@@ -13,8 +13,7 @@ The goal is to provide a stable and centralized reference for types, structures 
 
 * `struct/` Shared data structures describing configurations, runtime states and containers. See [`struct/README.md`](struct/README.md) for organization principles and ownership patterns.
 
-* `const.h`
-  Global constants and project-wide aliases used by multiple modules.
+* `const.h` Global constants and project-wide aliases used by multiple modules.
 
 
 ## Design Philosophy

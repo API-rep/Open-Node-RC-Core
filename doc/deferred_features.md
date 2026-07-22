@@ -342,6 +342,105 @@ Cette évolution constitue l'une des dernières refontes majeures avant la conve
 * profils motion stabilisés ;
 * extension du ComBus pour transporter les états nécessaires au moteur audio.
 
+---
+
+## 10. DynConfigStore — persistance ROM des configurations dynamiques
+
+**Objectif :** permettre aux configurations dynamiques (`dynCfg`) de survivre aux redémarrages, avec un remote comme source de vérité et une machine comme cache d'exécution.
+
+### Principes
+
+* **Remote-centric** : le remote stocke les configs utilisateur et les pousse vers la machine.
+* **Machine = cache** : la machine conserve en ROM un cache des dernières configs reçues, indexé par l'identifiant unique du remote.
+* **Compatibilité ascendante** : une machine recevant une config d'une version logicielle supérieure ignore les champs inconnus ; une machine recevant une config d'une version inférieure applique les valeurs par défaut pour les champs manquants.
+* **Fallback usine** : si aucune config en cache ne correspond, la machine démarre sur sa configuration usine (`constexpr`).
+
+### Architecture
+
+```text
+REMOTE (utilisateur unique)
+├── Stocke N configs persistantes (une par machine-type)
+├── Écran pour édition offline
+└── Au démarrage :
+    ├── Connexion réseau
+    ├── HELLO : envoie remoteId + softwareVersion
+    ├── Si machine répond CONFIG_CACHED (version match + hash identique) → pas d'upload
+    └── Si machine répond CONFIG_NEEDED → upload de la config adaptée
+
+MACHINE (véhicule)
+├── Stocke un cache de configs en ROM (8 slots par défaut, LRU)
+├── Au boot :
+│   ├── Attend le HELLO du remote
+│   ├── Cherche dans le cache : remoteId match + softwareVersion compatible
+│   ├── Si match → répond CONFIG_CACHED avec configHash
+│   ├── Si mismatch → répond CONFIG_NEEDED
+│   └── Si ROM pleine + pas de match → fallback usine
+└── Compatibilité ascendante obligatoire
+```
+
+### Handshake
+
+```text
+REMOTE                                          MACHINE
+  │                                                │
+  │──[HELLO, remoteId, softwareVersion]──────────►│
+  │                                                │
+  │◄────────────[WELCOME, machineVersion]────────│
+  │                                                │
+  │  Machine cherche dans son cache :
+  │  - remoteId match ?
+  │  - softwareVersion >= schemaVersion stockée ?
+  │                                                │
+  │◄────────────[CONFIG_CACHED, configHash]────────│ (si match)
+  │  Remote compare configHash avec sa config actuelle
+  │  Si identique → fin
+  │  Si différent → remote envoie nouvelle config
+  │                                                │
+  │◄────────────[CONFIG_NEEDED]──────────────────│ (si pas match)
+  │                                                │
+  │──[CONFIG_UPLOAD, header, payload]─────────────►│
+  │                                                │
+  │◄────────────[CONFIG_ACK]───────────────────────│
+```
+
+### Structure du cache machine
+
+```cpp
+struct ConfigCacheEntry {
+    uint8_t  remoteId[6];       ///< Identifiant unique du remote (MAC)
+    uint16_t schemaVersion;     ///< Version du format dynCfg au moment du stockage
+    uint32_t timestamp;         ///< Dernière utilisation (pour LRU)
+    uint16_t payloadSize;       ///< Taille réelle du payload
+    // ... payload dynCfg ...
+};
+```
+
+### Éviction
+
+Si le cache est plein (8/8 occupés) et qu'une nouvelle config doit être stockée :
+
+1. Rechercher une entrée avec `schemaVersion` obsolète (plus ancienne que la version supportée par la machine).
+2. Si aucune → éviction LRU (plus vieux `timestamp`).
+3. Écrire la nouvelle config à la place.
+
+### Points d'attention
+
+* **Taille des dynCfg** — À mesurer tôt. Si > 500 octets, envisager un canal ComBus dédié ou un protocole chunké pour l'upload.
+* **Format de stockage remote** — JSON (lisible, debuggable) vs binaire structuré (compact, rapide). À décider selon la capacité ROM du remote.
+* **`schemaVersion`** — `uint16_t` incrémental suffisant. Pas besoin de SemVer.
+* **Sécurité** — N'importe quel remote peut-il uploader sur n'importe quelle machine ? Un mécanisme de pairing/appairage est à prévoir.
+* **Éviction cache** — LRU basé sur `lastUsedMs`. Si ROM pleine + pas de match → fallback usine. L'utilisateur doit explicitement demander un upload.
+
+### Phase de réalisation
+
+| Phase | Livrable | Priorité |
+|-------|----------|----------|
+| **1** | `DynConfigStore` côté machine (cache 8 slots, LRU, fallback usine) | Haute |
+| **2** | Protocole HELLO/WELCOME/CONFIG_CACHED/CONFIG_NEEDED sur ComBus | Haute |
+| **3** | `schemaVersion` uint16 en tête de chaque dynCfg + compatibilité ascendante (ignore champs inconnus) | Haute |
+| **4** | Stockage config côté remote (JSON ou binaire) + édition écran | Moyenne |
+| **5** | `configHash` pour éviter les uploads inutiles | Moyenne |
+| **6** | Machine-type auto-détection (machine annonce son type au HELLO) | Basse |
 
 ---
 
@@ -435,4 +534,3 @@ MotionRamp {
 ```
 
 À créer lors de l'intégration du premier actionneur hydraulique dans la chaîne Motion.
-
