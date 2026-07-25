@@ -251,14 +251,14 @@ Example:
  * @param bus     Target ComBus instance receiving the update.
  * @param ch      Channel identifier.
  * @param val     New value to write.
- * @param caller  Identity checked against channel ownership.
+ * @param caller  Caller layer checked against channel access rules.
  *
  * @return True if the write was accepted.
  */
 bool combus_set_analog(ComBus& bus,
                        AnalogComBusID ch,
                        uint16_t val,
-                       ChanOwner caller);
+                       ChanLayer caller);
 ```
 
 ### `///<`
