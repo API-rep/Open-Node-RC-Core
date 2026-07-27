@@ -10,7 +10,7 @@
 
 #include "init.h"
 #include "../system/drv_control.h"
-#include <core/system/input/input_manager.h>
+#include <machines/system/input/input_update.h>
 #include <core/system/combus/combus_access.h>
 #include <machines/system/debug/dashboard_machine.h>
 #include <core/system/debug/dashboard/dashboard.h>

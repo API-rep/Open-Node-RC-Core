@@ -1,25 +1,21 @@
 /**
  * @file input_manager.cpp
- * @brief Implementation of input processing and bus synchronization
+ * @brief Implementation of core-side input acquisition
  */
 
 #include "input_manager.h"
-#include <core/system/combus/combus_access.h>
-#include <core/config/inputs/inputs.h>  // device lib + InputAnalog/DigitalMap
 
+int16_t inputAnalogValue[static_cast<uint8_t>(AnalogInputDevID::ANALOG_DEV_COUNT)]   = {0};
+bool    inputDigitalValue[static_cast<uint8_t>(DigitalInputDevID::DIGITAL_DEV_COUNT)] = {false};
 
-#include <machines/config/machines/volvo_A60H_bruder/inputs_map/inputs_map.h>  // InputAnalog/DigitalMapArray/Count
-// -> je pense à un bug de conception, qui impose l'include d'un fichier machine dans l'env core.
-// Je pense franchement qu'il y a un souci de logique dan le code "1. SIGNAL LOSS & FAILSAFE MANAGEMENT"
-// avec l'evolution du projet, je préfèrerai voir un simple import des données vers analog/digital input dev array.
-// ensuite, côté machine, s'occuper de faire le mapping des input_array vers combus. Ca évite de devoir ramener une instance du combus complet machine vers core ...
+static bool inputConnected = false;
+
 
 /**
  * @brief Initialize input hardware/protocol
  */
 
 void input_setup() {
-
 #if INPUT_MODULE == PS4_DS4_BT
 
   sys_log_info("[INPUT] BT stack init...\n");
@@ -29,57 +25,30 @@ void input_setup() {
 #elif INPUT_MODULE == INPUT_MODULE_NONE
   sys_log_warn("[INPUT] No input module configured — machine running in autonomous/headless mode.\n");
 #endif
-
 }
 
 
-
 /**
- * @brief Main input processing loop
+ * @brief Acquire + process physical input device state (core-only)
  */
 
-void input_update(ComBus &bus) {
+void input_refresh() {
 #if INPUT_MODULE == PS4_DS4_BT
 
-// ==========================================================
-// 1. SIGNAL LOSS & FAILSAFE MANAGEMENT
-// ==========================================================
-
-  if (!PS4.isConnected()) {
-      // Clear all mapped channels to their safe neutral values.
-      // Prevents stale non-neutral stick values from persisting across a
-      // disconnect/reconnect cycle and driving motors on the first RUNNING tick.
-    for (uint8_t i = 0; i < InputAnalogMapCount; i++) {
-      const InputAnalogMap&  m   = InputAnalogMapArray[i];
-      const AnalogInputDev&  dev = inputDev.analogInputDev[static_cast<uint8_t>(m.devID)];
-        // ANALOG_BUTTON (trigger): rest position = minVal → maps to 0.
-        // ANALOG_STICK:            rest position = center  → maps to CbusNeutral.
-      int16_t  restRaw = (dev.type == RemoteComp::ANALOG_BUTTON)
-                         ? (int16_t)dev.minVal
-                         : (int16_t)((dev.minVal + dev.maxVal) / 2);
-      uint16_t neutral = (uint16_t)map(restRaw, dev.minVal, dev.maxVal, 0, bus.analogBusMaxVal);
-      combus_set_analog(bus, m.busChannel, neutral, ChanLayer::REMOTE);
-    }
-
-    for (uint8_t i = 0; i < InputDigitalMapCount; i++) {
-      combus_set_digital(bus, InputDigitalMapArray[i].busChannel, false, ChanLayer::REMOTE);
-    }
-    return;   // source inactive — isDrived remains false from sys_manager pre-clear
+  inputConnected = PS4.isConnected();
+  if (!inputConnected) {
+    return;   // stale values retained — machine-side input_update() applies failsafe
   }
 
 // ==========================================================
-// 2. ANALOG INPUTS MAPPING ENGINE
+// ANALOG ACQUISITION + DEADBAND
 // ==========================================================
 
-  for (uint8_t i = 0; i < InputAnalogMapCount; i++) {
-
-      // --- Safe data access ---
-    const InputAnalogMap m = InputAnalogMapArray[i];
-    uint8_t devID = static_cast<uint8_t>(m.devID);
+  for (uint8_t i = 0; i < static_cast<uint8_t>(AnalogInputDevID::ANALOG_DEV_COUNT); i++) {
+    const AnalogInputDevID id = static_cast<AnalogInputDevID>(i);
     int16_t raw = 0;
 
-      // --- Physical Acquisition ---
-    switch (m.devID) {
+    switch (id) {
       case AnalogInputDevID::LX_STICK:  raw = PS4.LStickX(); break;
       case AnalogInputDevID::LY_STICK:  raw = PS4.LStickY(); break;
       case AnalogInputDevID::RX_STICK:  raw = PS4.RStickX(); break;
@@ -89,9 +58,8 @@ void input_update(ComBus &bus) {
       default: break;
     }
 
-      // --- Device-level deadband (raw domain) ---
-    const AnalogInputDev &dev = inputDev.analogInputDev[devID];
-    
+    const AnalogInputDev &dev = inputDev.analogInputDev[i];
+
     if (dev.deadband > 0) {
       if (dev.type == RemoteComp::ANALOG_BUTTON && raw <= (int16_t)dev.deadband) {
         raw = (int16_t)dev.minVal;   // clamp to rest position
@@ -102,29 +70,18 @@ void input_update(ComBus &bus) {
       }
     }
 
-      // --- Dynamic Scaling ---
-    uint16_t val = map(raw, dev.minVal, dev.maxVal, 0, bus.analogBusMaxVal);
-
-      // --- ComBus Injection ---
-    uint8_t ch = static_cast<uint8_t>(m.busChannel);
-    uint16_t busVal = m.isInverted ? (bus.analogBusMaxVal - val) : val;
-
-    combus_set_analog(bus, static_cast<AnalogComBusID>(ch), busVal, ChanLayer::REMOTE);
+    inputAnalogValue[i] = raw;
   }
 
 // ==========================================================
-// 3. DIGITAL INPUTS MAPPING ENGINE
+// DIGITAL ACQUISITION (raw, unprocessed)
 // ==========================================================
 
-  for (uint8_t i = 0; i < InputDigitalMapCount; i++) {
-
-      // --- Safe data access ---
-    const InputDigitalMap m = InputDigitalMapArray[i];
-    uint8_t devID = static_cast<uint8_t>(m.devID);
+  for (uint8_t i = 0; i < static_cast<uint8_t>(DigitalInputDevID::DIGITAL_DEV_COUNT); i++) {
+    const DigitalInputDevID id = static_cast<DigitalInputDevID>(i);
     bool raw = false;
 
-      // --- Physical Acquisition ---
-    switch (m.devID) {
+    switch (id) {
       case DigitalInputDevID::SQUARE_BTN:    raw = PS4.Square(); break;
       case DigitalInputDevID::CROSS_BTN:     raw = PS4.Cross(); break;
       case DigitalInputDevID::CIRCLE_BTN:    raw = PS4.Circle(); break;
@@ -146,23 +103,19 @@ void input_update(ComBus &bus) {
       default: break;
     }
 
-      // --- Logic Processing ---
-    const DigitalInputDev &dev = inputDev.digitalInputDev[devID];
-    bool finalState = (raw != (m.isInverted || dev.isInverted));
-
-      // --- ComBus Injection ---
-    uint8_t ch = static_cast<uint8_t>(m.busChannel);
-
-    combus_set_digital(bus, static_cast<DigitalComBusID>(ch), finalState, ChanLayer::REMOTE);
+    inputDigitalValue[i] = raw;
   }
-
-    // --- Mark bus as driven by this physical source ---
-  bus.isDrived      = true;
-  bus.lastFrameMs   = millis();   // liveness timestamp (shared with UART path)
 
 #endif
 }
 
+bool input_is_connected() {
+#if INPUT_MODULE == PS4_DS4_BT
+  return inputConnected;
+#else
+  return false;
+#endif
+}
 
 const char* input_get_name() {
 #if INPUT_MODULE == PS4_DS4_BT
@@ -171,3 +124,5 @@ const char* input_get_name() {
   return "---";
 #endif
 }
+
+// EOF input_manager.cpp

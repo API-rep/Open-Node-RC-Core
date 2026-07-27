@@ -11,14 +11,15 @@
 #include "../sys/sys_init.h"
 
 
-// =============================================================================
-// 1. COM TRANSPORT INIT
-// =============================================================================
-
 void hw_init_com()
 {
 #if defined(COMBUS_UART_TX) || defined(COMBUS_UART) || defined(COMBUS_UART_RX)
-    uart_init(ComBusUartBaud, &pinReg);
+      // Static storage for the shared UART port pool — owned by the machine,
+      // sized to this board's real capacity. Must outlive the program.
+    static UartCtx s_uartPool[UartComMaxPorts];
+    uart_com_register_pool(s_uartPool, UartComMaxPorts);
+
+    uart_init(ComBusUartBaud, UartComMaxPorts, &pinReg);
 #endif
 }
 

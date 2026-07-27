@@ -7,8 +7,9 @@
  *
  *   1. Open-drain pre-clear of `bus.isDrived` (written false at the top of
  *      every cycle; re-asserted true by any active physical input source).
- *   2. Input acquisition via `input_update()` — re-asserts `bus.isDrived`
- *      when a physical controller is connected.
+ *   2. Input acquisition: core `input_refresh()` then machine
+ *      `input_update(bus)` — re-asserts `bus.isDrived` when a physical
+ *      controller is connected.
  *   3. Battery sensing tick via `vbat_sense_tick()`.
  *   4. Failsafe evaluation: `failsafeActive = !bus.isDrived`.
  *
@@ -17,6 +18,16 @@
  *   - `bus.isDrived = true`  is written ONLY by active physical input sources
  *     (PS4 controller in `input_update`, UART frame in `combus_frame_apply`).
  *   - No other module writes this flag in either direction.
+ *
+ *   **Why this file lives under machines/ and not core/:**
+ *   Step 2 calls this machine's own `input_update(bus)` (the input device ->
+ *   ComBus mapping — see machines/system/input/input_update.h), which is
+ *   machine-specific by nature. Keeping sys_manager here avoids a core file
+ *   depending on a machine path. The trade-off: each machine owns its own
+ *   copy of this orchestrator. If that duplication becomes painful across
+ *   several machines, consider factoring the generic part (pre-clear / vbat /
+ *   failsafe) back into core behind a registered input hook — ask if/when
+ *   that's worth revisiting.
  *
  *   Machine node: call `sys_manager_update()` once as the first statement
  *   in `loop()`.
@@ -51,7 +62,8 @@ struct SysResult {
  *
  * @details Executes in order:
  *   1. Pre-clear `bus.isDrived` (open-drain reset).
- *   2. `input_update(bus)` — acquires all physical input sources.
+ *   2. `input_refresh()` (core) — physical acquisition.
+ *      `input_update(bus)` (machine) — input -> ComBus mapping.
  *   3. `vbat_sense_tick()` — battery ADC read and low-bat detection.
  *   4. Evaluates `failsafeActive = !bus.isDrived`.
  *

@@ -1,63 +1,41 @@
 /******************************************************************************
  * @file uart_com.cpp
- * @brief UART transport — port init, claim guard and ComBus channel helpers.
+ * @brief UART transport â€” port init, claim guard and ComBus channel helpers.
  *****************************************************************************/
 
-#include <config/config.h>
 #include "uart_com.h"
 
 #include <core/system/debug/logging/debug.h>
 #include <core/system/hw/pin_reg.h>
 #include <struct/uart_struct.h>
 
-// Board UartComMaxPorts config validation from config/config.h (board header)
-static_assert(UartComMaxPorts >= 1u, "UartComMaxPorts must be >= 1 (check board header)");
-
 
 // =============================================================================
-// 1. PRIVATE STATE
+// 1. PORT REGISTRY  (externally-owned storage â€” see uart_com_register_pool)
 // =============================================================================
 
-/**
- * @brief Define UART port registry entries..
- *
- * @details During initialization, the `uart_com_init` function claims one entry
- *   in the static `ports[]` registry and fills its metadata (serial pointer, owner name).
- *
- *   Each UART NodeCom instance is associated with a `UartCtx` entry. This lets the
- *   three port callbacks functions(`uart_write/readByte/available`) retrieve
- *   the correct `HardwareSerial*` at runtime.
- *
- *   Because the registry is statically allocated, the `NodeCom*` pointer returned to
- *   the caller by `uart_com_init` remains valid for the lifetime of the program.
- */
+static UartCtx* g_ports    = nullptr;  ///< caller-owned static storage, registered at boot
+static uint8_t  g_capacity = 0u;       ///< number of usable slots in g_ports
+static uint8_t  g_used     = 0u;       ///< number of slots currently claimed
 
-struct UartCtx {
-	HardwareSerial* serial  = nullptr;  ///< Pointer to the associated HardwareSerial instance
-	const char*     owner   = nullptr;  ///< Name of the module owning this port
-	uint32_t        baud    = 0u;       ///< Baud rate recorded at init (used for duplicate detection)
-	bool            claimed = false;    ///< Indicates if the port is already allocated
-	NodeCom         com     = {};       ///< NodeCom instance linked to this port
-};
-
-
-static UartCtx ports[UartComMaxPorts];  ///< Static pool of UART contexts
-static uint8_t portsCount = 0;          ///< Number of allocated UART ports
-
+void uart_com_register_pool(UartCtx* buffer, uint8_t capacity) {
+	if (g_ports != nullptr) {
+		sys_log_err("[UART_COM] FATAL: pool already registered â€” ignoring second call\n");
+		return;
+	}
+	if (buffer == nullptr || capacity == 0u) {
+		sys_log_err("[UART_COM] FATAL: uart_com_register_pool called with null buffer or zero capacity\n");
+		return;
+	}
+	g_ports    = buffer;
+	g_capacity = capacity;
+	g_used     = 0u;
+}
 
 
 // =============================================================================
 // 2. PORT CALLBACKS
 // =============================================================================
-
-/**
- * Static functions linked to the `NodeCom` function-pointer interface
- * for UART transport. They are assigned to `NodeCom.write/readByte/available`
- *  during `uart_com_init()` (step 3).
- *
- * Each receives a `void* ctx` context pointer cast to `UartCtx*`, giving access
- * to the correct `HardwareSerial*` port registry metadata.
- */
 
 	/// @brief UART port Write function
 static void uart_write(void* ctx, const uint8_t* data, size_t len) {
@@ -75,57 +53,47 @@ static int uart_available(void* ctx) {
 }
 
 
-
 // =============================================================================
 // 3. PUBLIC API
 // =============================================================================
 
-/**
- * @brief Initialize a UART port and return a NodeCom pointer.
- *
- * @details Initialization sequence:
- *   1. Guard checks — null serial pointer, duplicate claim on the same
- *      physical port, registry capacity exceeded. Returns nullptr on failure.
- *   2. Claim a context entry from the registry and record port metadata.
- *   3. Bind the NodeCom function pointers to this context.
- *   4. Claim GPIO pins in the optional pin registry (if `reg` is non-null).
- *   5. Configure and start the hardware serial port.
- *
- * @return NodeCom* Pointer to the initialized NodeCom interface, or nullptr on error.
- */
-
 NodeCom* uart_com_init(
-    HardwareSerial* serial, // Pointer to the HardwareSerial instance to use
-    uint32_t        baud,   // Baudrate for the connection
-    int             txPin,  // TX pin number
-    int             rxPin,  // RX pin number
-    const char*     owner,  // Name of the owning module (for debug)
-    PinReg*         reg   ) // Optional pin registry — claims tx/rx pins if non-null
+    HardwareSerial* serial,
+    uint32_t        baud,
+    int             txPin,
+    int             rxPin,
+    const char*     owner,
+    PinReg*         reg )
  {
-
 		// --- 1. Guard checks ---
-		// --- 1.1: Null serial pointer ---
-	if (!serial) {
-		sys_log_err("[UART_COM] nullptr serial — init aborted\n");
+		// --- 1.1: Pool not registered yet ---
+	if (g_ports == nullptr) {
+		sys_log_err("[UART_COM] FATAL: no pool registered â€” call uart_com_register_pool() before init ('%s')\n", owner);
 		return nullptr;
 	}
 
-		// --- 1.2: Reject duplicate claim — one owner per physical port ---
-	for (uint8_t i = 0u; i < portsCount; i++) {
-		if (ports[i].serial == serial) {
-			sys_log_err("[UART_COM] FATAL: port already claimed by '%s', rejected for '%s'\n", ports[i].owner, owner);
+		// --- 1.2: Null serial pointer ---
+	if (!serial) {
+		sys_log_err("[UART_COM] nullptr serial â€” init aborted ('%s')\n", owner);
+		return nullptr;
+	}
+
+		// --- 1.3: Reject duplicate claim â€” one owner per physical port ---
+	for (uint8_t i = 0u; i < g_used; i++) {
+		if (g_ports[i].serial == serial) {
+			sys_log_err("[UART_COM] FATAL: port already claimed by '%s', rejected for '%s'\n", g_ports[i].owner, owner);
 			return nullptr;
 		}
 	}
 
-		// --- 1.3: Registry capacity exceeded ---
-	if (portsCount >= UartComMaxPorts) {
-		sys_log_err("[UART_COM] FATAL: port pool full (%u max), rejected for '%s'\n", (unsigned)UartComMaxPorts, owner);
+		// --- 1.4: Pool capacity exceeded ---
+	if (g_used >= g_capacity) {
+		sys_log_err("[UART_COM] FATAL: port pool full (%u max), rejected for '%s'\n", (unsigned)g_capacity, owner);
 		return nullptr;
 	}
 
 		// --- 2. Claim a context entry from the registry and record port metadata ---
-	UartCtx* port    = &ports[portsCount++];  // next free slot in the registry
+	UartCtx* port    = &g_ports[g_used++];
 	port->serial     = serial;
 	port->owner      = owner;
 	port->baud       = baud;
@@ -150,7 +118,7 @@ NodeCom* uart_com_init(
 		// --- 5. Configure and start the hardware serial port ---
 	serial->begin(baud, SERIAL_8N1, rxPin, txPin);
 
-	sys_log_info("[UART_COM] '%s' — baud=%u  tx=%d  rx=%d\n",owner, baud, txPin, rxPin);
+	sys_log_info("[UART_COM] '%s' â€” baud=%u  tx=%d  rx=%d\n", owner, baud, txPin, rxPin);
 
 	return &port->com;
 }
@@ -176,14 +144,22 @@ HardwareSerial* uart_serial_for(int n) {
 
 #if defined(COMBUS_UART_TX) || defined(COMBUS_UART_RX) || defined(COMBUS_UART)
 
-// Board-level UART pin table — defined in the active env's board .cpp, resolved at link time.
+// Board-level UART pin table â€” defined in the active env's board .cpp, resolved at link time.
 extern const UartPinCfg uartPins[];
 
-static NodeCom* s_com[UartComMaxPorts] = {};
+  // Hardware ceiling â€” ESP32 exposes 3 UART peripherals (Serial/Serial1/Serial2),
+  // matching uart_serial_for() above. This is a fixed architectural fact, not
+  // a board/machine choice â€” safe for core to own as a constant.
+static constexpr uint8_t UART_HW_CHANNEL_MAX = 3u;
+
+static NodeCom* s_com[UART_HW_CHANNEL_MAX] = {};
+static uint8_t  s_maxChannels              = 0u;  ///< caller-declared count of ComBus channels actually exposed
 
 
-void uart_init(uint32_t baud, PinReg* reg)
+void uart_init(uint32_t baud, uint8_t maxChannels, PinReg* reg)
 {
+	s_maxChannels = (maxChannels <= UART_HW_CHANNEL_MAX) ? maxChannels : UART_HW_CHANNEL_MAX;
+
 		// --- Resolve UART channel and GPIO pins from build flag ---
 	#if defined(COMBUS_UART)
 		constexpr int uartCh    = COMBUS_UART;
@@ -207,8 +183,8 @@ void uart_init(uint32_t baud, PinReg* reg)
 
 NodeCom* uart_get_com(int uartCh)
 {
-	if (uartCh < 0 || uartCh >= UartComMaxPorts) {
-		sys_log_err("[UART_COM] uart_get_com: channel %d out of range.\n", uartCh);
+	if (uartCh < 0 || uartCh >= (int)s_maxChannels) {
+		sys_log_err("[UART_COM] uart_get_com: channel %d out of range (max %u).\n", uartCh, (unsigned)s_maxChannels);
 		return nullptr;
 	}
 	return s_com[uartCh];

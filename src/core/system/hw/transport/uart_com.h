@@ -1,28 +1,33 @@
 /******************************************************************************
  * @file uart_com.h
- * @brief UART transport � port init, claim guard and ComBus channel helpers.
+ * @brief UART transport — port init, claim guard and ComBus channel helpers.
  *
  * @details Groups all transport-layer UART concerns: low-level port opening
  * with claim guard, ComBus-channel init driven by compile flags, and a
  * convenience accessor that resolves the active channel for protocol layers.
  *
- * Available port pool is sized to UartComMaxPorts (board header via config/config.h).
- * A static_assert in uart_com.cpp validates this value is >= 1.
+ * Core owns ZERO static storage for the port registry. The caller (machine,
+ * sound node, or any future integrator) allocates a static UartCtx[] array
+ * sized to its own real needs and hands it to core exactly once via
+ * uart_com_register_pool(), before the first uart_com_init() call. This pool
+ * is shared by every UART owner in the program (ComBus, Sound, future
+ * modules) — its capacity is fixed for the program's lifetime.
  *
  * Serial0 (USB/UART) is pre-claimed in sys_init() when any DEBUG_* or
  * DEBUG_DASHBOARD flag is set, preventing accidental reuse by other modules.
  *
  * Call sequence:
  * @code
- *   sys_init();                            // debug serial + pin registry
- *   uart_init(ComBusUartBaud);             // machine: open port, claim pins
- *   uart_init(SOUND_UART_BAUD, &pinReg);   // sound:   open port, claim pins
- *   hw_init();                             // hardware peripherals
- *   combus_protocol_init(...);           // protocol layers wired to transport
+ *   sys_init();                                    // debug serial + pin registry
+ *   static UartCtx pool[UartComMaxPorts];           // machine: static storage
+ *   uart_com_register_pool(pool, UartComMaxPorts);  // machine: register once
+ *   uart_init(ComBusUartBaud, UartComMaxPorts, &pinReg);  // machine: open port
+ *   hw_init();                                      // hardware peripherals
+ *   combus_protocol_init(...);                    // protocol layers wired to transport
  * @endcode
  *
  * When no COMBUS_UART* flag is defined, all ComBus helpers compile to inline
- * no-ops � zero overhead at call sites.
+ * no-ops — zero overhead at call sites.
  *****************************************************************************/
 #pragma once
 
@@ -34,22 +39,61 @@
 
 
 // =============================================================================
-// 1. LOW-LEVEL PORT INIT
+// 1. PORT REGISTRY ENTRY  (storage layout — allocated and owned by the caller)
+// =============================================================================
+
+/**
+ * @brief One UART port registry slot.
+ * @details Exposed (not opaque) so the machine can declare its static array
+ *   directly, without an internal core header. Core never allocates this —
+ *   only writes into slots of a buffer handed to it via
+ *   uart_com_register_pool().
+ */
+struct UartCtx {
+	HardwareSerial* serial  = nullptr;  ///< Pointer to the associated HardwareSerial instance
+	const char*     owner   = nullptr;  ///< Name of the module owning this port
+	uint32_t        baud    = 0u;       ///< Baud rate recorded at init (used for duplicate detection)
+	bool            claimed = false;    ///< Indicates if the port is already allocated
+	NodeCom         com     = {};       ///< NodeCom instance linked to this port
+};
+
+
+// =============================================================================
+// 2. POOL REGISTRATION  (call ONCE at boot, before any uart_com_init)
+// =============================================================================
+
+/**
+ * @brief Register the UART port registry storage.
+ *
+ * @param buffer    Statically-allocated UartCtx array (caller-owned, must
+ *                   outlive the program — no heap, no local/temporary storage).
+ * @param capacity  Number of usable slots in buffer.
+ *
+ * @details A second call is rejected (logged, ignored) — the pool is meant
+ *   to be wired once at boot, by whichever init sequence runs first.
+ */
+void uart_com_register_pool(UartCtx* buffer, uint8_t capacity);
+
+
+// =============================================================================
+// 3. LOW-LEVEL PORT INIT
 // =============================================================================
 
 /**
  * @brief Initialize a UART port and return a claimed NodeCom*.
  *
- * @details Calls serial.begin() once and registers the port in an internal
- * claim table. A second call with the same serial pointer logs a fatal error
- * and returns nullptr.
+ * @details Calls serial.begin() once and registers the port in the pool
+ * handed to core via uart_com_register_pool(). Fails safely (logged,
+ * nullptr) if called before the pool is registered, on a null serial
+ * pointer, on a duplicate claim of the same physical port, or once the
+ * pool's capacity is exhausted.
  *
  * @param serial   HardwareSerial port (e.g. &Serial2).
  * @param baud     Baud rate.
  * @param txPin    GPIO TX pin (-1 to use Arduino default).
  * @param rxPin    GPIO RX pin (-1 to use Arduino default).
  * @param owner    Caller identifier logged in the claim table (e.g. "combus").
- * @param reg      Optional pin registry � TX and RX pins are claimed before
+ * @param reg      Optional pin registry — TX and RX pins are claimed before
  *                 serial.begin() when non-null.
  *
  * @return Pointer to a ready-to-use NodeCom, or nullptr on failure.
@@ -71,12 +115,12 @@ HardwareSerial* uart_serial_for(int n);
 
 
 // =============================================================================
-// 2. COMBUS UART CHANNEL INIT  (compile-flag driven)
+// 4. COMBUS UART CHANNEL INIT  (compile-flag driven)
 // =============================================================================
 //
-//   uart_init(baud, reg)    � open the ComBus UART port from the active flag.
-//   uart_get_com(ch)        � NodeCom* for a given UART channel index.
-//   uart_get_combus_com()   � shortcut: resolve active channel ? uart_get_com().
+//   uart_init(baud, maxChannels, reg) — open the ComBus UART port from the active flag.
+//   uart_get_com(ch)                  — NodeCom* for a given UART channel index.
+//   uart_get_combus_com()             — shortcut: resolve active channel → uart_get_com().
 //
 // =============================================================================
 
@@ -85,30 +129,23 @@ HardwareSerial* uart_serial_for(int n);
 /**
  * @brief Open the ComBus UART port and store the resulting NodeCom*.
  *
- * @details Resolves channel and GPIO pins from the active build flag and the
- * board-level uartPins[] table, sets the RX pin mode when applicable, then
- * calls uart_com_init() once.  The NodeCom* is retained internally and
- * retrieved later by uart_get_com() or uart_get_combus_com().
- *
- * @param baud  UART baud rate.
- * @param reg   Optional pin registry � TX and RX pins are claimed if non-null.
+ * @param baud        UART baud rate.
+ * @param maxChannels Number of hardware UART channels this board exposes to
+ *                     ComBus — bounds uart_get_com() only. Unrelated to the
+ *                     shared port pool from uart_com_register_pool(); this is
+ *                     purely a channel-index sanity ceiling, capped internally
+ *                     at the ESP32's 3 physical UARTs.
+ * @param reg         Optional pin registry — TX and RX pins are claimed if non-null.
  */
-void uart_init(uint32_t baud, PinReg* reg = nullptr);
+void uart_init(uint32_t baud, uint8_t maxChannels, PinReg* reg = nullptr);
 
 /**
  * @brief Return the NodeCom* opened by uart_init() for the given UART channel.
- *
- * @param uartCh  0-based UART channel index.
- * @return        NodeCom* or nullptr if out of range or not yet initialised.
  */
 NodeCom* uart_get_com(int uartCh);
 
 /**
  * @brief Return the NodeCom* for the active ComBus channel.
- *
- * @details Resolves the UART channel from COMBUS_UART / COMBUS_UART_TX /
- * COMBUS_UART_RX and delegates to uart_get_com().  Protocol-layer callers
- * use this instead of repeating the flag-resolution chain.
  */
 inline NodeCom* uart_get_combus_com()
 {
@@ -123,9 +160,9 @@ inline NodeCom* uart_get_combus_com()
 
 #else   // No COMBUS_UART* flag
 
-inline void     uart_init(uint32_t, PinReg* = nullptr) {}
-inline NodeCom* uart_get_com(int)                       { return nullptr; }
-inline NodeCom* uart_get_combus_com()                   { return nullptr; }
+inline void     uart_init(uint32_t, uint8_t, PinReg* = nullptr) {}
+inline NodeCom* uart_get_com(int)                                { return nullptr; }
+inline NodeCom* uart_get_combus_com()                             { return nullptr; }
 
 #endif  // COMBUS_UART_TX / COMBUS_UART_RX / COMBUS_UART
 

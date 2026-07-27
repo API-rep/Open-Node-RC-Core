@@ -9,11 +9,12 @@
 #include <core/config/inputs/PS4_dualshock.h>  // DigitalInputDevID enum
 #include <core/system/debug/logging/debug.h>
 #include <core/system/debug/dashboard/dashboard.h>
-#include <core/system/sys_manager.h>
 #include <core/system/output/output_manager.h>
 #include <core/system/combus/combus_access.h>
 #include <core/system/combus/processors/proc_chain.h>
 #include <core/system/vbat/vbat_sense.h>
+
+#include <machines/system/sys_manager.h>
 
 
 /**

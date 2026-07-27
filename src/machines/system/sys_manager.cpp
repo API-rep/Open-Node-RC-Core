@@ -5,7 +5,8 @@
 
 #include "sys_manager.h"
 
-#include <core/system/input/input_manager.h>
+#include <core/system/input/input_manager.h>    // input_refresh() — core acquisition
+#include <machines/system/input/input_update.h> // input_update(bus) — machine mapping
 #include <core/system/vbat/vbat_sense.h>
 
 
@@ -19,7 +20,8 @@ SysResult sys_manager_update(ComBus& bus) {
     bus.isDrived = false;
 
       // --- 2. Input acquisition (re-asserts isDrived if source active) ---
-    input_update(bus);
+    input_refresh();     // core: physical acquisition
+    input_update(bus);   // machine: mapping -> ComBus
 
       // --- 3. Battery sensing tick ---
     bool vbatChanged = vbat_sense_tick();
