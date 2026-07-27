@@ -1,4 +1,4 @@
-﻿/*!****************************************************************************
+/*!****************************************************************************
  * @file  simulation_struct.h
  * @brief Simulation layer structures — archived SimDev + active CbChain pipeline.
  *
@@ -24,8 +24,7 @@
 #include <optional>
 #include <variant>
 
-#include <core/config/machines/combus_ids.h>  // AnalogComBusID, DigitalComBusID
-#include <struct/combus_struct.h>              // ComBus (needed for SimBehaviorFn in archive)
+#include <struct/combus_struct.h>              // AnalogComBusID, DigitalComBusID (forward), ComBus
 #include <struct/combus_proc_struct.h>                  // CbProc, CbChain, CbProcFn
 #include <defs/defs.h>                                         // ChanLayer
 #include <struct/combus/processors/modules/gear_struct.h>      // GearStepCfg, GearShiftProfile, GearFsmState, GearProcCfg (migrated)

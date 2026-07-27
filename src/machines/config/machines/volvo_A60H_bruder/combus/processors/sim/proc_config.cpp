@@ -33,7 +33,7 @@
 
 #include "proc_config.h"
 
-#include <core/config/machines/dumper_truck/combus/combus.h>  // AnalogComBusID, DigitalComBusID
+#include <machines/config/machines/volvo_A60H_bruder/combus/combus.h>  // AnalogComBusID, DigitalComBusID, comBus
 #include <core/config/hw/simulation_presets.h>    // kVolvoD16J_steps, kGearShift_VolvoD16J
 #include <struct/combus_struct.h>                 // ChanLayer
 #include <core/system/combus/combus_res.h>        // CbusNeutral, pctToCbus
@@ -46,7 +46,7 @@
 #include <core/system/combus/processors/motion/cb_brake.h>         // cb_brake_fn, cb_rev_brake_fn
 #include <core/system/combus/processors/motion/cb_cruise.h>         // cb_cruise_fn, CbCruiseCfg, CbCruiseState
 #include <core/system/combus/processors/modules/gear/cb_gear.h>    // gear_fsm_fn, gear_ratio_inv_fn, gear_ratio_fn, gear_subgear_cap_fn, gear_dir_fn, gear_dyn_ramp_fn, gear_upshift_damp_fn
-using namespace DumperTruck;
+
 
 // Chain configs — included in declaration order (throttle before gear, gear before traction).
 // All types and function pointers are resolved by the common includes above.
@@ -55,7 +55,6 @@ using namespace DumperTruck;
 #include "traction_config.h"  // kTractionProcs — refs kGearCfg
 #include "steering_config.h"  // kSteeringProcs
 #include "dump_config.h"      // kDumpProcs
-
 
 // =============================================================================
 // 1. CHANNEL ARRAY

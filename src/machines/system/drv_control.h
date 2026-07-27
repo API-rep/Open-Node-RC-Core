@@ -7,7 +7,7 @@
  *****************************************************************************/
 #pragma once
 
-#include <core/config/machines/combus_types.h>
+#include <core/config/machines/machine_type_combus_ids.h>
 
 // =============================================================================
 // 1. DRIVER STATE MANAGEMENT

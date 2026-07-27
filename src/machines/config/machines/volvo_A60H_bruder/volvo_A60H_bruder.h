@@ -50,7 +50,7 @@ inline constexpr CombusLayout kVehicleCombusLayout  = CombusLayout::DUMPER_TRUCK
 
 #include <struct/struct.h>
 #include <defs/defs.h>
-#include <core/config/machines/combus_ids.h>
+#include <machines/config/machines/volvo_A60H_bruder/combus/combus.h>  // AnalogComBusID, DigitalComBusID
 
 /**
  * @brief Indices into `sigDevArray[]`.
@@ -72,8 +72,8 @@ enum SigDev {
 /// Array definitions in `volvo_A60H_bruder.cpp`.
 extern SigDevice sigDevArray[SIG_COUNT];
 
-#include <core/config/machines/dumper_truck/combus/processors/input/proc_config.h>  ///< kInputChains[], InputCh enum — dumper-truck class.
-#include <core/config/machines/dumper_truck/combus/processors/sim/proc_config.h>    ///< kSimChannels[], SimCh enum — dumper-truck class.
+#include <machines/config/machines/volvo_A60H_bruder/combus/processors/input/proc_config.h>  ///< kInputChains[], InputCh enum
+#include <machines/config/machines/volvo_A60H_bruder/combus/processors/sim/proc_config.h>    ///< kSimChannels[], SimCh enum
 
 // --- Board dispatch ---
   #include "mainboard/mainboard.h"

@@ -11,17 +11,13 @@
  *******************************************************************************/// 
 #pragma once
 
-#include <const.h>
-#include <struct/struct.h>
-#include <defs/defs.h>
+#include <defs/remotes_defs.h>  // RemoteProtocol
+#include <struct/remotes_struct.h>  // InputDev, AnalogInputDev, DigitalInputDev
+#include <PS4Controller.h>  // PS4 lib if PS4_DS4_BT set
 
-#include <config/config.h>
-
-#include <PS4Controller.h>
-
-/**
- * Device relative values
- */
+// =============================================================================
+// DEVICE CONSTANTS
+// =============================================================================
 
 #define DEF_STICK_MIN_VAL  -127          // maximum negative value for sticks
 #define DEF_STICK_MAX_VAL   127          // maximum positive value for sticks
@@ -29,16 +25,10 @@
 #define DEF_ANALOG_BUTTON_MIN_VAL    0   // maximum negative value for analog button
 #define DEF_ANALOG_BUTTON_MAX_VAL  255   // maximum positive value for analog button
 
-/**
- * Remote devices definition
-  Place here all config of devices embedded in the remote suhc as:
- * - Analog axis (sticks, sliders, analog buttons ...)
- * - Switch type devices (switchs, buttons ...)
- */
 
-/** @brief Remote analog config structure definition */
-
-  // remote analog device index
+// =============================================================================
+// ANALOG DEVICE ENUMS AND DESCRIPTOR ARRAYS — EMPTY (COUNT = 0)
+// =============================================================================
 
 enum class AnalogInputDevID : uint8_t {
   LX_STICK = 0,
@@ -50,14 +40,13 @@ enum class AnalogInputDevID : uint8_t {
   ANALOG_DEV_COUNT
 };
 
-  // remote analog device config structure array
 extern AnalogInputDev AnalogInputDevArray[static_cast<uint8_t>(AnalogInputDevID::ANALOG_DEV_COUNT)];
 
 
+// =============================================================================
+// DIGITAL DEVICE ENUMS AND DESCRIPTOR ARRAYS — EMPTY (COUNT = 0)
+// =============================================================================
 
-/** @brief Remote digital config structure definition */
-
-  // remote digital device index
 enum class DigitalInputDevID : uint8_t {
   SQUARE_BTN = 0,
   CROSS_BTN,
@@ -80,13 +69,13 @@ enum class DigitalInputDevID : uint8_t {
   DIGITAL_DEV_COUNT
 };
 
-  // remote digital device config structure array
 extern DigitalInputDev digitalInputDevArray[static_cast<uint8_t>(DigitalInputDevID::DIGITAL_DEV_COUNT)];
 
 
 
-/** @brief Remote config structure definition */
-//  ADD TO STRUCT IF NEED     #define REMOTE_ID          "PS4_DS4_BT"
+// =============================================================================
+// TOP-LEVEL DESCRIPTOR — NO DEVICE
+// =============================================================================
 
 inline constexpr InputDev inputDev {
   .infoName = "PS4 dualshock controller",                                             // remote short description

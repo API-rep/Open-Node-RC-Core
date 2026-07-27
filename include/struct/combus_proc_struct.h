@@ -37,9 +37,12 @@
 #include <optional>
 #include <variant>
 
-#include <core/config/machines/combus_ids.h>  // AnalogComBusID, DigitalComBusID
 #include <struct/combus_struct.h>              // ChanLayer
 
+// Forward declaration only — AnalogComBusID/DigitalComBusID used
+// below solely as type parameters for SrvDevice structure.
+enum class AnalogComBusID  : uint8_t;
+enum class DigitalComBusID : uint8_t;
 
 // =============================================================================
 // 1. FORWARD DECLARATION

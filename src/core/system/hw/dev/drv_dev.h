@@ -15,8 +15,13 @@
 #pragma once
 
 #include <DcMotorCore.h>
-#include <core/config/machines/combus_types.h>
 #include <core/system/hw/pin_reg.h>
+#include <struct/machines_struct.h>  // for EnvCfg
+
+// Forward declaration only — AnalogComBusID/DigitalComBusID used below as type
+// parameters for DcDevice structure.
+enum class AnalogComBusID  : uint8_t;
+enum class DigitalComBusID : uint8_t;
 
 
 // =============================================================================

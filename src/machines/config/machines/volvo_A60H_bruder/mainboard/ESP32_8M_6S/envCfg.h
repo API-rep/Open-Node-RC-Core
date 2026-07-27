@@ -16,11 +16,15 @@
  */
 #pragma once
 
+// Machine identity and board flag — must come first so that BOARD is visible
+// to boards.h (included indirectly via struct/struct.h).
+#include <machines/config/machines/volvo_A60H_bruder/mainboard/mainboard.h>
+
 #include <const.h>
 #include <struct/struct.h>
 #include <defs/defs.h>
 
-#include <core/config/machines/combus_types.h>
+#include <struct/combus_struct.h>
 
 
 // =============================================================================
@@ -38,9 +42,6 @@
 #define M_DEF_PWM_FREQ        16000     ///< Default DC-motor PWM frequency (Hz).
 #define SRV_DEF_PWM_FREQ         50     ///< Default servo PWM frequency (Hz).
 #define COOLING_FAN_SPEED       100     ///< Cooling fan duty cycle (%).
-
-  // Include board pin/peripheral definitions.
-#include <machines/config/boards/boards.h>
 
 
 // =============================================================================

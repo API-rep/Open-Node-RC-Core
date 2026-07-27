@@ -3,11 +3,15 @@
  * @brief Implementation of signal device configuration check and init.
  *****************************************************************************/
 
-#include <core/config/machines/combus_types.h>
 #include <struct/struct.h>
 #include <core/system/debug/logging/debug.h>
 
 #include "sig_dev.h"
+
+// Forward declaration only — AnalogComBusID/DigitalComBusID used
+// below as type parameters for SigDevice structure.
+enum class AnalogComBusID  : uint8_t;
+enum class DigitalComBusID : uint8_t;
 
 
 // =============================================================================

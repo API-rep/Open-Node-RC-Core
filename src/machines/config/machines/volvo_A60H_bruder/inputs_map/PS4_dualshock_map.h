@@ -1,5 +1,5 @@
-#include <struct/remotes_map_struct.h>
-#include <core/config/inputs/PS4_dualshock.h> // Pour tes enums AnalogDevID
+#include <core/config/inputs/inputs.h>              // device vocabulary + InputAnalogMap, InputDigitalMap
+#include <machines/config/machines/volvo_A60H_bruder/combus/combus.h>  // AnalogComBusID, DigitalComBusID
 
   // input to combus analog channel mapping
 extern const InputAnalogMap InputAnalogMapArray[];

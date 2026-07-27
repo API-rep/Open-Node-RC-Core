@@ -14,9 +14,12 @@
 
 #ifdef LIGHT_ENABLE
 
-#include <struct/combus_struct.h>
 #include "light_state.h"
 
+// Forward declaration only — AnalogComBusID/DigitalComBusID used below as type 
+// parameters for bus access
+enum class AnalogComBusID  : uint8_t;
+enum class DigitalComBusID : uint8_t;
 
 // =============================================================================
 // PUBLIC API

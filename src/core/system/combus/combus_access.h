@@ -21,8 +21,11 @@
 
 #include <optional>
 #include <struct/combus_struct.h>
-#include <core/config/machines/combus_ids.h>
 
+// Forward declaration only — AnalogComBusID/DigitalComBusID used
+// below solely as type parameters for combus_set function.
+enum class AnalogComBusID  : uint8_t;
+enum class DigitalComBusID : uint8_t;
 
 // =============================================================================
 // 1. CHANNEL WRITE ACCESSORS

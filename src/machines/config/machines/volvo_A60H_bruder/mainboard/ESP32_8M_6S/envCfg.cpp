@@ -13,10 +13,10 @@
  *   named parent at init time — only overrides need to be declared.
  *   ComBus channel assignments reference the enums in combus_types.h and
  *   are validated at sound/output module init.
- *******************************************************************************
- */
+ ******************************************************************************/
 
 #include "envCfg.h"
+#include <machines/config/machines/volvo_A60H_bruder/combus/combus_ids.h>
 
 
 // =============================================================================

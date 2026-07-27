@@ -4,7 +4,6 @@
  *****************************************************************************/
 #pragma once
 
-#include <core/config/machines/combus_types.h>
 #include <core/system/debug/logging/debug.h>
 
 #include "hw_init_drv.h"

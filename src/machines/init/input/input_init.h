@@ -26,14 +26,14 @@
 // =============================================================================
 
 	// EnvCfg selector and bus enums
-#include <core/config/machines/combus_types.h>
+#include <core/config/machines/machine_type_combus_ids.h>
 
 // =============================================================================
 // 3. REMOTE MAPPING STRUCTURES
 // =============================================================================
 
-	// Input mapping definitions
-#include <struct/remotes_map_struct.h>
+	// Input device vocabulary + mapping structures
+#include <core/config/inputs/inputs.h>
 
 
 // =============================================================================

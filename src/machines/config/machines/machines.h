@@ -7,15 +7,20 @@
  *******************************************************************************/// 
 #pragma once
 
-  /* TP dumper trucks */
-#if MACHINE == VOLVO_A60_H_BRUDER    // Bruder Volvo_A60H full electric conversion
+#ifndef MACHINE
+  #error "No machine defined for compilation. Check platformio.ini file and env:xxx MACHINE setting to fix the problem"
+#endif
+
+/* TP dumper trucks */
+#if MACHINE == VOLVO_A60_H_BRUDER
   #include "volvo_A60H_bruder/volvo_A60H_bruder.h"
-#endif
 
-#ifndef MACHINE 
- #error "No machine defined for compilation. Check platformio.ini file and env:xxx setting to fix the problem" 
-#endif
+// #elif MACHINE == ANOTHER_MACHINE
+//   #include "another_machine.h"
 
+#else
+  #error "Unsupported MACHINE value. Check platformio.ini file and env:xxx MACHINE setting to fix the problem"
+#endif
 
 #include <machines/config/machines/machines.h>
 

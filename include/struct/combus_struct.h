@@ -21,6 +21,26 @@
 
 #include <defs/machines_defs.h>
 
+// =============================================================================
+// FORWARD DECLARATIONS — OPAQUE ENUM TYPES
+// =============================================================================
+
+/// @brief Forward declarations only — AnalogComBusID/DigitalComBusID
+///   as opaque enum types (fixed underlying type = complete type in
+///   C++11+, sufficient for use as field/parameter types without
+///   the full definition).
+///
+/// Global scope: only one machine config is visible per translation
+/// unit today. If a multi-machine remote build ever needs several
+/// machine namespaces in the same TU, reintroduce namespacing then,
+/// alongside the .inc selection logic — not needed now.
+///
+/// For the FULL definition (enumerators + runtime comBus/arrays),
+/// include the machine's own combus.h / combus_ids.h instead.
+
+enum class AnalogComBusID  : uint8_t;
+enum class DigitalComBusID : uint8_t;
+
 
 // =============================================================================
 // COMBUS CHANNEL LAYERS

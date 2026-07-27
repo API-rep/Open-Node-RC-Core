@@ -17,7 +17,12 @@
  *****************************************************************************/
 #pragma once
 
-#include <core/config/machines/combus_types.h>
+#include <struct/machines_struct.h>
+
+// Forward declaration only — AnalogComBusID/DigitalComBusID used
+// below solely as type parameters for SigDevice structure.
+enum class AnalogComBusID  : uint8_t;
+enum class DigitalComBusID : uint8_t;
 
 
 // =============================================================================

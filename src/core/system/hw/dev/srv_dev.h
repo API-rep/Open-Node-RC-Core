@@ -14,8 +14,13 @@
 #pragma once
 
 #include <ServoCore.h>
-#include <core/config/machines/combus_types.h>
+#include <struct/machines_struct.h>
 #include <core/system/hw/pin_reg.h>
+
+// Forward declaration only — AnalogComBusID/DigitalComBusID used
+// below solely as type parameters for SrvDevice structure.
+enum class AnalogComBusID  : uint8_t;
+enum class DigitalComBusID : uint8_t;
 
 
 // =============================================================================

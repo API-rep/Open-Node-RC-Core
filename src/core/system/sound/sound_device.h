@@ -43,10 +43,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <optional>
-#include <defs/machines_defs.h>               // DevUsage
-#include <struct/combus_struct.h>             // ComBus
-#include <core/config/machines/combus_ids.h>  // AnalogComBusID, DigitalComBusID
-#include "sound_device_cfg.h"                 // HydRampCfg, HydPumpCfg, TriggerCfg
+#include <defs/machines_defs.h>                // DevUsage
+#include <struct/combus_struct.h>              // ComBus, AnalogComBusID, DigitalComBusID (forward declarations)
+#include "sound_device_cfg.h"                   // HydRampCfg, HydPumpCfg, TriggerCfg
 
 
 // =============================================================================

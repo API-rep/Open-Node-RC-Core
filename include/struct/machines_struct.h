@@ -13,14 +13,13 @@
 #include <const.h>
 #include <defs/defs.h>
 
-// Provides the correct namespace-scoped enum declarations + using namespace for
-// AnalogComBusID/DigitalComBusID used below. This fix project dependencies that 
-// could create include cycles.
-#include <core/config/machines/combus_ids.h>
-
 #include <core/system/combus/combus_res.h>  // SrvHwAngle, pct
 #include <struct/simulation_struct.h>   // CbChain, DriveState, DriveStateBus (+ archive A1–A4)
 
+// Forward declaration only — AnalogComBusID/DigitalComBusID used
+// below solely as field types (std::optional<...>).
+enum class AnalogComBusID  : uint8_t;
+enum class DigitalComBusID : uint8_t;
 
 /**
  * @brief DC driver module structure

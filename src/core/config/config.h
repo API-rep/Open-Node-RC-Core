@@ -11,7 +11,7 @@
 #include <struct/struct.h>
 #include <defs/defs.h>
 
-#include "machines/combus_types.h"
+#include <core/config/machines/combus_ids_remote.h>  // AnalogComBusRemoteID, DigitalComBusRemoteID
 #include "inputs/inputs.h"
 #include "outputs/outputs.h"
 

@@ -4,21 +4,32 @@
  */
 
 #include "input_manager.h"
-#include <core/config/machines/combus_types.h>
 #include <core/system/combus/combus_access.h>
-#include <PS4Controller.h>
+#include <core/config/inputs/inputs.h>  // device lib + InputAnalog/DigitalMap
 
+
+#include <machines/config/machines/volvo_A60H_bruder/inputs_map/inputs_map.h>  // InputAnalog/DigitalMapArray/Count
+// -> je pense à un bug de conception, qui impose l'include d'un fichier machine dans l'env core.
+// Je pense franchement qu'il y a un souci de logique dan le code "1. SIGNAL LOSS & FAILSAFE MANAGEMENT"
+// avec l'evolution du projet, je préfèrerai voir un simple import des données vers analog/digital input dev array.
+// ensuite, côté machine, s'occuper de faire le mapping des input_array vers combus. Ca évite de devoir ramener une instance du combus complet machine vers core ...
 
 /**
  * @brief Initialize input hardware/protocol
  */
 
 void input_setup() {
+
 #if INPUT_MODULE == PS4_DS4_BT
+
   sys_log_info("[INPUT] BT stack init...\n");
   PS4.begin(PS4_BLUETOOTH_ADDRESS);
   sys_log_info("[INPUT] BT stack init complete — waiting for controller (%s)\n", PS4_BLUETOOTH_ADDRESS);
+
+#elif INPUT_MODULE == INPUT_MODULE_NONE
+  sys_log_warn("[INPUT] No input module configured — machine running in autonomous/headless mode.\n");
 #endif
+
 }
 
 
@@ -49,6 +60,7 @@ void input_update(ComBus &bus) {
       uint16_t neutral = (uint16_t)map(restRaw, dev.minVal, dev.maxVal, 0, bus.analogBusMaxVal);
       combus_set_analog(bus, m.busChannel, neutral, ChanLayer::REMOTE);
     }
+
     for (uint8_t i = 0; i < InputDigitalMapCount; i++) {
       combus_set_digital(bus, InputDigitalMapArray[i].busChannel, false, ChanLayer::REMOTE);
     }

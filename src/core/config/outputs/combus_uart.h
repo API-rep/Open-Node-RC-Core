@@ -12,24 +12,23 @@
  *     ComBusUartBaud       — negotiated UART baud rate (≤ board UartMaxBaud)
  *     ComBusUartTxHz       — frame transmit rate in Hz
  *     ComBusUartMaxTxHz    — controller-side frame-rate ceiling (Hz)
- *****************************************************************************/
+ ******************************************************************************/
 #pragma once
 
 #include <stdint.h>
 #include <core/system/combus/combus_frame.h>
-#include <core/config/machines/combus_types.h>           // AnalogComBusID, DigitalComBusID (IS_MACHINE absent → enums only)
+#include <core/config/machines/combus_ids_remote.h>  // AnalogComBusRemoteID, DigitalComBusRemoteID
 
 /// UART transport physical cap — chosen as uint8_t safety ceiling (no hardware limit).
 static constexpr uint8_t CombusPhysUartMax = 255u;
 
 
 // =============================================================================
-
 // 2. EXACT FRAME SIZE FOR THIS COMBUS LAYOUT
 // =============================================================================
 
 /**
- * @brief Encoded frame size for this machine’s ComBus — in bytes.
+ * @brief Encoded frame size for this machine's ComBus — in bytes.
  *
  * @details Sized to the actual channel counts, not the protocol maximum.
  *   Smaller than CombusTransportMaxFrame when fewer than the protocol
@@ -38,14 +37,24 @@ static constexpr uint8_t CombusPhysUartMax = 255u;
  *
  *   Frame layout:
  *     7 bytes — fixed header (SOF + env_id + seq + run_level + flags + n_analog + n_dig_bytes)
- *     ceil(DigitalComBusID::CH_COUNT / 8) — digital channels packed LSB-first
- *     AnalogComBusID::CH_COUNT × 2        — analog channels as uint16_t LE
+ *     ceil(DigitalComBusRemoteID::CH_COUNT / 8) — digital channels packed LSB-first
+ *     AnalogComBusRemoteID::CH_COUNT × 2          — analog channels as uint16_t LE
  *     1 byte  — CRC-8
  */
+
+// NOTE (temporaire) : la taille de trame est actuellement calculée sur la
+// seule base du contrat REMOTE (CH_COUNT), en supposant que tout canal REMOTE
+// est systématiquement transmis. C'est l'hypothèse la plus simple et sûre
+// pour l'instant. Cette hypothèse devra être revue lorsque des flags
+// d'émission conditionnels seront introduits (ex: retour télémétrique
+// uniquement, sous-ensembles de canaux selon le mode de trame) — la taille
+// de trame deviendra alors variable et ne pourra plus être un simple constexpr
+// basé sur CH_COUNT. Voir COMBUS_PROCESSORS_ROADMAP.md pour le contexte plus
+// large.
 static constexpr uint8_t ComBusUartFrameSize =
     7u
-  + ((static_cast<uint8_t>(DigitalComBusID::CH_COUNT) + 7u) / 8u)
-  +  (static_cast<uint8_t>(AnalogComBusID::CH_COUNT)  * 2u)
+  + ((static_cast<uint8_t>(DigitalComBusRemoteID::CH_COUNT) + 7u) / 8u)
+  +  (static_cast<uint8_t>(AnalogComBusRemoteID::CH_COUNT)  * 2u)
   + 1u;
 
 

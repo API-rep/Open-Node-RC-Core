@@ -12,10 +12,20 @@
 
 
 // =============================================================================
+// INPUT MODULE CONSTANTS
+// =============================================================================
+
+/// No physical input device — autonomous / headless machine.
+/// Use this value in platformio.ini build_flags:
+///     -D INPUT_MODULE=INPUT_MODULE_NONE
+static constexpr uint8_t INPUT_MODULE_NONE = 0;
+
+
+// =============================================================================
 // ADC SYSTEM CONSTANTS
 // =============================================================================
 
-	/// ADC full-scale size — derived from MCU resolution at compile time.
+/// ADC full-scale size — derived from MCU resolution at compile time.
 #if defined(ESP32) || defined(ARDUINO_ARCH_ESP32)
   static constexpr uint16_t ADC_MAX_COUNT = 4095;   // 12-bit ADC
 #elif defined(__AVR__)

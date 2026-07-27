@@ -10,7 +10,7 @@
  *          Sub-modules included:
  *            combus   — always (channel IDs, array externs, comBus extern)
  *            motion   — always (traction preset alias)
- *            inputs_map — if INPUT_MODULE is defined
+ *            inputs_map — INSTANCE-specific (see note below)
  *            sound    — if SOUND_NODE or SOUND_ENABLED is defined
  *
  *          NOTE: `sound_dynamics.h` (standalone dispatcher) is no longer
@@ -24,7 +24,9 @@
 // 1. COMBUS  (always)
 // =============================================================================
 
-#include <core/config/machines/dumper_truck/combus/combus.h>
+// REMOTE-only vocabulary for generic dumper-truck code
+// Machine-specific code includes the concrete machine's combus.h directly
+#include <core/config/machines/dumper_truck/combus/combus_ids_remote.h>
 
 
 // =============================================================================
@@ -35,12 +37,10 @@
 
 
 // =============================================================================
-// 3. INPUT MAPPING  (only when an input module is active)
+// 3. INPUT MAPPING
 // =============================================================================
-
-#ifdef INPUT_MODULE
-  #include <core/config/machines/dumper_truck/inputs_map/inputs_map.h>
-#endif
+// NOTE: inputs_map is now INSTANCE-specific (volvo_A60H_bruder/inputs_map/).
+// The instance's machine header includes it directly.
 
 
 // =============================================================================
