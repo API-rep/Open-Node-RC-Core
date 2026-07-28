@@ -4,7 +4,7 @@
  *
  * @details Triggers compile-flag gated reactions when battery is low.
  *   The `comBus.batteryIsLow` flag is the universal pivot — written by
- *   `vbat_update()` from local sensing (VBAT_SENSING) or received from
+ *   `vbat_update()` from local sensing (HAS_VBAT_SENSING) or received from
  *   a ComBus RX frame.
  *
  *   VBAT_ALERT_BEEP  — boot beep via Tone32.
@@ -77,7 +77,7 @@ void vbat_alert_init()
  *
  * @details Reads `comBus.batteryIsLow` as the universal pivot and triggers
  *   gated reactions.  The flag is written upstream by `vbat_update()` from
- *   local sensing (VBAT_SENSING) or received from a ComBus RX frame.
+ *   local sensing (HAS_VBAT_SENSING) or received from a ComBus RX frame.
  *
  *   Does NOT call vbat_sense_tick() — orchestrator (vbat) handles that.
  */

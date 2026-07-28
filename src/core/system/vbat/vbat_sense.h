@@ -4,19 +4,22 @@
  *
  * @details Voltage divider-based ADC sensing with sliding average,
  *   1S–6S auto-detection, and hysteresis re-arm logic.
- *   Activated by -D VBAT_SENSING=<TYPE> in platformio.ini (e.g. LIPO).
+ *   Activated by -D VBAT_LIPO (or other VBAT_xxx flags) in platformio.ini.
  *
  *   Channel count is driven by VBatSense.count (set by the board).
- *   When VBAT_SENSING is not defined, all functions are inline no-ops —
+ *   When battery sensing is not configured, all functions are inline no-ops —
  *   no #ifdef required in callers.
+ *
+ *   The HAS_VBAT_SENSING flag is defined by the battery profile backend
+ *   (e.g., bat_lipo.h) when it is included via config.h.
  *****************************************************************************/
 #pragma once
 
+// Include config.h first so HAS_VBAT_SENSING is defined before we test it
+#include <core/config/vbat/config.h>
 #include <struct/vbat_struct.h>
 
-#ifdef VBAT_SENSING
-
-#include <core/config/vbat/config.h>
+#ifdef HAS_VBAT_SENSING
 
 
 // =============================================================================
@@ -64,7 +67,7 @@ bool vbat_is_disabled(uint8_t idx = 0);
 	/// Used by the dashboard detail view to display init-time parameters.
 const VBatSenseConfig* vbat_cfg(uint8_t idx = 0);
 
-#else // VBAT_SENSING not defined
+#else // HAS_VBAT_SENSING not defined
 
 // =============================================================================
 // 2. NO-OP STUBS — no #ifdef needed in callers
@@ -83,6 +86,6 @@ inline bool    vbat_is_low(uint8_t = 0)                    { return false;   }
 inline bool    vbat_is_disabled(uint8_t = 0)               { return true;    }
 inline const VBatSenseConfig* vbat_cfg(uint8_t = 0)        { return nullptr; }
 
-#endif // VBAT_SENSING
+#endif // HAS_VBAT_SENSING
 
 // EOF vbat_sense.h

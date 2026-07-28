@@ -11,9 +11,12 @@
  *   All channels indexed by VBatChannel enum (board config).
  *****************************************************************************/
 
-#ifdef VBAT_SENSING
+// Include config.h first so HAS_VBAT_SENSING is defined before vbat_sense.h tests it
+#include <core/config/vbat/config.h>
 
 #include "vbat_sense.h"
+
+#ifdef HAS_VBAT_SENSING
 
 #include <Arduino.h>
 #include <const.h>
@@ -168,7 +171,7 @@ void vbat_sense_init(VBatSense& sense) {
  *
  *   Returns immediately (false) if vbat_sense_init() has not been called yet.
  *
- * @return True when any channel’s isLow state has changed this tick.
+ * @return True when any channel's isLow state has changed this tick.
  */
 bool vbat_sense_tick() {
   if (!vBatSense) {
@@ -313,6 +316,6 @@ const VBatSenseConfig* vbat_cfg(uint8_t idx) {
   return (vBatSense && idx < vBatSense->count) ? &vBatSense->cfg[idx] : nullptr;
 }
 
-#endif // VBAT_SENSING
+#endif // HAS_VBAT_SENSING
 
 // EOF vbat_sense.cpp

@@ -3,7 +3,7 @@
  * @brief Battery voltage sensing structure definitions.
  *
  * @details Pure type definitions — no feature flag dependency.
- *   Available regardless of VBAT_SENSING activation.
+ *   Available regardless of HAS_VBAT_SENSING activation.
  *******************************************************************************///
 #pragma once
 

@@ -7,7 +7,8 @@
  *
  *   - `vbat_sense` : hardware ADC sensing, sliding average, cell auto-detection,
  *     low-bat flag. Writes `batteryIsLow` into the ComBus digital bus as event.
- *     Activated by `-D VBAT_SENSING=<TYPE>` compile flag
+ *     Activated by `-D VBAT_LIPO` (or other VBAT_xxx flags) in platformio.ini.
+ *     Sets HAS_VBAT_SENSING when active (defined by the battery profile backend).
  *
  *   - `vbat_alert` : reactions to low battery (beep, sound alert, LED alert, etc.).
  *     Reads `batteryIsLow` from the ComBus digital bus and triggers reactions. 
@@ -18,7 +19,7 @@
  *   (or any remote node on the bus) writes it, and `vbat_alert` reads it,
  *   regardless of who produced the sensing data.
  *
- *   When neither VBAT_SENSING nor any VBAT_ALERT_* flag is set, both
+ *   When neither HAS_VBAT_SENSING nor any VBAT_ALERT_* flag is set, both
  *   functions are inline no-ops.
  *****************************************************************************/
 #pragma once
@@ -26,7 +27,7 @@
 #include <core/system/vbat/vbat_alert.h>
 
 
-#if defined(VBAT_SENSING) || defined(VBAT_ALERT)
+#if defined(HAS_VBAT_SENSING) || defined(VBAT_ALERT)
 
 // =============================================================================
 // 1. API
@@ -51,9 +52,9 @@ void vbat_init(VBatSense* sense = nullptr);
  * @brief Main-loop battery tick — single entry point.
  *
  * @details Sequences three steps in order:
- *   1. `vbat_sense_tick()` — (if VBAT_SENSING) ADC read, sliding average,
+ *   1. `vbat_sense_tick()` — (if HAS_VBAT_SENSING) ADC read, sliding average,
  *      low-bat detection.
- *   2. (if VBAT_SENSING)    — writes `comBus.batteryIsLow` from local ADC.
+ *   2. (if HAS_VBAT_SENSING)    — writes `comBus.batteryIsLow` from local ADC.
  *   3. `vbat_alert_tick()`  — read `comBus.batteryIsLow`, trigger gated reactions.
  *
  *   In ComBus-only mode, the input bridge must populate `comBus.batteryIsLow`
@@ -67,11 +68,11 @@ void vbat_update();
 // 2. NO-OP STUBS
 // =============================================================================
 
-#else // neither VBAT_SENSING nor VBAT_ALERT
+#else // neither HAS_VBAT_SENSING nor VBAT_ALERT
 
 inline void vbat_init(VBatSense* = nullptr) {}
 inline void vbat_update() {}
 
-#endif // VBAT_SENSING || VBAT_ALERT
+#endif // HAS_VBAT_SENSING || VBAT_ALERT
 
 // EOF vbat.h

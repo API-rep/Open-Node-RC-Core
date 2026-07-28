@@ -6,19 +6,22 @@
  *   `vbat_alert` (alert hardware init + runtime reactions), each gated by
  *   their respective compile flags.
  *
- *   When only VBAT_ALERT_* flags are set (no VBAT_SENSING), the sensing
+ *   When only VBAT_ALERT_* flags are set (no HAS_VBAT_SENSING), the sensing
  *   steps are skipped and `sense` may be nullptr.  `comBus.batteryIsLow`
  *   is then populated externally (ComBus RX) before each `vbat_update()`.
  *****************************************************************************/
 
 #include "vbat.h"
 
-#ifdef VBAT_SENSING
+// Include config.h first so HAS_VBAT_SENSING is defined before we test it
+#include <core/config/vbat/config.h>
+
+#ifdef HAS_VBAT_SENSING
 #include <struct/combus_struct.h>
 extern ComBus comBus;
 #endif
 
-#if defined(VBAT_SENSING) || defined(VBAT_ALERT)
+#if defined(HAS_VBAT_SENSING) || defined(VBAT_ALERT)
 
 // =============================================================================
 // 1. INITIALIZATION
@@ -29,7 +32,7 @@ extern ComBus comBus;
  *
  * @details Initialization sequences two optional sub-modules in order:
  *   1. `vbat_sense_init()` : ADC setup, sliding-average seed, cell auto-detection,
- *      low-bat evaluation.  Activated when @p sense is non-null and VBAT_SENSING is set.
+ *      low-bat evaluation.  Activated when @p sense is non-null and HAS_VBAT_SENSING is set.
  *   2. `vbat_alert_init()` : initializes alert hardware (buzzer channel, etc.).
  *      Activated when any VBAT_ALERT_* flag is set.
  *
@@ -39,7 +42,7 @@ extern ComBus comBus;
 void vbat_init(VBatSense* sense)
 {
 		// --- 1. Hardware sensing (if available) ---
-#ifdef VBAT_SENSING
+#ifdef HAS_VBAT_SENSING
 	if (sense) {
 		vbat_sense_init(*sense);
 	}
@@ -66,7 +69,7 @@ void vbat_init(VBatSense* sense)
 void vbat_update()
 {
 		// --- 1. Sensing (if available) ---
-#ifdef VBAT_SENSING
+#ifdef HAS_VBAT_SENSING
 	vbat_sense_tick();
 	comBus.batteryIsLow = vbat_is_low(0);
 #endif
@@ -77,6 +80,6 @@ void vbat_update()
 	vbat_alert_tick();
 }
 
-#endif // VBAT_SENSING || VBAT_ALERT
+#endif // HAS_VBAT_SENSING || VBAT_ALERT
 
 // EOF vbat.cpp

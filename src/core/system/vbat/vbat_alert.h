@@ -4,7 +4,7 @@
  *
  * @details Triggers compile-flag gated reactions when battery is low.
  *   The `comBus.batteryIsLow` flag is the universal pivot — written by
- *   `vbat_update()` from local sensing (VBAT_SENSING) or received from
+ *   `vbat_update()` from local sensing (HAS_VBAT_SENSING) or received from
  *   a ComBus RX frame.  No dependency on app-specific headers.
  *
  *   Compile flags (set in platformio.ini):

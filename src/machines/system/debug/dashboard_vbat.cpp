@@ -37,7 +37,7 @@ static void render_vbat_view() {
 	uint8_t count = vbat_channel_count();
 	if (count == 0) {
 		dEmpty();
-		dLine("  VBAT_SENSING not active \u2014 no channels configured.");
+		dLine("  HAS_VBAT_SENSING not active \u2014 no channels configured.");
 		dEmpty();
 	} else {
 			// Header: %-9s "Voltage :" (9 chars) aligns with data %5.2f V (7 chars) + 2 spaces.

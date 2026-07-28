@@ -3,7 +3,7 @@
  * @brief ANSI terminal dashboard — Layer 3 battery sensing module view.
  *
  * @details Shows live voltage readings for all configured vbat channels.
- *   Renders a "not active" notice when VBAT_SENSING is not configured.
+ *   Renders a "not active" notice when HAS_VBAT_SENSING is not configured.
  *   Compiled only when -D DEBUG_DASHBOARD is set.
  *****************************************************************************/
 #pragma once

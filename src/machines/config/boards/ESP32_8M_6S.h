@@ -150,7 +150,7 @@ inline constexpr Board boardCfg {
  *   cell / regulator monitoring, no per-cell logic needed).
  */
 
-#ifdef VBAT_SENSING
+#ifdef HAS_VBAT_SENSING
 #include <core/system/vbat/vbat_sense.h>
 
 // --- Active sensing channels ---
@@ -171,7 +171,7 @@ extern VBatSense             vBatSense;
 
 
 
-#endif // VBAT_SENSING
+#endif // HAS_VBAT_SENSING
 
 
 // =============================================================================

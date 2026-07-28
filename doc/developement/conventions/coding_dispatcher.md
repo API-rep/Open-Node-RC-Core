@@ -1,8 +1,8 @@
 # Dispatcher Coding Conventions
 
-Dispatcher files are the unique entry point selecting one implementation among several interchangeable backends, typically definition and configuration files.
+Dispatcher files are the unique entry point selecting one implementation among several interchangeable backends.
 
-The purpose of a dispatcher is **selection only**. It shall not contain implementation logic.
+Their purpose is **selection only**. They shall not contain implementation logic.
 
 ---
 
@@ -13,10 +13,6 @@ Dispatchers shall follow the same structure.
 ```cpp
 #pragma once
 
-#ifndef FEATURE_FLAG
-  #error "No feature selected."
-#endif
-
 #if defined(FEATURE_BACKEND_A)
 
   #include "backend_A.h"
@@ -24,22 +20,22 @@ Dispatchers shall follow the same structure.
 // #elif defined(FEATURE_BACKEND_B)
 //   #include "backend_B.h"
 
-#elif defined(FEATURE_NONE)
+#elif defined(FEATURE_NOP)
 
   #include "nop.h"
 
 #else
 
-  #error "Unsupported feature configuration."
+  #error "No FEATURE_xxx backend selected."
 
 #endif
-
-// Shared interface declarations...
 ```
+
+Every dispatcher shall contain at least one commented `#elif` branch illustrating how to register an additional backend. This serves both as documentation and as a maintenance template.
 
 ---
 
-## 2. Boolean Build Flags
+## 2. Build Flags
 
 Dispatcher selection shall use **independent boolean build flags**. These flags are provided to the compiler through the command line or the `platformio.ini` configuration.
 
@@ -47,7 +43,8 @@ Example:
 
 ```text
 -D INPUT_PS4_DS4_BT
--D INPUT_MODULE_NONE
+-D INPUT_MODULE_NOP
+-D MACHINE_VOLVO_A60_H_BRUDER
 ```
 
 Numeric comparisons shall not be used.
@@ -55,10 +52,44 @@ Numeric comparisons shall not be used.
 Forbidden:
 
 ```cpp
--D INPUT_MODULE == PS4_DS4_BT
+#if INPUT_MODULE == PS4_DS4_BT
 ```
 
-This pattern introduces a silent C preprocessor bug by replacing unknown identifiers with `0`, potentially producing incorrect matches without any compilation error.
+Unknown identifiers are silently replaced by `0` by the C preprocessor, potentially producing incorrect matches without any compilation error.
+
+Backend selection flags are intended **only** for dispatcher files.
+
+If the selected backend exposes an optional feature, it shall define a dedicated capability flag for consumer code.
+
+Example:
+
+```cpp
+// lipo.h
+
+#if defined(VBAT_SENSE_LIPO)
+
+#define HAS_VBAT_SENSING
+
+...
+
+#endif
+```
+
+Application code shall test **capabilities**, not backend implementations.
+
+Preferred:
+
+```cpp
+#ifdef HAS_VBAT_SENSING
+```
+
+instead of:
+
+```cpp
+#if defined(VBAT_SENSE_LIPO)
+```
+
+Capability flags (`HAS_xxx`) shall always be defined by the backend itself, never by the dispatcher.
 
 ---
 
@@ -66,7 +97,7 @@ This pattern introduces a silent C preprocessor bug by replacing unknown identif
 
 Every backend selected by a dispatcher shall expose exactly the same public interface.
 
-Consumers shall never know which backend is active and shall treat the data provided by the dispatcher as an opaque interface, regardless of which backend has been selected.
+Consumers shall never know which backend is active and shall treat the data provided by the dispatcher as an opaque interface.
 
 Conditional compilation in consumer code shall be avoided whenever possible.
 
@@ -101,13 +132,7 @@ The dispatcher remains responsible for backend selection, while each backend pro
 
 Optional subsystems should provide a dedicated **nop backend** rather than special-case code inside the dispatcher.
 
-A nop backend represents a valid implementation exposing exactly the same public interface as every other backend while intentionally providing no functional behaviour.
-
-Typical example:
-
-```text
-/core/config/inputs/
-```
+A nop backend is a valid backend exposing exactly the same public interface as every other implementation while intentionally providing no functional behaviour.
 
 The dispatcher simply selects the nop backend like any other implementation.
 
@@ -129,7 +154,7 @@ Any backend-specific data, configuration tables or implementation details belong
 
 ## 7. Include Policy
 
-Application code shall include only the dispatcher as the single entry point.
+Application code shall include **only the dispatcher**.
 
 Example:
 
@@ -144,9 +169,27 @@ and **never**:
 #include "nop.h"
 ```
 
-The dispatcher is the public contract.
+Capability flags (`HAS_xxx`) are defined by the selected backend. Therefore, any source file testing a capability shall first include the corresponding dispatcher.
 
-Backend headers remain private implementation details.
+Correct:
+
+```cpp
+#include <config/vbat/vbat.h>
+
+#ifdef HAS_VBAT_SENSING
+...
+#endif
+```
+
+Incorrect:
+
+```cpp
+#ifdef HAS_VBAT_SENSING
+...
+#endif
+```
+
+without first including the dispatcher, following #ifdef statement will fail due to HAS_VBAT_SENSING missing definition.
 
 ---
 

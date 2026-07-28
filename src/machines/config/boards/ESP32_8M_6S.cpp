@@ -140,7 +140,7 @@ ServoPort srvPortArray[SRV_PORT_COUNT]= {
 
 
 
-#ifdef VBAT_SENSING
+#ifdef HAS_VBAT_SENSING
 
 // =============================================================================
 // BATTERY SENSING — channel configs
@@ -193,7 +193,7 @@ const VBatSenseConfig vBatSenseConfigArray[VBAT_CH_COUNT] = {
 VBatSenseState vBatSenseStateArray[VBAT_CH_COUNT];
 VBatSense      vBatSense { vBatSenseConfigArray, VBAT_CH_COUNT, vBatSenseStateArray };
 
-#endif // VBAT_SENSING
+#endif // HAS_VBAT_SENSING
 
 
 // =============================================================================
