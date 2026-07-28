@@ -16,13 +16,13 @@ static bool inputConnected = false;
  */
 
 void input_setup() {
-#if INPUT_MODULE == PS4_DS4_BT
+#if defined(INPUT_PS4_DS4_BT)
 
   sys_log_info("[INPUT] BT stack init...\n");
   PS4.begin(PS4_BLUETOOTH_ADDRESS);
   sys_log_info("[INPUT] BT stack init complete — waiting for controller (%s)\n", PS4_BLUETOOTH_ADDRESS);
 
-#elif INPUT_MODULE == INPUT_MODULE_NONE
+#elif defined(INPUT_MODULE_NONE)
   sys_log_warn("[INPUT] No input module configured — machine running in autonomous/headless mode.\n");
 #endif
 }
@@ -33,7 +33,7 @@ void input_setup() {
  */
 
 void input_refresh() {
-#if INPUT_MODULE == PS4_DS4_BT
+#if defined(INPUT_PS4_DS4_BT)
 
   inputConnected = PS4.isConnected();
   if (!inputConnected) {
@@ -110,7 +110,7 @@ void input_refresh() {
 }
 
 bool input_is_connected() {
-#if INPUT_MODULE == PS4_DS4_BT
+#if defined(INPUT_PS4_DS4_BT)
   return inputConnected;
 #else
   return false;
@@ -118,7 +118,7 @@ bool input_is_connected() {
 }
 
 const char* input_get_name() {
-#if INPUT_MODULE == PS4_DS4_BT
+#if defined(INPUT_PS4_DS4_BT)
   return inputDev.infoName;
 #else
   return "---";

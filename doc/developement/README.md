@@ -41,7 +41,7 @@ This separation avoids mixing concerns and keeps each document focused on a sing
 * [Coding Configurations](conventions/coding_configs.md) — Configuration-specific patterns
 * [Coding Runners](conventions/coding_runners.md) — Runner implementation guidelines
 * [Coding Structures](conventions/coding_structures.md) — Data structure conventions
-* [Runners](conventions/runners.md) — Runner system documentation
+* [Coding Dispatcher](conventions/coding_dispatcher.md) — Definition and confugation files dispatcher conventions
 
 ---
 

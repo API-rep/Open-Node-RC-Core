@@ -25,6 +25,7 @@ enum class AnalogComBusID : uint8_t {
   #include <core/config/machines/dumper_truck/combus/combus_ids_remote_analog.inc>
   WIRE_END,
   #include "combus_ids_local_analog.inc"
+  MACHINE_END,
   #include "combus_ids_system_analog.inc"
   CH_COUNT
 };

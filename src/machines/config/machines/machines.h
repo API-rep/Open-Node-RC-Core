@@ -22,6 +22,4 @@
   #error "Unsupported MACHINE value. Check platformio.ini file and env:xxx MACHINE setting to fix the problem"
 #endif
 
-#include <machines/config/machines/machines.h>
-
 // EOF machines.h

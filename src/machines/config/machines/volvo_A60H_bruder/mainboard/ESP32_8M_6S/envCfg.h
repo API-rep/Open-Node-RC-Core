@@ -26,6 +26,9 @@
 
 #include <struct/combus_struct.h>
 
+// Board-specific hardware definitions (pins, ports, constants)
+#include <machines/config/boards/ESP32_8M_6S.h>
+
 
 // =============================================================================
 // Build-time parameters

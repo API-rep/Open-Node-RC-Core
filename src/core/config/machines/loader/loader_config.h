@@ -17,26 +17,24 @@
 
 
 // =============================================================================
-// 1. COMBUS  (TODO: winter 2026 — define wheel loader ComBus channel IDs)
+// 1. COMBUS  (TODO: winter 2026 — define loader ComBus channel IDs)
 // =============================================================================
 
-// #include <core/config/machines/loader/combus/loader.h>
-
-
-// =============================================================================
-// 2. MOTION PRESET ALIAS  (TODO: winter 2026)
-// =============================================================================
-
-// #include <core/config/machines/loader/motion/loader_motion.h>
+// #include ...
 
 
 // =============================================================================
-// 3. INPUT MAPPING  (TODO: winter 2026)
+// 2. MOTION PRESET ALIAS  (TODO: winter 2026 — define loader motion channels)
 // =============================================================================
 
-// #ifdef INPUT_MODULE
-//   #include <core/config/machines/loader/inputs_map/inputs_map.h>
-// #endif
+// #include ...
+
+
+// =============================================================================
+// 3. INPUT MAPPING  (TODO: winter 2026 — define loader input module mapping)
+// =============================================================================
+
+//   #include ...
 
 
 // =============================================================================

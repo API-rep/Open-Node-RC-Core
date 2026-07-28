@@ -12,16 +12,6 @@
 
 
 // =============================================================================
-// INPUT MODULE CONSTANTS
-// =============================================================================
-
-/// No physical input device — autonomous / headless machine.
-/// Use this value in platformio.ini build_flags:
-///     -D INPUT_MODULE=INPUT_MODULE_NONE
-static constexpr uint8_t INPUT_MODULE_NONE = 0;
-
-
-// =============================================================================
 // ADC SYSTEM CONSTANTS
 // =============================================================================
 

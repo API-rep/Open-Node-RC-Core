@@ -5,6 +5,7 @@
 #pragma once
 
 #include <core/system/debug/logging/debug.h>
+#include <machines/config/config.h>
 
 #include "hw_init_drv.h"
 #include "hw_init_srv.h"

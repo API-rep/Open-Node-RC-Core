@@ -17,6 +17,7 @@
 #include <core/system/debug/dashboard/dashboard.h>
 #include <core/system/vbat/vbat_sense.h>
 #include <struct/simulation_struct.h>   // DriveStateBus
+#include <machines/config/config.h>  // Combus definitions
 
 #include <Arduino.h>
 #include <stdio.h>

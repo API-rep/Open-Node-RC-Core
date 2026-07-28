@@ -8,11 +8,14 @@
 #pragma once
 
 
-#if INPUT_MODULE == PS4_DS4_BT
+#if defined(INPUT_PS4_DS4_BT)
   #include "PS4_dualshock_map.h"
 
-// #elif INPUT_MODULE == ANOTHER_INPUT_DEVICE
-//   #include "another_input_map.h"
+// #elif defined(INPUT_ANOTHER_DEVICE)
+//   #include "another_input.h"
+
+#elif defined(INPUT_MODULE_NONE)
+  // no input module selected, nothing to map to control
 
 #else
     #error "No input mapping found for this input module. Check input module compatibility and platformio.ini file to fix the problem."

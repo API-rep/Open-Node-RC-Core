@@ -21,23 +21,21 @@
 // 1. COMBUS  (TODO: winter 2026 — define excavator ComBus channel IDs)
 // =============================================================================
 
-// #include <core/config/machines/excavator/combus/excavator.h>
+// #include ...
 
 
 // =============================================================================
-// 2. MOTION PRESET ALIAS  (TODO: winter 2026)
+// 2. MOTION PRESET ALIAS  (TODO: winter 2026 — define excavator motion channels)
 // =============================================================================
 
-// #include <core/config/machines/excavator/motion/excavator_motion.h>
+// #include ...
 
 
 // =============================================================================
-// 3. INPUT MAPPING  (TODO: winter 2026)
+// 3. INPUT MAPPING  (TODO: winter 2026 — define excavator input module mapping)
 // =============================================================================
 
-// #ifdef INPUT_MODULE
-//   #include <core/config/machines/excavator/inputs_map/inputs_map.h>
-// #endif
+//   #include ...
 
 
 // =============================================================================

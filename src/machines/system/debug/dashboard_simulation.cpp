@@ -8,6 +8,7 @@
 #include "dashboard_simulation.h"
 #include <core/system/debug/dashboard/dashboard.h>
 #include <struct/simulation_struct.h>
+#include <machines/config/config.h>                          // Combus definitions
 #include <core/system/combus/processors/motion/cb_ramp.h>    // CbRampCfg, CbRampState
 #include <core/system/combus/processors/base/cb_bypass.h>    // CbBypassCfg
 #include <struct/combus/processors/modules/gear_struct.h>    // GearProcCfg, GearFsmState
@@ -44,6 +45,7 @@ static const char* aCh(AnalogComBusID id)
 		case AnalogComBusID::SUBGEAR_BUS:          return "SUBGEAR";
 		case AnalogComBusID::DUMP_RAMPED_BUS:      return "DUMP_R";
 		case AnalogComBusID::STEERING_RAMPED_BUS:  return "STEER_R";
+		case AnalogComBusID::THROTTLE_STICK:       return "THR_STK";
 		case AnalogComBusID::THROTTLE_BUS:         return "THROTTLE";
 		default:                                    return "?";
 	}
