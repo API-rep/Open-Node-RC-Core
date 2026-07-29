@@ -8,12 +8,14 @@
 #pragma once
 
   /* ESP32 based board */
-#if BOARD == ESP32_8M_6S    // Bruder Volvo_A60H full electric conversion
+#if defined(BOARD_ESP32_8M_6S)
   #include "ESP32_8M_6S.h"
-#endif
 
-#ifndef BOARD 
- #error "No motherboard defined this vehicle. Check machine/machine_name.h file to fix the problem"
+// #elif defined(BOARD_ANOTHER_BOARD)
+//   #include "another_board.h"
+
+#else
+ #error "No motherboard defined this vehicle. Check BOARD_* flag to fix the problem"
 #endif
 
 // EOF boards.h

@@ -4,7 +4,7 @@
  *
  * @details Includes the vehicle-level shared constants from the Level-0 header
  *   then selects the board-specific environment configuration based on the
- *   -D BOARD build flag.
+ *   -D BOARD_* build flag.
  *
  *   Architecture:
  *   @code
@@ -23,17 +23,17 @@
 #include "../volvo_A60H_bruder.h"   // kVehicleName, kVehicleCombusLayout
 
 // =============================================================================
-// Board selection
+// BOARD ENVIRONEMENT CONFIG SELECTION
 // =============================================================================
 
-#ifndef BOARD
-  #define BOARD  ESP32_8M_6S  ///< Default board if not set by build flags.
-#endif
-
-#if BOARD == ESP32_8M_6S
+#if defined (BOARD_ESP32_8M_6S)
   #include "ESP32_8M_6S/envCfg.h"
+
+// #elif defined(BOARD_ANOTHER_BOARD)
+//   #include "ESP32_8M_6S/another_board.h"
+
 #else
-  #error "Unknown BOARD for volvo_A60H_bruder mainboard. Check -D BOARD in platformio.ini."
+  #error "Unknown environement configuation for véhicle BOARD_* flag."
 #endif
 
 // EOF mainboard.h

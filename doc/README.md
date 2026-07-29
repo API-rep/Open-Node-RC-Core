@@ -41,7 +41,7 @@ This section covers the practical aspects of creating and deploying a system.
 
 #### Quick Start
 
-* [Building an Open RC Node System](~build_a_system.md) — Step-by-step guide
+* [Building an Open RC Node System](building_a_system.md) — Step-by-step guide
 
 #### Hardware
 
@@ -96,6 +96,7 @@ Topics include:
 
 * ComBus
 * [Core Architecture](core_architecture.md)
+* [Board Architecture](board_architecture.md) - Hardware design and responsabity
 * Modules
 * Internal services
 * Software architecture

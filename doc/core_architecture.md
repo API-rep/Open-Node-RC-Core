@@ -104,6 +104,8 @@ Typical contents include:
 
 These files define **what the node is**.
 
+For the board-role contract within a node (mainboard vs extension board,
+peripherals), refer to [board_architecture.md](board_architecture.md)
 ---
 
 ## Node Initialization (`src/<node>/init/`)

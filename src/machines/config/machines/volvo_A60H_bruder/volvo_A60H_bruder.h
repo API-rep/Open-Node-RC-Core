@@ -15,16 +15,17 @@
  *   @code
  *   machines.h
  *     └── volvo_A60H_bruder/volvo_A60H_bruder.h   ← this file
- *           ├── [kVehicleName, kVehicleCombusLayout]   (shared)
- *           ├── [SigDev enum, sigDevArray]               (IS_MAINBOARD only)
- *           ├── mainboard/mainboard.h              (IS_MAINBOARD → BOARD dispatch)
- *           └── ext_board/ext_board.h              (IS_EXT_BOARD → BOARD dispatch)
+ *           ├── [kVehicleName, kVehicleCombusLayout] (shared)
+ *           ├── [SigDev enum, sigDevArray]           (IS_MAINBOARD only)
+ *           ├── mainboard/mainboard.h                (IS_MAINBOARD → BOARD dispatch)
+ *           └── ext_board/ext_board.h                (IS_EXT_BOARD → BOARD dispatch)
  *   @endcode
  *******************************************************************************
  */
 #pragma once
 
 #include <defs/core_defs.h>   // CombusLayout
+
 
 /// Machine class selector — expands to a CombusLayout member token so that
 /// `CombusLayout::MACHINE_TYPE` resolves correctly in sound_module/config/config.h.
@@ -43,7 +44,7 @@ inline constexpr CombusLayout kVehicleCombusLayout  = CombusLayout::DUMPER_TRUCK
 
 
 // =============================================================================
-// IS_MAINBOARD — vehicle-level device tables + board dispatch
+// Vehicle-level device tables + board dispatch
 // =============================================================================
 
 #if defined(IS_MAINBOARD)
