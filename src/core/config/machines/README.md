@@ -251,10 +251,10 @@ Typical usage:
 ```cpp
 #pragma once
 
-#if MACHINE == VOLVO_A60_H_BRUDER
+#if define(MACHINE_VOLVO_A60_H_BRUDER)
     #include <core/config/machines/dumper_truck/combus/combus_ids.h>
     using namespace DumperTruck;
-#endif
+...
 ```
 
 This keeps dependency chains minimal and avoids introducing include cycles.

@@ -19,7 +19,7 @@
 // 1. PROFILE DEFINITION
 // =============================================================================
 
-// Guard: replace #if 0 with #if MACHINE == <excavator machine id> when a real
+// Guard: replace #if 0 with #if MACHINE_TYPE_EXCAVATOR> when a real
 // excavator machine is added (winter 2026).
 #if 0
 const VehicleSoundProfile kVehicleSoundDynamics = {

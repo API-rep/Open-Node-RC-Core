@@ -19,8 +19,8 @@
 // 1. PROFILE DEFINITION
 // =============================================================================
 
-// Guard: replace #if 0 with #if MACHINE == <loader machine id> when a real
-// wheel loader machine is added (winter 2026).
+// Guard: replace #if 0 with #if MACHINE_TYPE_LOADER when a real wheel loader
+// machine is added (winter 2026).
 #if 0
 const VehicleSoundProfile kVehicleSoundDynamics = {
     .engineMode          = EngineMode::ENGINE_HYDRAULIC,

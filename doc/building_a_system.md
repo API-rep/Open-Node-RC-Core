@@ -64,7 +64,7 @@ instance built from it.
 ### Sharing Identity Across Paired Environments
 
 A machine and its paired extension board (e.g. a sound module) must agree
-on which vehicle they belong to — both need `MACHINE=VOLVO_A60_H_BRUDER` to
+on which vehicle they belong to — both need `MACHINE_MY_MACHINE` to
 resolve the same ComBus layout. Rather than duplicating that flag in two
 environment blocks (and risking them drifting apart), declare it once in a
 dedicated section and reference it from both:
@@ -101,17 +101,13 @@ never copy-pasted.
 
 ### Vehicle Instance Selection
 
-```ini
--D MACHINE=<instance>
-```
-
 Selects the concrete vehicle instance to build — an assertion flag, set
 directly in `platformio.ini`.
 
 Example:
 
 ```ini
--D MACHINE=VOLVO_A60_H_BRUDER
+-D MACHINE_VOLVO_A60_H_BRUDER
 ```
 
 `MACHINE` identifies one specific hardware build (this Volvo A60H Bruder
@@ -194,7 +190,7 @@ its domain.
 
 ```ini
 -D INPUT_PS4_DS4_BT       ; selects the PS4 DualShock input backend
-; -D INPUT_MODULE_NONE    ; alternative: no physical input device (autonomous build)
+; -D INPUT_NONE    ; alternative: no physical input device (autonomous build)
 ```
 
 ### Peripheral Selection

@@ -11,7 +11,7 @@
  *******************************************************************************/
 #pragma once
 
-#if defined(INPUT_MODULE_NONE)
+#if defined(INPUT_NONE)
 
     #include <defs/remotes_defs.h>  // RemoteProtocol
     #include <struct/remotes_struct.h>  // InputDev, AnalogInputDev, DigitalInputDev

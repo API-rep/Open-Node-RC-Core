@@ -5,7 +5,7 @@
  * @details Defines the empty descriptor arrays declared in nop.h.
  *   These arrays are zero-sized (COUNT = 0), so no initialisers are needed.
  *******************************************************************************/
-#if defined(INPUT_MODULE_NONE)
+#if defined(INPUT_NONE)
 
   #include "nop.h"
 

@@ -14,20 +14,16 @@ Dispatchers shall follow the same structure.
 #pragma once
 
 #if defined(FEATURE_BACKEND_A)
-
   #include "backend_A.h"
 
 // #elif defined(FEATURE_BACKEND_B)
 //   #include "backend_B.h"
 
 #elif defined(FEATURE_NOP)
-
   #include "nop.h"
 
 #else
-
   #error "No FEATURE_xxx backend selected."
-
 #endif
 ```
 

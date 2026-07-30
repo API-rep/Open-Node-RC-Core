@@ -24,65 +24,70 @@
  */
 #pragma once
 
-#include <defs/core_defs.h>   // CombusLayout
+#if defined (MACHINE_VOLVO_A60_H_BRUDER)
+
+  #include <defs/core_defs.h>   // CombusLayout
+
+  /// Machine class selector — expands to a CombusLayout member token so that
+  /// `CombusLayout::MACHINE_TYPE` resolves correctly in sound_module/config/config.h.
+  #define MACHINE_TYPE  DUMPER_TRUCK
 
 
-/// Machine class selector — expands to a CombusLayout member token so that
-/// `CombusLayout::MACHINE_TYPE` resolves correctly in sound_module/config/config.h.
-#define MACHINE_TYPE  DUMPER_TRUCK
+  // =============================================================================
+  // Level-0 — vehicle identity (shared between all environments)
+  // =============================================================================
+
+  /// Vehicle display name — used by EnvCfg.infoName in all environment configs.
+  inline constexpr const char*  kVehicleName = "Volvo A60H Bruder";
+
+  /// ComBus "remote layer" frame layout
+  inline constexpr CombusLayout kVehicleCombusLayout = CombusLayout::DUMPER_TRUCK;
 
 
-// =============================================================================
-// Level-0 — vehicle identity (shared between all environments)
-// =============================================================================
+  // =============================================================================
+  // Vehicle-level device tables + board dispatch
+  // =============================================================================
 
-/// Vehicle display name — used by EnvCfg.infoName in all environment configs.
-inline constexpr const char*  kVehicleName         = "Volvo A60H Bruder";
+  #if defined(IS_MAINBOARD)
 
-/// ComBus frame layout — shared between machine and sound nodes.
-inline constexpr CombusLayout kVehicleCombusLayout  = CombusLayout::DUMPER_TRUCK;
+    #include <struct/struct.h>
+    #include <defs/defs.h>
+    #include <machines/config/machines/volvo_A60H_bruder/combus/combus.h>  // AnalogComBusID, DigitalComBusID
+
+    /**
+     * @brief Indices into `sigDevArray[]`.
+     *
+     * @details Signal devices carry a ComBus channel reference and a `DevUsage`
+     *   tag.  Entries tagged `UNDEFINED` are handled by dedicated module logic
+     *   (engine key FSM, indicator/hazard mux in sound_core).
+     */
+    enum SigDev {
+        HORN_SIG    = 0,   ///< Horn trigger → DevUsage::SIG_HORN.
+        LIGHTS_SIG,        ///< Main lights toggle → DevUsage::SIG_LIGHT.
+        KEY_SIG,           ///< Engine on/off key → DevUsage::UNDEFINED (FSM).
+        INDIC_L_SIG,       ///< Left indicator → DevUsage::UNDEFINED (mux).
+        INDIC_R_SIG,       ///< Right indicator → DevUsage::UNDEFINED (mux).
+        HAZARDS_SIG,       ///< Hazard flashers → DevUsage::UNDEFINED (mux).
+        SIG_COUNT          ///< Sentinel — number of signal devices.
+    };
+
+    /// Array definitions in `volvo_A60H_bruder.cpp`.
+    extern SigDevice sigDevArray[SIG_COUNT];
+
+    #include <machines/config/machines/volvo_A60H_bruder/combus/processors/input/proc_config.h>  ///< kInputChains[], InputCh enum
+    #include <machines/config/machines/volvo_A60H_bruder/combus/processors/sim/proc_config.h>    ///< kSimChannels[], SimCh enum
+
+    // --- Board dispatch ---
+      #include "mainboard/mainboard.h"
 
 
-// =============================================================================
-// Vehicle-level device tables + board dispatch
-// =============================================================================
+  #elif defined(IS_EXT_BOARD)
+    #include "ext_board/ext_board.h"
+  #endif  // IS_MAINBOARD/IS_EXT_BOARD
 
-#if defined(IS_MAINBOARD)
+    // No #else error here: sound_node and remote envs include this file for
+    // kVehicleName / kVehicleCombusLayout only — they define neither flag.
 
-#include <struct/struct.h>
-#include <defs/defs.h>
-#include <machines/config/machines/volvo_A60H_bruder/combus/combus.h>  // AnalogComBusID, DigitalComBusID
-
-/**
- * @brief Indices into `sigDevArray[]`.
- *
- * @details Signal devices carry a ComBus channel reference and a `DevUsage`
- *   tag.  Entries tagged `UNDEFINED` are handled by dedicated module logic
- *   (engine key FSM, indicator/hazard mux in sound_core).
- */
-enum SigDev {
-    HORN_SIG    = 0,   ///< Horn trigger → DevUsage::SIG_HORN.
-    LIGHTS_SIG,        ///< Main lights toggle → DevUsage::SIG_LIGHT.
-    KEY_SIG,           ///< Engine on/off key → DevUsage::UNDEFINED (FSM).
-    INDIC_L_SIG,       ///< Left indicator → DevUsage::UNDEFINED (mux).
-    INDIC_R_SIG,       ///< Right indicator → DevUsage::UNDEFINED (mux).
-    HAZARDS_SIG,       ///< Hazard flashers → DevUsage::UNDEFINED (mux).
-    SIG_COUNT          ///< Sentinel — number of signal devices.
-};
-
-/// Array definitions in `volvo_A60H_bruder.cpp`.
-extern SigDevice sigDevArray[SIG_COUNT];
-
-#include <machines/config/machines/volvo_A60H_bruder/combus/processors/input/proc_config.h>  ///< kInputChains[], InputCh enum
-#include <machines/config/machines/volvo_A60H_bruder/combus/processors/sim/proc_config.h>    ///< kSimChannels[], SimCh enum
-
-// --- Board dispatch ---
-  #include "mainboard/mainboard.h"
-
-#elif defined(IS_EXT_BOARD)
-  #include "ext_board/ext_board.h"
-#endif
-  // No #else error here: sound_node and remote envs include this file for
-  // kVehicleName / kVehicleCombusLayout only — they define neither flag.
+#endif  // MACHINE_VOLVO_A60_H_BRUDER
 
 // EOF volvo_A60H_bruder.h

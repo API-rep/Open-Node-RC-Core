@@ -22,7 +22,7 @@ void input_setup() {
   PS4.begin(PS4_BLUETOOTH_ADDRESS);
   sys_log_info("[INPUT] BT stack init complete — waiting for controller (%s)\n", PS4_BLUETOOTH_ADDRESS);
 
-#elif defined(INPUT_MODULE_NONE)
+#elif defined(INPUT_NONE)
   sys_log_warn("[INPUT] No input module configured — machine running in autonomous/headless mode.\n");
 #endif
 }

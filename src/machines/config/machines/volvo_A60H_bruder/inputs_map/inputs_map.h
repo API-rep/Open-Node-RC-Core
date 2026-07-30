@@ -14,7 +14,7 @@
 // #elif defined(INPUT_ANOTHER_DEVICE)
 //   #include "another_input.h"
 
-#elif defined(INPUT_MODULE_NONE)
+#elif defined(INPUT_NONE)
   // no input module selected, nothing to map to control
 
 #else

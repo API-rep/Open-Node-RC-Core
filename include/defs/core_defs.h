@@ -18,10 +18,8 @@
  *
  * @details Used as `kVehicleCombusLayout` in vehicle entry-point headers.
  *   In each vehicle header, `#define MACHINE_TYPE <member>` (e.g.
- *   `#define MACHINE_TYPE DUMPER_TRUCK`) exposes the enum value for C++ use
+ *   `#define MACHINE_TYPE_DUMPER_TRUCK`) exposes the enum value for C++ use
  *   via `CombusLayout::MACHINE_TYPE`.
- *   Preprocessor dispatch (`#if MACHINE == VOLVO_A60_H_BRUDER`) uses the
- *   -D MACHINE= build flag directly — no separate integer constants needed.
  */
 enum class CombusLayout : uint8_t {
   UNDEFINED     =  0,   ///< No layout assigned

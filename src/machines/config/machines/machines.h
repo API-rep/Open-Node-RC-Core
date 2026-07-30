@@ -1,25 +1,24 @@
 /*!****************************************************************************
  * @file machines.h
- * @brief Top machines configuration file.
- * This file contain all available machines configuation files supported by the project.
- * To use ONE of them, uncomment the machine line in main config file or specify
- * a -DMACHINE=... parameter in compiler command line. 
+ * @brief Top machines dispatcher file.
+ * This dispatcher is the single entry point for machines configuation files.
+ * To use ONE of them, specify a -D MACHINE_* parameter in compiler command line
+ * or platformio.ini file. 
  *******************************************************************************/// 
 #pragma once
 
-#ifndef MACHINE
-  #error "No machine defined for compilation. Check platformio.ini file and env:xxx MACHINE setting to fix the problem"
-#endif
-
 /* TP dumper trucks */
-#if MACHINE == VOLVO_A60_H_BRUDER
+#if defined (MACHINE_VOLVO_A60_H_BRUDER)
   #include "volvo_A60H_bruder/volvo_A60H_bruder.h"
 
-// #elif MACHINE == ANOTHER_MACHINE
+// #elif defined (MACHINE_ANOTHER_MACHINE)
 //   #include "another_machine.h"
 
+#elif defined (MACHINE_NONE)
+  // include nothing. No machine selected
+
 #else
-  #error "Unsupported MACHINE value. Check platformio.ini file and env:xxx MACHINE setting to fix the problem"
+  #error "Unsupported/missing MACHINE_* value. Check platformio.ini file to fix the problem"
 #endif
 
 // EOF machines.h

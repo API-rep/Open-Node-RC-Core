@@ -31,11 +31,11 @@
 // #elif defined(INPUT_ANOTHER_DEVICE)
 //   #include "another_input.h"
 
-#elif defined(INPUT_MODULE_NONE)
+#elif defined(INPUT_NONE)
   #include "nop.h"
 
 #else
-  #error "inputs.h: no INPUT_xxx flag defined — set one in platformio.ini (e.g. -D INPUT_PS4_DS4_BT, or -D INPUT_MODULE_NONE for an autonomous machine)."
+  #error "inputs.h: no INPUT_xxx flag defined — set one in platformio.ini (e.g. -D INPUT_PS4_DS4_BT, or -D INPUT_NONE for an autonomous machine)."
 #endif
 
 
