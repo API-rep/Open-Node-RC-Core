@@ -3,7 +3,7 @@
  * @brief   Volvo A60H Bruder — vehicle configuration.
  *
  * @details Provides vehicle-level declarations for all execution environments:
- *   - `kVehicleName`, `kVehicleCombusLayout` — identity constants (always present).
+ *   - `kVehicleName` — identity constant (always present).
  *   - `SigDev` enum and `sigDevArray` extern — IS_MAINBOARD only.
  *   Dispatches to the board-specific environment based on the build flag:
  *   - `-D IS_MAINBOARD`  → machine main board (dispatches on -D BOARD).
@@ -15,7 +15,7 @@
  *   @code
  *   machines.h
  *     └── volvo_A60H_bruder/volvo_A60H_bruder.h   ← this file
- *           ├── [kVehicleName, kVehicleCombusLayout] (shared)
+ *           ├── [kVehicleName]                       (shared)
  *           ├── [SigDev enum, sigDevArray]           (IS_MAINBOARD only)
  *           ├── mainboard/mainboard.h                (IS_MAINBOARD → BOARD dispatch)
  *           └── ext_board/ext_board.h                (IS_EXT_BOARD → BOARD dispatch)
@@ -26,11 +26,9 @@
 
 #if defined (MACHINE_VOLVO_A60_H_BRUDER)
 
-  #include <defs/core_defs.h>   // CombusLayout
-
-  /// Machine class selector — expands to a CombusLayout member token so that
-  /// `CombusLayout::MACHINE_TYPE` resolves correctly in sound_module/config/config.h.
-  #define MACHINE_TYPE  DUMPER_TRUCK
+  /// Machine class selector — activates the MACHINE_TYPE_* dispatch branch used
+  /// by the type-level ComBus configuration (see machine_type_combus_ids.h).
+  #define MACHINE_TYPE_DUMPER_TRUCK
 
 
   // =============================================================================
@@ -39,9 +37,6 @@
 
   /// Vehicle display name — used by EnvCfg.infoName in all environment configs.
   inline constexpr const char*  kVehicleName = "Volvo A60H Bruder";
-
-  /// ComBus "remote layer" frame layout
-  inline constexpr CombusLayout kVehicleCombusLayout = CombusLayout::DUMPER_TRUCK;
 
 
   // =============================================================================
@@ -86,7 +81,7 @@
   #endif  // IS_MAINBOARD/IS_EXT_BOARD
 
     // No #else error here: sound_node and remote envs include this file for
-    // kVehicleName / kVehicleCombusLayout only — they define neither flag.
+    // kVehicleName only — they define neither flag.
 
 #endif  // MACHINE_VOLVO_A60_H_BRUDER
 

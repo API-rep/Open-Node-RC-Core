@@ -291,18 +291,18 @@ Add a branch in:
 Example:
 
 ```cpp
-#elif MACHINE == MY_NEW_MACHINE
+#elif define(MACHINE_MY_NEW_MACHINE)
     #include <core/config/machines/my_new_machine/my_new_machine_config.h>
 ```
 
 ```cpp
-#elif MACHINE == MY_NEW_MACHINE
+#elif define(MACHINE_MY_NEW_MACHINE)
     #include <core/config/machines/my_new_machine/combus/my_new_machine.h>
     using namespace MyNewMachine;
 ```
 
 ```cpp
-#elif MACHINE == MY_NEW_MACHINE
+#elif define(MACHINE_MY_NEW_MACHINE)
     #include <core/config/machines/my_new_machine/combus/combus_ids.h>
     using namespace MyNewMachine;
 ```
@@ -381,7 +381,7 @@ implementations.
 [env:machines]
 build_flags =
     -D IS_MACHINE
-    -D MACHINE=VOLVO_A60_H_BRUDER
+    -D MACHINE_VOLVO_A60_H_BRUDER
 ```
 
 Remote and sound node environments intentionally omit `IS_MACHINE`.

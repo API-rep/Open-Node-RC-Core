@@ -106,8 +106,8 @@
    */
   inline constexpr EnvCfg machine {
     .infoName      = kVehicleName,
-    .combusLayout  = kVehicleCombusLayout,
     .dcDev         = dcDevArray,
+
     .dcDevCount    = DC_DRV_COUNT,
     .srvDev        = SrvDevArray,
     .srvDevCount   = SRV_COUNT,

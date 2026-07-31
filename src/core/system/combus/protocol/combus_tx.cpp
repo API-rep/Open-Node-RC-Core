@@ -26,7 +26,8 @@
 
 struct CombusTxState {
 	NodeCom*        nodeCom  = nullptr;  ///< active transport interface
-	ComBusFrameCfg  frameCfg       = {};  ///< static layout descriptor (envId, nAnalog, nDigital)
+	ComBusFrameCfg  frameCfg       = {};  ///< static layout descriptor (nAnalog, nDigital)
+
 	uint8_t         seq       = 0u;  ///< rolling frame sequence counter (0�255)
 	uint32_t        lastTxMs  = 0u;  ///< timestamp of last transmitted frame (ms)
 	uint32_t        periodMs  = 0u;  ///< transmit period derived from txHz (0 = uninit)
@@ -52,8 +53,9 @@ static CombusTxState comBusTx;  ///< Combus transmitter instance state
 
 void combus_tx_init(
     NodeCom*       nodeCom,  // claimed transport interface (from uart_com_init or similar)
-    ComBusFrameCfg frameCfg, // static frame layout descriptor (envId, nAnalog, nDigital)
+    ComBusFrameCfg frameCfg, // static frame layout descriptor (nAnalog, nDigital)
     uint32_t       txHz )    // frame transmit rate in Hz
+
 {
 		// --- 1. Guard check ---
 	if (!nodeCom || txHz == 0u) { return; }

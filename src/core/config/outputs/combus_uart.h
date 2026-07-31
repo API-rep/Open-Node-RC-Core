@@ -36,11 +36,12 @@ static constexpr uint8_t CombusPhysUartMax = 255u;
  *   values change.
  *
  *   Frame layout:
- *     7 bytes — fixed header (SOF + env_id + seq + run_level + flags + n_analog + n_dig_bytes)
+ *     6 bytes — fixed header (SOF + n_analog + n_dig_bytes + seq + run_level + flags)
  *     ceil(DigitalComBusRemoteID::CH_COUNT / 8) — digital channels packed LSB-first
  *     AnalogComBusRemoteID::CH_COUNT × 2          — analog channels as uint16_t LE
  *     1 byte  — CRC-8
  */
+
 
 // NOTE (temporaire) : la taille de trame est actuellement calculée sur la
 // seule base du contrat REMOTE (CH_COUNT), en supposant que tout canal REMOTE
@@ -52,10 +53,11 @@ static constexpr uint8_t CombusPhysUartMax = 255u;
 // basé sur CH_COUNT. Voir COMBUS_PROCESSORS_ROADMAP.md pour le contexte plus
 // large.
 static constexpr uint8_t ComBusUartFrameSize =
-    7u
+    CombusFrameHeaderLen
   + ((static_cast<uint8_t>(DigitalComBusRemoteID::CH_COUNT) + 7u) / 8u)
   +  (static_cast<uint8_t>(AnalogComBusRemoteID::CH_COUNT)  * 2u)
   + 1u;
+
 
 
 // =============================================================================

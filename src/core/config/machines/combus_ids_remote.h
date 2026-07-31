@@ -18,17 +18,21 @@
  */
 #pragma once
 
+#include <machines/config/machines/machines.h> // MACHINE_TYPE_*
 
-#if MACHINE_TYPE == DUMPER_TRUCK
+
+#if defined(MACHINE_TYPE_DUMPER_TRUCK)
   #include <core/config/machines/dumper_truck/combus_ids_remote.h>
 
-// #elif MACHINE_TYPE == EXCAVATOR
+// #elif defined(MACHINE_TYPE_EXCAVATOR)
 //   #include <core/config/machines/excavator/combus_ids_remote.h>
-// #elif MACHINE_TYPE == WHEEL_LOADER
-//   #include <core/config/machines/wheel_loader/combus_ids_remote.h>
-#else
-  #error "combus_ids_remote.h.h: MACHINE_TYPE undefined or unsupported. Set MACHINE_TYPE to a known vehicle type (e.g. DUMPER_TRUCK) before including this file."
-#endif
 
+// #elif defined(MACHINE_TYPE_WHEEL_LOADER)
+//   #include <core/config/machines/wheel_loader/combus_ids_remote.h>
+
+#else
+  #error "Unsupported/missing MACHINE_TYPE_* value. Check MACHINE_* config file to fix the problem"
+
+#endif  // MACHINE_TYPE_DUMPER_TRUCK
 
 // EOF combus_ids_remote.h

@@ -73,7 +73,7 @@ dedicated section and reference it from both:
 ; Machine identity shared between the machine node and its paired sound node.
 [volvo_A60H_id]
 build_flags =
-    -D MACHINE=VOLVO_A60_H_BRUDER
+    -D MACHINE_VOLVO_A60_H_BRUDER
 
 [env:volvo_A60H_bruder]
 extends = env:machines
@@ -111,13 +111,13 @@ Example:
 ```
 
 `MACHINE` identifies one specific hardware build (this Volvo A60H Bruder
-conversion). It is distinct from `MACHINE_TYPE`, which identifies the
+conversion). It is distinct from `MACHINE_TYPE_*`, which identifies the
 *vehicle class* (dumper truck, excavator, ...) that instance belongs to.
-`MACHINE_TYPE` is **not** a build flag — it is declared once in the
+`MACHINE_TYPE_*` is **not** a build flag — it is declared once in the
 instance's own top-level header (e.g. `volvo_A60H_bruder.h`), since it is a
 property of the instance, derived once the instance is known, not a
 separate build-time choice. See `coding_dispatcher.md` for how
-`MACHINE_TYPE` drives the type-level ComBus dispatcher
+`MACHINE_TYPE_*` drives the type-level ComBus dispatcher
 (`machine_type_combus_ids.h`).
 
 ---

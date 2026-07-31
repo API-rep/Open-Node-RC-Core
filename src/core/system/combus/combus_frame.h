@@ -7,9 +7,9 @@
  *  Offset  Size  Field
  *  ------  ----  -----
  *   0       1    SOF          CombusFrameSof (0xAA)
- *   1-6     6    header       CombusFrameHeader fields (see outputs_struct.h)
- *   7       var  digital[]    bits packed LSB-first, ceil(n_digital/8) bytes
- *   7+d     var  analog[]     uint16_t LE, n_analog entries
+ *   1-5     5    header       CombusFrameHeader fields (see outputs_struct.h)
+ *   6       var  digital[]    bits packed LSB-first, ceil(n_digital/8) bytes
+ *   6+d     var  analog[]     uint16_t LE, n_analog entries
  *   last    1    crc8         CRC-8/MAXIM over bytes [0 ... last-1]
  * @endcode
  *
@@ -33,7 +33,7 @@
 static constexpr uint8_t CombusFrameSof = 0xAAu;
 
   /// Guard: catch any unexpected padding introduced in CombusFrameHeader.
-static_assert(sizeof(CombusFrameSof) + sizeof(CombusFrameHeader) == 7u,
+static_assert(sizeof(CombusFrameSof) + sizeof(CombusFrameHeader) == 6u,
               "Bad CombusFrameHeader size detected: check for unexpected padding");
 
   /// Fixed combus header size in bytes
@@ -68,7 +68,7 @@ static constexpr uint8_t CombusFrameMinLen = CombusFrameHeaderLen + sizeof(uint8
  * overflow a uint8_t (i.e. caller requested more data than the protocol
  * can address with a single-byte length field).
  *
- * @param[in]  cfg           Static layout descriptor (envId, nAnalog, nDigital).
+ * @param[in]  cfg           Static layout descriptor (nAnalog, nDigital).
  * @param[out] outputBuffer  Output buffer pointer (sized by the caller).
  * @param[in]  combus        Source ComBus instance to encode.
  * @param[in]  seq           Sequence counter (caller increments).

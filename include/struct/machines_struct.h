@@ -191,9 +191,9 @@ typedef struct {
 
 typedef struct {
   const char* infoName;                                 // machine name
-  CombusLayout combusLayout = CombusLayout::UNDEFINED;  // machine com-bus layout
   std::optional<float> maxFwSpeed;                      // maximum forward driving speed (0 to 100% - Defaut 100%)
   std::optional<float> maxBackSpeed;                     // maximum backward driving speed (0 to 100% - Defaut 100%)
+
   DcDevice*  dcDev;                                      // DC driver device config structure
   uint8_t    dcDevCount;                                  // number of DC driver device configured
   SrvDevice* srvDev;                                      // servo device config structure

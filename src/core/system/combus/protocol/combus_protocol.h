@@ -25,16 +25,18 @@
  *
  * Typical TX-only caller (env wrapper):
  * @code
- *   constexpr ComBusFrameCfg txCfg = { MACHINE_TYPE, N_ANALOG, N_DIGITAL };
+ *   constexpr ComBusFrameCfg txCfg = { N_ANALOG, N_DIGITAL };
  *   combus_protocol_init(txCfg, ComBusUartTxHz, {}, nullptr, nullptr);
  * @endcode
+
  *
  * Typical RX-only caller (env wrapper):
  * @code
  *   static uint16_t analog[N_ANALOG];
  *   static bool     digital[N_DIGITAL];
- *   constexpr ComBusFrameCfg rxCfg = { ENV_ID, N_ANALOG, N_DIGITAL };
+ *   constexpr ComBusFrameCfg rxCfg = { N_ANALOG, N_DIGITAL };
  *   combus_protocol_init({}, 0, rxCfg, analog, digital);
+
  * @endcode
  *****************************************************************************/
 #pragma once
@@ -63,9 +65,10 @@
  * RX side parameters are ignored when only COMBUS_UART_TX is defined.
  *
  * @param com        Open NodeCom* handle (from any *_com_init).
- * @param txCfg      ComBus frame config for TX (envId, nAnalog, nDigital).
+ * @param txCfg      ComBus frame config for TX (nAnalog, nDigital).
  * @param txHz       TX frame rate in Hz.
- * @param rxCfg      ComBus frame config for RX (envId, nAnalog, nDigital).
+ * @param rxCfg      ComBus frame config for RX (nAnalog, nDigital).
+
  * @param analogBuf  Caller-owned backing buffer for analog channels (RX side).
  * @param digitalBuf Caller-owned backing buffer for digital channels (RX side).
  */

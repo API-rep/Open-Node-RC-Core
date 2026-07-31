@@ -19,36 +19,42 @@
  */
 #pragma once
 
-
-// =============================================================================
-// 1. COMBUS  (always)
-// =============================================================================
-
-// REMOTE-only vocabulary for generic dumper-truck code
-// Machine-specific code includes the concrete machine's combus.h directly
-#include <core/config/machines/dumper_truck/combus/combus_ids_remote.h>
+#include <machines/config/machines/machines.h> // MACHINE_TYPE_*
 
 
-// =============================================================================
-// 2. MOTION PRESET ALIAS  (always)
-// =============================================================================
-
-#include <core/config/machines/dumper_truck/motion/dumper_truck_motion.h>
-
-
-// =============================================================================
-// 3. INPUT MAPPING
-// =============================================================================
-// NOTE: inputs_map is now INSTANCE-specific (volvo_A60H_bruder/inputs_map/).
-// The instance's machine header includes it directly.
-
-
-// =============================================================================
-// 4. SOUND DYNAMICS  (only in sound-module builds)
-// =============================================================================
-
-#if defined(SOUND_NODE) || defined(SOUND_ENABLED)
-  #include <core/config/machines/dumper_truck/sound/dumper_truck_sound.h>
-#endif
+#if defined(MACHINE_TYPE_DUMPER_TRUCK)
+  
+  // =============================================================================
+  // 1. COMBUS  (always)
+  // =============================================================================
+  
+  // REMOTE-only vocabulary for generic dumper-truck code
+  // Machine-specific code includes the concrete machine's combus.h directly
+  #include <core/config/machines/dumper_truck/combus/combus_ids_remote.h>
+  
+  
+  // =============================================================================
+  // 2. MOTION PRESET ALIAS  (always)
+  // =============================================================================
+  
+  #include <core/config/machines/dumper_truck/motion/dumper_truck_motion.h>
+  
+  
+  // =============================================================================
+  // 3. INPUT MAPPING
+  // =============================================================================
+  // NOTE: inputs_map is now INSTANCE-specific (volvo_A60H_bruder/inputs_map/).
+  // The instance's machine header includes it directly.
+  
+  
+  // =============================================================================
+  // 4. SOUND DYNAMICS  (only in sound-module builds)
+  // =============================================================================
+  
+  #if defined(SOUND_NODE) || defined(SOUND_ENABLED)
+    #include <core/config/machines/dumper_truck/sound/dumper_truck_sound.h>
+  #endif
+  
+#endif  // MACHINE_TYPE_DUMPER_TRUCK
 
 // EOF dumper_truck_config.h

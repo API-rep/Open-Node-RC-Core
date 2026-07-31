@@ -26,38 +26,45 @@
  *******************************************************************************///
 #pragma once
 
-#include <cstdint>
+#include <machines/config/machines/machines.h> // MACHINE_TYPE_*
 
-// =============================================================================
-// 1. ANALOG REMOTE CHANNELS (shared by ALL dumper-truck instances)
-// =============================================================================
 
-/**
- * @brief Analog REMOTE channels shared by all dumper-truck instances.
- *
- * @details These channels are transmitted over the wire to sound nodes
- *   and other remote receivers. They represent the core vehicle state
- *   that is common to ALL dumper-trucks.
- */
-enum class AnalogComBusRemoteID : uint8_t {
-    // NOTE: THROTTLE_BUS should be added here if missing from the .inc
-    #include "combus/combus_ids_remote_analog.inc"
-    CH_COUNT
-};
-
-// =============================================================================
-// 2. DIGITAL REMOTE CHANNELS (shared by ALL dumper-truck instances)
-// =============================================================================
-
-/**
- * @brief Digital REMOTE channels shared by all dumper-truck instances.
- *
- * @details These channels are transmitted over the wire as packed bits.
- *   They represent boolean states common to ALL dumper-trucks.
- */
-enum class DigitalComBusRemoteID : uint8_t {
-    #include "combus/combus_ids_remote_digital.inc"
-    CH_COUNT
-};
+#if defined(MACHINE_TYPE_DUMPER_TRUCK)
+    
+    #include <cstdint>
+    
+    // =============================================================================
+    // 1. ANALOG REMOTE CHANNELS (shared by ALL dumper-truck instances)
+    // =============================================================================
+    
+    /**
+     * @brief Analog REMOTE channels shared by all dumper-truck instances.
+     *
+     * @details These channels are transmitted over the wire to sound nodes
+     *   and other remote receivers. They represent the core vehicle state
+     *   that is common to ALL dumper-trucks.
+     */
+    enum class AnalogComBusRemoteID : uint8_t {
+        // NOTE: THROTTLE_BUS should be added here if missing from the .inc
+        #include "combus/combus_ids_remote_analog.inc"
+        CH_COUNT
+    };
+    
+    // =============================================================================
+    // 2. DIGITAL REMOTE CHANNELS (shared by ALL dumper-truck instances)
+    // =============================================================================
+    
+    /**
+     * @brief Digital REMOTE channels shared by all dumper-truck instances.
+     *
+     * @details These channels are transmitted over the wire as packed bits.
+     *   They represent boolean states common to ALL dumper-trucks.
+     */
+    enum class DigitalComBusRemoteID : uint8_t {
+        #include "combus/combus_ids_remote_digital.inc"
+        CH_COUNT
+    };
+    
+#endif  // MACHINE_TYPE_DUMPER_TRUCK
 
 // EOF combus_ids_remote.h

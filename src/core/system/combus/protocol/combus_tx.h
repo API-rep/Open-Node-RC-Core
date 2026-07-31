@@ -3,7 +3,7 @@
  * @brief ComBus transmitter module
  *
  * @details Serializes the live ComBus into a binary frame and sends it via
- * any NodeCom* physical transport interface (UART, ESP-Now, …) provided at
+ * any NodeCom* physical transport interface (UART, ESP-Now, â€¦) provided at
  * init time. Timer-gated and non-blocking: the update function does nothing
  * if the transmit interval has not elapsed since the last frame.
  *
@@ -11,8 +11,9 @@
  * @code
  *   // In init:
  *   NodeCom* com = uart_com_init(&Serial2, BAUD, TX_PIN, RX_PIN, "combus");
- *   constexpr ComBusFrameCfg cfg = { MACHINE_TYPE, N_ANALOG, N_DIGITAL };
+ *   constexpr ComBusFrameCfg cfg = { N_ANALOG, N_DIGITAL };
  *   combus_tx_init(com, cfg, TX_HZ);
+
  *
  *   // In loop:
  *   combus_tx_update(&comBus, failsafeActive);
@@ -36,8 +37,9 @@
  * @brief Initialize the ComBus transmitter.
  *
  * @param nodeCom   Claimed transport interface (from *_com_init).
- * @param frameCfg  ComBus layout descriptor (envId, nAnalog, nDigital).
+ * @param frameCfg  ComBus layout descriptor (nAnalog, nDigital).
  * @param txHz      Frame transmit rate in Hz.
+
  */
 
 void combus_tx_init( NodeCom*        nodeCom,

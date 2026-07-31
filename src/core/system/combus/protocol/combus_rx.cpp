@@ -193,8 +193,9 @@ static uint8_t tryDecode() {
 
 void combus_rx_init(
     NodeCom*       nodeCom,     // claimed transport interface (from uart_com_init or similar)
-    ComBusFrameCfg frameCfg,    // static frame layout descriptor (envId, nAnalog, nDigital)
+    ComBusFrameCfg frameCfg,    // static frame layout descriptor (nAnalog, nDigital)
     uint16_t*      analogBuf,   // caller-allocated array of frameCfg.nAnalog entries
+
     bool*          digitalBuf ) // caller-allocated array of frameCfg.nDigital entries
 {
 		// --- 1. Guard check ---

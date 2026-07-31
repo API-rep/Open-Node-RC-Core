@@ -58,7 +58,7 @@ uint8_t combus_frame_crc8(const uint8_t* data, uint8_t len) {
  * @details Serialization sequence:
  *   1. Null pointer and frame size overflow guard (returns 0 on failure).
  *   2. Build flags byte from transport-level inputs (failSafe, ...).
- *   3. Write fixed 7-byte header: SOF, envId, nAnalog, nDigital, seq, runLevel, flags.
+ *   3. Write fixed 6-byte header: SOF, nAnalog, nDigital, seq, runLevel, flags.
  *   4. Pack digital channel values as bits, LSB-first, ceil(nDigital/8) bytes.
  *   5. Write analog channel values as uint16_t little-endian, nAnalog entries.
  *   6. Append CRC-8/MAXIM over all preceding bytes.
@@ -70,7 +70,6 @@ uint8_t combus_frame_crc8(const uint8_t* data, uint8_t len) {
  * @param[in]  combus        Source ComBus instance to encode.
  * @param[in]  nAnalog       Number of analog channels to include.
  * @param[in]  nDigital      Number of digital channels to include.
- * @param[in]  envId         EnvCfg type identifier (MACHINE_TYPE build value).
  * @param[in]  seq           Rolling sequence counter (caller increments).
  * @param[in]  failSafe      Upstream failsafe flag (sets COMBUS_FLAG_FAILSAFE).
  *
@@ -85,7 +84,6 @@ uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
 
     const uint8_t nAnalog  = cfg.nAnalog;
     const uint8_t nDigital = cfg.nDigital;
-    const uint8_t envId    = cfg.envId;
                                
       // --- 1. Guard conditions — null pointer + frame size overflow ---
     if (!outputBuffer || !combus) {
@@ -109,7 +107,6 @@ uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
     uint8_t pos = 0;   // write position in outputBuffer
     
     outputBuffer[pos++] = CombusFrameSof;
-    outputBuffer[pos++] = envId;
     outputBuffer[pos++] = nAnalog;
     outputBuffer[pos++] = nDigital;
     outputBuffer[pos++] = seq;

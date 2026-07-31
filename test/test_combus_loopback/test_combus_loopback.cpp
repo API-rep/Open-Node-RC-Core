@@ -37,8 +37,8 @@
 
 static constexpr uint8_t  kTestNAnalog  = 4u;
 static constexpr uint8_t  kTestNDigital = 6u;
-static constexpr uint8_t  kTestEnvId    = 42u;   ///< arbitrary envId for testing
 static constexpr uint32_t kLoopbackBaud = 115200u;
+
 static constexpr int      kTxPin        = 17;     ///< Serial2 TX — connect to kRxPin
 static constexpr int      kRxPin        = 16;     ///< Serial2 RX — connect to kTxPin
 static constexpr uint32_t kRxPollMs     = 50u;    ///< poll budget per frame (ms)
@@ -49,7 +49,8 @@ static constexpr uint8_t  kMonkeyPasses = 8u;     ///< number of random frames t
 // SHARED TEST FIXTURES
 // =============================================================================
 
-static constexpr ComBusFrameCfg kCfg = { kTestEnvId, kTestNAnalog, kTestNDigital };
+static constexpr ComBusFrameCfg kCfg = { kTestNAnalog, kTestNDigital };
+
 
 // --- ComBus A (source / TX side) ---
 static AnalogComBus  txAnalogBus[kTestNAnalog];

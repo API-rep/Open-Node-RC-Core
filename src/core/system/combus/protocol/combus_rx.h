@@ -19,8 +19,9 @@
  *
  *    // In setup():
  *   NodeCom* com = uart_com_init(&Serial2, BAUD, RX_PIN, TX_PIN, "sound_rx");
- *   constexpr ComBusFrameCfg cfg = { MACHINE_TYPE, N_ANALOG, N_DIGITAL };
+ *   constexpr ComBusFrameCfg cfg = { N_ANALOG, N_DIGITAL };
  *   combus_rx_init(com, cfg, analog, digital);
+
  *
  *    // In loop():
  *   combus_rx_update();
@@ -45,8 +46,9 @@
  * @brief Initialize the ComBus receiver.
  *
  * @param nodeCom    NodeCom transport interface (from *_com_init).
- * @param frameCfg   Combus frame config (buffer sizes, envID)
+ * @param frameCfg   Combus frame config (buffer sizes: nAnalog, nDigital)
  * @param analogBuf  Caller-allocated analog buffer array
+
  * @param digitalBuf Caller-allocated digital buffer array
  */
 void combus_rx_init( NodeCom*            nodeCom,

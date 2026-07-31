@@ -20,7 +20,8 @@
  */
 #pragma once
 
-#include "../volvo_A60H_bruder.h"   // kVehicleName, kVehicleCombusLayout
+#include "../volvo_A60H_bruder.h"   // kVehicleName
+
 
 // =============================================================================
 // BOARD ENVIRONEMENT CONFIG SELECTION
