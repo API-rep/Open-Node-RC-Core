@@ -13,8 +13,19 @@
  *   last    1    crc8         CRC-8/MAXIM over bytes [0 ... last-1]
  * @endcode
  *
- * Individual machine instance ( UID) is delegated to the transport layer.
+ * `seq` semantics:
+ *   - control frames: rolling counter in 1..255 (wraps 255 -> 1, never 0)
+ *   - seq == 0        : RESERVED for a future handshake / versioning frame
+ *                      (generic to every ComBus participant — RF node or
+ *                      serial board — NOT limited to the machine <-> remote
+ *                      link).  See combus_handshake.h for the dedicated,
+ *                      structurally separate decoder path that will pick
+ *                      it up once the handshake / versioning mechanism is
+ *                      implemented.
+ *
+ * Individual machine instance UID is delegated to the transport layer.
  * See CombusFrameHeader in outputs_struct.h for the full wire layout.
+
  *****************************************************************************/
 #pragma once
 

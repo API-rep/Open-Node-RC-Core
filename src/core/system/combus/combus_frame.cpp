@@ -70,8 +70,11 @@ uint8_t combus_frame_crc8(const uint8_t* data, uint8_t len) {
  * @param[in]  combus        Source ComBus instance to encode.
  * @param[in]  nAnalog       Number of analog channels to include.
  * @param[in]  nDigital      Number of digital channels to include.
- * @param[in]  seq           Rolling sequence counter (caller increments).
+ * @param[in]  seq           Rolling sequence counter for control frames
+ *                           (1..255 — caller increments; value 0 is RESERVED
+ *                           for handshake frames, see combus_handshake.h).
  * @param[in]  failSafe      Upstream failsafe flag (sets COMBUS_FLAG_FAILSAFE).
+
  *
  * @return Number of bytes written into outputBuffer, 0 on error.
  */

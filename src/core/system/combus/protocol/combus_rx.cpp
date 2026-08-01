@@ -9,7 +9,9 @@
 #include <Arduino.h>
 
 #include <core/system/combus/combus_frame.h>
+#include <core/system/combus/combus_handshake.h>
 #include <core/system/debug/logging/debug.h>
+
 
 
 // =============================================================================
@@ -111,13 +113,20 @@ static void rxBufConsume(uint8_t n) {
  * @details Decoding sequence:
  *   1. Scan for SOF — discards leading bytes until `CombusFrameSof` is found
  *      or the buffer is exhausted.
- *   2. Peek header — reads `nAnalog` and `nDigital` from the wire header to
- *      compute the expected frame length; discards SOF and re-syncs if the
- *      size would exceed `frameMaxLen`.
- *   3. Copy and decode — extracts the complete frame into a linear buffer and
- *      calls `combus_frame_decode()`. On CRC success, updates the snapshot and
- *      consumes the frame bytes. On CRC failure, discards only the SOF and
- *      re-syncs.
+ *   2. Peek the `seq` byte at wire offset 3 (right after the 2-byte
+ *      `ComBusFrameCfg` nAnalog/nDigital) to discriminate between a
+ *      control frame (`seq` in 1..255) and a handshake frame (`seq == 0`).
+ *      The two paths are STRUCTURALLY SEPARATE — the control-frame decoder
+ *      is only ever called for non-zero seq, and the handshake stub in
+ *      `combus_handshake.cpp` is only ever called for seq == 0.  This keeps
+ *      the future versioning logic free to grow inside `combus_handshake.*`
+ *      without any refactor of the control-frame path.
+ *   3. Control-frame path — reads `nAnalog` / `nDigital` from the wire
+ *      header, computes the expected frame length, discards SOF and
+ *      re-syncs if the size would exceed `frameMaxLen`, copies the frame
+ *      into a linear buffer and calls `combus_frame_decode()`.  On CRC
+ *      success, updates the snapshot and consumes the frame bytes.  On
+ *      CRC failure, discards only the SOF and re-syncs.
  *
  * @return Number of bytes consumed, or 0 if no complete valid frame was found.
  */
@@ -129,14 +138,30 @@ static uint8_t tryDecode() {
 		rxBufConsume(1u);
 	}
 
+	if (comBusRx.rxCount < CombusFrameHeaderLen) {
+			// Not enough bytes yet even to peek the seq byte — wait for more.
+		return 0u;
+	}
+
+		// --- 2. Peek `seq` byte (wire offset 3) to discriminate frame kind ---
+	uint8_t seqByte = rxBufAt(1u + offsetof(CombusFrameHeader, cfg) +
+	                          offsetof(ComBusFrameCfg, nDigital) + 1u);
+
+	if (seqByte == 0u) {
+			// --- 2a. HANDSHAKE PATH — structurally separate from control ---
+			// Handshake decoder owns its ring-buffer consumption and CRC check.
+			// Returning 0 here means "try again next poll" or "no handshake
+			// available yet" — the SOF stays in place until either a full
+			// handshake frame arrives or the stub decides to drop it.
+		return combus_handshake_tryDecode(rxBuf, rxBufSize, comBusRx.rxHead, comBusRx.rxCount);
+	}
+
+		// --- 3. CONTROL-FRAME PATH ---
+		// From here on, `seq` is guaranteed in 1..255 — no handshake leak possible.
 	if (comBusRx.rxCount < CombusFrameMinLen) {
 		return 0u;
 	}
 
-		// --- 2. Peek header to compute expected frame size ---
-	if (comBusRx.rxCount < CombusFrameHeaderLen) {
-		return 0u;
-	}
 	uint8_t nAnalog   = rxBufAt(1u + offsetof(CombusFrameHeader, cfg) + offsetof(ComBusFrameCfg, nAnalog));
 	uint8_t nDigital  = rxBufAt(1u + offsetof(CombusFrameHeader, cfg) + offsetof(ComBusFrameCfg, nDigital));
 	uint8_t nDigBytes = (nDigital + 7u) / 8u;
@@ -155,7 +180,7 @@ static uint8_t tryDecode() {
 		return 0u;
 	}
 
-		// --- 3. Copy frame into a linear buffer and decode ---
+		// --- 4. Copy frame into a linear buffer and decode ---
 	uint8_t linear[frameMaxLen];
 	for (uint8_t i = 0u; i < expectedLen; ++i) {
 		linear[i] = rxBufAt(i);
@@ -174,6 +199,7 @@ static uint8_t tryDecode() {
 		return 0u;
 	}
 }
+
 
 
 

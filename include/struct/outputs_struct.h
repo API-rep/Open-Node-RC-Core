@@ -62,12 +62,20 @@ struct ComBusFrameCfg {
  *
  *   The first two bytes map directly to `ComBusFrameCfg`, enabling a
  *   memcpy-based decode without manual field extraction.
+ *
+ * @note `seq == 0` is RESERVED on every ComBus transport — generic to all
+ *   participants (RF node or serial board), NOT limited to the machine
+ *   <-> remote link.  See `combus_handshake.h` for the dedicated
+ *   structurally-separate decoder that will pick it up once the
+ *   handshake / versioning mechanism is implemented.
+
  */
 
 struct CombusFrameHeader {
     ComBusFrameCfg cfg;   ///< Static layout snapshot: nAnalog, nDigital (wire offsets 0–1).
-    uint8_t seq;          ///< Rolling frame counter (0 to 255).
+    uint8_t seq;          ///< Rolling frame counter (1..255 for control frames; 0 is RESERVED for handshake — see combus_handshake.h).
     uint8_t runLevel;     ///< Combus RunLevel cast to uint8_t.
+
     uint8_t flags;        ///< COMBUS_FLAG_* bits (transport status only).
 };
 

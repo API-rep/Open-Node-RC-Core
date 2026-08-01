@@ -62,8 +62,21 @@ est hors scope de ce document et devra être conçu séparément.
 
 - **Trame magique** : la valeur `seq == 0` est réservée exclusivement à
   une frame de handshake/validation (payload MD5 combus+version, adresse
-  émetteur). Le compteur de frames de contrôle normal redémarre à `1`
-  après un reset, jamais `0`.
+  émetteur). Le compteur de frames de contrôle normal démarre à `1`
+  après un reset et tourne en 1..255 (wrap 255 → 1, jamais 0).
+
+  Côté TX, le compteur est tenu par `CombusTxState::seq` dans
+  `src/core/system/combus/protocol/combus_tx.cpp`.  Côté RX, le décodeur
+  `combus_rx.cpp::tryDecode()` peek le byte `seq` dès le scan SOF et
+  route structurellement vers `combus_handshake_tryDecode()` (module
+  dédié `combus_handshake.{h,cpp}`) — pas un simple `if` imbriqué dans
+  le chemin de contrôle.  Cela permet au futur code de handshake de
+  grossir sans refactor du chemin de contrôle.
+
+  Ce mécanisme est générique à **tout** participant ComBus (node RF
+  machine↔remote, ou board série mainboard↔extension board) — pas
+  limité au lien RF.
+
 - **Déclencheur de validation côté récepteur** : pas seulement
   `seq == 0`, mais la condition structurelle *"adresse absente du cache
   amies"* — couvre à la fois le cas où c'est l'émetteur qui reboote

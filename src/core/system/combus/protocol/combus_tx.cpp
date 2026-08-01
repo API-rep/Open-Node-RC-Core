@@ -28,10 +28,11 @@ struct CombusTxState {
 	NodeCom*        nodeCom  = nullptr;  ///< active transport interface
 	ComBusFrameCfg  frameCfg       = {};  ///< static layout descriptor (nAnalog, nDigital)
 
-	uint8_t         seq       = 0u;  ///< rolling frame sequence counter (0�255)
+	uint8_t         seq       = 1u;  ///< rolling frame sequence counter (1..255). Value 0 is RESERVED for future handshake frames.
 	uint32_t        lastTxMs  = 0u;  ///< timestamp of last transmitted frame (ms)
 	uint32_t        periodMs  = 0u;  ///< transmit period derived from txHz (0 = uninit)
 };
+
 
 static CombusTxState comBusTx;  ///< Combus transmitter instance state
 
@@ -114,13 +115,19 @@ void combus_tx_update(
 
 		// --- 4. Send via transport ---
 	comBusTx.nodeCom->write(comBusTx.nodeCom->ctx, frame, frameLen);
+
+		// Advance seq counter. The control-frame range is 1..255 — value 0 is
+		// reserved for future handshake frames (see combus_handshake.h) and must
+		// never appear in a normal frame on the wire. Wrap from 255 → 1.
 	comBusTx.seq++;
+	if (comBusTx.seq == 0u) { comBusTx.seq = 1u; }
 
 	output_log_dbg("[COMBUS_TX] seq=%u  len=%u  rl=%d  flags=0x%02X\n",
-	               (unsigned)(comBusTx.seq - 1u),
+	               (unsigned)comBusTx.seq - 1u,
 	               (unsigned)frameLen,
 	               (int)bus->runLevel,
 	               (unsigned)(failSafe ? COMBUS_FLAG_FAILSAFE : 0u));
 }
+
 
 // EOF combus_tx.cpp
