@@ -72,14 +72,13 @@ uint8_t combus_handshake_tryDecode(
     if (!ringBuf || ringBufSize == 0u) { return 0u; }
     if (ringCount == 0u)               { return 0u; }
 
-    // --- 1. Compute expected wire length for a handshake frame ---
-    // Handshake frames have a fixed payload length of kCombusHandshakePayloadLen
-    // (currently zero — see combus_handshake.h).  The header and CRC-8 are
-    // mandatory, exactly as for a control frame.
-    const uint8_t expectedLen = sizeof(CombusFrameSof)
-                             + sizeof(CombusFrameHeader)
-                             + kCombusHandshakePayloadLen
-                             + sizeof(uint8_t);
+    // --- 1. Expected wire length for a handshake frame ---
+    // Single source of truth lives in the header (CombusFrameHandshakeMinLen)
+    // — reused here so any future change to the handshake layout (e.g. a
+    // payload length bumped above zero) is picked up without a duplicate
+    // definition here.
+    const uint8_t expectedLen = CombusFrameHandshakeMinLen;
+
 
     if (ringCount < expectedLen) {
         // Not enough bytes yet — caller will retry on the next poll.
@@ -103,13 +102,20 @@ uint8_t combus_handshake_tryDecode(
     uint8_t crcExpected = linear[expectedLen - 1u];
     uint8_t crcActual   = combus_frame_crc8(linear, (uint8_t)(expectedLen - 1u));
     if (crcActual != crcExpected) {
-        // CRC mismatch — the caller is responsible for re-syncing on SOF;
-        // we deliberately do NOT consume here because the next byte might
-        // also be a valid SOF for a fresh handshake attempt.
-        sys_log_info("[COMBUS_HANDSHAKE] CRC mismatch — dropping %u bytes\n",
-                     (unsigned)expectedLen);
+        // CRC mismatch. Same semantics as the control-frame path in
+        // combus_rx.cpp::tryDecode() (rxBufConsume(1u)): advance the ring
+        // buffer by exactly one byte so we re-sync past the leading byte
+        // (which the caller has already verified to be the SOF sentinel)
+        // and never loop forever on the same corrupted candidate. Mirrors
+        // the modular consume the rest of the file uses for the
+        // success path.
+        ringHead  = (uint8_t)(ringHead + 1u) % ringBufSize;
+        ringCount = (uint8_t)(ringCount - 1u);
+        sys_log_info("[COMBUS_HANDSHAKE] CRC mismatch — dropped 1 byte, "
+                     "re-sync past SOF\n");
         return 0u;
     }
+
 
     // --- 4. CRC OK — consume the validated frame from the ring buffer ---
     ringHead  = (uint8_t)(ringHead + expectedLen) % ringBufSize;

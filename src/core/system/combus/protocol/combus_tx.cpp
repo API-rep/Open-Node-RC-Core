@@ -116,6 +116,15 @@ void combus_tx_update(
 		// --- 4. Send via transport ---
 	comBusTx.nodeCom->write(comBusTx.nodeCom->ctx, frame, frameLen);
 
+		// Capture the seq value that was actually written on the wire BEFORE
+		// advancing — used by the debug log below. Important because the new
+		// wrap rule (255 → 1, never 0) breaks the old "comBusTx.seq - 1u"
+		// trick: after a real wrap, seq==1 and that expression would print
+		// 0, which is misleading since value 0 is RESERVED for handshake
+		// frames (see combus_handshake.h) and must NEVER appear in a control
+		// frame log line.
+	const uint8_t seqSent = comBusTx.seq;
+
 		// Advance seq counter. The control-frame range is 1..255 — value 0 is
 		// reserved for future handshake frames (see combus_handshake.h) and must
 		// never appear in a normal frame on the wire. Wrap from 255 → 1.
@@ -123,11 +132,12 @@ void combus_tx_update(
 	if (comBusTx.seq == 0u) { comBusTx.seq = 1u; }
 
 	output_log_dbg("[COMBUS_TX] seq=%u  len=%u  rl=%d  flags=0x%02X\n",
-	               (unsigned)comBusTx.seq - 1u,
+	               (unsigned)seqSent,
 	               (unsigned)frameLen,
 	               (int)bus->runLevel,
 	               (unsigned)(failSafe ? COMBUS_FLAG_FAILSAFE : 0u));
 }
+
 
 
 // EOF combus_tx.cpp
