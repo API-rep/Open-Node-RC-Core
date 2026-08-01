@@ -43,7 +43,7 @@
 // INPUT → COMBUS MAPPING STRUCTURES
 // =============================================================================
 
-#include <struct/combus_struct.h>  // AnalogComBusID + DigitalComBusID
+#include <core/system/combus/combus_defs.h>  // AnalogComBusID + DigitalComBusID
 
 struct InputAnalogMap {
   AnalogInputDevID devID;

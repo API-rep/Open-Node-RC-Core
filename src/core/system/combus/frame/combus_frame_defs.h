@@ -17,8 +17,7 @@
 // 1. COMBUS TRANSPORT FRAME STRUCTURE
 // =============================================================================
 
-/**
- * @brief Static com-bus layout descriptor — channel counts for this frame.
+/* @brief Static com-bus layout descriptor — channel counts for this frame.
  *
  * @details Set once at init, never changes at runtime. Shared between the TX
  *   codec, RX codec, and protocol modules (combus_tx, combus_rx) to avoid
@@ -50,8 +49,7 @@ struct ComBusFrameCfg {
 
 
 
-/**
- * @brief Combus transmission frame header fields shared with the decoded frame.
+/* @brief Combus transmission frame header fields shared with the decoded frame.
  *
  * @details These fields are transmitted in the transmission frame immediately
  *   after the SOF byte (offset 0). The same struct is embedded in ComBusFrame,

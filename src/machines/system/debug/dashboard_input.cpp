@@ -6,7 +6,7 @@
 #ifdef DEBUG_DASHBOARD
 
 #include "dashboard_input.h"
-#include <struct/combus_struct.h>  // DigitalComBusID, AnalogComBusID (via machine dispatch)
+#include <core/system/combus/combus_defs.h>  // DigitalComBusID, AnalogComBusID (via machine dispatch)
 #include <machines/config/config.h>  // Combus definitions
 #include <core/system/debug/dashboard/dashboard.h>
 #include <core/system/input/input_manager.h>

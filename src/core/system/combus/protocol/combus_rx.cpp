@@ -8,8 +8,8 @@
 #include <stddef.h>
 #include <Arduino.h>
 
-#include <core/system/combus/combus_frame.h>
-#include <core/system/combus/combus_handshake.h>
+#include <core/system/combus/frame/combus_frame.h>
+#include <core/system/combus/frame/combus_handshake.h>
 #include <core/system/debug/logging/debug.h>
 
 

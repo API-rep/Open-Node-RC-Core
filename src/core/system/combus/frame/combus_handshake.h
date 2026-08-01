@@ -31,7 +31,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include <core/system/combus/combus_frame.h>   // CombusFrameHeader, CombusFrameSof
+#include <core/system/combus/frame/combus_frame.h>   // CombusFrameHeader, CombusFrameSof
 
 
 // =============================================================================

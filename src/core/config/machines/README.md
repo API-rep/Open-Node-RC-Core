@@ -99,7 +99,7 @@ Without the type definition, however, the type remains unknown.
 #include <core/config/machines/dumper_truck/combus/dumper_truck.h>
 ```
 
-→ `dumper_truck.h` includes `<struct/combus_struct.h>` for the `ComBus` type.
+→ `dumper_truck.h` includes `<core/system/combus/combus_defs.h>` for the `ComBus` type.
 
 → `combus_struct.h` includes `<struct/machines_struct.h>` for machine
 configuration structures.
@@ -170,7 +170,7 @@ enum class DigitalComBusID : uint8_t {
 
 #ifdef IS_MACHINE
 
-#include <struct/combus_struct.h>
+#include <core/system/combus/combus_defs.h>
 
 extern AnalogComBusArray [...];
 extern DigitalComBusArray [...];

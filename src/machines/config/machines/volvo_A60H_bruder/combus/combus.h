@@ -11,7 +11,7 @@
 
 #include "combus_ids.h"
 
-#include <struct/combus_struct.h>
+#include <core/system/combus/combus_defs.h>
 
 /// @brief Com-bus analog channels configuration array
 extern AnalogComBus  AnalogComBusArray[static_cast<uint8_t>(AnalogComBusID::CH_COUNT)];

@@ -9,7 +9,7 @@
 #pragma once
 
 #include <stdint.h>
-#include <struct/combus_struct.h>
+#include <core/system/combus/combus_defs.h>
 
 #ifdef DEBUG_DASHBOARD
 

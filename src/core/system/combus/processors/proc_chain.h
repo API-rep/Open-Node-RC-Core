@@ -30,7 +30,7 @@
 // =============================================================================
 
 #include <struct/simulation_struct.h>   // CbChain, CbProc
-#include <struct/combus_struct.h>       // ComBus
+#include <core/system/combus/combus_defs.h>       // ComBus
 
 
 // =============================================================================

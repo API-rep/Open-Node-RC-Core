@@ -26,7 +26,7 @@
   #include <struct/struct.h>
   #include <defs/defs.h>
   
-  #include <struct/combus_struct.h>
+  #include <core/system/combus/combus_defs.h>
   
   // Board-specific hardware definitions (pins, ports, constants)
   #include <machines/config/boards/ESP32_8M_6S.h>

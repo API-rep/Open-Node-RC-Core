@@ -13,7 +13,7 @@
 #ifdef DEBUG_DASHBOARD
 
 #include <stdint.h>
-#include <struct/combus_struct.h>
+#include <core/system/combus/combus_defs.h>
 #include <struct/machines_struct.h>
 
 /**

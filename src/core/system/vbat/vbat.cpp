@@ -17,7 +17,7 @@
 #include <core/config/vbat/config.h>
 
 #ifdef HAS_VBAT_SENSING
-#include <struct/combus_struct.h>
+#include <core/system/combus/combus_defs.h>
 extern ComBus comBus;
 #endif
 

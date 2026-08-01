@@ -32,8 +32,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include <struct/combus_struct.h>
-#include <struct/outputs_struct.h>
+#include <core/system/combus/combus_defs.h>
+#include <core/system/combus/frame/combus_frame_defs.h>
 
 
 // =============================================================================

@@ -20,7 +20,7 @@
 #pragma once
 
 #include <optional>
-#include <struct/combus_struct.h>
+#include <core/system/combus/combus_defs.h>
 
 // Forward declaration only — AnalogComBusID/DigitalComBusID used
 // below solely as type parameters for combus_set function.

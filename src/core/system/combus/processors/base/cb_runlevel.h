@@ -19,7 +19,7 @@
 #pragma once
 
 #include <defs/machines_defs.h>         // RunLevel
-#include <struct/combus_struct.h>        // ComBus, ChanLayer
+#include <core/system/combus/combus_defs.h>        // ComBus, ChanLayer
 #include <struct/combus_proc_struct.h>   // CbProc
 
 
