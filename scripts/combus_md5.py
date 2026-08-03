@@ -12,7 +12,7 @@ on every build (cheap: hashes a few KB max, typically zero bytes today).
 Resolution chain (MACHINE_TYPE_* dispatch):
   1. Resolve the machine's Remote ComBus folder under
      src/core/config/machines/<machine>/combus/ by parsing the same
-     MACHINE_TYPE_* `#if/#elif` ladder as combus_ids_remote.h.
+     MACHINE_TYPE_* `#if/#elif` ladder in machine_type.h → <type>_config.h.
   2. Glob combus_ids_remote_*.inc and combus_remote_*.inc in
      that folder (sorted, deterministic).
   3. Concat raw bytes, MD5-hash, embed.
@@ -57,7 +57,7 @@ PROJECT_ROOT = Path(env["PROJECT_DIR"])
 #             how the C++ side actually wires the dispatch — see
 #             volvo_A60H_bruder.h: `#define MACHINE_TYPE_DUMPER_TRUCK`).
 #
-# Mirrors the dispatch ladder in src/core/config/machines/combus_ids_remote.h.
+# Mirrors the dispatch ladder in src/core/config/machines/machine_type.h.
 
 # Vehicle-define (CPP side)  ->  machine_type folder (MACHINE_TYPE_* side)
 VEHICLE_TO_MACHINE_TYPE = {

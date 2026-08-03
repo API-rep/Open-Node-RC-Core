@@ -17,7 +17,7 @@
 
 #include <stdint.h>
 #include <core/system/combus/frame/combus_frame.h>
-#include <core/config/machines/combus_ids_remote.h>  // AnalogComBusRemoteID, DigitalComBusRemoteID
+#include <core/config/machines/machine_type.h>        // AnalogComBusRemoteID, DigitalComBusRemoteID (transitive via combus_remote.h)
 
 /// UART transport physical cap — chosen as uint8_t safety ceiling (no hardware limit).
 static constexpr uint8_t CombusPhysUartMax = 255u;

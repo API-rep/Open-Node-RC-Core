@@ -14,14 +14,24 @@
  *             └─►  THIS FILE dispatches by MACHINE_TYPE_*
  *                   and pulls in dumper_truck/dumper_truck_config.h
  *
- *   Consumers should include ONLY this header (or one of its forward
- *   wrappers like combus_ids_remote.h) — never the per-machine-type
+ *   Consumers should include ONLY this header — never the per-machine-type
  *   path directly.  This keeps every MACHINE_TYPE_* dispatch logic
- *   confined to a single umbrella per concern.
+ *   confined to a single umbrella.
  *
- *   Single source of truth:
- *     - combus_ids_remote.h  : REMOTE ComBus vocab (Analog/Digital RemoteID)
- *     - machine_type.h       : machine-class sub-umbrella routing (THIS FILE)
+ *   Dispatch chain (machine-class → TYPE → per-TYPE config):
+ *
+ *     machine_type.h             ← (this file, top-level)
+ *       └── dumper_truck/dumper_truck_config.h
+ *             ├── dumper_truck/combus/combus_remote.h        ← TYPE runtime umbrella
+ *             │     └── dumper_truck/combus/combus_ids_remote.h  ← REMOTE vocab (IDs)
+ *             ├── dumper_truck/motion/dumper_truck_motion.h
+ *             └── dumper_truck/sound/dumper_truck_sound.h    ← if SOUND_NODE / SOUND_ENABLED
+ *
+ *   The TYPE-level runtime umbrella `combus_remote.h` is the analogue of
+ *   the legacy root `combus_ids_remote.h` dispatcher — it lives inside
+ *   each machine-type folder so every MACHINE_TYPE_* owns its own
+ *   ComBus REMOTE runtime + vocabulary pair.  The root dispatcher is
+ *   gone (see commit `13b4c5f` for the cleanup history).
  *
  *   @warning Do NOT add per-machine-type includes here.  Each
  *     <machine_type>_config.h pulls its own sub-modules.

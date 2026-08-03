@@ -54,9 +54,11 @@
   #define COMBUS_REMOTE_ANALOG_INC      <core/config/machines/dumper_truck/combus/combus_remote_analog.inc>
   #define COMBUS_REMOTE_DIGITAL_INC     <core/config/machines/dumper_truck/combus/combus_remote_digital.inc>
 
-  // REMOTE-only vocabulary for generic dumper-truck code
-  // Machine-specific code includes the concrete machine's combus.h directly
-  #include <core/config/machines/dumper_truck/combus/combus_ids_remote.h>
+  // REMOTE-only vocabulary + runtime umbrella for generic dumper-truck code.
+  // combus_remote.h pulls combus_ids_remote.h transitively (vocabulary) +
+  // exposes the TYPE-level runtime identifiers (see header).
+  // Machine-specific code includes the concrete machine's combus.h directly.
+  #include <core/config/machines/dumper_truck/combus/combus_remote.h>
   
   // =============================================================================
   // 2. MOTION PRESET ALIAS  (always)
