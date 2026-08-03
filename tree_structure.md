@@ -47,11 +47,12 @@ src/core/config/
 │   ├── nop.cpp / nop.h        # Input vide (aucune entrée)
 │   └── PS4_dualshock.cpp/h     # Module PS4 Dualshock
 ├── machines/                    # Config machines partagées
-│   ├── machine_type_combus_ids.h
-│   ├── combus_ids_remote.h
-│   └── dumper_truck/           # Machine example
+│   ├── combus_ids_remote.h    # Dispatcher REMOTE ComBus vocab by MACHINE_TYPE_*
+│   ├── machine_type.h         # Top-level machine-class dispatcher → <machine_type>_config.h
+│   └── dumper_truck/          # Machine example
 │       ├── excavator/
 │       └── loader/
+# NOTE: machine_type_combus_ids.h removed (merged into combus_ids_remote.h).
 ├── outputs/                     # Configuration sorties
 │   ├── outputs.h
 │   ├── combus_espnow.h

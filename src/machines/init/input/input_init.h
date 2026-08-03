@@ -26,7 +26,7 @@
 // =============================================================================
 
 	// EnvCfg selector and bus enums
-#include <core/config/machines/machine_type_combus_ids.h>
+#include <core/config/machines/combus_ids_remote.h>
 
 // =============================================================================
 // 3. REMOTE MAPPING STRUCTURES

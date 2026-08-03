@@ -6,13 +6,13 @@
 // =============================================================================
 
 AnalogComBus AnalogComBusArray[static_cast<uint8_t>(AnalogComBusID::CH_COUNT)] = {
-  #include <core/config/machines/dumper_truck/combus/combus_channels_remote_analog.inc>
+  #include COMBUS_REMOTE_ANALOG_INC
   #include "combus_channels_local_analog.inc"
   #include "combus_channels_system_analog.inc"
 };
 
 DigitalComBus DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::CH_COUNT)] = {
-  #include <core/config/machines/dumper_truck/combus/combus_channels_remote_digital.inc>
+  #include COMBUS_REMOTE_DIGITAL_INC
   #include "combus_channels_local_digital.inc"
   #include "combus_channels_system_digital.inc"
 };

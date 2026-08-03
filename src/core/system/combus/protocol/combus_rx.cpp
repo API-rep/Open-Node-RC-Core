@@ -10,6 +10,7 @@
 
 #include <core/system/combus/frame/combus_frame.h>
 #include <core/system/combus/frame/combus_handshake.h>
+#include <core/system/combus/frame/combus_handshake_rx.h>  // combus_handshake_tryDecode
 #include <core/system/debug/logging/debug.h>
 
 

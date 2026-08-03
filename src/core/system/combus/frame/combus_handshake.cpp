@@ -1,19 +1,28 @@
 /******************************************************************************
  * @file  combus_handshake.cpp
- * @brief ComBus handshake frame dispatcher — stub implementation.
+ * @brief ComBus handshake umbrella — shared helpers (boot banner + MD5 hex
+ *        formatting + status flag).
  *
- * @details Implements the structurally separate decoder path used when a
- *   frame's `seq` byte is `0u`.  See combus_handshake.h for the design
- *   contract.
+ * @details The RX and TX paths live in their own translation units
+ *   (combus_handshake_rx.cpp, combus_handshake_tx.cpp) — mirror of the
+ *   combus_rx.cpp / combus_tx.cpp split.  This .cpp owns only the cross-
+ *   cutting state and helpers shared by both sides:
  *
- *   Scope of THIS revision:
- *     - validate the structural shape of the frame (CRC-8, fixed length);
- *     - consume the bytes from the ring buffer to keep the link re-synced;
- *     - record liveness so the future versioning layer can poll it.
+ *     - s_handshakeEverReceived          (status flag)
+ *     - s_bootWarningLogged              (one-shot flag for the boot banner)
+ *     - combus_handshake_logBootWarningIfNeeded()
+ *     - combus_handshake_ever_received()
+ *     - combus_handshake_formatMd5Hex()  (32-char hex writer, used by both
+ *                                          RX compare and TX build paths)
+ *
+ *   Payload layout and side contracts live in:
+ *     - combus_handshake.h        (umbrella)
+ *     - combus_handshake_rx.h/cpp (decode + CRC + compare)
+ *     - combus_handshake_tx.h/cpp (frame build + sendOnce)
  *
  *   Scope EXPLICITLY out of this revision (to be added later):
- *     - payload interpretation (MD5, sender address, friend-cache update);
- *     - handshake transmission path (TX side);
+ *     - friend-cache update ("amies" / sender address);
+ *     - automatic burst at boot;
  *     - high-priority QoS routing.
  *****************************************************************************/
 
@@ -27,7 +36,28 @@
 
 
 // =============================================================================
-// 1. PRIVATE STATE
+// 0. COMPILE-TIME GUARDS
+// =============================================================================
+
+// Handshake payload length MUST equal what the auto-generated header
+// advertises as the wire length.  This is the SOLE guard — the previous
+// `static_assert(..., 18u)` was redundant with the one below and has been
+// removed: 18u is the wire magic that combus_md5.py writes, but the
+// authoritative source of truth lives in the generated header itself.
+static_assert(kCombusHandshakePayloadLen ==
+                  combus::wire::kCombusHandshakeWirePayloadLen,
+              "kCombusHandshakePayloadLen disagrees with "
+              "combus::wire::kCombusHandshakeWirePayloadLen.");
+
+#ifndef COMBUS_MD5_CHECK_DISABLE
+  /// @brief Compile-time switch — when defined (non-zero), MD5 compare is
+  ///        short-circuited.  Logged loudly at boot.  Default OFF.
+  #define COMBUS_MD5_CHECK_DISABLE  0
+#endif
+
+
+// =============================================================================
+// 1. PERSISTENT STATE
 // =============================================================================
 
 /**
@@ -41,105 +71,104 @@
  */
 static bool s_handshakeEverReceived = false;
 
+/// One-shot guard for the boot banner — see combus_handshake.h.
+static bool s_bootWarningLogged = false;
+
 
 // =============================================================================
-// 2. RX DISPATCHER — HANDLER STUB
+// 2. SHARED HELPERS
 // =============================================================================
 
 /**
- * @brief Read the byte at logical ring index `i` (0 = oldest).
+ * @brief Format a 16-byte MD5 as a 32-char lowercase hex string into `out`.
  *
- * @details Local helper duplicated from combus_rx.cpp (intentional — the
- *   handshake module owns its decoder, no dependency on RX internals).
+ * @details `out` MUST have room for at least 33 bytes (32 hex chars + NUL).
+ *   Always NUL-terminates.  Used by both the boot banner and the RX/TX
+ *   log lines so a single canonical representation is produced across the
+ *   whole module.
+ *
+ *   Kept header-only-ish (this is the .cpp definition) so the binary
+ *   cost is paid once, but the helper stays callable from any side TU
+ *   via combus_handshake.h.
+ *
+ * @param[in]  md5  Pointer to 16 bytes (the MD5).
+ * @param[out] out  Caller-owned buffer, must be >= 33 bytes.
  */
-static uint8_t ringByteAt(const uint8_t* ringBuf,
-                          uint8_t        ringBufSize,
-                          uint8_t        ringHead,
-                          uint8_t        i)
+void combus_handshake_formatMd5Hex(const uint8_t md5[16], char out[33])
 {
-    return ringBuf[(uint8_t)(ringHead + i) % ringBufSize];
+    static constexpr char hex[] = "0123456789abcdef";
+    for (uint8_t i = 0u; i < 16u; ++i) {
+        out[2u * i    ] = hex[(md5[i] >> 4) & 0x0Fu];
+        out[2u * i + 1u] = hex[ md5[i]       & 0x0Fu];
+    }
+    out[32u] = '\0';
 }
 
 
-// ----------------------------------------------------------------------------
-
-uint8_t combus_handshake_tryDecode(
-    uint8_t*       ringBuf,
-    uint8_t        ringBufSize,
-    uint8_t&       ringHead,
-    uint8_t&       ringCount )
+/**
+ * @brief Emit an impossible-to-miss boot banner when MD5 check is disabled.
+ *
+ * @details Invoked from the first RX or TX call (cheap flag-guarded).  We
+ *   do NOT rely on a global ctor (fragile init order on Arduino) — the
+ *   idempotence is owned by `s_bootWarningLogged`.
+ *
+ *   The banner uses repeated markers + uppercase so a quick `grep` on a
+ *   saved serial log immediately reveals the bypass is active.
+ */
+void combus_handshake_logBootWarningIfNeeded()
 {
-    if (!ringBuf || ringBufSize == 0u) { return 0u; }
-    if (ringCount == 0u)               { return 0u; }
+    if (s_bootWarningLogged) { return; }
 
-    // --- 1. Expected wire length for a handshake frame ---
-    // Single source of truth lives in the header (CombusFrameHandshakeMinLen)
-    // — reused here so any future change to the handshake layout (e.g. a
-    // payload length bumped above zero) is picked up without a duplicate
-    // definition here.
-    const uint8_t expectedLen = CombusFrameHandshakeMinLen;
+    char md5Hex[33];
+    combus_handshake_formatMd5Hex(combus::wire::kCombusWireMd5, md5Hex);
 
-
-    if (ringCount < expectedLen) {
-        // Not enough bytes yet — caller will retry on the next poll.
-        return 0u;
+    if (COMBUS_MD5_CHECK_DISABLE) {
+        sys_log_info(
+            "\n[COMBUS_HANDSHAKE] ############################################\n"
+            "[COMBUS_HANDSHAKE] ##  COMBUS_MD5_CHECK_DISABLE IS ACTIVE        ##\n"
+            "[COMBUS_HANDSHAKE] ##  Handshake MD5 comparison is BYPASSED.    ##\n"
+            "[COMBUS_HANDSHAKE] ##  Bring-up debug only — no mismatch detect.##\n"
+            "[COMBUS_HANDSHAKE] ##  local md5=%s  version=%u.%u               ##\n"
+            "[COMBUS_HANDSHAKE] ############################################\n",
+            md5Hex,
+            (unsigned)combus::wire::kCombusWireVersionMajor,
+            (unsigned)combus::wire::kCombusWireVersionMinor);
+    } else {
+        sys_log_info(
+            "[COMBUS_HANDSHAKE] md5-check ENABLED  local md5=%s  version=%u.%u\n",
+            md5Hex,
+            (unsigned)combus::wire::kCombusWireVersionMajor,
+            (unsigned)combus::wire::kCombusWireVersionMinor);
     }
 
-    // --- 2. Copy candidate bytes to a linear scratch buffer ---
-    // We cannot CRC-validate a ring buffer in place without unrolling the
-    // modulo, so we linearise once.  Allocates sizeof(expectedLen) on the
-    // stack; safe for any legal ComBus frame size (≤ 255).
-    uint8_t linear[ sizeof(CombusFrameSof)
-                  + sizeof(CombusFrameHeader)
-                  + 255u              // upper bound on handshake payload
-                  + sizeof(uint8_t) ];
-
-    for (uint8_t i = 0u; i < expectedLen; ++i) {
-        linear[i] = ringByteAt(ringBuf, ringBufSize, ringHead, i);
-    }
-
-    // --- 3. Validate CRC-8/MAXIM over the header + payload portion ---
-    uint8_t crcExpected = linear[expectedLen - 1u];
-    uint8_t crcActual   = combus_frame_crc8(linear, (uint8_t)(expectedLen - 1u));
-    if (crcActual != crcExpected) {
-        // CRC mismatch. Same semantics as the control-frame path in
-        // combus_rx.cpp::tryDecode() (rxBufConsume(1u)): advance the ring
-        // buffer by exactly one byte so we re-sync past the leading byte
-        // (which the caller has already verified to be the SOF sentinel)
-        // and never loop forever on the same corrupted candidate. Mirrors
-        // the modular consume the rest of the file uses for the
-        // success path.
-        ringHead  = (uint8_t)(ringHead + 1u) % ringBufSize;
-        ringCount = (uint8_t)(ringCount - 1u);
-        sys_log_info("[COMBUS_HANDSHAKE] CRC mismatch — dropped 1 byte, "
-                     "re-sync past SOF\n");
-        return 0u;
-    }
-
-
-    // --- 4. CRC OK — consume the validated frame from the ring buffer ---
-    ringHead  = (uint8_t)(ringHead + expectedLen) % ringBufSize;
-    ringCount = (uint8_t)(ringCount - expectedLen);
-
-    s_handshakeEverReceived = true;
-
-    // --- 5. Stub: payload interpretation is OUT OF SCOPE for this revision.
-    //     The future versioning layer will hook here to parse MD5 + sender
-    //     address, update the friend-cache, etc.  For now, log and move on.
-    sys_log_info("[COMBUS_HANDSHAKE] valid frame received (%u bytes) — payload "
-                 "interpretation deferred to a future revision\n",
-                 (unsigned)expectedLen);
-
-    return expectedLen;
+    s_bootWarningLogged = true;
 }
 
 
 // =============================================================================
-// 3. PUBLIC STATUS HELPERS
+// 3. PUBLIC STATUS HELPER
 // =============================================================================
 
 bool combus_handshake_ever_received() {
     return s_handshakeEverReceived;
 }
+
+
+// =============================================================================
+// 4. BRIDGE TO THE RX / TX TUs
+// =============================================================================
+//
+// `s_handshakeEverReceived` is defined here but written by the RX TU.
+// Forward-declare a tiny setter that lives next to the compare path.
+
+namespace combus_handshake_internal {
+    void markEverReceived();   // defined in combus_handshake_rx.cpp
+}
+
+namespace combus_handshake_internal {
+    bool g_everReceived() { return s_handshakeEverReceived; }
+    void markEverReceived() { s_handshakeEverReceived = true; }
+}
+
 
 // EOF combus_handshake.cpp

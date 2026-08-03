@@ -22,7 +22,11 @@
 
 
 #if defined(MACHINE_TYPE_DUMPER_TRUCK)
-  #include <core/config/machines/dumper_truck/combus_ids_remote.h>
+  // Path fixed: previously `dumper_truck/combus_ids_remote.h` (without
+  // /combus/ segment) — that file was a stale residual duplicated by
+  // the canonical `dumper_truck/combus/combus_ids_remote.h`.  The
+  // canonical path is the one dumper_truck_config.h itself uses.
+  #include <core/config/machines/dumper_truck/combus/combus_ids_remote.h>
 
 // #elif defined(MACHINE_TYPE_EXCAVATOR)
 //   #include <core/config/machines/excavator/combus_ids_remote.h>

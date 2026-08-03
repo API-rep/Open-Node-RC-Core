@@ -11,6 +11,7 @@
 
 #include "combus_ids.h"
 
+#include <core/config/machines/dumper_truck/dumper_truck_config.h>  // COMBUS_*_INC macros
 #include <core/system/combus/combus_defs.h>
 
 /// @brief Com-bus analog channels configuration array
