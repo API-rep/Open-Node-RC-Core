@@ -131,15 +131,16 @@ void combus_handshake_logBootWarningIfNeeded()
             "[COMBUS_HANDSHAKE] ##  local md5=%s  version=%u.%u               ##\n"
             "[COMBUS_HANDSHAKE] ############################################\n",
             md5Hex,
-            (unsigned)combus::wire::kCombusWireVersionMajor,
-            (unsigned)combus::wire::kCombusWireVersionMinor);
+            (unsigned)combus::wire::kProjectVersionMajor,
+            (unsigned)combus::wire::kProjectVersionMinor);
     } else {
         sys_log_info(
             "[COMBUS_HANDSHAKE] md5-check ENABLED  local md5=%s  version=%u.%u\n",
             md5Hex,
-            (unsigned)combus::wire::kCombusWireVersionMajor,
-            (unsigned)combus::wire::kCombusWireVersionMinor);
+            (unsigned)combus::wire::kProjectVersionMajor,
+            (unsigned)combus::wire::kProjectVersionMinor);
     }
+
 
     s_bootWarningLogged = true;
 }

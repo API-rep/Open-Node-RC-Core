@@ -74,8 +74,9 @@ uint8_t combus_handshake_sendOnce( NodeCom* nodeCom )
     for (uint8_t i = 0u; i < 16u; ++i) {
         frame[payloadStart + i] = combus::wire::kCombusWireMd5[i];
     }
-    frame[payloadStart + 16u] = combus::wire::kCombusWireVersionMajor;
-    frame[payloadStart + 17u] = combus::wire::kCombusWireVersionMinor;
+    frame[payloadStart + 16u] = combus::wire::kProjectVersionMajor;
+    frame[payloadStart + 17u] = combus::wire::kProjectVersionMinor;
+
 
     // CRC-8/MAXIM over header + payload.
     const uint8_t crcByteIndex = payloadStart + kCombusHandshakePayloadLen;
@@ -88,8 +89,9 @@ uint8_t combus_handshake_sendOnce( NodeCom* nodeCom )
     sys_log_info(
         "[COMBUS_HANDSHAKE] TX oneshot  bytes=%u  md5=%s  ver=%u.%u\n",
         (unsigned)totalLen, md5Hex,
-        (unsigned)combus::wire::kCombusWireVersionMajor,
-        (unsigned)combus::wire::kCombusWireVersionMinor);
+        (unsigned)combus::wire::kProjectVersionMajor,
+        (unsigned)combus::wire::kProjectVersionMinor);
+
 
     nodeCom->write(nodeCom->ctx, frame, totalLen);
     return totalLen;

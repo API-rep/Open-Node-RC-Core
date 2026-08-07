@@ -65,8 +65,9 @@ void combus_handshake_compareAndLog(
 
     const bool md5Match = (memcmp(wireMd5,
                                  combus::wire::kCombusWireMd5, 16) == 0);
-    const bool verMatch = (wireMajor == combus::wire::kCombusWireVersionMajor)
-                       && (wireMinor == combus::wire::kCombusWireVersionMinor);
+    const bool verMatch = (wireMajor == combus::wire::kProjectVersionMajor)
+                       && (wireMinor == combus::wire::kProjectVersionMinor);
+
 
     if (md5Match && verMatch) {
         sys_log_info(
@@ -83,11 +84,12 @@ void combus_handshake_compareAndLog(
         "[COMBUS_HANDSHAKE] MISMATCH  local md5=%s ver=%u.%u  "
         "wire md5=%s ver=%u.%u\n",
         localMd5Hex,
-        (unsigned)combus::wire::kCombusWireVersionMajor,
-        (unsigned)combus::wire::kCombusWireVersionMinor,
+        (unsigned)combus::wire::kProjectVersionMajor,
+        (unsigned)combus::wire::kProjectVersionMinor,
         wireMd5Hex,
         (unsigned)wireMajor,
         (unsigned)wireMinor);
+
 }
 
 

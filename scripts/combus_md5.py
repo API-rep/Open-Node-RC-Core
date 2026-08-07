@@ -5,7 +5,12 @@ Generates a single auto-generated, gitignored header that embeds:
   - kCombusWireMd5[16]            : MD5 of the canonical byte string built
                                     from version + REMOTE .inc files for
                                     the active MACHINE_TYPE_*.
-  - kCombusWireVersionMajor/Minor : from project_version.h.
+  - kProjectVersionMajor/Minor    : from project_version.h.
+                                    Naming reflects PROJECT-level contract,
+                                    not combus-specific (the same constants
+                                    can be reused by other subsystems in the
+                                    future).
+
 
 Triggered by the `extra_scripts` directive in platformio.ini.  Re-runs
 on every build (cheap: hashes a few KB max, typically zero bytes today).
@@ -284,10 +289,11 @@ header = f"""\
  * (see .gitignore:  /combus_handshake_md5.h and /scripts/__pycache__/).
  *
  * Single source of truth for the ComBus handshake payload wire bytes:
- *   - kCombusWireMd5[16]      : MD5 of the canonical byte string built
- *                               from version + REMOTE .inc files (sorted).
- *   - kCombusWireVersionMajor : from project_version.h.
- *   - kCombusWireVersionMinor : from project_version.h.
+ *   - kCombusWireMd5[16]    : MD5 of the canonical byte string built
+ *                             from version + REMOTE .inc files (sorted).
+ *   - kProjectVersionMajor  : from project_version.h (project-level).
+ *   - kProjectVersionMinor  : from project_version.h (project-level).
+
  *
  * Payload layout on the wire (18 bytes, seq==0 only):
  *   [0..15]  MD5 of (version header + REMOTE .inc contents)
@@ -323,9 +329,15 @@ static constexpr uint8_t kCombusWireMd5[16] = {{
 /**
  * @brief Project version — embedded in every handshake frame.
  *        Copied verbatim from project_version.h at build time.
+ *
+ *        Named "kProject*" (not "kCombusWire*") because these are the
+ *        PROJECT-level contract version constants, reusable by any
+ *        future subsystem (motion, sound, ...) that wants to advertise
+ *        the same project contract identity.  They are NOT combus-specific.
  */
-static constexpr uint8_t kCombusWireVersionMajor = {ver_major}u;
-static constexpr uint8_t kCombusWireVersionMinor = {ver_minor}u;
+static constexpr uint8_t kProjectVersionMajor = {ver_major}u;
+static constexpr uint8_t kProjectVersionMinor = {ver_minor}u;
+
 
 /**
  * @brief Wire payload length (bytes) of one handshake frame.
