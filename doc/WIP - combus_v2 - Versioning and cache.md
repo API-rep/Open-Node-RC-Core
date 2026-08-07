@@ -175,22 +175,26 @@ est hors scope de ce document et devra être conçu séparément.
 
 | # | Sujet | Question ouverte | Impact |
 |---|---|---|---|
-| B1 | Sémantique payload MD5 | Inclut combus layout + version logicielle, ou juste les `.inc` REMOTE ? | Doit être arbitré avant P1 |
+| B1 | ~~Sémantique payload MD5~~ | **DÉCISION PRISE** : payload = `version (major, minor) + MD5(REMOTE .inc)`. Version mergée dans le hash via header `v<major>.<minor>\n`. Sémantique = identité complète du contrat combus (layout + version). | ✅ Résolu |
 | B2 | Validation hardware | Aucun test live sur bench RF ni liaison série depuis `e37f5aa` | Bloque N3 |
 | B3 | Graine QoS 2 canaux (section 4 du WIP) | Hors scope handshake actuel ; à planifier séparément | Aucun impact court terme |
 | B4 | Failsafe ↔ handshake | Failsafe en cours de design dans son propre WIP | Doit converger avant P4 |
+| B5 | Résolution Remote .inc via macros | Aujourd'hui : parsing des `COMBUS_IDS_REMOTE_*_INC` dans `<machine>_config.h`. **À remplacer** par résolution directe après le rework du layering combus (multi-root -I overlay). | Aucun impact court terme |
+
 
 ### 5.5 Prochaines étapes (par ordre de priorité)
 
 | Étape | Action | Pré-requis | Effort |
 |---|---|---|---|
-| 1 | **Décision B1** : payload MD5 = `.inc` REMOTE uniquement ? ou + version ? | Aucune | 30 min (discussion) |
-| 2 | **Implémenter P1** : câbler MD5 dans `combus_handshake_tx.cpp` | B1 tranché | ~2 h |
-| 3 | **Implémenter P2** : cache multi-entrées + lookup | T3, T5 | ~4 h |
-| 4 | **Implémenter P3** : rafale au boot | T3 | ~1 h |
-| 5 | **Synchroniser failsafe ↔ handshake** (B4) | WIP failsafe avancé | ~2 h |
-| 6 | **Implémenter P4** : vidage cache sur IDLE/SLEEPING | Étape 5 | ~1 h |
-| 7 | **Validation hardware N3** | T1–T11 stables sur bench | 1 journée |
+| 1 | ~~Décision B1~~ : ✅ tranchée — version + combus.remote | — | — |
+| 1b | **Implémenter P1** (en cours) : le script `combus_md5.py` est déjà câblé — il produit `kCombusWireMd5[16]` + `kCombusWireVersionMajor/Minor`. Reste à câbler dans `combus_handshake_tx.cpp::buildFrame()` pour produire la trame wire | Aucune | ~2 h |
+| 2 | **Implémenter P2** : cache multi-entrées + lookup | T3, T5 | ~4 h |
+| 3 | **Implémenter P3** : rafale au boot | T3 | ~1 h |
+| 4 | **Synchroniser failsafe ↔ handshake** (B4) | WIP failsafe avancé | ~2 h |
+| 5 | **Implémenter P4** : vidage cache sur IDLE/SLEEPING | Étape 4 | ~1 h |
+| 6 | **Validation hardware N3** | T1–T11 stables sur bench | 1 journée |
+| 7 | **TODO post-rework layering combus** : remplacer `_extract_inc_paths()` (parsing macros) par `rglob` direct sur `<machine>/combus/combus_ids_remote_*.inc` | Refactor layering combus livré | ~30 min |
+
 
 ### 5.6 Hors scope (rappel)
 
