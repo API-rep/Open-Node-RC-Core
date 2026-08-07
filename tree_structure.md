@@ -57,9 +57,8 @@ src/core/config/
 │   ├── dumper_truck/            # TYPE: dumper truck / articulated hauler
 │   │   ├── dumper_truck_config.h    # Sub-umbrella (combus + motion + light + sound)
 │   │   ├── combus/                  # 🆕 ComBus REMOTE runtime + vocab
-│   │   │   ├── combus_remote.h          # TYPE-level runtime umbrella
-│   │   │   ├── combus_remote.cpp        # TYPE-level runtime definitions
 │   │   │   ├── combus_ids_remote.h      # REMOTE vocab (Analog/Digital RemoteID)
+
 │   │   │   ├── combus_ids_remote_analog.inc
 │   │   │   ├── combus_ids_remote_digital.inc
 │   │   │   ├── combus_remote_analog.inc
@@ -98,7 +97,8 @@ src/core/config/
 > - `src/core/config/machines/dumper_truck/combus/combus_channels_remote_*.inc` **renommés** en `combus_remote_*.inc` (préfixe correct).
 > - `src/core/config/machines/dumper_truck/combus_ids_remote.h` (chemin fantôme sans `/combus/`) **supprimé**.
 > - `src/core/config/machines/machine_type.h` **créé** — dispatcher top-level `MACHINE_TYPE_*` → `<type>_config.h`.
-> - `src/core/config/machines/<type>/combus/combus_remote.{h,cpp}` **créés** — runtime umbrella TYPE (mirror de `combus_ids_remote.h` côté runtime).
+> - `src/core/config/machines/<type>/combus/combus_remote.{h,cpp}` **créés** puis **supprimés** — umbrella runtime TYPE inutile (re-export sans valeur ajoutée de `combus_ids_remote.h` ; le runtime combus est instancié directement par chaque environnement via son combus.cpp instance-specific).
+
 
 ### Niveau 1 : `src/core/system/`
 
@@ -409,8 +409,8 @@ main.cpp (machine)
                                 └─> core/config/vbat/bat_lipo.h
                           └─> core/config/machines/machine_type.h
                                 └─> core/config/machines/dumper_truck/dumper_truck_config.h
-                                      ├─> core/config/machines/dumper_truck/combus/combus_remote.h
-                                      │     └─> core/config/machines/dumper_truck/combus/combus_ids_remote.h
+                                      ├─> core/config/machines/dumper_truck/combus/combus_ids_remote.h
+
                                       ├─> core/config/machines/dumper_truck/motion/dumper_truck_motion.h
                                       └─> core/config/machines/dumper_truck/sound/dumper_truck_sound.h
 ```
@@ -452,8 +452,8 @@ L'enum `CombusLayout` et son champ associé dans `ComBusFrameCfg` / `CombusFrame
 ```
 machine_type.h
   └─> <machine_type>_config.h
-        └─> <machine_type>/combus/combus_remote.h
-              └─> <machine_type>/combus/combus_ids_remote.h
+        └─> <machine_type>/combus/combus_ids_remote.h
+
 ```
 
 Le dispatcher racine `src/core/config/machines/combus_ids_remote.h` (qui doublonnait cette chaîne) a été **supprimé**.

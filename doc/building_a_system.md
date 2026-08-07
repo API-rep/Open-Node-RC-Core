@@ -118,7 +118,8 @@ instance's own top-level header (e.g. `volvo_A60H_bruder.h`), since it is a
 property of the instance, derived once the instance is known, not a
 separate build-time choice. See `coding_dispatcher.md` for how
 `MACHINE_TYPE_*` drives the type-level ComBus dispatcher
-(`machine_type.h` → `<machine_type>_config.h` → `combus_remote.h` → `combus_ids_remote.h`).
+(`machine_type.h` → `<machine_type>_config.h` → `combus_ids_remote.h`).
+
 
 ---
 

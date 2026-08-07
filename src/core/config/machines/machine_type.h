@@ -22,16 +22,17 @@
  *
  *     machine_type.h             ← (this file, top-level)
  *       └── dumper_truck/dumper_truck_config.h
- *             ├── dumper_truck/combus/combus_remote.h        ← TYPE runtime umbrella
- *             │     └── dumper_truck/combus/combus_ids_remote.h  ← REMOTE vocab (IDs)
+ *             ├── dumper_truck/combus/combus_ids_remote.h    ← REMOTE vocab (IDs)
  *             ├── dumper_truck/motion/dumper_truck_motion.h
  *             └── dumper_truck/sound/dumper_truck_sound.h    ← if SOUND_NODE / SOUND_ENABLED
  *
- *   The TYPE-level runtime umbrella `combus_remote.h` is the analogue of
- *   the legacy root `combus_ids_remote.h` dispatcher — it lives inside
- *   each machine-type folder so every MACHINE_TYPE_* owns its own
- *   ComBus REMOTE runtime + vocabulary pair.  The root dispatcher is
+ *   REMOTE-only ComBus runtime is intentionally NOT instantiated at TYPE
+ *   level — each environment (machine, future remote) owns its own combus
+ *   arrays and comBus instance via its instance-specific combus.cpp.
+ *   TYPE-level only exposes the shared channel vocabulary
+ *   (combus_ids_remote.h).  The root combus_ids_remote.h dispatcher is
  *   gone (see commit `13b4c5f` for the cleanup history).
+
  *
  *   @warning Do NOT add per-machine-type includes here.  Each
  *     <machine_type>_config.h pulls its own sub-modules.
