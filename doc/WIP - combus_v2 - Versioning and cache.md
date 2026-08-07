@@ -124,14 +124,81 @@ est hors scope de ce document et devra être conçu séparément.
   normale que la suivante remplace de toute façon. Le code de validation
   actuel doit éviter de coder en dur l'hypothèse "canal unique" pour ne
   pas devoir être redéplacé lors de l'introduction de la QoS.
-- Si un vrai besoin de sécurité (anti-usurpation) apparaît un jour, le
 
-  mécanisme actuel (MD5 sans clé secrète) ne le couvre pas — à revisiter
-  hors scope actuel le cas échéant.
-- **Failsafe actuel identifié comme fragile** : `IDLE`/`SLEEPING` est
-  aujourd'hui assignable librement par n'importe quel process système, et
-  la détection de perte de connexion repose sur un flag de mise à jour
-  ComBus activé/reset à chaque loop. Fonctionnel pour l'instant, mais à
-  migrer côté input pour plus de robustesse — migration qui devra aussi
-  couvrir le cas d'absence d'input (véhicule autonome, `INPUT_MODULE_NONE`)
-  où ce flag n'a par définition personne pour le mettre à jour.
+---
+
+## 5. État d'avancement (roadmap)
+
+> Snapshot à `a90a48d` (HEAD de `combus-frame-handshake`). Cette section
+> croise chaque point de la solution retenue avec son statut d'implémentation
+> réel (commits, fichiers, scripts). Pas une wishlist — un constat.
+
+### 5.1 Points traités ✅
+
+| # | Point du WIP | Commit(s) | Fichier(s) / Livrable(s) |
+|---|---|---|---|
+| T1 | Régression `CombusLayout` (suppression enum + champ frame) | `0c5adfe` | `combus_frame_defs.h`, `combus_frame.{h,cpp}` |
+| T2 | Réservation `seq == 0` pour handshake | `71a38e4` | `combus_rx.cpp::tryDecode()` — peek byte seq + route structurelle |
+| T3 | Décodeur dédié handshake (pas de `if` imbriqué) | `71a38e4`, `e37f5aa`, `13b4c5f` | `combus_handshake.{h,cpp}` (umbrella) + `combus_handshake_rx.{h,cpp}` + `combus_handshake_tx.{h,cpp}` |
+| T4 | Compteur `seq` côté TX (1..255, wrap 255→1, jamais 0) | `2d1e1b0`, `8dd57e6`, `71a38e4`, `41fc08f` | `CombusTxState::seq` dans `combus_tx.cpp` |
+| T5 | Split RX/TX handshake | `13b4c5f` | `combus_handshake_rx.{h,cpp}`, `combus_handshake_tx.{h,cpp}` |
+| T6 | Génération MD5 des `.inc` REMOTE | `13b4c5f` | `scripts/combus_md5.py` + output `combus_handshake_md5.h` |
+| T7 | Dispatcher `machine_type.h` (TYPE → `<type>_config.h`) | `1e7612d` | `src/core/config/machines/machine_type.h` |
+| T8 | Runtime umbrella TYPE (`combus_remote.{h,cpp}`) | `1e7612d` | `core/config/machines/<type>/combus/combus_remote.{h,cpp}` |
+| T9 | Fix CRC re-sync + TX seq log | `41fc08f` | `combus_handshake_rx.cpp`, `combus_tx.cpp` |
+| T10 | Renommage `combus_ids_remote_*.inc` → `combus_remote_*.inc` | `e37f5aa` | `core/config/machines/dumper_truck/combus/combus_remote_*.inc` |
+| T11 | Déplacement codec trame vers `src/core/system/combus/frame/` | `e37f5aa` | `frame/combus_frame.{h,cpp}`, `frame/combus_frame_defs.h`, `frame/combus_handshake*.{h,cpp}` |
+| T12 | Suppression dispatcher racine `combus_ids_remote.h` | `1e7612d` | `src/core/config/machines/combus_ids_remote.h` (supprimé) |
+| T13 | Doc `tree_structure.md` synchronisée | `a90a48d` | `tree_structure.md` (racine) |
+
+### 5.2 Points partiels 🟡 (infra posée, logique métier à finaliser)
+
+| # | Point du WIP | Statut | Reste à faire |
+|---|---|---|---|
+| P1 | Payload MD5 handshake (comb layout + version) | Script `combus_md5.py` génère le hash ; intégration dans la trame magique C++ pas encore tracée dans le code | Câbler la constante MD5 dans `combus_handshake_tx.cpp::buildFrame()` + vérifier la longueur payload |
+| P2 | Déclencheur "adresse absente du cache amies" | Concept documenté ; pas de structure `cache` dans le code | Implémenter `CombusHandshakeCache` (lookup O(1) par adresse, multi-entrées) + hook dans `combus_handshake_rx.cpp` |
+| P3 | Rafale courte au boot (3–5 répétitions) | Pas de code | Ajouter compteur de rafale dans `combus_handshake_tx.cpp`, démarrer au boot |
+| P4 | Slot unique vidé au runlevel IDLE/SLEEPING | Concept documenté (délègue au failsafe) ; pas de hook | Ajouter callback `onRunlevelChanged()` dans le cache, abonné au failsafe existant |
+| P5 | Failsafe ↔ handshake bridge | Failsafe séparé (`doc/WIP - Failsafe module design.md` ouvert) | Synchroniser les deux WIP — voir section 5.4 |
+
+### 5.3 Points non démarrés ❌
+
+| # | Point du WIP | Effort estimé | Dépendances |
+|---|---|---|---|
+| N1 | Cache multi-entrées (série point-à-point + RF multi-émetteurs) | ~1 jour-homme | P2 |
+| N2 | Distinction uplink-only (retry manuel) vs downlink (timeout ACK) | ~2 jours-homme | P2, infra TX/RX handshake |
+| N3 | Validation hardware bout en bout (tous les envs) | ~1 journée | T1–T10 stables, recompile flash |
+| N4 | Mesure du surcoût par frame de contrôle normale | ~2 h | Bench UART |
+| N5 | Documentation Doxygen du handshake (wire layout, offsets) | ~3 h | T11 figé |
+
+### 5.4 Points bloqués / décisions ouvertes 🔴
+
+| # | Sujet | Question ouverte | Impact |
+|---|---|---|---|
+| B1 | Sémantique payload MD5 | Inclut combus layout + version logicielle, ou juste les `.inc` REMOTE ? | Doit être arbitré avant P1 |
+| B2 | Validation hardware | Aucun test live sur bench RF ni liaison série depuis `e37f5aa` | Bloque N3 |
+| B3 | Graine QoS 2 canaux (section 4 du WIP) | Hors scope handshake actuel ; à planifier séparément | Aucun impact court terme |
+| B4 | Failsafe ↔ handshake | Failsafe en cours de design dans son propre WIP | Doit converger avant P4 |
+
+### 5.5 Prochaines étapes (par ordre de priorité)
+
+| Étape | Action | Pré-requis | Effort |
+|---|---|---|---|
+| 1 | **Décision B1** : payload MD5 = `.inc` REMOTE uniquement ? ou + version ? | Aucune | 30 min (discussion) |
+| 2 | **Implémenter P1** : câbler MD5 dans `combus_handshake_tx.cpp` | B1 tranché | ~2 h |
+| 3 | **Implémenter P2** : cache multi-entrées + lookup | T3, T5 | ~4 h |
+| 4 | **Implémenter P3** : rafale au boot | T3 | ~1 h |
+| 5 | **Synchroniser failsafe ↔ handshake** (B4) | WIP failsafe avancé | ~2 h |
+| 6 | **Implémenter P4** : vidage cache sur IDLE/SLEEPING | Étape 5 | ~1 h |
+| 7 | **Validation hardware N3** | T1–T11 stables sur bench | 1 journée |
+
+### 5.6 Hors scope (rappel)
+
+- **Mécanisme de remplacement de `CombusLayout`** : le WIP initial stipule
+  que ce mécanisme est **hors scope** de ce document. La régression a été
+  faite (commit `0c5adfe`), mais aucun successeur n'est implémenté ni
+  planifié ici. Si la section 5.5 ci-dessus constitue de facto un
+  successeur, **le déclarer explicitement** dans une nouvelle révision du
+  WIP avant de l'engager.
+- **QoS 2 canaux** : section 4 du WIP, graines uniquement, pas d'implémentation.
+
