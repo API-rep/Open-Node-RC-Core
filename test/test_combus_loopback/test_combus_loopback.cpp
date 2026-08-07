@@ -110,7 +110,13 @@ static void assertFrameMatchesBus(const ComBusFrame* frame, const ComBus* bus) {
 static void test_codec_single_roundtrip(void) {
     fillRandom(0xDEADBEEFul);
 
+    // seq == 0 is RESERVED for handshake frames (see combus_frame.h),
+    // combus_frame_encode() must reject it.
     uint8_t len = combus_frame_encode(kCfg, encodeBuf, &txComBus, 0u, false);
+    TEST_ASSERT_EQUAL_UINT8(0u, len);
+
+    // Regular round-trip with a valid seq (1).
+    len = combus_frame_encode(kCfg, encodeBuf, &txComBus, 1u, false);
     TEST_ASSERT_GREATER_THAN_UINT8(0u, len);
 
     bool ok = combus_frame_decode(kCfg, &rxFrame, encodeBuf, len);
@@ -118,6 +124,7 @@ static void test_codec_single_roundtrip(void) {
 
     assertFrameMatchesBus(&rxFrame, &txComBus);
 }
+
 
 /** Encode→decode with failsafe flag set — header flags byte must reflect it. */
 static void test_codec_failsafe_flag(void) {
@@ -144,12 +151,16 @@ static void test_codec_crc_reject(void) {
     TEST_ASSERT_FALSE(ok);  // CRC must catch the corruption
 }
 
-/** Monkey test — N random seeds, each must round-trip cleanly. */
+/** Monkey test — N random seeds, each must round-trip cleanly.
+ *
+ *  Note: seq starts at `pass + 1u` (not `pass`) because seq == 0 is RESERVED
+ *  for handshake frames; combus_frame_encode() rejects it.
+ */
 static void test_codec_monkey_roundtrip(void) {
     for (uint8_t pass = 0u; pass < kMonkeyPasses; ++pass) {
         fillRandom((uint32_t)pass * 0x9E3779B9ul);
 
-        uint8_t len = combus_frame_encode(kCfg, encodeBuf, &txComBus, pass, false);
+        uint8_t len = combus_frame_encode(kCfg, encodeBuf, &txComBus, (uint8_t)(pass + 1u), false);
         TEST_ASSERT_GREATER_THAN_UINT8(0u, len);
 
         bool ok = combus_frame_decode(kCfg, &rxFrame, encodeBuf, len);

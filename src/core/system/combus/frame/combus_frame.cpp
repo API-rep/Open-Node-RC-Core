@@ -88,16 +88,26 @@ uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
     const uint8_t nAnalog  = cfg.nAnalog;
     const uint8_t nDigital = cfg.nDigital;
                                
-      // --- 1. Guard conditions — null pointer + frame size overflow ---
+  // --- 1. Guard conditions — null pointer + frame size overflow ---
     if (!outputBuffer || !combus) {
         return 0;
     }
-      // Reject frame size over max uint8_t size (255u) to avoid overflow
+  // Reject seq == 0: value 0 is RESERVED for the handshake / versioning
+    // frame (see combus_handshake.h).  A control frame with seq==0 on the
+    // wire would be intercepted by the handshake RX path and decoded as a
+    // bogus MD5/version, causing a continuous MISMATCH storm in the logs.
+    // The sole legitimate producer of seq==0 is combus_handshake_tx.cpp,
+    // which builds the frame manually and never goes through this function.
+    if (seq == 0u) {
+        return 0;
+    }
+  // Reject frame size over max uint8_t size (255u) to avoid overflow
     uint8_t nDigBytes = (nDigital + 7u) / 8u;   // ceil(nDigital / 8)
 
     if ((CombusFrameHeaderLen + (uint16_t)nDigBytes + (uint16_t)nAnalog * 2u + 1u) > 255u) {
         return 0;
     }
+
 
       // --- 2. Build flags byte ---
     uint8_t flags = 0;   // transport-level status bits (COMBUS_FLAG_*)
