@@ -242,6 +242,12 @@ void combus_rx_init(
 	comBusRx.snapValid    = false;
 	comBusRx.everReceived = false;
 
+		// Reset the handshake contract-validated flag too — a fresh RX
+		// session must re-validate the MD5+version before any optimisation
+		// of subsequent handshake frames kicks in.
+	combus_handshake_internal::clearContractValidated();
+
+
 	sys_log_info("[COMBUS_RX] init — transport='%s'  A%u+D%u\n",
 	             nodeCom->name,
 	             (unsigned)frameCfg.nAnalog, (unsigned)frameCfg.nDigital);
