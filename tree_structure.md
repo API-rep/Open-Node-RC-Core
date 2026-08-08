@@ -373,8 +373,11 @@ include/
 
 ```
 scripts/
-└── combus_md5.py                # 🆕 extra_script PIO — génère combus_handshake_md5.h
-                                 #   (MD5 des .inc REMOTE + version projet)
+└── combus_md5.py                # 🆕 extra_script PIO — scan récursif src/core/
+                                 #   pour toute paire combus_ids_remote_{analog,digital}.inc
+                                 #   → génère combus_ids_remote_md5.h à côté de chaque paire
+                                 #   (MD5 des 2 .inc + version projet, 1 .h par type découvert)
+
 ```
 
 ---

@@ -142,9 +142,11 @@ est hors scope de ce document et devra être conçu séparément.
 | T3 | Décodeur dédié handshake (pas de `if` imbriqué) | `71a38e4`, `e37f5aa`, `13b4c5f` | `combus_handshake.{h,cpp}` (umbrella) + `combus_handshake_rx.{h,cpp}` + `combus_handshake_tx.{h,cpp}` |
 | T4 | Compteur `seq` côté TX (1..255, wrap 255→1, jamais 0) | `2d1e1b0`, `8dd57e6`, `71a38e4`, `41fc08f` | `CombusTxState::seq` dans `combus_tx.cpp` |
 | T5 | Split RX/TX handshake | `13b4c5f` | `combus_handshake_rx.{h,cpp}`, `combus_handshake_tx.{h,cpp}` |
-| T6 | Génération MD5 des `.inc` REMOTE | `13b4c5f` | `scripts/combus_md5.py` + output `combus_handshake_md5.h` |
+| T6 | Génération MD5 des `.inc` REMOTE (legacy — 1 .h par build, gate par MACHINE_*) | `13b4c5f` | `scripts/combus_md5.py` → `<build_dir>/<pioenv>/combus_handshake_md5.h` |
+| T6b | Génération MD5 par scan récursif (1 .h par paire `.inc`, agnostic au build) | _à venir_ | `scripts/combus_md5.py` → `combus_ids_remote_md5.h` à côté de chaque paire `combus_ids_remote_{analog,digital}.inc` découverte sous `src/core/` |
 | T7 | Dispatcher `machine_type.h` (TYPE → `<type>_config.h`) | `1e7612d` | `src/core/config/machines/machine_type.h` |
-| T8 | Runtime umbrella TYPE (`combus_remote.{h,cpp}`) | `1e7612d` | `core/config/machines/<type>/combus/combus_remote.{h,cpp}` |
+| T8 | Runtime umbrella TYPE (`combus_remote.{h,cpp}`) | `1e7612d` (créé) → `8409439` (supprimé) | `core/config/machines/<type>/combus/combus_remote.{h,cpp}` — **régression** : umbrella sans valeur ajoutée (re-export pur de `combus_ids_remote.h`), supprimé en `8409439`. Chaque environnement instancie désormais son runtime combus directement via son `combus.cpp` instance-specific. |
+
 | T9 | Fix CRC re-sync + TX seq log | `41fc08f` | `combus_handshake_rx.cpp`, `combus_tx.cpp` |
 | T10 | Renommage `combus_ids_remote_*.inc` → `combus_remote_*.inc` | `e37f5aa` | `core/config/machines/dumper_truck/combus/combus_remote_*.inc` |
 | T11 | Déplacement codec trame vers `src/core/system/combus/frame/` | `e37f5aa` | `frame/combus_frame.{h,cpp}`, `frame/combus_frame_defs.h`, `frame/combus_handshake*.{h,cpp}` |

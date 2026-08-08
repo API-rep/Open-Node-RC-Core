@@ -1,6 +1,7 @@
 .pio
 .pio/
-combus_handshake_md5.h
+combus_ids_remote_md5.h
+
 scripts/__pycache__/
 .vscode/.browse.c_cpp.db*
 
