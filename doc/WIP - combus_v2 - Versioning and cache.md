@@ -129,9 +129,11 @@ est hors scope de ce document et devra être conçu séparément.
 
 ## 5. État d'avancement (roadmap)
 
-> Snapshot à `a90a48d` (HEAD de `combus-frame-handshake`). Cette section
+> Snapshot à `b7614ff` (HEAD de `combus-frame-handshake` post-refonte
+> `scripts/combus_md5.py` — scan récursif, agnostic au build). Cette section
 > croise chaque point de la solution retenue avec son statut d'implémentation
 > réel (commits, fichiers, scripts). Pas une wishlist — un constat.
+
 
 ### 5.1 Points traités ✅
 
@@ -142,8 +144,9 @@ est hors scope de ce document et devra être conçu séparément.
 | T3 | Décodeur dédié handshake (pas de `if` imbriqué) | `71a38e4`, `e37f5aa`, `13b4c5f` | `combus_handshake.{h,cpp}` (umbrella) + `combus_handshake_rx.{h,cpp}` + `combus_handshake_tx.{h,cpp}` |
 | T4 | Compteur `seq` côté TX (1..255, wrap 255→1, jamais 0) | `2d1e1b0`, `8dd57e6`, `71a38e4`, `41fc08f` | `CombusTxState::seq` dans `combus_tx.cpp` |
 | T5 | Split RX/TX handshake | `13b4c5f` | `combus_handshake_rx.{h,cpp}`, `combus_handshake_tx.{h,cpp}` |
-| T6 | Génération MD5 des `.inc` REMOTE (legacy — 1 .h par build, gate par MACHINE_*) | `13b4c5f` | `scripts/combus_md5.py` → `<build_dir>/<pioenv>/combus_handshake_md5.h` |
-| T6b | Génération MD5 par scan récursif (1 .h par paire `.inc`, agnostic au build) | _à venir_ | `scripts/combus_md5.py` → `combus_ids_remote_md5.h` à côté de chaque paire `combus_ids_remote_{analog,digital}.inc` découverte sous `src/core/` |
+| T6 | Génération MD5 des `.inc` REMOTE (legacy — 1 .h par build, gate par MACHINE_*) | `13b4c5f` → supplanté en `b7614ff` | `scripts/combus_md5.py` → `<build_dir>/<pioenv>/combus_handshake_md5.h` — gardé à titre historique, **plus utilisé** depuis T6b |
+| T6b | Génération MD5 par scan récursif (1 .h par paire `.inc`, agnostic au build) | `b7614ff` | `scripts/combus_md5.py` (réécrit) → `combus_ids_remote_md5.h` à côté de chaque paire `combus_ids_remote_{analog,digital}.inc` découverte sous `src/core/`. Découverte par présence de fichier, indépendante du build flag. |
+
 | T7 | Dispatcher `machine_type.h` (TYPE → `<type>_config.h`) | `1e7612d` | `src/core/config/machines/machine_type.h` |
 | T8 | Runtime umbrella TYPE (`combus_remote.{h,cpp}`) | `1e7612d` (créé) → `8409439` (supprimé) | `core/config/machines/<type>/combus/combus_remote.{h,cpp}` — **régression** : umbrella sans valeur ajoutée (re-export pur de `combus_ids_remote.h`), supprimé en `8409439`. Chaque environnement instancie désormais son runtime combus directement via son `combus.cpp` instance-specific. |
 
@@ -152,14 +155,16 @@ est hors scope de ce document et devra être conçu séparément.
 | T11 | Déplacement codec trame vers `src/core/system/combus/frame/` | `e37f5aa` | `frame/combus_frame.{h,cpp}`, `frame/combus_frame_defs.h`, `frame/combus_handshake*.{h,cpp}` |
 | T12 | Suppression dispatcher racine `combus_ids_remote.h` | `1e7612d` | `src/core/config/machines/combus_ids_remote.h` (supprimé) |
 | T13 | Doc `tree_structure.md` synchronisée | `a90a48d` | `tree_structure.md` (racine) |
+| T14 | Câblage payload MD5 dans handshake TX | `13b4c5f` | `combus_handshake_tx.cpp::combus_handshake_sendOnce()` — `frame[payloadStart + i] = combus::wire::kCombusWireMd5[i]` (16 octets MD5) puis `kProjectVersionMajor/Minor` (2 octets version) ; longueur totale 18u garantie par `static_assert` dans `combus_handshake.cpp`. **Clos le point 1b** du §5.5. |
 
 ### 5.2 Points partiels 🟡 (infra posée, logique métier à finaliser)
 
 | # | Point du WIP | Statut | Reste à faire |
 |---|---|---|---|
-| P1 | Payload MD5 handshake (comb layout + version) | Script `combus_md5.py` génère le hash ; intégration dans la trame magique C++ pas encore tracée dans le code | Câbler la constante MD5 dans `combus_handshake_tx.cpp::buildFrame()` + vérifier la longueur payload |
+| _P1_ | ~~Payload MD5 handshake~~ | ✅ Clos — voir T14 en §5.1 | — |
 | P2 | Déclencheur "adresse absente du cache amies" | Concept documenté ; pas de structure `cache` dans le code | Implémenter `CombusHandshakeCache` (lookup O(1) par adresse, multi-entrées) + hook dans `combus_handshake_rx.cpp` |
 | P3 | Rafale courte au boot (3–5 répétitions) | Pas de code | Ajouter compteur de rafale dans `combus_handshake_tx.cpp`, démarrer au boot |
+
 | P4 | Slot unique vidé au runlevel IDLE/SLEEPING | Concept documenté (délègue au failsafe) ; pas de hook | Ajouter callback `onRunlevelChanged()` dans le cache, abonné au failsafe existant |
 | P5 | Failsafe ↔ handshake bridge | Failsafe séparé (`doc/WIP - Failsafe module design.md` ouvert) | Synchroniser les deux WIP — voir section 5.4 |
 
@@ -181,7 +186,8 @@ est hors scope de ce document et devra être conçu séparément.
 | B2 | Validation hardware | Aucun test live sur bench RF ni liaison série depuis `e37f5aa` | Bloque N3 |
 | B3 | Graine QoS 2 canaux (section 4 du WIP) | Hors scope handshake actuel ; à planifier séparément | Aucun impact court terme |
 | B4 | Failsafe ↔ handshake | Failsafe en cours de design dans son propre WIP | Doit converger avant P4 |
-| B5 | Résolution Remote .inc via macros | Aujourd'hui : parsing des `COMBUS_IDS_REMOTE_*_INC` dans `<machine>_config.h`. **À remplacer** par résolution directe après le rework du layering combus (multi-root -I overlay). | Aucun impact court terme |
+| B5 | ~~Résolution Remote .inc via macros~~ | ✅ Clos en `b7614ff` (T6b). Le parsing des macros `COMBUS_IDS_REMOTE_*_INC` a été remplacé par scan récursif `os.walk` de `src/core/` à la recherche de la paire `.inc`. Le rework de layering combus n'est plus nécessaire. | — |
+
 
 
 ### 5.5 Prochaines étapes (par ordre de priorité)
@@ -189,22 +195,25 @@ est hors scope de ce document et devra être conçu séparément.
 | Étape | Action | Pré-requis | Effort |
 |---|---|---|---|
 | 1 | ~~Décision B1~~ : ✅ tranchée — version + combus.remote | — | — |
-| 1b | **Implémenter P1** (en cours) : le script `combus_md5.py` est déjà câblé — il produit `kCombusWireMd5[16]` + `kCombusWireVersionMajor/Minor`. Reste à câbler dans `combus_handshake_tx.cpp::buildFrame()` pour produire la trame wire | Aucune | ~2 h |
+| 1b | ~~Implémenter P1~~ : ✅ clos — voir T14 en §5.1. Le câblage MD5 dans `combus_handshake_tx.cpp::combus_handshake_sendOnce()` est en place (`kCombusWireMd5[16]` + `kProjectVersionMajor/Minor`), `static_assert` cohérence OK, longueur payload = 18u comme spécifié | — | — |
 | 2 | **Implémenter P2** : cache multi-entrées + lookup | T3, T5 | ~4 h |
 | 3 | **Implémenter P3** : rafale au boot | T3 | ~1 h |
+
 | 4 | **Synchroniser failsafe ↔ handshake** (B4) | WIP failsafe avancé | ~2 h |
 | 5 | **Implémenter P4** : vidage cache sur IDLE/SLEEPING | Étape 4 | ~1 h |
 | 6 | **Validation hardware N3** | T1–T11 stables sur bench | 1 journée |
-| 7 | **TODO post-rework layering combus** : remplacer `_extract_inc_paths()` (parsing macros) par `rglob` direct sur `<machine>/combus/combus_ids_remote_*.inc` | Refactor layering combus livré | ~30 min |
+| 7 | ~~TODO post-rework layering combus~~ : ✅ clos en `b7614ff` (T6b). Le parsing des macros `COMBUS_IDS_REMOTE_*_INC` a été remplacé par scan récursif `os.walk` de `src/core/` à la recherche de la paire `.inc`. Le rework de layering combus (multi-root -I overlay) n'est plus un pré-requis. | — | — |
 
 
-### 5.6 Hors scope (rappel)
 
-- **Mécanisme de remplacement de `CombusLayout`** : le WIP initial stipule
-  que ce mécanisme est **hors scope** de ce document. La régression a été
-  faite (commit `0c5adfe`), mais aucun successeur n'est implémenté ni
-  planifié ici. Si la section 5.5 ci-dessus constitue de facto un
-  successeur, **le déclarer explicitement** dans une nouvelle révision du
-  WIP avant de l'engager.
+### 5.6 Statut du successeur de `CombusLayout`
+
+**DÉCLARATION** : le présent WIP (section 3 "Solution retenue") constitue
+**de facto le successeur** du mécanisme `CombusLayout` supprimé en
+`0c5adfe`. Il est désormais explicitement piloté par le tableau ci-dessus
+(§5.1 traité / §5.2 partiel / §5.3 non démarré / §5.4 bloqué) — plus
+aucun successeur implicite à révéler.
+
 - **QoS 2 canaux** : section 4 du WIP, graines uniquement, pas d'implémentation.
+
 
