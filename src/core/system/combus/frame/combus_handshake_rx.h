@@ -53,10 +53,16 @@ uint8_t combus_handshake_tryDecode(
  * @param[in] wireMd5    Pointer to 16 bytes received on the wire.
  * @param[in] wireMajor  On-wire project version MAJOR.
  * @param[in] wireMinor  On-wire project version MINOR.
+ *
+ * @return `true` iff the contract was effectively validated (real
+ *         MD5+version match).  `false` for mismatch AND for the
+ *         COMBUS_MD5_CHECK_DISABLE bypass path — bypass is a debug
+ *         switch and is NOT considered a validated contract.
  */
-void combus_handshake_compareAndLog(
+bool combus_handshake_compareAndLog(
     const uint8_t* wireMd5,
     uint8_t        wireMajor,
     uint8_t        wireMinor );
+
 
 // EOF combus_handshake_rx.h

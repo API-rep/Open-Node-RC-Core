@@ -46,7 +46,13 @@ static uint8_t ringByteAt(const uint8_t* ringBuf,
 // 2. RX INTERNAL — MD5 + VERSION COMPARE + LOG
 // =============================================================================
 
-void combus_handshake_compareAndLog(
+/**
+ * @brief Compare an on-wire MD5 + version pair against the locally-generated
+ *        copy, log the result, and short-circuit when COMBUS_MD5_CHECK_DISABLE
+ *        is active.  Returns `true` iff the contract was effectively validated
+ *        (real MD5+version match OR bypass mode).  See combus_handshake_rx.h.
+ */
+bool combus_handshake_compareAndLog(
     const uint8_t* wireMd5,
     uint8_t        wireMajor,
     uint8_t        wireMinor )
@@ -56,11 +62,16 @@ void combus_handshake_compareAndLog(
 
     // Bypass path — log "match" regardless of actual bytes, but still log
     // the on-wire payload so the bypass is auditable.
+    //
+    // Note: we deliberately return `false` here.  Bypass is a bring-up
+    // debug switch and is NOT considered a validated contract — it must
+    // not lift the compare-on-subsequent-frames optimisation.  Real
+    // validation requires a real MD5+version match.
     if (COMBUS_MD5_CHECK_DISABLE) {
         sys_log_info(
             "[COMBUS_HANDSHAKE] MATCH(bypass)  wire md5=%s  ver=%u.%u\n",
             wireMd5Hex, (unsigned)wireMajor, (unsigned)wireMinor);
-        return;
+        return false;
     }
 
     const bool md5Match = (memcmp(wireMd5,
@@ -73,8 +84,9 @@ void combus_handshake_compareAndLog(
         sys_log_info(
             "[COMBUS_HANDSHAKE] MATCH           wire md5=%s  ver=%u.%u\n",
             wireMd5Hex, (unsigned)wireMajor, (unsigned)wireMinor);
-        return;
+        return true;
     }
+
 
     // Mismatch — single compact line with local + wire side by side.
     char localMd5Hex[33];
@@ -157,9 +169,16 @@ uint8_t combus_handshake_tryDecode(
     const uint8_t  wireMajor = linear[payloadOffset + 16u];
     const uint8_t  wireMinor = linear[payloadOffset + 17u];
 
-    combus_handshake_compareAndLog(wireMd5, wireMajor, wireMinor);
+    if (combus_handshake_compareAndLog(wireMd5, wireMajor, wireMinor)) {
+        // First successful contract match on this transport — flip the
+        // validated flag so subsequent handshake frames can skip the MD5
+        // compare (other frame-level checks stay active).  Idempotent:
+        // repeated matches leave the flag set.
+        combus_handshake_internal::markContractValidated();
+    }
 
     return expectedLen;
 }
+
 
 // EOF combus_handshake_rx.cpp
