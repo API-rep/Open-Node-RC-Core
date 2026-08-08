@@ -18,8 +18,11 @@
 
 #include "combus_handshake_tx.h"
 
+#include <Arduino.h>  // millis()
+
 #include <core/system/combus/frame/combus_frame.h>
 #include <core/system/debug/logging/debug.h>
+
 
 
 // =============================================================================
@@ -103,4 +106,99 @@ uint8_t combus_handshake_sendOnce( NodeCom* nodeCom )
     return totalLen;
 }
 
+
+
+// =============================================================================
+// TX BURST — P3
+// =============================================================================
+
+/**
+ * @brief Drive the boot-time handshake burst on the given ComBus link.
+ *
+ * @details See combus_handshake_tx.h for the full contract.  This
+ *   implementation is intentionally minimal — it does NOT touch the
+ *   control-frame timer, does NOT introduce any priority / contention
+ *   logic, and does NOT modify the existing `combus_tx_update()` flow
+ *   beyond a single extra `write()` call when the burst fires.
+ *
+ *   Per-link state — see CombusHandshakeContext.  The burst state is
+ *   owned by the caller (typically embedded in CombusTxState).
+ */
+uint8_t combus_handshake_tx_update( CombusHandshakeContext* ctx,
+                                    NodeCom*                nodeCom )
+{
+    // --- 1. Guard checks ---
+    if (!ctx || !nodeCom || !nodeCom->write) { return 0u; }
+
+#if COMBUS_HANDSHAKE_BURST_DISABLE
+    // Compile-time bypass — burst disabled.  The contract must be
+    // validated by the peer sending a handshake frame first.
+    return 0u;
+#else
+    // --- 2. Burst must be active ---
+    if (!ctx->burstActive) { return 0u; }
+
+    // --- 3. Early termination — contract already validated on this link.
+    //    P3 constraint #3: a full-duplex link stops emitting as soon as
+    //    the peer has confirmed the contract.  We assume full-duplex
+    //    (mechanism B — see WIP combus_v2 §5.3) because every caller
+    //    today shares the same NodeCom* for TX and RX via
+    //    combus_protocol_init.  When N2 (asymmetric transports) lands,
+    //    this becomes a per-link flag passed to combus_tx_init().
+    if (ctx->contractValidated) {
+        ctx->burstActive    = false;
+        ctx->burstRemaining = 0u;
+        return 0u;
+    }
+
+    // --- 4. Interval gate — at least kCombusHandshakeBurstPeriodMs since
+    //    the last emission.  lastBurstMs == 0 means "never emitted yet"
+    //    (set by startBurst) → first call always fires.
+    const uint32_t nowMs = millis();
+    if (ctx->lastBurstMs != 0u
+        && (uint32_t)(nowMs - ctx->lastBurstMs) < kCombusHandshakeBurstPeriodMs) {
+        return 0u;
+    }
+
+    // --- 5. Emit one handshake frame via the existing sendOnce path.
+    //    We do NOT call sendOnce() directly because it would re-emit the
+    //    boot banner on every burst frame.  Instead we inline the
+    //    minimal frame build + write here.
+    uint8_t frame[ sizeof(CombusFrameSof)
+                 + sizeof(CombusFrameHeader)
+                 + kCombusHandshakePayloadLen
+                 + sizeof(uint8_t) ];
+    const uint8_t payloadStart = sizeof(CombusFrameSof)
+                              + sizeof(CombusFrameHeader);
+
+    frame[0] = CombusFrameSof;
+    frame[sizeof(CombusFrameSof) + 0u] = 0u;  // nAnalog
+    frame[sizeof(CombusFrameSof) + 1u] = 0u;  // nDigital
+    frame[sizeof(CombusFrameSof) + 2u] = 0u;  // seq = 0 (RESERVED handshake)
+    frame[sizeof(CombusFrameSof) + 3u] = 0u;  // runLevel
+
+    for (uint8_t i = 0u; i < 16u; ++i) {
+        frame[payloadStart + i] = combus::wire::kCombusWireMd5[i];
+    }
+    frame[payloadStart + 16u] = combus::wire::kProjectVersionMajor;
+    frame[payloadStart + 17u] = combus::wire::kProjectVersionMinor;
+
+    const uint8_t crcByteIndex = payloadStart + kCombusHandshakePayloadLen;
+    frame[crcByteIndex] = combus_frame_crc8(frame, crcByteIndex);
+    const uint8_t totalLen = (uint8_t)(crcByteIndex + 1u);
+
+    nodeCom->write(nodeCom->ctx, frame, totalLen);
+
+    // --- 6. Update burst state ---
+    ctx->lastBurstMs = nowMs;
+    if (ctx->burstRemaining > 0u) { ctx->burstRemaining--; }
+    if (ctx->burstRemaining == 0u) {
+        ctx->burstActive = false;  // burst complete
+    }
+
+    return totalLen;
+#endif
+}
+
 // EOF combus_handshake_tx.cpp
+
