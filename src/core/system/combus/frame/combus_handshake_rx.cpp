@@ -160,8 +160,25 @@ uint8_t combus_handshake_tryDecode(
 
     combus_handshake_internal::markEverReceived();
 
-    // --- 5. Decode payload (MD5 + version) and compare against local ---
-    //    Payload starts right after the header, length = kCombusHandshakePayloadLen.
+    // --- 5. If the contract is already validated, skip the MD5+version
+    //    compare and consume the frame as a no-op handshake.
+    //
+    //    The CRC + length + format checks above are still enforced on
+    //    every handshake frame — only the expensive MD5+version compare
+    //    is short-circuited once we have established that the peer speaks
+    //    the same contract.  This is the optimisation promised by the
+    //    s_contractValidated flag's Doxygen contract.
+    //
+    //    The COMBUS_MD5_CHECK_DISABLE bypass path never sets the flag
+    //    (compareAndLog() returns false on the bypass branch), so the
+    //    compare runs on every frame in bypass mode — by design.
+    if (combus_handshake_is_contract_validated()) {
+        sys_log_info("[COMBUS_HANDSHAKE] skip compare (contract validated)\n");
+        return expectedLen;
+    }
+
+    // --- 6. Contract not yet validated — decode payload (MD5 + version)
+    //    and compare against the locally-generated copy.
     //    Layout: [0..15] = MD5, [16] = major, [17] = minor.
     const uint8_t payloadOffset = sizeof(CombusFrameSof)
                                + sizeof(CombusFrameHeader);
@@ -179,6 +196,7 @@ uint8_t combus_handshake_tryDecode(
 
     return expectedLen;
 }
+
 
 
 // EOF combus_handshake_rx.cpp
