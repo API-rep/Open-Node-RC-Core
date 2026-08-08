@@ -57,32 +57,17 @@ static_assert(kCombusHandshakePayloadLen ==
 // =============================================================================
 // 1. PERSISTENT STATE
 // =============================================================================
+//
+// P3 — handshake state is per ComBus link instance, NOT a static global.
+// The umbrella helpers below take a `CombusHandshakeContext*` and read /
+// write the corresponding fields.  See combus_handshake.h §5 for the
+// rationale (multiple independent ComBus interfaces per machine).
+//
+// The boot-warning helper is the only one that still uses a static guard
+// (s_bootWarningLogged) — it is a one-shot log line, not per-link state.
+// The guard is moved into the context so it is also per-link; the umbrella
+// helper takes the context as a parameter.
 
-/**
- * @brief Persistent handshake-liveness flag.
- *
- * @details Tracked separately from the control-frame `everReceived` so the
- *   future versioning layer can tell control traffic from handshake traffic
- *   without inspecting the snapshot itself.
- *
- *   Lifetime: static — valid for the entire program run.
- */
-static bool s_handshakeEverReceived = false;
-
-/**
- * @brief Contract-validated flag — see combus_handshake.h.
- *
- * @details Set to `true` by the RX TU on the first successful MD5+version
- *   match.  Cleared by `combus_rx_init()` (via the internal bridge) so the
- *   flag is automatically reset whenever the transport is (re)initialised.
- *
- *   Lifetime: static — valid for the entire program run, but logically
- *   scoped to the current transport instance.
- */
-static bool s_contractValidated = false;
-
-/// One-shot guard for the boot banner — see combus_handshake.h.
-static bool s_bootWarningLogged = false;
 
 
 
@@ -121,14 +106,16 @@ void combus_handshake_formatMd5Hex(const uint8_t md5[16], char out[33])
  *
  * @details Invoked from the first RX or TX call (cheap flag-guarded).  We
  *   do NOT rely on a global ctor (fragile init order on Arduino) — the
- *   idempotence is owned by `s_bootWarningLogged`.
+ *   idempotence is owned by `ctx->bootWarningLogged` (per-link).
  *
  *   The banner uses repeated markers + uppercase so a quick `grep` on a
  *   saved serial log immediately reveals the bypass is active.
+ *
+ * @param ctx  Per-link handshake context (must not be null).
  */
-void combus_handshake_logBootWarningIfNeeded()
+void combus_handshake_logBootWarningIfNeeded(CombusHandshakeContext* ctx)
 {
-    if (s_bootWarningLogged) { return; }
+    if (!ctx || ctx->bootWarningLogged) { return; }
 
     char md5Hex[33];
     combus_handshake_formatMd5Hex(combus::wire::kCombusWireMd5, md5Hex);
@@ -153,7 +140,7 @@ void combus_handshake_logBootWarningIfNeeded()
     }
 
 
-    s_bootWarningLogged = true;
+    ctx->bootWarningLogged = true;
 }
 
 
@@ -161,12 +148,12 @@ void combus_handshake_logBootWarningIfNeeded()
 // 3. PUBLIC STATUS HELPER
 // =============================================================================
 
-bool combus_handshake_ever_received() {
-    return s_handshakeEverReceived;
+bool combus_handshake_ever_received(const CombusHandshakeContext* ctx) {
+    return ctx ? ctx->everReceived : false;
 }
 
-bool combus_handshake_is_contract_validated() {
-    return s_contractValidated;
+bool combus_handshake_is_contract_validated(const CombusHandshakeContext* ctx) {
+    return ctx ? ctx->contractValidated : false;
 }
 
 
@@ -175,19 +162,22 @@ bool combus_handshake_is_contract_validated() {
 // 4. BRIDGE TO THE RX / TX TUs
 // =============================================================================
 //
-// `s_handshakeEverReceived` is defined here but written by the RX TU.
-// Forward-declare a tiny setter that lives next to the compare path.
+// All setters take a `CombusHandshakeContext*` and mutate the per-link
+// state.  Null pointer is a no-op (defensive — the umbrella helpers are
+// called from many places).
 
 namespace combus_handshake_internal {
-    void markEverReceived();   // defined in combus_handshake_rx.cpp
+    void markEverReceived(CombusHandshakeContext* ctx) {
+        if (ctx) { ctx->everReceived = true; }
+    }
+    void markContractValidated(CombusHandshakeContext* ctx) {
+        if (ctx) { ctx->contractValidated = true; }
+    }
+    void clearContractValidated(CombusHandshakeContext* ctx) {
+        if (ctx) { ctx->contractValidated = false; }
+    }
 }
 
-namespace combus_handshake_internal {
-    bool g_everReceived() { return s_handshakeEverReceived; }
-    void markEverReceived() { s_handshakeEverReceived = true; }
-    void markContractValidated() { s_contractValidated = true; }
-    void clearContractValidated() { s_contractValidated = false; }
-}
 
 
 

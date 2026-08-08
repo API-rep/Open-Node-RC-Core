@@ -28,8 +28,14 @@
 
 uint8_t combus_handshake_sendOnce( NodeCom* nodeCom )
 {
-    // Boot banner on first TX (mirrors RX path).
-    combus_handshake_logBootWarningIfNeeded();
+    // Boot banner on first TX (mirrors RX path).  The TX path does not
+    // own a per-link context yet (P3 will introduce one for the burst
+    // state) — for now we use a static local context so the banner is
+    // emitted exactly once across all TX calls.  This will be replaced
+    // by a per-link context in P3 commit 4.
+    static CombusHandshakeContext s_txBootCtx = {};
+    combus_handshake_logBootWarningIfNeeded(&s_txBootCtx);
+
 
     if (!nodeCom || !nodeCom->write) {
         sys_log_info("[COMBUS_HANDSHAKE] TX skipped — null transport\n");

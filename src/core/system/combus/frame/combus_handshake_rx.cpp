@@ -112,16 +112,18 @@ bool combus_handshake_compareAndLog(
 // =============================================================================
 
 uint8_t combus_handshake_tryDecode(
-    uint8_t*       ringBuf,
-    uint8_t        ringBufSize,
-    uint8_t&       ringHead,
-    uint8_t&       ringCount )
+    CombusHandshakeContext* ctx,
+    uint8_t*                ringBuf,
+    uint8_t                 ringBufSize,
+    uint8_t&                ringHead,
+    uint8_t&                ringCount )
 {
-    if (!ringBuf || ringBufSize == 0u) { return 0u; }
-    if (ringCount == 0u)               { return 0u; }
+    if (!ctx || !ringBuf || ringBufSize == 0u) { return 0u; }
+    if (ringCount == 0u)                       { return 0u; }
 
-    // Boot banner on first call (cheap flag-guarded).
-    combus_handshake_logBootWarningIfNeeded();
+    // Boot banner on first call (cheap flag-guarded, per-link).
+    combus_handshake_logBootWarningIfNeeded(ctx);
+
 
     // --- 1. Expected wire length for a handshake frame ---
     const uint8_t expectedLen = CombusFrameHandshakeMinLen;
@@ -160,7 +162,7 @@ uint8_t combus_handshake_tryDecode(
     ringHead  = (uint8_t)(ringHead + expectedLen) % ringBufSize;
     ringCount = (uint8_t)(ringCount - expectedLen);
 
-    combus_handshake_internal::markEverReceived();
+    combus_handshake_internal::markEverReceived(ctx);
 
     // --- 5. If the contract is already validated, skip the MD5+version
     //    compare and consume the frame as a no-op handshake.
@@ -169,12 +171,12 @@ uint8_t combus_handshake_tryDecode(
     //    every handshake frame — only the expensive MD5+version compare
     //    is short-circuited once we have established that the peer speaks
     //    the same contract.  This is the optimisation promised by the
-    //    s_contractValidated flag's Doxygen contract.
+    //    ctx->contractValidated flag's Doxygen contract.
     //
     //    The COMBUS_MD5_CHECK_DISABLE bypass path never sets the flag
     //    (compareAndLog() returns false on the bypass branch), so the
     //    compare runs on every frame in bypass mode — by design.
-    if (combus_handshake_is_contract_validated()) {
+    if (combus_handshake_is_contract_validated(ctx)) {
         sys_log_info("[COMBUS_HANDSHAKE] skip compare (contract validated)\n");
         return expectedLen;
     }
@@ -193,11 +195,12 @@ uint8_t combus_handshake_tryDecode(
         // validated flag so subsequent handshake frames can skip the MD5
         // compare (other frame-level checks stay active).  Idempotent:
         // repeated matches leave the flag set.
-        combus_handshake_internal::markContractValidated();
+        combus_handshake_internal::markContractValidated(ctx);
     }
 
     return expectedLen;
 }
+
 
 
 

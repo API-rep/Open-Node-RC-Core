@@ -28,12 +28,22 @@
  *   same return semantics, same CRC behaviour.  This declaration lives
  *   separately from combus_handshake.h so consumers that only need RX
  *   can include just this header (matters when TX is stubbed out).
+ *
+ * @param ctx        Per-link handshake context (must not be null).
+ * @param ringBuf    Ring buffer base pointer.
+ * @param ringBufSize Ring buffer capacity (must be > 0).
+ * @param ringHead   In/out — current read index.
+ * @param ringCount  In/out — bytes currently in the ring buffer.
+ *
+ * @return Number of bytes consumed, or 0 if no complete valid frame was found.
  */
 uint8_t combus_handshake_tryDecode(
-    uint8_t*       ringBuf,
-    uint8_t        ringBufSize,
-    uint8_t&       ringHead,
-    uint8_t&       ringCount );
+    CombusHandshakeContext* ctx,
+    uint8_t*                ringBuf,
+    uint8_t                 ringBufSize,
+    uint8_t&                ringHead,
+    uint8_t&                ringCount );
+
 
 
 // =============================================================================

@@ -57,9 +57,11 @@ struct CombusRxState {
 	bool            snapValid    = false;     ///< true once at least one frame decoded
 	uint32_t        lastRxMs     = 0u;        ///< millis() at last successful decode
 	bool            everReceived = false;     ///< true after first valid frame received
+	CombusHandshakeContext handshakeCtx = {}; ///< per-link handshake state (P3)
 };
 
 static CombusRxState comBusRx;  ///< Single receiver instance (one ComBus RX per node)
+
 
 
 
@@ -154,8 +156,11 @@ static uint8_t tryDecode() {
 			// Returning 0 here means "try again next poll" or "no handshake
 			// available yet" — the SOF stays in place until either a full
 			// handshake frame arrives or the stub decides to drop it.
-		return combus_handshake_tryDecode(rxBuf, rxBufSize, comBusRx.rxHead, comBusRx.rxCount);
+		return combus_handshake_tryDecode(&comBusRx.handshakeCtx,
+		                                  rxBuf, rxBufSize,
+		                                  comBusRx.rxHead, comBusRx.rxCount);
 	}
+
 
 		// --- 3. CONTROL-FRAME PATH ---
 		// From here on, `seq` is guaranteed in 1..255 — no handshake leak possible.
@@ -245,7 +250,8 @@ void combus_rx_init(
 		// Reset the handshake contract-validated flag too — a fresh RX
 		// session must re-validate the MD5+version before any optimisation
 		// of subsequent handshake frames kicks in.
-	combus_handshake_internal::clearContractValidated();
+	combus_handshake_internal::clearContractValidated(&comBusRx.handshakeCtx);
+
 
 
 	sys_log_info("[COMBUS_RX] init — transport='%s'  A%u+D%u\n",

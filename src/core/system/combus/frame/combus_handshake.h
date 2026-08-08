@@ -49,8 +49,16 @@
 
 
 
+// Forward declaration — the full definition lives in §3 below.  Needed
+// so the boot-warning helper (§2) can take a `CombusHandshakeContext*`
+// parameter without a circular include.
+struct CombusHandshakeContext;
+
+
+
 // =============================================================================
 // 1. WIRE CONSTANTS — HANDSHAKE FRAME
+
 // =============================================================================
 
 /**
@@ -105,6 +113,68 @@ static constexpr uint8_t CombusFrameHandshakeMinLen =
 
 
 // =============================================================================
+// 1b. BURST-AT-BOOT CONSTANTS (P3)
+// =============================================================================
+
+/**
+ * @brief Number of handshake frames emitted in the boot-time burst.
+ *
+ * @details P3 (WIP combus_v2 §3) — the TX side emits a short burst of
+ *   handshake frames at boot so the peer can validate the contract even
+ *   if the very first frame is lost on a noisy link.  3 is the minimum
+ *   viable count per the WIP ("rafale courte 3–5 répétitions").
+ *
+ *   Per-link state — see CombusHandshakeContext.  This constant is the
+ *   shared default; each link instance starts its burst counter at this
+ *   value.
+ */
+static constexpr uint8_t kCombusHandshakeBurstCount = 3u;
+
+/**
+ * @brief Interval between two consecutive handshake burst emissions, in ms.
+ *
+ * @details P3 — 100 ms gives the peer ~10 chances per second to receive
+ *   and validate the contract during the burst window.  Adjustable after
+ *   peer review (see WIP combus_v2 §5.2 P3 row).
+ */
+static constexpr uint32_t kCombusHandshakeBurstPeriodMs = 100u;
+
+
+
+// =============================================================================
+// 1c. COMPILE-TIME SWITCHES — UNIQUE DEFINITIONS
+// =============================================================================
+
+/**
+ * @brief Compile-time switch — when defined (non-zero), the MD5+version
+ *        compare on the RX path is short-circuited.  Logged loudly at boot.
+ *        Default OFF.
+ *
+ * @details Defined HERE (umbrella) as the single source of truth.  Side
+ *   headers (combus_handshake_rx.h, combus_handshake_tx.h) MUST NOT
+ *   redefine this — they include the umbrella and pick up the value.
+ *   See R1.4 in the WIP combus_v2 §6 backlog.
+ */
+#ifndef COMBUS_MD5_CHECK_DISABLE
+  #define COMBUS_MD5_CHECK_DISABLE  0
+#endif
+
+/**
+ * @brief Compile-time switch — when defined (non-zero), the boot-time
+ *        handshake burst is disabled.  Logged loudly at boot.  Default OFF.
+ *
+ * @details P3 — debug-only switch, mirror of COMBUS_MD5_CHECK_DISABLE.
+ *   When active, the TX side never emits the burst; the contract must
+ *   be validated by the peer sending a handshake frame first.
+ */
+#ifndef COMBUS_HANDSHAKE_BURST_DISABLE
+  #define COMBUS_HANDSHAKE_BURST_DISABLE  0
+#endif
+
+
+
+
+// =============================================================================
 // 2. SHARED (RX + TX) BOOT-WARNING HELPER
 // =============================================================================
 
@@ -115,9 +185,12 @@ static constexpr uint8_t CombusFrameHandshakeMinLen =
  *   from their first invocation (the umbrella itself does not carry a
  *   transport handle, so it cannot log directly).
  *
- *   Idempotent — guarded by an internal static flag.
+ *   Idempotent — guarded by `ctx->bootWarningLogged` (per-link).
+ *
+ * @param ctx  Per-link handshake context (must not be null).
  */
-void combus_handshake_logBootWarningIfNeeded();
+void combus_handshake_logBootWarningIfNeeded(CombusHandshakeContext* ctx);
+
 
 /**
  * @brief Format a 16-byte MD5 as a 32-char lowercase hex string into `out`.
@@ -134,25 +207,70 @@ void combus_handshake_formatMd5Hex(const uint8_t md5[16], char out[33]);
 
 
 // =============================================================================
-// 3. PUBLIC STATUS HELPERS
+// 3. PER-LINK HANDSHAKE CONTEXT (P3)
+// =============================================================================
+//
+// Declared BEFORE the public status helpers so the helpers can take a
+// `const CombusHandshakeContext*` parameter without a forward declaration.
+
+/**
+ * @brief Per-ComBus-link handshake state container.
+ *
+ * @details Handshake state is per ComBus link instance.  Multiple
+ *   independent ComBus interfaces may coexist in the same machine
+ *   (e.g. ESP/network + UART/extension board).  Handshake validation
+ *   and TX burst state MUST NEVER be shared between links.
+ *
+ *   This is a fundamental property of the ComBus model, not an
+ *   anticipation of N2 (asymmetric transports).
+ *
+ *   Lifetime: caller-owned (typically embedded in CombusTxState /
+ *   CombusRxState, or held by the environment that owns the link).
+ *   Zero-initialised at construction — all flags start `false`,
+ *   counters start at 0.
+ *
+ *   Thread-safety: not thread-safe.  ComBus is single-threaded on
+ *   the targets it runs on (ESP32 Arduino core, etc.).
+ */
+struct CombusHandshakeContext {
+    // --- RX-side state (P2, migrated from static globals) ---
+    bool     contractValidated = false;  ///< true after first MD5+version match
+    bool     everReceived      = false;  ///< true after first valid handshake frame observed
+    bool     bootWarningLogged = false;  ///< one-shot guard for the boot banner
+
+    // --- TX-side state (P3) ---
+    bool     burstActive       = false;  ///< true while the boot-time burst is in progress
+    uint8_t  burstRemaining    = 0u;     ///< frames left to emit in the current burst
+    uint32_t lastBurstMs       = 0u;     ///< millis() at the last burst emission
+};
+
+
+
+// =============================================================================
+// 4. PUBLIC STATUS HELPERS
 // =============================================================================
 
 /**
  * @brief True if at least one valid handshake frame has ever been observed
- *   since boot, on any ComBus transport the node participates in.
+ *   on the given ComBus link since the last transport reset.
  *
- * @details Mirrors `combus_rx_ever_received()` for control frames.  Exposed
- *   as a thin accessor so the future cache / versioning layer can poll
- *   liveness without including the full RX module.
+ * @details Per-link state — see CombusHandshakeContext.  Mirrors
+ *   `combus_rx_ever_received()` for control frames.  Exposed as a thin
+ *   accessor so the future cache / versioning layer can poll liveness
+ *   without including the full RX module.
+ *
+ * @param ctx  Per-link handshake context (must not be null).
  */
-bool combus_handshake_ever_received();
+bool combus_handshake_ever_received(const CombusHandshakeContext* ctx);
 
 /**
  * @brief True if the local contract (MD5 + project version) has been
- *   validated against a peer on the wire since the last transport reset.
+ *   validated against a peer on the given ComBus link since the last
+ *   transport reset.
  *
- * @details Set to `true` by the RX path on the first handshake frame whose
- *   MD5 + version match the locally-generated copy.  Reset to `false` by
+ * @details Per-link state — see CombusHandshakeContext.  Set to `true`
+ *   by the RX path on the first handshake frame whose MD5 + version
+ *   match the locally-generated copy.  Reset to `false` by
  *   `combus_handshake_internal::clearContractValidated()` — called from
  *   `combus_rx_init()` so the flag is automatically cleared whenever the
  *   transport is (re)initialised.
@@ -165,46 +283,55 @@ bool combus_handshake_ever_received();
  *   Independent from `combus_handshake_ever_received()`: the latter is
  *   true as soon as ANY handshake frame is observed (match or not), the
  *   former only on a successful match.
+ *
+ * @param ctx  Per-link handshake context (must not be null).
  */
-bool combus_handshake_is_contract_validated();
+bool combus_handshake_is_contract_validated(const CombusHandshakeContext* ctx);
+
 
 
 
 // =============================================================================
-// 4. RX / TX ENTRY POINTS — declared in the side-specific headers:
+// 5. RX / TX ENTRY POINTS — declared in the side-specific headers:
 //      - combus_handshake_rx.h   (combus_handshake_tryDecode)
 //      - combus_handshake_tx.h   (combus_handshake_sendOnce)
 //    Include them directly where needed.
 
 
+
 // =============================================================================
-// 5. INTERNAL BRIDGE — written by RX, read by the umbrella
+// 6. INTERNAL BRIDGE — written by RX, read by the umbrella
 // =============================================================================
 
 /**
- * @brief Cross-TU helper namespace used by combus_handshake_rx.cpp to set
- *        the shared `s_handshakeEverReceived` flag owned by the umbrella.
- *        Not part of the public API — never call from outside the
- *        handshake module.
+ * @brief Cross-TU helper namespace used by combus_handshake_rx.cpp to
+ *        mutate the per-link context owned by the caller.  Not part of
+ *        the public API — never call from outside the handshake module.
+ *
+ * @details All functions take a `CombusHandshakeContext*` so the state
+ *   is per-link.  A null pointer is treated as a no-op (defensive —
+ *   the umbrella helpers are called from many places).
  */
 namespace combus_handshake_internal {
-    void markEverReceived();
+    void markEverReceived(CombusHandshakeContext* ctx);
 
     /**
      * @brief Mark the local contract as validated against a peer on the
      *        wire.  Called from `combus_handshake_rx.cpp` after a
      *        successful MD5+version match.
      */
-    void markContractValidated();
+    void markContractValidated(CombusHandshakeContext* ctx);
 
     /**
      * @brief Clear the contract-validated flag.  Called from
      *        `combus_rx_init()` so the flag is automatically reset
      *        whenever the transport is (re)initialised.
      */
-    void clearContractValidated();
+    void clearContractValidated(CombusHandshakeContext* ctx);
 }
 
 // EOF combus_handshake.h
+
+
 
 
