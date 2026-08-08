@@ -129,10 +129,10 @@ est hors scope de ce document et devra être conçu séparément.
 
 ## 5. État d'avancement (roadmap)
 
-> Snapshot à `b7614ff` (HEAD de `combus-frame-handshake` post-refonte
-> `scripts/combus_md5.py` — scan récursif, agnostic au build). Cette section
-> croise chaque point de la solution retenue avec son statut d'implémentation
-> réel (commits, fichiers, scripts). Pas une wishlist — un constat.
+> Snapshot à `97fbe8f` (HEAD de `combus-frame-handshake`, P2 + P3 clos).
+> Cette section croise chaque point de la solution retenue avec son statut
+> d'implémentation réel (commits, fichiers, scripts). Pas une wishlist — un
+> constat.
 
 
 ### 5.1 Points traités ✅
@@ -157,6 +157,7 @@ est hors scope de ce document et devra être conçu séparément.
 | T13 | Doc `tree_structure.md` synchronisée | `a90a48d` | `tree_structure.md` (racine) |
 | T14 | Câblage payload MD5 dans handshake TX | `13b4c5f` | `combus_handshake_tx.cpp::combus_handshake_sendOnce()` — `frame[payloadStart + i] = combus::wire::kCombusWireMd5[i]` (16 octets MD5) puis `kProjectVersionMajor/Minor` (2 octets version) ; longueur totale 18u garantie par `static_assert` dans `combus_handshake.cpp`. **Clos le point 1b** du §5.5. |
 | T15 | Flag `s_contractValidated` + lifecycle P2 | `bfc108f`, `89db20a`, `c3457bf`, `64ab934`, `7819194` | `combus_handshake.{h,cpp}` : flag statique + accesseur public `combus_handshake_is_contract_validated()` + bridge interne `markContractValidated()` / `clearContractValidated()`. `combus_handshake_rx.cpp` : `compareAndLog` retourne `bool` (match) ; `tryDecode` appelle `markContractValidated()` après match ; **`tryDecode` skip le MD5+version compare quand le flag est `true`** (optimisation runtime promise par le Doxygen du flag). `combus_rx.cpp::combus_rx_init()` : appelle `clearContractValidated()` (couplage cycle de vie transport). 4 tests Group C dans `test_combus_loopback.cpp` (clear-on-init, set-on-match, no-mark-on-mismatch, full-cycle init→match→re-init). Bypass `COMBUS_MD5_CHECK_DISABLE` retourne `false` et ne flippe jamais le flag → compare tourne à chaque frame en mode bypass (par design). **Clos le point P2** du §5.2. |
+| T16 | Rafale handshake au boot (P3) | `19d76f4`, `e44bf8f`, `a301f6c`, `d75c645`, `dc860e4`, `97fbe8f` | **9 commits (P3 commits 1–9)** — 1) `combus_handshake_defs.h` : `kCombusHandshakeBurstCount` (5) + `kCombusHandshakeBurstPeriodMs` (50) + drapeaux compile-time `COMBUS_HANDSHAKE_BURST_DISABLE` / `COMBUS_HANDSHAKE_TX_DISABLE` (le 2e pour les unit tests). 2) `CombusHandshakeContext` migre les statiques handshake (`contractValidated` + nouveau `burstActive`/`burstRemaining`/`lastBurstMs`), namespace `combus_handshake_internal` pour startBurst/stopBurst/markContractValidated/clearContractValidated/combus_handshake_tx_update. 3) Accesseurs `startBurst` / `stopBurst` rajoutés à `combus_handshake.h` via namespace interne. 4) `combus_handshake_tx_update(ctx, nodeCom)` : emit cadence `kCombusHandshakeBurstPeriodMs`, arrêt à `remaining == 0` OU `burstActive == false` OU `ctx->contractValidated`. 5) `combus_tx.cpp` / `combus_rx.cpp` : champs `CombusHandshakeContext* handshakeCtx` partagés via setter `combus_{tx,rx}_set_handshake_ctx()` ; `combus_tx_update()` appelle `combus_handshake_tx_update(ctx, nodeCom)` **avant** la gate timer de la trame de contrôle ; `combus_tx_init()` arme la rafale via `startBurst()` ; `combus_rx_init()` clear `contractValidated` via le contexte partagé. 6) `combus_handshake_rx.cpp` : sur match MD5+version, `stopBurst(ctx)` arrête la rafale sur le **même** lien. 7) `combus_protocol.cpp` : `static CombusHandshakeContext s_linkHandshakeCtx = {}` par lien, filé aux deux côtés TX et RX avant init. 8) `test_combus_loopback.cpp` : Group C migre vers `s_testCtx` + `markContractValidated` (P3) ; Group D ajoute 5 tests codec-level sur le lifecycle de la rafale (start arms, stop disarms, première émission, no-op intra-period, stop-on-validated). Fix pré-existant : `fillRandom()` retirait `isDrived` qui n'a jamais existé. **Clos le point P3** du §5.2. |
 
 
 
@@ -166,8 +167,7 @@ est hors scope de ce document et devra être conçu séparément.
 |---|---|---|---|
 | _P1_ | ~~Payload MD5 handshake~~ | ✅ Clos — voir T14 en §5.1 | — |
 | _P2_ | ~~Déclencheur "adresse absente du cache amies"~~ | ✅ Clos — voir T15 en §5.1. Recadrage : pas de cache multi-entrées, juste un `bool valid` par lien, false au boot et après `combus_rx_init()`, true au premier match MD5+version réel. | — |
-
-| P3 | Rafale courte au boot (3–5 répétitions) | Pas de code | Ajouter compteur de rafale dans `combus_handshake_tx.cpp`, démarrer au boot |
+| _P3_ | ~~Rafale courte au boot (3–5 répétitions)~~ | ✅ Clos — voir T16 en §5.1. Rafale de `kCombusHandshakeBurstCount` (5) trames handshake au boot, cadence `kCombusHandshakeBurstPeriodMs` (50 ms), arrêt anticipé sur contrat validé côté RX (`stopBurst()` depuis `combus_handshake_rx.cpp`). Compteur d'état portée par `CombusHandshakeContext::burstRemaining` / `lastBurstMs`. Driver : `combus_handshake_tx_update(ctx, nodeCom)` appelé depuis `combus_tx.cpp::combus_tx_update()` avant la gate timer de la trame de contrôle (donc indépendant du Hz de contrôle). 5 tests Group D ajoutés dans `test_combus_loopback.cpp` (start/stop arms, première émission, no-op intra-period, stop-on-validated). Per-link : contexte partagé TX↔RX filé par `combus_protocol.cpp::combus_protocol_init()`. | — |
 
 | P4 | Slot unique vidé au runlevel IDLE/SLEEPING | Concept documenté (délègue au failsafe) ; pas de hook | Ajouter callback `onRunlevelChanged()` dans le cache, abonné au failsafe existant |
 | P5 | Failsafe ↔ handshake bridge | Failsafe séparé (`doc/WIP - Failsafe module design.md` ouvert) | Synchroniser les deux WIP — voir section 5.4 |
@@ -200,8 +200,8 @@ est hors scope de ce document et devra être conçu séparément.
 |---|---|---|---|
 | 1 | ~~Décision B1~~ : ✅ tranchée — version + combus.remote | — | — |
 | 1b | ~~Implémenter P1~~ : ✅ clos — voir T14 en §5.1. Le câblage MD5 dans `combus_handshake_tx.cpp::combus_handshake_sendOnce()` est en place (`kCombusWireMd5[16]` + `kProjectVersionMajor/Minor`), `static_assert` cohérence OK, longueur payload = 18u comme spécifié | — | — |
-| 2 | **Implémenter P2** : cache multi-entrées + lookup | T3, T5 | ~4 h |
-| 3 | **Implémenter P3** : rafale au boot | T3 | ~1 h |
+| 2 | ~~Implémenter P2 : cache multi-entrées + lookup~~ | ✅ Clos — voir T15 en §5.1 (recadré : pas de cache multi-entrées, juste `bool valid` par lien) | — |
+| 3 | ~~Implémenter P3 : rafale au boot~~ | ✅ Clos — voir T16 en §5.1 | — |
 
 | 4 | **Synchroniser failsafe ↔ handshake** (B4) | WIP failsafe avancé | ~2 h |
 | 5 | **Implémenter P4** : vidage cache sur IDLE/SLEEPING | Étape 4 | ~1 h |
