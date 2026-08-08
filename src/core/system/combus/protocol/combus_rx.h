@@ -99,4 +99,29 @@ uint32_t combus_rx_age_ms();
 
 bool combus_rx_is_alive(uint32_t timeoutMs = 500u);
 
+
+
+// =============================================================================
+// 2. PER-LINK HANDSHAKE CONTEXT WIRING (P3)
+// =============================================================================
+
+// Forward declaration — the full definition lives in combus_handshake.h.
+struct CombusHandshakeContext;
+
+/**
+ * @brief Wire the per-link handshake context to the RX module.
+ *
+ * @details P3 — must be called BEFORE `combus_rx_init()` so the
+ *   contract-validated flag is shared with the TX module of the same
+ *   link.  Typically called from `combus_protocol_init()` with the
+ *   same context as `combus_tx_set_handshake_ctx()`.
+ *
+ *   Multiple independent ComBus interfaces may coexist; each link has
+ *   its own context.  See CombusHandshakeContext in combus_handshake.h.
+ *
+ * @param ctx  Per-link handshake context (may be null).
+ */
+void combus_rx_set_handshake_ctx( CombusHandshakeContext* ctx );
+
 // EOF combus_rx.h
+

@@ -5,8 +5,13 @@
 
 #include "combus_tx.h"
 
+#include <Arduino.h>  // millis()
+
 #include <core/system/combus/frame/combus_frame.h>
+#include <core/system/combus/frame/combus_handshake.h>
+#include <core/system/combus/frame/combus_handshake_tx.h>
 #include <core/system/debug/logging/debug.h>
+
 
 
 // =============================================================================
@@ -31,10 +36,30 @@ struct CombusTxState {
 	uint8_t         seq       = 1u;  ///< rolling frame sequence counter (1..255). Value 0 is RESERVED for future handshake frames.
 	uint32_t        lastTxMs  = 0u;  ///< timestamp of last transmitted frame (ms)
 	uint32_t        periodMs  = 0u;  ///< transmit period derived from txHz (0 = uninit)
+
+	// P3 — per-link handshake context.  Points to the same context as
+	// CombusRxState::handshakeCtx (shared between TX and RX of the same
+	// link).  Wired by combus_protocol_init() — see combus_protocol.cpp.
+	// Multiple independent ComBus interfaces may coexist; each link has
+	// its own context.  See CombusHandshakeContext in combus_handshake.h.
+	CombusHandshakeContext* handshakeCtx = nullptr;
 };
 
 
+
 static CombusTxState comBusTx;  ///< Combus transmitter instance state
+
+
+
+// =============================================================================
+// 1b. PER-LINK HANDSHAKE CONTEXT WIRING (P3)
+// =============================================================================
+
+void combus_tx_set_handshake_ctx( CombusHandshakeContext* ctx )
+{
+    comBusTx.handshakeCtx = ctx;
+}
+
 
 
 
@@ -68,10 +93,20 @@ void combus_tx_init(
 		// --- 3. Derive transmit period ---
 	comBusTx.periodMs = 1000u / txHz;
 
-		// --- 4. Log init confirmation ---
+		// --- 4. Reset handshake burst state on the linked context (P3).
+	//    combus_protocol_init() wires comBusTx.handshakeCtx to the same
+	//    context as comBusRx.handshakeCtx BEFORE calling combus_tx_init().
+	//    If the wiring is missing (legacy caller), the burst is simply
+	//    not armed — no crash, no UB.
+	if (comBusTx.handshakeCtx) {
+		combus_handshake_internal::startBurst(comBusTx.handshakeCtx);
+	}
+
+		// --- 5. Log init confirmation ---
 	sys_log_info("[COMBUS_TX] init — transport='%s'  rate=%uHz  A%u+D%u\n",
 	             nodeCom->name, txHz, (unsigned)frameCfg.nAnalog, (unsigned)frameCfg.nDigital);
 }
+
 
 
 
@@ -96,10 +131,20 @@ void combus_tx_update(
 		// --- 1. Guard check ---
 	if (!comBusTx.nodeCom || comBusTx.periodMs == 0u || !bus) { return; }
 
+		// --- 1b. P3 — drive the boot-time handshake burst on the linked
+	//    context.  Independent of the control-frame timer below — if
+	//    both timers expire on the same call, two write() calls happen
+	//    back-to-back (no priority / contention logic, per P3 constraint
+	//    #2).  No-op when the burst is inactive or already validated.
+	if (comBusTx.handshakeCtx) {
+		combus_handshake_tx_update(comBusTx.handshakeCtx, comBusTx.nodeCom);
+	}
+
 		// --- 2. Timer gate ---
 	uint32_t now = millis();
 	if ((now - comBusTx.lastTxMs) < comBusTx.periodMs) { return; }
 	comBusTx.lastTxMs = now;
+
 
 		// --- 3. Encode ---
 	static uint8_t frame[255u];

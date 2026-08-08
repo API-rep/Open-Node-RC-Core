@@ -196,7 +196,15 @@ uint8_t combus_handshake_tryDecode(
         // compare (other frame-level checks stay active).  Idempotent:
         // repeated matches leave the flag set.
         combus_handshake_internal::markContractValidated(ctx);
+
+        // P3 — stop the TX burst on the SAME link.  The contract is
+        // validated, no need to keep emitting handshake frames.  The
+        // shared CombusHandshakeContext (wired by combus_protocol_init)
+        // is the only thing that couples TX and RX of the same link —
+        // a different link's burst is untouched.
+        combus_handshake_internal::stopBurst(ctx);
     }
+
 
     return expectedLen;
 }
