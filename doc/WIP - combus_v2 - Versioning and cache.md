@@ -220,4 +220,34 @@ aucun successeur implicite à révéler.
 
 - **QoS 2 canaux** : section 4 du WIP, graines uniquement, pas d'implémentation.
 
+---
+
+## 6. Revue de code tierce — backlog R1 (peer review)
+
+Une revue de code tierce (R1) a été passée sur la stack ComBus à
+l'occasion de la livraison P2.  Cette section consigne les
+constats pour traçabilité, **sans rouvrir P2** (qui reste clos
+tel que documenté en §5.1 / T15).
+
+| # | Constat | Sévérité revue | Statut | Action prévue |
+|---|---|---|---|---|
+| R1.1 | UB : `combus_handshake_compareAndLog()` ne retourne rien sur la branche mismatch depuis le passage `void → bool` (P2, ma responsabilité) | 🚨 Critique | ✅ Clos en `65b7ca3` | — |
+| R1.2 | `combus_tx.cpp` : `periodMs = 1000u / txHz` rend la TX silencieusement morte si `txHz > 1000` (cap implicite à 1 kHz, sans log) | 🚨 Critique | 🟡 Dette — impact réel nul (aucun caller ne passe >1000 Hz) | Ajouter un guard explicite + log dans `combus_tx_init()` |
+| R1.3 | `CombusFrameHeader` non-`packed` — fonctionne car tous les champs sont `uint8_t`, mais aucune défense en profondeur contre une future insertion d'un type >8 bits | ⚠️ Majeur | 🟡 Dette | Marquer la struct `__attribute__((packed))` ou ajouter un commentaire explicite |
+| R1.4 | `COMBUS_MD5_CHECK_DISABLE` défini par 2 endroits (`combus_handshake_rx.h` + `combus_handshake.cpp`). Header guards font leur job (les deux valent 0 par défaut), mais source de vérité pas unique | ⚠️ Majeur | 🟡 Dette | Déplacer la définition unique dans l'umbrella `combus_handshake.h` |
+| R1.5 | `combus_handshake.h` :42 inclut directement `dumper_truck/combus_ids_remote_md5.h` — bloque la réutilisation pour un autre type de machine | ⚠️ Majeur | 🟡 Dette documentée | Migration déjà prévue, dépend de T7 (dispatcher machine_type) — voir §3 / WIP |
+| R1.6 | Typo `isDrived` → `isDriven` (anglais). Impact = pollution de l'API publique et des grep | ⚠️ Majeur | 🟡 Dette | Migration d'API publique, hors périmètre d'un fix ponctuel |
+| R1.7 | Buffer stack `linear[262]` dans `combus_handshake_rx.cpp::tryDecode()` alors que `CombusFrameHandshakeMinLen` = 25. Excès de pile sur MCU contraint | ⚠️ Majeur | 🟡 Dette | Réduire à `CombusFrameHandshakeMinLen` (25 octets) — fix trivial |
+| R1.8 | Calcul d'offset obscur pour le byte `seq` dans `combus_rx.cpp::tryDecode()` (`1u + offsetof(...) + offsetof(...) + 1u`). Correct mais illisible | 🔍 Mineur | 🟡 Dette de lisibilité | Extraire `constexpr uint8_t kSeqOffset = 3u` |
+| R1.9 | Buffer TX `static uint8_t frame[255u]` caché dans `combus_tx.cpp::combus_tx_update()`. Mono-tâche OK, cauchemar de réentrance si multi-instance | 🔍 Mineur | 🟡 Dette | Attacher le buffer à `CombusTxState` |
+| R1.10 | Pas de garde `nAnalog`/`nDigital` à `combus_rx_init()` : l'appelant doit s'assurer que `analogBuf`/`digitalBuf` sont correctement dimensionnés | 🔍 Mineur | 🟡 Dette | Ajouter `static_assert` ou runtime check |
+| R1.11 | `combus_protocol_init` (singleton NodeCom partagé TX/RX) ne permet pas d'asymétrie de transports | 🔍 Mineur | 🟡 Dette d'architecture | Hors périmètre d'un fix ponctuel |
+
+**Bilan R1** : 1 vrai bug fonctionnel corrigé (R1.1), 1 bug à impact
+nul documenté (R1.2), 9 dettes architecturales pré-existantes
+consignées dans la backlog.  Aucune des critiques R1 ne remet en
+cause la régression P2 elle-même ni son contenu fonctionnel
+(`s_contractValidated` + lifecycle + skip-compare + 4 tests Group C).
+
+
 

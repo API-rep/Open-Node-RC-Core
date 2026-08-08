@@ -13,12 +13,8 @@
 
 #include <stdint.h>
 
-#include <core/system/combus/frame/combus_handshake.h> // umbrella (constants, logBootWarning, formatMd5Hex)
+#include <core/system/combus/frame/combus_handshake.h> // umbrella (constants, logBootWarning, formatMd5Hex, COMBUS_MD5_CHECK_DISABLE)
 
-// Compile-time bypass flag — default OFF, override with `-D COMBUS_MD5_CHECK_DISABLE=1`.
-#ifndef COMBUS_MD5_CHECK_DISABLE
-  #define COMBUS_MD5_CHECK_DISABLE  0
-#endif
 
 
 // =============================================================================

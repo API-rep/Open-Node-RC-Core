@@ -45,15 +45,13 @@
 // removed: 18u is the wire magic that combus_md5.py writes, but the
 // authoritative source of truth lives in the generated header itself.
 static_assert(kCombusHandshakePayloadLen ==
-                  combus::wire::kCombusHandshakeWirePayloadLen,
-              "kCombusHandshakePayloadLen disagrees with "
-              "combus::wire::kCombusHandshakeWirePayloadLen.");
+                   combus::wire::kCombusHandshakeWirePayloadLen,
+               "kCombusHandshakePayloadLen disagrees with "
+               "combus::wire::kCombusHandshakeWirePayloadLen.");
 
-#ifndef COMBUS_MD5_CHECK_DISABLE
-  /// @brief Compile-time switch — when defined (non-zero), MD5 compare is
-  ///        short-circuited.  Logged loudly at boot.  Default OFF.
-  #define COMBUS_MD5_CHECK_DISABLE  0
-#endif
+// COMBUS_MD5_CHECK_DISABLE is defined in combus_handshake.h (umbrella) as
+// the single source of truth — see R1.4 in WIP combus_v2 §6.
+
 
 
 // =============================================================================
