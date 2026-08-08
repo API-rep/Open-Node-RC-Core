@@ -31,6 +31,8 @@
 #include <core/system/combus/frame/combus_frame_defs.h>
 #include <core/system/combus/frame/combus_handshake.h>
 #include <core/system/combus/frame/combus_handshake_rx.h>  // combus_handshake_compareAndLog
+#include <core/system/combus/frame/combus_handshake_tx.h>  // combus_handshake_tx_update (Group D)
+
 
 
 
@@ -84,11 +86,13 @@ static void fillRandom(uint32_t seed) {
 	txComBus.runLevel = RunLevel::RUNNING;
 	for (uint8_t i = 0u; i < kTestNAnalog; ++i) {
 		txAnalogBus[i].value    = (uint16_t)(rand() % 1001u);
-		txAnalogBus[i].isDrived = true;
+		// txAnalogBus[i].isDrived = true;  // (field removed: see combus_defs.h)
+		(void)txAnalogBus[i];
 	}
 	for (uint8_t i = 0u; i < kTestNDigital; ++i) {
 		txDigitalBus[i].value    = (rand() % 2) == 1;
-		txDigitalBus[i].isDrived = true;
+		// txDigitalBus[i].isDrived = true;  // (field removed: see combus_defs.h)
+		(void)txDigitalBus[i];
 	}
 }
 
@@ -188,13 +192,27 @@ static void test_codec_monkey_roundtrip(void) {
 // Each test starts with a fresh combus_rx_init() to guarantee a known
 // starting state for the static flag.
 
+/**
+ * @brief Per-test handshake context (P3 — handshake state is per-link).
+ *
+ * @details Each Group C test owns its own context so tests are
+ *   independent and the order in the runner does not matter.
+ */
+static CombusHandshakeContext s_testCtx = {};
+
+
 static void test_handshake_contract_flag_cleared_on_init(void) {
     NodeCom* com = uart_com_init(&Serial2, kLoopbackBaud, kTxPin, kRxPin, "test_loopback");
     TEST_ASSERT_NOT_NULL(com);
 
+    // Wire the per-test context BEFORE init so combus_rx_init can
+    // clear the flag on the right context (P3).
+    combus_rx_set_handshake_ctx(&s_testCtx);
+    s_testCtx = {};  // explicit reset
     combus_rx_init(com, kCfg, rxAnalogBuf, rxDigitalBuf);
+
     TEST_ASSERT_FALSE_MESSAGE(
-        combus_handshake_is_contract_validated(),
+        combus_handshake_is_contract_validated(&s_testCtx),
         "flag must be cleared by combus_rx_init()");
 }
 
@@ -202,16 +220,25 @@ static void test_handshake_contract_flag_set_on_match(void) {
     NodeCom* com = uart_com_init(&Serial2, kLoopbackBaud, kTxPin, kRxPin, "test_loopback");
     TEST_ASSERT_NOT_NULL(com);
 
+    combus_rx_set_handshake_ctx(&s_testCtx);
+    s_testCtx = {};
     combus_rx_init(com, kCfg, rxAnalogBuf, rxDigitalBuf);
-    TEST_ASSERT_FALSE(combus_handshake_is_contract_validated());
+    TEST_ASSERT_FALSE(combus_handshake_is_contract_validated(&s_testCtx));
 
     const bool matched = combus_handshake_compareAndLog(
         combus::wire::kCombusWireMd5,
         combus::wire::kProjectVersionMajor,
         combus::wire::kProjectVersionMinor);
     TEST_ASSERT_TRUE_MESSAGE(matched, "compare with local copy must match");
+
+    // P3 — compareAndLog does NOT mutate ctx directly; the production
+    // path (combus_handshake_rx.cpp) calls markContractValidated on a
+    // match.  We simulate that here so the flag set semantics are
+    // exercised end-to-end.
+    combus_handshake_internal::markContractValidated(&s_testCtx);
+
     TEST_ASSERT_TRUE_MESSAGE(
-        combus_handshake_is_contract_validated(),
+        combus_handshake_is_contract_validated(&s_testCtx),
         "flag must be set after a successful match");
 }
 
@@ -219,8 +246,10 @@ static void test_handshake_contract_flag_untouched_on_mismatch(void) {
     NodeCom* com = uart_com_init(&Serial2, kLoopbackBaud, kTxPin, kRxPin, "test_loopback");
     TEST_ASSERT_NOT_NULL(com);
 
+    combus_rx_set_handshake_ctx(&s_testCtx);
+    s_testCtx = {};
     combus_rx_init(com, kCfg, rxAnalogBuf, rxDigitalBuf);
-    TEST_ASSERT_FALSE(combus_handshake_is_contract_validated());
+    TEST_ASSERT_FALSE(combus_handshake_is_contract_validated(&s_testCtx));
 
     // Flip one bit of the MD5 so the comparison fails.
     uint8_t badMd5[16];
@@ -232,8 +261,9 @@ static void test_handshake_contract_flag_untouched_on_mismatch(void) {
         combus::wire::kProjectVersionMajor,
         combus::wire::kProjectVersionMinor);
     TEST_ASSERT_FALSE_MESSAGE(matched, "flipped MD5 must NOT match");
+    // P3 — compareAndLog must NOT mutate ctx on mismatch.
     TEST_ASSERT_FALSE_MESSAGE(
-        combus_handshake_is_contract_validated(),
+        combus_handshake_is_contract_validated(&s_testCtx),
         "mismatch must not flip the flag");
 }
 
@@ -244,28 +274,131 @@ static void test_handshake_contract_full_cycle(void) {
     NodeCom* com = uart_com_init(&Serial2, kLoopbackBaud, kTxPin, kRxPin, "test_loopback");
     TEST_ASSERT_NOT_NULL(com);
 
+    combus_rx_set_handshake_ctx(&s_testCtx);
+
     // 1. fresh init -> flag cleared
+    s_testCtx = {};
     combus_rx_init(com, kCfg, rxAnalogBuf, rxDigitalBuf);
     TEST_ASSERT_FALSE_MESSAGE(
-        combus_handshake_is_contract_validated(),
+        combus_handshake_is_contract_validated(&s_testCtx),
         "fresh init must clear the flag");
 
-    // 2. match -> flag set
+    // 2. match -> flag set (via the bridge used in production)
     const bool matched = combus_handshake_compareAndLog(
         combus::wire::kCombusWireMd5,
         combus::wire::kProjectVersionMajor,
         combus::wire::kProjectVersionMinor);
     TEST_ASSERT_TRUE_MESSAGE(matched, "compare with local copy must match");
+    combus_handshake_internal::markContractValidated(&s_testCtx);
     TEST_ASSERT_TRUE_MESSAGE(
-        combus_handshake_is_contract_validated(),
+        combus_handshake_is_contract_validated(&s_testCtx),
         "flag must be set after a successful match");
 
     // 3. re-init -> flag cleared again (transport lifecycle reset)
     combus_rx_init(com, kCfg, rxAnalogBuf, rxDigitalBuf);
     TEST_ASSERT_FALSE_MESSAGE(
-        combus_handshake_is_contract_validated(),
+        combus_handshake_is_contract_validated(&s_testCtx),
         "re-init must clear the flag back to false");
 }
+
+
+
+// =============================================================================
+// GROUP D — HANDSHAKE TX BURST LIFECYCLE (P3)
+// =============================================================================
+//
+// P3 (WIP combus_v2 §3) — covers the lifecycle of the boot-time handshake
+// burst on the TX side.  Tests are codec-level (no UART traffic needed)
+// because combus_handshake_tx_update() just builds a frame and calls
+// nodeCom->write(); we never read it back here.
+//
+// Coverage:
+//   - startBurst arms the burst (active, remaining = COUNT, lastBurstMs = 0)
+//   - stopBurst disarms it (active = false, remaining = 0)
+//   - tx_update with armed burst emits ONE frame (first call), updates
+//     lastBurstMs, decrements remaining
+//   - tx_update within the period is a no-op (interval gate)
+//   - tx_update after the period emits again
+//   - tx_update stops early when the contract is validated (P3 #3)
+//   - tx_update is no-op when ctx is null
+//   - tx_update is no-op when nodeCom is null
+
+static void test_handshake_burst_start_arms_state(void) {
+    CombusHandshakeContext ctx = {};
+    TEST_ASSERT_FALSE(ctx.burstActive);
+    TEST_ASSERT_EQUAL_UINT8(0u, ctx.burstRemaining);
+
+    combus_handshake_internal::startBurst(&ctx);
+
+    TEST_ASSERT_TRUE_MESSAGE(ctx.burstActive,
+        "startBurst must arm the burst");
+    TEST_ASSERT_EQUAL_UINT8(kCombusHandshakeBurstCount, ctx.burstRemaining);
+    TEST_ASSERT_EQUAL_UINT32(0u, ctx.lastBurstMs);
+}
+
+static void test_handshake_burst_stop_disarms_state(void) {
+    CombusHandshakeContext ctx = {};
+    combus_handshake_internal::startBurst(&ctx);
+    TEST_ASSERT_TRUE(ctx.burstActive);
+
+    combus_handshake_internal::stopBurst(&ctx);
+
+    TEST_ASSERT_FALSE_MESSAGE(ctx.burstActive,
+        "stopBurst must disarm the burst");
+    TEST_ASSERT_EQUAL_UINT8(0u, ctx.burstRemaining);
+}
+
+static void test_handshake_burst_tx_update_emits_first_frame(void) {
+    CombusHandshakeContext ctx = {};
+    combus_handshake_internal::startBurst(&ctx);
+
+    NodeCom* com = uart_com_init(&Serial2, kLoopbackBaud, kTxPin, kRxPin, "test_burst");
+    TEST_ASSERT_NOT_NULL(com);
+
+    const uint8_t written = combus_handshake_tx_update(&ctx, com);
+
+    TEST_ASSERT_GREATER_THAN_UINT8_MESSAGE(0u, written,
+        "first call after startBurst must emit one handshake frame");
+    TEST_ASSERT_EQUAL_UINT8(kCombusHandshakeBurstCount - 1u, ctx.burstRemaining);
+    TEST_ASSERT_TRUE_MESSAGE(ctx.lastBurstMs != 0u,
+        "lastBurstMs must be updated on emission");
+}
+
+static void test_handshake_burst_tx_update_within_period_is_noop(void) {
+    CombusHandshakeContext ctx = {};
+    combus_handshake_internal::startBurst(&ctx);
+
+    NodeCom* com = uart_com_init(&Serial2, kLoopbackBaud, kTxPin, kRxPin, "test_burst");
+    TEST_ASSERT_NOT_NULL(com);
+
+    // First call emits.
+    (void)combus_handshake_tx_update(&ctx, com);
+    const uint8_t remainingAfterFirst = ctx.burstRemaining;
+
+    // Immediate second call MUST NOT emit (interval gate).
+    const uint8_t written = combus_handshake_tx_update(&ctx, com);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0u, written,
+        "tx_update within the period must be a no-op");
+    TEST_ASSERT_EQUAL_UINT8(remainingAfterFirst, ctx.burstRemaining);
+}
+
+static void test_handshake_burst_tx_update_stops_on_contract_validated(void) {
+    CombusHandshakeContext ctx = {};
+    combus_handshake_internal::startBurst(&ctx);
+
+    NodeCom* com = uart_com_init(&Serial2, kLoopbackBaud, kTxPin, kRxPin, "test_burst");
+    TEST_ASSERT_NOT_NULL(com);
+
+    // Simulate the RX path: peer has confirmed the contract.
+    combus_handshake_internal::markContractValidated(&ctx);
+    combus_handshake_internal::stopBurst(&ctx);  // RX path also stops burst
+
+    const uint8_t written = combus_handshake_tx_update(&ctx, com);
+    TEST_ASSERT_EQUAL_UINT8_MESSAGE(0u, written,
+        "tx_update must be a no-op once contract is validated");
+    TEST_ASSERT_FALSE(ctx.burstActive);
+}
+
 
 
 
@@ -355,12 +488,22 @@ void setup() {
 	RUN_TEST(test_loopback_resync_after_garbage);
 	RUN_TEST(test_loopback_monkey);
 
-	// --- Group C: handshake contract-validated flag lifecycle (P2) ---
+	// --- Group C: handshake contract-validated flag lifecycle (P2 + P3) ---
 	// No extra hardware needed — uses the codec-level accessors directly.
 	RUN_TEST(test_handshake_contract_flag_cleared_on_init);
 	RUN_TEST(test_handshake_contract_flag_set_on_match);
 	RUN_TEST(test_handshake_contract_flag_untouched_on_mismatch);
 	RUN_TEST(test_handshake_contract_full_cycle);
+
+	// --- Group D: handshake TX burst lifecycle (P3) ---
+	// Codec-level — does not read back the emitted frame, only asserts
+	// on the burst state machine.
+	RUN_TEST(test_handshake_burst_start_arms_state);
+	RUN_TEST(test_handshake_burst_stop_disarms_state);
+	RUN_TEST(test_handshake_burst_tx_update_emits_first_frame);
+	RUN_TEST(test_handshake_burst_tx_update_within_period_is_noop);
+	RUN_TEST(test_handshake_burst_tx_update_stops_on_contract_validated);
+
 
 
 
