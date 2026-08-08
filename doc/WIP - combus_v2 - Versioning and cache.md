@@ -156,13 +156,16 @@ est hors scope de ce document et devra être conçu séparément.
 | T12 | Suppression dispatcher racine `combus_ids_remote.h` | `1e7612d` | `src/core/config/machines/combus_ids_remote.h` (supprimé) |
 | T13 | Doc `tree_structure.md` synchronisée | `a90a48d` | `tree_structure.md` (racine) |
 | T14 | Câblage payload MD5 dans handshake TX | `13b4c5f` | `combus_handshake_tx.cpp::combus_handshake_sendOnce()` — `frame[payloadStart + i] = combus::wire::kCombusWireMd5[i]` (16 octets MD5) puis `kProjectVersionMajor/Minor` (2 octets version) ; longueur totale 18u garantie par `static_assert` dans `combus_handshake.cpp`. **Clos le point 1b** du §5.5. |
+| T15 | Flag `s_contractValidated` + lifecycle P2 | `bfc108f`, `89db20a`, `c3457bf`, `64ab934` | `combus_handshake.{h,cpp}` : flag statique + accesseur public `combus_handshake_is_contract_validated()` + bridge interne `markContractValidated()` / `clearContractValidated()`. `combus_handshake_rx.cpp` : `compareAndLog` retourne `bool` (match) ; `tryDecode` appelle `markContractValidated()` après match. `combus_rx.cpp::combus_rx_init()` : appelle `clearContractValidated()` (couplage cycle de vie transport). 3 tests Group C dans `test_combus_loopback.cpp` (clear-on-init, set-on-match, no-mark-on-mismatch). Bypass `COMBUS_MD5_CHECK_DISABLE` retourne `false` et ne flippe jamais le flag. **Clos le point P2** du §5.2. |
+
 
 ### 5.2 Points partiels 🟡 (infra posée, logique métier à finaliser)
 
 | # | Point du WIP | Statut | Reste à faire |
 |---|---|---|---|
 | _P1_ | ~~Payload MD5 handshake~~ | ✅ Clos — voir T14 en §5.1 | — |
-| P2 | Déclencheur "adresse absente du cache amies" | Concept documenté ; pas de structure `cache` dans le code | Implémenter `CombusHandshakeCache` (lookup O(1) par adresse, multi-entrées) + hook dans `combus_handshake_rx.cpp` |
+| _P2_ | ~~Déclencheur "adresse absente du cache amies"~~ | ✅ Clos — voir T15 en §5.1. Recadrage : pas de cache multi-entrées, juste un `bool valid` par lien, false au boot et après `combus_rx_init()`, true au premier match MD5+version réel. | — |
+
 | P3 | Rafale courte au boot (3–5 répétitions) | Pas de code | Ajouter compteur de rafale dans `combus_handshake_tx.cpp`, démarrer au boot |
 
 | P4 | Slot unique vidé au runlevel IDLE/SLEEPING | Concept documenté (délègue au failsafe) ; pas de hook | Ajouter callback `onRunlevelChanged()` dans le cache, abonné au failsafe existant |
