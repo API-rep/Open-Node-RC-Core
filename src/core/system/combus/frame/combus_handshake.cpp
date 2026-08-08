@@ -176,7 +176,22 @@ namespace combus_handshake_internal {
     void clearContractValidated(CombusHandshakeContext* ctx) {
         if (ctx) { ctx->contractValidated = false; }
     }
+
+    // P3 — burst lifecycle accessors.  Per-link state, see
+    // CombusHandshakeContext §3 in combus_handshake.h.
+    void startBurst(CombusHandshakeContext* ctx) {
+        if (!ctx) { return; }
+        ctx->burstActive    = true;
+        ctx->burstRemaining = kCombusHandshakeBurstCount;
+        ctx->lastBurstMs    = 0u;  // 0 → first emission on next tx_update()
+    }
+    void stopBurst(CombusHandshakeContext* ctx) {
+        if (!ctx) { return; }
+        ctx->burstActive    = false;
+        ctx->burstRemaining = 0u;
+    }
 }
+
 
 
 

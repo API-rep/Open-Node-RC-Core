@@ -328,7 +328,30 @@ namespace combus_handshake_internal {
      *        whenever the transport is (re)initialised.
      */
     void clearContractValidated(CombusHandshakeContext* ctx);
+
+    /**
+     * @brief Start (or restart) the boot-time handshake burst on the
+     *        given link.  Sets `burstActive = true`, `burstRemaining =
+     *        kCombusHandshakeBurstCount`, `lastBurstMs = 0` so the
+     *        first emission happens on the very next `tx_update()` call.
+     *
+     * @details Called from `combus_tx_init()` so the burst is armed
+     *   whenever the transport is (re)initialised.  Idempotent — calling
+     *   twice in a row is equivalent to calling once.
+     */
+    void startBurst(CombusHandshakeContext* ctx);
+
+    /**
+     * @brief Stop the boot-time handshake burst on the given link.
+     *        Sets `burstActive = false`, `burstRemaining = 0`.
+     *
+     * @details Called from the RX path when the contract is validated
+     *   (early termination — see P3 constraint #3) and from
+     *   `combus_tx_init()` to reset state on transport reinit.
+     */
+    void stopBurst(CombusHandshakeContext* ctx);
 }
+
 
 // EOF combus_handshake.h
 
