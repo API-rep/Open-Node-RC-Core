@@ -237,6 +237,37 @@ static void test_handshake_contract_flag_untouched_on_mismatch(void) {
         "mismatch must not flip the flag");
 }
 
+/** Full lifecycle: init -> false, match -> true, init again -> false.
+ *  Covers the reset-on-transport-reinit semantics end-to-end.
+ */
+static void test_handshake_contract_full_cycle(void) {
+    NodeCom* com = uart_com_init(&Serial2, kLoopbackBaud, kTxPin, kRxPin, "test_loopback");
+    TEST_ASSERT_NOT_NULL(com);
+
+    // 1. fresh init -> flag cleared
+    combus_rx_init(com, kCfg, rxAnalogBuf, rxDigitalBuf);
+    TEST_ASSERT_FALSE_MESSAGE(
+        combus_handshake_is_contract_validated(),
+        "fresh init must clear the flag");
+
+    // 2. match -> flag set
+    const bool matched = combus_handshake_compareAndLog(
+        combus::wire::kCombusWireMd5,
+        combus::wire::kProjectVersionMajor,
+        combus::wire::kProjectVersionMinor);
+    TEST_ASSERT_TRUE_MESSAGE(matched, "compare with local copy must match");
+    TEST_ASSERT_TRUE_MESSAGE(
+        combus_handshake_is_contract_validated(),
+        "flag must be set after a successful match");
+
+    // 3. re-init -> flag cleared again (transport lifecycle reset)
+    combus_rx_init(com, kCfg, rxAnalogBuf, rxDigitalBuf);
+    TEST_ASSERT_FALSE_MESSAGE(
+        combus_handshake_is_contract_validated(),
+        "re-init must clear the flag back to false");
+}
+
+
 
 // =============================================================================
 // GROUP B — UART LOOPBACK (requires TX↔RX jumper on Serial2)
@@ -329,6 +360,8 @@ void setup() {
 	RUN_TEST(test_handshake_contract_flag_cleared_on_init);
 	RUN_TEST(test_handshake_contract_flag_set_on_match);
 	RUN_TEST(test_handshake_contract_flag_untouched_on_mismatch);
+	RUN_TEST(test_handshake_contract_full_cycle);
+
 
 
 	UNITY_END();
