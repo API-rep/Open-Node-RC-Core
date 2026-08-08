@@ -102,7 +102,9 @@ bool combus_handshake_compareAndLog(
         (unsigned)wireMajor,
         (unsigned)wireMinor);
 
+    return false;
 }
+
 
 
 // =============================================================================
