@@ -29,6 +29,9 @@
 #include <core/system/combus/protocol/combus_rx.h>
 #include <core/system/combus/combus_defs.h>
 #include <core/system/combus/frame/combus_frame_defs.h>
+#include <core/system/combus/frame/combus_handshake.h>
+#include <core/system/combus/frame/combus_handshake_rx.h>  // combus_handshake_compareAndLog
+
 
 
 // =============================================================================
@@ -172,8 +175,73 @@ static void test_codec_monkey_roundtrip(void) {
 
 
 // =============================================================================
+// GROUP C — HANDSHAKE CONTRACT-VALIDATED FLAG LIFECYCLE
+// =============================================================================
+//
+// P2 (WIP combus_v2 §5.2) — covers the lifecycle of
+// combus_handshake_is_contract_validated() and its wiring:
+//   - boot / combus_rx_init()           -> flag cleared (false)
+//   - match on combus_handshake_compareAndLog() -> flag set (true)
+//   - mismatch                          -> flag untouched (stays at previous value)
+//
+// Tests use the codec-level accessors directly — no UART traffic needed.
+// Each test starts with a fresh combus_rx_init() to guarantee a known
+// starting state for the static flag.
+
+static void test_handshake_contract_flag_cleared_on_init(void) {
+    NodeCom* com = uart_com_init(&Serial2, kLoopbackBaud, kTxPin, kRxPin, "test_loopback");
+    TEST_ASSERT_NOT_NULL(com);
+
+    combus_rx_init(com, kCfg, rxAnalogBuf, rxDigitalBuf);
+    TEST_ASSERT_FALSE_MESSAGE(
+        combus_handshake_is_contract_validated(),
+        "flag must be cleared by combus_rx_init()");
+}
+
+static void test_handshake_contract_flag_set_on_match(void) {
+    NodeCom* com = uart_com_init(&Serial2, kLoopbackBaud, kTxPin, kRxPin, "test_loopback");
+    TEST_ASSERT_NOT_NULL(com);
+
+    combus_rx_init(com, kCfg, rxAnalogBuf, rxDigitalBuf);
+    TEST_ASSERT_FALSE(combus_handshake_is_contract_validated());
+
+    const bool matched = combus_handshake_compareAndLog(
+        combus::wire::kCombusWireMd5,
+        combus::wire::kProjectVersionMajor,
+        combus::wire::kProjectVersionMinor);
+    TEST_ASSERT_TRUE_MESSAGE(matched, "compare with local copy must match");
+    TEST_ASSERT_TRUE_MESSAGE(
+        combus_handshake_is_contract_validated(),
+        "flag must be set after a successful match");
+}
+
+static void test_handshake_contract_flag_untouched_on_mismatch(void) {
+    NodeCom* com = uart_com_init(&Serial2, kLoopbackBaud, kTxPin, kRxPin, "test_loopback");
+    TEST_ASSERT_NOT_NULL(com);
+
+    combus_rx_init(com, kCfg, rxAnalogBuf, rxDigitalBuf);
+    TEST_ASSERT_FALSE(combus_handshake_is_contract_validated());
+
+    // Flip one bit of the MD5 so the comparison fails.
+    uint8_t badMd5[16];
+    memcpy(badMd5, combus::wire::kCombusWireMd5, 16);
+    badMd5[0] ^= 0x01u;
+
+    const bool matched = combus_handshake_compareAndLog(
+        badMd5,
+        combus::wire::kProjectVersionMajor,
+        combus::wire::kProjectVersionMinor);
+    TEST_ASSERT_FALSE_MESSAGE(matched, "flipped MD5 must NOT match");
+    TEST_ASSERT_FALSE_MESSAGE(
+        combus_handshake_is_contract_validated(),
+        "mismatch must not flip the flag");
+}
+
+
+// =============================================================================
 // GROUP B — UART LOOPBACK (requires TX↔RX jumper on Serial2)
 // =============================================================================
+
 
 /** Init combus_tx and combus_rx on the same Serial2 port (loopback). */
 static void test_loopback_init(void) {
@@ -255,6 +323,13 @@ void setup() {
 	RUN_TEST(test_loopback_single_frame);
 	RUN_TEST(test_loopback_resync_after_garbage);
 	RUN_TEST(test_loopback_monkey);
+
+	// --- Group C: handshake contract-validated flag lifecycle (P2) ---
+	// No extra hardware needed — uses the codec-level accessors directly.
+	RUN_TEST(test_handshake_contract_flag_cleared_on_init);
+	RUN_TEST(test_handshake_contract_flag_set_on_match);
+	RUN_TEST(test_handshake_contract_flag_untouched_on_mismatch);
+
 
 	UNITY_END();
 }
