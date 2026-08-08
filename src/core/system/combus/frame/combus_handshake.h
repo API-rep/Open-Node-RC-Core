@@ -147,6 +147,28 @@ void combus_handshake_formatMd5Hex(const uint8_t md5[16], char out[33]);
  */
 bool combus_handshake_ever_received();
 
+/**
+ * @brief True if the local contract (MD5 + project version) has been
+ *   validated against a peer on the wire since the last transport reset.
+ *
+ * @details Set to `true` by the RX path on the first handshake frame whose
+ *   MD5 + version match the locally-generated copy.  Reset to `false` by
+ *   `combus_handshake_internal::clearContractValidated()` — called from
+ *   `combus_rx_init()` so the flag is automatically cleared whenever the
+ *   transport is (re)initialised.
+ *
+ *   Intended use: skip the MD5+version compare on subsequent handshake
+ *   frames once the contract is known to be valid, while still running
+ *   every other frame-level check (CRC, length, format).  Does NOT
+ *   short-circuit any control-frame validation.
+ *
+ *   Independent from `combus_handshake_ever_received()`: the latter is
+ *   true as soon as ANY handshake frame is observed (match or not), the
+ *   former only on a successful match.
+ */
+bool combus_handshake_is_contract_validated();
+
+
 
 // =============================================================================
 // 4. RX / TX ENTRY POINTS — declared in the side-specific headers:
@@ -167,7 +189,22 @@ bool combus_handshake_ever_received();
  */
 namespace combus_handshake_internal {
     void markEverReceived();
+
+    /**
+     * @brief Mark the local contract as validated against a peer on the
+     *        wire.  Called from `combus_handshake_rx.cpp` after a
+     *        successful MD5+version match.
+     */
+    void markContractValidated();
+
+    /**
+     * @brief Clear the contract-validated flag.  Called from
+     *        `combus_rx_init()` so the flag is automatically reset
+     *        whenever the transport is (re)initialised.
+     */
+    void clearContractValidated();
 }
 
 // EOF combus_handshake.h
+
 

@@ -71,8 +71,21 @@ static_assert(kCombusHandshakePayloadLen ==
  */
 static bool s_handshakeEverReceived = false;
 
+/**
+ * @brief Contract-validated flag — see combus_handshake.h.
+ *
+ * @details Set to `true` by the RX TU on the first successful MD5+version
+ *   match.  Cleared by `combus_rx_init()` (via the internal bridge) so the
+ *   flag is automatically reset whenever the transport is (re)initialised.
+ *
+ *   Lifetime: static — valid for the entire program run, but logically
+ *   scoped to the current transport instance.
+ */
+static bool s_contractValidated = false;
+
 /// One-shot guard for the boot banner — see combus_handshake.h.
 static bool s_bootWarningLogged = false;
+
 
 
 // =============================================================================
@@ -154,6 +167,11 @@ bool combus_handshake_ever_received() {
     return s_handshakeEverReceived;
 }
 
+bool combus_handshake_is_contract_validated() {
+    return s_contractValidated;
+}
+
+
 
 // =============================================================================
 // 4. BRIDGE TO THE RX / TX TUs
@@ -169,7 +187,10 @@ namespace combus_handshake_internal {
 namespace combus_handshake_internal {
     bool g_everReceived() { return s_handshakeEverReceived; }
     void markEverReceived() { s_handshakeEverReceived = true; }
+    void markContractValidated() { s_contractValidated = true; }
+    void clearContractValidated() { s_contractValidated = false; }
 }
+
 
 
 // EOF combus_handshake.cpp
