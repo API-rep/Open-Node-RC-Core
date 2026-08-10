@@ -32,6 +32,9 @@
 #include <core/system/combus/frame/combus_handshake.h>
 #include <core/system/combus/frame/combus_handshake_rx.h>  // combus_handshake_compareAndLog
 #include <core/system/combus/frame/combus_handshake_tx.h>  // combus_handshake_tx_update (Group D)
+#include <core/system/combus/protocol/combus_protocol.h>    // P3 — caller-owned per-link context
+#include <core/system/combus/protocol/combus_tx.h>          // combus_tx_set_handshake_ctx
+#include <core/system/combus/protocol/combus_rx.h>          // combus_rx_set_handshake_ctx
 
 
 
@@ -401,6 +404,63 @@ static void test_handshake_burst_tx_update_stops_on_contract_validated(void) {
 
 
 
+// =============================================================================
+// GROUP E — CALLER-OWNED PER-LINK HANDSHAKE CONTEXT (P3)
+// =============================================================================
+//
+// P3 (WIP combus_v2 §3) — verifies that:
+//   - two distinct CombusHandshakeContext instances have INDEPENDENT state
+//     (one's flag/burst does not leak into the other);
+//   - a single context SHARED between combus_tx_set_handshake_ctx() and
+//     combus_rx_set_handshake_ctx() reflects state changes on both sides.
+
+/** Two distinct contexts must not share their contract-validated flag. */
+static void test_handshake_two_contexts_have_independent_flags(void) {
+    CombusHandshakeContext ctxA = {};
+    CombusHandshakeContext ctxB = {};
+
+    combus_handshake_internal::markContractValidated(&ctxA);
+
+    TEST_ASSERT_TRUE_MESSAGE(
+        combus_handshake_is_contract_validated(&ctxA),
+        "ctxA must reflect the contract-validated flag");
+    TEST_ASSERT_FALSE_MESSAGE(
+        combus_handshake_is_contract_validated(&ctxB),
+        "ctxB must be independent of ctxA — flag must NOT leak");
+}
+
+/** Two distinct contexts must not share their burst state either. */
+static void test_handshake_two_contexts_have_independent_bursts(void) {
+    CombusHandshakeContext ctxA = {};
+    CombusHandshakeContext ctxB = {};
+
+    combus_handshake_internal::startBurst(&ctxA);
+    TEST_ASSERT_TRUE_MESSAGE(ctxA.burstActive, "ctxA burst must be armed");
+    TEST_ASSERT_FALSE_MESSAGE(ctxB.burstActive,
+        "ctxB burst must stay disarmed — independent of ctxA");
+    TEST_ASSERT_EQUAL_UINT8(0u, ctxB.burstRemaining);
+
+    combus_handshake_internal::stopBurst(&ctxA);
+    TEST_ASSERT_FALSE(ctxA.burstActive);
+    TEST_ASSERT_FALSE(ctxB.burstActive);
+}
+
+/** Wiring the SAME context to both TX and RX must share its state. */
+static void test_handshake_shared_context_is_shared_between_tx_and_rx(void) {
+    CombusHandshakeContext ctx = {};
+
+    combus_tx_set_handshake_ctx(&ctx);
+    combus_rx_set_handshake_ctx(&ctx);
+
+    // Mutate via the RX-path bridge; the flag must be visible.
+    combus_handshake_internal::markContractValidated(&ctx);
+
+    TEST_ASSERT_TRUE_MESSAGE(
+        combus_handshake_is_contract_validated(&ctx),
+        "shared ctx must report the contract as validated");
+}
+
+
 
 // =============================================================================
 // GROUP B — UART LOOPBACK (requires TX↔RX jumper on Serial2)
@@ -504,8 +564,12 @@ void setup() {
 	RUN_TEST(test_handshake_burst_tx_update_within_period_is_noop);
 	RUN_TEST(test_handshake_burst_tx_update_stops_on_contract_validated);
 
-
-
+	// --- Group E: caller-owned per-link handshake context (P3) ---
+	// Verifies that two contexts have INDEPENDENT state and that one
+	// context SHARED between TX and RX reflects state on both sides.
+	RUN_TEST(test_handshake_two_contexts_have_independent_flags);
+	RUN_TEST(test_handshake_two_contexts_have_independent_bursts);
+	RUN_TEST(test_handshake_shared_context_is_shared_between_tx_and_rx);
 
 	UNITY_END();
 }

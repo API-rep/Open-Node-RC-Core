@@ -216,22 +216,21 @@ void combus_handshake_formatMd5Hex(const uint8_t md5[16], char out[33]);
 /**
  * @brief Per-ComBus-link handshake state container.
  *
- * @details Handshake state is per ComBus link instance.  Multiple
- *   independent ComBus interfaces may coexist in the same machine
- *   (e.g. ESP/network + UART/extension board).  Handshake validation
- *   and TX burst state MUST NEVER be shared between links.
+ * @details Handshake state is per ComBus link instance.  The context is
+ *   provided and owned by the caller (typically a static variable in the
+ *   environment that calls combus_protocol_init()).
  *
- *   This is a fundamental property of the ComBus model, not an
- *   anticipation of N2 (asymmetric transports).
+ *   A machine firmware today owns a single ComBus link, so one context
+ *   is sufficient.  A Remote firmware may own several independent ComBus
+ *   links (one per managed machine), each with its own context.
  *
- *   Lifetime: caller-owned (typically embedded in CombusTxState /
- *   CombusRxState, or held by the environment that owns the link).
- *   Zero-initialised at construction — all flags start `false`,
- *   counters start at 0.
+ *   TX and RX of the same link share the same context pointer.
+ *   State must NEVER be shared across different links.
  *
- *   Thread-safety: not thread-safe.  ComBus is single-threaded on
- *   the targets it runs on (ESP32 Arduino core, etc.).
+ *   Lifetime: caller-owned, must outlive the link.  Zero-initialised
+ *   at construction.
  */
+
 struct CombusHandshakeContext {
     // --- RX-side state (P2, migrated from static globals) ---
     bool     contractValidated = false;  ///< true after first MD5+version match

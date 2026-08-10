@@ -10,6 +10,7 @@
 #include <machines/config/config.h>
 #include <core/config/outputs/combus_uart.h>         // ComBusUartBaud, ComBusUartTxHz, UartMaxBaud
 #include <core/system/combus/protocol/combus_protocol.h>
+#include <core/system/combus/frame/combus_handshake.h>  // CombusHandshakeContext (P3)
 #include <core/system/hw/transport/uart_com.h>
 #include <core/system/debug/logging/debug.h>
 
@@ -22,6 +23,12 @@ void combus_uart_init()
 {
     static_assert(ComBusUartBaud <= UartMaxBaud,
                   "ComBusUartBaud exceeds board hardware ceiling UartMaxBaud");
+
+        // P3 — caller-owned per-link handshake context.  Zero-initialised
+        //    at boot, shared between TX and RX of the same ComBus link
+        //    by combus_protocol_init().  Multiple independent ComBus
+        //    interfaces must each declare their own context.
+    static CombusHandshakeContext s_linkHandshakeCtx = {};
 
     constexpr ComBusFrameCfg txCfg = {
         static_cast<uint8_t>(AnalogComBusID::WIRE_END),   ///< Wire channels only — not local sound-node channels.
@@ -38,9 +45,9 @@ void combus_uart_init()
           static_cast<uint8_t>(DigitalComBusID::WIRE_END),  ///< Wire channels only.
       };
 
-      combus_protocol_init(uart_get_combus_com(), txCfg, ComBusUartTxHz, rxCfg, s_analog, s_digital);
+      combus_protocol_init(uart_get_combus_com(), txCfg, ComBusUartTxHz, rxCfg, s_analog, s_digital, &s_linkHandshakeCtx);
     #else
-      combus_protocol_init(uart_get_combus_com(), txCfg, ComBusUartTxHz, {}, nullptr, nullptr);
+      combus_protocol_init(uart_get_combus_com(), txCfg, ComBusUartTxHz, {}, nullptr, nullptr, &s_linkHandshakeCtx);
     #endif
 }
 
