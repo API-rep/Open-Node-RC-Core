@@ -2,21 +2,25 @@
  * @file proc_failsafe_reset.cpp
  * @brief Failsafe processor — pivot reset at the start of each cycle.
  *
- * @details Stub at step 1: the body is empty. The actual reset of
- *   `failsafeBus.active` is deferred to step 2 (WIP §12.2). Once the
- *   reset processor is wired into `kFailsafeChain`, the body will
- *   perform the in-place reset:
- *   @code
- *   (void)proc;
- *   (void)value;
- *   (void)claimed;
- *   failsafeBus.active = false;
- *   @endcode
+ * @details Resets `failsafeBus.active` to `false` at the beginning of
+ *   each cycle. The function is the single, explicit owner of the
+ *   pivot reset — `failsafe_update()` does not perform any inline
+ *   reset.
+ *
+ *   Contract (WIP §5):
+ *     - reads no channel;
+ *     - does not modify `value` (pass-through);
+ *     - never sets `claimed`;
+ *     - has no RunLevel / machine / environment logic;
+ *     - has no reaction logic.
+ *
+ *   The processor participates in the main Failsafe chain
+ *   `kFailsafeChain` as the first entry (reset → contributors).
  *****************************************************************************/
 
 #include "proc_failsafe_reset.h"
 
-#include "failsafe.h"  // failsafeBus (used at step 2)
+#include "failsafe.h"  // failsafeBus
 
 
 // =============================================================================
@@ -24,20 +28,21 @@
 // =============================================================================
 
 /**
- * @brief No-op stub at step 1.
+ * @brief Clears the Failsafe pivot at cycle start.
  *
- * @details The pivot `failsafeBus.active` is not touched here yet.
- *   The reset is performed exclusively by the processor function once
- *   step 2 wires it into `kFailsafeChain`. Until then, the
- *   `failsafe_update()` orchestrator is itself a no-op.
+ * @param proc     CbProc descriptor — unused (pass-through).
+ *                 `inCh` = nullopt, `outCh` = nullopt, `cfg` = nullptr.
+ * @param value    Pipeline value — not modified.
+ * @param claimed  Never set to `true`.
  */
 void proc_failsafe_reset_fn(CbProc* proc, uint16_t& value, bool& claimed)
 {
-    (void)proc;     // Ignored at step 1.
+    (void)proc;     // No descriptor data consumed.
     (void)value;    // Pass-through.
-    (void)claimed;  // Never set.
+    (void)claimed;  // Never claimed.
 
-    // WIP: step 2 — failsafeBus.active = false;
+    // WIP: explicit pivot reset — single owner of this assignment.
+    failsafeBus.active = false;
 }
 
 // EOF proc_failsafe_reset.cpp
