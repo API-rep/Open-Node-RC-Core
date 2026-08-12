@@ -34,6 +34,25 @@
  *
  *   Sound node: call `sys_manager_reset()` before the UART frame interpreter;
  *   `combus_frame_apply()` re-asserts `isDrived` when a valid frame is applied.
+ *
+ *   **Failsafe deprecation note (WIP §12.4):**
+ *   `SysResult::failsafeActive` is kept temporarily for backward compatibility
+ *   with the legacy reaction path in `src/machines/main.cpp` and the
+ *   `output_manager` / `combus_tx` consumers. The new Failsafe module
+ *   (`src/core/system/failsafe/`, see `doc/WIP - Failsafe module design.md`)
+ *   publishes `failsafeBus.active` and exposes the read-only accessor
+ *   `failsafe_is_active()` (from `failsafe_access.h`). Once the new reaction
+ *   chain has been validated end-to-end (WIP §12.9 and §12.12), this field
+ *   and its legacy producer (`failsafeActive = !bus.isDrived` in
+ *   `sys_manager_update()`) will be removed and all consumers will migrate to
+ *   `failsafe_is_active()`.
+ *
+ *   Migration rules in effect until then:
+ *     - producers must keep writing `failsafeActive` unchanged;
+ *     - consumers must keep reading `failsafeActive` unchanged;
+ *     - the legacy reaction path must remain operational;
+ *     - `failsafe_init()` and `failsafe_update()` must NOT be called from
+ *       `sys_manager_update()` at this step.
  *****************************************************************************/
 #pragma once
 
@@ -46,9 +65,15 @@
 
 /**
  * @brief Return value of sys_manager_update() — system tick summary.
+ *
+ * @details `failsafeActive` is **kept temporarily** for backward compatibility
+ *   with the legacy reaction path. See the file-level deprecation note above.
  */
 struct SysResult {
-    bool failsafeActive;  ///< true = no active input source detected this cycle
+    bool failsafeActive;  ///< true = no active input source detected this cycle.
+                          ///<  @deprecated Kept temporarily for backward compatibility.
+                          ///<  Migrate to `failsafe_is_active()` once the new
+                          ///<  reaction chain (WIP §12.9 / §12.12) is validated.
     bool vbatChanged;     ///< true = at least one vbat channel changed state
 };
 
