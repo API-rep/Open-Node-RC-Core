@@ -972,3 +972,38 @@ pio test -e test_combus_loopback
 8. **Ordre des sources** : toute nouvelle chaîne doit finir avant `failsafe_update()`.
 9. **Staleness** : chaque contributeur doit avoir un test où son propriétaire cesse de réarmer son `FAILSAFE_X`.
 10. **Premier cycle** : pas de grace period ; la sûreté repose sur l'ordre d'exécution et le premier passage des sources avant la première évaluation.
+
+---
+
+## 12.18 — Journal d'étapes (validation)
+
+Cette section consigne la validation de chaque étape une fois terminée.
+Elle est ajoutée au WIP pour matérialiser les étapes "validation pure"
+(aucun changement de code) dans l'historique git.
+
+### Étape 3 — Façade `failsafe_access.h` (validation, sans modification)
+
+**Date** : 8/12/2026
+**Branche** : `failsafe-module`
+**Commit parent** : `3d6e62d` (étape 2)
+
+**Conclusion** : `failsafe_access.h` créé à l'étape 1 satisfait déjà le
+contrat. Aucune modification du code n'est nécessaire.
+
+Contrat validé :
+
+```cpp
+inline bool failsafe_is_active() { return failsafeBus.active; }
+```
+
+Vérifications effectuées :
+
+- Compilation `volvo_A60H_bruder` SUCCESS (1 139 029 octets Flash,
+  45 748 octets RAM).
+- Smoke-test temporaire `_smoke_access.cpp` compilé sans erreur ni
+  warning. Le fichier a été supprimé après validation.
+- Aucune dépendance vers `machines/`.
+- Aucun header lourd non justifié (`failsafe.h` inclut uniquement
+  `<stdint.h>`).
+
+Diff vs étape 2 : 0 octet, 0 fichier modifié.
