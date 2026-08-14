@@ -129,17 +129,36 @@ if not PAIRS:
 # =============================================================================
 
 def get_defined_flags(env) -> set[str]:
-    """Return set of preprocessor symbols defined via -D in build_flags."""
+    """
+    Return set of preprocessor symbols *effectively defined* for this build.
+
+    NOTE: env['CPPDEFINES'] is empty at the time `pre:` extra_scripts run
+    (PlatformIO 6.x resolves extends / build_flags AFTER pre-scripts).  We
+    therefore parse the active env's build_flags via GetProjectOption and
+    recursively walk the `extends` chain to collect inherited -D flags.
+    """
     flags: set[str] = set()
-    try:
-        raw = env.GetProjectOption("build_flags", "")
-    except Exception:
-        return flags
 
-    text = " ".join(str(x) for x in raw) if isinstance(raw, list) else str(raw)
+    def _collect(env_name: str | None, seen: set[str]) -> None:
+        if env_name is None or env_name in seen:
+            return
+        seen.add(env_name)
+        try:
+            raw = env.GetProjectOption("build_flags", "")
+        except Exception:
+            raw = ""
+        text = " ".join(str(x) for x in raw) if isinstance(raw, list) else str(raw)
+        for m in re.finditer(r"-D\s*([A-Za-z_][A-Za-z0-9_]*)", text):
+            flags.add(m.group(1))
+        try:
+            parent = env.GetProjectOption("extends", None)
+        except Exception:
+            parent = None
+        if parent:
+            for p in str(parent).split():
+                _collect(p.strip(), seen)
 
-    for m in re.finditer(r"-D\s*([A-Za-z_][A-Za-z0-9_]*)", text):
-        flags.add(m.group(1))
+    _collect(env.get("PIOENV"), set())
     return flags
 
 
@@ -179,7 +198,7 @@ def resolve_file(path: Path, visited: set[Path], defined: set[str]) -> bytes:
     """
     Recursively resolve a file:
       - Expand #include directives transitively.
-      - Evaluate #ifdef / #endif (single level, no nesting).
+      - Evaluate #ifdef / #endif with arbitrary nesting depth.
       - Skip already-visited files (cycle guard).
 
     Returns the resolved content as raw bytes.
@@ -199,34 +218,34 @@ def resolve_file(path: Path, visited: set[Path], defined: set[str]) -> bytes:
 
     out = bytearray()
     lines = text.splitlines()
-    i = 0
-    n = len(lines)
 
-    while i < n:
-        line = lines[i]
+    # Stack of conditional states. Root is always active.
+    # Each entry is True if the current #ifdef block is active.
+    cond_stack = [True]
+
+    for line in lines:
         stripped = line.strip()
 
-        # --- #ifdef FLAG ... #endif (single level) ---
+        # --- #ifdef FLAG ---
         m_ifdef = _RE_IFDEF.match(stripped)
         if m_ifdef:
             flag = m_ifdef.group(1)
-            # Find matching #endif
-            j = i + 1
-            while j < n and not _RE_ENDIF.match(lines[j].strip()):
-                j += 1
+            # Active only if parent is active AND flag is defined
+            is_active = cond_stack[-1] and (flag in defined)
+            cond_stack.append(is_active)
+            continue  # do not emit the directive itself
 
-            if flag in defined:
-                # Keep block content (lines between #ifdef and #endif)
-                for k in range(i + 1, j):
-                    out.extend(_process_line(lines[k], path.parent, visited, defined))
-            # else: drop entire block
+        # --- #endif ---
+        if _RE_ENDIF.match(stripped):
+            if len(cond_stack) > 1:
+                cond_stack.pop()
+            continue  # do not emit the directive itself
 
-            i = j + 1  # skip past #endif
+        # --- Normal line: emit only if current block is active ---
+        if not cond_stack[-1]:
             continue
 
-        # --- Regular line (may contain #include) ---
         out.extend(_process_line(line, path.parent, visited, defined))
-        i += 1
 
     return bytes(out)
 
