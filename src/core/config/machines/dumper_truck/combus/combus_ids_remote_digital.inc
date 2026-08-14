@@ -18,3 +18,8 @@ LIGHT_END,                  ///< Range marker — first index after light group
 BRAKING = LIGHT_END,        ///< ESC / inertia pipeline is in a braking state — written by motion (MotionOutput::isBraking).
 KEY_ACTIVE,                 ///< Processed ignition key state — 1=engine active, 0=inactive. Written by key_runlevel chain. Transmitted to sound node.
 MOTION_END,                 ///< Range marker — first index after motion group
+
+// ---- Common umbrella ------------------------------------------
+// Cross-machine-type Failsafe Digital REMOTE channel IDs (e.g.
+// FAILSAFE_INPUT_LINK). Pulled in only when HAS_FAILSAFE is defined.
+#include <core/config/machines/common/combus/combus_ids_remote_digital_common.inc>
