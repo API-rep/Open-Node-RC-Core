@@ -47,9 +47,9 @@ Plusieurs choix techniques sont formulés comme des **hypothèses à valider** d
 |---|---|---|---|
 | A1 | Définir le schéma YAML minimal (champs `id`, `type`, `scope`, `theme`, `requires`) | `schemas/cb_v1.schema.json` (ou Pydantic) | — |
 | A2 | Écrire un `.cb` pour le thème `vbat` (2-3 channels réels) | `src/core/system/vbat/vbat.cb` | A1 |
-| A3 | Implémenter le parser YAML (discovery + validation minimale) | `scripts/combus_builder/parser.py` | A1 |
+| A3 | Implémenter la discovery + parsing YAML minimal (collecte brute, sans tri/canonisation) | `scripts/combus_builder/parser.py` | A1 |
 | A4 | Implémenter la résolution des flags (lecture `env["CPPDEFINES"]` — mécanisme à valider) | `scripts/combus_builder/flags.py` | — |
-| A5 | Implémenter la canonisation (tri global `(scope, type, theme, id)`) | `scripts/combus_builder/canon.py` | A3 |
+| A5 | Implémenter la canonisation (fusion + tri global `(scope, type, theme, id)`) | `scripts/combus_builder/canon.py` | A3 |
 | A6 | Implémenter le générateur de header C++ (enum + tableau + count) | `scripts/combus_builder/generator.py` | A5 |
 | A7 | Implémenter le calcul MD5 (représentation canonique JSON) | `scripts/combus_builder/md5.py` | A5 |
 | A8 | Écrire le test de cohérence CPPDEFINES (paramétrable par env) | `scripts/combus_builder/coherence.py` | A4 |

@@ -266,7 +266,9 @@ Recherche de :
 *.cbch
 ```
 
-Le scan est trié pour les diagnostics, mais son ordre n'est jamais utilisé comme ordre protocolaire.
+L'ordre de discovery est brut : la discovery ne trie pas les chemins et
+ne leur attribue aucune signification protocolaire. Le tri canonique est
+réalisé en aval par l'étape de canonisation (A5).
 
 ### Parse / validation
 
@@ -317,12 +319,12 @@ Les valeurs numériques des enums peuvent être utilisées directement dans le w
 
 Avant migration :
 1. analyser l'ordre legacy (depuis les `.inc` actuels) et déterminer son importance dans le code existant (notamment `wire_end` et toute autre dépendance d'ordre dans le C++) ;
-2. capturer cet ordre legacy comme **référence** dans la logique du parser ;
+2. capturer cet ordre legacy comme **référence** dans la logique de la canonisation (A5) ;
 3. produire l'ordre v2 (via tri canonique) ;
 4. comparer ;
 5. **échouer explicitement** en cas de divergence.
 
-Le parser doit donc **préserver l'ordre wire_end** lorsqu'il reconstruit la liste des channels actifs : si un ordre legacy est documenté comme important (par exemple via `wire_end` ou tout autre invariant d'ordre dans le code C++), cet ordre est intégré comme clé de tri secondaire ou comme override explicite, et non comme simple tri canonique `(scope, type, theme, id)`.
+L'étape de canonisation (A5) doit donc **préserver l'ordre wire_end** lorsqu'elle reconstruit la liste des channels actifs : si un ordre legacy est documenté comme important (par exemple via `wire_end` ou tout autre invariant d'ordre dans le code C++), cet ordre est intégré comme clé de tri secondaire ou comme override explicite, et non comme simple tri canonique `(scope, type, theme, id)`. La discovery (A3) et le parsing restent neutres sur cette dimension.
 
 Si le tri canonique diverge du legacy :
 - conserver l'ordre legacy (mode compatibilité), ou
@@ -474,7 +476,7 @@ output identique
 MD5 identique
 ```
 
-Tester également un ordre de scan volontairement différent (fichiers renommés, ordre de découverte modifié).
+Tester également un ordre de scan volontairement différent (fichiers renommés, ordre de découverte modifié) : la discovery (A3) doit retourner une collecte indépendante de l'ordre du filesystem, et la canonisation (A5) doit produire un ordre canonique identique quel que soit l'ordre de discovery reçu.
 
 ### Étape 6 — flags
 
