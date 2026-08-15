@@ -5,37 +5,37 @@
 # contributor reports a fault.
 #
 # Legacy equivalent: src/core/system/failsafe/combus_ids_digital_failsafe.inc
-#   #ifdef HAS_FAILSAFE
-#   FAILSAFE,           ///< Failsafe aggregator channel — set when any FAILSAFE_X contributor reports a fault
-#   #ifdef HAS_VBAT_FAILSAFE
-#     #include <core/config/vbat/combus_ids_digital_vbat_failsafe.inc>
-#   #endif
-#   FAILSAFE_END,        ///< Range marker — first index after Failsafe group.
-#   #endif
+# #ifdef HAS_FAILSAFE
+# FAILSAFE,           ///< Failsafe aggregator channel — set when any FAILSAFE_X contributor reports a fault
+# #ifdef HAS_VBAT_FAILSAFE
+# #include <core/config/vbat/combus_ids_digital_vbat_failsafe.inc>
+# #endif
+# FAILSAFE_END,       ///< Range marker — first index after Failsafe group.
+# #endif
 #
 # Notes:
-# - FAILSAFE is the aggregator, not a source. It is consumed by the
-#   C++ processor proc_failsafe_reset (cf. src/core/system/failsafe/proc_failsafe_reset.cpp).
+# - FAILSAFE is the aggregator, not a contributor.
 # - Contributors (FAILSAFE_VBAT, etc.) are declared in their own .cb
 #   files (e.g. src/core/system/vbat/vbat_failsafe.cb).
 # - FAILSAFE_END is a legacy range marker. The generator deduces it
 #   automatically from the list of channels in the group.
-# - REMOTE scope is required: the core failsafe must be accessible
-#   from core modules without machine-specific coupling.
-# - Direction: downlink only. The core failsafe publishes the aggregated
-#   FAILSAFE state downstream to consumers (machine, sound node, etc.).
-#   No uplink (the core does not consume FAILSAFE_X contributors
-#   directly — it consumes them via the aggregator).
+# - LOCAL scope is required because FAILSAFE is shared by all boards
+#   composing the local node. It allows the Failsafe state to be
+#   propagated to, and collected from, the different boards of that node.
+# - Direction is both uplink and downlink: any board may publish or
+#   consume the local Failsafe state as required by its role.
+# - Remote propagation, if required, is handled separately through a
+#   REMOTE ComBus definition(FAILSAFE_TELEMETRY ...).
 
-module: failsafe
 
 channels:
   - id: FAILSAFE
     infoName: "Failsafe aggregator"
     type: digital
-    scope: REMOTE
+    scope: LOCAL
     theme: failsafe
     direction:
+      - uplink
       - downlink
     requires:
       - HAS_FAILSAFE

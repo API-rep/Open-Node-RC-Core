@@ -1,32 +1,35 @@
 # vbat_failsafe.cb — VBAT-as-Failsafe-contributor
 #
-# This file declares the ComBus channel FAILSAFE_VBAT, which allows the
-# vbat module to signal a low-battery state to the Failsafe system.
+# This file declares the ComBus channel FAILSAFE_VBAT, which allows
+# the vbat module to signal a battery failure (typ. low bat) to the
+# Failsafe system.
 #
 # Legacy equivalent: src/core/config/vbat/combus_ids_digital_vbat_failsafe.inc
-#   FAILSAFE_VBAT,    ///< VBAT-as-Failsafe-contributor test channel — wired only when HAS_VBAT_FAILSAFE is set.
+# FAILSAFE_VBAT,    ///< VBAT-as-Failsafe-contributor test channel — wired only when HAS_VBAT_FAILSAFE is set.
 #
 # Notes:
 # - The BATTERY_LOW channel (digital, LOCAL) is already declared in
 #   src/core/config/machines/dumper_truck/combus/combus_ids_remote_digital.inc
 #   (line 5). It is NOT duplicated here.
 # - This .cb only declares the Failsafe contributor (FAILSAFE_VBAT).
-# - REMOTE scope is required: the core failsafe module must be able to
-#   consume this channel without machine-specific coupling.
-# - Direction: uplink only. The vbat module (machine node) sends the
-#   FAILSAFE_VBAT signal upstream to the core failsafe consumer.
-#   No downlink (the core does not write back to this channel).
+# - LOCAL scope is required because FAILSAFE_VBAT is shared by all boards
+#   composing the local node. Battery sensing may be performed by any of
+#   these boards.
+# - The channel is therefore readable and writable on the local wire:
+#   both uplink and downlink are enabled.
+# - Remote feedback, if required, is handled through a dedicated GLOBAL
+#   ComBus definition and is outside the scope of this channel.
 
-module: vbat
 
 channels:
   - id: FAILSAFE_VBAT
     infoName: "VBAT failsafe contributor"
     type: digital
-    scope: REMOTE
+    scope: LOCAL
     theme: failsafe
     direction:
       - uplink
+      - downlink
     requires:
       - HAS_FAILSAFE
       - HAS_VBAT_FAILSAFE
