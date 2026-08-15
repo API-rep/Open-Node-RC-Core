@@ -848,6 +848,30 @@ Cible : `src/core/system/failsafe/failsafe.cb` (équivalent du `combus_ids_digit
 
 **Recommandation** : merger la branche `failsafe-module` avant de continuer, pour avoir le répertoire `src/core/system/failsafe/` et les fichiers C++ associés (`failsafe.cpp`, `failsafe_chain.cpp`, `proc_failsafe_reset.cpp`, etc.). Sinon, le `.cb` est créé dans un répertoire orphelin.
 
+
+
+### A2 — Convention `direction` (uplink / downlink)
+
+**Principe** : `uplink` / `downlink` indiquent le sens de transmission sur le fil, par rapport au nœud de référence (machine). Ils ne définissent pas le nœud : ils définissent le sens du canal dans le contrat remote.
+
+**Format** :
+
+```yaml
+scope: REMOTE
+direction:
+  - uplink
+  - downlink
+```
+
+Une définition peut éventuellement être bidirectionnelle si elle porte les deux flags.
+
+**Application aux deux `.cb`** :
+
+| Channel | Scope | Direction | Raison |
+|---|---|---|---|
+| `FAILSAFE_VBAT` (vbat_failsafe.cb) | REMOTE | `uplink` | Le module vbat (machine) envoie le signal FAILSAFE_VBAT en amont vers le core failsafe. Pas de downlink (le core n'écrit pas dans ce channel). |
+| `FAILSAFE` (failsafe.cb) | REMOTE | `downlink` | Le core failsafe publie l'état agrégé FAILSAFE en aval vers les consommateurs (machine, sound node, etc.). Pas d'uplink (le core ne consomme pas directement les contributeurs — il passe par l'agrégateur). |
+
 ### Notes diverses
 
 - `FAILSAFE` est `REMOTE` (validé).

@@ -223,3 +223,24 @@ Implémenter l'architecture à 3 pointeurs pour la superposition de layers :
 
 ### Prochaine étape
 Une fois le layering implémenté et validé, passer à la **Phase 2 — Groupes thématiques**.
+
+## Direction (uplink / downlink)
+
+**Principe** : `uplink` / `downlink` indiquent le sens de transmission sur le fil, par rapport au nœud de référence (machine). Ils ne définissent pas le nœud : ils définissent le sens du canal dans le contrat remote.
+
+**Format** :
+
+```yaml
+scope: REMOTE
+direction:
+  - uplink
+  - downlink
+```
+
+Une définition peut éventuellement être bidirectionnelle si elle porte les deux flags.
+
+**Exemples** :
+
+- `FAILSAFE_VBAT` (contributeur Failsafe) : `direction: [uplink]` — le module vbat envoie le signal en amont vers le core failsafe.
+- `FAILSAFE` (agrégateur) : `direction: [downlink]` — le core failsafe publie l'état agrégé en aval vers les consommateurs.
+

@@ -22,6 +22,10 @@
 #   automatically from the list of channels in the group.
 # - REMOTE scope is required: the core failsafe must be accessible
 #   from core modules without machine-specific coupling.
+# - Direction: downlink only. The core failsafe publishes the aggregated
+#   FAILSAFE state downstream to consumers (machine, sound node, etc.).
+#   No uplink (the core does not consume FAILSAFE_X contributors
+#   directly — it consumes them via the aggregator).
 
 module: failsafe
 
@@ -31,5 +35,7 @@ channels:
     type: digital
     scope: REMOTE
     theme: failsafe
+    direction:
+      - downlink
     requires:
       - HAS_FAILSAFE

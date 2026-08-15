@@ -13,6 +13,9 @@
 # - This .cb only declares the Failsafe contributor (FAILSAFE_VBAT).
 # - REMOTE scope is required: the core failsafe module must be able to
 #   consume this channel without machine-specific coupling.
+# - Direction: uplink only. The vbat module (machine node) sends the
+#   FAILSAFE_VBAT signal upstream to the core failsafe consumer.
+#   No downlink (the core does not write back to this channel).
 
 module: vbat
 
@@ -22,6 +25,8 @@ channels:
     type: digital
     scope: REMOTE
     theme: failsafe
+    direction:
+      - uplink
     requires:
       - HAS_FAILSAFE
       - HAS_VBAT_FAILSAFE
