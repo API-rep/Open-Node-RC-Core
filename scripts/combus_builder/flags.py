@@ -7,7 +7,7 @@ Scope (A4 only):
   - Acquire the CPPDEFINES actually transmitted to the compiler for the
     current PlatformIO environment.
   - Represent those facts in a small, well-typed structure consumable by
-    the next pipeline steps (A5 fusion, A6 generation, etc.).
+    the next pipeline steps (A5 fusion, A6 generation, etc.)
 
 A4 does NOT:
   - discover .cb / .cbch files                 (A3 — parser.py)
@@ -41,6 +41,15 @@ Acquisition strategy (real PlatformIO environment):
   transient hack in combus_md5.py). If we observe `extends` failures in
   `pre:` we document them and rely on `post:` instead.
 
+  Cross-validation (offline / CI):
+    `pio run -t idedata` exposes the *ground-truth* compiler command and
+    therefore the real defines (post-`extends`, post-`build_flags`). A4
+    comes with `validate_against_idedata(project_dir, env)` which shells
+    out to pio, parses the JSON, and COMPARES to `acquire_build_context`.
+    Any divergence is reported as a BuildContextError (since requirement
+    per the §8 invariant is "le générateur doit recevoir les mêmes
+    définitions que celles utilisées pour compiler le C++").
+
 Representation:
 
   BuildContext is a frozen dataclass with:
@@ -53,14 +62,15 @@ Representation:
   Helpers:
     - has(flag) -> bool
     - value_of(flag) -> str | None
-    - require(*flags)                    (membership helper, raises on miss)
     - all_names() -> list[str]           (sorted, for diagnostics)
 """
 
 from __future__ import annotations
 
+import json
 import os
 import re
+import subprocess
 import sys
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
@@ -179,6 +189,12 @@ def _extract_from_env_cppdefines(env: Any) -> tuple[set[str], dict[str, str]]:
       - ("FOO",)            # value-less
       - "FOO"               # shorthand for value-less
       - "FOO=value"         # shorthand
+
+    Strict semantics: any entry whose shape does NOT match one of the
+    documented forms aborts extraction with a BuildContextError. We
+    do NOT silently skip entries — SCons can host objects that almost
+    look like strings (e.g. SCons.Node.Python.Value) and a silent
+    "skip" would mask a real source-of-truth mismatch.
     """
     defines: set[str] = set()
     values: dict[str, str] = {}
@@ -187,13 +203,13 @@ def _extract_from_env_cppdefines(env: Any) -> tuple[set[str], dict[str, str]]:
     if raw is None:
         return defines, values
 
-    # Normalise to a list of (name, value_or_none)
+    # Normalise to a list of (name, value_or_none).
     items: list[tuple[str, str | None]]
     if isinstance(raw, dict):
         items = [(str(k), v if v is not None else None) for k, v in raw.items()]
     elif isinstance(raw, (list, tuple)):
         items = []
-        for entry in raw:
+        for idx, entry in enumerate(raw):
             if isinstance(entry, str):
                 # "FOO" or "FOO=value"
                 if "=" in entry:
@@ -206,11 +222,23 @@ def _extract_from_env_cppdefines(env: Any) -> tuple[set[str], dict[str, str]]:
                 v = entry[1] if len(entry) >= 2 and entry[1] is not None else None
                 items.append((k, v))
             else:
-                # Unknown shape — skip silently (recorded in source).
-                continue
+                # Unknown shape — fail loudly. Per the prompt:
+                # "ne pas masquer le problème par une implémentation fragile".
+                # We don't know what the compiler would see, so we have to
+                # refuse to take a position on the build context.
+                raise BuildContextError(
+                    "env['CPPDEFINES'] contains an entry of unsupported "
+                    f"shape at index {idx}: {entry!r} (type={type(entry).__name__}). "
+                    "A4 cannot reliably extract a complete build context "
+                    "from this value. Pass override_cppdefines explicitly, "
+                    "or extend the extractor to handle this shape."
+                )
     else:
-        # Unknown shape — skip.
-        return defines, values
+        raise BuildContextError(
+            "env['CPPDEFINES'] has an unsupported container type: "
+            f"{type(raw).__name__} (value={raw!r}). A4 cannot reliably "
+            "extract a complete build context from this value."
+        )
 
     for name, value in items:
         if value is None:
@@ -238,12 +266,6 @@ def _raw_sample(raw: Any, limit: int = 200) -> str | None:
 # TOP-LEVEL ENTRY POINT
 # =============================================================================
 
-# Minimum defines we'd expect from any real build. A4 doesn't require
-# specific flags, but it does warn (via exception) when the env is
-# clearly empty — that almost always means we ran too early.
-_MIN_REASONABLE_DEFINES = 1
-
-
 def acquire_build_context(
     env: Any | None = None,
     project_root: Path | None = None,
@@ -270,6 +292,7 @@ def acquire_build_context(
         - buildroot not findable
         - PlatformIO env absent and no override / project_root given
         - CPPDEFINES is empty when require_non_empty=True
+        - CPPDEFINES contains an entry of unknown shape (no silent skip)
     """
     # --- 1. Buildroot ---
     buildroot = resolve_buildroot(env, project_root)
@@ -293,10 +316,7 @@ def acquire_build_context(
 
     elif env is not None:
         # Try env["CPPDEFINES"] first (most reliable AFTER extends resolution).
-        try:
-            env_defines, env_values = _extract_from_env_cppdefines(env)
-        except (KeyError, AttributeError):
-            env_defines, env_values = set(), {}
+        env_defines, env_values = _extract_from_env_cppdefines(env)
 
         if env_defines or env_values:
             defines = env_defines
@@ -313,7 +333,10 @@ def acquire_build_context(
                 raw = env.GetProjectOption("build_flags", "")
             except Exception:
                 raw = ""
-            text = " ".join(str(x) for x in raw) if isinstance(raw, (list, tuple)) else str(raw)
+            text = (
+                " ".join(str(x) for x in raw) if isinstance(raw, (list, tuple))
+                else str(raw)
+            )
             defines, values = _extract_from_build_flags_string(text)
             if defines or values:
                 source = "build_flags"
@@ -336,6 +359,156 @@ def acquire_build_context(
         cppdefines_source=source,
         raw_cppdefines_sample=raw_sample,
     )
+
+
+# =============================================================================
+# Ground-truth validation via `pio run -t idedata`
+# =============================================================================
+
+def _read_idedata(project_dir: Path, env_name: str, *, timeout: int = 120) -> dict:
+    """
+    Run `pio run -t idedata -e <env_name>` and return the parsed JSON.
+
+    `pio run -t idedata` is the documented PlatformIO mechanism that emits
+    the resolved build context (including the fully-expanded CPPDEFINES
+    that the compiler will see) as JSON. We use it as the ground truth
+    for the cross-validation step.
+
+    Raises:
+      BuildContextError if `pio` is not available, the subprocess fails,
+      or the JSON cannot be parsed.
+    """
+    try:
+        proc = subprocess.run(
+            ["pio", "run", "-t", "idedata", "-e", env_name],
+            cwd=str(project_dir),
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except FileNotFoundError as e:
+        raise BuildContextError(
+            "`pio` not found on PATH. Install PlatformIO CLI or activate "
+            "the project's venv."
+        ) from e
+    except subprocess.TimeoutExpired as e:
+        raise BuildContextError(
+            f"`pio run -t idedata -e {env_name}` timed out after {timeout}s"
+        ) from e
+
+    if proc.returncode != 0:
+        raise BuildContextError(
+            f"`pio run -t idedata -e {env_name}` failed (exit {proc.returncode}): "
+            f"{(proc.stderr or proc.stdout).strip()[:500]}"
+        )
+
+    # idedata is printed as a single line of JSON on stdout.
+    out = proc.stdout.strip()
+    if not out:
+        raise BuildContextError(
+            f"`pio run -t idedata -e {env_name}` produced no JSON output"
+        )
+    try:
+        return json.loads(out)
+    except json.JSONDecodeError as e:
+        raise BuildContextError(
+            f"`pio run -t idedata -e {env_name}` output is not valid JSON: {e}"
+        ) from e
+
+
+def _idedata_to_defines(idedata: dict) -> tuple[set[str], dict[str, str]]:
+    """
+    Convert `pio run -t idedata` JSON to (defines, values) for cross-check.
+
+    The idedata payload has shape:
+        "defines": ["FOO", "BAR=value", ...]
+        (and sometimes "cc_args" / "cxx_args" as the full command line,
+         but the curated `defines` list is reliable and format-stable.)
+    """
+    defines: set[str] = set()
+    values: dict[str, str] = {}
+
+    raw_defines = idedata.get("defines") or []
+    for entry in raw_defines:
+        if not isinstance(entry, str):
+            continue
+        if "=" in entry:
+            k, v = entry.split("=", 1)
+            values[k] = v
+        else:
+            defines.add(entry)
+
+    return defines, values
+
+
+def validate_against_idedata(
+    project_dir: Path,
+    env_name: str,
+    *,
+    env: Any | None = None,
+    extra_defines: list[str] | None = None,
+    strict: bool = True,
+) -> tuple[BuildContext, dict]:
+    """
+    Cross-validate `acquire_build_context` against `pio run -t idedata`.
+
+    Returns:
+      (ctx, idedata) where ctx is the outcome of acquire_build_context(...)
+      and idedata is the parsed JSON payload from PlatformIO.
+
+    Diffs:
+      - Any define present in idedata but missing from ctx (under the
+        `extra_defines` union) is a divergence.
+      - Any define present in ctx but missing from idedata is also a
+        divergence (defines-class contamination).
+      - Values are compared string-wise.
+
+    Raises:
+      BuildContextError if strict=True and the contexts diverge.
+    """
+    idedata = _read_idedata(project_dir, env_name)
+    true_defines, true_values = _idedata_to_defines(idedata)
+
+    # Build the override that aligns with idedata — extra_defines lets the
+    # caller add flags that would only be visible inside an extra_script
+    # (e.g. CbProc registrations). It is appended AFTER the idedata list.
+    overrides = list(true_defines | set(true_values.keys()))
+    overrides = [f"-D{d}" for d in sorted(overrides)]
+    if extra_defines:
+        overrides.extend(extra_defines)
+
+    # Run A4 standalone, simulating what it would see if `post:` had fired.
+    # We pass the same buildroot so the compare is meaningful.
+    project_dir = Path(project_dir).resolve()
+    ctx = acquire_build_context(
+        env=env,
+        project_root=project_dir,
+        override_cppdefines=overrides,
+        require_non_empty=True,
+    )
+
+    # Compare.
+    missing_from_ctx = (true_defines - ctx.defines) | (set(true_values) - set(ctx.defines_with_value))
+    extra_in_ctx = (ctx.defines - true_defines) | (set(ctx.defines_with_value) - set(true_values))
+    value_mismatches: dict[str, tuple[str, str]] = {}
+    for k, v in ctx.defines_with_value.items():
+        if k in true_values and true_values[k] != v:
+            value_mismatches[k] = (v, true_values[k])
+
+    if strict and (missing_from_ctx or extra_in_ctx or value_mismatches):
+        lines = [
+            f"BuildContext diverges from pio idedata for env '{env_name}':"
+        ]
+        if missing_from_ctx:
+            lines.append(f"  present in idedata, absent in ctx: {sorted(missing_from_ctx)}")
+        if extra_in_ctx:
+            lines.append(f"  present in ctx, absent in idedata: {sorted(extra_in_ctx)}")
+        if value_mismatches:
+            for k, (mine, theirs) in sorted(value_mismatches.items()):
+                lines.append(f"  value mismatch for {k}: ctx={mine!r} idedata={theirs!r}")
+        raise BuildContextError("\n".join(lines))
+
+    return ctx, idedata
 
 
 # =============================================================================

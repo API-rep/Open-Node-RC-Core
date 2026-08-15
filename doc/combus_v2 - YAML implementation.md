@@ -1009,17 +1009,44 @@ Erreurs explicites (`BuildContextError`) :
 - `BuildContextError` rend le cas pathologique visible au build (pas de
   fallback silencieux).
 
-**Tests** (20/20 passent) :
+**Tests** (27/27 passent — 2 skipped sans `COMBUS_A4_INTEGRATION=1`) :
 
 ```
 python scripts/combus_builder/tests/test_flags.py
+# Pour activer les tests d'intégration PlatformIO réels :
+COMBUS_A4_INTEGRATION=1 python scripts/combus_builder/tests/test_flags.py
 ```
 
-Couvre : extraction build_flags (simple/valeur/mixte/sans flag/valeur avec `=`) ;
-extraction env CPPDEFINES (dict/list-strings/list-tuples/None) ;
-acquisition (override, env, fallback build_flags, no-defines-raises, no-defines-allowed,
-bad-buildroot, standalone no-env) ;
-helpers BuildContext (all_names, has, value_of, to_dict, frozen).
+Couvre :
+- extraction build_flags (simple/valeur/mixte/sans flag/valeur avec `=`) ;
+- extraction env CPPDEFINES (dict/list-strings/list-tuples/None) ;
+- **STRICT** : entrées CPPDEFINES inconnues (objet exotique) → `BuildContextError`
+  au lieu d'un silent skip ;
+- **STRICT** : container CPPDEFINES inconnu (ni dict, ni list/tuple) → `BuildContextError` ;
+- acquisition (override, env, fallback build_flags, no-defines-raises,
+  no-defines-allowed, bad-buildroot, standalone no-env) ;
+- helpers BuildContext (all_names, has, value_of, to_dict, frozen) ;
+- parser idedata (`_idedata_to_defines`) : list, vide, entries non-string ;
+- **intégration PlatformIO** (skip par défaut) : `validate_against_idedata`
+  contre `pio run -t idedata -e <env>` sur un env machine + un env remote.
+
+**Validation against ground truth (`pio run -t idedata`)** :
+
+A4 expose `validate_against_idedata(project_dir, env_name, strict=True)` qui :
+
+1. shell `pio run -t idedata -e <env>` et parse la sortie JSON ;
+2. compare les defines détectés par `acquire_build_context` à la liste
+   `defines` de l'idedata (post-`extends`, post-`build_flags`, source de vérité) ;
+3. lève `BuildContextError` à la moindre divergence (defines présents
+   d'un côté et absents de l'autre, valeurs différentes).
+
+Cela ferme l'angle mort identifié en review : un `CPPDEFINES` non-vide
+mais incomplet (extends mal résolu, container partiel) ne peut plus
+passer la validation sans être détecté explicitement à l'intégration.
+
+Les tests d'intégration sont guardés par `COMBUS_A4_INTEGRATION=1` :
+- skip par défaut (CI sans pio / sans toolchain, Windows build nocache) ;
+- 2 tests : un env machine, un env remote (si présents dans `platformio.ini`).
 
 **Hors scope A4 (rappel)** : discovery .cb/.cbch (A3), fusion (A5),
 tri canonique (A5), génération C++ (A6), MD5 (A7), validation processors
@@ -1049,12 +1076,20 @@ séparément en A12, hors du scope A4.
 ```python
 # scripts/combus_builder_main.py (à créer si besoin)
 Import("env")  # SCons inject
-from scripts.combus_builder.flags import acquire_build_context, BuildContextError
+from scripts.combus_builder.flags import (
+    acquire_build_context,
+    validate_against_idedata,
+    BuildContextError,
+)
 try:
     ctx = acquire_build_context(env)
 except BuildContextError as e:
     print(f"[combus_builder] FATAL: {e}")
     env.Exit(1)
+
+# Validation croisée (CI / sanity check) — peut être lancée en CLI :
+#   python -m scripts.combus_builder.flags \
+#     --validate-against-idedata --env <env_name>
 ```
 
 ### Notes diverses

@@ -2,17 +2,30 @@
 """
 Tests for flags.py — A4.
 
-These tests are self-contained: they build fake "SCons env" objects
-that mimic the relevant PlatformIO/SCons API surface. This avoids the
-need to actually launch a PlatformIO build for unit tests.
+Two layers:
 
-A real integration test against PlatformIO is recommended separately
-(see doc/combus_v2 - YAML implementation.md section 27).
+  1. Unit tests (FakeEnv, no PlatformIO):
+     - build_flags extraction
+     - env CPPDEFINES extraction (dict / list-strings / list-tuples)
+     - acquire_build_context (override / env / fallback / errors)
+     - BuildContext helpers
+     - _extract_from_env_cppdefines: STRICT mode (no silent skip)
+
+  2. Integration tests (real PlatformIO):
+     - skip unless pio is on PATH AND a primary env exists
+     - cross-check ctx vs `pio run -t idedata` for a real env
+     - assert no uncontrolled divergence
+
+The integration tests are NOT run by default — they require pio and
+working network/toolchains. They are guarded by env var
+COMBUS_A4_INTEGRATION=1 so that CI can opt in.
 """
 
 from __future__ import annotations
 
+import json
 import os
+import subprocess
 import sys
 import inspect
 import tempfile
@@ -21,8 +34,6 @@ from pathlib import Path
 
 # Ensure the combus_builder package is importable when running this
 # file directly from the repo root.
-# Path layout: repo_root/scripts/combus_builder/tests/test_flags.py
-# -> repo_root = tests.parent.parent.parent
 THIS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = THIS_DIR.parent.parent.parent
 if str(REPO_ROOT) not in sys.path:
@@ -34,6 +45,8 @@ from scripts.combus_builder.flags import (
     acquire_build_context,
     _extract_from_build_flags_string,
     _extract_from_env_cppdefines,
+    _idedata_to_defines,
+    validate_against_idedata,
 )
 
 
@@ -154,6 +167,40 @@ def test_extract_from_env_cppdefines_none():
     assert values == {}
 
 
+def test_extract_from_env_cppdefines_unsupported_entry_raises():
+    """
+    A4 must NOT silently skip entries it doesn't recognise. Per the
+    A4 prompt: "ne pas masquer le problème par une implémentation fragile".
+    SCons can host objects like SCons.Node.Python.Value that don't fit
+    the documented shapes — a silent skip would mask a real source-of-truth
+    mismatch.
+    """
+    class WeirdValue:
+        """Placeholder for the kind of object SCons can host."""
+        def __repr__(self):
+            return "<WeirdValue>"
+
+    env = FakeEnv(cppdefines=[("FOO", 1), WeirdValue()])
+    try:
+        _extract_from_env_cppdefines(env)
+    except BuildContextError as e:
+        assert "unsupported" in str(e)
+        assert "WeirdValue" in str(e)
+    else:
+        raise AssertionError("expected BuildContextError on unsupported entry shape")
+
+
+def test_extract_from_env_cppdefines_unsupported_container_raises():
+    """A single int at the top level (not a dict / list / tuple) must raise."""
+    env = FakeEnv(cppdefines=42)  # type: ignore[arg-type]
+    try:
+        _extract_from_env_cppdefines(env)
+    except BuildContextError as e:
+        assert "unsupported container type" in str(e)
+    else:
+        raise AssertionError("expected BuildContextError on unsupported container type")
+
+
 # =============================================================================
 # Tests for full acquire_build_context (need tmp_path)
 # =============================================================================
@@ -189,7 +236,6 @@ def test_acquire_with_env_cppdefines(tmp_path):
     assert ctx.buildroot == src
     assert ctx.cppdefines_source == "env"
     assert "FOO" in ctx.defines
-    # IS_MACHINE / MACHINE_VOLVO_A60_H_BRUDER are value-1 defines
     assert ctx.has("IS_MACHINE")
     assert ctx.has("MACHINE_VOLVO_A60_H_BRUDER")
     assert ctx.value_of("IS_MACHINE") == "1"
@@ -198,7 +244,6 @@ def test_acquire_with_env_cppdefines(tmp_path):
 
 def test_acquire_fallback_to_build_flags(tmp_path):
     src = _tmp_src_dir(tmp_path)
-    # env has empty CPPDEFINES (simulates pre: hook) but build_flags exposes things
     env = FakeEnv(
         project_src_dir=str(src),
         cppdefines={},
@@ -240,7 +285,6 @@ def test_acquire_no_defines_allowed_when_not_required(tmp_path):
 
 
 def test_acquire_bad_buildroot_raises(tmp_path):
-    # No src/ created inside tmp_path/proj
     fake_root = tmp_path / "proj"
     fake_root.mkdir()
     try:
@@ -255,14 +299,12 @@ def test_acquire_bad_buildroot_raises(tmp_path):
 
 
 def test_acquire_standalone_no_env_no_override_raises(tmp_path):
-    # No env, no override, no project_root -> buildroot falls back to cwd+src
-    # which doesn't exist in tmp_path.
     cwd_before = Path.cwd()
     try:
         os.chdir(tmp_path)
         acquire_build_context()
     except BuildContextError:
-        pass  # OK — any BuildContextError is acceptable here
+        pass
     else:
         raise AssertionError("expected BuildContextError in standalone no-env mode")
     finally:
@@ -317,14 +359,132 @@ def test_buildcontext_is_frozen():
 
 
 # =============================================================================
+# Tests for idedata cross-validation helpers (no PlatformIO needed)
+# =============================================================================
+
+def test_idedata_to_defines_basic():
+    """The idedata parser should handle the canonical `defines` list."""
+    payload = {
+        "defines": ["FOO", "BAR=42", "QUX"],
+        "other_junk": "ignored",
+    }
+    defines, values = _idedata_to_defines(payload)
+    assert defines == {"FOO", "QUX"}
+    assert values == {"BAR": "42"}
+
+
+def test_idedata_to_defines_empty():
+    defines, values = _idedata_to_defines({})
+    assert defines == set()
+    assert values == {}
+
+
+def test_idedata_to_defines_skips_non_strings():
+    """Idedata can contain non-string entries (defensive)."""
+    payload = {"defines": ["FOO", 42, None, "BAR=1"]}
+    defines, values = _idedata_to_defines(payload)
+    assert defines == {"FOO"}
+    assert values == {"BAR": "1"}
+
+
+# =============================================================================
+# Integration tests (real PlatformIO, opt-in)
+# =============================================================================
+
+def _pio_exists() -> bool:
+    try:
+        subprocess.run(
+            ["pio", "--version"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+        )
+        return True
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
+def _read_primary_envs(repo_root: Path) -> list[str]:
+    """Heuristic: list `[env:*]` sections from platformio.ini."""
+    ini = repo_root / "platformio.ini"
+    if not ini.is_file():
+        return []
+    envs = []
+    for line in ini.read_text(encoding="utf-8", errors="replace").splitlines():
+        s = line.strip()
+        if s.startswith("[env:") and s.endswith("]"):
+            envs.append(s[len("[env:"):-1])
+    return envs
+
+
+def test_integration_against_idedata_machine_env(tmp_path):
+    """
+    Run A4's idedata cross-validation against the real project on a
+    PlatformIO env that targets a machine. Skips if pio / env / network
+    are unavailable.
+    """
+    if os.environ.get("COMBUS_A4_INTEGRATION") != "1":
+        print("  SKIP (set COMBUS_A4_INTEGRATION=1 to run)")
+        return
+
+    if not _pio_exists():
+        print("  SKIP (pio not on PATH)")
+        return
+
+    envs = _read_primary_envs(REPO_ROOT)
+    if not envs:
+        print("  SKIP (no [env:*] in platformio.ini)")
+        return
+
+    # Pick the first env that looks like a machine (or any first one).
+    target = next((e for e in envs if "machine" in e.lower() or "main" in e.lower()), envs[0])
+    print(f"  using env '{target}' from {len(envs)} candidate(s)")
+
+    ctx, idedata = validate_against_idedata(
+        project_dir=REPO_ROOT,
+        env_name=target,
+        strict=True,
+    )
+    assert ctx.buildroot.is_dir()
+    print(f"  ctx has {len(ctx.defines)} defines, {len(ctx.defines_with_value)} values")
+    print(f"  idedata envs: {idedata.get('envs', ids_in_idedata := '<see defines>')}")
+
+
+def test_integration_against_idedata_remote_env(tmp_path):
+    """
+    Same as above but on a remote-style env. Skips if no such env exists.
+    """
+    if os.environ.get("COMBUS_A4_INTEGRATION") != "1":
+        print("  SKIP (set COMBUS_A4_INTEGRATION=1 to run)")
+        return
+
+    if not _pio_exists():
+        print("  SKIP (pio not on PATH)")
+        return
+
+    envs = _read_primary_envs(REPO_ROOT)
+    remote = next((e for e in envs if "remote" in e.lower() or "ext" in e.lower()), None)
+    if remote is None:
+        print("  SKIP (no remote-style env in platformio.ini)")
+        return
+
+    print(f"  using env '{remote}'")
+    ctx, idedata = validate_against_idedata(
+        project_dir=REPO_ROOT,
+        env_name=remote,
+        strict=True,
+    )
+    assert ctx.buildroot.is_dir()
+    print(f"  ctx has {len(ctx.defines)} defines, {len(ctx.defines_with_value)} values")
+
+
+# =============================================================================
 # Test runner
 # =============================================================================
 
 def _run_all():
     """Discover all test_* functions and run them. Tests that take a
     tmp_path receive a real tempdir; tests that take no args are called bare."""
-    import functools
-
     this = sys.modules[__name__]
     tests = [
         (name, fn)
