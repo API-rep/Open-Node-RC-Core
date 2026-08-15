@@ -943,6 +943,101 @@ Tout cela est reporté aux étapes A4+.
   `pyyaml` dans son env SCons, donc transparent en build. En CLI standalone,
   `pip install pyyaml` est nécessaire (msg d'erreur explicite si absent).
 
+
+
+### A4 — Acquisition du buildroot et résolution des flags (implémentation)
+
+**Fichiers créés** :
+
+- `scripts/combus_builder/flags.py` — module A4.
+- `scripts/combus_builder/tests/test_flags.py` — 20 tests unitaires.
+
+**API principale** (`flags.py`) :
+
+```python
+acquire_build_context(env=None, project_root=None, override_cppdefines=None,
+                      require_non_empty=True) -> BuildContext
+```
+
+Retourne un `BuildContext` (frozen dataclass) avec :
+
+- `buildroot: Path` — src_dir résolu.
+- `defines: frozenset[str]` — defines sans valeur.
+- `defines_with_value: dict[str, str]` — defines avec valeur (stringifiée).
+- `cppdefines_source: str` — `'env' | 'build_flags' | 'override' | 'none'`.
+- `raw_cppdefines_sample: str | None` — extrait pour debug.
+
+Helpers : `has(flag)`, `value_of(flag)`, `all_names()`, `to_dict()`.
+
+**Stratégie d'acquisition** (ordre de fiabilité) :
+
+1. `env["PROJECT_SRC_DIR"]` (PIO 6.x canonique) → `env["PROJECT_DIR"] + "/src"` :
+   réutilise `parser.resolve_buildroot` (A3) pour éviter une logique parallèle.
+
+2. `env["CPPDEFINES"]` (forme SCons dict/list/tuple) — la plus fiable
+   car déjà résolue par SCons. Normalise les 3 formes observées :
+   - `{"FOO": 1, "BAR": None}` (dict SCons)
+   - `["FOO", "BAR=42", "QUX"]` (list of strings)
+   - `[("FOO", 1), ("BAR",)]` (list of tuples)
+
+3. Fallback `env.GetProjectOption("build_flags", "")` + regex `_RE_D_FLAG`
+   (héritage `combus_md5.py` marqué transitoire dans la doc §8).
+
+4. `override_cppdefines` — pour tests / CLI.
+
+Erreurs explicites (`BuildContextError`) :
+- buildroot introuvable ;
+- `CPPDEFINES` inaccessible ET vide (sauf si `require_non_empty=False`).
+
+**Observations réelles sur PlatformIO 6.x** (recopiées du rework Failsafe) :
+
+- `env["CPPDEFINES"]` peut être **vide** en hook `pre:` car PIO 6.x résout
+  `extends` et `build_flags` **après** l'exécution des extra_scripts `pre:`.
+- En hook `post:`, `CPPDEFINES` est peuplé mais le script ne peut plus
+  modifier le build SCons.
+- L'option `extends` n'est pas traversée par `GetProjectOption("build_flags")`
+  en `pre:` — c'est précisément le cas pathologique que `combus_md5.py`
+  contourne par récursion manuelle (transitoire, à supprimer) ;
+  A4 ne duplique pas cette logique et se contente de la documenter.
+
+**Solution retenue pour A4** :
+
+- A4 essaie systematic `env["CPPDEFINES"]` **puis** tombe sur `build_flags`
+  **puis** accepte `override_cppdefines`.
+- A4 ne réimplémente pas la récursion `extends`. Si `pre:` ne donne rien,
+  l'utilisateur passe en `post:` ou fournit l'override.
+- `BuildContextError` rend le cas pathologique visible au build (pas de
+  fallback silencieux).
+
+**Tests** (20/20 passent) :
+
+```
+python scripts/combus_builder/tests/test_flags.py
+```
+
+Couvre : extraction build_flags (simple/valeur/mixte/sans flag/valeur avec `=`) ;
+extraction env CPPDEFINES (dict/list-strings/list-tuples/None) ;
+acquisition (override, env, fallback build_flags, no-defines-raises, no-defines-allowed,
+bad-buildroot, standalone no-env) ;
+helpers BuildContext (all_names, has, value_of, to_dict, frozen).
+
+**Hors scope A4 (rappel)** : discovery .cb/.cbch (A3), fusion (A5),
+tri canonique (A5), génération C++ (A6), MD5 (A7), validation processors
+(Phase C).
+
+**Intégration PlatformIO** (à finaliser en Phase A / B) :
+
+```python
+# scripts/combus_builder_main.py (à créer si besoin)
+Import("env")  # SCons inject
+from scripts.combus_builder.flags import acquire_build_context, BuildContextError
+try:
+    ctx = acquire_build_context(env)
+except BuildContextError as e:
+    print(f"[combus_builder] FATAL: {e}")
+    env.Exit(1)
+```
+
 ### Notes diverses
 
 - `FAILSAFE` est `REMOTE` (validé).
