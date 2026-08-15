@@ -759,3 +759,64 @@ Les trois points à lever avant le prototype sont :
 3. validation des processors référencés par `.cbch`.
 
 Le reste doit rester volontairement léger et évolutif pendant le prototype.
+
+## 27. Notes de travail
+
+> Section de travail pour le rework. Consigne uniquement les **réponses au roadmap** (ex : point A1 → structure du `.cb`). Pas de longs développements : c'est pour relecture lors de la rédaction de la doc finale.
+
+### A1 — Schéma YAML minimal `.cb`
+
+**Structure retenue** (basée sur la branche `failsafe-module` et `platformio.ini`) :
+
+```yaml
+# Fichier : src/core/system/failsafe/failsafe.cb
+module: failsafe
+
+channels:
+  - id: FAILSAFE
+    infoName: "Failsafe aggregator"
+    type: digital
+    scope: REMOTE
+    theme: failsafe
+    requires: [HAS_FAILSAFE]
+
+  - id: FAILSAFE_VBAT
+    infoName: "VBAT failsafe contributor"
+    type: digital
+    scope: REMOTE
+    theme: failsafe
+    requires: [HAS_FAILSAFE, HAS_VBAT_FAILSAFE]
+```
+
+**Flags observés dans `platformio.ini` (branche `failsafe-module`)** :
+
+| Flag | Rôle | Source |
+|---|---|---|
+| `IS_MACHINE` | Active les sections machine-only dans les headers ComBus | `[env:machines]` |
+| `HAS_FAILSAFE` | Active l'umbrella Failsafe dans les agrégateurs ComBus | `[env:machines]` |
+| `HAS_VBAT_FAILSAFE` | Active le contributeur VBAT dans Failsafe | À définir par env |
+| `MACHINE_VOLVO_A60_H_BRUDER` | Identité machine partagée machine + sound node | `[volvo_A60H_id]` |
+| `IS_MAINBOARD` / `IS_EXT_BOARD` / `IS_REMOTE` / `SOUND_NODE` | Type d'env | par env |
+
+**Champs validés** : `id`, `infoName`, `type`, `scope`, `theme`, `requires`, `uplink`/`downlink`/aucun.
+
+**Validateur** : à choisir (JSON Schema, Pydantic, Cerberus) — point ouvert.
+
+### A2 — Premier `.cb` : `failsafe.cb`
+
+Cible : `src/core/system/failsafe/failsafe.cb` (équivalent du `combus_ids_digital_failsafe.inc` actuel).
+
+**Mapping legacy → `.cb`** :
+
+| Legacy (`.inc`) | `.cb` |
+|---|---|
+| `FAILSAFE` (dans `combus_ids_digital_failsafe.inc`) | channel `id: FAILSAFE`, `requires: [HAS_FAILSAFE]` |
+| `FAILSAFE_VBAT` (dans `combus_ids_digital_vbat_failsafe.inc`) | channel `id: FAILSAFE_VBAT`, `requires: [HAS_FAILSAFE, HAS_VBAT_FAILSAFE]` |
+| `FAILSAFE_END` (range marker) | **À traiter** : marker de fin de groupe, pas un channel. Options : (a) générateur le déduit, (b) champ `group_end: true`, (c) ignoré. **À décider**. |
+
+### Notes diverses
+
+- `FAILSAFE` est `REMOTE` (validé).
+- `SYSTEM` est dans le modèle dès v2 (validé).
+- `.cbch` est pour plus tard (structure spécifique, hors scope A1).
+
