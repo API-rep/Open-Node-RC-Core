@@ -814,6 +814,40 @@ Cible : `src/core/system/failsafe/failsafe.cb` (équivalent du `combus_ids_digit
 | `FAILSAFE_VBAT` (dans `combus_ids_digital_vbat_failsafe.inc`) | channel `id: FAILSAFE_VBAT`, `requires: [HAS_FAILSAFE, HAS_VBAT_FAILSAFE]` |
 | `FAILSAFE_END` (range marker) | **À traiter** : marker de fin de groupe, pas un channel. Options : (a) générateur le déduit, (b) champ `group_end: true`, (c) ignoré. **À décider**. |
 
+
+
+### A2 — Implémentation (rapport)
+
+**Vérification préalable** : un combus VBAT existe-t-il déjà ?
+
+- Recherche dans `src/core/system/vbat/` : aucun `.inc` ComBus, uniquement du code C++ (`vbat.cpp`, `vbat_sense.cpp`, `vbat_alert.cpp`).
+- Recherche dans `src/core/config/vbat/` : aucun `.inc` ComBus, uniquement `config.h` (définit `HAS_VBAT_SENSING`).
+- Recherche dans `src/core/config/machines/dumper_truck/combus/` : `BATTERY_LOW` est déclaré dans `combus_ids_remote_digital.inc` (ligne 5), mais c'est un channel **digital LOCAL** (écrit par vbat, lu par tous), pas un contributeur Failsafe.
+- Recherche dans `src/core/system/combus/` : aucune mention de vbat/VBAT.
+
+**Conclusion** : aucun combus VBAT-as-Failsafe-contributor n'existe dans le working tree actuel. Le channel `FAILSAFE_VBAT` n'existe que sur la branche `failsafe-module` (cf. `src/core/config/vbat/combus_ids_digital_vbat_failsafe.inc`).
+
+**Fichiers créés** :
+
+1. `src/core/system/vbat/vbat.cb` — déclare `FAILSAFE_VBAT` (contributeur Failsafe).
+   - Équivalent legacy : `src/core/config/vbat/combus_ids_digital_vbat_failsafe.inc` (branche `failsafe-module`).
+   - `requires: [HAS_FAILSAFE, HAS_VBAT_FAILSAFE]`.
+   - `scope: REMOTE` (le core failsafe doit pouvoir le consommer sans couplage machine).
+
+2. `src/core/system/failsafe/failsafe.cb` — déclare `FAILSAFE` (agrégateur).
+   - Équivalent legacy : `src/core/system/failsafe/combus_ids_digital_failsafe.inc` (branche `failsafe-module`).
+   - `requires: [HAS_FAILSAFE]`.
+   - `scope: REMOTE`.
+   - Note : `FAILSAFE_END` (range marker) n'est PAS déclaré — le générateur le déduit automatiquement.
+
+**Vérification `src/core/system/failsafe/` (nouveau rep)** :
+
+- Le répertoire `src/core/system/failsafe/` **n'existe pas** dans le working tree actuel (branche `main`).
+- Il existe uniquement sur la branche `failsafe-module` (cf. `git ls-tree failsafe-module`).
+- Le fichier `failsafe.cb` est donc créé dans un répertoire qui n'existe pas encore — il faudra créer le répertoire ou merger la branche `failsafe-module` d'abord.
+
+**Recommandation** : merger la branche `failsafe-module` avant de continuer, pour avoir le répertoire `src/core/system/failsafe/` et les fichiers C++ associés (`failsafe.cpp`, `failsafe_chain.cpp`, `proc_failsafe_reset.cpp`, etc.). Sinon, le `.cb` est créé dans un répertoire orphelin.
+
 ### Notes diverses
 
 - `FAILSAFE` est `REMOTE` (validé).

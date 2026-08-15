@@ -1,0 +1,35 @@
+# failsafe.cb — Failsafe aggregator
+#
+# Ce fichier déclare le channel ComBus FAILSAFE, l'agrégateur du système
+# Failsafe. Il est mis à 1 (fault) si au moins un contributeur FAILSAFE_X
+# signale un défaut.
+#
+# Équivalent legacy : src/core/system/failsafe/combus_ids_digital_failsafe.inc
+#   #ifdef HAS_FAILSAFE
+#   FAILSAFE,           ///< Failsafe aggregator channel — set when any FAILSAFE_X contributor reports a fault
+#   #ifdef HAS_VBAT_FAILSAFE
+#     #include <core/config/vbat/combus_ids_digital_vbat_failsafe.inc>
+#   #endif
+#   FAILSAFE_END,        ///< Range marker — first index after Failsafe group.
+#   #endif
+#
+# Notes :
+# - FAILSAFE est l'agrégateur, pas une source. Il est consommé par le
+#   processor C++ proc_failsafe_reset (cf. src/core/system/failsafe/proc_failsafe_reset.cpp).
+# - Les contributeurs (FAILSAFE_VBAT, etc.) sont déclarés dans leurs
+#   propres .cb (ex. src/core/system/vbat/vbat.cb).
+# - FAILSAFE_END est un range marker legacy. Le générateur le déduit
+#   automatiquement à partir de la liste des channels du groupe.
+# - Le scope REMOTE est requis : le core failsafe doit être accessible
+#   depuis les modules core sans couplage machine-specific.
+
+module: failsafe
+
+channels:
+  - id: FAILSAFE
+    infoName: "Failsafe aggregator"
+    type: digital
+    scope: REMOTE
+    theme: failsafe
+    requires:
+      - HAS_FAILSAFE
