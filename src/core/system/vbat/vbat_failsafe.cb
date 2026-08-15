@@ -1,0 +1,27 @@
+# vbat_failsafe.cb — VBAT-as-Failsafe-contributor
+#
+# This file declares the ComBus channel FAILSAFE_VBAT, which allows the
+# vbat module to signal a low-battery state to the Failsafe system.
+#
+# Legacy equivalent: src/core/config/vbat/combus_ids_digital_vbat_failsafe.inc
+#   FAILSAFE_VBAT,    ///< VBAT-as-Failsafe-contributor test channel — wired only when HAS_VBAT_FAILSAFE is set.
+#
+# Notes:
+# - The BATTERY_LOW channel (digital, LOCAL) is already declared in
+#   src/core/config/machines/dumper_truck/combus/combus_ids_remote_digital.inc
+#   (line 5). It is NOT duplicated here.
+# - This .cb only declares the Failsafe contributor (FAILSAFE_VBAT).
+# - REMOTE scope is required: the core failsafe module must be able to
+#   consume this channel without machine-specific coupling.
+
+module: vbat
+
+channels:
+  - id: FAILSAFE_VBAT
+    infoName: "VBAT failsafe contributor"
+    type: digital
+    scope: REMOTE
+    theme: failsafe
+    requires:
+      - HAS_FAILSAFE
+      - HAS_VBAT_FAILSAFE

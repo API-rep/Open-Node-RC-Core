@@ -1,10 +1,10 @@
 # failsafe.cb — Failsafe aggregator
 #
-# Ce fichier déclare le channel ComBus FAILSAFE, l'agrégateur du système
-# Failsafe. Il est mis à 1 (fault) si au moins un contributeur FAILSAFE_X
-# signale un défaut.
+# This file declares the ComBus channel FAILSAFE, the Failsafe system
+# aggregator. It is set to 1 (fault) if at least one FAILSAFE_X
+# contributor reports a fault.
 #
-# Équivalent legacy : src/core/system/failsafe/combus_ids_digital_failsafe.inc
+# Legacy equivalent: src/core/system/failsafe/combus_ids_digital_failsafe.inc
 #   #ifdef HAS_FAILSAFE
 #   FAILSAFE,           ///< Failsafe aggregator channel — set when any FAILSAFE_X contributor reports a fault
 #   #ifdef HAS_VBAT_FAILSAFE
@@ -13,15 +13,15 @@
 #   FAILSAFE_END,        ///< Range marker — first index after Failsafe group.
 #   #endif
 #
-# Notes :
-# - FAILSAFE est l'agrégateur, pas une source. Il est consommé par le
-#   processor C++ proc_failsafe_reset (cf. src/core/system/failsafe/proc_failsafe_reset.cpp).
-# - Les contributeurs (FAILSAFE_VBAT, etc.) sont déclarés dans leurs
-#   propres .cb (ex. src/core/system/vbat/vbat.cb).
-# - FAILSAFE_END est un range marker legacy. Le générateur le déduit
-#   automatiquement à partir de la liste des channels du groupe.
-# - Le scope REMOTE est requis : le core failsafe doit être accessible
-#   depuis les modules core sans couplage machine-specific.
+# Notes:
+# - FAILSAFE is the aggregator, not a source. It is consumed by the
+#   C++ processor proc_failsafe_reset (cf. src/core/system/failsafe/proc_failsafe_reset.cpp).
+# - Contributors (FAILSAFE_VBAT, etc.) are declared in their own .cb
+#   files (e.g. src/core/system/vbat/vbat_failsafe.cb).
+# - FAILSAFE_END is a legacy range marker. The generator deduces it
+#   automatically from the list of channels in the group.
+# - REMOTE scope is required: the core failsafe must be accessible
+#   from core modules without machine-specific coupling.
 
 module: failsafe
 

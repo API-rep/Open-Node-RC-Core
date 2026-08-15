@@ -829,7 +829,7 @@ Cible : `src/core/system/failsafe/failsafe.cb` (équivalent du `combus_ids_digit
 
 **Fichiers créés** :
 
-1. `src/core/system/vbat/vbat.cb` — déclare `FAILSAFE_VBAT` (contributeur Failsafe).
+1. `src/core/system/vbat/vbat_failsafe.cb` — déclare `FAILSAFE_VBAT` (contributeur Failsafe).
    - Équivalent legacy : `src/core/config/vbat/combus_ids_digital_vbat_failsafe.inc` (branche `failsafe-module`).
    - `requires: [HAS_FAILSAFE, HAS_VBAT_FAILSAFE]`.
    - `scope: REMOTE` (le core failsafe doit pouvoir le consommer sans couplage machine).
