@@ -872,6 +872,75 @@ Une définition peut éventuellement être bidirectionnelle si elle porte les de
 | `FAILSAFE_VBAT` (vbat_failsafe.cb) | REMOTE | `uplink` | Le module vbat (machine) envoie le signal FAILSAFE_VBAT en amont vers le core failsafe. Pas de downlink (le core n'écrit pas dans ce channel). |
 | `FAILSAFE` (failsafe.cb) | REMOTE | `downlink` | Le core failsafe publie l'état agrégé FAILSAFE en aval vers les consommateurs (machine, sound node, etc.). Pas d'uplink (le core ne consomme pas directement les contributeurs — il passe par l'agrégateur). |
 
+
+
+### A3 — Discovery + parsing YAML minimal (implémentation)
+
+**Fichiers créés** :
+
+- `scripts/combus_builder/__init__.py` — package marker.
+- `scripts/combus_builder/parser.py` — module A3 (discovery + parsing).
+
+**API principale** (`parser.py`) :
+
+```python
+discover_and_parse(env=None, project_root=None) -> (buildroot, files, parsed)
+```
+
+- `resolve_buildroot(env, project_root)` : récupère le buildroot depuis
+  `env["PROJECT_SRC_DIR"]` (PIO 6.x) → `env["PROJECT_DIR"] + "/src"` → override
+  explicite → `cwd + "/src"`. Le buildroot n'est JAMAIS hardcodé à un node.
+- `discover_config_files(buildroot)` : `os.walk` récursif, filtre par
+  `CONFIG_EXTENSIONS = {".cb", ".cbch"}`. `.pio/` exclus explicitement (avec
+  `.git/`, `__pycache__/`, `node_modules/`). Retour en ordre brut (pas de tri).
+- `parse_yaml_file(path)` : `yaml.safe_load`, vérifie top-level dict, lève
+  `ParseError` avec chemin + ligne/colonne PyYAML en cas d'erreur.
+- `parse_all(files)` : itère, conserve l'ordre, lève à la première erreur.
+
+**Sortie** : `(buildroot, [Path...], [(Path, type_label, raw_dict)...])` en
+ordre de discovery. Aucune canonisation, aucune résolution de flags,
+aucune génération de header.
+
+**Tests effectués** (validés via CLI `python -m scripts.combus_builder.parser .`) :
+
+```
+[combus_builder] buildroot = C:\...\src
+[combus_builder] discovered 2 config file(s):
+  - src/core/system/failsafe/failsafe.cb
+  - src/core/system/vbat/vbat_failsafe.cb
+[combus_builder] parsed 2 file(s) successfully
+```
+
+Tests d'erreur OK :
+- fichier vide → `ParseError: empty YAML document`
+- top-level list → `ParseError: top-level YAML must be a mapping, got list`
+- YAML cassé (flow sequence non terminée) → `ParseError: invalid YAML`
+  avec ligne/colonne PyYAML.
+
+**Hors scope A3 (rappel)** : canonisation, résolution `CPPDEFINES` métier,
+génération C++, MD5, validation champs, lookup processors, wiring `.cbch`.
+Tout cela est reporté aux étapes A4+.
+
+**Difficultés / choix** :
+
+- **Buildroot** : la roadmap demande d'éviter de dupliquer la logique de
+  sélection du node. `PROJECT_SRC_DIR` est la variable canonique PIO 6.x.
+  Fallback `PROJECT_DIR + "/src"` pour les versions qui ne définissent pas
+  la première. Le parser ne fait AUCUNE hypothèse sur le node construit
+  (machines/remotes/sound) — il scanne *toute* la `src/`.
+
+- **Pré/`post:` hook** : A3 ne dépend pas du moment où `CPPDEFINES` est
+  résolu (c'est un problème A4). Le parser peut donc tourner en `pre:` sans
+  problème.
+
+- **Ordre brut** : `os.walk` donne un ordre stable sur un FS donné mais
+  pas portable. A5 (canonisation) pose une clé `(scope, type, theme, id)`
+  qui rendra l'ordre indépendant du FS. A3 ne triche pas sur cet aspect.
+
+- **Dépendance PyYAML** : le parser requiert `pyyaml`. PlatformIO installe
+  `pyyaml` dans son env SCons, donc transparent en build. En CLI standalone,
+  `pip install pyyaml` est nécessaire (msg d'erreur explicite si absent).
+
 ### Notes diverses
 
 - `FAILSAFE` est `REMOTE` (validé).
