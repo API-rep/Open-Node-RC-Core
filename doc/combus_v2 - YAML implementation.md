@@ -1009,7 +1009,7 @@ Erreurs explicites (`BuildContextError`) :
 - `BuildContextError` rend le cas pathologique visible au build (pas de
   fallback silencieux).
 
-**Tests** (27/27 passent — 2 skipped sans `COMBUS_A4_INTEGRATION=1`) :
+**Tests** (35/35 passent — 2 skipped sans `COMBUS_A4_INTEGRATION=1`) :
 
 ```
 python scripts/combus_builder/tests/test_flags.py
@@ -1027,26 +1027,58 @@ Couvre :
   no-defines-allowed, bad-buildroot, standalone no-env) ;
 - helpers BuildContext (all_names, has, value_of, to_dict, frozen) ;
 - parser idedata (`_idedata_to_defines`) : list, vide, entries non-string ;
-- **intégration PlatformIO** (skip par défaut) : `validate_against_idedata`
-  contre `pio run -t idedata -e <env>` sur un env machine + un env remote.
+- **intégration PlatformIO** (skip par défaut) :
+  - `test_integration_real_build_dump_then_compare_idedata` —
+    vrai `pio run -e <env>` → JSON → comparaison.
+  - `test_integration_remote_env_real_build` — idem sur un env remote.
+- **test structurel** : `test_validation_architecture_does_not_round_trip_idedata`
+  ferme le piège du round-trip cité en review (un refactor futur qui
+  réintroduirait la dépendance idedata→ctx ferait échouer ce test).
 
 **Validation against ground truth (`pio run -t idedata`)** :
 
-A4 expose `validate_against_idedata(project_dir, env_name, strict=True)` qui :
+L'architecture précédente (un `validate_against_idedata` qui construisait
+son propre `override_cppdefines` à partir d'idedata) faisait un round-trip
+texte et était structurellement incapable de détecter une divergence
+entre le chemin prod (`env["CPPDEFINES"]` réel) et idedata. Corrigé
+en deux pièces indépendantes :
 
-1. shell `pio run -t idedata -e <env>` et parse la sortie JSON ;
-2. compare les defines détectés par `acquire_build_context` à la liste
-   `defines` de l'idedata (post-`extends`, post-`build_flags`, source de vérité) ;
-3. lève `BuildContextError` à la moindre divergence (defines présents
-   d'un côté et absents de l'autre, valeurs différentes).
+**Pièce 1 — prod path** :
+`dump_ctx_to_json(env, out_path)` (helper de `flags.py`) écrit
+`ctx.to_dict()` dans un fichier. Appellé par un **post:** hook SCons
+dédié (`scripts/combus_builder_dump_ctx.py`) qui s'enregistre via
+`env.AddPostAction("$PROG_PATH", ...)`. Sortie :
+`.pio/build/<env>/combus_ctx.json`.
 
-Cela ferme l'angle mort identifié en review : un `CPPDEFINES` non-vide
-mais incomplet (extends mal résolu, container partiel) ne peut plus
-passer la validation sans être détecté explicitement à l'intégration.
+**Pièce 2 — comparaison** :
+`compare_context_to_idedata(ctx, idedata, env_name, strict=True)` est
+une fonction pure. Elle prend un ctx déjà construit (par n'importe quel
+chemin) et un payload idedata déjà parsé, et lève
+`ContextDivergenceError` à la moindre divergence.
 
-Les tests d'intégration sont guardés par `COMBUS_A4_INTEGRATION=1` :
-- skip par défaut (CI sans pio / sans toolchain, Windows build nocache) ;
-- 2 tests : un env machine, un env remote (si présents dans `platformio.ini`).
+**Le test d'intégration** (`test_integration_real_build_dump_then_compare_idedata`) :
+1. lance un **vrai** `pio run -e <env>` (qui fire le post: hook et
+   produit `combus_ctx.json` depuis le vrai `env["CPPDEFINES"]`) ;
+2. lance un **autre** `pio run -t idedata -e <env>` (ground truth) ;
+3. charge `combus_ctx.json` et appelle `compare_context_to_idedata(...)`.
+
+Les deux sources sont produites par **deux invocations pio distinctes**.
+Aucune n'est dérivée de l'autre. C'est la seule séquence qui ferme
+réellement la question « est-ce que le chemin prod est le même que
+idedata ? ».
+
+**Test structurel** :
+`test_validation_architecture_does_not_round_trip_idedata` vérifie par
+introspection du source de `flags.py` que :
+- `dump_ctx_to_json` ne référence ni `read_idedata` ni `override_cppdefines` ;
+- `compare_context_to_idedata` ne référence ni `acquire_build_context`
+  ni `read_idedata` ;
+- `validate_against_idedata` (l'API avec round-trip) n'existe plus.
+
+Ce test empêche une régression future qui réintroduirait le piège.
+
+**Opt-in** : `COMBUS_A4_INTEGRATION=1` pour activer les tests d'intégration.
+Skip par défaut (coût : vrai build + toolchain).
 
 **Hors scope A4 (rappel)** : discovery .cb/.cbch (A3), fusion (A5),
 tri canonique (A5), génération C++ (A6), MD5 (A7), validation processors
@@ -1071,14 +1103,16 @@ voie normale**. Tout usage du fallback doit laisser une trace diagnostique
 
 Le moment exact d'intégration (`pre:` / `post:` / autre) est validé
 séparément en A12, hors du scope A4.
+
 **Intégration PlatformIO** (à finaliser en Phase A / B) :
 
 ```python
-# scripts/combus_builder_main.py (à créer si besoin)
+# scripts/combus_builder_dump_ctx.py (fourni)
+# post: hook SCons — enregistre dump_ctx_to_json(env, ...) via AddPostAction.
+# Sortie : .pio/build/<env>/combus_ctx.json
 Import("env")  # SCons inject
 from scripts.combus_builder.flags import (
     acquire_build_context,
-    validate_against_idedata,
     BuildContextError,
 )
 try:
@@ -1087,9 +1121,10 @@ except BuildContextError as e:
     print(f"[combus_builder] FATAL: {e}")
     env.Exit(1)
 
-# Validation croisée (CI / sanity check) — peut être lancée en CLI :
-#   python -m scripts.combus_builder.flags \
-#     --validate-against-idedata --env <env_name>
+# Validation croisée (CI / sanity check) — déclenche un vrai build :
+#   COMBUS_A4_INTEGRATION=1 python scripts/combus_builder/tests/test_flags.py
+# Le test lance pio run -e <env> + pio run -t idedata -e <env> et
+# compare les deux via compare_context_to_idedata(ctx, idedata, env_name).
 ```
 
 ### Notes diverses

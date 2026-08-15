@@ -6,8 +6,9 @@ Scope (A4 only):
   - Acquire the buildroot of the current PlatformIO node.
   - Acquire the CPPDEFINES actually transmitted to the compiler for the
     current PlatformIO environment.
-  - Represent those facts in a small, well-typed structure consumable by
-    the next pipeline steps (A5 fusion, A6 generation, etc.)
+  - Reify this as a `combus_ctx.json` artifact during a real build so
+    that an integration test can compare it against the ground truth
+    (`pio run -t idedata`).
 
 A4 does NOT:
   - discover .cb / .cbch files                 (A3 — parser.py)
@@ -26,6 +27,7 @@ Acquisition strategy (real PlatformIO environment):
      a) env["CPPDEFINES"]  — the SCons dict mapping flag -> value as it
         will be passed to the compiler. Most reliable when the script
         runs after `extends` resolution (i.e. `post:` hook in PIO 6.x).
+        This is the ONLY path that reflects what the compiler actually sees.
      b) env.GetProjectOption("build_flags")  — returns the raw "build_flags"
         string for the current env. May MISS inherited flags from `extends`
         if PIO 6.x hasn't expanded them yet (i.e. `pre:` hook). Falls back
@@ -41,14 +43,20 @@ Acquisition strategy (real PlatformIO environment):
   transient hack in combus_md5.py). If we observe `extends` failures in
   `pre:` we document them and rely on `post:` instead.
 
-  Cross-validation (offline / CI):
-    `pio run -t idedata` exposes the *ground-truth* compiler command and
-    therefore the real defines (post-`extends`, post-`build_flags`). A4
-    comes with `validate_against_idedata(project_dir, env)` which shells
-    out to pio, parses the JSON, and COMPARES to `acquire_build_context`.
-    Any divergence is reported as a BuildContextError (since requirement
-    per the §8 invariant is "le générateur doit recevoir les mêmes
-    définitions que celles utilisées pour compiler le C++").
+Real-build ground-truth validation (post: hook):
+
+  The integration test fixture is a `post:` hook that drops
+  `.pio/build/<env>/combus_ctx.json` from the REAL env["CPPDEFINES"]
+  (no fiddling, no override). The corresponding integration test then:
+
+    1. triggers a real `pio run -e <env>` (which fires the hook and
+       produces the JSON),
+    2. triggers `pio run -t idedata -e <env>` for the ground truth,
+    3. compares the two.
+
+  This is the only structurally sound way to assert that what A4 sees
+  in a real build matches what PlatformIO actually hands to the compiler.
+  No text round-trip, no derivation from idedata itself.
 
 Representation:
 
@@ -86,6 +94,10 @@ from .parser import resolve_buildroot
 
 class BuildContextError(Exception):
     """Raised when the build context cannot be determined."""
+
+
+class ContextDivergenceError(Exception):
+    """Raised when a real-build ctx diverges from the idedata ground truth."""
 
 
 # =============================================================================
@@ -141,8 +153,6 @@ class BuildContext:
 #   -DFOO
 #   -D  FOO=bar
 #   -DFOO=bar
-# It does NOT touch -D inside a string literal (we apply it to a per-line
-# split so this is rare and an acceptable v1 limitation).
 _RE_D_FLAG = re.compile(
     r"""-D\s*
         (?P<name>[A-Za-z_][A-Za-z0-9_]*)
@@ -224,8 +234,6 @@ def _extract_from_env_cppdefines(env: Any) -> tuple[set[str], dict[str, str]]:
             else:
                 # Unknown shape — fail loudly. Per the prompt:
                 # "ne pas masquer le problème par une implémentation fragile".
-                # We don't know what the compiler would see, so we have to
-                # refuse to take a position on the build context.
                 raise BuildContextError(
                     "env['CPPDEFINES'] contains an entry of unsupported "
                     f"shape at index {idx}: {entry!r} (type={type(entry).__name__}). "
@@ -281,7 +289,8 @@ def acquire_build_context(
                              If None, falls back to standalone / CLI mode.
       project_root:          explicit project root for CLI mode.
       override_cppdefines:   explicit list of "-D" tokens for tests.
-                             If set, used as the primary source (label: 'override').
+                             If non-None, used as the primary source (label: 'override').
+                             If None, env["CPPDEFINES"] is consulted.
       require_non_empty:     if True (default), raise when zero defines are found.
 
     Returns:
@@ -362,17 +371,66 @@ def acquire_build_context(
 
 
 # =============================================================================
-# Ground-truth validation via `pio run -t idedata`
+# Real-build ground-truth validation
+# =============================================================================
+#
+# The architecture is intentionally split into two pieces to avoid the
+# "round-trip text" trap identified in the review:
+#
+#   1. dump_ctx_to_json(env, out_path)
+#        Runs INSIDE a real PlatformIO build (post: hook). It calls
+#        acquire_build_context(env) WITHOUT override and writes
+#        ctx.to_dict() to a JSON file. NO idedata, NO override, NO
+#        text round-trip on the same data.
+#
+#   2. compare_context_to_idedata(ctx, idedata, env_name)
+#        Pure, deterministic comparison between a real-build ctx
+#        (whatever the source) and a parsed idedata payload.
+#
+#   3. test_integration_… reads the dumped JSON and the idedata
+#      parsed from a separate `pio run -t idedata` invocation, then
+#      calls compare_context_to_idedata. This is the only sequence
+#      that closes the "is the prod path the same as the idedata path"
+#      question, because the two data sources are produced by two
+#      separate pio invocations, not one re-derived from the other.
 # =============================================================================
 
-def _read_idedata(project_dir: Path, env_name: str, *, timeout: int = 120) -> dict:
+def dump_ctx_to_json(env: Any, out_path: Path) -> BuildContext:
+    """
+    Acquire the build context from a real SCons env and serialise it
+    to a JSON file. NO override is allowed in this path — it's the
+    artifact that integration tests will compare against idedata.
+
+    Designed to be called from a `post:` PlatformIO extra_script.
+    """
+    if not isinstance(out_path, Path):
+        out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    ctx = acquire_build_context(env)  # must use real env, no override
+    out_path.write_text(json.dumps(ctx.to_dict(), indent=2), encoding="utf-8")
+    return ctx
+
+
+def load_ctx_from_json(path: Path) -> BuildContext:
+    """Inverse of dump_ctx_to_json; used by integration tests."""
+    raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    return BuildContext(
+        buildroot=Path(raw["buildroot"]),
+        defines=frozenset(raw["defines"]),
+        defines_with_value=dict(raw["defines_with_value"]),
+        cppdefines_source=raw["cppdefines_source"],
+        raw_cppdefines_sample=raw.get("raw_cppdefines_sample"),
+    )
+
+
+def read_idedata(project_dir: Path, env_name: str, *, timeout: int = 120) -> dict:
     """
     Run `pio run -t idedata -e <env_name>` and return the parsed JSON.
 
     `pio run -t idedata` is the documented PlatformIO mechanism that emits
     the resolved build context (including the fully-expanded CPPDEFINES
-    that the compiler will see) as JSON. We use it as the ground truth
-    for the cross-validation step.
+    that the compiler will see) as JSON. We use it as ground truth.
 
     Raises:
       BuildContextError if `pio` is not available, the subprocess fails,
@@ -402,7 +460,6 @@ def _read_idedata(project_dir: Path, env_name: str, *, timeout: int = 120) -> di
             f"{(proc.stderr or proc.stdout).strip()[:500]}"
         )
 
-    # idedata is printed as a single line of JSON on stdout.
     out = proc.stdout.strip()
     if not out:
         raise BuildContextError(
@@ -416,14 +473,12 @@ def _read_idedata(project_dir: Path, env_name: str, *, timeout: int = 120) -> di
         ) from e
 
 
-def _idedata_to_defines(idedata: dict) -> tuple[set[str], dict[str, str]]:
+def idedata_to_defines(idedata: dict) -> tuple[set[str], dict[str, str]]:
     """
     Convert `pio run -t idedata` JSON to (defines, values) for cross-check.
 
     The idedata payload has shape:
         "defines": ["FOO", "BAR=value", ...]
-        (and sometimes "cc_args" / "cxx_args" as the full command line,
-         but the curated `defines` list is reliable and format-stable.)
     """
     defines: set[str] = set()
     values: dict[str, str] = {}
@@ -441,74 +496,67 @@ def _idedata_to_defines(idedata: dict) -> tuple[set[str], dict[str, str]]:
     return defines, values
 
 
-def validate_against_idedata(
-    project_dir: Path,
+def compare_context_to_idedata(
+    ctx: BuildContext,
+    idedata: dict,
     env_name: str,
     *,
-    env: Any | None = None,
-    extra_defines: list[str] | None = None,
     strict: bool = True,
-) -> tuple[BuildContext, dict]:
+) -> dict:
     """
-    Cross-validate `acquire_build_context` against `pio run -t idedata`.
+    Pure comparison between a real-build ctx and a parsed idedata payload.
 
-    Returns:
-      (ctx, idedata) where ctx is the outcome of acquire_build_context(...)
-      and idedata is the parsed JSON payload from PlatformIO.
+    Returns a report dict (also acceptable as a non-throwing diagnostic).
+    Raises ContextDivergenceError on strict=True AND any divergence.
 
-    Diffs:
-      - Any define present in idedata but missing from ctx (under the
-        `extra_defines` union) is a divergence.
-      - Any define present in ctx but missing from idedata is also a
-        divergence (defines-class contamination).
-      - Values are compared string-wise.
-
-    Raises:
-      BuildContextError if strict=True and the contexts diverge.
+    `ctx` MUST come from a real production path (a post: hook dropping
+    combus_ctx.json) — NOT from an override derived from idedata. The
+    two sources have to be independent for the comparison to be
+    meaningful.
     """
-    idedata = _read_idedata(project_dir, env_name)
-    true_defines, true_values = _idedata_to_defines(idedata)
+    true_defines, true_values = idedata_to_defines(idedata)
 
-    # Build the override that aligns with idedata — extra_defines lets the
-    # caller add flags that would only be visible inside an extra_script
-    # (e.g. CbProc registrations). It is appended AFTER the idedata list.
-    overrides = list(true_defines | set(true_values.keys()))
-    overrides = [f"-D{d}" for d in sorted(overrides)]
-    if extra_defines:
-        overrides.extend(extra_defines)
-
-    # Run A4 standalone, simulating what it would see if `post:` had fired.
-    # We pass the same buildroot so the compare is meaningful.
-    project_dir = Path(project_dir).resolve()
-    ctx = acquire_build_context(
-        env=env,
-        project_root=project_dir,
-        override_cppdefines=overrides,
-        require_non_empty=True,
+    missing_from_ctx = (
+        (true_defines - ctx.defines)
+        | (set(true_values) - set(ctx.defines_with_value))
     )
-
-    # Compare.
-    missing_from_ctx = (true_defines - ctx.defines) | (set(true_values) - set(ctx.defines_with_value))
-    extra_in_ctx = (ctx.defines - true_defines) | (set(ctx.defines_with_value) - set(true_values))
-    value_mismatches: dict[str, tuple[str, str]] = {}
+    extra_in_ctx = (
+        (ctx.defines - true_defines)
+        | (set(ctx.defines_with_value) - set(true_values))
+    )
+    value_mismatches: dict[str, dict[str, str]] = {}
     for k, v in ctx.defines_with_value.items():
         if k in true_values and true_values[k] != v:
-            value_mismatches[k] = (v, true_values[k])
+            value_mismatches[k] = {"ctx": v, "idedata": true_values[k]}
 
-    if strict and (missing_from_ctx or extra_in_ctx or value_mismatches):
+    report = {
+        "env_name": env_name,
+        "ctx_source": ctx.cppdefines_source,
+        "ctx_defines_count": len(ctx.defines),
+        "ctx_values_count": len(ctx.defines_with_value),
+        "idedata_defines_count": len(true_defines),
+        "idedata_values_count": len(true_values),
+        "missing_from_ctx": sorted(missing_from_ctx),
+        "extra_in_ctx": sorted(extra_in_ctx),
+        "value_mismatches": value_mismatches,
+        "diverges": bool(missing_from_ctx or extra_in_ctx or value_mismatches),
+    }
+
+    if strict and report["diverges"]:
         lines = [
-            f"BuildContext diverges from pio idedata for env '{env_name}':"
+            f"BuildContext (real build, source={ctx.cppdefines_source}) "
+            f"diverges from pio idedata for env '{env_name}':"
         ]
         if missing_from_ctx:
             lines.append(f"  present in idedata, absent in ctx: {sorted(missing_from_ctx)}")
         if extra_in_ctx:
             lines.append(f"  present in ctx, absent in idedata: {sorted(extra_in_ctx)}")
         if value_mismatches:
-            for k, (mine, theirs) in sorted(value_mismatches.items()):
-                lines.append(f"  value mismatch for {k}: ctx={mine!r} idedata={theirs!r}")
-        raise BuildContextError("\n".join(lines))
+            for k, d in sorted(value_mismatches.items()):
+                lines.append(f"  value mismatch for {k}: ctx={d['ctx']!r} idedata={d['idedata']!r}")
+        raise ContextDivergenceError("\n".join(lines))
 
-    return ctx, idedata
+    return report
 
 
 # =============================================================================
