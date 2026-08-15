@@ -1025,6 +1025,25 @@ helpers BuildContext (all_names, has, value_of, to_dict, frozen).
 tri canonique (A5), génération C++ (A6), MD5 (A7), validation processors
 (Phase C).
 
+
+
+**Invariant A4 (validé par review)** :
+
+> `env["CPPDEFINES"]` = vérité.
+> `env.GetProjectOption("build_flags")` = fallback de compatibilité / prototype,
+> avec provenance explicitement signalée par `BuildContext.cppdefines_source`.
+
+Cela colle avec l'invariant global de la note §8 :
+
+> Le générateur doit recevoir les mêmes définitions que celles utilisées pour compiler le C++.
+
+Le fallback `build_flags` est conservé pour le prototype (compat avec
+`combus_md5.py` existant), mais **ne doit pas devenir silencieusement la
+voie normale**. Tout usage du fallback doit laisser une trace diagnostique
+(via `cppdefines_source='build_flags'` ou `BuildContextError` si vide).
+
+Le moment exact d'intégration (`pre:` / `post:` / autre) est validé
+séparément en A12, hors du scope A4.
 **Intégration PlatformIO** (à finaliser en Phase A / B) :
 
 ```python

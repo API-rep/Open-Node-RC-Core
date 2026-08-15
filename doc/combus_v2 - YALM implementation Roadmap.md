@@ -48,7 +48,7 @@ Plusieurs choix techniques sont formulés comme des **hypothèses à valider** d
 | A1 | Définir le schéma YAML minimal (champs `id`, `type`, `scope`, `theme`, `requires`) | `schemas/cb_v1.schema.json` (ou Pydantic) | — |
 | A2 | Écrire un `.cb` pour le thème `vbat` (2-3 channels réels) | `src/core/system/vbat/vbat.cb` | A1 |
 | A3 | Implémenter la discovery + parsing YAML minimal (collecte brute, sans tri/canonisation) | `scripts/combus_builder/parser.py` | A1 |
-| A4 | Implémenter la résolution des flags (lecture `env["CPPDEFINES"]` — mécanisme à valider) | `scripts/combus_builder/flags.py` | — |
+| A4 | Implémenter l'acquisition du contexte de build et la résolution des flags (CPPDEFINES, avec fallback de compatibilité) et récupérer le buildroot | `scripts/combus_builder/flags.py` | — |
 | A5 | Implémenter la canonisation (fusion + tri global `(scope, type, theme, id)`) | `scripts/combus_builder/canon.py` | A3 |
 | A6 | Implémenter le générateur de header C++ (enum + tableau + count) | `scripts/combus_builder/generator.py` | A5 |
 | A7 | Implémenter le calcul MD5 (représentation canonique JSON) | `scripts/combus_builder/md5.py` | A5 |
@@ -56,7 +56,7 @@ Plusieurs choix techniques sont formulés comme des **hypothèses à valider** d
 | A9 | Comparer le **contrat protocolaire** généré au legacy (mapping IDs, valeurs d'enum) | Script de comparaison + rapport | A6, A7 |
 | A10 | Valider le déterminisme (2 runs → contrat identique) | Test pytest | A6, A7 |
 | A11 | Documenter les invariants observés (ordre canonique vs legacy) | Note dans `doc/` | A9, A10 |
-| A12 | **Valider l'hypothèse `post:`** : tester sur un env PlatformIO réel ; si CPPDEFINES est vide, basculer sur un fallback (recursion `extends` ou autre) | Rapport de validation | A4, A8 |
+| A12 | **Choisir le mécanisme d'intégration PlatformIO** : valider à quel moment du cycle (`pre:` / `post:` / autre) le contexte de build acquis par A4 est effectivement disponible, et confirmer le hook retenu avant l'intégration Phase B | Rapport de validation | A4, A8 |
 
 ### Gate Phase A → Phase B
 
