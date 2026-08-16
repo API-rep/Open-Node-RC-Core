@@ -579,26 +579,104 @@ considérées compatibles à tort.
 
 Le handshake doit représenter le **contrat ComBus généré**.
 
-Principe :
+Principe (option B retenue, A7) :
 
 ```text
-MD5(
-    schema_version,
-    generator_version,
-    représentation canonique des flags pertinents,
-    items actifs triés
-)
+MD5(canal canonique des channels actifs)
++ constantes séparées (machineType, projectVersion)
 ```
 
-La représentation canonique ne dépend ni :
-- du chemin ;
-- des commentaires ;
-- de l'ordre YAML ;
-- du formatage.
+**machineType et projectVersion ne sont pas hachés.** Ils sont émis
+comme constantes C++ séparées (`kProjectVersionMajor`,
+`kProjectVersionMinor`, `kMachineType`,
+`kCombusHandshakeWirePayloadLen = 18u` = 16 md5 + 2 version).
+Avantage : un mismatch détecte précisément lequel des deux axes
+diverge et produit un diagnostic utile.
 
-Une sérialisation JSON canonique à clés triées peut servir de représentation intermédiaire.
+### Représentation canonique (A7.1)
 
-Le MD5 ne doit plus reconstruire indirectement le comportement du préprocesseur C++.
+- JSON avec `sort_keys=True` ;
+- top-level `{ "view": <nom>, "channels": [...] }` ;
+- par channel : `{id, type, scope, theme, direction (sorted), infoName}` ;
+- channels dans l'ordre canonique `(scope priority, type, theme, id)`
+  déjà utilisé par `_select_view()` (A5.1) — **même clé**, donc même ordre.
+
+Le résultat ne dépend ni du chemin, ni des commentaires, ni de l'ordre
+YAML, ni du formatage, ni de la découverte. `direction` est sérialisé
+comme **liste triée** pour absorber une inversion cosmétique.
+`infoName` **fait partie** du hash (renommer un label de debug change
+le hash — voulu). `requires` **ne fait pas partie** du hash : son
+effet est déjà capturé par la présence/absence du channel dans la vue
+après résolution (A6.1).
+
+### Vues hashées (A7.2)
+
+Deux vues sont hashées :
+- `combus_local` (REMOTE + LOCAL) — base d'alignement inter-nœud ;
+- `combus_remote` (REMOTE only) — handshake strict sur ce qui passe le fil.
+
+`combus` (full, REMOTE + LOCAL + SYSTEM) **n'est pas hashé** : deux
+cartes d'un même nœud peuvent légitimement instancier des channels
+SYSTEM différents (répartition de modules entre cartes). `combus_local`
+remplace `combus` comme base d'alignement inter-nœud.
+
+### Artefacts générés (A7.3)
+
+Pour chaque vue hashée, le générateur émet un header
+`<view>_md5.h` dans `.pio/build/<env>/generated/combus/` :
+
+```cpp
+namespace combus {
+namespace wire {
+  static constexpr uint8_t kCombus_localComBusMd5[16] = { 0x76u, 0x08u, ... };
+  static constexpr const char* kCombus_localComBusMd5Hex = "76080c7114ce...";
+  // ... (et seulement dans combus_local_md5.h)
+  static constexpr uint8_t kProjectVersionMajor = 0u;
+  static constexpr uint8_t kProjectVersionMinor = 1u;
+  static constexpr uint8_t kCombusHandshakeWirePayloadLen = 18u;
+  static constexpr const char* kMachineType = "MACHINE_TYPE_DUMPER_TRUCK";
+} }
+```
+
+**Convention d'émission (A7.1)** : les constantes partagées
+(`kProjectVersionMajor`, `kProjectVersionMinor`,
+`kCombusHandshakeWirePayloadLen`, `kMachineType`) sont émises dans
+`combus_local_md5.h` **uniquement**. `combus_remote_md5.h` ne les
+redéclare pas. Le contrat pour les consommateurs : inclure
+`combus_local_md5.h` *avant* `combus_remote_md5.h` si l'accès aux
+constantes partagées est nécessaire ; `combus_remote_md5.h` est
+autonome pour son seul MD5 par-vue.
+
+Raison du choix `static constexpr` (et non `inline constexpr`) : la
+toolchain `xtensa-esp32-elf-g++` utilisée par PlatformIO rejette
+`inline constexpr` au scope namespace dans certaines configurations.
+`static constexpr` est link-safe et compile sur toutes les toolchains
+supportées.
+
+### Implémentation
+
+- Module : `scripts/combus_builder/md5.py`.
+- Appelé par `generator.generate()` après l'émission des trois vues.
+- Détection de `machineType` via le flag CPP `MACHINE_TYPE_*` actif
+  dans `BuildContext` (fonction `_detect_machine_type()`).
+- `projectVersion` est un placeholder `0u/1u` jusqu'à introduction
+  d'un `project_version.h` (hors scope A7).
+
+### Tests (A7.4)
+
+`scripts/combus_builder/tests/test_md5.py` couvre :
+- déterminisme (re-runs identiques, ordre de discovery différent) ;
+- insensibilité au formatage cosmétique (ordre de clés YAML) ;
+- sensibilité à un changement de `direction` (le cas qui a motivé A7) ;
+- sensibilité à tout changement de champ ;
+- format des artefacts C++ (`static constexpr`, namespace
+  `combus::wire`, payload len = 18u) ;
+- compilation effective avec la toolchain PlatformIO
+  (`xtensa-esp32-elf-g++`) ;
+- absence d'émission de `combus_md5.h` (A7.2).
+
+Le MD5 ne doit plus reconstruire indirectement le comportement du
+préprocesseur C++.
 
 ## 14. Compatibilité legacy
 
@@ -2116,6 +2194,97 @@ Downlink`. Simple, expressif, 1 octet.
 - `direction` C++ : **4 options viables**, pas de figeage.
 
 **Aucun commit nécessaire** (audit pur, read-only).
+
+### A7 — Calcul MD5 pour combus views (implémentation)
+
+**Statut** : livré (37 tests passent, compilation effective
+avec `xtensa-esp32-elf-g++`).
+
+**Fichiers créés** :
+
+- `scripts/combus_builder/md5.py` — module de calcul MD5 + rendu C++.
+- `scripts/combus_builder/tests/test_md5.py` — 37 tests unitaires.
+
+**API principale** (`md5.py`) :
+
+```python
+canonical_bytes(view: View) -> bytes
+compute_view_hash(view: View) -> ViewHash
+compute_hashes(views: Iterable[View]) -> dict[str, ViewHash]
+emit_md5_header(view_name, hash_, out_dir, machine_type, ...) -> Path
+generate_md5_artifacts(sel, out_dir, machine_type, ...) -> (hashes, written)
+```
+
+**Représentation canonique (A7.1)** :
+
+- JSON `sort_keys=True` ;
+- top-level `{"view": <nom>, "channels": [...]}` ;
+- par channel : `{id, type, scope, theme, direction (sorted), infoName}` ;
+- channels dans l'ordre canonique `(scope priority, type, theme, id)`.
+
+**Vue hashée** : `combus_local` (REMOTE+LOCAL) et `combus_remote`
+(REMOTE only). `combus` (full, REMOTE+LOCAL+SYSTEM) n'est **pas**
+haché (cf. §12 / §13.2 sur l'alignement inter-nœud).
+
+**machineType** : détecté via `BuildContext.has("MACHINE_TYPE_*")`
+par `_detect_machine_type()`. Émis en string token pour log.
+
+**projectVersion** : placeholder `0u/1u`. Hors scope A7.
+
+**Convention d'émission (A7.1)** :
+
+- Per-view (chaque `_md5.h`) : `static constexpr uint8_t k<Cap>ComBusMd5[16]`
+  + `static constexpr const char* k<Cap>ComBusMd5Hex`.
+- Constantes partagées (`kProjectVersionMajor/Minor`,
+  `kCombusHandshakeWirePayloadLen`, `kMachineType`) émises dans
+  `combus_local_md5.h` **uniquement**. `combus_remote_md5.h` ne les
+  redéclare pas.
+
+**Choix `static constexpr` (vs `inline constexpr`)** : la toolchain
+`xtensa-esp32-elf-g++` utilisée par PlatformIO rejette `inline
+constexpr` au scope namespace dans certaines configurations. Le
+pattern `static constexpr` est link-safe et compile sur toutes les
+toolchains supportées.
+
+**Couverture de tests** (37/37) :
+
+- `canonical_bytes()` shape, JSON valide, champs requis présents ;
+- déterminisme (re-runs identiques, ordre de discovery différent) ;
+- insensibilité au formatage cosmétique (ordre des clés YAML) ;
+- sensibilité à un changement de `direction` (le cas qui a motivé A7) ;
+- sensibilité à un changement de chaque champ (id, type, scope, infoName) ;
+- format des artefacts C++ (k<Cap>ComBusMd5[16], hex, namespace combus::wire,
+  payload len = 18u, machineType custom, version custom) ;
+- compilation effective avec `xtensa-esp32-elf-g++` (incluant les
+  deux `_md5.h` dans le même TU — régression redefinition fermée) ;
+- `_detect_machine_type` (DUMPER_TRUCK / UNCONFIGURED / AMBIGUOUS / valeur) ;
+- pipeline complet `generate()` émet bien 9 fichiers de vue + 2 fichiers md5.
+
+**Bilan A7 vs les 10 points de review initiaux** :
+
+1. `IS_MACHINE` : non imposé. Le générateur s'appuie sur `_detect_machine_type`
+   qui lit le flag actif dans `BuildContext`. Aucun test de cohérence strict
+   sur `IS_MACHINE` — c'est un invariant d'env, pas une dépendance générateur.
+2. Ordre wire_end : préservé par construction — `wire_end` est calculé dans
+   `_select_view()` et la même clé de tri est utilisée pour le hash. Pas de
+   parser legacy : le générateur est la source de vérité.
+3. Test d'ordre de scan : `test_md5_deterministic_across_file_discovery_order`
+   vérifie l'invariant sans toucher au repo.
+4. Runtime Failsafe inchangé : la note le dit explicitement. A7 ne touche
+   pas au runtime ComBus ; il ajoute seulement deux nouveaux fichiers
+   `_md5.h` qui sont consommés par un futur handshake (hors scope A7).
+5. Suppression des `.inc` : déplacée hors d'A7 (Phase D / E).
+6. Version majeure : non définie. A7 utilise un placeholder `0u/1u`.
+7. Artefact stale `combus_ids_remote_md5.h` : nettoyé en parallèle
+   (cf. note en tête du module md5).
+8. `combus_ids.h` : généré par le générateur (déjà le cas depuis A6.1).
+   Les `_md5.h` sont autonomes et n'incluent pas les `_ids.h`.
+9. Séparation analog/digital : déjà en place via A6.1 (deux pipelines,
+   deux enums, deux tableaux). A7 ne change rien côté canaux.
+10. Processors C++ : hors scope A7. À traiter en Phase C.
+
+**Hors scope A7** : `combus_handshake.h/.cpp` (consommateur du MD5),
+`project_version.h`, définition d'une version majeure.
 
 ### Notes diverses
 
