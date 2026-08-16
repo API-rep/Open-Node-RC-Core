@@ -98,7 +98,7 @@ channels:
 
   - id: FAILSAFE_VBAT
     type: digital
-    scope: REMOTE
+    scope: LOCAL
     theme: failsafe
 ```
 
@@ -202,7 +202,6 @@ downlink: false
 
 Les règles précises de compatibilité scope/transport sont validées par le générateur.
 
-Dans le modèle retenu, `FAILSAFE` est `REMOTE`.
 
 ## 5. Périmètre du `.cb`
 
@@ -705,8 +704,6 @@ Cela permet de conserver :
 - logique métier dans les modules ;
 - câblage déclaratif (`.cbch`).
 
-Dans le modèle retenu, `FAILSAFE` est `REMOTE`.
-
 ## 20. Cohérence avec l'architecture Failsafe
 
 Le modèle Failsafe reste compatible avec le générateur :
@@ -842,7 +839,7 @@ Ces fonctionnalités ne doivent pas être introduites préventivement.
 10. L'ordre des IDs est déterministe et constitue un contrat protocolaire.
 11. `REMOTE`, `LOCAL` et `SYSTEM` existent dans le modèle dès v2.
 12. `uplink` / `downlink` sont intégrés dès maintenant.
-13. `FAILSAFE` est `REMOTE`.
+13. `FAILSAFE` est `LOCAL`.
 14. Les artefacts générés vivent dans `.pio`.
 15. Aucun artefact généré n'est commit.
 16. Aucune divergence silencieuse n'est acceptée.
@@ -925,22 +922,8 @@ Le reste doit rester volontairement léger et évolutif pendant le prototype.
 
 ```yaml
 # Fichier : src/core/system/failsafe/failsafe.cb
-module: failsafe
 
-channels:
-  - id: FAILSAFE
-    infoName: "Failsafe aggregator"
-    type: digital
-    scope: REMOTE
-    theme: failsafe
-    requires: [HAS_FAILSAFE]
-
-  - id: FAILSAFE_VBAT
-    infoName: "VBAT failsafe contributor"
-    type: digital
-    scope: REMOTE
-    theme: failsafe
-    requires: [HAS_FAILSAFE, HAS_VBAT_FAILSAFE]
+-> a mettre à jour a partir de sources
 ```
 
 **Flags observés dans `platformio.ini` (branche `failsafe-module`)** :
@@ -1024,8 +1007,8 @@ Une définition peut éventuellement être bidirectionnelle si elle porte les de
 
 | Channel | Scope | Direction | Raison |
 |---|---|---|---|
-| `FAILSAFE_VBAT` (vbat_failsafe.cb) | REMOTE | `uplink` | Le module vbat (machine) envoie le signal FAILSAFE_VBAT en amont vers le core failsafe. Pas de downlink (le core n'écrit pas dans ce channel). |
-| `FAILSAFE` (failsafe.cb) | REMOTE | `downlink` | Le core failsafe publie l'état agrégé FAILSAFE en aval vers les consommateurs (machine, sound node, etc.). Pas d'uplink (le core ne consomme pas directement les contributeurs — il passe par l'agrégateur). |
+| `FAILSAFE_VBAT` (vbat_failsafe.cb) | LOCAL | `uplink` | Le module vbat (machine) envoie le signal FAILSAFE_VBAT en amont vers le core failsafe. Pas de downlink (le core n'écrit pas dans ce channel). |
+| `FAILSAFE` (failsafe.cb) | LOCAL | `downlink` | Le core failsafe publie l'état agrégé FAILSAFE en aval vers les consommateurs (machine, sound node, etc.). Pas d'uplink (le core ne consomme pas directement les contributeurs — il passe par l'agrégateur). |
 
 
 
@@ -1280,7 +1263,189 @@ except BuildContextError as e:
 # compare les deux via compare_context_to_idedata(ctx, idedata, env_name).
 ```
 
-### A5 — Canonisation (implémentation)
+### A5.1 — Durcissement de la canonisation `channels:`
+
+**Fichiers créés / modifiés** :
+
+- `scripts/combus_builder/canon/__init__.py` — orchestration A5.
+- `scripts/combus_builder/canon/channels.py` — contrat `channels:`.
+- `scripts/combus_builder/canon.py` — **supprimé** (ancien monolithique).
+- `scripts/combus_builder/tests/test_canon.py` — 76 tests.
+
+**Architecture** :
+
+```text
+scripts/combus_builder/
+    canon/
+        __init__.py     # orchestration (canonize, CanonResult)
+        channels.py     # contrat et canonisation des `channels:`
+```
+
+Pas de sur-fragmentation : tout le vocabulaire et les règles du
+format `channels:` sont regroupés dans `channels.py`. Pas de
+`chains.py` tant que le format `chains:` n'a pas de contrat réel.
+
+**Vocabulaires centralisés dans `channels.py`** (un seul endroit
+à modifier pour étendre) :
+
+| Constante | Rôle |
+|---|---|
+| `ALLOWED_FIELDS` | clés autorisées par channel |
+| `VALID_TYPES` | `analog`, `digital` |
+| `VALID_SCOPES` | `LOCAL`, `REMOTE`, `SYSTEM` |
+| `VALID_THEMES` | `failsafe`, `vbat`, … (à étendre) |
+| `SCOPE_ORDER` | ordre canonique : `LOCAL < REMOTE < SYSTEM` |
+| `DIRECTION_TOKENS` | `uplink`, `downlink`, `both`, `none` |
+| `DIRECTION_BY_SCOPE` | tokens autorisés par scope |
+
+**Champs autorisés pour `channels:`** (strict) :
+
+```yaml
+id:
+infoName:
+type:
+scope:
+theme:
+direction:
+requires:
+```
+
+Toute clé inconnue → erreur explicite. Pas d'ignorance silencieuse.
+Les anciens champs (`module`, `layer`, `default`, `info_name`) sont
+rejetés.
+
+**Règles de validation** :
+
+| Champ | Règle |
+|---|---|
+| `id` | requis, string non vide, **unique globalement** (tous types/scopes/themes confondus) |
+| `infoName` | **REQUIS**, string non vide (pas d'alias `info_name`) |
+| `type` | ∈ {`analog`, `digital`} |
+| `scope` | ∈ {`LOCAL`, `REMOTE`, `SYSTEM`} |
+| `theme` | ∈ `VALID_THEMES` (cadré, extensible) |
+| `direction` | contrat par scope (voir ci-dessous) |
+| `requires` | optionnel, AND, doublons interdits |
+
+**Contrat `direction` par scope** :
+
+| Scope | Tokens autorisés | Résultat |
+|---|---|---|
+| `LOCAL` | `uplink`, `downlink`, `both`, `none` | `both` → `{uplink, downlink}`, `none` → `{}` |
+| `REMOTE` | `uplink`, `downlink`, `both` | `both` → `{uplink, downlink}`, `none` interdit |
+| `SYSTEM` | absent ou `[none]` | `{}` ; toute direction wire → erreur |
+
+**Règles strictes** :
+
+- `direction: []` rejeté pour `LOCAL`/`REMOTE` (pas assimilé à `none`).
+- Doublons dans `direction` → erreur.
+- Combinaisons incohérentes (`both` + `uplink`, `none` + `uplink`,
+  `none` + `both`) → erreur.
+- `SYSTEM` sans `direction` ou `direction: [none]` → `frozenset()`.
+- Toute direction wire sur `SYSTEM` → erreur.
+
+**Représentation interne de `direction`** :
+
+```python
+frozenset({"uplink", "downlink"})  # both
+frozenset({"uplink"})              # uplink seul
+frozenset({"downlink"})            # downlink seul
+frozenset()                        # none / SYSTEM
+```
+
+Aucune trace de la syntaxe de surface (`both`, `none`, absence) dans
+la sortie. A6 ne voit que `uplink`/`downlink`/vide.
+
+**`requires`** :
+
+- Absent ou `[]` → actif par défaut.
+- Non vide → AND (tous les flags doivent être présents).
+- Doublons → erreur.
+- Résolution effective contre `BuildContext` → A8.
+
+**Fusion** :
+
+- Tous les fichiers découverts peuvent contribuer à `channels:`.
+- L'ordre de découverte n'a aucune valeur.
+- L'ordre des entrées YAML n'a aucune valeur.
+- Conflit d'ID → `ChannelConflictError` avec les deux chemins.
+
+**Ordre canonique** : `(scope, type, theme, id)`, avec
+`SCOPE_ORDER = {LOCAL: 0, REMOTE: 1, SYSTEM: 2}`.
+
+**Frontière A3 / A5 (verrouillée)** :
+
+```
+A3 = discovery → collecte → existence/validité structurelle minimale
+     → parsing YAML → stockage brut
+A5 = extraction de channels: → validation sémantique → defaults
+     → normalisation → fusion → détection de conflits → canonisation
+```
+
+A3 ne décide pas de la sémantique des channels. A5 ne fait pas de
+discovery.
+
+**Extension indépendante du contenu** :
+
+Un `.cb` peut contenir plusieurs sections (`channels:`, `chains:`,
+etc.). Le traitement est spécifique à chaque format de section, pas
+à l'extension du fichier. A5.1 sélectionne par CLÉ (`channels:`),
+pas par extension.
+
+**Tests** (76/76 passent) :
+
+```
+python scripts/combus_builder/tests/test_canon.py
+```
+
+Couvre :
+- extraction de sections (extension-agnostique) ;
+- rejet des clés inconnues (`typo`, `module`, `layer`, `default`,
+  `info_name`) ;
+- validation par champ (chaque chemin d'erreur) ;
+- `infoName` requis (pas d'alias) ;
+- `theme` cadré (rejet des thèmes non listés) ;
+- matrice complète `direction` par scope (LOCAL/REMOTE/SYSTEM) ;
+- normalisation `both` → `{uplink, downlink}`, `none` → `{}` ;
+- rejet des doublons dans `direction` et `requires` ;
+- rejet des combinaisons incohérentes ;
+- rejet des directions wire sur `SYSTEM` ;
+- unicité d'ID (à travers types/scopes/themes) ;
+- détection de conflit (avec chemins dans l'erreur) ;
+- fusion (multi-fichiers, multi-sections, ordre indépendant) ;
+- tri canonique `(scope, type, theme, id)` ;
+- déterminisme ;
+- fichier package (`channels:` + `chains:`) ;
+- test structurel : A5.1 ne branche pas sur `type_label` ;
+- test structurel : vocabulaires centralisés dans `channels.py` ;
+- **validation sur les vrais `.cb`** :
+  - `src/core/system/failsafe/failsafe.cb` (FAILSAFE) ;
+  - `src/core/system/vbat/vbat_failsafe.cb` (FAILSAFE_VBAT) ;
+  - les deux ensemble (pas de conflit).
+
+**Fichiers réels validés** :
+
+| Fichier | Channel | Résultat |
+|---|---|---|
+| `src/core/system/failsafe/failsafe.cb` | `FAILSAFE` | OK |
+| `src/core/system/vbat/vbat_failsafe.cb` | `FAILSAFE_VBAT` | OK |
+| Les deux ensemble | `FAILSAFE`, `FAILSAFE_VBAT` | OK (tri : `FAILSAFE` < `FAILSAFE_VBAT`) |
+
+**Incompatibilités découvertes** : aucune. Les deux fichiers réels
+sont conformes au contrat strict.
+
+**Tests A3 / A4 / A5** :
+
+```
+A3 : import OK (pas de test dédié, exercé via A5)
+A4 : 35/35 tests passed
+A5 : 76/76 tests passed
+```
+
+**Hors scope A5.1** (rappel) : A6 (génération C++), A7 (MD5), A8
+(résolution `requires` contre CPPDEFINES), `.cbch`, `chains:`,
+processors, wire contract legacy.
+
+### Notes diverses
 
 **Fichiers créés** :
 
@@ -1382,13 +1547,7 @@ Couvre :
    Toute combinaison supplémentaire doit être ajoutée avec un test
    dédié.
 
-2. **FAILSAFE doit-il être REMOTE ?** : la note §19 dit « Dans le
-   modèle retenu, `FAILSAFE` est `REMOTE` », mais les fichiers
-   `.cb` actuels (`failsafe.cb`, `vbat_failsafe.cb`) utilisent
-   `scope: LOCAL`. A5 accepte les deux. La divergence est à
-   résoudre avant la migration Phase D.
-
-3. **Ordre des scopes** : l'ordre canonique utilise l'ordre
+2. **Ordre des scopes** : l'ordre canonique utilise l'ordre
    alphabétique (`LOCAL < REMOTE < SYSTEM`). Si un autre ordre est
    requis (par exemple `SYSTEM < LOCAL < REMOTE` pour matcher la
    narration de la doc), il suffit de modifier `_SCOPE_ORDER` dans
@@ -1408,7 +1567,6 @@ résolution `requires` contre CPPDEFINES (A8), validation processors
 
 ### Notes diverses
 
-- `FAILSAFE` est `REMOTE` (validé).
 - `SYSTEM` est dans le modèle dès v2 (validé).
 - `.cbch` est pour plus tard (structure spécifique, hors scope A1).
 
