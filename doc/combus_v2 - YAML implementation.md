@@ -104,6 +104,76 @@ channels:
 
 Le tri est **global** après parsing : l'ordre des fichiers n'a aucune valeur protocolaire. Le tri par fichier (avant fusion) créerait un ordre non-canonique et masquerait les divergences avec le legacy.
 
+### L'extension ne détermine pas le contenu
+
+L'extension (`.cb`, `.cbch`) sert uniquement à la **découverte** et au
+**périmètre de collecte**. Elle n'impose pas une sémantique exclusive
+au fichier.
+
+Un même fichier peut contenir plusieurs sections (`channels`, `chains`,
+`processors`, etc.) :
+
+```yaml
+module: vbat
+
+channels:
+  - id: BATTERY_VOLTAGE
+    type: analog
+    scope: LOCAL
+    theme: vbat
+
+chains:
+  - name: vbat_alert
+    processors: [vbat_low_check, vbat_alert_publish]
+```
+
+A3 expose la représentation brute du document (toutes sections
+présentes). A5 sélectionne ensuite les sections qui relèvent de son
+domaine (`channels:` pour A5, `chains:` pour la Phase C).
+
+**Ne pas implémenter de règle du type « `.cb` → channels uniquement »**.
+
+### Frontière A3 / A5 (verrouillée)
+
+Le mot « validation » ne désigne pas la même chose en A3 et en A5.
+Cette distinction est verrouillée explicitement :
+
+**A3 = acquisition / collecte** :
+
+> trouver → collecter → vérifier l'existence / validité minimale → stocker brut
+
+A3 doit notamment :
+- découvrir les fichiers de configuration à partir du buildroot ;
+- collecter les fichiers ;
+- vérifier qu'ils existent et sont lisibles ;
+- parser le YAML suffisamment pour savoir qu'il s'agit d'un document
+  exploitable (top-level mapping, non vide) ;
+- vérifier uniquement la structure minimale nécessaire pour pouvoir
+  stocker / exposer le document ;
+- conserver le contenu brut / la représentation brute nécessaire aux
+  étapes suivantes.
+
+**A3 ne valide pas la sémantique ComBus.** Il ne doit notamment pas
+décider :
+- si un `id` est autorisé ;
+- si `scope` / `type` / `theme` forment une combinaison valide ;
+- si `direction` est obligatoire ;
+- si deux définitions sont en conflit ;
+- si deux fichiers définissent le même canal ;
+- comment fusionner plusieurs définitions ;
+- quel ordre canonique appliquer.
+
+**A5 = interprétation métier / fusion / canonisation** :
+
+> interpréter les sections pertinentes → valider les définitions ComBus → fusionner → détecter les conflits → canoniser / trier
+
+A5 prend les données collectées par A3 et effectue le travail logique.
+A5 sélectionne les sections qui relèvent de son domaine (par exemple
+`channels:` pour A5, `chains:` pour la Phase C) sans dépendre de
+l'extension du fichier.
+
+Cette distinction est respectée dans le code **et dans la documentation**.
+
 ## 4. Modèle de données
 
 Le modèle cible comprend notamment :
@@ -323,6 +393,89 @@ Avant migration :
 3. produire l'ordre v2 (via tri canonique) ;
 4. comparer ;
 5. **échouer explicitement** en cas de divergence.
+
+### Unicité des IDs (verrouillée)
+
+> **`id` est unique globalement, tous types confondus.**
+
+Donc :
+
+```yaml
+channels:
+  - id: FOO
+    type: digital
+```
+
+et ailleurs :
+
+```yaml
+channels:
+  - id: FOO
+    type: analog
+```
+
+→ **erreur de conflit**.
+
+Le `type` ne fait pas partie de l'espace d'unicité de l'ID. La détection
+de collision porte sur `id` globalement.
+
+**Aucune stratégie « last one wins ».** Deux définitions concurrentes
+du même `id` doivent provoquer une erreur explicite avec suffisamment
+de contexte pour identifier les fichiers concernés.
+
+### Direction et defaults (verrouillée)
+
+```text
+SYSTEM → direction implicite = none
+LOCAL  → direction obligatoire
+REMOTE → direction obligatoire
+```
+
+Il n'y a **aucun default implicite** pour `LOCAL` ou `REMOTE`. Raison :
+`scope` et `direction` sont deux axes indépendants. Un défaut caché
+transformerait implicitement le scope en choix de direction wire.
+
+Donc :
+
+```yaml
+scope: SYSTEM
+```
+
+sans `direction` peut être normalisé vers `direction = none`.
+
+Mais :
+
+```yaml
+scope: LOCAL
+```
+
+sans `direction` → erreur de validation.
+
+```yaml
+scope: REMOTE
+```
+
+sans `direction` → erreur de validation.
+
+### Combinaisons `scope × type × theme` (ambiguïté ouverte)
+
+La documentation évoque des contraintes entre ces axes (cf. §18 :
+« combinaison scope/type/theme interdite → erreur »), mais **la table
+complète des combinaisons autorisées / interdites n'est pas
+explicitement spécifiée** dans la note d'architecture actuelle.
+
+A5 implémente uniquement les contraintes confirmées :
+- `type ∈ {analog, digital}` (énuméré §4) ;
+- `scope ∈ {REMOTE, LOCAL, SYSTEM}` (énuméré §4) ;
+- `theme` est une chaîne libre (pas d'énumération fermée) ;
+- `direction` est obligatoire pour `LOCAL` et `REMOTE`, implicite
+  `none` pour `SYSTEM` (cf. paragraphe précédent).
+
+Les combinaisons `scope × type × theme` plus fines (par exemple
+« SYSTEM × analog interdit ? ») sont **à spécifier dans une passe
+ultérieure**. A5 les ignore pour l'instant et les traite comme
+autorisées par défaut. Toute combinaison supplémentaire doit être
+ajoutée avec un test dédié.
 
 L'étape de canonisation (A5) doit donc **préserver l'ordre wire_end** lorsqu'elle reconstruit la liste des channels actifs : si un ordre legacy est documenté comme important (par exemple via `wire_end` ou tout autre invariant d'ordre dans le code C++), cet ordre est intégré comme clé de tri secondaire ou comme override explicite, et non comme simple tri canonique `(scope, type, theme, id)`. La discovery (A3) et le parsing restent neutres sur cette dimension.
 
@@ -1126,6 +1279,132 @@ except BuildContextError as e:
 # Le test lance pio run -e <env> + pio run -t idedata -e <env> et
 # compare les deux via compare_context_to_idedata(ctx, idedata, env_name).
 ```
+
+### A5 — Canonisation (implémentation)
+
+**Fichiers créés** :
+
+- `scripts/combus_builder/canon.py` — module A5.
+- `scripts/combus_builder/tests/test_canon.py` — 42 tests.
+
+**API principale** (`canon.py`) :
+
+```python
+canonize(parsed: list[tuple[Path, str, Any]]) -> CanonResult
+```
+
+Retourne un `CanonResult` (frozen dataclass) avec :
+
+- `active_definitions: list[ChannelDefinition]` — validé, sans conflit,
+  ordre de découverte (pour diagnostic).
+- `canonical_definitions: list[ChannelDefinition]` — même contenu,
+  trié par `(scope, type, theme, id)`.
+
+**Contrat A3 → A5** (verrouillé) :
+
+- A3 retourne `list[tuple[Path, type_label, raw_dict]]`.
+- A5 lit la clé `channels:` de chaque `raw_dict`.
+- A5 **ignore** `type_label` (l'extension ne détermine pas le contenu).
+  Un `.cbch` avec une section `channels:` est traité comme un `.cb`
+  avec une section `channels:`.
+- A5 ne consomme pas `BuildContext` (A4). Le champ `requires` est
+  préservé tel quel ; sa résolution contre `CPPDEFINES` est le job
+  de A8.
+
+**Règles de validation implémentées** :
+
+| Champ | Règle |
+|---|---|
+| `id` | requis, string non vide, **unique globalement** (tous types confondus) |
+| `type` | requis, ∈ {`analog`, `digital`} |
+| `scope` | requis, ∈ {`REMOTE`, `LOCAL`, `SYSTEM`} |
+| `theme` | requis, string non vide (pas d'énum fermé) |
+| `direction` | requis pour `LOCAL`/`REMOTE`, optionnel pour `SYSTEM` (défaut = `none`) |
+| `requires` | optionnel, liste de strings non vides |
+| `infoName` | optionnel, string |
+
+**Stratégie de fusion** :
+
+- Tous les fichiers collectés peuvent contribuer aux `channels:`.
+- L'ordre de découverte n'a aucune valeur.
+- L'ordre des entrées dans le YAML n'a aucune valeur.
+- Conflit d'ID (même `id` dans deux fichiers) → `ChannelConflictError`
+  avec les deux chemins et les deux définitions.
+
+**Stratégie de détection des conflits** :
+
+- Clé d'unicité : `id` (globalement, tous types confondus).
+- Pas de « last one wins ».
+- Pas de merge partiel.
+- Erreur explicite avec contexte suffisant pour identifier les fichiers.
+
+**Ordre canonique** :
+
+```python
+(scope, type, theme, id)
+```
+
+dans cet ordre exact. Le scope utilise un ordre alphabétique
+(`LOCAL < REMOTE < SYSTEM`) défini dans `_SCOPE_ORDER` (un seul
+endroit à modifier si l'ordre doit changer).
+
+**Defaults `direction`** :
+
+- `SYSTEM` sans `direction` → `frozenset()` (représente `none`).
+- `LOCAL` sans `direction` → erreur.
+- `REMOTE` sans `direction` → erreur.
+- Doublons dans `direction` → déduplication silencieuse (pas une erreur).
+
+**Tests** (42/42 passent) :
+
+```
+python scripts/combus_builder/tests/test_canon.py
+```
+
+Couvre :
+- extraction de sections (extension-agnostique) ;
+- validation par champ (chaque chemin d'erreur) ;
+- defaults `direction` (SYSTEM → none, LOCAL/REMOTE → required) ;
+- unicité d'ID (à travers les types) ;
+- détection de conflit (avec chemins dans l'erreur) ;
+- fusion (multi-fichiers, multi-sections, ordre indépendant) ;
+- tri canonique `(scope, type, theme, id)` ;
+- déterminisme (même set, ordre différent → même sortie) ;
+- fichier package (`channels:` + `chains:` dans le même fichier) ;
+- test structurel : A5 ne branche pas sur `type_label`.
+
+**Ambiguïtés restantes** (à traiter dans une passe ultérieure) :
+
+1. **Combinaisons `scope × type × theme`** : la table complète des
+   combinaisons autorisées/interdites n'est pas explicitement
+   spécifiée dans la note d'architecture. A5 implémente uniquement
+   les contraintes par axe (énumérations de `type` et `scope`).
+   Toute combinaison supplémentaire doit être ajoutée avec un test
+   dédié.
+
+2. **FAILSAFE doit-il être REMOTE ?** : la note §19 dit « Dans le
+   modèle retenu, `FAILSAFE` est `REMOTE` », mais les fichiers
+   `.cb` actuels (`failsafe.cb`, `vbat_failsafe.cb`) utilisent
+   `scope: LOCAL`. A5 accepte les deux. La divergence est à
+   résoudre avant la migration Phase D.
+
+3. **Ordre des scopes** : l'ordre canonique utilise l'ordre
+   alphabétique (`LOCAL < REMOTE < SYSTEM`). Si un autre ordre est
+   requis (par exemple `SYSTEM < LOCAL < REMOTE` pour matcher la
+   narration de la doc), il suffit de modifier `_SCOPE_ORDER` dans
+   `canon.py`.
+
+**Modifications documentaires effectuées** :
+
+- §3 : ajout de « L'extension ne détermine pas le contenu » et
+  « Frontière A3 / A5 (verrouillée) ».
+- §10 : ajout de « Unicité des IDs (verrouillée) », « Direction et
+  defaults (verrouillée) », « Combinaisons `scope × type × theme`
+  (ambiguïté ouverte) ».
+
+**Hors scope A5 (rappel)** : génération C++ (A6), MD5 (A7),
+résolution `requires` contre CPPDEFINES (A8), validation processors
+(Phase C), wiring `.cbch` (Phase C).
 
 ### Notes diverses
 
