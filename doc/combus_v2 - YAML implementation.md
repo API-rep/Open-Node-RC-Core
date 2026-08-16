@@ -533,6 +533,48 @@ Le générateur doit :
 
 Aucun artefact généré ne doit être placé dans `src/`.
 
+### A6.2 — Trois vues générées : `combus`, `combus_local`, `combus_remote`
+
+Le générateur émet **trois vues** partageant le même espace d'IDs :
+
+| Vue | Contenu | Artefacts générés |
+|---|---|---|
+| `combus` | `scope ∈ {REMOTE, LOCAL, SYSTEM}` | `combus_ids.h`, `combus.h`, `combus.cpp` |
+| `combus_local` | `scope ∈ {REMOTE, LOCAL}` (A6.2) | `combus_local_ids.h`, `combus_local.h`, `combus_local.cpp` |
+| `combus_remote` | `scope ∈ {REMOTE}` | `combus_remote_ids.h`, `combus_remote.h`, `combus_remote.cpp` |
+
+**Rôle de `combus_local` (A6.2)** : préparer un futur MD5 d'alignement
+inter-nœud insensible aux différences `SYSTEM` entre cartes d'un même
+nœud. Deux cartes d'un même nœud peuvent instancier des channels
+`SYSTEM` différents (répartition de modules entre cartes) ; un MD5
+calculé sur `combus` (REMOTE+LOCAL+SYSTEM) diverge donc entre cartes
+légitimement configurées. `combus_local` (REMOTE+LOCAL, sans SYSTEM)
+sera la base d'un MD5 de vérification d'alignement inter-nœud plus
+fiable. Le calcul du MD5 lui-même reste **A7**, hors scope ici.
+
+**Règle de non-renumérotation (verrouillée)** : un channel REMOTE ou
+LOCAL doit avoir **exactement le même ID numérique** dans `combus` et
+dans `combus_local`. Cette propriété est garantie par construction :
+`_select_view()` utilise la même clé de tri canonique
+`(scope priority, type, theme, id)` pour les deux vues, et le préfixe
+REMOTE+LOCAL de `combus` est contigu. `combus_local` n'a donc pas
+besoin d'un sentinel `WireEnd` séparé — `combus.WireEnd` est
+directement réutilisable.
+
+**Implémentation** : `combus_local` réutilise exactement le même code
+que `combus_remote` (qui prend déjà `allowed_scopes` en paramètre).
+Aucun format allégé, aucun chemin de code dédié. Le triplet complet
+est généré (mêmes structures `AnalogComBus` / `DigitalComBus`, mêmes
+champs `infoName`, `value`, `layer`, `direction`).
+
+**Note explicite pour A7** : le futur calcul MD5 doit porter sur la
+**définition complète** de chaque channel
+(`id`, `type`, `scope`, `theme`, `direction`, `infoName`), pas
+uniquement sur les IDs numériques. Un changement de `direction` sans
+changement d'ID doit être détecté — sinon deux compilations avec le
+même ensemble de channels mais des `direction` différentes seraient
+considérées compatibles à tort.
+
 ## 13. MD5 / handshake
 
 Le handshake doit représenter le **contrat ComBus généré**.

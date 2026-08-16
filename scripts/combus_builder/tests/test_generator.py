@@ -404,8 +404,190 @@ def test_select_views_both_views():
     sel = select_views(chs)
     assert isinstance(sel, ViewSelection)
     assert sel.full.ch_count == 3
+    assert sel.local.ch_count == 2
     assert sel.remote.ch_count == 1
     assert sel.remote.channels[0].ch.id == "R1"
+
+
+# =============================================================================
+# A6.2 — combus_local view (REMOTE + LOCAL, no SYSTEM)
+# =============================================================================
+
+def test_select_views_local_excludes_system():
+    """A6.2: combus_local contains exactly REMOTE+LOCAL channels, no SYSTEM."""
+    chs = _canon_from_yamls({
+        "channels": [
+            _ch("R1", scope="REMOTE"),
+            _ch("R2", scope="REMOTE"),
+            _ch("L1", scope="LOCAL"),
+            _ch("L2", scope="LOCAL"),
+            _ch("S1", scope="SYSTEM", direction=None),
+            _ch("S2", scope="SYSTEM", direction=None),
+        ]
+    })
+    sel = select_views(chs)
+    assert sel.local.ch_count == 4
+    scopes = {vc.ch.scope for vc in sel.local.channels}
+    assert scopes == {"REMOTE", "LOCAL"}
+    assert "SYSTEM" not in scopes
+
+
+def test_select_views_local_is_prefix_of_full():
+    """A6.2: combus_local is a strict prefix of combus (REMOTE+LOCAL channels
+    appear in the same order, with the same numeric IDs)."""
+    chs = _canon_from_yamls({
+        "channels": [
+            _ch("R1", scope="REMOTE"),
+            _ch("R2", scope="REMOTE"),
+            _ch("L1", scope="LOCAL"),
+            _ch("L2", scope="LOCAL"),
+            _ch("S1", scope="SYSTEM", direction=None),
+            _ch("S2", scope="SYSTEM", direction=None),
+        ]
+    })
+    sel = select_views(chs)
+    # combus_local must be a prefix of combus (same channels, same order, same IDs).
+    assert sel.local.ch_count == 4
+    assert sel.full.ch_count == 6
+    for i in range(sel.local.ch_count):
+        assert sel.local.channels[i].ch.id == sel.full.channels[i].ch.id, (
+            f"order mismatch at index {i}: local={sel.local.channels[i].ch.id} "
+            f"vs full={sel.full.channels[i].ch.id}"
+        )
+        assert sel.local.channels[i].numeric_id == sel.full.channels[i].numeric_id, (
+            f"id mismatch at index {i}: local={sel.local.channels[i].numeric_id} "
+            f"vs full={sel.full.channels[i].numeric_id}"
+        )
+
+
+def test_select_views_local_no_renumbering():
+    """A6.2: a channel that appears in both combus and combus_local has the
+    SAME numeric_id in both views (no renumbering)."""
+    chs = _canon_from_yamls({
+        "channels": [
+            _ch("R1", scope="REMOTE"),
+            _ch("R2", scope="REMOTE"),
+            _ch("L1", scope="LOCAL"),
+            _ch("L2", scope="LOCAL"),
+            _ch("S1", scope="SYSTEM", direction=None),
+        ]
+    })
+    sel = select_views(chs)
+    # Build a map id -> numeric_id in each view.
+    full_ids = {vc.ch.id: vc.numeric_id for vc in sel.full.channels}
+    local_ids = {vc.ch.id: vc.numeric_id for vc in sel.local.channels}
+    # Every channel in combus_local must have the same numeric_id in combus.
+    for cid, nid in local_ids.items():
+        assert cid in full_ids, f"{cid} missing from combus"
+        assert full_ids[cid] == nid, (
+            f"renumbering detected: {cid} has id {nid} in combus_local "
+            f"but {full_ids[cid]} in combus"
+        )
+
+
+def test_select_views_local_wire_end_equals_full_wire_end():
+    """A6.2: combus_local.wire_end == combus.wire_end (same REMOTE/LOCAL
+    boundary by construction)."""
+    chs = _canon_from_yamls({
+        "channels": [
+            _ch("R1", scope="REMOTE"),
+            _ch("R2", scope="REMOTE"),
+            _ch("L1", scope="LOCAL"),
+            _ch("S1", scope="SYSTEM", direction=None),
+        ]
+    })
+    sel = select_views(chs)
+    assert sel.local.wire_end == sel.full.wire_end
+
+
+def test_select_views_local_deterministic():
+    """A6.2: combus_local is deterministic (parity with combus/combus_remote)."""
+    chs_a = _canon_from_yamls({"channels": [
+        _ch("R1", scope="REMOTE"),
+        _ch("L1", scope="LOCAL"),
+        _ch("S1", scope="SYSTEM", direction=None),
+    ]})
+    sel_a = select_views(chs_a)
+    chs_b = _canon_from_yamls({"channels": [
+        _ch("S1", scope="SYSTEM", direction=None),
+        _ch("L1", scope="LOCAL"),
+        _ch("R1", scope="REMOTE"),
+    ]})
+    sel_b = select_views(chs_b)
+    assert [vc.ch.id for vc in sel_a.local.channels] == [vc.ch.id for vc in sel_b.local.channels]
+    assert [vc.numeric_id for vc in sel_a.local.channels] == [vc.numeric_id for vc in sel_b.local.channels]
+
+
+def test_select_views_local_empty_when_no_remote_or_local():
+    """A6.2: combus_local is empty when only SYSTEM channels exist."""
+    chs = _canon_from_yamls({"channels": [
+        _ch("S1", scope="SYSTEM", direction=None),
+        _ch("S2", scope="SYSTEM", direction=None),
+    ]})
+    sel = select_views(chs)
+    assert sel.local.ch_count == 0
+    assert sel.local.wire_end == 0
+
+
+def test_generate_emits_combus_local_files(tmp_path):
+    """A6.2: generate() emits combus_local_ids.h, combus_local.h, combus_local.cpp."""
+    chs = _canon_from_yamls({"channels": [
+        _ch("R1", scope="REMOTE"),
+        _ch("L1", scope="LOCAL"),
+        _ch("S1", scope="SYSTEM", direction=None),
+    ]})
+    sel = generate(chs, _ctx([]), tmp_path)
+    assert (tmp_path / "combus_local_ids.h").exists()
+    assert (tmp_path / "combus_local.h").exists()
+    assert (tmp_path / "combus_local.cpp").exists()
+    # And the existing views are still emitted.
+    assert (tmp_path / "combus_ids.h").exists()
+    assert (tmp_path / "combus.h").exists()
+    assert (tmp_path / "combus.cpp").exists()
+    assert (tmp_path / "combus_remote_ids.h").exists()
+    assert (tmp_path / "combus_remote.h").exists()
+    assert (tmp_path / "combus_remote.cpp").exists()
+
+
+def test_combus_local_ids_header_excludes_system():
+    """A6.2: combus_local_ids.h must NOT contain any SYSTEM channel."""
+    chs = _canon_from_yamls({"channels": [
+        _ch("R1", scope="REMOTE"),
+        _ch("L1", scope="LOCAL"),
+        _ch("S1", scope="SYSTEM", direction=None),
+    ]})
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        generate(chs, _ctx([]), Path(tmp_dir))
+        ids = (Path(tmp_dir) / "combus_local_ids.h").read_text(encoding="utf-8")
+    assert "R1" in ids
+    assert "L1" in ids
+    assert "S1" not in ids
+
+
+def test_combus_local_no_bus_instance():
+    """A6.2: combus_local.h does NOT declare comBus (only combus does)."""
+    chs = _canon_from_yamls({"channels": [
+        _ch("R1", scope="REMOTE"),
+        _ch("L1", scope="LOCAL"),
+    ]})
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        generate(chs, _ctx([]), Path(tmp_dir))
+        h = (Path(tmp_dir) / "combus_local.h").read_text(encoding="utf-8")
+    assert "extern ComBus comBus" not in h
+
+
+def test_combus_local_no_wire_end_sentinel():
+    """A6.2: combus_local_ids.h does NOT declare a WireEnd sentinel
+    (combus.WireEnd is the canonical boundary; combus_local reuses it)."""
+    chs = _canon_from_yamls({"channels": [
+        _ch("R1", scope="REMOTE"),
+        _ch("L1", scope="LOCAL"),
+    ]})
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        generate(chs, _ctx([]), Path(tmp_dir))
+        ids = (Path(tmp_dir) / "combus_local_ids.h").read_text(encoding="utf-8")
+    assert "Combus_localWireEnd" not in ids
+    assert "WireEnd" not in ids
 
 
 def test_select_views_deterministic():
@@ -891,11 +1073,14 @@ def test_generator_against_real_repo_files():
         sel = generate(chs, ctx, Path(tmp_dir))
         assert sel.full.ch_count > 0
         assert sel.full.ch_count >= sel.remote.ch_count
+        # A6.2: 9 files total (3 views × 3 files each).
         for fname in ("combus.h", "combus.cpp", "combus_ids.h",
+                      "combus_local.h", "combus_local.cpp", "combus_local_ids.h",
                       "combus_remote.h", "combus_remote.cpp", "combus_remote_ids.h"):
             assert (Path(tmp_dir) / fname).exists(), f"missing {fname}"
         # And no ChannelDescriptor anywhere.
         for fname in ("combus.h", "combus.cpp", "combus_ids.h",
+                      "combus_local.h", "combus_local.cpp", "combus_local_ids.h",
                       "combus_remote.h", "combus_remote.cpp", "combus_remote_ids.h"):
             content = (Path(tmp_dir) / fname).read_text(encoding="utf-8")
             assert "ChannelDescriptor" not in content, f"ChannelDescriptor leaked in {fname}"

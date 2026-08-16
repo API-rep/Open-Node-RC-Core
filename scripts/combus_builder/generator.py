@@ -179,13 +179,18 @@ class View:
 @dataclass(frozen=True)
 class ViewSelection:
     """
-    Both views in one struct, sharing the same ID space.
+    All three views in one struct, sharing the same ID space.
 
-    full:   combus (REMOTE + LOCAL + SYSTEM)
+    full:   combus        (REMOTE + LOCAL + SYSTEM)
+    local:  combus_local  (REMOTE + LOCAL)        — A6.2
     remote: combus_remote (REMOTE only)
+
+    A channel that appears in multiple views has the SAME numeric_id in
+    every view it appears in (no renumbering between views).
     """
 
     full: View
+    local: View
     remote: View
 
 
@@ -287,16 +292,23 @@ def _select_view(
 
 def select_views(channels: list[ChannelDefinition]) -> ViewSelection:
     """
-    Build the two views from the canonical channel list.
+    Build the three views from the canonical channel list.
 
-    Both views share the same ID space (a channel has the same numeric
-    ID in both views if it appears in both).
+    All views share the same ID space (a channel has the same numeric
+    ID in every view it appears in — no renumbering between views).
+
+    The combus_local view (A6.2) is a strict prefix of combus: it
+    contains exactly the REMOTE+LOCAL channels of combus, in the same
+    order, with the same numeric IDs. This is by construction because
+    the sort key is identical and the prefix is contiguous.
     """
     full = _select_view(channels, "combus",
                         {"REMOTE", "LOCAL", "SYSTEM"})
+    local = _select_view(channels, "combus_local",
+                         {"REMOTE", "LOCAL"})
     remote = _select_view(channels, "combus_remote",
                           {"REMOTE"})
-    return ViewSelection(full=full, remote=remote)
+    return ViewSelection(full=full, local=local, remote=remote)
 
 
 # =============================================================================
@@ -586,11 +598,11 @@ def generate(
     out_dir: Path,
 ) -> ViewSelection:
     """
-    Full A6.1 generation pipeline.
+    Full A6.2 generation pipeline.
 
     1. Resolve `requires` against ctx.
-    2. Select views.
-    3. Emit three files per view.
+    2. Select views (combus, combus_local, combus_remote).
+    3. Emit three files per view (9 files total).
 
     Returns the ViewSelection so callers (tests, diagnostics) can
     inspect what was generated.
@@ -598,6 +610,7 @@ def generate(
     active = resolve_requires(channels, ctx)
     sel = select_views(active)
     emit_view(sel.full, out_dir, ctx)
+    emit_view(sel.local, out_dir, ctx)
     emit_view(sel.remote, out_dir, ctx)
     return sel
 
@@ -621,6 +634,9 @@ def main(
     print(f"[combus_builder] generated view 'combus' "
           f"({sel.full.ch_count} channels, WIRE_END={sel.full.wire_end}) "
           f"-> {out_dir}/combus.{{h,cpp,_ids.h}}")
+    print(f"[combus_builder] generated view 'combus_local' "
+          f"({sel.local.ch_count} channels, WIRE_END={sel.local.wire_end}) "
+          f"-> {out_dir}/combus_local.{{h,cpp,_ids.h}}")
     print(f"[combus_builder] generated view 'combus_remote' "
           f"({sel.remote.ch_count} channels, WIRE_END={sel.remote.wire_end}) "
           f"-> {out_dir}/combus_remote.{{h,cpp,_ids.h}}")
