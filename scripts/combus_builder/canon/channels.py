@@ -199,6 +199,15 @@ def _normalize_direction(
             f"`direction` must be a list, got {type(raw_dir).__name__}",
         )
 
+    # Chaque entrée doit être une string (sinon set()/dict() échoue).
+    # On valide le type AVANT toute opération nécessitant des valeurs hashables.
+    bad_type = [d for d in raw_dir if not isinstance(d, str)]
+    if bad_type:
+        raise ChannelValidationError(
+            path, channel_id,
+            f"`direction` entries must be strings, got {bad_type!r}",
+        )
+
     # Doublons interdits (vérifié en premier pour donner un message clair).
     if len(raw_dir) != len(set(raw_dir)):
         seen: set[str] = set()
@@ -468,19 +477,31 @@ def extract_channels_sections(
     section `channels:` est traité comme un `.cb` avec une section
     `channels:`.
 
-    Les documents sans `channels:` sont silencieusement ignorés (ils
-    peuvent contenir d'autres sections comme `chains:` qui ne sont
-    pas du ressort de A5.1).
+    Distinction précise :
+      - clé `channels:` absente  → ignorée silencieusement
+      - `channels: null`          → erreur de validation explicite
+      - `channels: []`            → section valide vide
+      - `channels: [...]`         → section valide non vide
+
+    Les documents sans `channels:` peuvent contenir d'autres sections
+    (comme `chains:`) qui ne sont pas du ressort de A5.1.
     """
     out: list[tuple[Path, list[Any]]] = []
     for path, _type_label, raw in parsed:
         if not isinstance(raw, dict):
             continue
         if "channels" not in raw:
+            # Clé absente : le fichier ne déclare aucun channel.
             continue
         section = raw["channels"]
         if section is None:
-            continue
+            # Clé présente mais valeur null : erreur explicite.
+            raise ChannelValidationError(
+                path, None,
+                "`channels:` is explicitly null; expected a list of channels "
+                "(use `channels: []` for an empty section, or omit the key "
+                "to declare no channels)",
+            )
         if not isinstance(section, list):
             raise ChannelValidationError(
                 path, None,

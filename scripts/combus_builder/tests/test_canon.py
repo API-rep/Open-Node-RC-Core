@@ -146,6 +146,61 @@ def test_extract_sections_extension_agnostic(tmp_path):
 
 
 # =============================================================================
+# Bug 2: Distinguish channels: absent vs null vs []
+# =============================================================================
+
+def test_extract_sections_no_channels_key_ignored(tmp_path):
+    """File without `channels:` key is silently ignored (not an error)."""
+    p1 = tmp_path / "a.cb"
+    parsed = [_parsed(p1, {"other": "value"})]
+    sections = extract_channels_sections(parsed)
+    assert sections == []
+
+
+def test_extract_sections_null_rejected(tmp_path):
+    """`channels: null` (explicitly null) is an error."""
+    p1 = tmp_path / "a.cb"
+    parsed = [_parsed(p1, {"channels": None})]
+    try:
+        extract_channels_sections(parsed)
+    except ChannelValidationError as e:
+        assert "null" in str(e)
+        assert "channels" in str(e)
+    else:
+        raise AssertionError("expected ChannelValidationError for channels: null")
+
+
+def test_extract_sections_empty_list_accepted(tmp_path):
+    """`channels: []` is a valid empty section (no error)."""
+    p1 = tmp_path / "a.cb"
+    parsed = [_parsed(p1, {"channels": []})]
+    sections = extract_channels_sections(parsed)
+    assert len(sections) == 1
+    assert sections[0][0] == p1
+    assert sections[0][1] == []
+
+
+def test_extract_sections_null_differs_from_absent(tmp_path):
+    """absent and null are DIFFERENT: absent is OK, null is an error."""
+    p_absent = tmp_path / "absent.cb"
+    p_null = tmp_path / "null.cb"
+    parsed = [
+        _parsed(p_absent, {"other": "value"}),
+        _parsed(p_null, {"channels": None}),
+    ]
+    # absent is fine
+    sections = extract_channels_sections([parsed[0]])
+    assert sections == []
+    # null is an error
+    try:
+        extract_channels_sections([parsed[1]])
+    except ChannelValidationError:
+        pass
+    else:
+        raise AssertionError("expected ChannelValidationError for channels: null")
+
+
+# =============================================================================
 # Unknown keys
 # =============================================================================
 
@@ -735,6 +790,106 @@ def test_dir_invalid_token(tmp_path):
     except ChannelValidationError as e:
         assert "direction" in str(e)
         assert "sideways" in str(e)
+    else:
+        raise AssertionError("expected ChannelValidationError")
+
+
+# =============================================================================
+# Bug 1: Direction entries must be strings (no TypeError on unhashable types)
+# =============================================================================
+
+def test_dir_entry_list_rejected(tmp_path):
+    """`direction: [[uplink]]` must raise ChannelValidationError, not TypeError."""
+    p = tmp_path / "a.cb"
+    parsed = [_parsed(p, {"channels": [{
+        "id": "FOO",
+        "infoName": "Foo",
+        "type": "digital",
+        "scope": "LOCAL",
+        "theme": "failsafe",
+        "direction": [["uplink"]],
+    }]})]
+    try:
+        canonize(parsed)
+    except ChannelValidationError as e:
+        assert "direction" in str(e)
+        assert "strings" in str(e)
+    except TypeError as e:
+        raise AssertionError(
+            f"expected ChannelValidationError, got TypeError: {e}"
+        )
+    else:
+        raise AssertionError("expected ChannelValidationError")
+
+
+def test_dir_entry_int_rejected(tmp_path):
+    """`direction: [123]` must raise ChannelValidationError."""
+    p = tmp_path / "a.cb"
+    parsed = [_parsed(p, {"channels": [{
+        "id": "FOO",
+        "infoName": "Foo",
+        "type": "digital",
+        "scope": "LOCAL",
+        "theme": "failsafe",
+        "direction": [123],
+    }]})]
+    try:
+        canonize(parsed)
+    except ChannelValidationError as e:
+        assert "direction" in str(e)
+        assert "strings" in str(e)
+    except TypeError as e:
+        raise AssertionError(
+            f"expected ChannelValidationError, got TypeError: {e}"
+        )
+    else:
+        raise AssertionError("expected ChannelValidationError")
+
+
+def test_dir_entry_dict_rejected(tmp_path):
+    """`direction: [{key: val}]` must raise ChannelValidationError."""
+    p = tmp_path / "a.cb"
+    parsed = [_parsed(p, {"channels": [{
+        "id": "FOO",
+        "infoName": "Foo",
+        "type": "digital",
+        "scope": "LOCAL",
+        "theme": "failsafe",
+        "direction": [{"key": "val"}],
+    }]})]
+    try:
+        canonize(parsed)
+    except ChannelValidationError as e:
+        assert "direction" in str(e)
+        assert "strings" in str(e)
+    except TypeError as e:
+        raise AssertionError(
+            f"expected ChannelValidationError, got TypeError: {e}"
+        )
+    else:
+        raise AssertionError("expected ChannelValidationError")
+
+
+def test_dir_entry_mixed_types_rejected(tmp_path):
+    """A mix of valid and invalid types must be rejected."""
+    p = tmp_path / "a.cb"
+    parsed = [_parsed(p, {"channels": [{
+        "id": "FOO",
+        "infoName": "Foo",
+        "type": "digital",
+        "scope": "LOCAL",
+        "theme": "failsafe",
+        "direction": ["uplink", 123],
+    }]})]
+    try:
+        canonize(parsed)
+    except ChannelValidationError as e:
+        assert "direction" in str(e)
+        assert "strings" in str(e)
+    except TypeError as e:
+        raise AssertionError(
+            f"expected ChannelValidationError, got TypeError: {e}"
+        )
     else:
         raise AssertionError("expected ChannelValidationError")
 

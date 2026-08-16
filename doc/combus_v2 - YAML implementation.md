@@ -1445,6 +1445,102 @@ A5 : 76/76 tests passed
 (résolution `requires` contre CPPDEFINES), `.cbch`, `chains:`,
 processors, wire contract legacy.
 
+### A5.1 — Corrections de bugs de validation (post-implémentation)
+
+Deux bugs de validation ont été identifiés lors de la review de code.
+Ces corrections sont strictement locales et ne modifient pas le
+contrat A5.1.
+
+#### Bug 1 — `direction` : entrées non-string
+
+**Avant** : `_normalize_direction` utilisait `set(raw_dir)` avant
+d'avoir validé que chaque élément de `direction` est une `str`.
+
+Entrée problématique :
+
+```yaml
+direction:
+  - [uplink]
+```
+
+Avant correction : `TypeError: unhashable type: 'list'`.
+Après correction : `ChannelValidationError` explicite.
+
+**Correction** : validation du type de chaque entrée **avant** toute
+opération nécessitant des valeurs hashables (`set()`, `dict keys`,
+détection de doublons).
+
+```python
+bad_type = [d for d in raw_dir if not isinstance(d, str)]
+if bad_type:
+    raise ChannelValidationError(
+        path, channel_id,
+        f"`direction` entries must be strings, got {bad_type!r}",
+    )
+```
+
+Le pattern est aligné sur `_validate_requires` (qui valide déjà le
+type des éléments avant la détection de doublons).
+
+**Tests ajoutés** : 4 (list, int, dict, mixed types).
+
+#### Bug 2 — `channels:` : absent vs null vs `[]`
+
+**Avant** : `extract_channels_sections` traitait `null` et la clé
+absente de la même façon (silencieusement).
+
+| Forme | Avant | Après |
+|---|---|---|
+| clé absente | ignorée | **ignorée** |
+| `channels: null` | ignorée | **erreur explicite** |
+| `channels: []` | acceptée | **acceptée** |
+| `channels: [...]` | acceptée | **acceptée** |
+
+**Correction** : la clé présente mais `null` lève maintenant
+`ChannelValidationError` avec un message indiquant explicitement
+le bon choix (`channels: []` pour une section vide, ou omettre la
+clé pour ne pas déclarer de channels).
+
+```python
+if section is None:
+    raise ChannelValidationError(
+        path, None,
+        "`channels:` is explicitly null; expected a list of channels "
+        "(use `channels: []` for an empty section, or omit the key "
+        "to declare no channels)",
+    )
+```
+
+**Tests ajoutés** : 4 (no key, null, [], absent vs null).
+
+#### Revue ciblée du pattern validation → opération
+
+Pendant la correction, recherche des autres endroits où une
+opération nécessitant des valeurs d'un type précis (`set`, `dict`
+keys, hash, comparaison spécifique) pourrait être effectuée avant
+validation du type des éléments YAML.
+
+| Fonction | Statut |
+|---|---|
+| `_normalize_direction` | corrigé (bug 1) |
+| `_validate_requires` | déjà OK (valide le type avant `set()`) |
+| `extract_channels_sections` | corrigé (bug 2) |
+| `validate_channel` | OK (chaque champ validé avant usage ; `set(raw.keys())` opère sur les clés qui sont toujours des strings) |
+| `merge_channels` | OK (utilise `ch.id` déjà validé) |
+
+Aucune autre correction nécessaire.
+
+#### Tests
+
+```
+A5 : 84/84 tests passed (76 existants + 8 nouveaux)
+A4 : 35/35 tests passed
+A3 : import OK
+```
+
+Fichiers `.cb` réels validés : `failsafe.cb`, `vbat_failsafe.cb`
+(toujours conformes).
+
 ### Notes diverses
 
 **Fichiers créés** :
@@ -1564,6 +1660,102 @@ Couvre :
 **Hors scope A5 (rappel)** : génération C++ (A6), MD5 (A7),
 résolution `requires` contre CPPDEFINES (A8), validation processors
 (Phase C), wiring `.cbch` (Phase C).
+
+### A5.1 — Corrections de bugs de validation (post-implémentation)
+
+Deux bugs de validation ont été identifiés lors de la review de code.
+Ces corrections sont strictement locales et ne modifient pas le
+contrat A5.1.
+
+#### Bug 1 — `direction` : entrées non-string
+
+**Avant** : `_normalize_direction` utilisait `set(raw_dir)` avant
+d'avoir validé que chaque élément de `direction` est une `str`.
+
+Entrée problématique :
+
+```yaml
+direction:
+  - [uplink]
+```
+
+Avant correction : `TypeError: unhashable type: 'list'`.
+Après correction : `ChannelValidationError` explicite.
+
+**Correction** : validation du type de chaque entrée **avant** toute
+opération nécessitant des valeurs hashables (`set()`, `dict keys`,
+détection de doublons).
+
+```python
+bad_type = [d for d in raw_dir if not isinstance(d, str)]
+if bad_type:
+    raise ChannelValidationError(
+        path, channel_id,
+        f"`direction` entries must be strings, got {bad_type!r}",
+    )
+```
+
+Le pattern est aligné sur `_validate_requires` (qui valide déjà le
+type des éléments avant la détection de doublons).
+
+**Tests ajoutés** : 4 (list, int, dict, mixed types).
+
+#### Bug 2 — `channels:` : absent vs null vs `[]`
+
+**Avant** : `extract_channels_sections` traitait `null` et la clé
+absente de la même façon (silencieusement).
+
+| Forme | Avant | Après |
+|---|---|---|
+| clé absente | ignorée | **ignorée** |
+| `channels: null` | ignorée | **erreur explicite** |
+| `channels: []` | acceptée | **acceptée** |
+| `channels: [...]` | acceptée | **acceptée** |
+
+**Correction** : la clé présente mais `null` lève maintenant
+`ChannelValidationError` avec un message indiquant explicitement
+le bon choix (`channels: []` pour une section vide, ou omettre la
+clé pour ne pas déclarer de channels).
+
+```python
+if section is None:
+    raise ChannelValidationError(
+        path, None,
+        "`channels:` is explicitly null; expected a list of channels "
+        "(use `channels: []` for an empty section, or omit the key "
+        "to declare no channels)",
+    )
+```
+
+**Tests ajoutés** : 4 (no key, null, [], absent vs null).
+
+#### Revue ciblée du pattern validation → opération
+
+Pendant la correction, recherche des autres endroits où une
+opération nécessitant des valeurs d'un type précis (`set`, `dict`
+keys, hash, comparaison spécifique) pourrait être effectuée avant
+validation du type des éléments YAML.
+
+| Fonction | Statut |
+|---|---|
+| `_normalize_direction` | corrigé (bug 1) |
+| `_validate_requires` | déjà OK (valide le type avant `set()`) |
+| `extract_channels_sections` | corrigé (bug 2) |
+| `validate_channel` | OK (chaque champ validé avant usage ; `set(raw.keys())` opère sur les clés qui sont toujours des strings) |
+| `merge_channels` | OK (utilise `ch.id` déjà validé) |
+
+Aucune autre correction nécessaire.
+
+#### Tests
+
+```
+A5 : 84/84 tests passed (76 existants + 8 nouveaux)
+A4 : 35/35 tests passed
+A3 : import OK
+```
+
+Fichiers `.cb` réels validés : `failsafe.cb`, `vbat_failsafe.cb`
+(toujours conformes).
 
 ### Notes diverses
 
