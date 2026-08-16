@@ -1541,6 +1541,165 @@ A3 : import OK
 Fichiers `.cb` réels validés : `failsafe.cb`, `vbat_failsafe.cb`
 (toujours conformes).
 
+### A6 — Audit préalable de ChanLayer (read-only)
+
+**Périmètre** : audit ciblé du modèle runtime autour de `ChanLayer`,
+`.layer`, `runLevelLayer`, `battLowLayer`, et tout accès à
+`AnalogComBus`/`DigitalComBus`. Pas d'implémentation, pas de
+changement de comportement.
+
+**Contexte acquis** :
+- `scope LOCAL/SYSTEM` → vue `combus` ; `scope REMOTE` → vue
+  `combus_remote`. Pas de vue `combus_system` séparée.
+- `direction` est une propriété runtime du channel, jamais un
+  critère de sélection de vue. A5 normalise déjà
+  `both` → `{uplink, downlink}`, `none` → `{}`.
+
+#### Tableau champ / rôle / consommateurs / dépendance A6 / risque de suppression
+
+| Champ | Rôle | Consommateurs | Dépendance A6 | Risque de suppression |
+|---|---|---|---|---|
+| `AnalogComBus::layer` | Garde d'écriture (`_layer_ok`) | `combus_access.cpp` (4 sites : `combus_set_analog`, `combus_set_digital`, `combus_set_runlevel`, `combus_set_battlow`) | **Oui** : si A6 supprime `layer`, la garde d'écriture disparaît | **Élevé** : la garde est la seule fonction runtime de `layer` |
+| `DigitalComBus::layer` | Idem | Idem | **Oui** | **Élevé** : idem |
+| `ComBus::runLevelLayer` | Garde d'écriture sur `runLevel` | `combus_access.cpp::combus_set_runlevel` | **Oui** | **Moyen** : utilisé uniquement par `combus_set_runlevel` |
+| `ComBus::battLowLayer` | Garde d'écriture sur `batteryIsLow` | `combus_access.cpp::combus_set_battlow` | **Oui** | **Moyen** : utilisé uniquement par `combus_set_battlow` |
+| `SimDev::chainLayer` | **Mort** : déclaré dans `simulation_struct.h` (archive A4), jamais instancié, jamais lu | Aucun | **Non** | **Aucun** : déjà mort |
+| `ChanLayer` (enum) | Type des champs ci-dessus | `combus_struct.h`, `combus_access.h/.cpp`, `combus_frame.h/.cpp`, `simulation_struct.h` (archive), `cb_runlevel.h` (include), `input_update.cpp` | **Oui** | **Élevé** : type central |
+
+#### Usages identifiés (lecture diagnostic vs dépendance fonctionnelle)
+
+**Dépendance fonctionnelle (routage/sélection/autorisation)** :
+
+1. `combus_access.cpp::_layer_ok(slot.layer, caller)` — **garde d'écriture**.
+   C'est la **seule** dépendance fonctionnelle réelle de `layer`.
+   Si `layer` disparaît, cette garde disparaît.
+
+2. `combus_access.cpp::combus_set_runlevel` — utilise `bus.runLevelLayer`.
+   Appelée par :
+   - `main.cpp` (5 sites : `IDLE`, `SLEEPING`, `RUNNING`, `IDLE`, `SLEEPING`)
+   - `init.cpp` (1 site : `DEF_RUNLEVEL`, `ChanLayer::LOCAL`)
+   - `cb_runlevel.cpp` (2 sites : `activeLevel`, `defaultLevel`)
+   - `combus_frame.cpp` (1 site : depuis frame RX)
+
+3. `combus_access.cpp::combus_set_battlow` — utilise `bus.battLowLayer`.
+   Appelée par :
+   - `main.cpp` (1 site : `true` quand `vbat_is_low`)
+
+4. `input_update.cpp` — appelle `combus_set_analog/digital` avec
+   `ChanLayer::REMOTE` (3 sites). C'est l'**écriture depuis l'input
+   manager** : les channels d'input sont marqués `REMOTE` dans les
+   `.inc`, donc l'écriture passe la garde.
+
+**Lecture diagnostic** :
+
+- Aucun. `layer` n'est lu que par `_layer_ok` (garde d'écriture).
+  Pas d'affichage, pas de log, pas de sérialisation.
+
+#### Réponses aux points à trancher
+
+**1. `layer` dans `AnalogComBus`/`DigitalComBus` : peut-il être supprimé ?**
+
+**Non, pas sans alternative.** La garde `_layer_ok` est la seule
+protection contre les écritures non autorisées (ex: un processor
+SYSTEM qui essaierait d'écrire un channel LOCAL). Si `layer`
+disparaît, il faut une autre garde.
+
+**Alternative possible** : la distinction `LOCAL` vs `SYSTEM` peut
+être portée par l'**adresse du tableau** (les channels SYSTEM
+vivent dans `[MACHINE_END..CH_COUNT)`, les LOCAL dans
+`[WIRE_END..MACHINE_END)`). Mais cela ne couvre pas la distinction
+`REMOTE` (qui est dans `[0..WIRE_END)`).
+
+**Conclusion** : `layer` ne peut pas être supprimé sans refonte
+de la garde d'écriture. **À traiter dans A6, pas avant.**
+
+**2. Si `layer` disparaît, où doit vivre la distinction SYSTEM/LOCAL ?**
+
+**Pas de perte démontrée** : `layer` n'est pas supprimé dans cet
+audit. Si A6 décide de le supprimer, la distinction SYSTEM/LOCAL
+peut être portée par :
+- l'adresse du tableau (`[MACHINE_END..CH_COUNT)` pour SYSTEM,
+  `[WIRE_END..MACHINE_END)` pour LOCAL) ;
+- un flag `isSystem` dans le descripteur de channel ;
+- un namespace C++ séparé.
+
+**Aucune de ces options n'est implémentée ni testée.** À
+arbitrer en A6.
+
+**3. `runLevelLayer`/`battLowLayer` restent-ils indépendants ?**
+
+**Oui.** Ils sont indépendants de `layer` (sur les channels) :
+- `runLevelLayer` est sur `ComBus` (pas sur un channel) ;
+- `battLowLayer` est sur `ComBus` (pas sur un channel) ;
+- ils protègent des champs uniques (`runLevel`, `batteryIsLow`),
+  pas des channels.
+
+Ils utilisent la même enum `ChanLayer` et la même fonction
+`_layer_ok`, mais leur rôle est distinct. **Pas de couplage
+fonctionnel avec `layer` (channels).**
+
+**4. Régression fonctionnelle potentielle de la fusion LOCAL+SYSTEM ?**
+
+**Oui, si la garde `_layer_ok` est supprimée.** Aujourd'hui :
+- un channel `SYSTEM` ne peut être écrit que par un caller
+  `SYSTEM` (ex: `cb_runlevel_fn` via l'overload sans `caller`) ;
+- un channel `LOCAL` peut être écrit par `LOCAL` ou `SYSTEM` ;
+- un channel `REMOTE` peut être écrit par n'importe qui.
+
+Si LOCAL+SYSTEM sont fusionnés (un seul tableau, un seul layer),
+la garde `_layer_ok` n'a plus de granularité. **Régression :
+perte de la protection SYSTEM-only.**
+
+**5. Adaptations nécessaires pour A6 ?**
+
+**Aucune adaptation runtime.** A6 (génération C++) doit :
+- générer les `.inc` (channels) à partir des `.cb` ;
+- générer les tableaux `AnalogComBusArray`/`DigitalComBusArray` ;
+- préserver le champ `layer` (valeur par défaut : `ChanLayer::LOCAL`
+  pour les channels générés, sauf si le `.cb` spécifie autre chose) ;
+- préserver `runLevelLayer`/`battLowLayer` (valeurs par défaut
+  actuelles : `LOCAL`) ;
+- préserver la garde `_layer_ok` (inchangée).
+
+**A6 ne touche pas au runtime.** Le runtime continue d'utiliser
+`layer` comme aujourd'hui.
+
+#### Représentation C++ de `direction` (options pour A6)
+
+**Pas de figeage.** Options viables :
+
+| Option | Avantages | Inconvénients |
+|---|---|---|
+| `enum class Direction : uint8_t { None=0, Uplink=1, Downlink=2 }` + bitmask manuel | Simple, pas de dépendance | Pas d'opérateurs bitwise natifs |
+| `enum class Direction : uint8_t { None=0, Uplink=1, Downlink=2, Both=Uplink\|Downlink }` + `operator\|`, `operator&` | Bitwise natif, expressif | `Both` doit être `Uplink\|Downlink` (3), pas 0 |
+| Type dédié encapsulant le bitmask (`struct DirectionBits { uint8_t bits; }`) | Encapsulation, pas d'ambiguïté | Verbosité |
+| `std::bitset<2>` | Standard, opérateurs intégrés | Overhead mémoire, pas de `enum class` |
+
+**Contraintes pour A6** :
+- doit représenter `{uplink}`, `{downlink}`, `{uplink, downlink}`,
+  `{}` (4 états) ;
+- doit être sérialisable pour debug/log ;
+- doit être comparable (égalité, sous-ensemble) ;
+- doit tenir sur 1 octet (cohérent avec `ChanLayer`).
+
+**Recommandation (non figée)** : `enum class Direction : uint8_t`
+avec `operator|`, `operator&`, `operator~`, et `Both = Uplink |
+Downlink`. Simple, expressif, 1 octet.
+
+#### Conclusion
+
+- `layer` (channels) : **dépendance fonctionnelle réelle** (garde
+  d'écriture). **Ne pas supprimer** sans alternative.
+- `runLevelLayer`/`battLowLayer` : **indépendants** de `layer`
+  (channels). **Pas de couplage**.
+- `chainLayer` (SimDev) : **mort**. Déjà inerte.
+- Fusion LOCAL+SYSTEM : **régression** de la garde `_layer_ok`.
+- A6 : **aucune adaptation runtime**. Préserver `layer`,
+  `runLevelLayer`, `battLowLayer`, `_layer_ok`.
+- `direction` C++ : **4 options viables**, pas de figeage.
+
+**Aucun commit nécessaire** (audit pur, read-only).
+
 ### Notes diverses
 
 **Fichiers créés** :
@@ -1756,6 +1915,165 @@ A3 : import OK
 
 Fichiers `.cb` réels validés : `failsafe.cb`, `vbat_failsafe.cb`
 (toujours conformes).
+
+### A6 — Audit préalable de ChanLayer (read-only)
+
+**Périmètre** : audit ciblé du modèle runtime autour de `ChanLayer`,
+`.layer`, `runLevelLayer`, `battLowLayer`, et tout accès à
+`AnalogComBus`/`DigitalComBus`. Pas d'implémentation, pas de
+changement de comportement.
+
+**Contexte acquis** :
+- `scope LOCAL/SYSTEM` → vue `combus` ; `scope REMOTE` → vue
+  `combus_remote`. Pas de vue `combus_system` séparée.
+- `direction` est une propriété runtime du channel, jamais un
+  critère de sélection de vue. A5 normalise déjà
+  `both` → `{uplink, downlink}`, `none` → `{}`.
+
+#### Tableau champ / rôle / consommateurs / dépendance A6 / risque de suppression
+
+| Champ | Rôle | Consommateurs | Dépendance A6 | Risque de suppression |
+|---|---|---|---|---|
+| `AnalogComBus::layer` | Garde d'écriture (`_layer_ok`) | `combus_access.cpp` (4 sites : `combus_set_analog`, `combus_set_digital`, `combus_set_runlevel`, `combus_set_battlow`) | **Oui** : si A6 supprime `layer`, la garde d'écriture disparaît | **Élevé** : la garde est la seule fonction runtime de `layer` |
+| `DigitalComBus::layer` | Idem | Idem | **Oui** | **Élevé** : idem |
+| `ComBus::runLevelLayer` | Garde d'écriture sur `runLevel` | `combus_access.cpp::combus_set_runlevel` | **Oui** | **Moyen** : utilisé uniquement par `combus_set_runlevel` |
+| `ComBus::battLowLayer` | Garde d'écriture sur `batteryIsLow` | `combus_access.cpp::combus_set_battlow` | **Oui** | **Moyen** : utilisé uniquement par `combus_set_battlow` |
+| `SimDev::chainLayer` | **Mort** : déclaré dans `simulation_struct.h` (archive A4), jamais instancié, jamais lu | Aucun | **Non** | **Aucun** : déjà mort |
+| `ChanLayer` (enum) | Type des champs ci-dessus | `combus_struct.h`, `combus_access.h/.cpp`, `combus_frame.h/.cpp`, `simulation_struct.h` (archive), `cb_runlevel.h` (include), `input_update.cpp` | **Oui** | **Élevé** : type central |
+
+#### Usages identifiés (lecture diagnostic vs dépendance fonctionnelle)
+
+**Dépendance fonctionnelle (routage/sélection/autorisation)** :
+
+1. `combus_access.cpp::_layer_ok(slot.layer, caller)` — **garde d'écriture**.
+   C'est la **seule** dépendance fonctionnelle réelle de `layer`.
+   Si `layer` disparaît, cette garde disparaît.
+
+2. `combus_access.cpp::combus_set_runlevel` — utilise `bus.runLevelLayer`.
+   Appelée par :
+   - `main.cpp` (5 sites : `IDLE`, `SLEEPING`, `RUNNING`, `IDLE`, `SLEEPING`)
+   - `init.cpp` (1 site : `DEF_RUNLEVEL`, `ChanLayer::LOCAL`)
+   - `cb_runlevel.cpp` (2 sites : `activeLevel`, `defaultLevel`)
+   - `combus_frame.cpp` (1 site : depuis frame RX)
+
+3. `combus_access.cpp::combus_set_battlow` — utilise `bus.battLowLayer`.
+   Appelée par :
+   - `main.cpp` (1 site : `true` quand `vbat_is_low`)
+
+4. `input_update.cpp` — appelle `combus_set_analog/digital` avec
+   `ChanLayer::REMOTE` (3 sites). C'est l'**écriture depuis l'input
+   manager** : les channels d'input sont marqués `REMOTE` dans les
+   `.inc`, donc l'écriture passe la garde.
+
+**Lecture diagnostic** :
+
+- Aucun. `layer` n'est lu que par `_layer_ok` (garde d'écriture).
+  Pas d'affichage, pas de log, pas de sérialisation.
+
+#### Réponses aux points à trancher
+
+**1. `layer` dans `AnalogComBus`/`DigitalComBus` : peut-il être supprimé ?**
+
+**Non, pas sans alternative.** La garde `_layer_ok` est la seule
+protection contre les écritures non autorisées (ex: un processor
+SYSTEM qui essaierait d'écrire un channel LOCAL). Si `layer`
+disparaît, il faut une autre garde.
+
+**Alternative possible** : la distinction `LOCAL` vs `SYSTEM` peut
+être portée par l'**adresse du tableau** (les channels SYSTEM
+vivent dans `[MACHINE_END..CH_COUNT)`, les LOCAL dans
+`[WIRE_END..MACHINE_END)`). Mais cela ne couvre pas la distinction
+`REMOTE` (qui est dans `[0..WIRE_END)`).
+
+**Conclusion** : `layer` ne peut pas être supprimé sans refonte
+de la garde d'écriture. **À traiter dans A6, pas avant.**
+
+**2. Si `layer` disparaît, où doit vivre la distinction SYSTEM/LOCAL ?**
+
+**Pas de perte démontrée** : `layer` n'est pas supprimé dans cet
+audit. Si A6 décide de le supprimer, la distinction SYSTEM/LOCAL
+peut être portée par :
+- l'adresse du tableau (`[MACHINE_END..CH_COUNT)` pour SYSTEM,
+  `[WIRE_END..MACHINE_END)` pour LOCAL) ;
+- un flag `isSystem` dans le descripteur de channel ;
+- un namespace C++ séparé.
+
+**Aucune de ces options n'est implémentée ni testée.** À
+arbitrer en A6.
+
+**3. `runLevelLayer`/`battLowLayer` restent-ils indépendants ?**
+
+**Oui.** Ils sont indépendants de `layer` (sur les channels) :
+- `runLevelLayer` est sur `ComBus` (pas sur un channel) ;
+- `battLowLayer` est sur `ComBus` (pas sur un channel) ;
+- ils protègent des champs uniques (`runLevel`, `batteryIsLow`),
+  pas des channels.
+
+Ils utilisent la même enum `ChanLayer` et la même fonction
+`_layer_ok`, mais leur rôle est distinct. **Pas de couplage
+fonctionnel avec `layer` (channels).**
+
+**4. Régression fonctionnelle potentielle de la fusion LOCAL+SYSTEM ?**
+
+**Oui, si la garde `_layer_ok` est supprimée.** Aujourd'hui :
+- un channel `SYSTEM` ne peut être écrit que par un caller
+  `SYSTEM` (ex: `cb_runlevel_fn` via l'overload sans `caller`) ;
+- un channel `LOCAL` peut être écrit par `LOCAL` ou `SYSTEM` ;
+- un channel `REMOTE` peut être écrit par n'importe qui.
+
+Si LOCAL+SYSTEM sont fusionnés (un seul tableau, un seul layer),
+la garde `_layer_ok` n'a plus de granularité. **Régression :
+perte de la protection SYSTEM-only.**
+
+**5. Adaptations nécessaires pour A6 ?**
+
+**Aucune adaptation runtime.** A6 (génération C++) doit :
+- générer les `.inc` (channels) à partir des `.cb` ;
+- générer les tableaux `AnalogComBusArray`/`DigitalComBusArray` ;
+- préserver le champ `layer` (valeur par défaut : `ChanLayer::LOCAL`
+  pour les channels générés, sauf si le `.cb` spécifie autre chose) ;
+- préserver `runLevelLayer`/`battLowLayer` (valeurs par défaut
+  actuelles : `LOCAL`) ;
+- préserver la garde `_layer_ok` (inchangée).
+
+**A6 ne touche pas au runtime.** Le runtime continue d'utiliser
+`layer` comme aujourd'hui.
+
+#### Représentation C++ de `direction` (options pour A6)
+
+**Pas de figeage.** Options viables :
+
+| Option | Avantages | Inconvénients |
+|---|---|---|
+| `enum class Direction : uint8_t { None=0, Uplink=1, Downlink=2 }` + bitmask manuel | Simple, pas de dépendance | Pas d'opérateurs bitwise natifs |
+| `enum class Direction : uint8_t { None=0, Uplink=1, Downlink=2, Both=Uplink\|Downlink }` + `operator\|`, `operator&` | Bitwise natif, expressif | `Both` doit être `Uplink\|Downlink` (3), pas 0 |
+| Type dédié encapsulant le bitmask (`struct DirectionBits { uint8_t bits; }`) | Encapsulation, pas d'ambiguïté | Verbosité |
+| `std::bitset<2>` | Standard, opérateurs intégrés | Overhead mémoire, pas de `enum class` |
+
+**Contraintes pour A6** :
+- doit représenter `{uplink}`, `{downlink}`, `{uplink, downlink}`,
+  `{}` (4 états) ;
+- doit être sérialisable pour debug/log ;
+- doit être comparable (égalité, sous-ensemble) ;
+- doit tenir sur 1 octet (cohérent avec `ChanLayer`).
+
+**Recommandation (non figée)** : `enum class Direction : uint8_t`
+avec `operator|`, `operator&`, `operator~`, et `Both = Uplink |
+Downlink`. Simple, expressif, 1 octet.
+
+#### Conclusion
+
+- `layer` (channels) : **dépendance fonctionnelle réelle** (garde
+  d'écriture). **Ne pas supprimer** sans alternative.
+- `runLevelLayer`/`battLowLayer` : **indépendants** de `layer`
+  (channels). **Pas de couplage**.
+- `chainLayer` (SimDev) : **mort**. Déjà inerte.
+- Fusion LOCAL+SYSTEM : **régression** de la garde `_layer_ok`.
+- A6 : **aucune adaptation runtime**. Préserver `layer`,
+  `runLevelLayer`, `battLowLayer`, `_layer_ok`.
+- `direction` C++ : **4 options viables**, pas de figeage.
+
+**Aucun commit nécessaire** (audit pur, read-only).
 
 ### Notes diverses
 
