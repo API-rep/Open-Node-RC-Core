@@ -1,18 +1,26 @@
 #!/usr/bin/env python3
 """
-Tests for generator.py (A6) - C++ artifact generation.
+Tests for generator.py (A6.1) - C++ artifact generation.
+
+A6.1 corrections vs A6:
+  - ChannelDescriptor is REMOVED.
+  - The generator emits REAL AnalogComBus / DigitalComBus runtime
+    structures (infoName, value, layer, direction) — matching
+    include/struct/combus_struct.h.
+  - ChanLayer is preserved (audit A6 confirmed _layer_ok() requires it).
+  - direction is a fourth field on each runtime struct entry.
 
 Coverage:
-  - requires resolution (errors only -- A6 raises, not filters).
+  - requires resolution (errors only — A6 raises, not filters).
   - View selection (combus = REMOTE+LOCAL+SYSTEM; combus_remote = REMOTE).
   - Deterministic ID allocation.
   - WIRE_END computation.
   - Direction C++ representation (0/1/2/3, both normalization).
-  - ChannelDescriptor rendering (infoName, direction, escape).
+  - Real runtime struct rendering (infoName, value, layer, direction).
   - File emission (.h/.cpp/_ids.h, atomic write).
   - Generation against a real .cb file in the repo.
   - Generated C++ is structurally well-formed (basic checks).
-  - Python <-> C++ coherence.
+  - Python <-> C++ coherence (Direction enum values + struct field order).
 """
 
 from __future__ import annotations
@@ -113,6 +121,126 @@ def _ctx_with_values(values: dict) -> BuildContext:
 
 
 # =============================================================================
+# A6.1 SPECIFIC: ChannelDescriptor must NOT appear
+# =============================================================================
+
+def test_no_channel_descriptor_struct_in_rendered_header():
+    """A6.1: ChannelDescriptor abstraction is REMOVED. Header must not
+    declare a ChannelDescriptor struct."""
+    chs = _canon_from_yamls({"channels": [_ch("FOO")]})
+    view = _build_view_with_channels(chs)
+    out = _render_header(view, _ctx([]))
+    assert "struct ChannelDescriptor" not in out
+    assert "ChannelDescriptor " not in out
+
+
+def test_no_channel_descriptor_in_rendered_source():
+    """A6.1: generated .cpp must not reference ChannelDescriptor either."""
+    chs = _canon_from_yamls({"channels": [
+        _ch("FOO", info_name="Foo"),
+        _ch("BAR", type_="analog", info_name="Bar"),
+    ]})
+    view = _build_view_with_channels(chs)
+    out = _render_source(view, _ctx([]))
+    assert "ChannelDescriptor" not in out
+
+
+def test_no_channel_descriptor_in_full_generation(tmp_path):
+    """End-to-end: emitted files must not contain ChannelDescriptor."""
+    chs = _canon_from_yamls({"channels": [
+        _ch("FOO", scope="REMOTE"),
+        _ch("BAR", type_="analog", scope="REMOTE"),
+    ]})
+    sel = generate(chs, _ctx([]), tmp_path)
+    for fname in ("combus.h", "combus.cpp", "combus_ids.h",
+                  "combus_remote.h", "combus_remote.cpp", "combus_remote_ids.h"):
+        content = (tmp_path / fname).read_text(encoding="utf-8")
+        assert "ChannelDescriptor" not in content, f"ChannelDescriptor in {fname}"
+
+
+# =============================================================================
+# A6.1 SPECIFIC: ChanLayer is PRESERVED
+# =============================================================================
+
+def test_chanlayer_enum_in_combus_struct():
+    """combus_struct.h still defines ChanLayer (audit A6 confirmed _layer_ok)."""
+    h = (REPO_ROOT / "include" / "struct" / "combus_struct.h").read_text(encoding="utf-8")
+    assert "enum class ChanLayer" in h
+    for v in ("SYSTEM", "LOCAL", "REMOTE", "UNDEFINED"):
+        assert v in h, f"ChanLayer::{v} missing from combus_struct.h"
+
+
+def test_generated_initializers_use_chanlayer():
+    """Generated .cpp must use ChanLayer::X in the .layer field of each entry."""
+    chs = _canon_from_yamls({"channels": [
+        _ch("R1", scope="REMOTE", type_="digital"),
+        _ch("L1", scope="LOCAL", type_="digital"),
+        _ch("S1", scope="SYSTEM", type_="digital", direction=["none"]),
+    ]})
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        generate(chs, _ctx([]), Path(tmp_dir))
+        cpp = (Path(tmp_dir) / "combus.cpp").read_text(encoding="utf-8")
+    # At least one of each layer value must appear in the initializers.
+    assert ".layer = ChanLayer::REMOTE" in cpp
+    assert ".layer = ChanLayer::LOCAL" in cpp
+    assert ".layer = ChanLayer::SYSTEM" in cpp
+
+
+def test_generated_header_includes_combus_struct():
+    """Generated .h must #include <struct/combus_struct.h> for ChanLayer / Direction."""
+    chs = _canon_from_yamls({"channels": [_ch("FOO")]})
+    view = _build_view_with_channels(chs)
+    out = _render_header(view, _ctx([]))
+    assert "#include <struct/combus_struct.h>" in out
+
+
+# =============================================================================
+# A6.1 SPECIFIC: direction is added to runtime structs
+# =============================================================================
+
+def test_direction_field_in_combus_struct():
+    """AnalogComBus and DigitalComBus both have a `direction` field."""
+    h = (REPO_ROOT / "include" / "struct" / "combus_struct.h").read_text(encoding="utf-8")
+    assert "Direction   direction" in h or "Direction direction" in h
+
+
+def test_generated_initializers_have_direction_field():
+    """Each generated entry must include `.direction = Direction::X`."""
+    chs = _canon_from_yamls({"channels": [
+        _ch("UP",   direction=["uplink"]),
+        _ch("DOWN", direction=["downlink"]),
+        _ch("BOTH", direction=["both"]),
+        _ch("NONE", direction=["none"]),
+    ]})
+    view = _build_view_with_channels(chs)
+    out = _render_source(view, _ctx([]))
+    assert ".direction = Direction::Uplink" in out
+    assert ".direction = Direction::Downlink" in out
+    assert ".direction = Direction::Both" in out
+    assert ".direction = Direction::None" in out
+
+
+def test_generated_init_order_infoName_value_layer_direction():
+    """Each entry must keep the field order: infoName, value, layer, direction."""
+    chs = _canon_from_yamls({"channels": [
+        _ch("FOO", info_name="Foo channel", direction=["uplink"]),
+    ]})
+    view = _build_view_with_channels(chs)
+    out = _render_source(view, _ctx([]))
+    # The first { ... } entry should appear with this exact field order.
+    m = re.search(r"\{[^}]*\.infoName[^}]*\}", out)
+    assert m, f"no initializer with .infoName found in:\n{out}"
+    entry = m.group(0)
+    pos_info = entry.find(".infoName")
+    pos_value = entry.find(".value")
+    pos_layer = entry.find(".layer")
+    pos_dir = entry.find(".direction")
+    assert 0 <= pos_info < pos_value < pos_layer < pos_dir, (
+        f"field order broken: {entry!r}"
+    )
+
+
+# =============================================================================
 # Direction C++ representation
 # =============================================================================
 
@@ -180,7 +308,7 @@ def test_resolve_requires_with_value():
 
 
 def test_resolve_requires_missing_raises():
-    """A6 RAISES on missing requires (it does NOT silently filter)."""
+    """A6.1 RAISES on missing requires (it does NOT silently filter)."""
     chs = _canon_from_yamls({"channels": [_ch("FOO", requires=["MISSING_FLAG"])]})
     ctx = _ctx([])
     try:
@@ -393,42 +521,55 @@ def test_render_ids_header_no_wire_end_for_remote_view():
     assert "Combus_remoteWireEnd" not in out
 
 
-def test_render_header_direction_enum():
+def test_render_header_externs_real_runtime_structs():
+    """A6.1: header declares extern AnalogComBusArray[] / DigitalComBusArray[]."""
+    chs = _canon_from_yamls({"channels": [
+        _ch("FOO", type_="digital", scope="REMOTE"),
+        _ch("BAR", type_="analog", scope="REMOTE"),
+    ]})
+    view = _build_view_with_channels(chs)
+    out = _render_header(view, _ctx([]))
+    assert "extern AnalogComBus AnalogCombusArray" in out
+    assert "extern DigitalComBus DigitalCombusArray" in out
+
+
+def test_render_header_no_direction_enum():
+    """A6.1: Direction enum is defined in combus_struct.h (runtime), NOT in
+    the generated header. Generator only USES the enum."""
     chs = _canon_from_yamls({"channels": [_ch("FOO")]})
     view = _build_view_with_channels(chs)
     out = _render_header(view, _ctx([]))
-    assert "enum class Direction : uint8_t" in out
-    assert "None     = 0" in out
-    assert "Uplink   = 1" in out
-    assert "Downlink = 2" in out
-    assert "Both     = 3" in out
-    assert "operator|" in out
-    assert "operator&" in out
-    assert "operator~" in out
+    assert "enum class Direction" not in out
 
 
-def test_render_header_descriptor_struct():
+def test_render_header_combus_view_has_bus_instance():
+    """combus (full) view header declares `extern ComBus comBus`."""
     chs = _canon_from_yamls({"channels": [_ch("FOO")]})
     view = _build_view_with_channels(chs)
     out = _render_header(view, _ctx([]))
-    assert "struct ChannelDescriptor" in out
-    assert "infoName" in out
-    assert "Direction   direction" in out
+    assert "extern ComBus comBus" in out
 
 
-def test_render_source_channel_descriptors():
+def test_render_header_remote_view_no_bus_instance():
+    """combus_remote view header does NOT declare comBus (it's a wire view)."""
+    chs = _canon_from_yamls({"channels": [_ch("R1", scope="REMOTE")]})
+    sel = select_views(chs)
+    out = _render_header(sel.remote, _ctx([]))
+    assert "extern ComBus comBus" not in out
+
+
+def test_render_source_real_runtime_structs():
+    """A6.1: source defines AnalogComBusArray[] / DigitalComBusArray[] directly."""
     chs = _canon_from_yamls({"channels": [
         _ch("FOO", info_name="Foo channel", direction=["uplink"]),
         _ch("BAR", type_="analog", info_name="Bar analog", direction=["both"]),
     ]})
     view = _build_view_with_channels(chs)
     out = _render_source(view, _ctx([]))
-    assert '"Foo channel"' in out
-    assert "Direction::Uplink" in out
-    assert '"Bar analog"' in out
-    assert "Direction::Both" in out
-    assert "AnalogCombusChannelDescriptors" in out
-    assert "DigitalCombusChannelDescriptors" in out
+    assert "AnalogComBus AnalogCombusArray" in out
+    assert "DigitalComBus DigitalCombusArray" in out
+    assert "Foo channel" in out
+    assert "Bar analog" in out
 
 
 def test_render_source_info_name_with_quote_safe():
@@ -448,6 +589,26 @@ def test_render_source_info_name_with_backslash():
     view = _build_view_with_channels(chs)
     out = _render_source(view, _ctx([]))
     assert "foo\\\\bar" in out
+
+
+def test_render_source_analog_default_is_cbus_neutral():
+    """Analog channels default to CbusNeutral in .value."""
+    chs = _canon_from_yamls({"channels": [
+        _ch("FOO", type_="analog"),
+    ]})
+    view = _build_view_with_channels(chs)
+    out = _render_source(view, _ctx([]))
+    assert ".value = CbusNeutral" in out
+
+
+def test_render_source_digital_default_is_false():
+    """Digital channels default to false in .value."""
+    chs = _canon_from_yamls({"channels": [
+        _ch("FOO", type_="digital"),
+    ]})
+    view = _build_view_with_channels(chs)
+    out = _render_source(view, _ctx([]))
+    assert ".value = false" in out
 
 
 # =============================================================================
@@ -482,13 +643,9 @@ def test_safe_write_overwrites(tmp_path):
 
 def test_safe_write_cleans_tmp_on_failure(tmp_path):
     target = tmp_path / "out.h"
-    # Force a write error by making the directory read-only after creation.
     import os
     try:
-        # Pre-create a file; tmp should use a different name.
         _safe_write(target, "initial\n")
-        # Now corrupt the temp file path by removing write perms on parent.
-        # Skip on Windows where chmod is unreliable.
         if not sys.platform.startswith("win"):
             os.chmod(tmp_path, 0o500)
             try:
@@ -498,7 +655,6 @@ def test_safe_write_cleans_tmp_on_failure(tmp_path):
             os.chmod(tmp_path, 0o700)
     except OSError:
         pass
-    # The original file should still exist with its original content.
     assert target.read_text(encoding="utf-8") == "initial\n"
 
 
@@ -575,19 +731,9 @@ def test_generated_ids_header_parses():
     assert re.search(r"CH_COUNT", ids)
 
 
-def test_generated_header_has_direction_ops():
-    chs = _canon_from_yamls({"channels": [_ch("FOO")]})
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        generate(chs, _ctx([]), Path(tmp_dir))
-        h = (Path(tmp_dir) / "combus.h").read_text(encoding="utf-8")
-    assert "operator|" in h
-    assert "operator&" in h
-    assert "operator~" in h
-    assert "0x03u" in h
-
-
 def test_generated_cpp_compiles_cleanly_with_cpp_check():
-    """If a C++ compiler is available, the generated files should compile standalone."""
+    """If a C++ compiler is available, the generated files should compile standalone
+    against include/struct/combus_struct.h."""
     import shutil
     import subprocess
     if not shutil.which("g++") and not shutil.which("clang++"):
@@ -601,7 +747,7 @@ def test_generated_cpp_compiles_cleanly_with_cpp_check():
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         generate(chs, _ctx([]), tmp)
-        # Compile the standalone test.
+        # We need the runtime header and the combus_res.h for CbusNeutral.
         test_src = tmp / "test_main.cpp"
         test_src.write_text(
             """
@@ -610,13 +756,24 @@ int main() {
     static_assert(AnalogCombusID::A1 == 0, "A1");
     static_assert(DigitalCombusID::D1 == 0, "D1");
     static_assert(AnalogCombusID::CH_COUNT > 0, "count");
+    // Read .direction to ensure it is publicly accessible.
+    Direction d = comBus.analogBus[0].direction;
+    (void)d;
     return 0;
 }
 """
         )
         compiler = "g++" if shutil.which("g++") else "clang++"
+        # Provide the runtime include path so #include <struct/combus_struct.h> resolves.
+        include_root = REPO_ROOT / "include"
+        # Provide the core path so CbusNeutral resolves.
+        core_root = REPO_ROOT / "src" / "core" / "system" / "combus"
         r = subprocess.run(
-            [compiler, "-std=c++17", "-I", str(tmp), str(test_src), "-o", str(tmp / "test")],
+            [compiler, "-std=c++17",
+             "-I", str(tmp),
+             "-I", str(include_root),
+             "-I", str(core_root.parent),
+             str(test_src), "-o", str(tmp / "test")],
             capture_output=True,
             text=True,
         )
@@ -655,26 +812,66 @@ def test_generator_against_real_repo_files():
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         sel = generate(chs, ctx, Path(tmp_dir))
-        # combus must have at least one channel (failsafe/vbat are in the repo).
         assert sel.full.ch_count > 0
-        # combus_remote may be empty if no REMOTE channels are defined yet -- valid end-state.
         assert sel.full.ch_count >= sel.remote.ch_count
         for fname in ("combus.h", "combus.cpp", "combus_ids.h",
                       "combus_remote.h", "combus_remote.cpp", "combus_remote_ids.h"):
             assert (Path(tmp_dir) / fname).exists(), f"missing {fname}"
+        # And no ChannelDescriptor anywhere.
+        for fname in ("combus.h", "combus.cpp", "combus_ids.h",
+                      "combus_remote.h", "combus_remote.cpp", "combus_remote_ids.h"):
+            content = (Path(tmp_dir) / fname).read_text(encoding="utf-8")
+            assert "ChannelDescriptor" not in content, f"ChannelDescriptor leaked in {fname}"
 
 
 # =============================================================================
-# Python <-> C++ coherence
+# Python <-> C++ coherence (Direction enum values + struct field order)
 # =============================================================================
 
-def test_python_enum_matches_cpp_enum():
-    assert Direction.from_frozenset(frozenset()) == 0
-    assert Direction.from_frozenset(frozenset({"uplink"})) == 1
-    assert Direction.from_frozenset(frozenset({"downlink"})) == 2
-    assert Direction.from_frozenset(frozenset({"uplink", "downlink"})) == 3
+def test_python_direction_constants_match_cpp_enum():
+    """Python `Direction.X` constants must equal the C++ `enum class Direction` values."""
+    assert Direction.NONE == 0
+    assert Direction.UPLINK == 1
+    assert Direction.DOWNLINK == 2
+    assert Direction.BOTH == 3
+    # And the C++ enum in combus_struct.h must declare the same values.
+    h = (REPO_ROOT / "include" / "struct" / "combus_struct.h").read_text(encoding="utf-8")
+    m = re.search(
+        r"enum class Direction\s*:\s*uint8_t\s*\{([^}]*)\}",
+        h,
+    )
+    assert m, "Direction enum not found in combus_struct.h"
+    body = m.group(1)
+    assert "None     = 0" in body
+    assert "Uplink   = 1" in body
+    assert "Downlink = 2" in body
+    assert "Both     = 3" in body
+
+
+def test_python_direction_to_cpp_enum_name_roundtrip():
+    """For every Direction value, the C++ enum name round-trips."""
     for v in range(4):
         assert Direction.to_cpp_enum_name(v).startswith("Direction::")
+
+
+def test_runtime_struct_field_order_matches_python_emission():
+    """The runtime struct (AnalogComBus / DigitalComBus) must declare its
+    fields in the same order as the generator emits initializers:
+    infoName, value, layer, direction."""
+    h = (REPO_ROOT / "include" / "struct" / "combus_struct.h").read_text(encoding="utf-8")
+    for struct_name in ("AnalogComBus", "DigitalComBus"):
+        # Find the struct definition body.
+        m = re.search(rf"typedef\s+struct\s+\{{([^}}]*)\}}\s*{struct_name};", h, re.DOTALL)
+        assert m, f"{struct_name} struct not found"
+        body = m.group(1)
+        pos_info = body.find("infoName")
+        pos_value = body.find("value")
+        pos_layer = body.find("layer")
+        pos_dir = body.find("direction")
+        assert pos_info >= 0, f"{struct_name} missing infoName"
+        assert pos_value > pos_info, f"{struct_name} value before infoName"
+        assert pos_layer > pos_value, f"{struct_name} layer before value"
+        assert pos_dir > pos_layer, f"{struct_name} direction before layer"
 
 
 def test_generated_cpp_direction_for_both():

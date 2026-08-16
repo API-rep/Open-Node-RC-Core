@@ -19,6 +19,10 @@
 #   both uplink and downlink are enabled.
 # - Remote feedback, if required, is handled through a dedicated GLOBAL
 #   ComBus definition and is outside the scope of this channel.
+#
+# A6.1 — `direction: [both]` shorthand added (TEMPORARY, pending .inc migration).
+# During A6.1 the legacy .inc channels are not yet migrated, so the runtime
+# writes/reads both ways. To be re-evaluated once .inc migration is complete.
 
 
 channels:
@@ -28,8 +32,7 @@ channels:
     scope: LOCAL
     theme: failsafe
     direction:
-      - uplink
-      - downlink
+      - both
     requires:
       - HAS_FAILSAFE
       - HAS_VBAT_FAILSAFE

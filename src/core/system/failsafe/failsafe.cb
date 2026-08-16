@@ -26,6 +26,10 @@
 #   consume the local Failsafe state as required by its role.
 # - Remote propagation, if required, is handled separately through a
 #   REMOTE ComBus definition(FAILSAFE_TELEMETRY ...).
+#
+# A6.1 — `direction: [both]` shorthand added (TEMPORARY, pending .inc migration).
+# During A6.1 the legacy .inc channels are not yet migrated, so the runtime
+# writes/reads both ways. To be re-evaluated once .inc migration is complete.
 
 
 channels:
@@ -35,7 +39,6 @@ channels:
     scope: LOCAL
     theme: failsafe
     direction:
-      - uplink
-      - downlink
+      - both
     requires:
       - HAS_FAILSAFE

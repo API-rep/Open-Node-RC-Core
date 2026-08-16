@@ -1,62 +1,64 @@
 #!/usr/bin/env python3
 """
-combus_builder/generator.py - A6: C++ artifact generation.
+combus_builder/generator.py - A6.1: C++ artifact generation.
 
-Scope (A6):
-  - Take the canonised ChannelDefinitions (A5.1) + BuildContext (A4).
-  - Resolve `requires` against BuildContext (A8 territory but the
-    gating logic is a simple subset check; A6 owns it because no
-    generation can happen without it).
-  - Select which channels belong to which view:
-      * combus       = REMOTE + LOCAL + SYSTEM (full node view)
-      * combus_remote = REMOTE only (wire view)
-  - Allocate deterministic numeric IDs per view, with the `WIRE_END`
-    sentinel at the boundary between REMOTE and LOCAL+SYSTEM.
-  - Emit three C++ artifacts per view:
-      * <view>_ids.h   - enum class only (enum + CH_COUNT)
-      * <view>.h       - extern arrays + bus instance
-      * <view>.cpp     - array definitions + bus instance definition
-  - All output goes into a build directory (NOT in src/).
+A6.1 corrections vs A6:
+  - REMOVED ChannelDescriptor abstraction.
+  - Generator now emits REAL runtime structures (AnalogComBus / DigitalComBus)
+    that match the runtime in include/struct/combus_struct.h.
+  - `direction` is added as a fourth field on those structs (alongside
+    `infoName`, `value`, `layer`). `ChanLayer` is preserved unchanged
+    (audit A6 confirmed `_layer_ok()` requires it).
+  - Both views still produced:
+      * combus        = REMOTE + LOCAL + SYSTEM
+      * combus_remote = REMOTE only
 
-Out of scope (A6):
+Scope (A6.1):
+  - Take canonised ChannelDefinitions (A5.1) + BuildContext (A4).
+  - Resolve `requires` against BuildContext.
+  - Allocate deterministic numeric IDs per view.
+  - Emit the real runtime structures, not a new abstraction.
+
+Out of scope (A6.1):
   - ChanLayer refactor (audit warned: layer is functionally used).
   - runLevelLayer / battLowLayer migration.
   - chains: (Phase C).
   - MD5 (A7).
+  - .cbch.
+  - Full .inc migration (only the new .cb files are used by the generator;
+    the .inc files remain in the source tree until Phase D).
 
 Direction representation (C++):
-  - `enum class Direction : uint8_t { None, Uplink, Downlink, Both=3 }`
-  - `Both` = static_cast<Direction>(Uplink|Downlink) = 3.
-  - Operators: `|`, `&`, `~` on the enum.
-  - ChannelDescriptor stores the bitset as a single uint8_t.
-  - Conversion: uplink-only -> 1, downlink-only -> 2, both -> 3, none -> 0.
+  - `enum class Direction : uint8_t { None=0, Uplink=1, Downlink=2, Both=3 }`
+  - Bit layout: bit 0 = uplink, bit 1 = downlink.
+  - Both = static_cast<Direction>(Uplink|Downlink) = 3.
+  - Operators `|`, `&`, `~` are defined in combus_struct.h.
 
 View contract:
   - combus (REMOTE+LOCAL+SYSTEM):
       * ID range [0, CH_COUNT) where REMOTE is [0, WIRE_END) and
         LOCAL+SYSTEM is [WIRE_END, CH_COUNT).
-      * All channels participate in the runtime bus.
+      * Generated artifacts:
+          - combus_ids.h        (enum class only)
+          - combus.h            (extern arrays + bus instance)
+          - combus.cpp          (array definitions + bus instance definition)
   - combus_remote (REMOTE only):
       * ID range [0, CH_COUNT) where WIRE_END == CH_COUNT.
-      * Used only for serial protocol sizing (frame size).
+      * Generated artifacts:
+          - combus_remote_ids.h
+          - combus_remote.h
+          - combus_remote.cpp
       * No sentinel beyond CH_COUNT.
 
 ID allocation policy:
   - Within a view, IDs are allocated in stable order:
       * Sort key: (scope priority [REMOTE<LOCAL<SYSTEM], type=analog|then digital, theme, id)
   - Between views, the SAME channel always gets the SAME numeric ID.
-    That way, move code from combus.h to combus_remote.h can use
-    the same identifiers.
-  - `WIRE_END` is the index of the first non-REMOTE channel in the
-    full view (combus). In the remote view, CH_COUNT == count of REMOTE.
 
-Generaton directory:
+Generation directory:
   - Default: .pio/build/<env>/combus_generated/
-  - Configurable via:
-      * CLI flag --out-dir
+  - Configurable via CLI flag --out-dir
   - Files are written atomically (write to .tmp, then rename).
-  - On any generation failure, partial files are NOT left behind
-    (best-effort cleanup).
 """
 
 from __future__ import annotations
@@ -66,7 +68,6 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 from .canon.channels import ChannelDefinition
 from .flags import BuildContext
@@ -77,7 +78,7 @@ from .flags import BuildContext
 # =============================================================================
 
 class GeneratorError(Exception):
-    """Base class for A6 generator errors."""
+    """Base class for A6.1 generator errors."""
 
 
 class RequiresResolutionError(GeneratorError):
@@ -94,21 +95,20 @@ class RequiresResolutionError(GeneratorError):
 
 
 # =============================================================================
-# C++ DIRECTION REPRESENTATION
+# C++ DIRECTION REPRESENTATION (matches combus_struct.h Direction enum)
 # =============================================================================
 
 class Direction:
     """
     C++ representation of `direction` (frozenset -> uint8_t).
 
-    Bit layout:
-      bit 0 = uplink
-      bit 1 = downlink
-      0 = none, 1 = uplink, 2 = downlink, 3 = both.
+    Bit layout: bit 0 = uplink, bit 1 = downlink.
+    Values match the C++ `enum class Direction : uint8_t` in combus_struct.h:
+      None=0, Uplink=1, Downlink=2, Both=3.
 
-    Constants are exported as Ints (uint8_t) so they can be used
-    directly in the generated C++ code without depending on the
-    enum class.
+    This class is the single source of truth for the Python-side mapping.
+    A coherence check (test_python_direction_matches_cpp_enum) verifies that
+    the constants match the values emitted in the generated C++ header.
     """
 
     NONE = 0
@@ -190,6 +190,20 @@ class ViewSelection:
 
 
 # =============================================================================
+# SCOPE -> ChanLayer C++ MAPPING
+# =============================================================================
+
+# ComBus scope -> ChanLayer C++ enum.
+# Maps the YAML scope to the runtime ChanLayer value used in the
+# generated `AnalogComBus` / `DigitalComBus` initializers.
+_SCOPE_TO_CHANLAYER: dict[str, str] = {
+    "REMOTE": "ChanLayer::REMOTE",
+    "LOCAL":  "ChanLayer::LOCAL",
+    "SYSTEM": "ChanLayer::SYSTEM",
+}
+
+
+# =============================================================================
 # STEP 1: requires RESOLUTION
 # =============================================================================
 
@@ -204,11 +218,7 @@ def resolve_requires(
     in ctx (with or without value). Channel order is preserved.
 
     Raises RequiresResolutionError on the first channel whose
-    `requires` references an undefined flag. We do NOT print a warning
-    and continue: a required flag missing from BuildContext is a hard
-    error (the channel must be filtered, but the build must also fail
-    loudly so the operator knows the YAML is asking for something
-    the build doesn't provide).
+    `requires` references an undefined flag.
     """
     resolved: list[ChannelDefinition] = []
     for ch in channels:
@@ -249,11 +259,6 @@ def _select_view(
     allowed_scopes is the set of scopes that belong to this view.
     For combus: {"REMOTE", "LOCAL", "SYSTEM"}.
     For combus_remote: {"REMOTE"}.
-
-    The ID allocation is deterministic: scope priority (REMOTE first),
-    then type (analog before digital), then theme, then id.
-
-    The first non-REMOTE channel defines WIRE_END.
     """
     selected = [ch for ch in channels if ch.scope in allowed_scopes]
     selected.sort(key=lambda ch: (
@@ -286,9 +291,6 @@ def select_views(channels: list[ChannelDefinition]) -> ViewSelection:
 
     Both views share the same ID space (a channel has the same numeric
     ID in both views if it appears in both).
-
-    Returns:
-      ViewSelection with .full (combus) and .remote (combus_remote).
     """
     full = _select_view(channels, "combus",
                         {"REMOTE", "LOCAL", "SYSTEM"})
@@ -305,7 +307,7 @@ _HEADER_PROLOGUE = """\
 /******************************************************************************
  * GENERATED FILE - DO NOT EDIT.
  *
- * Generated by scripts/combus_builder/generator.py (A6).
+ * Generated by scripts/combus_builder/generator.py (A6.1).
  * Source: <generator_version>
  * View: <view_name>
  * Build context: <ctx_summary>
@@ -313,7 +315,6 @@ _HEADER_PROLOGUE = """\
  * Regenerate on every PlatformIO build via the combus_builder extra_script.
  * Do not commit this file to the source tree.
  ******************************************************************************/
-#pragma once
 """
 
 
@@ -328,22 +329,38 @@ def _escape_cpp_string(s: str) -> str:
     return s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", "\\r")
 
 
+def _default_value_for_type(type_: str) -> str:
+    """
+    Return the C++ literal for the default `value` of a freshly-generated
+    channel (matches the runtime convention used in the legacy .inc files).
+
+    Analog defaults to CbusNeutral (neutral 16-bit value). Digital defaults
+    to false. The runtime may override these at boot via combus_set_*().
+    """
+    if type_ == "analog":
+        return "CbusNeutral"
+    return "false"
+
+
 def _render_ids_header(view: View, ctx: BuildContext) -> str:
     """
     Render the `<view>_ids.h` file.
 
     Contains:
-      - enum class <View>ComBusID : uint8_t { ... CH_COUNT };
+      - enum class Analog<View>ComBusID : uint8_t { ... CH_COUNT };
+      - enum class Digital<View>ComBusID : uint8_t { ... CH_COUNT };
     """
-    # Group by type for readability (analog/digital).
     analog = [vc for vc in view.channels if vc.ch.type == "analog"]
     digital = [vc for vc in view.channels if vc.ch.type == "digital"]
 
+    cap = view.name.capitalize()
     body: list[str] = []
     body.append(_HEADER_PROLOGUE
-                .replace("<generator_version>", "A6")
+                .replace("<generator_version>", "A6.1")
                 .replace("<view_name>", view.name)
                 .replace("<ctx_summary>", _ctx_summary(ctx)))
+    body.append("")
+    body.append("#include <cstdint>")
     body.append("")
     body.append("// =============================================================================")
     body.append("// 1. ENUMS")
@@ -351,7 +368,7 @@ def _render_ids_header(view: View, ctx: BuildContext) -> str:
     body.append("")
 
     if analog:
-        body.append(f"enum class Analog{view.name.capitalize()}ID : uint8_t {{")
+        body.append(f"enum class Analog{cap}ID : uint8_t {{")
         body.append("    // --- analog channels ---")
         for vc in analog:
             body.append(f"    {vc.ch.id} = {vc.numeric_id},")
@@ -360,7 +377,7 @@ def _render_ids_header(view: View, ctx: BuildContext) -> str:
         body.append("")
 
     if digital:
-        body.append(f"enum class Digital{view.name.capitalize()}ID : uint8_t {{")
+        body.append(f"enum class Digital{cap}ID : uint8_t {{")
         body.append("    // --- digital channels ---")
         for vc in digital:
             body.append(f"    {vc.ch.id} = {vc.numeric_id},")
@@ -371,7 +388,7 @@ def _render_ids_header(view: View, ctx: BuildContext) -> str:
     # WIRE_END: only meaningful for the full view.
     if view.name == "combus":
         body.append(f"// Index of the first non-REMOTE channel (REMOTE = [0..WIRE_END)).")
-        body.append(f"static constexpr uint8_t {view.name.capitalize()}WireEnd = {view.wire_end}u;")
+        body.append(f"static constexpr uint8_t {cap}WireEnd = {view.wire_end}u;")
         body.append("")
 
     body.append("// EOF")
@@ -383,71 +400,47 @@ def _render_header(view: View, ctx: BuildContext) -> str:
     Render the `<view>.h` file.
 
     Contains:
-      - Direction enum (None, Uplink, Downlink, Both)
-      - ChannelDescriptor struct (infoName, value, direction)
-      - extern arrays + bus instance
+      - Forward declaration / inclusion of the IDs header
+      - extern declarations of the channel arrays
+      - extern declaration of the bus instance (combus view only)
     """
+    cap = view.name.capitalize()
     body: list[str] = []
     body.append(_HEADER_PROLOGUE
-                .replace("<generator_version>", "A6")
+                .replace("<generator_version>", "A6.1")
                 .replace("<view_name>", view.name)
                 .replace("<ctx_summary>", _ctx_summary(ctx)))
     body.append("")
-    body.append("#include <cstdint>")
+    body.append("#pragma once")
     body.append("")
     body.append(f"#include \"{view.name}_ids.h\"")
     body.append("")
-    body.append("// =============================================================================")
-    body.append("// 1. DIRECTION (C++ representation of A5.1 `direction`)")
-    body.append("// =============================================================================")
-    body.append("")
-    body.append("/**")
-    body.append(" * @brief Wire direction of a channel (bitmask, 1 byte).")
-    body.append(" *")
-    body.append(" * @details bit 0 = uplink, bit 1 = downlink.")
-    body.append(" *   None     = 0")
-    body.append(" *   Uplink   = 1")
-    body.append(" *   Downlink = 2")
-    body.append(" *   Both     = 3 (= Uplink | Downlink)")
-    body.append(" */")
-    body.append("enum class Direction : uint8_t {")
-    body.append("    None     = 0,")
-    body.append("    Uplink   = 1,")
-    body.append("    Downlink = 2,")
-    body.append("    Both     = 3")
-    body.append("};")
-    body.append("")
-    body.append("static constexpr Direction operator|(Direction a, Direction b) {")
-    body.append("    return static_cast<Direction>(static_cast<uint8_t>(a) | static_cast<uint8_t>(b));")
-    body.append("}")
-    body.append("")
-    body.append("static constexpr Direction operator&(Direction a, Direction b) {")
-    body.append("    return static_cast<Direction>(static_cast<uint8_t>(a) & static_cast<uint8_t>(b));")
-    body.append("}")
-    body.append("")
-    body.append("static constexpr Direction operator~(Direction a) {")
-    body.append("    return static_cast<Direction>(~static_cast<uint8_t>(a) & 0x03u);")
-    body.append("}")
+    body.append("#include <struct/combus_struct.h>")
     body.append("")
     body.append("// =============================================================================")
-    body.append("// 2. CHANNEL DESCRIPTORS")
-    body.append("// =============================================================================")
-    body.append("")
-    body.append("struct ChannelDescriptor {")
-    body.append("    const char* infoName;")
-    body.append("    Direction   direction;")
-    body.append("};")
-    body.append("")
-    body.append("// =============================================================================")
-    body.append("// 3. EXTERN ARRAYS")
+    body.append("// 1. EXTERN ARRAYS")
     body.append("// =============================================================================")
     body.append("")
     if any(vc.ch.type == "analog" for vc in view.channels):
-        body.append(f"extern const ChannelDescriptor Analog{view.name.capitalize()}ChannelDescriptors[];")
-        body.append(f"extern const uint8_t Analog{view.name.capitalize()}ChannelCount;")
+        body.append(
+            f"extern AnalogComBus Analog{cap}Array"
+            f"[static_cast<uint8_t>(Analog{cap}ID::CH_COUNT)];"
+        )
     if any(vc.ch.type == "digital" for vc in view.channels):
-        body.append(f"extern const ChannelDescriptor Digital{view.name.capitalize()}ChannelDescriptors[];")
-        body.append(f"extern const uint8_t Digital{view.name.capitalize()}ChannelCount;")
+        body.append(
+            f"extern DigitalComBus Digital{cap}Array"
+            f"[static_cast<uint8_t>(Digital{cap}ID::CH_COUNT)];"
+        )
+
+    # Bus instance is only declared on the combus (full) view.
+    if view.name == "combus":
+        body.append("")
+        body.append("// =============================================================================")
+        body.append("// 2. EXTERN BUS INSTANCE")
+        body.append("// =============================================================================")
+        body.append("")
+        body.append("extern ComBus comBus;")
+
     body.append("")
     body.append("// EOF")
     return "\n".join(body) + "\n"
@@ -458,48 +451,92 @@ def _render_source(view: View, ctx: BuildContext) -> str:
     Render the `<view>.cpp` file.
 
     Contains:
-      - ChannelDescriptor arrays (one per type).
-      - Channel counts.
+      - AnalogComBusArray[] (if analog channels exist)
+      - DigitalComBusArray[] (if digital channels exist)
+      - comBus definition (combus view only)
     """
+    cap = view.name.capitalize()
+    analog = [vc for vc in view.channels if vc.ch.type == "analog"]
+    digital = [vc for vc in view.channels if vc.ch.type == "digital"]
+
     body: list[str] = []
     body.append(_HEADER_PROLOGUE
-                .replace("<generator_version>", "A6")
+                .replace("<generator_version>", "A6.1")
                 .replace("<view_name>", view.name)
                 .replace("<ctx_summary>", _ctx_summary(ctx)))
     body.append("")
     body.append(f"#include \"{view.name}.h\"")
+    if any(vc.ch.type == "analog" for vc in view.channels):
+        body.append("#include <core/system/combus/combus_res.h>  // CbusNeutral")
     body.append("")
-    body.append("// =============================================================================")
-    body.append("// 1. ANALOG CHANNEL DESCRIPTORS")
-    body.append("// =============================================================================")
-    body.append("")
-    analog = [vc for vc in view.channels if vc.ch.type == "analog"]
-    digital = [vc for vc in view.channels if vc.ch.type == "digital"]
-    cap = view.name.capitalize()
+
     if analog:
-        body.append(f"const ChannelDescriptor Analog{cap}ChannelDescriptors[] = {{")
+        body.append("// =============================================================================")
+        body.append("// 1. ANALOG CHANNEL ARRAY")
+        body.append("// =============================================================================")
+        body.append("")
+        body.append(
+            f"AnalogComBus Analog{cap}Array"
+            f"[static_cast<uint8_t>(Analog{cap}ID::CH_COUNT)] = {{"
+        )
         for vc in analog:
-            dir_name = Direction.to_cpp_enum_name(vc.direction_bits)
-            escaped_info = _escape_cpp_string(vc.ch.info_name)
-            body.append(f"    {{ \"{escaped_info}\", {dir_name} }}, // {vc.ch.id}")
+            _emit_channel_init(body, vc, "analog")
         body.append("};")
-        body.append(f"const uint8_t Analog{cap}ChannelCount = {len(analog)}u;")
         body.append("")
-    body.append("// =============================================================================")
-    body.append("// 2. DIGITAL CHANNEL DESCRIPTORS")
-    body.append("// =============================================================================")
-    body.append("")
+
     if digital:
-        body.append(f"const ChannelDescriptor Digital{cap}ChannelDescriptors[] = {{")
-        for vc in digital:
-            dir_name = Direction.to_cpp_enum_name(vc.direction_bits)
-            escaped_info = _escape_cpp_string(vc.ch.info_name)
-            body.append(f"    {{ \"{escaped_info}\", {dir_name} }}, // {vc.ch.id}")
-        body.append("};")
-        body.append(f"const uint8_t Digital{cap}ChannelCount = {len(digital)}u;")
+        body.append("// =============================================================================")
+        body.append("// 2. DIGITAL CHANNEL ARRAY")
+        body.append("// =============================================================================")
         body.append("")
+        body.append(
+            f"DigitalComBus Digital{cap}Array"
+            f"[static_cast<uint8_t>(Digital{cap}ID::CH_COUNT)] = {{"
+        )
+        for vc in digital:
+            _emit_channel_init(body, vc, "digital")
+        body.append("};")
+        body.append("")
+
+    if view.name == "combus":
+        body.append("// =============================================================================")
+        body.append("// 3. BUS INSTANCE")
+        body.append("// =============================================================================")
+        body.append("")
+        body.append("ComBus comBus {")
+        body.append("    .runLevel        = RunLevel::NOT_YET_SET,")
+        body.append("    .runLevelLayer   = ChanLayer::LOCAL,")
+        body.append(f"    .analogBus       = Analog{cap}Array,")
+        body.append(f"    .digitalBus      = Digital{cap}Array,")
+        body.append("    .analogBusMaxVal = (1UL << (sizeof(uint16_t) * 8)) - 1")
+        body.append("};")
+        body.append("")
+
     body.append("// EOF")
     return "\n".join(body) + "\n"
+
+
+def _emit_channel_init(body: list[str], vc: ViewChannel, type_: str) -> None:
+    """
+    Emit a single `AnalogComBus` / `DigitalComBus` initializer entry.
+
+    Output format (matches runtime AnalogComBus/DigitalComBus struct):
+
+        { .infoName = "...", .value = ..., .layer = ChanLayer::X, .direction = Direction::Y },
+
+    The `.layer` field comes from the channel's scope (REMOTE/LOCAL/SYSTEM).
+    The `.direction` field is the bitmask from Direction.from_frozenset.
+    """
+    escaped_info = _escape_cpp_string(vc.ch.info_name)
+    layer = _SCOPE_TO_CHANLAYER[vc.ch.scope]
+    dir_name = Direction.to_cpp_enum_name(vc.direction_bits)
+    default_value = _default_value_for_type(type_)
+    body.append(
+        f"    {{ .infoName = \"{escaped_info}\", "
+        f".value = {default_value}, "
+        f".layer = {layer}, "
+        f".direction = {dir_name} }}, // {vc.ch.id}"
+    )
 
 
 # =============================================================================
@@ -549,7 +586,7 @@ def generate(
     out_dir: Path,
 ) -> ViewSelection:
     """
-    Full A6 generation pipeline.
+    Full A6.1 generation pipeline.
 
     1. Resolve `requires` against ctx.
     2. Select views.
