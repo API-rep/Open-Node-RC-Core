@@ -614,48 +614,12 @@ def generate(
     emit_view(sel.full, out_dir, ctx)
     emit_view(sel.local, out_dir, ctx)
     emit_view(sel.remote, out_dir, ctx)
-    # A7: MD5 artifacts for combus_local and combus_remote.
-    # machineType is derived from the active MACHINE_TYPE_* flag in ctx.
+    # A7.1: MD5 artifact for combus_remote only.
     # projectVersion is a placeholder until project_version.h is introduced
     # (out of A7 scope — see md5.py docstring).
     from .md5 import generate_md5_artifacts
-    machine_type = _detect_machine_type(ctx)
-    generate_md5_artifacts(
-        sel,
-        out_dir,
-        machine_type=machine_type,
-    )
+    generate_md5_artifacts(sel, out_dir)
     return sel
-
-
-# =============================================================================
-# machineType DETECTION (A7 helper)
-# =============================================================================
-
-# Mapping from MACHINE_TYPE_* CPP flag values to their canonical token name.
-# If more machine types are added, extend this mapping — A7 only emits the
-# token as a string constant for log/debug, not as part of the hash.
-_MACHINE_TYPE_TOKENS = (
-    "MACHINE_TYPE_DUMPER_TRUCK",
-    "MACHINE_TYPE_EXCAVATOR",
-    "MACHINE_TYPE_WHEEL_LOADER",
-)
-
-
-def _detect_machine_type(ctx: BuildContext) -> str:
-    """
-    Detect the active MACHINE_TYPE_* flag from BuildContext and return its
-    canonical token name. Returns 'UNCONFIGURED' if none is set.
-    """
-    active = [tok for tok in _MACHINE_TYPE_TOKENS
-              if ctx.has(tok) or ctx.value_of(tok) is not None]
-    if not active:
-        return "UNCONFIGURED"
-    # If more than one is set, surface that — defensive guard against a
-    # misconfigured platformio.ini.
-    if len(active) > 1:
-        return "AMBIGUOUS:" + "|".join(sorted(active))
-    return active[0]
 
 
 # =============================================================================
