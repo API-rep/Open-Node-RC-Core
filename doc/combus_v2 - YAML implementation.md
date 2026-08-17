@@ -1753,6 +1753,7 @@ A3 : import OK
 Fichiers `.cb` réels validés : `failsafe.cb`, `vbat_failsafe.cb`
 (toujours conformes).
 
+
 ### A6 — Audit préalable de ChanLayer (read-only)
 
 **Périmètre** : audit ciblé du modèle runtime autour de `ChanLayer`,
@@ -1911,6 +1912,154 @@ Downlink`. Simple, expressif, 1 octet.
 - `direction` C++ : **4 options viables**, pas de figeage.
 
 **Aucun commit nécessaire** (audit pur, read-only).
+
+### A6.1 — Première génération C++ (runtime structs)
+
+Livré (commit précédent à A6.2). Construit les vrais structs runtime
+(`AnalogComBus` / `DigitalComBus`) — pas une abstraction `ChannelDescriptor`
+nouvelle. Ajoute `direction` comme quatrième champ aux structs runtime
+(à côté de `infoName`, `value`, `layer`). Préserve `ChanLayer` inchangé
+(l'audit A6 a confirmé que `_layer_ok()` en a besoin).
+
+Deux vues émises : `combus` (REMOTE + LOCAL + SYSTEM) et `combus_remote`
+(REMOTE only). Allocation d'ID stable intra-vue (sort key
+`(scope priority, type=analog then digital, theme, id)`), même ID
+numérique pour le même canal entre les vues. Résolution de `requires`
+contre `BuildContext`. Hors scope : refactor `ChanLayer`, migration
+`runLevelLayer`/`battLowLayer`, `chains:` (Phase C), MD5 (A7), `.cbch`,
+migration complète `.inc`.
+
+Diff : `combus_v2_A6.1.diff`, `combus_v2_A6.1_report.md`.
+
+### A6.2 — Trois vues : `combus`, `combus_local`, `combus_remote`
+
+Livré (commit précédent à A7). Ajoute la troisième vue
+`combus_local` (REMOTE + LOCAL) au pipeline de génération. Rationale :
+alignement inter-nœud sans toucher au wire (la vue wire reste
+`combus_remote`).
+
+Trois artefacts émis par vue :
+- `combus_ids.h` / `combus_local_ids.h` / `combus_remote_ids.h`
+- `combus.h` / `combus_local.h` / `combus_remote.h`
+- `combus.cpp` / `combus_local.cpp` / `combus_remote.cpp`
+
+Le contrat wire (REMOTE only, ID range `[0, CH_COUNT)`) reste sur
+`combus_remote`. Le contrat `combus` (full) sépare REMOTE `[0, WIRE_END)`
+de LOCAL+SYSTEM `[WIRE_END, CH_COUNT)`.
+
+Diff : `combus_v2_A6.2.diff`.
+
+### A7 — Calcul MD5 pour les vues combus
+
+Livré (commit 0038553, 2026-08-15). Première implémentation du hash
+MD5 sur les canaux canoniques.
+
+**Option B retenue** : MD5 séparé des constantes partagées. Le hash
+ne mélange pas `projectVersion` ni `kMachineType` — ils sont émis
+comme constantes C++ séparées. Avantage : un mismatch diagnostique
+précisément lequel des axes diverge.
+
+Inputs du hash : `id`, `type`, `scope`, `theme`, `direction` (triée),
+`infoName`. Représentation canonique : JSON `sort_keys=True`,
+top-level `{view, channels[]}`. Channels dans l'ordre canonique
+`(scope priority, type, theme, id)` — déjà utilisé par `_select_view()`.
+
+À ce stade deux hashes : `combus_local` et `combus_remote`, plus
+`kMachineType` (qui s'avère ensuite inutile côté consumer).
+
+Diff : `combus_v2_A7.diff`.
+
+### A7.1 — Simplification (1 vue, pas de kMachineType)
+
+Livré (commit efc6db0, 2026-08-16). Simplification excessive lors
+d'une passe plus large.
+
+**Comparaison A7 vs `scripts/combus_md5.py` (branche
+`combus-frame-handshake`)** : 8 points de divergence, le plus simple
+retenu pour chacun (jamais un compromis). Le `combus_handshake.h`
+consomme un unique `kCombusWireMd5[16]` → la vue unique
+`combus_remote` suffit. `kMachineType` n'est consommé par personne
+→ supprimé. `_detect_machine_type()` retiré de `generator.py`.
+
+Suppressions : `kMachineType`, vue `combus_local` MD5, 8 tests
+correspondants. Conservation : `static constexpr` (toolchain ESP32),
+API `canonical_bytes` / `compute_view_hash` / `emit_md5_header` /
+`generate_md5_artifacts`, sources uniques via A3.
+
+Bilan (8 points) documenté dans §13 + tableau comparatif. 3 items
+« reste à faire » pour le merge `combus-frame-handshake` listés.
+
+221/221 tests verts (avant : 229 ; -8 tests pour matcher la
+simplification).
+
+Diff : `combus_v2_A7.1.diff`.
+
+### A7.2 — Restauration des 3 vues MD5 + header commun
+
+Livré (commit a5b1367, 2026-08-17). Restaure les 3 hashes
+(`combus_remote`, `combus_local`, `combus`) après la simplification
+excessive d'A7.1, **sans toucher au calcul MD5 lui-même**.
+
+**Le bug à corriger** : A7.1 avait supprimé par erreur la génération
+de `combus_local` et `combus` dans une passe plus large.
+
+**Modifications strictement bornées** :
+1. `generate_md5_artifacts()` produit 3 hashes :
+   - `kCombusRemoteComBusMd5[16]` → `combus_remote_md5.h`
+   - `kCombusLocalComBusMd5[16]`  → `combus_local_md5.h`
+   - `kCombusComBusMd5[16]`       → `combus_md5.h`
+2. **Header partagé `combus_wire_common.h`** émis en premier. Porte
+   les constantes communes (`kProjectVersionMajor/Minor`,
+   `kCombusHandshakeWirePayloadLen`). Chaque header de vue
+   `#include "combus_wire_common.h"` — évite la duplication et la
+   redéfinition quand les 4 headers sont inclus dans la même TU.
+3. Convention d'émission : `combus_wire_common.h` écrit **en premier**
+   (ordre déterministe sur disque).
+
+**Non touché** : `canonical_bytes()`, `compute_view_hash()`, les
+inputs (`id`, `type`, `scope`, `theme`, `direction` triée,
+`infoName`), `sort_keys=True`, exclusion de `requires`,
+`static constexpr`, A5/A6, `combus_handshake.cpp/.h`, `.cbch`,
+migration `.inc`, contrat des vues.
+
+**Matrice scope → vues (validée par tests)** :
+- REMOTE change → 3 hashes changent
+- LOCAL change → `combus_local`+`combus` changent, `combus_remote`
+  inchangé (vue REMOTE isolée du scope)
+- SYSTEM change → seul `combus` change
+
+**Régression stricte** : `combus_remote` hash value identique à
+A7.1 (test `test_combus_remote_hash_matches_a71_value`).
+
+**Architecture C++** :
+```cpp
+// combus_wire_common.h
+namespace combus { namespace wire {
+  static constexpr uint8_t kProjectVersionMajor = 0u;
+  static constexpr uint8_t kProjectVersionMinor = 1u;
+  static constexpr uint8_t kCombusHandshakeWirePayloadLen = 18u;
+}}
+
+// combus_<view>_md5.h
+#include "combus_wire_common.h"
+namespace combus { namespace wire {
+  static constexpr uint8_t kCombus<View>ComBusMd5[16] = { ... };
+  static constexpr const char* kCombus<View>ComBusMd5Hex = "...";
+}}
+```
+
+**Tests : 224/224 verts** (avant A7.2 : 221 ; +3 net : +3 scope-influence
++1 compile-check 4-en-1, -1 tests A7.1 spécifiques). 1 skipped si
+pas de compilateur C++ dispo. Compile-check effectif avec
+`xtensa-esp32-elf-g++` (toolchain PlatformIO ESP32) sur les 4 headers
+ensemble dans une même TU (`test_four_headers_compile_together`).
+
+**Doc §13** réécrit : table des 3 vues, matrice scope, convention
+header partagé, bilan comparatif A7 vs A7.1 vs A7.2 vs
+`scripts/combus_md5.py`. 4 items « reste à faire » listés (le
+futur flag de portée wire est explicitement hors scope A7.2).
+
+Diff : `combus_v2_A7.2.diff`.
 
 ### Notes diverses
 
