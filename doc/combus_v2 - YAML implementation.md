@@ -579,11 +579,11 @@ considérées compatibles à tort.
 
 Le handshake doit représenter le **contrat ComBus généré**.
 
-Principe (option B retenue, A7.1) :
+Principe (option B retenue, A7) :
 
 ```text
-MD5(canal canonique des channels de la vue combus_remote)
-+ constantes séparées (projectVersion)
+MD5(canal canonique des channels d'une vue)
++ constantes partagées (projectVersion, payload len)
 ```
 
 **projectVersion n'est pas haché.** Il est émis comme constante C++
@@ -592,29 +592,57 @@ séparée (`kProjectVersionMajor`, `kProjectVersionMinor`,
 Avantage : un mismatch détecte précisément lequel des deux axes
 diverge et produit un diagnostic utile.
 
-**machineType n'est plus émis (A7.1).** Le MD5 REMOTE est déjà la
-source de vérité pour la compatibilité entre familles de machine
-types — un handshake entre deux types différents diverge
-structurellement (canaux absents vs présents), pas sémantiquement.
-Le script `scripts/combus_md5.py` de la branche `combus-frame-handshake`
-n'émettait pas non plus `kMachineType` — l'A7.1 aligne main sur
-le strict nécessaire.
+**machineType n'est plus émis** (A7.1 puis A7.2 — le handshake consumer
+ne le consomme pas).
 
-### Vue hashée (A7.1 simplification)
+### Trois vues hashées (A7.2)
 
-**Seule `combus_remote` est hashée.** Le consommateur du handshake
-(`src/core/system/combus/frame/combus_handshake.h` sur la branche
-`combus-frame-handshake`) référence un unique `kCombusWireMd5[16]` —
-le strict minimum du contrat wire. La vue `combus_local` (REMOTE +
-LOCAL) introduite en A6.2 était spéculative pour un futur MD5
-d'alignement inter-nœud ; aucun consommateur ne la requête
-aujourd'hui, donc elle est retirée du pipeline MD5 en A7.1.
+A7.2 restaure les **trois** empreintes :
 
-`combus` (full) n'est pas non plus hashée : deux cartes d'un même
-nœud peuvent légitimement instancier des channels SYSTEM différents
-(répartition de modules entre cartes) — déjà documenté en A6.2.
+| Vue | Contenu | Symbole C++ | Header | Portée |
+|-----|---------|-------------|--------|--------|
+| `combus_remote` | REMOTE only | `kCombusRemoteComBusMd5[16]` | `combus_remote_md5.h` | strict wire |
+| `combus_local` | REMOTE + LOCAL | `kCombusLocalComBusMd5[16]` | `combus_local_md5.h` | alignement inter-nœud |
+| `combus` | REMOTE + LOCAL + SYSTEM | `kCombusComBusMd5[16]` | `combus_md5.h` | full picture (référence locale) |
 
-### Représentation canonique (A7.1)
+Chaque vue a son propre MD5 — les changements de scope se propagent
+selement aux vues qui contiennent le canal modifié :
+
+* un changement en **REMOTE** modifie les **trois** hashes ;
+* un changement en **LOCAL** modifie `combus_local` et `combus`,
+  mais **pas** `combus_remote` ;
+* un changement en **SYSTEM** modifie **seulement** `combus`.
+
+(Validé par `test_local_influences_local_and_full_not_remote`,
+`test_system_influences_only_full`,
+`test_remote_influences_all_three_hashes` — `test_md5.py`.)
+
+Le calcul, les inputs (`id`, `type`, `scope`, `theme`, `direction`
+triée, `infoName`), la sérialisation (`sort_keys=True`) et l'exclusion
+de `requires` restent **strictement ceux validés en A7.1**.
+**La valeur de `combus_remote` est inchangée** vs A7.1 (test
+`test_combus_remote_hash_matches_a71_value`).
+
+### Header commun (A7.2)
+
+Les constantes réellement communes (`kProjectVersionMajor`,
+`kProjectVersionMinor`, `kCombusHandshakeWirePayloadLen`) vivent dans
+**un header partagé** `combus_wire_common.h`. Chaque header de vue
+inclut `combus_wire_common.h`. Avantage : les trois headers (plus le
+partagé) peuvent être inclus ensemble dans la même TU sans
+redéfinition — validé par `test_four_headers_compile_together`.
+
+Convention d'émission (A7.2) :
+
+* `combus_wire_common.h` est écrit **en premier** (test
+  `test_generate_md5_artifacts_emits_remote_first`) ;
+* `combus_remote_md5.h`, `combus_local_md5.h`, `combus_md5.h`
+  contiennent **uniquement** leur propre `k<View>ComBusMd5[16]` et
+  `k<View>ComBusMd5Hex`, puis `#include "combus_wire_common.h"` ;
+* les noms `kCombusRemoteComBusMd5`, `kCombusLocalComBusMd5`,
+  `kCombusComBusMd5` sont distincts → pas de collision de symboles.
+
+### Représentation canonique (A7.1, inchangée en A7.2)
 
 - JSON avec `sort_keys=True` ;
 - top-level `{ "view": <nom>, "channels": [...] }` ;
@@ -630,22 +658,45 @@ le hash — voulu). `requires` **ne fait pas partie** du hash : son
 effet est déjà capturé par la présence/absence du channel dans la vue
 après résolution (A6.1).
 
-### Artefact généré (A7.1)
+### Artefacts générés (A7.2)
 
-Le générateur émet **un seul header** dans `.pio/build/<env>/generated/combus/` :
+Pour chaque vue hashée, le générateur émet un header `<view>_md5.h`
+dans `.pio/build/<env>/generated/combus/`, plus le header commun
+`combus_wire_common.h` :
 
 ```cpp
+// combus_wire_common.h
 namespace combus {
 namespace wire {
-  static constexpr uint8_t kCombusRemoteComBusMd5[16] = { 0x76u, 0x08u, ... };
-  static constexpr const char* kCombusRemoteComBusMd5Hex = "76080c7114ce...";
   static constexpr uint8_t kProjectVersionMajor = 0u;
   static constexpr uint8_t kProjectVersionMinor = 1u;
   static constexpr uint8_t kCombusHandshakeWirePayloadLen = 18u;
 } }
-```
 
-Fichier : `combus_remote_md5.h`.
+// combus_remote_md5.h
+#include "combus_wire_common.h"
+namespace combus {
+namespace wire {
+  static constexpr uint8_t kCombusRemoteComBusMd5[16] = { 0x76u, 0x08u, ... };
+  static constexpr const char* kCombusRemoteComBusMd5Hex = "76080c7114ce...";
+} }
+
+// combus_local_md5.h
+#include "combus_wire_common.h"
+namespace combus {
+namespace wire {
+  static constexpr uint8_t kCombusLocalComBusMd5[16] = { 0xa1u, 0x2bu, ... };
+  static constexpr const char* kCombusLocalComBusMd5Hex = "a12b7c...";
+} }
+
+// combus_md5.h
+#include "combus_wire_common.h"
+namespace combus {
+namespace wire {
+  static constexpr uint8_t kCombusComBusMd5[16] = { 0xffu, 0x00u, ... };
+  static constexpr const char* kCombusComBusMd5Hex = "ff00...";
+} }
+```
 
 Raison du choix `static constexpr` (et non `inline constexpr`) : la
 toolchain `xtensa-esp32-elf-g++` utilisée par PlatformIO rejette
@@ -656,57 +707,68 @@ supportées.
 ### Implémentation
 
 - Module : `scripts/combus_builder/md5.py`.
-- API publique : `canonical_bytes(view)`,
-  `compute_view_hash(view) -> ViewHash`,
-  `emit_md5_header(hash, out_dir) -> Path`,
-  `generate_md5_artifacts(sel, out_dir) -> (ViewHash, Path)`.
+- API publique :
+  - `canonical_bytes(view) -> bytes`
+  - `compute_view_hash(view) -> ViewHash`
+  - `emit_view_header(hash, out_dir) -> Path` (un fichier par vue)
+  - `emit_common_header(out_dir) -> Path` (`combus_wire_common.h`)
+  - `generate_md5_artifacts(sel, out_dir) -> (dict, list[Path])`
 - Appelé par `generator.generate()` après l'émission des trois vues.
 - `projectVersion` est un placeholder `0u/1u` jusqu'à introduction
-  d'un `project_version.h` (hors scope A7.1).
+  d'un `project_version.h` (hors scope A7.2).
 
-### Tests (29/29 passent, 1 skipped si pas de compilateur C++)
+### Tests (224/224 passent, 1 skipped si pas de compilateur C++)
 
 `scripts/combus_builder/tests/test_md5.py` couvre :
+
 - déterminisme (re-runs identiques, ordre de discovery différent) ;
 - insensibilité au formatage cosmétique (ordre des clés de la dict) ;
 - sensibilité à un changement de `direction` (le cas qui a motivé A7) ;
 - sensibilité à tout changement de champ ;
 - format des artefacts C++ (`static constexpr`, namespace
   `combus::wire`, payload len = 18u, pas de `kMachineType`) ;
-- compilation effective avec la toolchain PlatformIO
-  (`xtensa-esp32-elf-g++` ou fallback `g++`) ;
-- absence d'émission de `combus_local_md5.h` (A7.1 simplification) ;
-- absence de `kMachineType` dans le rendu (A7.1 simplification).
+- matrice scope → vues (REMOTE → 3 hashes, LOCAL → 2 hashes, SYSTEM
+  → 1 hash) ;
+- `combus_remote` inchangé vs A7.1 (régression stricte) ;
+- **compile-check effectif 4-en-1** : les 4 headers inclus ensemble
+  dans la même TU (test `test_four_headers_compile_together`) ;
+- déterminisme des 3 hashes à travers re-runs et discovery order.
 
 Le MD5 ne doit plus reconstruire indirectement le comportement du
 préprocesseur C++.
 
-### Bilan A7.1 vs `scripts/combus_md5.py` (branche `combus-frame-handshake`)
+### Bilan A7.2 vs A7.1 vs `scripts/combus_md5.py`
 
-Pour chaque point de divergence entre `main` (A7) et `combus-frame-handshake`
-(legacy `combus_md5.py`), la **version la plus simple** a été retenue :
+A7.1 avait réduit par erreur le pipeline MD5 à 1 vue (`combus_remote`
+uniquement). A7.2 restaure les 3 vues **sans rien casser** :
 
-| Point | Legacy (`combus-md5.py`) | A7 (main) | A7.1 retenue | Pourquoi |
-|-------|-------------------------|-----------|---------------|----------|
-| Inputs hash | version + contenu brut des `.inc` (lecture disque) | JSON canonique des channels (in-memory) | **A7** | Pas de I/O, pas d'encodage path, pas d'ASCII forcé |
-| Vues hashées | 1 par paire d'`.inc` | 2 (combus_local + combus_remote) | **1 (combus_remote)** | Le handshake consumer référence un seul `kCombusWireMd5[16]` |
-| `kMachineType` | absent | présent | **absent** | Pas consommé par `combus_handshake.h` |
-| `kProjectVersionMajor/Minor` | présent | présent | **présent** | Consommé par `combus_handshake.h` |
-| `kCombusHandshakeWirePayloadLen` | présent | présent | **présent** | Consommé par `combus_handshake.h` (`static_assert` côté .cpp) |
-| Détection `MACHINE_TYPE_*` | non (par présence de fichiers) | oui (`_detect_machine_type`) | **supprimé** | Plus rien à détecter (kMachineType retiré) |
-| Discovery | scan `src/core/` pour paires d'`.inc` | scan via A3 + filtre `scope=REMOTE` | **A7** (A3 est la source de vérité unique) |
-| Path du header | `combus_ids_remote_md5.h` (à côté des `.inc`) | `combus_remote_md5.h` (dans build dir) | **A7** | Le consumer doit migrer (hors scope A7.1) |
+| Aspect | A7 (legacy main) | A7.1 | A7.2 | `combus-md5.py` (handshake) |
+|--------|-------------------|------|------|----------------------------|
+| Inputs hash | JSON canonique (in-memory) | idem | idem | version + raw .inc content |
+| Vues hashées | 2 (local + remote) | **1 (remote)** | **3 (full + local + remote)** | 1 par paire d'`.inc` |
+| `kMachineType` | présent | absent | absent | absent |
+| Header partagé | non (hack : shared only in local) | non | **oui (`combus_wire_common.h`)** | n/a |
+| Constantes partagées | dupliquées dans combus_local_md5.h | dupliquées dans combus_remote_md5.h | **1 seule fois dans `combus_wire_common.h`** | dupliquées par vue |
+| Discovery | A3 + scope filter | idem | idem | scan `src/core/` |
+| Header path | `combus_remote_md5.h` (build dir) | idem | **3 headers dans build dir** | `combus_ids_remote_md5.h` (à côté des `.inc`) |
+
+Le MD5 lui-même (calcul, inputs, sérialisation, exclusion de
+`requires`) n'a **pas bougé** depuis A7.1.
 
 **Reste à faire pour un merge trivial de `combus-frame-handshake`** :
 
 1. Mettre à jour l'include dans `combus_handshake.h` (sur
    `combus-frame-handshake`) pour pointer vers le header généré par
-   A7.1 (chemin exact à fixer en Phase B/C quand l'intégration
-   PlatformIO sera finalisée).
+   A7.2 (chemin exact à fixer en Phase B/C quand l'intégration
+   PlatformIO sera finalisée). Le consumer référence un unique
+   `kCombusWireMd5[16]` qui correspond à `kCombusRemoteComBusMd5[16]`.
 2. Supprimer `scripts/combus_md5.py` legacy une fois le consumer
    migré.
 3. Vérifier que `combus_handshake.cpp` n'utilise pas `kMachineType`
-   (vérification effectuée dans §1 de cette note : pas trouvé).
+   (effectué en A7.1 : pas trouvé).
+4. **Hors scope A7.2** : implémenter le futur flag de portée wire
+   qui décidera *à l'exécution* quelle vue (remote/local/full) sert
+   au handshake. Tâche séparée, côté handshake, hors A7.2.
 
 ## 14. Compatibilité legacy
 
