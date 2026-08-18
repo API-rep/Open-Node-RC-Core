@@ -224,11 +224,35 @@ Implémenter l'architecture à 3 pointeurs pour la superposition de layers :
 ### Prochaine étape
 Une fois le layering implémenté et validé, passer à la **Phase 2 — Groupes thématiques**.
 
-## Direction (uplink / downlink)
+## Direction (uplink / downlink) et propagation
 
-**Principe** : `uplink` / `downlink` indiquent le sens de transmission sur le fil, par rapport au nœud de référence (machine). Ils ne définissent pas le nœud : ils définissent le sens du canal dans le contrat remote.
+### Contrat de propagation
 
-**Format** :
+Un channel déclaré `REMOTE` représente une donnée échangée entre nœuds.
+
+Sa `direction` décrit **exclusivement** sa circulation sur le wire inter-node :
+
+- `uplink` : le nœud local publie la valeur vers le nœud distant ;
+- `downlink` : le nœud local reçoit la valeur depuis le nœud distant ;
+- `both` : la valeur circule dans les deux directions.
+
+Un channel `REMOTE` est **également présent** dans la représentation ComBus locale (`LOCAL`) de chaque board appartenant au nœud.
+
+Cette propagation intra-node est **indépendante de `direction`** :
+
+- elle ne constitue **pas** une transmission wire ;
+- elle ne modifie **pas** la direction REMOTE déclarée ;
+- elle doit rendre le channel disponible de manière cohérente sur les boards du même nœud.
+
+La représentation `LOCAL` issue d'un channel `REMOTE` est donc implicitement disponible pour les échanges entre boards du nœud, **sans que cette propagation soit exprimée comme une seconde `direction` dans le `.cb`**.
+
+La question d'un éventuel `owner` du channel ou d'une direction spécifique liée au module producteur est volontairement hors de ce contrat et reste à décider ultérieurement.
+
+### Principe (wire)
+
+`uplink` / `downlink` indiquent le sens de transmission sur le fil, par rapport au nœud de référence (machine). Ils ne définissent pas le nœud : ils définissent le sens du canal dans le contrat remote.
+
+### Format
 
 ```yaml
 scope: REMOTE
@@ -239,8 +263,13 @@ direction:
 
 Une définition peut éventuellement être bidirectionnelle si elle porte les deux flags.
 
-**Exemples** :
+### Exemples
 
 - `FAILSAFE_VBAT` (contributeur Failsafe) : `direction: [uplink]` — le module vbat envoie le signal en amont vers le core failsafe.
 - `FAILSAFE` (agrégateur) : `direction: [downlink]` — le core failsafe publie l'état agrégé en aval vers les consommateurs.
+
+### Notes d'implémentation
+
+- La propagation intra-node est gérée par le runtime ComBus (cf. `include/struct/combus_struct.h` — la présence d'un channel dans la vue `LOCAL` découle de sa présence dans la vue `REMOTE`).
+- Aucun champ additionnel n'est nécessaire dans le `.cb` pour exprimer cette propagation.
 
