@@ -85,7 +85,15 @@ DIRECTION_TOKENS: frozenset[str] = frozenset({"uplink", "downlink", "both", "non
 # Tokens autorisés par scope (en surface).
 DIRECTION_BY_SCOPE: dict[str, frozenset[str]] = {
     "LOCAL": frozenset({"uplink", "downlink", "both", "none"}),
-    "REMOTE": frozenset({"uplink", "downlink", "both"}),
+    # A9.5 — REMOTE accepts `none` (per A9.3 contract extension):
+    #   REMOTE = type-level declaration (bus created on all machines of
+    #   the type), but with no inter-node wire activity. Intra-node
+    #   propagation remains implicit (cf. A9.3 / doc/~combus_v2.md).
+    #   Example: ESC_SPEED_BUS / THROTTLE_BUS — declared once for all
+    #   dumper_truck instances, propagated between boards of the same
+    #   node via the local wire, but NOT sent to the deprecated
+    #   sound_module over the inter-node wire.
+    "REMOTE": frozenset({"uplink", "downlink", "both", "none"}),
     "SYSTEM": frozenset({"none"}),  # seule valeur de surface acceptée
 }
 

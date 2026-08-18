@@ -657,16 +657,14 @@ def test_dir_remote_uplink_downlink(tmp_path):
     assert result.canonical_definitions[0].direction == frozenset({"uplink", "downlink"})
 
 
-def test_dir_remote_none_rejected(tmp_path):
+def test_dir_remote_none_normalizes_to_empty(tmp_path):
+    # A9.5 — REMOTE now accepts `none` (per A9.3 contract extension).
+    # REMOTE = type-level declaration, no inter-node wire activity.
+    # Intra-node propagation remains implicit.
     p = tmp_path / "a.cb"
     parsed = [_parsed(p, {"channels": [_ch(scope="REMOTE", direction=["none"])]})]
-    try:
-        canonize(parsed)
-    except ChannelValidationError as e:
-        assert "direction" in str(e)
-        assert "REMOTE" in str(e)
-    else:
-        raise AssertionError("expected ChannelValidationError")
+    result = canonize(parsed)
+    assert result.canonical_definitions[0].direction == frozenset()
 
 
 def test_dir_remote_empty_rejected(tmp_path):
