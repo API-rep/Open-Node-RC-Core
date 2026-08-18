@@ -78,7 +78,7 @@ CbChain kSimChannels[SIM_CH_COUNT] = {
 
   { .name       = "gear",
     .inCh       = AnalogComBusID::ESC_RPM_BUS,
-    .outCh      = AnalogComBusID::GEAR,
+    .outCh      = AnalogComBusID::GEAR_BUS,
     .procs      = kGearProcs,
     .procCount  = static_cast<uint8_t>(std::size(kGearProcs)),
   },

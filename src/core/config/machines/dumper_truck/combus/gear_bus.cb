@@ -1,0 +1,34 @@
+# gear_bus.cb — Active virtual gear (1..3)
+#
+# - Written by the SIM_GEAR chain (gear-inv-ratio -> gear-fsm ->
+#   gear-ramp -> GEAR_BUS, with engine_rpm side-effect to ESC_RPM_BUS).
+# - Read by:
+#     * sound module (gearboxType == VIRTUAL_3SPEED,
+#       selectedGear = comBus.analogBus[GEAR_BUS].value) — wire
+#       inter-node, still active (RPM-driven sound effects).
+#     * dashboard (debug label "GEAR", formatted as "G:%u").
+#     * motion pipeline (gearRatio[gear] selection for traction).
+# - Range: 1..3 (NEVER 0; neutral/idle is encoded separately in
+#   DRIVE_STATE_BUS bit0 ACTIVE).
+# - Future-proofing: REMOTE+downlink leaves room for a future physical
+#   gearbox to claim this channel (e.g. for an actual gear actuator
+#   driver). The virtual gear pipeline can also continue to write it.
+#
+# Note (A9.6): This file promotes the previous `GEAR` channel to
+# `GEAR_BUS` for naming consistency with the other type-level REMOTE
+# analog buses (STEERING_BUS, DUMP_BUS, THROTTLE_BUS, ESC_SPEED_BUS).
+# All C++ consumers have been updated to use `AnalogComBusID::GEAR_BUS`.
+#
+# Implicit gate: MACHINE_TYPE_DUMPER_TRUCK (build system must filter
+# this .cb to dumper_truck builds only).
+
+
+channels:
+
+- id: GEAR_BUS
+  infoName: "Active gear"
+  type: analog
+  scope: REMOTE
+  theme: core
+  direction:
+    - downlink
