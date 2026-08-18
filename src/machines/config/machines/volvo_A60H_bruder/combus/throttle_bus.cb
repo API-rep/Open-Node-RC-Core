@@ -1,0 +1,30 @@
+# throttle_bus.cb — Main throttle bus (conditioned)
+#
+# - Written by the INPUT_THROTTLE chain (THROTTLE_STICK -> conditioning ->
+#   THROTTLE_BUS).
+# - Read by the SIM_THROTTLE chain (THROTTLE_BUS -> ramp -> ESC_RPM_BUS).
+# - Also observed by reverse-brake (cb_brake_fn reads THROTTLE_BUS for
+#   opposing stick deflection).
+# - May be modified by processing chains (ex: ramp/filter chains).
+#
+# Note (A9.4): This file lives in the volvo_A60H_bruder/combus/ directory
+# (instance-level), unlike STEERING_BUS and DUMP_BUS which sit in
+# dumper_truck/combus/ (type-level). The implicit gate is the build for
+# the volvo_A60H_bruder instance. If THROTTLE_BUS is later promoted to
+# type-level (dumper_truck), move the file accordingly.
+#
+# A6.1 — `direction: [both]` shorthand added (TEMPORARY, pending .inc migration).
+# Same caveat as failsafe.cb / vbat_failsafe.cb: during the .inc
+# migration the runtime writes/reads both ways. Re-evaluate when .inc
+# migration is complete for this scope.
+
+
+channels:
+
+- id: THROTTLE_BUS
+  infoName: "Throttle"
+  type: analog
+  scope: LOCAL
+  theme: core
+  direction:
+    - both
