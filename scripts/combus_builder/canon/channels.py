@@ -66,6 +66,7 @@ VALID_SCOPES: frozenset[str] = frozenset({"LOCAL", "REMOTE", "SYSTEM"})
 
 # Thèmes autorisés. À étendre ici quand un nouveau thème apparaît.
 VALID_THEMES: frozenset[str] = frozenset({
+    "core",        # A9.1: STEERING_BUS (dumper_truck/combus/steering_bus.cb)
     "failsafe",
     "vbat",
     # Ajouter ici les nouveaux thèmes légitimes.
