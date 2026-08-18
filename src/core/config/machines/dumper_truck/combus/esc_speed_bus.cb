@@ -1,0 +1,36 @@
+# esc_speed_bus.cb — ESC speed (inertia-smoothed, bipolar)
+#
+# - Written by the SIM_TRACTION chain (ESC_RPM_BUS -> upshift-damp,
+#   subgear-cap, gear-dir -> ESC_SPEED_BUS).
+# - Read by:
+#     * sound module (speed_behaviorFn -> sound_core_set_speed) — wire
+#       inter-node, but the legacy sound_module is being phased out
+#       in favor of a new 'machine sound module', so this wire is
+#       effectively inactive (no current consumer on the remote side).
+#     * mainboard ESC driver (comChannel)
+#     * light interpreter (escInReverse = value < centre)
+#     * dashboard (debug 'ESC_SPD')
+# - Bipolar: positive = FWD, negative = REV (post-gear-dir proc).
+# - Owner comment in legacy .inc noted owner=SYSTEM_EXT (the ESC
+#   output driver). Documented here for traceability.
+#
+# Note (A9.5): direction=[none] reflects the A9.3 contract extension
+# (REMOTE = type-level declaration, direction = wire inter-node
+# activity). ESC_SPEED_BUS is declared at type-level for all
+# dumper_truck instances, propagated on the LOCAL wire (intra-node,
+# mainboard <-> ext_board) implicitly per A9.3, but NOT sent to the
+# deprecated sound_module over the inter-node wire.
+#
+# Implicit gate: MACHINE_TYPE_DUMPER_TRUCK (build system must filter
+# this .cb to dumper_truck builds only).
+
+
+channels:
+
+- id: ESC_SPEED_BUS
+  infoName: "ESC speed"
+  type: analog
+  scope: REMOTE
+  theme: core
+  direction:
+    - none
