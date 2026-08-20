@@ -22,8 +22,8 @@
  *                    gear-inv-ratio: wheel_speed * 1000 / gearRatio[prevGear] = engine_rpm;
  *                    writes engine_rpm to ESC_RPM_BUS (sound node reads engine RPM).
  *
- *     SIM_STEERING : in(STEERING_BUS) -> bypass(DIRECT_DRIVE), ramp -> out(STEERING_RAMPED_BUS)
- *     SIM_DUMP     : in(DUMP_BUS) -> bypass(DIRECT_DRIVE), ramp -> out(DUMP_RAMPED_BUS)
+ *     SIM_STEERING : in(STEERING_BUS) -> bypass(DIRECT_DRIVE), ramp -> out(STEERING_BUS)
+ *     SIM_DUMP     : in(DUMP_BUS) -> bypass(DIRECT_DRIVE), ramp -> out(DUMP_BUS)
  *
  *   SUBGEAR_BUS is written by INPUT chain (cb_btn procs) — see input_proc_config.cpp.
  *******************************************************************************
@@ -85,14 +85,14 @@ CbChain kSimChannels[SIM_CH_COUNT] = {
 
   { .name       = "steering",
     .inCh       = AnalogComBusID::STEERING_BUS,
-    .outCh      = AnalogComBusID::STEERING_RAMPED_BUS,
+    .outCh      = AnalogComBusID::STEERING_BUS,
     .procs      = kSteeringProcs,
     .procCount  = static_cast<uint8_t>(std::size(kSteeringProcs)),
   },
 
   { .name       = "dump",
     .inCh       = AnalogComBusID::DUMP_BUS,
-    .outCh      = AnalogComBusID::DUMP_RAMPED_BUS,
+    .outCh      = AnalogComBusID::DUMP_BUS,
     .procs      = kDumpProcs,
     .procCount  = static_cast<uint8_t>(std::size(kDumpProcs)),
   },

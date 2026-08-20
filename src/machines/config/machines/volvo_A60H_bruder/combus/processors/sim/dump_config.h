@@ -7,9 +7,9 @@
  *     CbRampCfg, CbRampState, CbProc, cb_sym_ramp_fn, cb_bypass_fn,
  *     DigitalComBusID, CbusNeutral, pctToCbus.
  *
- *   Chain function: DUMP_BUS → [bypass?] → asymmetric ramp → DUMP_RAMPED_BUS.
+ *   Chain function: DUMP_BUS → [bypass?] → asymmetric ramp → DUMP_BUS.
  *   In:  DUMP_BUS (raw actuator command), DIRECT_DRIVE.
- *   Out: DUMP_RAMPED_BUS (ramped dump command for hydraulic actuator).
+ *   Out: DUMP_BUS (ramped dump command for hydraulic actuator).
  *
  *   bypass: DIRECT_DRIVE HIGH → claim; raw dump command skips ramp.
  *   ramp: slow raise (accelSteps = 2 %/tick), fast lower (accelDownSteps = 4 %/tick), instant stop.
