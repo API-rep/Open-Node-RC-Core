@@ -1,0 +1,26 @@
+﻿# subgear_bus.cb --- Active sub-gear index (1..N, 0 = inactive)
+#
+# - Written by the SIM_GEAR chain (gear-subgear-claim or input SUBGEAR_SET_BTN).
+# - Read by sim_gear (gear chain), dashboards, sound_module (legacy).
+# - Range: 0..N (0 = inactive, 1..N = active sub-gear index).
+# - Failsafe: inactive (0) when wire is lost.
+#
+# A9.9: REMOTE + downlink. Allows the remote controller to either:
+#   - write a sub-gear index directly (claim),
+#   - send up/down commands to step through gear ratios,
+#   - or let the machine manage it automatically.
+#
+# Note: legacy .inc (combus_ids_local_analog.inc) still holds the SUBGEAR_BUS
+# enum entry. Migration to enum-driven by .cb deferred to a later step.
+#
+# Implicit gate: MACHINE_TYPE_DUMPER_TRUCK.
+
+channels:
+- id: SUBGEAR_BUS
+  infoName: "Active sub-gear"
+  type: analog
+  scope: REMOTE
+  theme: core
+  direction:
+    - downlink
+
