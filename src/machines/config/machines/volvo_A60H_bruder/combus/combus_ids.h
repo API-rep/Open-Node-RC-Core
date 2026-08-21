@@ -27,6 +27,7 @@ enum class AnalogComBusID : uint8_t {
   #include "combus_ids_local_analog.inc"
   MACHINE_END,
   #include "combus_ids_system_analog.inc"
+  #include <core/config/machines/dumper_truck/inputs/input_ids_analog.inc>      // A9.9: raw input acquisition (SYSTEM)
   CH_COUNT
 };
 
@@ -36,6 +37,7 @@ enum class DigitalComBusID : uint8_t {
   #include "combus_ids_local_digital.inc"
   MACHINE_END,
   #include "combus_ids_system_digital.inc"
+  #include <core/config/machines/dumper_truck/inputs/input_ids_digital.inc>     // A9.9: raw input acquisition (SYSTEM)
   CH_COUNT
 };
 

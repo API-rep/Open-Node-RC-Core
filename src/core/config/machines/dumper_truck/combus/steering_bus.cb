@@ -1,13 +1,7 @@
 # steering_bus.cb — Main steering bus
 #
-# - Written by the input modules.
-# - Read by the hardware motion system.
-# - May be modified by processing chains (ex: ramp/filter chains).
+# - Written by inputs modules.
 #
-# Note (A9.1): `MACHINE_TYPE_DUMPER_TRUCK` is the implicit gate for this
-# file. The build system must NOT include this .cb in a non-dumper_truck
-# build (either via build_src_filter or via A3 directory-based filtering).
-# Tracking: Phase B/C integration concern.
 
 channels:
 

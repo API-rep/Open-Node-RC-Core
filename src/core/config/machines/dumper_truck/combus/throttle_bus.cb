@@ -1,6 +1,6 @@
 # throttle_bus.cb — Main throttle bus (conditioned)
 #
-# - Written by an input modules.
+# - Written by input modules.
 # - Map by default to ESC_SPEED_BUS
 
 channels:

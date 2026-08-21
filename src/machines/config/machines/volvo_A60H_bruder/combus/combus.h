@@ -11,6 +11,13 @@
 
 #include "combus_ids.h"
 
+#include <core/config/machines/dumper_truck/inputs/input_channels_analog.inc>  // A9.9: raw INPUT acquisition (SYSTEM) \u2014 lives in core/, injected into the array initializer in combus.cpp
+#include <core/config/machines/dumper_truck/inputs/input_channels_digital.inc>  // A9.9: raw INPUT acquisition (SYSTEM) \u2014 lives in core/, injected into the array initializer in combus.cpp
+
+#include <core/config/machines/dumper_truck/inputs/input_ids_analog.inc>        // A9.9: raw INPUT acquisition (SYSTEM) \u2014 lives in core/, injected into the enum tail in combus_ids.h
+
+#include <core/config/machines/dumper_truck/inputs/input_ids_digital.inc>       // A9.9: raw INPUT acquisition (SYSTEM) \u2014 lives in core/, injected into the enum tail in combus_ids.h
+
 #include <struct/combus_struct.h>
 
 /// @brief Com-bus analog channels configuration array

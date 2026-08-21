@@ -1,8 +1,6 @@
-# dump_bus.cb — Main dump bus (hydraulic actuator command)
+# dump_bus.cb — Main dump bus
 #
-# - Written by the input modules.
-# - Read by the hardware motion system.
-# - May be modified by processing chains (ex: ramp/filter chains).
+# - Written by an input modules.
 
 channels:
 
