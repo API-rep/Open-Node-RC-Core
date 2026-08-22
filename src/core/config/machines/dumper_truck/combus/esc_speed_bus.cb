@@ -11,4 +11,4 @@ channels:
   value: CbusNeutral
   scope: REMOTE
   theme: core
-  direction: [none]
+  direction: none

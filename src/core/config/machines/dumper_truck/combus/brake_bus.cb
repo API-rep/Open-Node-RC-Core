@@ -16,6 +16,4 @@ channels:
   type: analog
   scope: REMOTE
   theme: core
-  direction: [downlink]
-
-
+  direction: downlink

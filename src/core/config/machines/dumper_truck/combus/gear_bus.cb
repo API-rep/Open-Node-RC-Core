@@ -13,4 +13,4 @@ channels:
   value: 1
   scope: REMOTE
   theme: core
-  direction: [downlink]
+  direction: downlink

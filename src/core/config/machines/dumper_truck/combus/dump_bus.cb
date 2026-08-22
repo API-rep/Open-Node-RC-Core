@@ -10,5 +10,5 @@ channels:
   value: CbusNeutral
   scope: REMOTE
   theme: core
-  direction: [downlink]
+  direction: downlink
 

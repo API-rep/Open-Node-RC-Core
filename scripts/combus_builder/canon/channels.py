@@ -199,15 +199,18 @@ def _normalize_direction(
     """
     Valide et normalise `direction` selon le scope.
 
-    Règles :
-      - Doit être une liste (ou absente pour SYSTEM).
-      - SYSTEM : champ absent OU [none] → frozenset().
-                Toute autre valeur → erreur.
-      - LOCAL/REMOTE : liste non vide, tokens autorisés par scope,
-                       pas de doublons, pas de combinaisons incohérentes.
+    Règles (decision mainteneur 2026-08-22 : direction = string, pas liste) :
+      - Champ absent pour SYSTEM → frozenset() (= none implicite).
+      - Doit être une STRING unique ∈ {uplink, downlink, both, none}.
+      - SYSTEM : seule 'none' (ou champ absent) est acceptée.
+      - LOCAL/REMOTE : 'uplink', 'downlink', 'both', 'none' tous OK
+                       selon la politique par scope.
       - `both` est un raccourci pour {uplink, downlink}.
-      - `none` est un raccourci pour {} (uniquement LOCAL).
-      - Combinaisons incohérentes (both+uplink, none+uplink, etc.) → erreur.
+      - `none` est un raccourci pour {}.
+
+    Pourquoi une string (et non une liste) : les valeurs possibles sont
+    mutuellement exclusives. Une liste n'apporte rien et complique la
+    syntaxe YAML.
 
     Retourne un frozenset normalisé (uniquement uplink/downlink).
     """
@@ -221,112 +224,49 @@ def _normalize_direction(
             "(SYSTEM may omit it and defaults to 'none')",
         )
 
-    # Doit être une liste.
-    if not isinstance(raw_dir, list):
+    # Doit être une string.
+    if not isinstance(raw_dir, str):
         raise ChannelValidationError(
             path, channel_id,
-            f"`direction` must be a list, got {type(raw_dir).__name__}",
+            f"`direction` must be a string, got {type(raw_dir).__name__} "
+            f"({raw_dir!r}); accepted values: 'uplink', 'downlink', 'both', 'none'",
         )
 
-    # Chaque entrée doit être une string (sinon set()/dict() échoue).
-    # On valide le type AVANT toute opération nécessitant des valeurs hashables.
-    bad_type = [d for d in raw_dir if not isinstance(d, str)]
-    if bad_type:
-        raise ChannelValidationError(
-            path, channel_id,
-            f"`direction` entries must be strings, got {bad_type!r}",
-        )
-
-    # Doublons interdits (vérifié en premier pour donner un message clair).
-    if len(raw_dir) != len(set(raw_dir)):
-        seen: set[str] = set()
-        dups: list[str] = []
-        for d in raw_dir:
-            if d in seen:
-                dups.append(d)
-            seen.add(d)
-        raise ChannelValidationError(
-            path, channel_id,
-            f"`direction` contains duplicates: {dups!r}",
-        )
-
-    # SYSTEM : seule [none] est acceptée.
+    # SYSTEM : seule 'none' est acceptée.
     if scope == "SYSTEM":
-        if raw_dir == ["none"]:
+        if raw_dir == "none":
             return frozenset()
         raise ChannelValidationError(
             path, channel_id,
             f"scope=SYSTEM does not have a wire direction; "
-            f"only `direction: [none]` (or absent) is accepted, "
+            f"only `direction: none` (or absent) is accepted, "
             f"got {raw_dir!r}",
         )
 
-    # LOCAL/REMOTE : liste non vide.
-    if not raw_dir:
+    # LOCAL/REMOTE : la valeur doit être un token autorisé globalement.
+    if raw_dir not in DIRECTION_TOKENS:
         raise ChannelValidationError(
             path, channel_id,
-            f"`direction` must be a non-empty list for scope={scope!r}, "
-            f"got empty list",
+            f"`direction` must be one of {sorted(DIRECTION_TOKENS)}, "
+            f"got {raw_dir!r}",
         )
 
     # Tokens autorisés par scope.
     allowed = DIRECTION_BY_SCOPE[scope]
-    bad = [d for d in raw_dir if d not in DIRECTION_TOKENS]
-    if bad:
+    if raw_dir not in allowed:
         raise ChannelValidationError(
             path, channel_id,
-            f"`direction` entries must be in {sorted(DIRECTION_TOKENS)}, "
-            f"got invalid entries {bad!r}",
-        )
-    bad_scope = [d for d in raw_dir if d not in allowed]
-    if bad_scope:
-        raise ChannelValidationError(
-            path, channel_id,
-            f"scope={scope!r} does not accept direction tokens {bad_scope!r}; "
+            f"scope={scope!r} does not accept direction token {raw_dir!r}; "
             f"allowed for this scope: {sorted(allowed)}",
         )
 
-    # Normalisation : `both` → {uplink, downlink}, `none` → {}.
-    # Combinaisons incohérentes (both+uplink, none+uplink, etc.) → erreur.
-    #
-    # On détecte les combinaisons incohérentes en deux passes :
-    # 1. Compter les tokens de surface (both, none, uplink, downlink).
-    # 2. Vérifier que la combinaison est cohérente.
-    has_both = "both" in raw_dir
-    has_none = "none" in raw_dir
-    has_wire = any(d in ("uplink", "downlink") for d in raw_dir)
-
-    if has_both and has_wire:
-        raise ChannelValidationError(
-            path, channel_id,
-            f"`direction: [both]` cannot be combined with "
-            f"`uplink` or `downlink`, got {raw_dir!r}",
-        )
-    if has_none and has_wire:
-        raise ChannelValidationError(
-            path, channel_id,
-            f"`direction: [none]` cannot be combined with "
-            f"`uplink` or `downlink`, got {raw_dir!r}",
-        )
-    if has_none and has_both:
-        raise ChannelValidationError(
-            path, channel_id,
-            f"`direction: [none]` cannot be combined with "
-            f"`both`, got {raw_dir!r}",
-        )
-
-    # Normalisation effective.
-    normalized: set[str] = set()
-    for d in raw_dir:
-        if d == "both":
-            normalized.add("uplink")
-            normalized.add("downlink")
-        elif d == "none":
-            pass  # none = {} (déjà vérifié ci-dessus)
-        else:
-            normalized.add(d)
-
-    return frozenset(normalized)
+    # Normalisation : `both` → {uplink, downlink}, `none` → {},
+    # `uplink`/`downlink` → {uplink}/{downlink}.
+    if raw_dir == "both":
+        return frozenset({"uplink", "downlink"})
+    if raw_dir == "none":
+        return frozenset()
+    return frozenset({raw_dir})
 
 
 # =============================================================================
