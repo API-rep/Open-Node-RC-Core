@@ -14,9 +14,8 @@ channels:
 - id: BRAKE_BUS
   infoName: "Brake pedal"
   type: analog
-value: 0
   scope: REMOTE
   theme: core
-  direction: downlink
+  direction: [downlink]
 
 

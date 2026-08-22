@@ -422,6 +422,16 @@ def _render_value(ch: ChannelDefinition, type_: str) -> str:
     )
 
 
+# Mapping view.name -> C++ identifier prefix (must match legacy naming).
+# Legacy uses "ComBus" (B majuscule) — str.capitalize() would yield
+# "Combus" which is wrong. We hardcode the correct form here.
+_VIEW_ID_PREFIX: dict[str, str] = {
+    "combus": "ComBus",
+    "combus_local": "ComBusLocal",
+    "combus_remote": "ComBusRemote",
+}
+
+
 def _render_ids_header(view: View, ctx: BuildContext) -> str:
     """
     Render the `<view>_ids.h` file.
@@ -433,7 +443,7 @@ def _render_ids_header(view: View, ctx: BuildContext) -> str:
     analog = [vc for vc in view.channels if vc.ch.type == "analog"]
     digital = [vc for vc in view.channels if vc.ch.type == "digital"]
 
-    cap = view.name.capitalize()
+    cap = _VIEW_ID_PREFIX[view.name]
     body: list[str] = []
     body.append(_HEADER_PROLOGUE
                 .replace("<generator_version>", "A6.1")
@@ -484,7 +494,7 @@ def _render_header(view: View, ctx: BuildContext) -> str:
       - extern declarations of the channel arrays
       - extern declaration of the bus instance (combus view only)
     """
-    cap = view.name.capitalize()
+    cap = _VIEW_ID_PREFIX[view.name]
     body: list[str] = []
     body.append(_HEADER_PROLOGUE
                 .replace("<generator_version>", "A6.1")
@@ -535,7 +545,7 @@ def _render_source(view: View, ctx: BuildContext) -> str:
       - DigitalComBusArray[] (if digital channels exist)
       - comBus definition (combus view only)
     """
-    cap = view.name.capitalize()
+    cap = _VIEW_ID_PREFIX[view.name]
     analog = [vc for vc in view.channels if vc.ch.type == "analog"]
     digital = [vc for vc in view.channels if vc.ch.type == "digital"]
 
