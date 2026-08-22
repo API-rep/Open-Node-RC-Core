@@ -9,18 +9,18 @@
 // to core/.../inputs/input_channels_*.inc \u2014 see combus.h includes (assembled
 // into the enclosing scope as extra enum members via combus_ids.h).
 
+// RAW INPUT acquisition descriptors now come from input.cb via the combus_builder hook.
+// The 4 input_*_*.inc fragments are removed 2026-08-22 — see combus_v2 migration.
 AnalogComBus AnalogComBusArray[static_cast<uint8_t>(AnalogComBusID::CH_COUNT)] = {
   #include <core/config/machines/dumper_truck/combus/combus_channels_remote_analog.inc>
   #include "combus_channels_local_analog.inc"
   #include "combus_channels_system_analog.inc"
-  #include <core/config/machines/dumper_truck/inputs/input_channels_analog.inc>
 };
 
 DigitalComBus DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::CH_COUNT)] = {
   #include <core/config/machines/dumper_truck/combus/combus_channels_remote_digital.inc>
   #include "combus_channels_local_digital.inc"
   #include "combus_channels_system_digital.inc"
-  #include <core/config/machines/dumper_truck/inputs/input_channels_digital.inc>
 };
 
 // --- Garde-fous compile-time : cohérence enum <-> tableau ---

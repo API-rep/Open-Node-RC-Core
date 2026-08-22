@@ -1,0 +1,102 @@
+# input.cb — Raw input acquisition channels (LOCAL, direction: none)
+#
+# Purpose:
+#   - Defines all raw acquisition channels (sticks + buttons) that input_update()
+#     writes each loop, before any INPUT/SIM processor conditions them.
+#   - These channels live in firmware ONLY — NEVER transmitted on the wire
+#     (direction: none). They are private to the acquisition layer.
+#   - They are the SOURCE side of the input mapping (PS4_dualshock_map.cpp)
+#     and the INPUT side of subsequent processors (THROTTLE_BUS, etc.).
+#
+# Scope: LOCAL
+#   - Per ChanLayer spec: "Local firmware caller + extension boards caller
+#     of same node". input_update() is the local firmware producer.
+#   - direction: none  → not on the wire (NOT uplink, NOT downlink).
+#
+# Wire format:
+#   - analog channels: uint16_t [0..65535], post map() from device raw domain.
+#   - digital channels: bool.
+#   - Device raw sources from PS4_dualshock.cpp descriptors
+#     (sticks: [-127,+127], triggers: [0,255]).
+#
+# Migration note (A9.9):
+#   - These channels were previously declared in
+#     src/machines/config/machines/volvo_A60H_bruder/combus/combus_ids_local_*.inc
+#     as LOCAL/REMOTE — both ill-named per ChanLayer spec (raw acquisition is
+#     intra-firmware, not on the wire).
+#   - They are now the canonical default for ANY dumper_truck instance
+#     (Cat 770, Bell B45, Komatsu HD785, ...).
+#   - The .cb file is the source of truth; the legacy .inc files below are
+#     the build-time hand-written mirror until the combus_builder is fully
+#     wired into platformio.ini.
+#
+# Runtime source chain:
+#   PS4 hardware → input_manager::inputAnalogValue[] (int16_t, raw)
+#                → input_update() map() → bus[CHANNEL].value (uint16_t)
+#                → INPUT processors (THROTTLE_BUS, etc.) or direct consumers
+#                → consumer (sim_brake, INPUT_SUBGEAR, etc.)
+
+channels:
+
+# -----------------------------------------------------------------------------
+# ANALOG — sticks (PS4 DualShock axis)
+# -----------------------------------------------------------------------------
+
+- id: THROTTLE_STICK
+  infoName: "Throttle stick (raw, LY)"
+  type: analog
+  theme: core
+  scope: LOCAL
+  direction: none
+- id: STEERING_STICK
+  infoName: "Steering stick (raw, LX)"
+  type: analog
+  theme: core
+  scope: LOCAL
+  direction: none
+- id: DUMP_STICK
+  infoName: "Dump stick (raw, RY)"
+  type: analog
+  theme: core
+  scope: LOCAL
+  direction: none
+# -----------------------------------------------------------------------------
+# DIGITAL — buttons (PS4 DigitalInputDevID)
+# -----------------------------------------------------------------------------
+
+- id: DIRECT_DRIVE_BTN
+  infoName: "Direct-drive toggle button (raw, OPTIONS)"
+  type: digital
+  theme: core
+  scope: LOCAL
+  direction: none
+- id: SUBGEAR_SET_BTN
+  infoName: "Sub-gear toggle button (raw, SHARE)"
+  type: digital
+  theme: core
+  scope: LOCAL
+  direction: none
+- id: GEAR_UP_BTN
+  infoName: "Gear up button (raw, UP_ARROW)"
+  type: digital
+  theme: core
+  scope: LOCAL
+  direction: none
+- id: GEAR_DOWN_BTN
+  infoName: "Gear down button (raw, DOWN_ARROW)"
+  type: digital
+  theme: core
+  scope: LOCAL
+  direction: none
+- id: CRUISE_TOGGLE_BTN
+  infoName: "Cruise toggle button (raw, SQUARE)"
+  type: digital
+  theme: core
+  scope: LOCAL
+  direction: none
+- id: CRUISE_UPDATE_BTN
+  infoName: "Cruise update button (raw, L3)"
+  type: digital
+  theme: core
+  scope: LOCAL
+  direction: none
