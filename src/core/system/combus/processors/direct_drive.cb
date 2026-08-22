@@ -1,0 +1,26 @@
+# direct_drive.cb — Direct-drive mode flag (REMOTE)
+#
+# - DIRECT_DRIVE: written by INPUT_DIRECT_DRIVE chain (toggle proc).
+#   Set to 1 when direct-drive mode is active (OPTIONS button toggled on).
+#   Read by SIM_THROTTLE, SIM_TRACTION, SIM_GEAR, SIM_STEERING, SIM_DUMP
+#   (bypass procs) to skip their ramp/conditioning and pass raw values
+#   directly to the actuators.
+#
+# Theme: mode / bypass.
+# TEMPORARY LOCATION: this file lives at the root of src/core/system/combus/processors
+# because DIRECT_DRIVE is a side-effect of the direct-drive input processor chain.
+# Final destination: a "package" that bundles processor + combus together
+# (created on-the-fly by the combus_builder).
+
+channels:
+
+# -----------------------------------------------------------------------------
+# DIGITAL — direct-drive mode flag
+# -----------------------------------------------------------------------------
+
+- id: DIRECT_DRIVE
+  infoName: "Direct-drive mode (1=raw passthrough, 0=normal sim)"
+  type: digital
+  theme: mode
+  scope: REMOTE
+  direction: none

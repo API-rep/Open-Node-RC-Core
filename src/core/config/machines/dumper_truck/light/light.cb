@@ -1,0 +1,50 @@
+# light.cb — Driver light / indicator / hazard channels (REMOTE)
+#
+# - LIGHTS: main lights toggle (head + tail).
+#   Written by input module (PS4 controller).
+#   Read by light module (kLedDescriptors[]).
+# - INDICATOR_LEFT / INDICATOR_RIGHT: turn signals.
+#   Written by input module.
+#   Read by light module (indicator channels).
+# - HAZARDS: hazard flashers (both indicators simultaneously).
+#   Written by input module.
+#   Read by light module.
+#
+# Theme: driver_inputs / signals.
+# Migration note: these channels were previously declared in
+# src/machines/config/machines/volvo_A60H_bruder/combus/combus_ids_*.inc
+# as REMOTE — now declared here at the TYPE level (generic to all dumper-trucks).
+
+channels:
+
+# -----------------------------------------------------------------------------
+# DIGITAL — lights + indicators + hazards
+# -----------------------------------------------------------------------------
+
+- id: LIGHTS
+  infoName: "Main lights toggle"
+  type: digital
+  theme: signals
+  scope: REMOTE
+  direction: downlink
+
+- id: INDICATOR_LEFT
+  infoName: "Left turn indicator"
+  type: digital
+  theme: signals
+  scope: REMOTE
+  direction: downlink
+
+- id: INDICATOR_RIGHT
+  infoName: "Right turn indicator"
+  type: digital
+  theme: signals
+  scope: REMOTE
+  direction: downlink
+
+- id: HAZARDS
+  infoName: "Hazard flashers"
+  type: digital
+  theme: signals
+  scope: REMOTE
+  direction: downlink

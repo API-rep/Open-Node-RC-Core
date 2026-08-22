@@ -1,0 +1,33 @@
+# key.cb — Engine key / runlevel channels (REMOTE)
+#
+# - KEY_BTN: physical key switch input (TRIANGLE on PS4 in dumper-truck layout).
+#   Written by input module (PS4 controller).
+#   Read by INPUT_KEY_RUNLEVEL chain (key_on + key_off + runlevel).
+# - KEY_ACTIVE: engine on/off flag (0 = off, 1 = on).
+#   Written by INPUT_KEY_RUNLEVEL chain.
+#   Read by main loop (RunLevel FSM, sleep timeout), dashboard.
+#
+# Theme: power / runlevel.
+# Migration note: these channels were previously declared in
+# src/machines/config/machines/volvo_A60H_bruder/combus/combus_ids_*.inc
+# as REMOTE — now declared here at the TYPE level (generic to all dumper-trucks).
+
+channels:
+
+# -----------------------------------------------------------------------------
+# DIGITAL — key switch + active flag
+# -----------------------------------------------------------------------------
+
+- id: KEY_BTN
+  infoName: "Engine key button (raw, TRIANGLE)"
+  type: digital
+  theme: power
+  scope: REMOTE
+  direction: downlink
+
+- id: KEY_ACTIVE
+  infoName: "Engine active flag (0=off, 1=on)"
+  type: digital
+  theme: power
+  scope: REMOTE
+  direction: none

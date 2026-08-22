@@ -1,0 +1,26 @@
+# esc_rpm_bus.cb — ESC RPM (engine RPM after gear ratio) (REMOTE)
+#
+# - ESC_RPM_BUS: written by SIM_GEAR chain (gear-inv-ratio + rpm-fade).
+#   Carries engine RPM (after gear ratio conversion from wheel_speed).
+#   Read by sound module (engine sound), dashboard (RPM gauge).
+#   Also read by SIM_TRACTION (before GEAR overwrites it with engine_rpm).
+#
+# Theme: traction / engine_rpm.
+# TEMPORARY LOCATION: this file lives at the root of src/core/system/combus/processors
+# because ESC_RPM_BUS is a side-effect of the gear processor chain.
+# Final destination: a "package" that bundles processor + combus together
+# (created on-the-fly by the combus_builder).
+
+channels:
+
+# -----------------------------------------------------------------------------
+# ANALOG — engine RPM (post gear ratio)
+# -----------------------------------------------------------------------------
+
+- id: ESC_RPM_BUS
+  infoName: "ESC engine RPM (post gear ratio, side-effect of gear chain)"
+  type: analog
+  value: 0
+  theme: traction
+  scope: REMOTE
+  direction: none

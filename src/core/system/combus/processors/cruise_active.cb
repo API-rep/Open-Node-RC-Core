@@ -1,0 +1,25 @@
+# cruise_active.cb — Cruise control active flag (REMOTE)
+#
+# - CRUISE_ACTIVE: written by INPUT_CRUISE_NORMAL chain (toggle proc).
+#   Set to 1 when normal cruise mode is active (□ button toggled on,
+#   and SUBGEAR_BUS == 0). Read by SIM_THROTTLE chain (cruise_sync proc)
+#   to sync the cruise state into the throttle chain.
+#
+# Theme: cruise / control.
+# TEMPORARY LOCATION: this file lives at the root of src/core/system/combus/processors
+# because CRUISE_ACTIVE is a side-effect of the cruise input processor chain.
+# Final destination: a "package" that bundles processor + combus together
+# (created on-the-fly by the combus_builder).
+
+channels:
+
+# -----------------------------------------------------------------------------
+# DIGITAL — cruise active flag
+# -----------------------------------------------------------------------------
+
+- id: CRUISE_ACTIVE
+  infoName: "Cruise control active (1=normal cruise on, 0=off)"
+  type: digital
+  theme: cruise
+  scope: REMOTE
+  direction: none
