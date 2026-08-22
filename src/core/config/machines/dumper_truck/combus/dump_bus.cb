@@ -7,6 +7,8 @@ channels:
 - id: DUMP_BUS
   infoName: "Dump"
   type: analog
+  value: CbusNeutral
   scope: REMOTE
   theme: core
   direction: [downlink]
+

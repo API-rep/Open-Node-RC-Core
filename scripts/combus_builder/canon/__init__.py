@@ -23,9 +23,13 @@ from typing import Any
 
 from .channels import (
     ALLOWED_FIELDS,
+    ANALOG_VALUE_MAX,
+    ANALOG_VALUE_MIN,
     DIRECTION_BY_SCOPE,
     DIRECTION_TOKENS,
     SCOPE_ORDER,
+    VALID_ANALOG_VALUES,
+    VALID_DIGITAL_VALUES,
     VALID_SCOPES,
     VALID_THEMES,
     VALID_TYPES,
@@ -33,6 +37,7 @@ from .channels import (
     ChannelDefinition,
     ChannelError,
     ChannelValidationError,
+    ChannelValueConflictError,
     canonize_channels,
     extract_channels_sections,
     merge_channels,
@@ -46,6 +51,10 @@ __all__ = [
     "VALID_TYPES",
     "VALID_SCOPES",
     "VALID_THEMES",
+    "VALID_ANALOG_VALUES",
+    "VALID_DIGITAL_VALUES",
+    "ANALOG_VALUE_MIN",
+    "ANALOG_VALUE_MAX",
     "SCOPE_ORDER",
     "DIRECTION_TOKENS",
     "DIRECTION_BY_SCOPE",
@@ -53,6 +62,7 @@ __all__ = [
     "ChannelError",
     "ChannelValidationError",
     "ChannelConflictError",
+    "ChannelValueConflictError",
     # Data
     "ChannelDefinition",
     # API

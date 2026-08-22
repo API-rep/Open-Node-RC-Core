@@ -1,4 +1,4 @@
-﻿# brake_bus.cb --- Brake pedal input (L2)
+# brake_bus.cb --- Brake pedal input (L2)
 # A9.8: REMOTE, analog, downlink.
 # 
 # - Written by the input module (PS4 controller, L2 trigger).
@@ -14,8 +14,9 @@ channels:
 - id: BRAKE_BUS
   infoName: "Brake pedal"
   type: analog
+value: 0
   scope: REMOTE
   theme: core
-  direction:
-    - downlink
+  direction: downlink
+
 

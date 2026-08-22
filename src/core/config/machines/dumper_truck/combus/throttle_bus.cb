@@ -8,6 +8,8 @@ channels:
 - id: THROTTLE_BUS
   infoName: "Throttle"
   type: analog
+  value: CbusNeutral
   scope: REMOTE
   theme: core
-  direction: [downlink]
+  direction: downlink
+

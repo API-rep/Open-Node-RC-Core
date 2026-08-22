@@ -40,5 +40,7 @@ channels:
     theme: failsafe
     direction:
       - both
+    value: high    # default to fault state: aggregator is HIGH (= true) until
+                   # any contributor clears it. Failsafe-by-default contract.
     requires:
       - HAS_FAILSAFE

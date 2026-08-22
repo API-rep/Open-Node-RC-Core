@@ -33,6 +33,8 @@ channels:
     theme: failsafe
     direction:
       - both
+    value: high    # default to fault state: contributor reports fault until
+                   # proven healthy. Failsafe-by-default contract.
     requires:
       - HAS_FAILSAFE
       - HAS_VBAT_FAILSAFE

@@ -540,7 +540,144 @@ def test_four_headers_compile_together(tmp_path):
             return
         # If we got a returncode != 0 with the first compiler and g++
         # is the fallback, break so the error message can be reported.
-        if compiler == "g++":
+    if compiler == "g++":
             assert False, f"compile failed: {r.stderr}"
     import pytest
     pytest.skip("No C++ compiler available for compile-check")
+
+
+# =============================================================================
+# A10 — Determinism on the REAL repo (end-to-end, bit-identical)
+# =============================================================================
+#
+# A10 of the Roadmap: "Validate determinism (2 runs -> identical contract)".
+# This test runs the FULL pipeline (parser -> canon -> select_views ->
+# generate -> generate_md5_artifacts) twice on the real .cb files in src/,
+# then asserts that:
+#   1. The 3 view hashes (combus_remote, combus_local, combus) are identical.
+#   2. The 4 emitted header files (combus_wire_common.h, combus_remote_md5.h,
+#      combus_local_md5.h, combus_md5.h) are BIT-IDENTICAL between the two
+#      runs (same bytes, not just same hash).
+#   3. The 3 view-specific C++ headers (combus_remote.h, combus_local.h,
+#      combus.h) are also bit-identical.
+#
+# This is the strongest possible determinism guarantee: not just "same hash"
+# but "same bytes on disk". If anything in the pipeline is non-deterministic
+# (timestamp, dict iteration order, file mtime, etc.), this test catches it.
+
+def _run_full_pipeline(out_dir: Path):
+    """Run the full combus_builder pipeline on the real repo, write to out_dir."""
+    from scripts.combus_builder.parser import discover_and_parse
+    from scripts.combus_builder.canon import canonize
+    from scripts.combus_builder.generator import generate, select_views
+
+    buildroot = REPO_ROOT / "src"
+    if not buildroot.exists():
+        import pytest
+        pytest.skip(f"src/ not found at {buildroot}")
+
+    _, files, parsed = discover_and_parse(project_root=buildroot.parent)
+    cb_files = [f for f in files if f.suffix == ".cb"]
+    if not cb_files:
+        import pytest
+        pytest.skip("no .cb files found in src/")
+
+    result = canonize(parsed)
+    sel = select_views(result.canonical_definitions)
+    # The real repo has channels with `requires: [HAS_FAILSAFE, HAS_VBAT_FAILSAFE]`.
+    # We must declare these flags in the BuildContext, otherwise generate() raises
+    # RequiresResolutionError. This mirrors what test_generator.py does.
+    ctx = _ctx(["HAS_FAILSAFE", "HAS_VBAT_FAILSAFE"])
+    # generate() takes the raw list of ChannelDefinitions, not the ViewSelection.
+    generate(result.canonical_definitions, ctx, out_dir)
+    return sel
+
+
+def test_a10_full_pipeline_deterministic_bit_identical(tmp_path: Path):
+    """A10: 2 runs of the full pipeline on the real repo produce bit-identical
+    headers (not just same hash)."""
+    out1 = tmp_path / "run1"
+    out2 = tmp_path / "run2"
+    out1.mkdir()
+    out2.mkdir()
+
+    sel1 = _run_full_pipeline(out1)
+    sel2 = _run_full_pipeline(out2)
+
+    # 1. Hashes must match.
+    # ViewSelection has attributes .remote, .local, .full (not combus_*).
+    for attr in ("remote", "local", "full"):
+        h1 = compute_view_hash(getattr(sel1, attr))
+        h2 = compute_view_hash(getattr(sel2, attr))
+        assert h1.md5_hex == h2.md5_hex, (
+            f"A10 FAIL: hash mismatch for {attr}: "
+            f"run1={h1.md5_hex} run2={h2.md5_hex}"
+        )
+
+    # 2. Emitted header files must be bit-identical.
+    expected_files = [
+        "combus_wire_common.h",
+        "combus_remote_md5.h",
+        "combus_local_md5.h",
+        "combus_md5.h",
+        "combus_remote.h",
+        "combus_local.h",
+        "combus.h",
+    ]
+    for fname in expected_files:
+        p1 = out1 / fname
+        p2 = out2 / fname
+        assert p1.exists(), f"A10 FAIL: {fname} missing in run1"
+        assert p2.exists(), f"A10 FAIL: {fname} missing in run2"
+        b1 = p1.read_bytes()
+        b2 = p2.read_bytes()
+        assert b1 == b2, (
+            f"A10 FAIL: {fname} differs between runs "
+            f"(run1={len(b1)} bytes, run2={len(b2)} bytes)"
+        )
+
+
+def test_a10_md5_deterministic_across_file_discovery_order(tmp_path: Path):
+    """A10: even if the OS returns .cb files in a different order, the
+    generated headers are bit-identical."""
+    from scripts.combus_builder.parser import discover_and_parse
+    from scripts.combus_builder.canon import canonize
+    from scripts.combus_builder.generator import generate, select_views
+
+    buildroot = REPO_ROOT / "src"
+    if not buildroot.exists():
+        import pytest
+        pytest.skip(f"src/ not found at {buildroot}")
+
+    out1 = tmp_path / "run1"
+    out2 = tmp_path / "run2"
+    out1.mkdir()
+    out2.mkdir()
+
+    # Run 1: normal order.
+    _, _, parsed1 = discover_and_parse(project_root=buildroot.parent)
+    result1 = canonize(parsed1)
+    sel1 = select_views(result1.canonical_definitions)
+    ctx = _ctx(["HAS_FAILSAFE", "HAS_VBAT_FAILSAFE"])
+    generate(result1.canonical_definitions, ctx, out1)
+
+    # Run 2: reverse the file order to stress the parser/canon.
+    _, files2, parsed2 = discover_and_parse(project_root=buildroot.parent)
+    parsed2_reversed = list(reversed(parsed2))
+    result2 = canonize(parsed2_reversed)
+    sel2 = select_views(result2.canonical_definitions)
+    generate(result2.canonical_definitions, ctx, out2)
+
+    # All 7 emitted files must be bit-identical.
+    for fname in (
+        "combus_wire_common.h",
+        "combus_remote_md5.h",
+        "combus_local_md5.h",
+        "combus_md5.h",
+        "combus_remote.h",
+        "combus_local.h",
+        "combus.h",
+    ):
+        b1 = (out1 / fname).read_bytes()
+        b2 = (out2 / fname).read_bytes()
+        assert b1 == b2, f"A10 FAIL: {fname} differs across file-order runs"

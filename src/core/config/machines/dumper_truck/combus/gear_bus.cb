@@ -10,7 +10,8 @@ channels:
 - id: GEAR_BUS
   infoName: "Active gear"
   type: analog
+  value: 1
   scope: REMOTE
   theme: core
-  direction:
-    - downlink
+  direction: downlink
+

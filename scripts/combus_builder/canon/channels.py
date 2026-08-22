@@ -56,7 +56,26 @@ ALLOWED_FIELDS: frozenset[str] = frozenset({
     "theme",
     "direction",
     "requires",
+    "value",
 })
+
+# Tokens acceptés pour `value` sur un channel analog.
+# Mapping vers littéraux C++ uint16_t (cf. src/core/system/combus/combus_res.h).
+VALID_ANALOG_VALUES: frozenset[str] = frozenset({
+    "CbusMinVal",
+    "CbusNeutral",
+    "CbusMaxVal",
+})
+
+# Tokens acceptés pour `value` sur un channel digital.
+VALID_DIGITAL_VALUES: frozenset[str] = frozenset({
+    "low",
+    "high",
+})
+
+# Bornes pour les valeurs analog numériques brutes (entier accepté dans [0..65535]).
+ANALOG_VALUE_MIN: int = 0
+ANALOG_VALUE_MAX: int = 65535
 
 # Types autorisés.
 VALID_TYPES: frozenset[str] = frozenset({"analog", "digital"})
@@ -140,6 +159,14 @@ class ChannelDefinition:
     (ou vide pour `none`/SYSTEM). Les tokens de surface `both` et
     `none` sont normalisés à la validation et n'apparaissent jamais
     dans cette représentation.
+
+    `value` est `None` si le champ est absent du YAML ; sinon :
+      - analog : l'un des tokens `CbusMinVal` / `CbusNeutral` / `CbusMaxVal`
+                 OU un entier `[ANALOG_VALUE_MIN..ANALOG_VALUE_MAX]`.
+      - digital : l'un des tokens `low` / `high`.
+    La forme canonique est conservée telle quelle (pas de conversion
+    implicite) afin que le générateur C++ puisse décider du littéral
+    exact à émettre.
     """
 
     id: str
@@ -151,6 +178,7 @@ class ChannelDefinition:
     requires: frozenset[str]
     source_path: Path
     raw: dict[str, Any] = field(default_factory=dict)
+    value: str | int | None = None
 
     def sort_key(self) -> tuple[int, str, str, str]:
         """Clé de tri canonique : (scope, type, theme, id)."""
@@ -349,6 +377,127 @@ def _validate_requires(
 
 
 # =============================================================================
+# VALIDATION : value
+# =============================================================================
+
+def _validate_value(
+    path: Path,
+    channel_id: str | None,
+    type_: str,
+    raw_val: Any,
+) -> str | int | None:
+    """
+    Valide et normalise `value` selon le `type` du channel.
+
+    Règles :
+      - Champ absent (`raw_val is None`) → None (= défaut générateur).
+      - `value: null` explicite → erreur (canonique : null ≠ valeur absente).
+      - analog :
+          * Token ∈ {"CbusMinVal", "CbusNeutral", "CbusMaxVal"} → str tel quel.
+          * Entier dans [ANALOG_VALUE_MIN..ANALOG_VALUE_MAX] → int tel quel.
+          * Tout autre type ou valeur hors bornes → erreur.
+      - digital :
+          * Token ∈ {"low", "high"} → str tel quel.
+          * Toute autre valeur → erreur.
+      - Cross-type strict :
+          * low/high sur analog → erreur.
+          * CbusMinVal/Neutral/MaxVal sur digital → erreur.
+          * entier sur digital → erreur.
+
+    Retourne :
+      - None si absent.
+      - str (token) ou int (entier brut) si présent et valide.
+    """
+    # Cas absent : champ non présent dans le YAML.
+    if raw_val is None:
+        # Distinction absent / null :
+        # PyYAML retourne None pour `key: null` ET pour clé absente.
+        # On ne peut PAS distinguer les deux ici sans contexte.
+        # La distinction est faite par validate_channel() qui vérifie
+        # explicitement `raw_val is None AND "value" in raw` via
+        # ChannelValidationError séparé. Voir validate_channel().
+        return None
+
+    # analog
+    if type_ == "analog":
+        if isinstance(raw_val, str):
+            if raw_val in VALID_ANALOG_VALUES:
+                return raw_val
+            raise ChannelValidationError(
+                path, channel_id,
+                f"`value` for analog must be one of "
+                f"{sorted(VALID_ANALOG_VALUES)} or an integer in "
+                f"[{ANALOG_VALUE_MIN}..{ANALOG_VALUE_MAX}]; "
+                f"got unknown token {raw_val!r}",
+            )
+        if isinstance(raw_val, bool):
+            # bool est sous-classe de int en Python : on l'exclut explicitement.
+            raise ChannelValidationError(
+                path, channel_id,
+                f"`value` for analog must be a token or an integer, "
+                f"got boolean {raw_val!r}",
+            )
+        if isinstance(raw_val, int):
+            if ANALOG_VALUE_MIN <= raw_val <= ANALOG_VALUE_MAX:
+                return raw_val
+            raise ChannelValidationError(
+                path, channel_id,
+                f"`value` for analog must be in [{ANALOG_VALUE_MIN}.."
+                f"{ANALOG_VALUE_MAX}] (uint16_t range), got {raw_val!r}",
+            )
+        # Autres types YAML : float, list, dict, etc.
+        raise ChannelValidationError(
+            path, channel_id,
+            f"`value` for analog must be a string token or an integer, "
+            f"got {type(raw_val).__name__} ({raw_val!r})",
+        )
+
+    # digital
+    if type_ == "digital":
+        if isinstance(raw_val, str):
+            if raw_val in VALID_DIGITAL_VALUES:
+                return raw_val
+            raise ChannelValidationError(
+                path, channel_id,
+                f"`value` for digital must be one of "
+                f"{sorted(VALID_DIGITAL_VALUES)}; "
+                f"got unknown token {raw_val!r}",
+            )
+        raise ChannelValidationError(
+            path, channel_id,
+            f"`value` for digital must be a string token ('low' or 'high'), "
+            f"got {type(raw_val).__name__} ({raw_val!r})",
+        )
+
+    # type inconnu (ne devrait pas arriver : validate_channel filtre avant).
+    raise ChannelValidationError(
+        path, channel_id,
+        f"`value` validation called with unknown `type`={type_!r}",
+    )
+
+
+def _check_value_explicit_null(
+    path: Path,
+    channel_id: str | None,
+    raw: dict[str, Any],
+) -> None:
+    """
+    Rejette explicitement `value: null` (≠ champ absent).
+
+    PyYAML retourne None à la fois pour clé absente et pour clé=None.
+    On distingue les deux cas ici : si "value" est dans le mapping ET
+    que raw["value"] est None, c'est une erreur explicite.
+    """
+    if "value" in raw and raw["value"] is None:
+        raise ChannelValidationError(
+            path, channel_id,
+            "`value` is explicitly null; expected a token (e.g. "
+            "'CbusNeutral', 'low') or an integer for analog. "
+            "Omit the field to use the generator default.",
+        )
+
+
+# =============================================================================
 # VALIDATION : un channel complet
 # =============================================================================
 
@@ -451,6 +600,12 @@ def validate_channel(
     # --- requires ---
     requires = _validate_requires(path, cid, raw.get("requires"))
 
+    # --- value (optionnel) ---
+    # Distinction explicite absent / null AVANT _validate_value (qui retourne
+    # None pour les deux cas).
+    _check_value_explicit_null(path, cid, raw)
+    value = _validate_value(path, cid, ctype, raw.get("value"))
+
     return ChannelDefinition(
         id=cid,
         info_name=info_name,
@@ -461,6 +616,7 @@ def validate_channel(
         requires=requires,
         source_path=path,
         raw=dict(raw),
+        value=value,
     )
 
 
@@ -516,6 +672,26 @@ def extract_channels_sections(
 # FUSION + CONFLITS
 # =============================================================================
 
+class ChannelValueConflictError(ChannelError):
+    """Deux définitions d'un même channel portent des `value` incompatibles."""
+
+    def __init__(self, channel_id: str, first_path: Path, second_path: Path,
+                 first_value: Any, second_value: Any):
+        self.channel_id = channel_id
+        self.first_path = first_path
+        self.second_path = second_path
+        self.first_value = first_value
+        self.second_value = second_value
+        super().__init__(
+            f"channel id {channel_id!r} is defined in two files with "
+            f"incompatible `value`:\n"
+            f"  - {first_path}: value={first_value!r}\n"
+            f"  - {second_path}: value={second_value!r}\n"
+            f"`value` must match across definitions of the same channel id. "
+            f"Resolve the conflict before continuing."
+        )
+
+
 def merge_channels(
     sections: list[tuple[Path, list[Any]]],
 ) -> list[ChannelDefinition]:
@@ -523,7 +699,15 @@ def merge_channels(
     Valide chaque channel, détecte les conflits d'ID, retourne la liste
     fusionnée (non triée).
 
-    Lève ChannelValidationError ou ChannelConflictError.
+    Lève ChannelValidationError, ChannelConflictError ou
+    ChannelValueConflictError.
+
+    Note :
+      - Un même id avec des `value` différents est une erreur explicite
+        (pas de fusion silencieuse).
+      - Si l'un des deux `value` est None (= défaut générateur), l'autre
+        gagne ; la présence explicite de `value` reste cohérente avec
+        "même id = même contrat".
     """
     by_id: dict[str, ChannelDefinition] = {}
     for path, section in sections:
@@ -531,6 +715,14 @@ def merge_channels(
             ch = validate_channel(path, raw, idx)
             if ch.id in by_id:
                 existing = by_id[ch.id]
+                if existing.value != ch.value:
+                    raise ChannelValueConflictError(
+                        channel_id=ch.id,
+                        first_path=existing.source_path,
+                        second_path=ch.source_path,
+                        first_value=existing.value,
+                        second_value=ch.value,
+                    )
                 raise ChannelConflictError(
                     channel_id=ch.id,
                     first_path=existing.source_path,

@@ -8,7 +8,8 @@ channels:
 - id: ESC_SPEED_BUS
   infoName: "ESC speed"
   type: analog
+  value: CbusNeutral
   scope: REMOTE
   theme: core
-  direction:
-    - none
+  direction: none
+

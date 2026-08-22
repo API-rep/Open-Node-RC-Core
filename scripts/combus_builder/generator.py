@@ -344,14 +344,82 @@ def _escape_cpp_string(s: str) -> str:
 def _default_value_for_type(type_: str) -> str:
     """
     Return the C++ literal for the default `value` of a freshly-generated
-    channel (matches the runtime convention used in the legacy .inc files).
+    channel WHEN THE YAML CHANNEL DEFINES NO `value:` (matches the
+    runtime convention used in the legacy .inc files).
 
     Analog defaults to CbusNeutral (neutral 16-bit value). Digital defaults
     to false. The runtime may override these at boot via combus_set_*().
+
+    Note : when the YAML declares an explicit `value`, the canonical
+    representation in ChannelDefinition.value is used instead — see
+    `_render_value`.
     """
     if type_ == "analog":
         return "CbusNeutral"
     return "false"
+
+
+# Mapping canon → littéral C++ pour les tokens `value:` acceptés.
+# Les tokens sont émis tels quels (ce sont déjà des symboles C++ valides
+# ou des littéraux booléens).
+_VALUE_TOKEN_TO_CPP: dict[str, str] = {
+    # analog
+    "CbusMinVal":  "CbusMinVal",
+    "CbusNeutral": "CbusNeutral",
+    "CbusMaxVal":  "CbusMaxVal",
+    # digital
+    "low":  "false",
+    "high": "true",
+}
+
+
+def _render_value(ch: ChannelDefinition, type_: str) -> str:
+    """
+    Return the C++ literal for the `value` field of a freshly-generated
+    channel.
+
+    Resolution order :
+      1. If `ch.value is None` (YAML absent) → use the generator default
+         (analog: CbusNeutral, digital: false). Behaviour preserved from
+         pre-A5.x to keep legacy parity.
+      2. If `ch.value` is a string token (e.g. 'CbusNeutral', 'high') →
+         emit the mapped C++ literal (see _VALUE_TOKEN_TO_CPP).
+      3. If `ch.value` is an int (analog only) → emit `<n>u` (uint16_t).
+
+    Any other shape is a programming error : _validate_value in
+    canon/channels.py rejects anything else at the canonisation layer.
+    """
+    if ch.value is None:
+        return _default_value_for_type(type_)
+
+    # Token (str)
+    if isinstance(ch.value, str):
+        try:
+            return _VALUE_TOKEN_TO_CPP[ch.value]
+        except KeyError as e:
+            # Should be unreachable : _validate_value rejects unknown tokens.
+            raise GeneratorError(
+                f"unknown value token {ch.value!r} for channel "
+                f"{ch.id!r} (type={type_}); this is a bug — "
+                f"canon/channels.py should have rejected it."
+            ) from e
+
+    # Integer (analog only, validated by _validate_value)
+    if isinstance(ch.value, int) and not isinstance(ch.value, bool):
+        if type_ != "analog":
+            # Should be unreachable : _validate_value rejects int on digital.
+            raise GeneratorError(
+                f"integer value {ch.value!r} for digital channel "
+                f"{ch.id!r}; this is a bug — canon/channels.py should "
+                f"have rejected it."
+            )
+        return f"{ch.value}u"
+
+    # Should be unreachable.
+    raise GeneratorError(
+        f"unsupported canonical value {ch.value!r} (type={type(ch.value).__name__}) "
+        f"for channel {ch.id!r}; this is a bug in the canon<->generator contract."
+    )
 
 
 def _render_ids_header(view: View, ctx: BuildContext) -> str:
@@ -536,16 +604,22 @@ def _emit_channel_init(body: list[str], vc: ViewChannel, type_: str) -> None:
 
         { .infoName = "...", .value = ..., .layer = ChanLayer::X, .direction = Direction::Y },
 
+    The `.value` field is rendered from the canonical channel value
+    (see _render_value). It honours the YAML `value:` contract :
+      - analog : CbusMinVal / CbusNeutral / CbusMaxVal / `<n>u`
+      - digital : false / true
+    Falls back to the generator default when `value:` is absent.
+
     The `.layer` field comes from the channel's scope (REMOTE/LOCAL/SYSTEM).
     The `.direction` field is the bitmask from Direction.from_frozenset.
     """
     escaped_info = _escape_cpp_string(vc.ch.info_name)
     layer = _SCOPE_TO_CHANLAYER[vc.ch.scope]
     dir_name = Direction.to_cpp_enum_name(vc.direction_bits)
-    default_value = _default_value_for_type(type_)
+    value_literal = _render_value(vc.ch, type_)
     body.append(
         f"    {{ .infoName = \"{escaped_info}\", "
-        f".value = {default_value}, "
+        f".value = {value_literal}, "
         f".layer = {layer}, "
         f".direction = {dir_name} }}, // {vc.ch.id}"
     )
