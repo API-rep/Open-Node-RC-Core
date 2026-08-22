@@ -59,7 +59,12 @@ from pathlib import Path
 Import("env")  # noqa: F821 — SCons inject
 
 # Make `scripts.combus_builder.*` importable from the repo root.
-_REPO_ROOT = Path(__file__).resolve().parent.parent
+#
+# NOTE: `__file__` is NOT guaranteed to be defined when SCons loads this
+# script via SConscript() (it is in some SCons versions, missing in others).
+# We use `env["PROJECT_DIR"]` instead, which PlatformIO always injects and
+# which points to the repo root (the directory containing platformio.ini).
+_REPO_ROOT = Path(env["PROJECT_DIR"]).resolve()
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
