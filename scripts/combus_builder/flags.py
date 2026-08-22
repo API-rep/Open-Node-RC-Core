@@ -80,6 +80,7 @@ import os
 import re
 import subprocess
 import sys
+from collections import OrderedDict, deque
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Any, Iterable
@@ -214,10 +215,18 @@ def _extract_from_env_cppdefines(env: Any) -> tuple[set[str], dict[str, str]]:
         return defines, values
 
     # Normalise to a list of (name, value_or_none).
+    #
+    # Accepted container types:
+    #   - dict / OrderedDict          (key -> value mapping)
+    #   - list / tuple / deque        (ordered sequence of entries)
+    #
+    # PlatformIO 6.x injects CPPDEFINES as a `collections.deque`
+    # (to preserve order across `extends` resolution); older PIO
+    # versions used plain `list`. Both must work.
     items: list[tuple[str, str | None]]
-    if isinstance(raw, dict):
+    if isinstance(raw, (dict, OrderedDict)):
         items = [(str(k), v if v is not None else None) for k, v in raw.items()]
-    elif isinstance(raw, (list, tuple)):
+    elif isinstance(raw, (list, tuple, deque)):
         items = []
         for idx, entry in enumerate(raw):
             if isinstance(entry, str):
