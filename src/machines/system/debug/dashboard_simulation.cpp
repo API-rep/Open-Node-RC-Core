@@ -43,8 +43,6 @@ static const char* aCh(AnalogComBusID id)
 		case AnalogComBusID::DRIVE_STATE_BUS:      return "DRV_ST";
 		case AnalogComBusID::BRAKE_BUS:            return "BRAKE";
 		case AnalogComBusID::SUBGEAR_BUS:          return "SUBGEAR";
-		case AnalogComBusID::DUMP_BUS:      return "DUMP_R";
-		case AnalogComBusID::STEERING_BUS:  return "STEER_R";
 		case AnalogComBusID::THROTTLE_STICK:       return "THR_STK";
 		case AnalogComBusID::THROTTLE_BUS:         return "THROTTLE";
 		default:                                    return "?";
