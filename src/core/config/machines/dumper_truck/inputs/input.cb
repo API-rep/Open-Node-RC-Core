@@ -48,12 +48,14 @@ channels:
   theme: core
   scope: LOCAL
   direction: none
+  
 - id: STEERING_STICK
   infoName: "Steering stick (raw, LX)"
   type: analog
   theme: core
   scope: LOCAL
   direction: none
+
 - id: DUMP_STICK
   infoName: "Dump stick (raw, RY)"
   type: analog
@@ -70,32 +72,44 @@ channels:
   theme: core
   scope: LOCAL
   direction: none
+
 - id: SUBGEAR_SET_BTN
   infoName: "Sub-gear toggle button (raw, SHARE)"
   type: digital
   theme: core
   scope: LOCAL
   direction: none
+
 - id: GEAR_UP_BTN
   infoName: "Gear up button (raw, UP_ARROW)"
   type: digital
   theme: core
   scope: LOCAL
   direction: none
+
 - id: GEAR_DOWN_BTN
   infoName: "Gear down button (raw, DOWN_ARROW)"
   type: digital
   theme: core
   scope: LOCAL
   direction: none
+
 - id: CRUISE_TOGGLE_BTN
   infoName: "Cruise toggle button (raw, SQUARE)"
   type: digital
   theme: core
   scope: LOCAL
   direction: none
+
 - id: CRUISE_UPDATE_BTN
   infoName: "Cruise update button (raw, L3)"
+  type: digital
+  theme: core
+  scope: LOCAL
+  direction: none
+
+- id: HORN_BTN
+  infoName: "Horn button (raw, CIRCLE)"
   type: digital
   theme: core
   scope: LOCAL
