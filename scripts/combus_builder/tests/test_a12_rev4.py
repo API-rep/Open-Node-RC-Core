@@ -28,8 +28,51 @@ _HELPER_SRC = r'''import os, sys
 sys.path.insert(0, '.')
 
 src_hook = open('scripts/combus_scons_hook.py', 'r', encoding='utf-8').read()
-src_hook = '\n'.join(l for l in src_hook.splitlines()
-                if 'Import("env")' not in l and l.strip() != 'main(env)')
+# Strip SCons-specific lines that the helper mocks via Import() / main(env):
+#   - Import("env")     : injected as `env` global
+#   - The try/except block for Import("projenv"): the helper has no
+#     projenv, so we strip the whole block and inject `projenv = None`
+#     directly into the exec namespace below. The block to strip is:
+#         try:
+#             Import("projenv")  # noqa: ...
+#         except Exception:  # pragma: no cover ...
+#             projenv = None  # type: ignore[assignment]
+#   - main(env)         : called explicitly below
+src_hook_lines = []
+i = 0
+src_lines = src_hook.splitlines()
+while i < len(src_lines):
+    line = src_lines[i]
+    if 'Import("env")' in line:
+        i += 1
+        continue
+    if line.strip() == 'try:':
+        # Look ahead: is this the projenv try/except block?
+        is_projenv_block = False
+        if i + 1 < len(src_lines) and 'Import("projenv")' in src_lines[i + 1]:
+            is_projenv_block = True
+        if is_projenv_block:
+            # Skip the try, Import("projenv"), except, projenv = None lines.
+            i += 1
+            while i < len(src_lines):
+                stripped = src_lines[i].strip()
+                if stripped.startswith('except '):
+                    i += 1
+                    continue
+                if stripped.startswith('projenv = None'):
+                    i += 1
+                    # Skip trailing blank/comment line if any.
+                    if i < len(src_lines) and not src_lines[i].strip():
+                        i += 1
+                    break
+                i += 1
+            continue
+    if line.strip() == 'main(env)':
+        i += 1
+        continue
+    src_hook_lines.append(line)
+    i += 1
+src_hook = '\n'.join(src_hook_lines)
 
 class FakeEnv(dict):
     def get(self, k, d=None):
@@ -58,6 +101,10 @@ ns = globals()
 ns['__file__'] = 'scripts/combus_scons_hook.py'
 ns['Import'] = lambda n: env
 ns['env'] = env
+# The hook's try/except block for Import("projenv") was stripped above
+# (helper has no projenv). Inject `projenv = None` directly so the
+# hook's main() can call _add_to_cpppath(projenv, ...) safely.
+ns['projenv'] = None
 exec(compile(src_hook, 'scripts/combus_scons_hook.py', 'exec'), ns)
 main(env)
 '''
