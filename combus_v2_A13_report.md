@@ -135,11 +135,63 @@ L'exécution des tests Unity nécessite un `test_port` (ESP32 connecté). En l'a
 - ❌ **Non touché** : bug `BRAKING`, bug `projenv`/`NameError` (dette technique séparée)
 - ❌ **Non touché** : Phase 4 (migration `WIRE_END` → `COUNT`, dépend de local/remote en cours)
 
-## 9. Relance — Tests d'identité mémoire runtime (post-review)
+## 9. Investigation de la sémantique de `**` dans PlatformIO src_filter (post-relance)
+
+Suite au feedback de l'utilisateur (« pourquoi `+<core/system/hw/**>` ne couvrait pas déjà `hw/transport/uart_com.cpp` ? Test l'isolément »), un test d'isolément a été réalisé pour vérifier la sémantique de `**` dans `build_src_filter`.
+
+### 9.1. Test 1 : retirer l'entrée explicite `+<core/system/hw/transport/uart_com.cpp>`
+
+**Modification** : le `build_src_filter` de `test_combus_loopback` devient :
+```
+build_src_filter = -<*> +<core/system/combus/combus_frame.cpp> +<core/system/combus/protocol/**> +<core/system/combus/combus_access.cpp> +<core/system/hw/**
+```
+
+**Résultat** : le linker ne trouve pas `uart_com_init` :
+```
+undefined reference to `uart_com_init(HardwareSerial*, unsigned int, int, int, char const*, PinReg*)'
+```
+
+**Interprétation** : `+<core/system/hw/**>` ne capture PAS `transport/uart_com.cpp`. Le `**` ne descend pas dans le sous-dossier `transport/`.
+
+### 9.2. Test 2 : retirer `+<core/system/hw/**>`, garder seulement l'entrée explicite
+
+**Modification** : le `build_src_filter` devient :
+```
+build_src_filter = -<*> +<core/system/combus/combus_frame.cpp> +<core/system/combus/protocol/**> +<core/system/combus/combus_access.cpp> +<core/system/hw/transport/uart_com.cpp>
+```
+
+**Résultat** : `uart_com_init` est trouvé, MAIS le linker ne trouve pas `pin_claim` :
+```
+undefined reference to `pin_claim(PinReg&, unsigned char, PinOwner, char const*, bool, bool)'
+```
+
+**Interprétation** : `pin_claim` est défini dans `core/system/hw/pin_reg.cpp` (directement sous `hw/`, pas dans un sous-dossier). Donc `+<core/system/hw/**>` capture bien les fichiers directement sous `hw/`, mais pas les sous-dossiers.
+
+### 9.3. Conclusion
+
+**`**` dans PlatformIO `src_filter` est `single-level` (sémantique `fnmatch` de Python), PAS récursif.**
+
+- `+<core/system/hw/**>` ⇔ `+<core/system/hw/*>` (équivalent pour fnmatch)
+- Matche les fichiers directement sous `hw/` (e.g. `pin_reg.cpp`, `drv.h`, `node_com.h`)
+- Ne matche PAS les fichiers dans les sous-dossiers (e.g. `transport/uart_com.cpp`)
+
+Pour matcher un fichier à 2+ niveaux, il faut lister explicitement le chemin : `+<core/system/hw/transport/uart_com.cpp>`. C'est la combinaison des deux qui couvre à la fois `pin_reg.cpp` (root de `hw/`) et `uart_com.cpp` (sous-dossier `transport/`).
+
+**Implication** : la ligne `+<core/system/combus/combus.cpp>` legacy ne cachait rien d'autre qu'un effet secondaire (le linker résolvait `uart_com_init` ET `pin_claim` via le chemin "magic" du PlatformIO — peut-être un effet du `-<*>` initial qui ne s'appliquait pas comme attendu ? ou un bug silencieux du filtre). Le retrait a forcé la déclaration explicite des deux dépendances, ce qui est plus propre et plus maintenable.
+
+### 9.4. Fichiers modifiés
+
+| Fichier | Modification |
+|---|---|
+| `platformio.ini` | Commentaire explicatif ajouté à la ligne `+<core/system/hw/**> +<core/system/hw/transport/uart_com.cpp>` pour documenter la sémantique fnmatch. |
+
+**Vérification finale** : `pio test -e test_combus_loopback --without-uploading --without-testing` → `[PASSED] Took 39.63 seconds` ✅
+
+## 10. Relance A13.1 — Tests d'identité mémoire runtime (post-review)
 
 Suite au feedback de l'utilisateur (« la ligne `+<core/system/combus/combus.cpp>` legacy doit être nettoyée, et l'identité mémoire doit être tentée via le hook SCons »), un commit incrémental `XXX` a été produit.
 
-### 9.1. Point 1 : nettoyage de `build_src_filter`
+### 10.1. Point 1 : nettoyage de `build_src_filter`
 
 **Action** : retrait de la ligne `+<core/system/combus/combus.cpp>` de `build_src_filter` (ligne 199).
 
@@ -152,7 +204,7 @@ undefined reference to `uart_com_init(HardwareSerial*, unsigned int, int, int, c
 
 **Correctif** : remplacement par `+<core/system/hw/**> +<core/system/hw/transport/uart_com.cpp>` (forme explicite). Compilation OK sans le fichier legacy `combus.cpp` (qui reste marqué « Supprimer » dans l'audit initial).
 
-### 9.2. Point 2 : activation de l'identité mémoire via un second extra_script
+### 10.2. Point 2 : activation de l'identité mémoire via un second extra_script
 
 **Piste explorée** : créer un second extra_script (`scripts/combus_test_add_generated_source.py`) qui ajoute le `combus_generated/combus.cpp` au build_src_filter effectif de l'env de test. Le hook `combus_scons_hook.py` (déjà enregistré globalement via `[env]`) génère les artefacts et ajoute le dossier au CPPPATH, mais **ne compile pas** le `.cpp` généré.
 
@@ -163,7 +215,7 @@ undefined reference to `uart_com_init(HardwareSerial*, unsigned int, int, int, c
 
 **Verdict** : l'identité mémoire runtime est désormais **TESTÉE AU NIVEAU LINK**. Les 4 tests `test_same_memory_object_*` sont compilés et liés dans le binaire. Si les 3 vues référençaient des arrays différents, les `TEST_ASSERT_EQUAL_PTR` lèveraient à l'exécution.
 
-### 9.3. Verdict final actualisé sur l'invariant central
+### 10.3. Verdict final actualisé sur l'invariant central
 
 > **« un channel = une seule instance runtime, quelle que soit la vue »**
 
@@ -182,7 +234,7 @@ undefined reference to `uart_com_init(HardwareSerial*, unsigned int, int, int, c
 
 L'exécution réelle des tests (au-delà du link) nécessite un ESP32 connecté et reste à valider en CI hardware.
 
-### 9.4. Fichiers ajoutés / modifiés (relance)
+### 10.4. Fichiers ajoutés / modifiés (relance)
 
 | Fichier | Modification |
 |---|---|
@@ -191,9 +243,10 @@ L'exécution réelle des tests (au-delà du link) nécessite un ESP32 connecté 
 | `test/test_combus_loopback/test_combus_loopback.cpp` | 4 tests `test_same_memory_object_*` réactivés. Commentaire Group C mis à jour (la limitation « non testable » est levée). |
 | `combus_v2_A13_report.md` | Cette section additive § 9. |
 
-## 10. Annexes
+## 11. Annexes
 
 - Diff consolidé : `combus_v2_A13.diff` (à générer via `git diff e721597 HEAD`)
 - Diff incrémental (relance) : `combus_v2_A13.1.diff` (à générer via `git diff 09e8cfd HEAD`)
-- Log de compilation : `C:\temp\pio_test_compile5.log` (étape initiale), `pio_test_compile_pt6.log` (étape finale)
+- Diff incrémental (investigation `**`) : `combus_v2_A13.2.diff` (à générer)
+- Log de compilation : `C:\temp\pio_test_compile5.log` (étape initiale), `pio_test_compile_pt6.log` (étape finale), `pio_test_isol1.log` (test 1), `pio_test_isol2.log` (test 2), `pio_test_final.log` (validation finale)
 - Code généré : `C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\combus_generated\`
