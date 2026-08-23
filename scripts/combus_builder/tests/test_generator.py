@@ -694,6 +694,97 @@ def test_render_ids_header_basic():
     assert "CombusWireEnd" in out
 
 
+# =============================================================================
+# Phase 1 A.11 — per-bus wire-end divergence (regression guard)
+# =============================================================================
+
+def test_wire_end_analog_and_digital_can_diverge():
+    """Phase 1 A.11 regression guard: a config with 5 REMOTE analog and
+    3 REMOTE digital channels must yield wire_end_analog=5 and
+    wire_end_digital=3, with the two values explicitly distinct.
+
+    This is the exact bug that caf2353 silently introduced: collapsing
+    both per-bus counts into a single ComBusWireEnd (= total REMOTE).
+    Without this test, a future refactor that refuses the two counters
+    would not be caught.
+    """
+    chs = _canon_from_yamls({
+        "channels": [
+            _ch("A1", type_="analog", scope="REMOTE", direction="uplink"),
+            _ch("A2", type_="analog", scope="REMOTE", direction="uplink"),
+            _ch("A3", type_="analog", scope="REMOTE", direction="uplink"),
+            _ch("A4", type_="analog", scope="REMOTE", direction="uplink"),
+            _ch("A5", type_="analog", scope="REMOTE", direction="uplink"),
+            _ch("D1", type_="digital", scope="REMOTE", direction="uplink"),
+            _ch("D2", type_="digital", scope="REMOTE", direction="uplink"),
+            _ch("D3", type_="digital", scope="REMOTE", direction="uplink"),
+            _ch("L1", type_="analog", scope="LOCAL", direction="uplink"),  # not REMOTE — must not be counted
+        ]
+    })
+    view = _build_view_with_channels(chs)
+    assert view.wire_end_analog == 5
+    assert view.wire_end_digital == 3
+    # Explicit non-regression assertion: the two values MUST differ.
+    assert view.wire_end_analog != view.wire_end_digital
+    # And the total wire_end must equal the sum of the two per-bus counts.
+    assert view.wire_end == view.wire_end_analog + view.wire_end_digital == 8
+
+
+def test_wire_end_analog_and_digital_equal_when_counts_match():
+    """Sanity check: when REMOTE analog and REMOTE digital counts are
+    equal, the per-bus constants are equal too (and equal to wire_end/2).
+    This is the volvo_A60H_bruder case (9 + 9 = 18)."""
+    chs = _canon_from_yamls({
+        "channels": [
+            _ch(f"A{i}", type_="analog", scope="REMOTE", direction="uplink") for i in range(1, 4)
+        ] + [
+            _ch(f"D{i}", type_="digital", scope="REMOTE", direction="uplink") for i in range(1, 4)
+        ]
+    })
+    view = _build_view_with_channels(chs)
+    assert view.wire_end_analog == 3
+    assert view.wire_end_digital == 3
+    assert view.wire_end_analog == view.wire_end_digital
+    assert view.wire_end == 6
+
+
+def test_render_ids_header_emits_distinct_per_bus_values():
+    """Phase 1 A.11 regression guard: the generated combus_ids.h must
+    contain ComBusWireEndAnalog and ComBusWireEndDigital with the
+    correct numeric values (not just the line names)."""
+    chs = _canon_from_yamls({
+        "channels": [
+            _ch("A1", type_="analog", scope="REMOTE", direction="uplink"),
+            _ch("A2", type_="analog", scope="REMOTE", direction="uplink"),
+            _ch("A3", type_="analog", scope="REMOTE", direction="uplink"),
+            _ch("A4", type_="analog", scope="REMOTE", direction="uplink"),
+            _ch("A5", type_="analog", scope="REMOTE", direction="uplink"),
+            _ch("D1", type_="digital", scope="REMOTE", direction="uplink"),
+            _ch("D2", type_="digital", scope="REMOTE", direction="uplink"),
+            _ch("D3", type_="digital", scope="REMOTE", direction="uplink"),
+        ]
+    })
+    view = _build_view_with_channels(chs)
+    out = _render_ids_header(view, _ctx([]))
+    # The two per-bus constants must be present with the right values.
+    assert "ComBusWireEndAnalog   = 5u" in out
+    assert "ComBusWireEndDigital  = 3u" in out
+    # And the total must equal the sum.
+    assert "ComBusWireEnd         = 8u" in out
+    # And the two per-bus values must be syntactically distinct (not
+    # both pointing to the same expression).
+    assert "ComBusWireEndAnalog" in out
+    assert "ComBusWireEndDigital" in out
+    # Sanity: the comment must NOT mention a specific machine name
+    # (the generator is generic, called for any config).
+    assert "volvo_A60H_bruder" not in out
+    assert "dumper_truck" not in out
+    assert "excavator" not in out
+    assert "loader" not in out
+
+
+
+
 def test_render_ids_header_analog_digital():
     chs = _canon_from_yamls({
         "channels": [
