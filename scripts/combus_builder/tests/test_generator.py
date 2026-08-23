@@ -656,17 +656,31 @@ def _build_view_with_channels(channels: list[ChannelDefinition]) -> View:
                                   ch.theme, ch.id))
     view_channels = []
     wire_end = 0
+    # Phase 1 A.11 fix: per-bus wire-end counters (mirror of _select_view).
+    wire_end_analog = 0
+    wire_end_digital = 0
     for idx, ch in enumerate(selected):
         view_channels.append(ViewChannel(
             numeric_id=idx,
             ch=ch,
             direction_bits=Direction.from_frozenset(ch.direction),
         ))
-        if ch.scope != "REMOTE" and wire_end == 0:
+        if ch.scope == "REMOTE":
+            if ch.type == "analog":
+                wire_end_analog += 1
+            else:
+                wire_end_digital += 1
+        elif wire_end == 0:
             wire_end = idx
     if wire_end == 0 and selected:
         wire_end = len(selected)
-    return View(name="combus", channels=view_channels, wire_end=wire_end)
+    return View(
+        name="combus",
+        channels=view_channels,
+        wire_end=wire_end,
+        wire_end_analog=wire_end_analog,
+        wire_end_digital=wire_end_digital,
+    )
 
 
 def test_render_ids_header_basic():

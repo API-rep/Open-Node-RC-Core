@@ -161,15 +161,22 @@ class View:
     """
     One resolved view (combus OR combus_remote).
 
-    name:        "combus" or "combus_remote".
-    channels:    list of ViewChannel in ID order.
-    wire_end:    index of the first non-REMOTE channel (== len if no LOCAL/SYSTEM).
-    ch_count:    total channel count in this view.
+    name:             "combus" or "combus_remote".
+    channels:         list of ViewChannel in ID order.
+    wire_end:         index of the first non-REMOTE channel (== len if no LOCAL/SYSTEM).
+    wire_end_analog:  count of REMOTE analog channels (== number of REMOTE analog
+                      channels in canonical order).  Used by the C++ generator
+                      to emit a per-bus wire-end constant (Phase 1 A.11 fix:
+                      analog and digital wire-ends are NOT always equal).
+    wire_end_digital: count of REMOTE digital channels.  See wire_end_analog.
+    ch_count:         total channel count in this view.
     """
 
     name: str
     channels: list[ViewChannel]
     wire_end: int
+    wire_end_analog: int
+    wire_end_digital: int
 
     @property
     def ch_count(self) -> int:
@@ -275,19 +282,39 @@ def _select_view(
 
     view_channels: list[ViewChannel] = []
     wire_end = 0
+    # Phase 1 A.11 fix: per-bus wire-end counters (analog vs digital).
+    # Both counters track REMOTE channels only, separated by type.  The
+    # final values (after the loop) represent the count of REMOTE
+    # channels of each type in the view, which may differ from
+    # `wire_end` (= total REMOTE count across both types).
+    wire_end_analog = 0
+    wire_end_digital = 0
     for idx, ch in enumerate(selected):
         view_channels.append(ViewChannel(
             numeric_id=idx,
             ch=ch,
             direction_bits=Direction.from_frozenset(ch.direction),
         ))
-        if ch.scope != "REMOTE" and wire_end == 0:
+        if ch.scope == "REMOTE":
+            # REMOTE channel — bump the matching per-bus counter.
+            if ch.type == "analog":
+                wire_end_analog += 1
+            else:
+                wire_end_digital += 1
+        elif wire_end == 0:
+            # First non-REMOTE: this index is the global wire_end.
             wire_end = idx
     if wire_end == 0 and selected:
         # All REMOTE: WIRE_END == CH_COUNT.
         wire_end = len(selected)
 
-    return View(name=view_name, channels=view_channels, wire_end=wire_end)
+    return View(
+        name=view_name,
+        channels=view_channels,
+        wire_end=wire_end,
+        wire_end_analog=wire_end_analog,
+        wire_end_digital=wire_end_digital,
+    )
 
 
 def select_views(channels: list[ChannelDefinition]) -> ViewSelection:
@@ -478,7 +505,15 @@ def _render_ids_header(view: View, ctx: BuildContext) -> str:
     # WIRE_END: only meaningful for the full view.
     if view.name == "combus":
         body.append(f"// Index of the first non-REMOTE channel (REMOTE = [0..WIRE_END)).")
-        body.append(f"static constexpr uint8_t {cap}WireEnd = {view.wire_end}u;")
+        body.append(f"// This is the TOTAL wire-end (analog + digital).  Use the")
+        body.append(f"// per-bus constants below for analog/digital-aware loops and")
+        body.append(f"// buffer sizes.  (Phase 1 A.11: analog and digital wire-ends")
+        body.append(f"// are NOT always equal — they happen to coincide for")
+        body.append(f"// volvo_A60H_bruder but are emitted distinctly for protocol")
+        body.append(f"// soundness.)")
+        body.append(f"static constexpr uint8_t {cap}WireEnd         = {view.wire_end}u;")
+        body.append(f"static constexpr uint8_t {cap}WireEndAnalog   = {view.wire_end_analog}u;")
+        body.append(f"static constexpr uint8_t {cap}WireEndDigital  = {view.wire_end_digital}u;")
         body.append("")
 
     body.append("// EOF")

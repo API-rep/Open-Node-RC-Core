@@ -123,7 +123,7 @@ static void render_overview() {
 
 		// --- 3. Channel summary (wire channels only: 0..WIRE_END-1) ---
 	dMid();
-	const uint8_t wireEnd = ComBusWireEnd;
+	const uint8_t wireEnd = ComBusWireEndAnalog;   // wire channels in the analog bus array
 	for (uint8_t i = 0; i < wireEnd && i < s_analogCh; i++) {
 		uint16_t    raw  = s_bus->analogBus[i].value;
 		int16_t     pct  = dashPctBipolar(raw, s_bus->analogBusMaxVal);

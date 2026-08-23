@@ -151,11 +151,11 @@ void loop() {
       {
         const int32_t kIdleBand = static_cast<int32_t>(CbusNeutral) / 20;  // ±5 % threshold
         bool active = false;
-        for (uint8_t i = 0; i < ComBusWireEnd && !active; i++) {
+        for (uint8_t i = 0; i < ComBusWireEndAnalog && !active; i++) {
             const int32_t off = static_cast<int32_t>(comBus.analogBus[i].value) - static_cast<int32_t>(CbusNeutral);
             if (off > kIdleBand || off < -kIdleBand) active = true;
         }
-        for (uint8_t i = 0; i < ComBusWireEnd && !active; i++) {
+        for (uint8_t i = 0; i < ComBusWireEndDigital && !active; i++) {
             if (comBus.digitalBus[i].value) active = true;
         }
         if (active) s_lastActivityMs = millis();
