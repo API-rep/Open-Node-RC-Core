@@ -691,7 +691,8 @@ def test_render_ids_header_basic():
     assert "enum class DigitalCombusID : uint8_t" in out
     assert "FOO = 0" in out
     assert "CH_COUNT" in out
-    assert "CombusWireEnd" in out
+    # Phase 4 (A14): WireEnd constants are no longer emitted.
+    assert "CombusWireEnd" not in out
 
 
 # =============================================================================
@@ -748,10 +749,17 @@ def test_wire_end_analog_and_digital_equal_when_counts_match():
     assert view.wire_end == 6
 
 
-def test_render_ids_header_emits_distinct_per_bus_values():
-    """Phase 1 A.11 regression guard: the generated combus_ids.h must
-    contain ComBusWireEndAnalog and ComBusWireEndDigital with the
-    correct numeric values (not just the line names)."""
+def test_render_ids_header_does_not_emit_wire_end():
+    """Phase 4 (A14) regression guard: the generated combus_ids.h must
+    NOT contain ComBusWireEnd / ComBusWireEndAnalog / ComBusWireEndDigital
+    anymore. Wire dimensions are now derived directly from the Remote
+    view's ID enums (AnalogComBusRemoteID::CH_COUNT and
+    DigitalComBusRemoteID::CH_COUNT) at the call site.
+
+    The per-bus counters (wire_end_analog, wire_end_digital) are still
+    computed by the generator (see test_wire_end_analog_and_digital_*),
+    but they are no longer emitted as C++ constants.
+    """
     chs = _canon_from_yamls({
         "channels": [
             _ch("A1", type_="analog", scope="REMOTE", direction="uplink"),
@@ -766,15 +774,10 @@ def test_render_ids_header_emits_distinct_per_bus_values():
     })
     view = _build_view_with_channels(chs)
     out = _render_ids_header(view, _ctx([]))
-    # The two per-bus constants must be present with the right values.
-    assert "ComBusWireEndAnalog   = 5u" in out
-    assert "ComBusWireEndDigital  = 3u" in out
-    # And the total must equal the sum.
-    assert "ComBusWireEnd         = 8u" in out
-    # And the two per-bus values must be syntactically distinct (not
-    # both pointing to the same expression).
-    assert "ComBusWireEndAnalog" in out
-    assert "ComBusWireEndDigital" in out
+    # None of the WireEnd constants must be emitted.
+    assert "ComBusWireEnd" not in out
+    assert "WireEndAnalog" not in out
+    assert "WireEndDigital" not in out
     # Sanity: the comment must NOT mention a specific machine name
     # (the generator is generic, called for any config).
     assert "volvo_A60H_bruder" not in out

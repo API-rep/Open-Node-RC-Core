@@ -477,6 +477,8 @@ def _render_ids_header(view: View, ctx: BuildContext) -> str:
                 .replace("<view_name>", view.name)
                 .replace("<ctx_summary>", _ctx_summary(ctx)))
     body.append("")
+    body.append("#pragma once")  # Phase 4 (A14): guard against multiple inclusion (was missing — caused multiple-definition errors when included directly from .cpp files).
+    body.append("")
     body.append("#include <cstdint>")
     body.append("")
     body.append("// =============================================================================")
@@ -502,18 +504,14 @@ def _render_ids_header(view: View, ctx: BuildContext) -> str:
         body.append("};")
         body.append("")
 
-    # WIRE_END: only meaningful for the full view.
-    if view.name == "combus":
-        body.append(f"// Index of the first non-REMOTE channel (REMOTE = [0..WIRE_END)).")
-        body.append(f"// This is the TOTAL wire-end (analog + digital).  Use the")
-        body.append(f"// per-bus constants below for analog/digital-aware loops and")
-        body.append(f"// buffer sizes.  (Phase 1 A.11: analog and digital wire-ends")
-        body.append(f"// are not guaranteed to be equal and are emitted distinctly")
-        body.append(f"// for protocol soundness.)")
-        body.append(f"static constexpr uint8_t {cap}WireEnd         = {view.wire_end}u;")
-        body.append(f"static constexpr uint8_t {cap}WireEndAnalog   = {view.wire_end_analog}u;")
-        body.append(f"static constexpr uint8_t {cap}WireEndDigital  = {view.wire_end_digital}u;")
-        body.append("")
+    # Phase 4 (A14): ComBusWireEnd / ComBusWireEndAnalog / ComBusWireEndDigital
+    # are no longer emitted. Wire dimensions are now derived directly from
+    # the Remote view's ID enums (AnalogComBusRemoteID::CH_COUNT and
+    # DigitalComBusRemoteID::CH_COUNT) at the call site. See:
+    #   - src/machines/init/com/combus_uart_init.cpp
+    #   - src/machines/main.cpp
+    #   - src/machines/system/debug/dashboard_machine.cpp
+    #   - src/sound_module/config/config.h
 
     body.append("// EOF")
     return "\n".join(body) + "\n"
