@@ -135,57 +135,46 @@ L'exécution des tests Unity nécessite un `test_port` (ESP32 connecté). En l'a
 - ❌ **Non touché** : bug `BRAKING`, bug `projenv`/`NameError` (dette technique séparée)
 - ❌ **Non touché** : Phase 4 (migration `WIRE_END` → `COUNT`, dépend de local/remote en cours)
 
-## 9. Investigation de la sémantique de `**` dans PlatformIO src_filter (post-relance)
+## 9. Investigation de la sémantique de `**` dans PlatformIO src_filter (A13.2 → A13.3)
 
-Suite au feedback de l'utilisateur (« pourquoi `+<core/system/hw/**>` ne couvrait pas déjà `hw/transport/uart_com.cpp` ? Test l'isolément »), un test d'isolément a été réalisé pour vérifier la sémantique de `**` dans `build_src_filter`.
+### 9.1. Question initiale (A13.2)
 
-### 9.1. Test 1 : retirer l'entrée explicite `+<core/system/hw/transport/uart_com.cpp>`
+Suite au feedback de l'utilisateur (« pourquoi `+<core/system/hw/**>` ne couvrait pas déjà `hw/transport/uart_com.cpp` ? Test l'isolément »), deux tests d'isolément ont été réalisés.
 
-**Modification** : le `build_src_filter` de `test_combus_loopback` devient :
+### 9.2. Tests 1 & 2 (A13.2 — conclusion erronée)
+
+| Test | `build_src_filter` | Résultat |
+|---|---|---|
+| 1 | `+<core/system/hw/**>` (sans `/*.ext`) | `undefined reference to uart_com_init` |
+| 2 | `+<core/system/hw/transport/uart_com.cpp>` (sans `**`) | `undefined reference to pin_claim` |
+
+**Conclusion A13.2 (ERRONÉE)** : « `**` dans PlatformIO src_filter est single-level (sémantique fnmatch de Python), PAS récursif ».
+
+### 9.3. Remise en question (A13.3)
+
+L'utilisateur a signalé que la conclusion A13.2 contredisait la documentation officielle PlatformIO, qui présente `+<**/*.cpp>` comme exemple de pattern récursif. L'hypothèse corrigée est que la limitation venait de la **syntaxe exacte** (absence d'extension après `**`), pas de `**` lui-même.
+
+### 9.4. Test 3 (A13.3 — conclusion correcte)
+
+**Modification** : remplacement des 2 patterns par la forme documentée :
 ```
-build_src_filter = -<*> +<core/system/combus/combus_frame.cpp> +<core/system/combus/protocol/**> +<core/system/combus/combus_access.cpp> +<core/system/hw/**
-```
-
-**Résultat** : le linker ne trouve pas `uart_com_init` :
-```
-undefined reference to `uart_com_init(HardwareSerial*, unsigned int, int, int, char const*, PinReg*)'
-```
-
-**Interprétation** : `+<core/system/hw/**>` ne capture PAS `transport/uart_com.cpp`. Le `**` ne descend pas dans le sous-dossier `transport/`.
-
-### 9.2. Test 2 : retirer `+<core/system/hw/**>`, garder seulement l'entrée explicite
-
-**Modification** : le `build_src_filter` devient :
-```
-build_src_filter = -<*> +<core/system/combus/combus_frame.cpp> +<core/system/combus/protocol/**> +<core/system/combus/combus_access.cpp> +<core/system/hw/transport/uart_com.cpp>
-```
-
-**Résultat** : `uart_com_init` est trouvé, MAIS le linker ne trouve pas `pin_claim` :
-```
-undefined reference to `pin_claim(PinReg&, unsigned char, PinOwner, char const*, bool, bool)'
+build_src_filter = -<*> +<core/system/combus/combus_frame.cpp> +<core/system/combus/protocol/**> +<core/system/combus/combus_access.cpp> +<core/system/hw/**/*.cpp> +<core/system/hw/**/*.h>
 ```
 
-**Interprétation** : `pin_claim` est défini dans `core/system/hw/pin_reg.cpp` (directement sous `hw/`, pas dans un sous-dossier). Donc `+<core/system/hw/**>` capture bien les fichiers directement sous `hw/`, mais pas les sous-dossiers.
+**Résultat** : `pio test -e test_combus_loopback --without-uploading --without-testing` → **[PASSED] Took 35.94 seconds** ✅
 
-### 9.3. Conclusion
+**Conclusion A13.3 (CORRECTE)** : la syntaxe `<dossier/**/*.ext>` capture BIEN tous les fichiers à n'importe quelle profondeur sous `<dossier/>`. La limitation observée en A13.2 venait de la syntaxe `<dossier/**>` (sans extension après `**`), qui est effectivement limitée à un seul niveau. Le `**` en lui-même est bien récursif (conforme à la doc PlatformIO).
 
-**`**` dans PlatformIO `src_filter` est `single-level` (sémantique `fnmatch` de Python), PAS récursif.**
-
-- `+<core/system/hw/**>` ⇔ `+<core/system/hw/*>` (équivalent pour fnmatch)
-- Matche les fichiers directement sous `hw/` (e.g. `pin_reg.cpp`, `drv.h`, `node_com.h`)
-- Ne matche PAS les fichiers dans les sous-dossiers (e.g. `transport/uart_com.cpp`)
-
-Pour matcher un fichier à 2+ niveaux, il faut lister explicitement le chemin : `+<core/system/hw/transport/uart_com.cpp>`. C'est la combinaison des deux qui couvre à la fois `pin_reg.cpp` (root de `hw/`) et `uart_com.cpp` (sous-dossier `transport/`).
-
-**Implication** : la ligne `+<core/system/combus/combus.cpp>` legacy ne cachait rien d'autre qu'un effet secondaire (le linker résolvait `uart_com_init` ET `pin_claim` via le chemin "magic" du PlatformIO — peut-être un effet du `-<*>` initial qui ne s'appliquait pas comme attendu ? ou un bug silencieux du filtre). Le retrait a forcé la déclaration explicite des deux dépendances, ce qui est plus propre et plus maintenable.
-
-### 9.4. Fichiers modifiés
+### 9.5. Fichiers modifiés
 
 | Fichier | Modification |
 |---|---|
-| `platformio.ini` | Commentaire explicatif ajouté à la ligne `+<core/system/hw/**> +<core/system/hw/transport/uart_com.cpp>` pour documenter la sémantique fnmatch. |
+| `platformio.ini` | `+<core/system/hw/**> +<core/system/hw/transport/uart_com.cpp>` → `+<core/system/hw/**/*.cpp> +<core/system/hw/**/*.h>`. Commentaire mis à jour pour expliquer la distinction syntaxique. |
+| `combus_v2_A13_report.md` | Section § 9 corrigée : les sous-sections 9.1-9.2 sont conservées comme historique de l'investigation, 9.3 documente la remise en question, 9.4 documente le test correctif. La conclusion est désormais nuancée (« la limitation venait de la syntaxe `<dossier/**>`, pas de `**` en général »). |
 
-**Vérification finale** : `pio test -e test_combus_loopback --without-uploading --without-testing` → `[PASSED] Took 39.63 seconds` ✅
+### 9.6. Leçon de l'investigation
+
+**Ne jamais généraliser une observation isolée à une « règle de PlatformIO » sans vérifier la documentation officielle.** Le fait que `<dossier/**>` ne matche pas les sous-dossiers ne signifie pas que `**` n'est pas récursif — il faut la forme complète `<dossier/**/*.ext>` pour exprimer la récursion avec une extension spécifique.
 
 ## 10. Relance A13.1 — Tests d'identité mémoire runtime (post-review)
 
@@ -202,7 +191,7 @@ undefined reference to `uart_com_init(HardwareSerial*, unsigned int, int, int, c
 
 **Analyse** : la ligne legacy n'était **pas inutile** comme le rapport initial le prétendait. Elle cachait une dépendance implicite sur `uart_com_init` (probablement via un effet de bord du filtre — le chemin `+<core/system/hw/**` couvrait `transport/uart_com.cpp` mais le `>` après `**` était mal fermé dans une édition intermédiaire, ce qui rendait le filtre inopérant).
 
-**Correctif** : remplacement par `+<core/system/hw/**> +<core/system/hw/transport/uart_com.cpp>` (forme explicite). Compilation OK sans le fichier legacy `combus.cpp` (qui reste marqué « Supprimer » dans l'audit initial).
+**Correctif** : initialement `+<core/system/hw/**> +<core/system/hw/transport/uart_com.cpp>` (forme explicite). Compilation OK sans le fichier legacy `combus.cpp` (qui reste marqué « Supprimer » dans l'audit initial). Voir section § 9 pour l'investigation ultérieure qui a montré que la forme `<dossier/**>` est single-level, et que la forme récursive correcte est `<dossier/**/*.ext>`. Le `build_src_filter` final utilise désormais `+<core/system/hw/**/*.cpp> +<core/system/hw/**/*.h>`.
 
 ### 10.2. Point 2 : activation de l'identité mémoire via un second extra_script
 
@@ -247,6 +236,8 @@ L'exécution réelle des tests (au-delà du link) nécessite un ESP32 connecté 
 
 - Diff consolidé : `combus_v2_A13.diff` (à générer via `git diff e721597 HEAD`)
 - Diff incrémental (relance) : `combus_v2_A13.1.diff` (à générer via `git diff 09e8cfd HEAD`)
-- Diff incrémental (investigation `**`) : `combus_v2_A13.2.diff` (à générer)
-- Log de compilation : `C:\temp\pio_test_compile5.log` (étape initiale), `pio_test_compile_pt6.log` (étape finale), `pio_test_isol1.log` (test 1), `pio_test_isol2.log` (test 2), `pio_test_final.log` (validation finale)
+- Diff incrémental (investigation `**` A13.2) : `combus_v2_A13.2.diff` (commit `9628888`)
+- Diff incrémental (correction A13.3) : `combus_v2_A13.3.diff` (à générer)
+- Log de compilation : `C:\temp\pio_test_compile5.log` (étape initiale), `pio_test_compile_pt6.log` (étape finale), `pio_test_isol1.log` (test 1 — A13.2), `pio_test_isol2.log` (test 2 — A13.2), `pio_test_final.log` (validation finale A13.2), `pio_test_a133_v2.log` (test 3 — A13.3)
+- Version PlatformIO : `6.1.19` (Core)
 - Code généré : `C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\combus_generated\`
