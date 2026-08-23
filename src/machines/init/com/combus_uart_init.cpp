@@ -24,18 +24,18 @@ void combus_uart_init()
                   "ComBusUartBaud exceeds board hardware ceiling UartMaxBaud");
 
     constexpr ComBusFrameCfg txCfg = {
-        static_cast<uint8_t>(AnalogComBusID::WIRE_END),   ///< Wire channels only — not local sound-node channels.
-        static_cast<uint8_t>(DigitalComBusID::WIRE_END),  ///< Wire channels only — not local sound-node channels.
+        ComBusWireEnd,                                   ///< Wire channels only — not local sound-node channels.
+        ComBusWireEnd,                                   ///< Wire channels only — not local sound-node channels.
     };
 
 
     // --- Full-duplex: also initialise RX side ---
     #if defined(COMBUS_UART)
-      static uint16_t s_analog[static_cast<uint8_t>(AnalogComBusID::WIRE_END)];
-      static bool     s_digital[static_cast<uint8_t>(DigitalComBusID::WIRE_END)];
+      static uint16_t s_analog[ComBusWireEnd];
+      static bool     s_digital[ComBusWireEnd];
       constexpr ComBusFrameCfg rxCfg = {
-          static_cast<uint8_t>(AnalogComBusID::WIRE_END),   ///< Wire channels only.
-          static_cast<uint8_t>(DigitalComBusID::WIRE_END),  ///< Wire channels only.
+          ComBusWireEnd,                                   ///< Wire channels only.
+          ComBusWireEnd,                                   ///< Wire channels only.
       };
 
       combus_protocol_init(uart_get_combus_com(), txCfg, ComBusUartTxHz, rxCfg, s_analog, s_digital);
