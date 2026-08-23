@@ -692,11 +692,12 @@ def _safe_write(path: Path, content: str) -> None:
 
 
 # Views that should NOT emit the .h/.cpp runtime artifacts.
-# The .h/.cpp files are still RENDERED (so the generator stays a single
-# source of truth for all view artifacts) but the I/O emission is skipped.
 # Phase 2 / A12 hook: only the ids + md5 headers are written to disk.
-# The .h/.cpp counterparts are only kept in memory for the MD5 payload
-# (which is built from the in-memory View model, see md5.py).
+# The .h/.cpp rendering is SKIPPED entirely for these views —
+# _render_header() and _render_source() are never called. Only the
+# ids header is rendered and written. The MD5 payload for these views
+# is built independently, directly from the in-memory View model
+# (see md5.canonical_bytes()), so no intermediate .cpp file is needed.
 _NO_EMIT_RUNTIME_VIEWS = frozenset({"combus_local", "combus_remote"})
 
 
