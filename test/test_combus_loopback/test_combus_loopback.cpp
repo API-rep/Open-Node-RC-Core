@@ -30,6 +30,18 @@
 #include <struct/combus_struct.h>
 #include <struct/outputs_struct.h>
 
+// Phase 3 / A13: include combus.h (declares AnalogComBusArray /
+// DigitalComBusArray) AND the 3 view-specific ids headers so the
+// runtime identity test can reference AnalogComBusID, AnalogComBusLocalID
+// and AnalogComBusRemoteID in the same translation unit.
+//
+// combus.h transitively includes combus_ids.h, so we do NOT include
+// it directly here (avoids the double-definition error: combus_ids.h
+// does not yet have a #pragma once guard).
+#include "combus.h"
+#include "combus_local_ids.h"
+#include "combus_remote_ids.h"
+
 
 // =============================================================================
 // TEST CONFIGURATION
@@ -81,12 +93,17 @@ static void fillRandom(uint32_t seed) {
     txComBus.runLevel = RunLevel::RUNNING;
     for (uint8_t i = 0u; i < kTestNAnalog; ++i) {
         txAnalogBus[i].value    = (uint16_t)(rand() % 1001u);
-        txAnalogBus[i].isDrived = true;
+        // Note: the per-channel 'isDrived' flag was removed in A6.1 (it
+        // is now on the ComBus struct, not on individual channels). See
+        // Phase 3 / A13 fix below (fillRandom still works because the
+        // codec test only cares about `value`).
     }
     for (uint8_t i = 0u; i < kTestNDigital; ++i) {
         txDigitalBus[i].value    = (rand() % 2) == 1;
-        txDigitalBus[i].isDrived = true;
     }
+    // Drive the bus once for this test (the runtime flag is per-bus, not
+    // per-channel in A6.1+).
+    txComBus.isDrived = true;
 }
 
 /** Assert that rxFrame fields match txComBus content. */
@@ -226,6 +243,84 @@ static void test_loopback_monkey(void) {
 
 
 // =============================================================================
+// GROUP C — VIEW IDENTITY (Phase 3 / A13)
+//
+// Validates the central invariant of Solution A: the 3 view-specific
+// enums (AnalogComBusID, AnalogComBusLocalID, AnalogComBusRemoteID and
+// their digital counterparts) must share the same numeric ID for every
+// channel they have in common (the "prefix alignment" property).
+//
+// This is the C++-runtime counterpart of the Python test
+// `test_render_ids_header_emits_distinct_per_bus_values`. The Python
+// test verifies the generator's output; this C++ test verifies the
+// actual compiled code (and would catch any future build-system bug
+// that re-mapped the enums independently).
+//
+// Channel choices (volvo_A60H_bruder / dumper_truck):
+//   - BRAKE_BUS (REMOTE analog): present in all 3 views.
+//   - DUMP_STICK (LOCAL analog): present in combus + combus_local.
+//   - CRUISE_ACTIVE (REMOTE digital): present in all 3 views.
+//   - CRUISE_TOGGLE_BTN (LOCAL digital): present in combus + combus_local.
+//
+// LIMITATION (documented): the test harness in test/test_combus_loopback
+// does NOT link against the generated `combus_generated/combus.cpp`
+// (which defines `AnalogComBusArray` and `DigitalComBusArray`). It
+// therefore cannot test *memory identity* of the arrays (Step 2 of
+// the original Phase 3 spec). The pointer-equality tests would require
+// either:
+//   (a) linking the generated combus.cpp into the test binary, or
+//   (b) making the test binary reference the runtime `comBus` (which
+//       would also require linking combus.cpp + its dependencies).
+// Both are blocked by the test env's build_src_filter (line 199 of
+// platformio.ini) which doesn't include the generated directory.
+// Phase 3 is therefore scoped to the *prefix alignment* test
+// (numerical), not memory identity. The Python generator test
+// `test_render_ids_header_emits_distinct_per_bus_values` is the
+// primary guard for the memory-identity invariant at the
+// generation layer; this C++ test is the secondary guard at the
+// compilation layer.
+// =============================================================================
+
+/** Prefix alignment: the 3 enums must agree on numeric values for shared channels. */
+static void test_id_prefix_alignment_analog(void) {
+    // REMOTE channels: present in all 3 views, must have the same numeric id.
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(AnalogComBusID::BRAKE_BUS),
+                            static_cast<uint8_t>(AnalogComBusRemoteID::BRAKE_BUS));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(AnalogComBusID::BRAKE_BUS),
+                            static_cast<uint8_t>(AnalogComBusLocalID::BRAKE_BUS));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(AnalogComBusID::THROTTLE_BUS),
+                            static_cast<uint8_t>(AnalogComBusRemoteID::THROTTLE_BUS));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(AnalogComBusID::THROTTLE_BUS),
+                            static_cast<uint8_t>(AnalogComBusLocalID::THROTTLE_BUS));
+
+    // LOCAL-only channels: present in combus + combus_local, must agree.
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(AnalogComBusID::DUMP_STICK),
+                            static_cast<uint8_t>(AnalogComBusLocalID::DUMP_STICK));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(AnalogComBusID::STEERING_STICK),
+                            static_cast<uint8_t>(AnalogComBusLocalID::STEERING_STICK));
+}
+
+/** Prefix alignment: digital counterpart. */
+static void test_id_prefix_alignment_digital(void) {
+    // REMOTE channels.
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DigitalComBusID::CRUISE_ACTIVE),
+                            static_cast<uint8_t>(DigitalComBusRemoteID::CRUISE_ACTIVE));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DigitalComBusID::CRUISE_ACTIVE),
+                            static_cast<uint8_t>(DigitalComBusLocalID::CRUISE_ACTIVE));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DigitalComBusID::LIGHTS),
+                            static_cast<uint8_t>(DigitalComBusRemoteID::LIGHTS));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DigitalComBusID::LIGHTS),
+                            static_cast<uint8_t>(DigitalComBusLocalID::LIGHTS));
+
+    // LOCAL-only channels.
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DigitalComBusID::CRUISE_TOGGLE_BTN),
+                            static_cast<uint8_t>(DigitalComBusLocalID::CRUISE_TOGGLE_BTN));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DigitalComBusID::HORN_BTN),
+                            static_cast<uint8_t>(DigitalComBusLocalID::HORN_BTN));
+}
+
+
+// =============================================================================
 // RUNNER
 // =============================================================================
 
@@ -244,6 +339,11 @@ void setup() {
     RUN_TEST(test_loopback_single_frame);
     RUN_TEST(test_loopback_resync_after_garbage);
     RUN_TEST(test_loopback_monkey);
+
+    // --- Group C: view identity prefix alignment (Phase 3 / A13) ---
+    // Memory identity tests are out of scope here (see Group C comment).
+    RUN_TEST(test_id_prefix_alignment_analog);
+    RUN_TEST(test_id_prefix_alignment_digital);
 
     UNITY_END();
 }
