@@ -21,6 +21,6 @@ channels:
   infoName: "Drive state (FWD/REV, side-effect of throttle dir proc)"
   type: analog
   value: CbusNeutral
-  theme: traction
+  theme: core
   scope: REMOTE
   direction: none

@@ -21,13 +21,13 @@ channels:
 - id: KEY_BTN
   infoName: "Engine key button (raw, TRIANGLE)"
   type: digital
-  theme: power
+  theme: core
   scope: REMOTE
   direction: downlink
 
 - id: KEY_ACTIVE
   infoName: "Engine active flag (0=off, 1=on)"
   type: digital
-  theme: power
+  theme: core
   scope: REMOTE
   direction: none

@@ -20,6 +20,6 @@ channels:
 - id: GEAR_SHIFTING
   infoName: "Gear shifting in progress (1=during upshift damp window)"
   type: digital
-  theme: traction
+  theme: core
   scope: REMOTE
   direction: none

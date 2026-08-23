@@ -20,6 +20,6 @@ channels:
 - id: CRUISE_ACTIVE
   infoName: "Cruise control active (1=normal cruise on, 0=off)"
   type: digital
-  theme: cruise
+  theme: core
   scope: REMOTE
   direction: none

@@ -88,6 +88,7 @@ VALID_THEMES: frozenset[str] = frozenset({
     "core",        # A9.1: STEERING_BUS (dumper_truck/combus/steering_bus.cb)
     "failsafe",
     "vbat",
+    "light",
     # Ajouter ici les nouveaux thèmes légitimes.
 })
 

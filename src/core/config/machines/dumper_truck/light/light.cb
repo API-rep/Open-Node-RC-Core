@@ -24,27 +24,27 @@ channels:
 - id: LIGHTS
   infoName: "Main lights toggle"
   type: digital
-  theme: signals
+  theme: light
   scope: REMOTE
   direction: downlink
 
 - id: INDICATOR_LEFT
   infoName: "Left turn indicator"
   type: digital
-  theme: signals
+  theme: light
   scope: REMOTE
   direction: downlink
 
 - id: INDICATOR_RIGHT
   infoName: "Right turn indicator"
   type: digital
-  theme: signals
+  theme: light
   scope: REMOTE
   direction: downlink
 
 - id: HAZARDS
   infoName: "Hazard flashers"
   type: digital
-  theme: signals
+  theme: light
   scope: REMOTE
   direction: downlink

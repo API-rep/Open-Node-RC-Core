@@ -55,8 +55,16 @@ import shutil
 import sys
 from pathlib import Path
 
-# SCons / PlatformIO injects `env` at top level.
+# SCons / PlatformIO injects `env` at top level. PlatformIO also
+# separates the project source compilation environment (`projenv`) from
+# the libraries / framework environment (`env`); both must see the
+# generated headers directory in their CPPPATH, otherwise the project
+# .cpp files cannot include the generated combus*.h headers.
 Import("env")  # noqa: F821 — SCons inject
+try:
+    Import("projenv")  # noqa: F821 — SCons inject, may not exist
+except Exception:  # pragma: no cover — some PIO versions omit it
+    projenv = None  # type: ignore[assignment]
 
 # Make `scripts.combus_builder.*` importable from the repo root.
 #
@@ -232,6 +240,26 @@ def _check_staging_complete(staging_dir: Path) -> None:
 
 
 # =============================================================================
+# CPPPATH propagation
+# =============================================================================
+
+def _add_to_cpppath(target_env, out_dir_str: str, label: str) -> None:
+    """
+    Add `out_dir_str` to `target_env`'s CPPPATH if not already present.
+    `label` is just a diagnostic suffix for the print() message.
+    """
+    if target_env is None:
+        return
+    cpppath = target_env.get("CPPPATH", [])
+    if isinstance(cpppath, str):
+        cpppath = [cpppath]
+    if out_dir_str not in cpppath:
+        cpppath.append(out_dir_str)
+        target_env["CPPPATH"] = cpppath
+    print(f"[combus_scons_hook] CPPPATH += {out_dir_str} ({label})")
+
+
+# =============================================================================
 # Main pipeline
 # =============================================================================
 
@@ -248,16 +276,9 @@ def main(env) -> int:
     # --- Skip path ---------------------------------------------------------
     if _skip_requested():
         _verify_skip_artifacts(out_dir)
-        # Add to CPPPATH so the .cpp files can find the pre-existing
-        # headers. We do NOT regenerate.
         out_dir_str = str(out_dir)
-        cpppath = env.get("CPPPATH", [])
-        if isinstance(cpppath, str):
-            cpppath = [cpppath]
-        if out_dir_str not in cpppath:
-            cpppath.append(out_dir_str)
-            env["CPPPATH"] = cpppath
-        print(f"[combus_scons_hook] CPPPATH += {out_dir_str} (from skip)")
+        _add_to_cpppath(env, out_dir_str, "skip, env")
+        _add_to_cpppath(projenv, out_dir_str, "skip, projenv")
         return 0
 
     # --- Late imports ------------------------------------------------------
@@ -344,15 +365,15 @@ def main(env) -> int:
     )
 
     # --- 6. CPPPATH -------------------------------------------------------
+    # PlatformIO separates `env` (libraries / framework) from
+    # `projenv` (project sources). The combus-generated headers are
+    # only included by project sources (e.g. combus_uart.h under
+    # src/core/system/combus/), so the minimum fix is to expose them
+    # via `projenv`. We ALSO touch `env` for symmetry and for any
+    # library code that might include them transitively.
     out_dir_str = str(out_dir)
-    cpppath = env.get("CPPPATH", [])
-    if isinstance(cpppath, str):
-        cpppath = [cpppath]
-    if out_dir_str not in cpppath:
-        cpppath.append(out_dir_str)
-        env["CPPPATH"] = cpppath
-
-    print(f"[combus_scons_hook] CPPPATH += {out_dir_str}")
+    _add_to_cpppath(env, out_dir_str, "env")
+    _add_to_cpppath(projenv, out_dir_str, "projenv")
     return 0
 
 

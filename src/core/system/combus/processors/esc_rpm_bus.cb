@@ -21,6 +21,6 @@ channels:
   infoName: "ESC engine RPM (post gear ratio, side-effect of gear chain)"
   type: analog
   value: 0
-  theme: traction
+  theme: core
   scope: REMOTE
   direction: none
