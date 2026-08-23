@@ -1000,6 +1000,89 @@ def test_generate_empty_yields_empty_views(tmp_path):
 
 
 # =============================================================================
+# Phase 2 / A12 — combus_local and combus_remote .h/.cpp are NOT emitted
+# =============================================================================
+
+def test_generate_does_not_emit_local_remote_h_cpp(tmp_path):
+    """Phase 2 / A12: combus_local.h/.cpp and combus_remote.h/.cpp
+    are NO LONGER written to disk. Only the _ids.h + _md5.h headers
+    are emitted for these views. The MD5 payload is built directly
+    from the in-memory View model (see md5.canonical_bytes), so no
+    intermediate .cpp file is needed.
+
+    The combus (full) view still emits combus.h + combus.cpp + combus_ids.h
+    because it's the runtime bus instance.
+    """
+    chs = _canon_from_yamls({
+        "channels": [
+            _ch("R1", scope="REMOTE", type_="digital", direction="uplink"),
+            _ch("R2", scope="REMOTE", type_="analog", direction="uplink"),
+            _ch("L1", scope="LOCAL", type_="digital", direction="uplink"),
+        ]
+    })
+    sel = generate(chs, _ctx([]), tmp_path)
+    # combus (full view): 3 files
+    assert (tmp_path / "combus.h").is_file()
+    assert (tmp_path / "combus.cpp").is_file()
+    assert (tmp_path / "combus_ids.h").is_file()
+    # combus_local / combus_remote: ids only (no .h/.cpp)
+    assert (tmp_path / "combus_local_ids.h").is_file()
+    assert (tmp_path / "combus_remote_ids.h").is_file()
+    # Phase 2: the .h/.cpp counterparts MUST NOT exist
+    assert not (tmp_path / "combus_local.h").exists(), \
+        "combus_local.h should NOT be emitted (Phase 2)"
+    assert not (tmp_path / "combus_local.cpp").exists(), \
+        "combus_local.cpp should NOT be emitted (Phase 2)"
+    assert not (tmp_path / "combus_remote.h").exists(), \
+        "combus_remote.h should NOT be emitted (Phase 2)"
+    assert not (tmp_path / "combus_remote.cpp").exists(), \
+        "combus_remote.cpp should NOT be emitted (Phase 2)"
+    # MD5 artifacts (3 views + shared)
+    assert (tmp_path / "combus_local_md5.h").is_file()
+    assert (tmp_path / "combus_remote_md5.h").is_file()
+    assert (tmp_path / "combus_md5.h").is_file()
+    assert (tmp_path / "combus_wire_common.h").is_file()
+    # Total: 9 files
+    all_files = sorted(p.name for p in tmp_path.iterdir())
+    assert len(all_files) == 9, f"Expected 9 files, got {len(all_files)}: {all_files}"
+
+
+def test_md5_payload_built_from_view_model_not_files(tmp_path):
+    """Phase 2: the MD5 payload must be built from the in-memory View
+    model, NOT from reading combus_local.cpp / combus_remote.cpp
+    (which are no longer on disk).
+
+    We verify this by:
+      1. Asserting that the _md5.h files are still produced even though
+         the .cpp files don't exist.
+      2. Asserting that two generate() calls with identical inputs
+         produce identical MD5 hashes (no filesystem-coupling).
+    """
+    chs = _canon_from_yamls({
+        "channels": [
+            _ch("R1", scope="REMOTE", type_="digital", direction="uplink"),
+            _ch("R2", scope="REMOTE", type_="analog", direction="uplink"),
+        ]
+    })
+    # First run
+    sel1 = generate(chs, _ctx([]), tmp_path / "run1")
+    md5_run1 = (tmp_path / "run1" / "combus_remote_md5.h").read_text()
+    # Second run on a different directory
+    sel2 = generate(chs, _ctx([]), tmp_path / "run2")
+    md5_run2 = (tmp_path / "run2" / "combus_remote_md5.h").read_text()
+    # MD5 must be identical (deterministic, no path/host coupling)
+    assert md5_run1 == md5_run2, (
+        "MD5 hash differs between runs — this means the hash is NOT "
+        "computed purely from the in-memory View model."
+    )
+    # Verify the .cpp files do NOT exist on disk for the second run
+    assert not (tmp_path / "run2" / "combus_remote.cpp").exists()
+    assert not (tmp_path / "run2" / "combus_remote.h").exists()
+    # But the MD5 header DOES exist
+    assert (tmp_path / "run2" / "combus_remote_md5.h").is_file()
+
+
+# =============================================================================
 # Generated C++ is structurally well-formed (basic checks)
 # =============================================================================
 

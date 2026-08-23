@@ -149,17 +149,17 @@ def main() -> int:
         print(f"  FAIL: {e}")
 
     # ----- Test 5 : SKIP with full artefact set -----
-    # Since rev 6, the hook checks the FULL EXPECTED_ARTIFACTS list
-    # (12 files: 3 views x 3 + 3 MD5), not just combus.h. We populate
-    # all 12 sentinel files.
+    # Phase 2 / A12: the hook checks the FULL EXPECTED_ARTIFACTS list
+    # (9 files: combus {h,cpp,_ids} + combus_local_ids + combus_remote_ids
+    #  + 3 MD5 + combus_wire_common). We populate all 9 sentinel files.
     print()
     print("Test 5: COMBUS_BUILDER_SKIP=1 with full artefact set -> success")
     sentinel_dir = skip_dir / "combus_generated"
     sentinel_dir.mkdir(parents=True, exist_ok=True)
     EXPECTED_ARTEFACT_NAMES = (
         "combus.h", "combus.cpp", "combus_ids.h",
-        "combus_local.h", "combus_local.cpp", "combus_local_ids.h",
-        "combus_remote.h", "combus_remote.cpp", "combus_remote_ids.h",
+        "combus_local_ids.h",
+        "combus_remote_ids.h",
         "combus_local_md5.h", "combus_remote_md5.h", "combus_md5.h",
         "combus_wire_common.h",
     )
@@ -170,14 +170,14 @@ def main() -> int:
     env_overlay.pop('A12_EMPTY_CPPDEFINES', None)
     env_overlay['A12_BUILD_DIR'] = str(skip_dir)
     res = subprocess.run([sys.executable, str(HELPER)],
-                         cwd=REPO, capture_output=True, text=True,
-                         env=env_overlay)
+                          cwd=REPO, capture_output=True, text=True,
+                          env=env_overlay)
     print(f"  exit={res.returncode}")
     try:
         assert res.returncode == 0
         assert "FATAL" not in res.stderr
         assert "using pre-existing" in res.stdout
-        assert "13 files verified" in res.stdout
+        assert "9 files verified" in res.stdout
         print("  OK")
     except AssertionError as e:
         failures.append(f"Test 5: {e}")

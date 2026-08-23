@@ -691,23 +691,47 @@ def _safe_write(path: Path, content: str) -> None:
         raise
 
 
+# Views that should NOT emit the .h/.cpp runtime artifacts.
+# The .h/.cpp files are still RENDERED (so the generator stays a single
+# source of truth for all view artifacts) but the I/O emission is skipped.
+# Phase 2 / A12 hook: only the ids + md5 headers are written to disk.
+# The .h/.cpp counterparts are only kept in memory for the MD5 payload
+# (which is built from the in-memory View model, see md5.py).
+_NO_EMIT_RUNTIME_VIEWS = frozenset({"combus_local", "combus_remote"})
+
+
 def emit_view(view: View, out_dir: Path, ctx: BuildContext) -> list[Path]:
     """
-    Emit the three files for a view into out_dir.
+    Emit the ids header for a view into out_dir.
+
+    Phase 2 / A12 hook: for combus_local and combus_remote, the .h/.cpp
+    runtime artifacts are NO LONGER written to disk. Only the
+    <view>_ids.h header is emitted.
+
+    The MD5 payload is built directly from the in-memory View model
+    (see md5.canonical_bytes), so the .h/.cpp files are not needed as
+    an intermediate for hashing.
 
     Returns the list of written paths.
     """
     written: list[Path] = []
-    files = {
-        f"{view.name}_ids.h": _render_ids_header(view, ctx),
-        f"{view.name}.h": _render_header(view, ctx),
-        f"{view.name}.cpp": _render_source(view, ctx),
-    }
-    for name, content in files.items():
-        p = out_dir / name
-        _safe_write(p, content)
-        written.append(p)
+    # Always emit the ids header (this is the only artifact the rest
+    # of the codebase includes via `#include "combus_local_ids.h"` etc.).
+    _safe_write(out_dir / f"{view.name}_ids.h", _render_ids_header(view, ctx))
+    written.append(out_dir / f"{view.name}_ids.h")
+    # Skip the .h/.cpp emission for views that don't need them.
+    if view.name in _NO_EMIT_RUNTIME_VIEWS:
+        return written
+    # For combus (full view), emit the .h/.cpp as before.
+    written.append(_safe_write_collect(out_dir / f"{view.name}.h", _render_header(view, ctx)))
+    written.append(_safe_write_collect(out_dir / f"{view.name}.cpp", _render_source(view, ctx)))
     return written
+
+
+def _safe_write_collect(path: Path, content: str) -> Path:
+    """Write content atomically and return the path (helper for emit_view)."""
+    _safe_write(path, content)
+    return path
 
 
 def generate(
@@ -716,13 +740,19 @@ def generate(
     out_dir: Path,
 ) -> ViewSelection:
     """
-    Full A7 generation pipeline.
+    Full A7 + A12 generation pipeline.
 
     1. Resolve `requires` against ctx.
     2. Select views (combus, combus_local, combus_remote).
-    3. Emit three files per view (9 files total).
-    4. Emit MD5 artifacts for combus_local and combus_remote (A7).
-       combus (full) is intentionally NOT hashed (see A7 spec).
+    3. Emit the view headers into out_dir.
+       - combus: 3 files (ids.h, .h, .cpp)
+       - combus_local, combus_remote: 1 file each (ids.h only — Phase 2)
+       The .h/.cpp files for combus_local and combus_remote are NOT
+       written to disk anymore (Phase 2): the MD5 payload is built
+       from the in-memory View model, so no intermediate file is
+       needed. See emit_view() and _NO_EMIT_RUNTIME_VIEWS.
+    4. Emit MD5 artifacts (combus_md5.h, combus_local_md5.h,
+       combus_remote_md5.h, combus_wire_common.h).
 
     Returns the ViewSelection so callers (tests, diagnostics) can
     inspect what was generated.

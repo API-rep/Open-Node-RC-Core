@@ -81,16 +81,18 @@ if str(_REPO_ROOT) not in sys.path:
 # Expected artefacts (the contract that this hook guarantees)
 # =============================================================================
 
+# Phase 2 / A12: combus_local.h/.cpp and combus_remote.h/.cpp are NO LONGER
+# emitted. The MD5 payload is built directly from the in-memory View
+# model (see scripts/combus_builder/md5.py), so no intermediate .cpp file
+# is needed. Only the _ids.h + _md5.h headers are written to disk.
 EXPECTED_ARTIFACTS = (
-    # 3 views x 3 files (A6.1):
+    # combus (full view) — still needs .h/.cpp because it's the runtime
+    # bus instance.
     "combus.h",
     "combus.cpp",
     "combus_ids.h",
-    "combus_local.h",
-    "combus_local.cpp",
+    # combus_local / combus_remote: ids only (Phase 2).
     "combus_local_ids.h",
-    "combus_remote.h",
-    "combus_remote.cpp",
     "combus_remote_ids.h",
     # MD5 artefacts (A7). All 3 views are hashed.
     "combus_local_md5.h",
