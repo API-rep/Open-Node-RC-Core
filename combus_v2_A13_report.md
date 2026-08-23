@@ -241,3 +241,41 @@ L'exécution réelle des tests (au-delà du link) nécessite un ESP32 connecté 
 - Log de compilation : `C:\temp\pio_test_compile5.log` (étape initiale), `pio_test_compile_pt6.log` (étape finale), `pio_test_isol1.log` (test 1 — A13.2), `pio_test_isol2.log` (test 2 — A13.2), `pio_test_final.log` (validation finale A13.2), `pio_test_a133_v2.log` (test 3 — A13.3)
 - Version PlatformIO : `6.1.19` (Core)
 - Code généré : `C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\combus_generated\`
+
+## 12. Dette technique préexistante — Chantiers A et B (post-A13)
+
+Suite à la revue de l'utilisateur, deux chantiers de dette technique préexistante (identifiés en A12 § 5.3 et § 7) ont été traités dans des commits dédiés, séparés du travail de Phase 3.
+
+### 12.1. Chantier A — Channel `BRAKING` manquant (commit `8c8467e`)
+
+**Problème** : `BRAKING` était référencé dans `light_interpreter.cpp` (consommé par `LightBit::BRAKING`) et `dashboard_simulation.cpp` (affichage debug) mais n'était déclaré dans aucun fichier `.cb`. Cela causait une erreur de linker (`undefined reference to comBus`) car le `combus_ids.h` généré ne contenait pas `BRAKING` dans l'enum `DigitalComBusID`.
+
+**Solution** : ajout du channel `BRAKING` dans `src/core/config/machines/dumper_truck/light/light.cb` avec :
+- `scope: LOCAL` (état dérivé du motion, pas sur le wire)
+- `direction: none` (état interne, pas d'activité wire)
+- `theme: light` (côté consommateur)
+- `producer: MotionOutput::isBraking` (futur, pas encore implémenté)
+
+**Validation** :
+- Le générateur a accepté le changement : `BRAKING = 30` dans `DigitalComBusID`
+- `combus.cpp` initialiseur : `.layer = ChanLayer::LOCAL, .direction = None`
+- L'erreur de linker `undefined reference to comBus` est **préexistante** et non liée à ce changement (vérifié par checkout du commit précédent + relance).
+
+### 12.2. Chantier B — `projenv` `NameError` dans `test_a12_rev4.py` (commit `b5e16ba`)
+
+**Problème** : le helper `_a12_helper_v2.py` (pattern inliné dans `_HELPER_SRC` de `test_a12_rev4.py`) exec'ait `scripts/combus_scons_hook.py` avec un mock `Import()` qui retournait `env` pour n'importe quel argument. Le hook fait `Import("projenv")` dans un try/except qui assigne `projenv = None` en cas d'échec. Comme le mock retournait `env` au lieu de lever une exception, `projenv` n'était jamais assigné, et les appels `_add_to_cpppath(projenv, ...)` levaient `NameError`.
+
+**Solution** : 
+- Le helper filtre maintenant le bloc try/except complet pour `Import("projenv")` (4 lignes : `try:`, `Import("projenv")`, `except Exception:`, `projenv = None`).
+- Le helper injecte directement `projenv = None` dans le namespace exec. La fonction `_add_to_cpppath` gère déjà `target_env=None` (retour early).
+
+**Validation** : tous les 7 tests de `test_a12_rev4.py` passent désormais (auparavant 1/7). En particulier le Test 5 qui asserte `"9 files verified"` (le compte d'artefacts de la Phase 2).
+
+### 12.3. Bilan
+
+| Chantier | Commit | Statut |
+|---|---|---|
+| A — Channel `BRAKING` | `8c8467e` | ✅ Validé |
+| B — Fix `projenv` dans helper | `b5e16ba` | ✅ Validé (7/7 tests) |
+
+**Périmètre respecté** : aucun fichier applicatif touché, aucun changement au générateur ou au hook. Les deux chantiers sont strictement des corrections de dette technique préexistante.
