@@ -247,8 +247,11 @@ static void test_loopback_monkey(void) {
 //
 // Validates the central invariant of Solution A: the 3 view-specific
 // enums (AnalogComBusID, AnalogComBusLocalID, AnalogComBusRemoteID and
-// their digital counterparts) must share the same numeric ID for every
-// channel they have in common (the "prefix alignment" property).
+// their digital counterparts) must reference the SAME runtime object
+// in AnalogComBusArray[] / DigitalComBusArray[]. Comparing only the
+// numeric values would NOT prove this — two independent arrays
+// initialised identically would pass a value-only check. We compare
+// POINTERS (TEST_ASSERT_EQUAL_PTR) to prove memory identity.
 //
 // This is the C++-runtime counterpart of the Python test
 // `test_render_ids_header_emits_distinct_per_bus_values`. The Python
@@ -257,29 +260,81 @@ static void test_loopback_monkey(void) {
 // that re-mapped the enums independently).
 //
 // Channel choices (volvo_A60H_bruder / dumper_truck):
-//   - BRAKE_BUS (REMOTE analog): present in all 3 views.
-//   - DUMP_STICK (LOCAL analog): present in combus + combus_local.
-//   - CRUISE_ACTIVE (REMOTE digital): present in all 3 views.
-//   - CRUISE_TOGGLE_BTN (LOCAL digital): present in combus + combus_local.
+//   - BRAKE_BUS (REMOTE analog, id=0): present in all 3 views.
+//   - DUMP_STICK (LOCAL analog, id=18): present in combus + combus_local,
+//     absent from combus_remote (REMOTE-only view).
+//   - CRUISE_ACTIVE (REMOTE digital, id=9): present in all 3 views.
+//   - CRUISE_TOGGLE_BTN (LOCAL digital, id=21): present in combus +
+//     combus_local, absent from combus_remote.
 //
-// LIMITATION (documented): the test harness in test/test_combus_loopback
-// does NOT link against the generated `combus_generated/combus.cpp`
-// (which defines `AnalogComBusArray` and `DigitalComBusArray`). It
-// therefore cannot test *memory identity* of the arrays (Step 2 of
-// the original Phase 3 spec). The pointer-equality tests would require
-// either:
-//   (a) linking the generated combus.cpp into the test binary, or
-//   (b) making the test binary reference the runtime `comBus` (which
-//       would also require linking combus.cpp + its dependencies).
-// Both are blocked by the test env's build_src_filter (line 199 of
-// platformio.ini) which doesn't include the generated directory.
-// Phase 3 is therefore scoped to the *prefix alignment* test
-// (numerical), not memory identity. The Python generator test
-// `test_render_ids_header_emits_distinct_per_bus_values` is the
-// primary guard for the memory-identity invariant at the
-// generation layer; this C++ test is the secondary guard at the
-// compilation layer.
+// The generated combus_generated/combus.cpp is added to the test env's
+// source list via scripts/combus_test_add_generated_source.py (registered
+// as `extra_scripts = pre:...` in the test_combus_loopback env section).
+// This makes AnalogComBusArray / DigitalComBusArray available at link
+// time, enabling the pointer-equality tests below.
 // =============================================================================
+
+/** Analog: a REMOTE channel must be the same object in all 3 views. */
+static void test_same_memory_object_analog_remote(void) {
+    AnalogComBus& via_full   = AnalogComBusArray[static_cast<uint8_t>(AnalogComBusID::BRAKE_BUS)];
+    AnalogComBus& via_remote = AnalogComBusArray[static_cast<uint8_t>(AnalogComBusRemoteID::BRAKE_BUS)];
+    AnalogComBus& via_local  = AnalogComBusArray[static_cast<uint8_t>(AnalogComBusLocalID::BRAKE_BUS)];
+
+    // Pointer identity: the 3 views must reference the same object.
+    TEST_ASSERT_EQUAL_PTR(&via_full, &via_remote);
+    TEST_ASSERT_EQUAL_PTR(&via_full, &via_local);
+
+    // Write via one view, read via the others.
+    via_full.value = 12345u;
+    TEST_ASSERT_EQUAL_UINT16(12345u, via_remote.value);
+    TEST_ASSERT_EQUAL_UINT16(12345u, via_local.value);
+
+    via_remote.value = 6789u;
+    TEST_ASSERT_EQUAL_UINT16(6789u, via_full.value);
+    TEST_ASSERT_EQUAL_UINT16(6789u, via_local.value);
+}
+
+/** Analog: a LOCAL-only channel must be the same object in combus + combus_local. */
+static void test_same_memory_object_analog_local_only(void) {
+    AnalogComBus& via_full  = AnalogComBusArray[static_cast<uint8_t>(AnalogComBusID::DUMP_STICK)];
+    AnalogComBus& via_local = AnalogComBusArray[static_cast<uint8_t>(AnalogComBusLocalID::DUMP_STICK)];
+
+    // Pointer identity: combus and combus_local must share the object.
+    TEST_ASSERT_EQUAL_PTR(&via_full, &via_local);
+
+    // Write via one view, read via the other.
+    via_local.value = 999u;
+    TEST_ASSERT_EQUAL_UINT16(999u, via_full.value);
+}
+
+/** Digital: a REMOTE channel must be the same object in all 3 views. */
+static void test_same_memory_object_digital_remote(void) {
+    DigitalComBus& via_full   = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::CRUISE_ACTIVE)];
+    DigitalComBus& via_remote = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusRemoteID::CRUISE_ACTIVE)];
+    DigitalComBus& via_local  = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusLocalID::CRUISE_ACTIVE)];
+
+    TEST_ASSERT_EQUAL_PTR(&via_full, &via_remote);
+    TEST_ASSERT_EQUAL_PTR(&via_full, &via_local);
+
+    via_full.value = true;
+    TEST_ASSERT_TRUE(via_remote.value);
+    TEST_ASSERT_TRUE(via_local.value);
+
+    via_remote.value = false;
+    TEST_ASSERT_FALSE(via_full.value);
+    TEST_ASSERT_FALSE(via_local.value);
+}
+
+/** Digital: a LOCAL-only channel must be the same object in combus + combus_local. */
+static void test_same_memory_object_digital_local_only(void) {
+    DigitalComBus& via_full  = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::CRUISE_TOGGLE_BTN)];
+    DigitalComBus& via_local = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusLocalID::CRUISE_TOGGLE_BTN)];
+
+    TEST_ASSERT_EQUAL_PTR(&via_full, &via_local);
+
+    via_local.value = true;
+    TEST_ASSERT_TRUE(via_full.value);
+}
 
 /** Prefix alignment: the 3 enums must agree on numeric values for shared channels. */
 static void test_id_prefix_alignment_analog(void) {
@@ -340,8 +395,14 @@ void setup() {
     RUN_TEST(test_loopback_resync_after_garbage);
     RUN_TEST(test_loopback_monkey);
 
-    // --- Group C: view identity prefix alignment (Phase 3 / A13) ---
-    // Memory identity tests are out of scope here (see Group C comment).
+    // --- Group C: view identity (Phase 3 / A13) ---
+    // Memory identity (pointer equality) + prefix alignment (numeric).
+    // The generated combus_generated/combus.cpp is added to the test
+    // env's source list via scripts/combus_test_add_generated_source.py.
+    RUN_TEST(test_same_memory_object_analog_remote);
+    RUN_TEST(test_same_memory_object_analog_local_only);
+    RUN_TEST(test_same_memory_object_digital_remote);
+    RUN_TEST(test_same_memory_object_digital_local_only);
     RUN_TEST(test_id_prefix_alignment_analog);
     RUN_TEST(test_id_prefix_alignment_digital);
 
