@@ -26,27 +26,37 @@ This is the axis already documented in `core_architecture.md`
 (`src/machines/`, `src/remotes/`, ...). It answers "what does this
 firmware control" — a vehicle, or a handheld controller.
 
-### 1.2 Board Role
+# 1.2 Board Role — *deprecated*
 
-*What is this firmware's position within its own ecosystem category?*
+> **Status: deprecated.** The `IS_MAINBOARD` / `IS_EXT_BOARD` axis 
+described below no longer reflects the architecture. Kept here for
+historical context only, until the remaining code references are migrated.
 
-* **`IS_MAINBOARD`** — the decision-making board for its node. Hosts
-  the authoritative ComBus instance for that node. Exactly one
-  mainboard per node.
-* **`IS_EXT_BOARD`** — a child board attached to a mainboard, with its
-  own compiled firmware, its own MCU, participating in the same node's
-  ComBus as a secondary participant rather than the authority.
+`IS_EXT_BOARD` was originally introduced to integrate `sound_module`
+as a secondary board attached to a mainboard's authoritative ComBus.
 
-This axis is orthogonal to ecosystem category. A sound module is the
-canonical example: depending on the concrete vehicle, the exact same
-sound board could conceivably be wired as the machine's mainboard or
-as an extension board — the role is a contract decision, not a
-hardware limitation of the board itself.
+This model no longer holds.
 
-### Combined Contract
+Any board with compiled firmware is simply a **BOARD**: a peer
+participant on its node's ComBus, capable of hosting any module — motors,
+sound, inputs, or others — rather than having a distinguished "mainboard"
+or "extension" role.
 
-A firmware always resolves both axes: its node type in the ecosystem
-and its board role in the node.
+A node's ComBus no longer has a single authoritative owner.
+
+Each board implicitly owns the ComBus channels for whichever modules
+it hosts, while sharing the rest of the node's ComBus like any other
+participant.
+
+There is therefore no longer a board-role axis to resolve.
+
+A firmware only resolves its node type in the ecosystem (§1.1);
+board role is no longer a separate contract.
+
+Code still referencing `IS_MAINBOARD` / `IS_EXT_BOARD` — for example
+`combus_scons_hook.py`'s structural-flags check — should be flagged
+`// deprecated` and migrated to drop the distinction.
+
 
 ---
 

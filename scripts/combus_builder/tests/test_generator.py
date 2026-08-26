@@ -74,7 +74,7 @@ def _ch(
     type_: str = "digital",
     scope: str = "LOCAL",
     theme: str = "failsafe",
-    direction: list | None = None,
+    direction: str | None = None,
     requires: list | None = None,
 ) -> dict:
     d: dict = {
@@ -87,7 +87,7 @@ def _ch(
     if direction is not None:
         d["direction"] = direction
     elif scope in ("LOCAL", "REMOTE"):
-        d["direction"] = ["uplink"]
+        d["direction"] = "uplink"
     if requires is not None:
         d["requires"] = requires
     return d
@@ -648,32 +648,39 @@ def test_view_channel_direction_bits():
 # =============================================================================
 
 def _build_view_with_channels(channels: list[ChannelDefinition]) -> View:
-    """Build a test View wrapping a list of channels (forces the same sort key as _select_view)."""
-    selected = list(channels)
+    """Build a test View wrapping a list of channels (mirror of
+    `_select_view` from generator.py). Phase 5 (A15): each type has
+    its own 0-based counter.
+    """
     _VIEW_SCOPE_ORDER = {"REMOTE": 0, "LOCAL": 1, "SYSTEM": 2}
-    selected.sort(key=lambda ch: (_VIEW_SCOPE_ORDER[ch.scope],
-                                  0 if ch.type == "analog" else 1,
-                                  ch.theme, ch.id))
-    view_channels = []
-    wire_end = 0
-    # Phase 1 A.11 fix: per-bus wire-end counters (mirror of _select_view).
+    selected_analog = sorted(
+        [ch for ch in channels if ch.type == "analog"],
+        key=lambda ch: (_VIEW_SCOPE_ORDER[ch.scope], ch.theme, ch.id),
+    )
+    selected_digital = sorted(
+        [ch for ch in channels if ch.type == "digital"],
+        key=lambda ch: (_VIEW_SCOPE_ORDER[ch.scope], ch.theme, ch.id),
+    )
+    view_channels: list[ViewChannel] = []
     wire_end_analog = 0
     wire_end_digital = 0
-    for idx, ch in enumerate(selected):
+    for idx, ch in enumerate(selected_analog):
         view_channels.append(ViewChannel(
             numeric_id=idx,
             ch=ch,
             direction_bits=Direction.from_frozenset(ch.direction),
         ))
         if ch.scope == "REMOTE":
-            if ch.type == "analog":
-                wire_end_analog += 1
-            else:
-                wire_end_digital += 1
-        elif wire_end == 0:
-            wire_end = idx
-    if wire_end == 0 and selected:
-        wire_end = len(selected)
+            wire_end_analog += 1
+    for idx, ch in enumerate(selected_digital):
+        view_channels.append(ViewChannel(
+            numeric_id=idx,
+            ch=ch,
+            direction_bits=Direction.from_frozenset(ch.direction),
+        ))
+        if ch.scope == "REMOTE":
+            wire_end_digital += 1
+    wire_end = wire_end_analog + wire_end_digital
     return View(
         name="combus",
         channels=view_channels,
@@ -688,7 +695,7 @@ def test_render_ids_header_basic():
     view = _build_view_with_channels(chs)
     out = _render_ids_header(view, _ctx([]))
     assert "GENERATED FILE" in out
-    assert "enum class DigitalCombusID : uint8_t" in out
+    assert "enum class DigitalComBusID : uint8_t" in out
     assert "FOO = 0" in out
     assert "CH_COUNT" in out
     # Phase 4 (A14): WireEnd constants are no longer emitted.
@@ -797,11 +804,11 @@ def test_render_ids_header_analog_digital():
     })
     view = _build_view_with_channels(chs)
     out = _render_ids_header(view, _ctx([]))
-    assert "enum class AnalogCombusID" in out
-    assert "enum class DigitalCombusID" in out
+    assert "enum class AnalogComBusID" in out
+    assert "enum class DigitalComBusID" in out
     # A1 gets 0 in analog, D1 gets 0 in digital (each enum has its own ID space).
     assert re.search(r"A1\s*=\s*0", out)
-    assert re.search(r"D1\s*=\s*1", out)
+    assert re.search(r"D1\s*=\s*0", out)
 
 
 def test_render_ids_header_no_wire_end_for_remote_view():
@@ -1451,3 +1458,146 @@ def test_generated_cpp_direction_for_downlink():
     view = _build_view_with_channels(chs)
     out = _render_source(view, _ctx([]))
     assert "Direction::Downlink" in out
+
+
+# =============================================================================
+# Phase 5 (A15) — ID/data correspondence tests
+# =============================================================================
+# These tests guard against the bug found in A14 verification: the
+# generator previously allocated IDs via a single global enumerate()
+# over a (scope, type, theme, id)-sorted channel list, which mixed
+# analog and digital channels into one sequence. The result: digital
+# IDs started at 9 (after the 9 analog REMOTE channels), and the
+# generated DigitalComBusArray[] was indexed by the position-in-list
+# (0..19), not by the channel's own ID (9..17). Reading
+# DigitalComBusArray[CRUISE_ACTIVE=9] therefore read CRUISE_TOGGLE_BTN
+# data, not CRUISE_ACTIVE data. The fix: each TYPE now has its own
+# 0-based counter. The tests below verify the fix is in place.
+# =============================================================================
+
+
+def test_a15_analog_ids_are_0_based_per_type():
+    """Phase 5 (A15) regression guard: analog channels must have 0-based
+    numeric_id within their own type, NOT in a global sequence that
+    mixes with digital channels.
+
+    Setup: 2 analog REMOTE + 2 digital REMOTE. Before the fix, the
+    analog IDs would be {0, 1} and the digital IDs would be {2, 3}
+    (global enumerate). After the fix: analog {0, 1}, digital {0, 1}
+    (per-type 0-based).
+    """
+    chs = _canon_from_yamls({"channels": [
+        _ch("A1", type_="analog", scope="REMOTE", theme="core", direction="uplink"),
+        _ch("D1", type_="digital", scope="REMOTE", theme="core", direction="uplink"),
+        _ch("A2", type_="analog", scope="REMOTE", theme="core", direction="uplink"),
+        _ch("D2", type_="digital", scope="REMOTE", theme="core", direction="uplink"),
+    ]})
+    sel = select_views(chs)
+    analog = {vc.ch.id: vc.numeric_id
+              for vc in sel.remote.channels
+              if vc.ch.type == "analog"}
+    digital = {vc.ch.id: vc.numeric_id
+               for vc in sel.remote.channels
+               if vc.ch.type == "digital"}
+    # Each type starts at 0 and is contiguous.
+    assert set(analog.values()) == {0, 1}, f"analog IDs not 0-based: {analog}"
+    assert set(digital.values()) == {0, 1}, f"digital IDs not 0-based: {digital}"
+
+
+def test_a15_generated_array_data_matches_enum_ids():
+    """Phase 5 (A15) regression guard: the generated combus.cpp must
+    place each channel's data at the array index equal to its enum ID.
+
+    Before the fix: digital channels had enum IDs 2, 3 but their data
+    was at array positions 0, 1. Reading digitalBus[2] would read
+    garbage. After the fix: digitalBus[2] reads D2's data.
+
+    This test parses the generated .cpp and verifies, for every
+    channel, that the data appears at the position equal to its ID.
+    """
+    import re
+    chs = _canon_from_yamls({"channels": [
+        _ch("A1", type_="analog", scope="REMOTE", info_name="A1 data"),
+        _ch("D1", type_="digital", scope="REMOTE", info_name="D1 data"),
+        _ch("A2", type_="analog", scope="REMOTE", info_name="A2 data"),
+        _ch("D2", type_="digital", scope="REMOTE", info_name="D2 data"),
+    ]})
+    sel = select_views(chs)
+    with tempfile.TemporaryDirectory() as td:
+        out_dir = Path(td)
+        generate(chs, _ctx([]), out_dir)
+        cpp = (out_dir / "combus.cpp").read_text(encoding="utf-8")
+
+    # Extract infoName values for each channel type, in array order.
+    def extract_info_names(cpp_text: str, type_: str) -> list[str]:
+        m = re.search(
+            rf"{type_}ComBusArray\s*\[[^\]]+\]\s*=\s*\{{(.*?)\}};",
+            cpp_text, re.DOTALL)
+        assert m, f"could not find {type_}ComBusArray in generated .cpp"
+        body = m.group(1)
+        return re.findall(r'\.infoName\s*=\s*"([^"]+)"', body)
+
+    analog_names = extract_info_names(cpp, "Analog")
+    digital_names = extract_info_names(cpp, "Digital")
+
+    # Build a map from infoName -> expected enum ID.
+    analog_id_by_name = {vc.ch.info_name: vc.numeric_id
+                         for vc in sel.full.channels
+                         if vc.ch.type == "analog"}
+    digital_id_by_name = {vc.ch.info_name: vc.numeric_id
+                          for vc in sel.full.channels
+                          if vc.ch.type == "digital"}
+
+    # For each name at position i, its expected ID is i. Verify the
+    # actual ID matches.
+    for i, name in enumerate(analog_names):
+        expected_id = analog_id_by_name.get(name)
+        assert expected_id == i, (
+            f"AnalogComBusArray[{i}] contains {name!r} but its "
+            f"expected ID is {expected_id} (data/enum mismatch)")
+    for i, name in enumerate(digital_names):
+        expected_id = digital_id_by_name.get(name)
+        assert expected_id == i, (
+            f"DigitalComBusArray[{i}] contains {name!r} but its "
+            f"expected ID is {expected_id} (data/enum mismatch)")
+
+
+def test_a15_remote_view_only_contains_remote_channels():
+    """Phase 5 (A15): the combus_remote view must only contain channels
+    with scope=REMOTE, regardless of type.
+    """
+    chs = _canon_from_yamls({"channels": [
+        _ch("R_A", type_="analog", scope="REMOTE"),
+        _ch("R_D", type_="digital", scope="REMOTE"),
+        _ch("L_A", type_="analog", scope="LOCAL"),
+        _ch("L_D", type_="digital", scope="LOCAL"),
+    ]})
+    sel = select_views(chs)
+    remote_ids = {vc.ch.id for vc in sel.remote.channels}
+    assert remote_ids == {"R_A", "R_D"}, (
+        f"combus_remote must only contain REMOTE channels, got {remote_ids}")
+
+
+def test_a15_wire_end_equals_count_of_remote_channels():
+    """Phase 5 (A15): view.wire_end must equal the count of REMOTE
+    channels of ALL types (analog + digital).
+    """
+    chs = _canon_from_yamls({"channels": [
+        _ch("R1", type_="analog", scope="REMOTE"),
+        _ch("R2", type_="digital", scope="REMOTE"),
+        _ch("R3", type_="analog", scope="REMOTE"),
+        _ch("L1", type_="analog", scope="LOCAL"),
+        _ch("L2", type_="digital", scope="LOCAL"),
+    ]})
+    sel = select_views(chs)
+    # combus_full has 3 REMOTE channels (2 analog + 1 digital).
+    assert sel.full.wire_end == 3, (
+        f"combus.wire_end should be 3 (count of REMOTE), got {sel.full.wire_end}")
+    # combus_remote has all 3 REMOTE channels.
+    assert sel.remote.wire_end == 3, (
+        f"combus_remote.wire_end should be 3 (== CH_COUNT), got {sel.remote.wire_end}")
+    # combus_local has 3 REMOTE channels (same as combus).
+    assert sel.local.wire_end == 3
+    # Per-type counts: 2 analog REMOTE, 1 digital REMOTE.
+    assert sel.full.wire_end_analog == 2
+    assert sel.full.wire_end_digital == 1

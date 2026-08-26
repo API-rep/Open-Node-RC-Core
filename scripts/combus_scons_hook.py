@@ -2,51 +2,51 @@
 """
 combus_scons_hook.py — A12 implementation: PlatformIO extra_script hook.
 
-This script is loaded by PlatformIO via `extra_scripts = post:...` in
-platformio.ini. It runs ONCE after `extends` resolution and CPPDEFINES
-construction, but BEFORE SCons starts compiling the `.cpp` files.
+This script is loaded by PlatformIO via `extra_scripts = pre:...` in
+platformio.ini. It runs ONCE, BEFORE SCons resolves `build_src_filter`.
 
-Pipeline:
-  1. Acquire BuildContext from the live SCons env (`env["CPPDEFINES"]`).
-  2. Discover and parse the `.cb` files in the current buildroot.
-  3. Canonise and resolve `requires` against the BuildContext.
-  4. Emit the 3 view triplets (combus, combus_local, combus_remote) +
-     MD5 artefacts (A7) into a generated directory.
-  5. Add the generated directory to env['CPPPATH'] so the .cpp files
-     pick them up via `#include "combus.h"` etc.
+Pipeline (A16 refactor — deferred SCons task):
+  1. Eagerly add the `combus_generated/` directory to CPPPATH and
+     `combus.cpp` to PIOBUILDFILES so SCons picks them up when the
+     source list is resolved.
+  2. Register a SINGLE SCons `env.Command()` that produces all the
+     `combus_generated/*` artefacts LAZILY — at build time, not at
+     hook-registration time. This is the key change versus the
+     previous A12/A15 approach which called the generator eagerly.
 
-This script is the production integration of A12. It does NOT use
-`env.AddPostAction()` — the generation happens BEFORE compilation, not
-after. See doc/combus_v2 - A12 hook mechanism.md for the rationale.
+The SCons task is invalidated when:
+  - any of the `*.cb` / `*.cbch` source files change, AND/OR
+  - any of the configuration values listed in `varlist` (CPPDEFINES,
+    CPPPATH, LIBDEPS, buildroot) change.
+
+This solves the two failure modes the previous eager-hook approach
+suffered from:
+  - `pre:`  → CPPDEFINES is empty (env not yet built)
+  - `post:` → PIOBUILDFILES is frozen (sources already resolved)
+
+By deferring the actual generation work to a SCons task, the env is
+fully built by the time the action runs, and the artefacts are
+written before any source is compiled (SCons topological sort).
+
+A single Command is registered on `env` (idempotency guard prevents a
+second registration on `projenv`).
 
 Usage in platformio.ini:
 
     extra_scripts =
-        post:scripts/combus_scons_hook.py
+        pre:scripts/combus_scons_hook.py
 
-Failure policy (revision 6, 2026-08-22):
-  - ANY error in the pipeline (import, BuildContext, parse, canonise,
-    generate, write) is FATAL. The hook calls sys.exit(1) which SCons
-    interprets as a build failure. The build cannot continue with stale
-    artefacts.
-  - Anti-stale: artefacts are written into a sibling staging
-    directory; only after a completeness check on the staging does the
-    hook publish them into the final location. If generation fails,
-    the staging is cleaned up and the previous out_dir is left
-    untouched. The build then aborts because _fatal() exits with code
-    1, before any .cpp is compiled.
-  - COMBUS_BUILDER_SKIP=1: explicit opt-out. The hook verifies that
-    the FULL EXPECTED_ARTIFACTS list is already present in the
-    expected directory; if not, it fails loudly. This prevents the
-    silent "skip + missing headers" trap.
-
-The "atomic" claim of the publish step is about renaming only; the
-real safety against stale-artefact builds is the FATAL-on-any-error
-policy, which makes it impossible for a compile to start against
-artefacts that don't match the current configuration.
-
-See doc/combus_v2 - A12 hook mechanism.md section 15 for the full
-contract.
+Failure policy (revision 7, 2026-08-25):
+  - Any error in the action is fatal (return non-zero from the action).
+  - Anti-stale: artefacts are written into a sibling staging directory;
+    only after a completeness check on the staging does the hook publish
+    them into the final location.
+  - COMBUS_BUILDER_SKIP=1: the Command is registered but its action is
+    replaced by a no-op (and the build only succeeds if the artefacts
+    are already present).
+  - If env["CPPDEFINES"] is empty or required structural flags are
+    missing at action time, the build fails loudly (no silent
+    generation with an incomplete context).
 """
 from __future__ import annotations
 
@@ -55,11 +55,7 @@ import shutil
 import sys
 from pathlib import Path
 
-# SCons / PlatformIO injects `env` at top level. PlatformIO also
-# separates the project source compilation environment (`projenv`) from
-# the libraries / framework environment (`env`); both must see the
-# generated headers directory in their CPPPATH, otherwise the project
-# .cpp files cannot include the generated combus*.h headers.
+# SCons / PlatformIO inject `env` and (sometimes) `projenv` at top level.
 Import("env")  # noqa: F821 — SCons inject
 try:
     Import("projenv")  # noqa: F821 — SCons inject, may not exist
@@ -67,11 +63,6 @@ except Exception:  # pragma: no cover — some PIO versions omit it
     projenv = None  # type: ignore[assignment]
 
 # Make `scripts.combus_builder.*` importable from the repo root.
-#
-# NOTE: `__file__` is NOT guaranteed to be defined when SCons loads this
-# script via SConscript() (it is in some SCons versions, missing in others).
-# We use `env["PROJECT_DIR"]` instead, which PlatformIO always injects and
-# which points to the repo root (the directory containing platformio.ini).
 _REPO_ROOT = Path(env["PROJECT_DIR"]).resolve()
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
@@ -81,10 +72,6 @@ if str(_REPO_ROOT) not in sys.path:
 # Expected artefacts (the contract that this hook guarantees)
 # =============================================================================
 
-# Phase 2 / A12: combus_local.h/.cpp and combus_remote.h/.cpp are NO LONGER
-# emitted. The MD5 payload is built directly from the in-memory View
-# model (see scripts/combus_builder/md5.py), so no intermediate .cpp file
-# is needed. Only the _ids.h + _md5.h headers are written to disk.
 EXPECTED_ARTIFACTS = (
     # combus (full view) — still needs .h/.cpp because it's the runtime
     # bus instance.
@@ -103,7 +90,7 @@ EXPECTED_ARTIFACTS = (
 
 
 def _missing_artefacts(out_dir: Path) -> list[str]:
-    """Return the list of EXPECTED_ARTEFACTS that are not present."""
+    """Return the list of expected artefacts that are not present."""
     return [name for name in EXPECTED_ARTIFACTS
             if not (out_dir / name).is_file()]
 
@@ -113,11 +100,11 @@ def _missing_artefacts(out_dir: Path) -> list[str]:
 # =============================================================================
 
 def _fatal(msg: str) -> None:
-    """
-    Print a fatal error to stderr and exit with code 1.
+    """Print a fatal error to stderr and exit with code 1.
 
-    SCons / PlatformIO interpret a non-zero exit from an extra_script
-    as a build failure. This is the ONLY way the hook reports failure.
+    Used by the HOOK itself (registration time). Inside the SCons
+    action we prefer returning a non-zero exit code (so SCons records
+    the failure on the target).
     """
     sys.stderr.write(f"[combus_scons_hook] FATAL: {msg}\n")
     sys.stderr.flush()
@@ -138,40 +125,15 @@ def _skip_requested() -> bool:
     )
 
 
-def _verify_skip_artifacts(out_dir: Path) -> None:
-    """
-    When COMBUS_BUILDER_SKIP=1 is set, the hook does NOT regenerate.
-    It MUST verify that EVERY expected artefact is already present in
-    out_dir (the full EXPECTED_ARTIFACTS list, not just a sentinel).
-    If anything is missing, the build cannot succeed (the .cpp files
-    include several of these headers) and we must fail loudly rather
-    than let the compiler emit a confusing "file not found" error.
-    """
-    missing = _missing_artefacts(out_dir)
-    if missing:
-        _fatal(
-            f"COMBUS_BUILDER_SKIP=1 is set but the artefacts in {out_dir} "
-            f"are incomplete. Missing files: {missing}. Either unset "
-            "COMBUS_BUILDER_SKIP to regenerate, or run a build without "
-            "the skip first to produce the full artefact set."
-        )
-    print(
-        f"[combus_scons_hook] COMBUS_BUILDER_SKIP=1 — using pre-existing "
-        f"artefacts in {out_dir} ({len(EXPECTED_ARTIFACTS)} files verified)."
-    )
-
-
 # =============================================================================
 # Output directory resolution
 # =============================================================================
 
 def _default_out_dir(env) -> Path:
-    """
-    Where to write the generated headers.
+    """Where to write the generated headers.
 
     Prefer `PROJECT_BUILD_DIR` (PlatformIO 6.x), fall back to
-    `.pio/build/<PIOENV>` derived from PROJECT_DIR + PIOENV. Refuse to
-    run if neither is available (the caller has to set up at least one).
+    `.pio/build/<PIOENV>` derived from PROJECT_DIR + PIOENV.
     """
     build_dir = env.get("PROJECT_BUILD_DIR")
     if build_dir:
@@ -184,7 +146,7 @@ def _default_out_dir(env) -> Path:
 
     raise RuntimeError(
         "Neither PROJECT_BUILD_DIR nor PROJECT_DIR is available on env; "
-        "cannot determine where to write generated headers."
+        "cannot determine where to write generated artefacts."
     )
 
 
@@ -193,23 +155,10 @@ def _default_out_dir(env) -> Path:
 # =============================================================================
 
 def _publish(src_dir: Path, dst_dir: Path) -> None:
-    """
-    Publish the staging directory into the final location.
+    """Atomically publish the staging directory into the final location.
 
-    IMPORTANT: This function is NOT crash-safe by itself. There is a
-    window between the `shutil.rmtree(dst_dir)` and the
-    `os.replace(src_dir, dst_dir)` in which `dst_dir` does not exist
-    on disk. If the process is killed inside that window, the build
-    is in an inconsistent state. We accept this risk because:
-
-    1. The only thing that runs after the publish is the SCons
-       compilation, which the hook cannot reach on fatal errors
-       (`_fatal` -> `sys.exit(1)` propagates immediately).
-    2. The pre-publish completeness check (`_check_staging_complete`)
-       prevents publishing a partial staging in the first place.
-
-    The real safety net is therefore the FATAL-on-any-error policy
-    upstream of this function, not the publish itself.
+    Crash-safety window: between `rmtree(dst_dir)` and `os.replace`.
+    Accepted because `_fatal` propagates immediately on any error.
     """
     if dst_dir.exists():
         shutil.rmtree(dst_dir)
@@ -217,24 +166,14 @@ def _publish(src_dir: Path, dst_dir: Path) -> None:
 
 
 def _check_staging_complete(staging_dir: Path) -> None:
-    """
-    Verify that the staging directory contains the full
-    EXPECTED_ARTIFACTS list BEFORE any publication. If anything is
-    missing, fail loudly and clean the staging.
-
-    Rationale: even if `generate()` reported success, we want a
-    belt-and-braces check here. A partial staging could replace a
-    previously valid out_dir with an incomplete one, breaking the
-    compile with confusing errors. Better to fail the build than to
-    publish a partial set.
-    """
+    """Verify that the staging directory contains the full
+    EXPECTED_ARTIFACTS list BEFORE any publication."""
     missing = [name for name in EXPECTED_ARTIFACTS
                if not (staging_dir / name).is_file()]
     if missing:
-        # Clean the staging so we don't leave junk around.
         if staging_dir.exists():
             shutil.rmtree(staging_dir)
-        _fatal(
+        raise RuntimeError(
             f"staging directory {staging_dir} is incomplete after "
             f"generation. Missing files: {missing}. The previous "
             "out_dir is left untouched; the build is aborted."
@@ -242,48 +181,90 @@ def _check_staging_complete(staging_dir: Path) -> None:
 
 
 # =============================================================================
-# CPPPATH propagation
+# Source discovery (used to compute the SCons source list + for the action)
 # =============================================================================
 
-def _add_to_cpppath(target_env, out_dir_str: str, label: str) -> None:
+def _discover_cb_sources(buildroot: Path) -> list[str]:
+    """Return the list of `*.cb` / `*.cbch` source files (strings).
+
+    Used both:
+    - as the `source` list of the SCons Command (for incremental build),
+    - and as the input of the action (for invalidation awareness).
     """
-    Add `out_dir_str` to `target_env`'s CPPPATH if not already present.
-    `label` is just a diagnostic suffix for the print() message.
-    """
-    if target_env is None:
-        return
-    cpppath = target_env.get("CPPPATH", [])
-    if isinstance(cpppath, str):
-        cpppath = [cpppath]
-    if out_dir_str not in cpppath:
-        cpppath.append(out_dir_str)
-        target_env["CPPPATH"] = cpppath
-    print(f"[combus_scons_hook] CPPPATH += {out_dir_str} ({label})")
+    sources: list[str] = []
+    for ext in ("*.cb", "*.cbch"):
+        for p in buildroot.rglob(ext):
+            sources.append(str(p))
+    return sorted(sources)
 
 
 # =============================================================================
-# Main pipeline
+# The SCons action — runs LAZILY at build time, with the env fully built
 # =============================================================================
 
-def main(env) -> int:
+def _generate_combus_action(target, source, env):
     """
-    Run the A12 hook pipeline.
+    SCons action that produces all `combus_generated/*` artefacts.
 
-    Returns 0 on success. On ANY error, calls _fatal() which calls
-    sys.exit(1) — this function never returns a non-zero code, because
-    SCons must treat any failure as a build failure.
+    Invoked by SCons at build time, after `env` is fully constructed
+    (so `env["CPPDEFINES"]` is populated and `PioBuildFiles` is
+    resolved). Writes into a staging directory, then atomically
+    publishes into the final out_dir.
+
+    Hard failures (returns non-zero) on:
+      - env["CPPDEFINES"] empty
+      - missing structural flags (e.g. IS_MACHINE / IS_REMOTE)
+      - generator / parser / canon errors
+      - atomic-publish failure
     """
+    print("[combus_scons_action] running combus builder…")
+
     out_dir = _default_out_dir(env)
 
-    # --- Skip path ---------------------------------------------------------
-    if _skip_requested():
-        _verify_skip_artifacts(out_dir)
-        out_dir_str = str(out_dir)
-        _add_to_cpppath(env, out_dir_str, "skip, env")
-        _add_to_cpppath(projenv, out_dir_str, "skip, projenv")
-        return 0
+    # --- 1. Hard fail on empty CPPDEFINES --------------------------------
+    # By the time the action runs, the env is fully built and CPPDEFINES
+    # is populated. If it isn't, the context is genuinely incomplete and
+    # the previous A12/A15 fallback (GetProjectOption("build_flags"))
+    # would be hiding a real misconfiguration.
+    cppdefines = env.get("CPPDEFINES", [])
+    if not cppdefines:
+        sys.stderr.write(
+            "[combus_scons_action] FATAL: env['CPPDEFINES'] is empty at "
+            "action time. Refusing to generate with an incomplete context.\n"
+        )
+        return 1
 
-    # --- Late imports ------------------------------------------------------
+    # --- 2. Hard fail if NO structural flag is set ------------------------
+    # At least one of these should be set on every legitimate env.
+    # NOTE: IS_MAINBOARD and IS_EXT_BOARD are DEPRECATED (the "board role"
+    # axis no longer exists — every board is an implicit BOARD, owner of
+    # the combus of the module it hosts, cf. §1.2 of board_architecture.md).
+    # They MUST NOT be used as a validation criterion here.
+    structural_flags = {"IS_MACHINE", "IS_REMOTE"}
+    # CPPDEFINES is a list of (name, value) tuples when value-less,
+    # or just `name` for the value-less form — normalise to set of names.
+    define_names: set[str] = set()
+    for d in cppdefines:
+        if isinstance(d, tuple):
+            define_names.add(d[0])
+        else:
+            define_names.add(d)
+    if not (define_names & structural_flags):
+        sys.stderr.write(
+            f"[combus_scons_action] FATAL: no structural flag set "
+            f"(expected one of {sorted(structural_flags)}). "
+            f"Refusing to generate.\n"
+        )
+        return 1
+
+    # --- 3. Late imports (so the action only imports when it runs) -------
+    # SCons runs actions in a subprocess (or at least a fresh import
+    # context), so sys.path is NOT inherited from the hook. We rebuild
+    # it from the COMBUS_REPO_ROOT env var that the hook set at
+    # registration time.
+    repo_root = env.get("COMBUS_REPO_ROOT")
+    if repo_root and repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
     try:
         from scripts.combus_builder.canon import canonize
         from scripts.combus_builder.flags import (
@@ -296,86 +277,279 @@ def main(env) -> int:
             discover_and_parse,
         )
     except ImportError as e:
-        _fatal(f"cannot import combus_builder: {e}. "
-               "Make sure the repo root is on sys.path (it should be).")
+        sys.stderr.write(
+            f"[combus_scons_action] FATAL: cannot import combus_builder: {e}\n"
+        )
+        return 1
 
-    # --- 1. Build context --------------------------------------------------
+    # --- 4. Build context ------------------------------------------------
     try:
         ctx = acquire_build_context(env=env)
     except BuildContextError as e:
-        _fatal(f"BuildContext acquisition failed: {e}")
-
+        sys.stderr.write(
+            f"[combus_scons_action] FATAL: BuildContext failed: {e}\n"
+        )
+        return 1
     print(
-        f"[combus_scons_hook] BuildContext acquired "
+        f"[combus_scons_action] BuildContext acquired "
         f"(source={ctx.cppdefines_source}, "
         f"{len(ctx.defines)} defines, "
         f"{len(ctx.defines_with_value)} valued)"
     )
 
-    # --- 2. Discover + parse ----------------------------------------------
+    # --- 5. Discover + parse ---------------------------------------------
     try:
         _, _, parsed = discover_and_parse(env=env)
     except ParseError as e:
-        _fatal(f"YAML parse failed: {e}")
+        sys.stderr.write(
+            f"[combus_scons_action] FATAL: YAML parse failed: {e}\n"
+        )
+        return 1
 
-    # --- 3. Canonise ------------------------------------------------------
+    # --- 6. Canonise ----------------------------------------------------
     try:
         canon = canonize(parsed)
-    except Exception as e:  # ChannelError family; keep broad for visibility
-        _fatal(f"canonisation failed: {e}")
+    except Exception as e:
+        sys.stderr.write(
+            f"[combus_scons_action] FATAL: canonisation failed: {e}\n"
+        )
+        return 1
 
-    # --- 4. Generate (atomic) ---------------------------------------------
-    # Write into a sibling temp dir, then atomically publish. If anything
-    # fails between here and the publish, the previous artefacts (if any)
-    # are gone and the build will fail with a missing-header error.
+    # --- 7. Generate (atomic) -------------------------------------------
     staging_dir = out_dir.with_suffix(out_dir.suffix + ".new")
-    # Clean any leftover staging from a previous failed attempt.
     if staging_dir.exists():
         shutil.rmtree(staging_dir)
-
     try:
         sel = generate(canon.canonical_definitions, ctx, staging_dir)
     except GeneratorError as e:
-        # Clean staging; do NOT touch out_dir (it may still hold valid
-        # artefacts from a previous successful build, but the build
-        # will fail anyway because we exit 1).
         if staging_dir.exists():
             shutil.rmtree(staging_dir)
-        _fatal(f"generation failed: {e}")
+        sys.stderr.write(
+            f"[combus_scons_action] FATAL: generation failed: {e}\n"
+        )
+        return 1
     except Exception as e:
         if staging_dir.exists():
             shutil.rmtree(staging_dir)
-        _fatal(f"unexpected error during generation: {e}")
+        sys.stderr.write(
+            f"[combus_scons_action] FATAL: unexpected error during generation: {e}\n"
+        )
+        return 1
 
-    # --- 4b. Pre-publish completeness check -------------------------------
-    # Belt-and-braces: even if generate() returned without error, do
-    # not publish a staging that is missing one of the expected files.
-    _check_staging_complete(staging_dir)
+    # --- 8. Pre-publish completeness check ------------------------------
+    try:
+        _check_staging_complete(staging_dir)
+    except RuntimeError as e:
+        sys.stderr.write(f"[combus_scons_action] FATAL: {e}\n")
+        return 1
 
-    # --- 5. Publish -------------------------------------------------------
+    # --- 9. Publish ------------------------------------------------------
     try:
         _publish(staging_dir, out_dir)
     except OSError as e:
-        _fatal(f"failed to publish generated artefacts: {e}")
+        sys.stderr.write(
+            f"[combus_scons_action] FATAL: failed to publish artefacts: {e}\n"
+        )
+        return 1
 
     print(
-        f"[combus_scons_hook] generated "
+        f"[combus_scons_action] generated "
         f"combus ({sel.full.ch_count} ch, WIRE_END={sel.full.wire_end}), "
         f"combus_local ({sel.local.ch_count} ch), "
         f"combus_remote ({sel.remote.ch_count} ch) "
         f"-> {out_dir}"
     )
+    return 0
 
-    # --- 6. CPPPATH -------------------------------------------------------
-    # PlatformIO separates `env` (libraries / framework) from
-    # `projenv` (project sources). The combus-generated headers are
-    # only included by project sources (e.g. combus_uart.h under
-    # src/core/system/combus/), so the minimum fix is to expose them
-    # via `projenv`. We ALSO touch `env` for symmetry and for any
-    # library code that might include them transitively.
+
+def _skip_action(target, source, env):
+    """No-op action for COMBUS_BUILDER_SKIP=1 (artefacts must already be present)."""
+    out_dir = _default_out_dir(env)
+    missing = _missing_artefacts(out_dir)
+    if missing:
+        sys.stderr.write(
+            f"[combus_scons_action] FATAL: COMBUS_BUILDER_SKIP=1 but "
+            f"artefacts missing: {missing}\n"
+        )
+        return 1
+    print(f"[combus_scons_action] SKIP — using pre-existing artefacts in {out_dir}")
+    return 0
+
+
+# =============================================================================
+# CPPPATH / PIOBUILDFILES propagation (eager, at hook time)
+# =============================================================================
+
+def _add_to_cpppath(target_env, out_dir_str: str, label: str) -> None:
+    if target_env is None:
+        return
+    cpppath = target_env.get("CPPPATH", [])
+    if isinstance(cpppath, str):
+        cpppath = [cpppath]
+    if out_dir_str not in cpppath:
+        cpppath.append(out_dir_str)
+        target_env["CPPPATH"] = cpppath
+    print(f"[combus_scons_hook] CPPPATH += {out_dir_str} ({label})")
+
+
+def _add_common_defs_cpppath(target_env, project_dir, pio_env) -> None:
+    """Add `.pio/libdeps/<pio_env>/common_defs/include` to CPPPATH if it
+    exists. Mirrors `combus_test_add_generated_source.py`. The library
+    is auto-CPPPATH'd after extends resolution; in `pre:` mode the env
+    may not yet know about it, so we add it explicitly.
+    """
+    if not project_dir or not pio_env:
+        return
+    candidate = Path(project_dir) / ".pio" / "libdeps" / pio_env / "common_defs" / "include"
+    if not candidate.is_dir():
+        return
+    for te in (target_env, projenv):
+        if te is None:
+            continue
+        cpppath = te.get("CPPPATH", [])
+        if isinstance(cpppath, str):
+            cpppath = [cpppath]
+        if str(candidate) not in cpppath:
+            cpppath.append(str(candidate))
+            te["CPPPATH"] = cpppath
+    print(f"[combus_scons_hook] CPPPATH += {candidate}")
+
+
+# =============================================================================
+# Deferred task registration
+# =============================================================================
+
+def _register_deferred_task(env) -> None:
+    """
+    Register a SINGLE `env.Command()` for all combus_generated/* artefacts.
+
+    Idempotency: we mark the env with `_combus_command_registered = True`
+    to avoid re-registration if the hook is somehow invoked twice (e.g.
+    if both `env` and `projenv` are presented to the hook — only `env`
+    receives the Command).
+    """
+    if env.GetOption("no_exec"):
+        # SCons is in dry-run / query mode. Don't touch anything.
+        return
+    if env.get("_combus_command_registered"):
+        return
+
+    out_dir = _default_out_dir(env)
+    project_dir = env.get("PROJECT_DIR")
+    pio_env = env.get("PIOENV") or "default"
+
+    # Stash the repo root on the env so the SCons action (which runs in
+    # a fresh Python interpreter that does NOT inherit our sys.path) can
+    # rebuild it before importing scripts.combus_builder.
+    if project_dir:
+        env["COMBUS_REPO_ROOT"] = str(Path(project_dir).resolve())
+
+    # --- Build the targets ----------------------------------------------
+    targets = [str(out_dir / name) for name in EXPECTED_ARTIFACTS]
+
+    # --- Build the source list (.cb / .cbch) -----------------------------
+    # Best-effort: if the project tree isn't yet visible (PIO rare cases),
+    # fall back to an empty source list — the artefacts will simply be
+    # regenerated whenever any SCons-managed dependency changes.
+    sources: list[str] = []
+    if project_dir:
+        sources = _discover_cb_sources(Path(project_dir))
+    if not sources:
+        # Use a non-existent sentinel so SCons still knows the action's
+        # inputs are a list of strings (it accepts [] silently).
+        sources = []
+
+    # --- Choose action: skip or full ------------------------------------
+    if _skip_requested():
+        action = _skip_action
+    else:
+        action = _generate_combus_action
+
+    # --- Register the Command ------------------------------------------
+    #
+    # varlist=[] would defeat the purpose; we list the env variables that
+    # are semantically relevant to the generation:
+    #   - CPPDEFINES: any -D flag (MACHINE_*, IS_*, HAS_*, DEBUG_*, ...)
+    #     can change which channels are emitted (their `requires:` clause).
+    #   - CPPPATH:    for completeness; in practice the `.cb` parser
+    #     doesn't depend on it but a user-visible change should still
+    #     force a regen (e.g. if a .cb #include'd a generated header).
+    #   - LIBDEPS:    adding/removing a library could expose/hide headers.
+    #
+    # The native SCons `varlist=` is the supported mechanism for env-var
+    # invalidation: SCons serialises those values into the build
+    # signature, so a change in any of them triggers a rebuild.
+    try:
+        env.Command(
+            target=targets,
+            source=sources,
+            action=action,
+            varlist=["CPPDEFINES", "CPPPATH", "LIBDEPS"],
+        )
+    except Exception as e:
+        sys.stderr.write(
+            f"[combus_scons_hook] FATAL: could not register Command: {e}\n"
+        )
+        sys.exit(1)
+
+    env["_combus_command_registered"] = True
+    print(
+        f"[combus_scons_hook] registered deferred Command "
+        f"(targets={len(targets)}, sources={len(sources)}, "
+        f"varlist=[CPPDEFINES, CPPPATH, LIBDEPS])"
+    )
+
+
+# =============================================================================
+# Main pipeline (eager portion — runs at hook load time)
+# =============================================================================
+
+def main(env) -> int:
+    """
+    Hook entry point — runs at `pre:` time.
+
+    1. Adds `out_dir` to CPPPATH and `combus.cpp` to PIOBUILDFILES
+       (eager, so the artefacts are picked up by the source resolution
+       that happens immediately after this hook).
+    2. Adds `common_defs/include` to CPPPATH (mirrors the test helper).
+    3. Registers a deferred SCons Command for the actual generation.
+    """
+    out_dir = _default_out_dir(env)
     out_dir_str = str(out_dir)
+
+    # --- 1. CPPPATH for env + projenv -----------------------------------
     _add_to_cpppath(env, out_dir_str, "env")
     _add_to_cpppath(projenv, out_dir_str, "projenv")
+
+    # --- 2. libdeps CPPPATH (common_defs) --------------------------------
+    project_dir = env.get("PROJECT_DIR")
+    pio_env = env.get("PIOENV") or "default"
+    _add_common_defs_cpppath(env, project_dir, pio_env)
+
+    # --- 3. PIOBUILDFILES (combus.cpp) -----------------------------------
+    # The .cpp may not exist yet (the Command hasn't run), but PIOBUILDFILES
+    # only needs the path string; SCons will see the file appear after the
+    # Command runs and will compile it before the link step.
+    sources = env.get("PIOBUILDFILES", [])
+    if isinstance(sources, str):
+        sources = [sources]
+    cpp_str = str(out_dir / "combus.cpp")
+    if cpp_str not in sources:
+        sources.append(cpp_str)
+        env.Replace(PIOBUILDFILES=sources)
+    print(f"[combus_scons_hook] PIOBUILDFILES += {cpp_str}")
+    # Mirror on projenv (some PIO versions read PIOBUILDFILES from projenv)
+    if projenv is not None:
+        psources = projenv.get("PIOBUILDFILES", [])
+        if isinstance(psources, str):
+            psources = [psources]
+        if cpp_str not in psources:
+            psources.append(cpp_str)
+            projenv.Replace(PIOBUILDFILES=psources)
+
+    # --- 4. Register the deferred Command (single, on env only) --------
+    _register_deferred_task(env)
+
     return 0
 
 
@@ -383,6 +557,5 @@ def main(env) -> int:
 # Module-level execution
 # =============================================================================
 # SCons imports this script and runs it. main() either returns 0 (success)
-# or calls sys.exit(1) (fatal). We do NOT catch the SystemExit here:
-# letting it propagate is what makes SCons treat the build as failed.
+# or calls sys.exit(1) (fatal). We do NOT catch the SystemExit here.
 main(env)

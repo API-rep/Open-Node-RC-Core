@@ -16,6 +16,19 @@
 
 #include "PS4_dualshock_map.h"
 
+// This TU is one half of the input-mapping dispatch. The empty mapping
+// (`nop_map.cpp`) defines the same four symbols when the INPUT_NONE
+// flag is set. Compiling both TUs together yields a linker
+// `multiple definition` error on those four symbols.
+//
+// The matching guard is in `nop_map.cpp` (complementary
+// #if defined(INPUT_NONE)). PlatformIO compiles every .cpp in the
+// active build_src_filter, so the guard has to be in the .cpp itself,
+// not just in a .h (which would only suppress re-inclusion of the
+// declarations). This mirrors the `inputs.h` dispatch at the header
+// level.
+#if defined(INPUT_PS4_DS4_BT)
+
   // input → ComBus analog channel mapping
 const InputAnalogMap InputAnalogMapArray[] = {
   // { Index manette,                    Canal ComBus,                  Inversion }
@@ -44,6 +57,8 @@ const InputDigitalMap InputDigitalMapArray[] = {
 
   // number of digital mappings in InputDigitalMap array
 const uint8_t InputDigitalMapCount = sizeof(InputDigitalMapArray) / sizeof(InputDigitalMap);
+
+#endif  // INPUT_PS4_DS4_BT
 
 
 // EOF PS4_dualshock_map.cpp

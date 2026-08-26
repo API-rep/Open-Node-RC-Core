@@ -18,15 +18,15 @@
 // 1. COMBUS UART INIT
 // =============================================================================
 
-// Phase 4 (A14): wire dimensions are now derived from the Remote view's
-// ID enums directly. Digital IDs continue after analog IDs in the Remote
-// view, so the digital count is the difference between the two CH_COUNT
-// sentinels. This replaces the temporary ComBusWireEndAnalog/Digital
-// constants emitted by the generator (removed in this same phase).
+// Phase 4 (A14) + Phase 5 (A15): wire dimensions are derived from the
+// Remote view's ID enums directly. Since A15, each TYPE has its own
+// 0-based counter (analog and digital are independently numbered), so
+// CH_COUNT for each enum equals exactly the count of channels of that
+// type in the Remote view — no subtraction needed.
 static constexpr uint8_t kRemoteAnalogCount =
     static_cast<uint8_t>(AnalogComBusRemoteID::CH_COUNT);
 static constexpr uint8_t kRemoteDigitalCount =
-    static_cast<uint8_t>(DigitalComBusRemoteID::CH_COUNT) - kRemoteAnalogCount;
+    static_cast<uint8_t>(DigitalComBusRemoteID::CH_COUNT);
 
 void combus_uart_init()
 {

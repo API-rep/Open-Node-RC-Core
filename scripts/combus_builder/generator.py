@@ -268,17 +268,45 @@ def _select_view(
     Select channels whose scope is in allowed_scopes, allocate deterministic
     IDs in canonical order, and compute WIRE_END.
 
+    ID allocation policy (Phase 5 A15 fix — bug d'indexation):
+        Each TYPE (analog, digital) has its OWN 0-based counter. The
+        numeric_id assigned to a channel is its position within its type
+        in the view, NOT its position in the global view-wide sequence.
+        This guarantees that `DigitalComBusArray[DigitalComBusID::XXX]`
+        accesses the correct slot — previously, IDs were allocated via a
+        single global enumerate() which mixed analog and digital into one
+        sequence, causing digital IDs to start at 9 (after the 9 analog
+        REMOTE channels) and a complete misalignment between the enum
+        values and the runtime array indices.
+
     allowed_scopes is the set of scopes that belong to this view.
     For combus: {"REMOTE", "LOCAL", "SYSTEM"}.
     For combus_remote: {"REMOTE"}.
+
+    Sort key (stable, per-type):
+        (scope priority, theme, id)
+    Scope priority: REMOTE < LOCAL < SYSTEM (preserves wire order:
+    REMOTE channels are at the lowest indices, LOCAL next, SYSTEM last).
     """
     selected = [ch for ch in channels if ch.scope in allowed_scopes]
-    selected.sort(key=lambda ch: (
-        _VIEW_SCOPE_ORDER[ch.scope],
-        0 if ch.type == "analog" else 1,
-        ch.theme,
-        ch.id,
-    ))
+    # Per-type sort: analog and digital are sorted independently.
+    # They are concatenated later, analog-first.
+    selected_analog = sorted(
+        [ch for ch in selected if ch.type == "analog"],
+        key=lambda ch: (
+            _VIEW_SCOPE_ORDER[ch.scope],
+            ch.theme,
+            ch.id,
+        ),
+    )
+    selected_digital = sorted(
+        [ch for ch in selected if ch.type == "digital"],
+        key=lambda ch: (
+            _VIEW_SCOPE_ORDER[ch.scope],
+            ch.theme,
+            ch.id,
+        ),
+    )
 
     view_channels: list[ViewChannel] = []
     wire_end = 0
@@ -289,24 +317,36 @@ def _select_view(
     # `wire_end` (= total REMOTE count across both types).
     wire_end_analog = 0
     wire_end_digital = 0
-    for idx, ch in enumerate(selected):
+    # Phase 5 A15: separate 0-based counters per type.
+    analog_idx = 0
+    digital_idx = 0
+    # The wire order is: all analog channels first (in scope/theme/id
+    # order), then all digital channels (in scope/theme/id order). This
+    # preserves the legacy "REMOTE channels at the lowest indices"
+    # invariant: among the analog channels, REMOTE ones come first
+    # because they sort before LOCAL/SYSTEM.
+    for ch in selected_analog:
         view_channels.append(ViewChannel(
-            numeric_id=idx,
+            numeric_id=analog_idx,
             ch=ch,
             direction_bits=Direction.from_frozenset(ch.direction),
         ))
         if ch.scope == "REMOTE":
-            # REMOTE channel — bump the matching per-bus counter.
-            if ch.type == "analog":
-                wire_end_analog += 1
-            else:
-                wire_end_digital += 1
-        elif wire_end == 0:
-            # First non-REMOTE: this index is the global wire_end.
-            wire_end = idx
-    if wire_end == 0 and selected:
-        # All REMOTE: WIRE_END == CH_COUNT.
-        wire_end = len(selected)
+            wire_end_analog += 1
+        analog_idx += 1
+    for ch in selected_digital:
+        view_channels.append(ViewChannel(
+            numeric_id=digital_idx,
+            ch=ch,
+            direction_bits=Direction.from_frozenset(ch.direction),
+        ))
+        if ch.scope == "REMOTE":
+            wire_end_digital += 1
+        digital_idx += 1
+    # Compute wire_end: index of the first non-REMOTE channel in the
+    # flattened wire order. REMOTE channels of both types come first
+    # because they sort first within each type.
+    wire_end = wire_end_analog + wire_end_digital
 
     return View(
         name=view_name,
