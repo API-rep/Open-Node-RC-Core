@@ -7,7 +7,7 @@
 
 #include "combus_uart_init.h"
 
-#include <machines/config/config.h>
+#include <machines/config/config.h>   // transitively includes <combus_remote_ids.h> via dumper_truck/combus_ids_remote.h
 #include <core/config/outputs/combus_uart.h>         // ComBusUartBaud, ComBusUartTxHz, UartMaxBaud
 #include <core/system/combus/protocol/combus_protocol.h>
 #include <core/system/combus/frame/combus_handshake.h>  // CombusHandshakeContext (P3)
@@ -18,6 +18,16 @@
 // =============================================================================
 // 1. COMBUS UART INIT
 // =============================================================================
+
+// Phase 4 (A14) + Phase 5 (A15): wire dimensions are derived from the
+// Remote view's ID enums directly. Since A15, each TYPE has its own
+// 0-based counter (analog and digital are independently numbered), so
+// CH_COUNT for each enum equals exactly the count of channels of that
+// type in the Remote view — no subtraction needed.
+static constexpr uint8_t kRemoteAnalogCount =
+    static_cast<uint8_t>(AnalogComBusRemoteID::CH_COUNT);
+static constexpr uint8_t kRemoteDigitalCount =
+    static_cast<uint8_t>(DigitalComBusRemoteID::CH_COUNT);
 
 void combus_uart_init()
 {
@@ -31,18 +41,18 @@ void combus_uart_init()
     static CombusHandshakeContext s_linkHandshakeCtx = {};
 
     constexpr ComBusFrameCfg txCfg = {
-        static_cast<uint8_t>(AnalogComBusID::WIRE_END),   ///< Wire channels only — not local sound-node channels.
-        static_cast<uint8_t>(DigitalComBusID::WIRE_END),  ///< Wire channels only — not local sound-node channels.
+        kRemoteAnalogCount,                               ///< Analog wire channels only — not local sound-node channels.
+        kRemoteDigitalCount,                              ///< Digital wire channels only — not local sound-node channels.
     };
 
 
     // --- Full-duplex: also initialise RX side ---
     #if defined(COMBUS_UART)
-      static uint16_t s_analog[static_cast<uint8_t>(AnalogComBusID::WIRE_END)];
-      static bool     s_digital[static_cast<uint8_t>(DigitalComBusID::WIRE_END)];
+      static uint16_t s_analog[kRemoteAnalogCount];
+      static bool     s_digital[kRemoteDigitalCount];
       constexpr ComBusFrameCfg rxCfg = {
-          static_cast<uint8_t>(AnalogComBusID::WIRE_END),   ///< Wire channels only.
-          static_cast<uint8_t>(DigitalComBusID::WIRE_END),  ///< Wire channels only.
+          kRemoteAnalogCount,                             ///< Analog wire channels only.
+          kRemoteDigitalCount,                            ///< Digital wire channels only.
       };
 
       combus_protocol_init(uart_get_combus_com(), txCfg, ComBusUartTxHz, rxCfg, s_analog, s_digital, &s_linkHandshakeCtx);

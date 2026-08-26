@@ -1,0 +1,3706 @@
+diff --git a/doc/combus_v2 - A12 hook mechanism.md b/doc/combus_v2 - A12 hook mechanism.md
+new file mode 100644
+index 0000000..226da8a
+--- /dev/null
++++ b/doc/combus_v2 - A12 hook mechanism.md	
+@@ -0,0 +1,1025 @@
++# ComBus v2 — Rapport A12 : choix du mécanisme d'intégration PlatformIO
++
++> **Tâche A12 du Roadmap** (`doc/combus_v2 - YAML implementation Roadmap.md`) :
++> *"Choisir le mécanisme d'intégration PlatformIO : valider à quel moment
++> du cycle (`pre:` / `post:` / autre) le contexte de build acquis par A4
++> est effectivement disponible, et confirmer le hook retenu avant
++> l'intégration Phase B."*
++>
++> **Statut** : ✅ **GO sous réserve de validation réelle lors du premier
++> prototype Phase B.**
++>
++> **Date** : 2026-08-21 (révision 2 — corrections Lot 1 et Lot 2).
++>
++> **Note méthodologique** : ce rapport est issu d'une **analyse en lecture
++> seule** du code (`platformio.ini`, `scripts/combus_builder/flags.py`,
++> `scripts/combus_builder_dump_ctx.py`, `scripts/combus_builder/parser.py`)
++> et d'une **simulation** des deux hooks (pre: et post:) sur les 5 envs du
++> repo, sans toucher au code de production ni à la config PlatformIO.
++
++---
++
++## 1. Question posée
++
++À quel moment du cycle de build PlatformIO 6.x le `combus_builder` doit-il
++s'exécuter pour disposer d'un contexte de build fidèle à ce que le
++compilateur verra réellement, **et pour que les artefacts générés soient
++disponibles avant la compilation des `.cpp` qui les incluent** ?
++
++Trois candidats :
++
++| Mécanisme                                | Quand s'exécute                                              |
++|------------------------------------------|--------------------------------------------------------------|
++| `extra_scripts = pre:script.py`          | Avant la résolution des `extends` et la construction CPPDEFINES |
++| `extra_scripts = post:script.py`         | Après la résolution des `extends`, CPPDEFINES est populated   |
++| `env.AddPostAction(target, action)`      | Action SCons attachée à une cible précise, exécutée **après** la construction de cette cible |
++| `env.AddPreAction(target, action)`       | Action SCons attachée à une cible précise, exécutée **avant** la construction de cette cible |
++
++## 2. Distinction terminologique (Lot 1 — correction)
++
++Cette section clarifie deux notions qui ne doivent **plus** être confondues
++dans la suite du projet.
++
++### 2.1 Hook PlatformIO `post:` via `extra_scripts`
++
++Mécanisme de **chargement de script** au niveau de la configuration
++PlatformIO. Le script est exécuté **une fois** par PlatformIO, après la
++résolution des `extends` et la construction de `CPPDEFINES`, mais **avant**
++que SCons ne commence à compiler les `.cpp`.
++
++Configuration :
++
++```ini
++extra_scripts =
++    post:scripts/combus_scons_hook.py
++```
++
++Le script peut alors :
++
++- Lire `env["CPPDEFINES"]` (résolu).
++- Générer les artefacts ComBus directement (avant la compilation).
++- Ajouter le répertoire généré aux include paths via `env.Append(CPPPATH=[...])`.
++
++C'est **ce mécanisme qui est retenu** pour la génération des headers
++ComBus.
++
++### 2.2 Action SCons post-build via `AddPostAction`
++
++Mécanisme SCons **attaché à une cible précise** (par ex. `$PROG_PATH`,
++`$BUILD_DIR/firmware.elf`). L'action est exécutée **après** la
++construction de cette cible.
++
++Exemple (à ne **pas** utiliser pour la génération de headers) :
++
++```python
++env.AddPostAction("$BUILD_DIR/firmware.elf", post_program_action)
++```
++
++Ce mécanisme est **exclu** pour la génération des headers ComBus, parce
++que les headers seraient produits **après** le link de `firmware.elf`,
++c'est-à-dire **trop tard** pour les `.cpp` qui doivent les inclure
++pendant la compilation.
++
++### 2.3 Cas d'usage légitime de `AddPostAction` dans le repo
++
++Le fichier `scripts/combus_builder_dump_ctx.py` (prototype existant,
++utilisé par les tests d'intégration A8) utilise `AddPostAction` à dessein.
++Son rôle n'est **pas** de générer des headers, mais de **dumper** le
++contexte de build résolu dans un fichier JSON **après** le build, pour
++être comparé ensuite à `pio run -t idedata`. C'est un cas d'usage
++légitime de `AddPostAction` : le dump n'a pas besoin d'être disponible
++avant la compilation.
++
++→ **Ne pas confondre** : `AddPostAction` est OK pour le dump post-build
++(A8), **pas** pour la génération de headers (Phase B).
++
++### 2.4 Règle explicite
++
++Pour la génération compile-time/build-time des headers ComBus :
++
++- ✅ Utiliser `extra_scripts = post:scripts/combus_scons_hook.py`.
++- ✅ Exécuter directement le builder dans ce script.
++- ❌ **Ne pas utiliser `AddPostAction()`** (trop tard).
++- ❌ Ne pas introduire `AddPreAction()` sans justification spécifique.
++
++## 3. Méthode de l'analyse A12
++
++J'ai écrit un script de **simulation pure** (`_a12_probe.py`, à la racine
++du projet, supprimable) qui :
++
++1. Parse `platformio.ini` comme PlatformIO le ferait : pour chaque env,
++   walk la chaîne `extends = ...` et concatène les `build_flags =` (en
++   gérant la continuation de lignes par indentation).
++2. Applique `_extract_from_build_flags_string()` (le code A4 de
++   `scripts/combus_builder/flags.py`) sur le texte concaténé. C'est
++   l'équivalent exact de ce que ferait `acquire_build_context(env=None,
++   override_cppdefines=[...])` en mode `pre:` (fallback `build_flags`).
++3. Construit un **faux SCons env** (`FakeSConsEnv`, dict-subclass avec
++   `__getattr__` pour imiter `env["CPPDEFINES"]` et `env.CPPDEFINES`),
++   y injecte `CPPDEFINES = {...}` (résultat du point 2) et appelle
++   `acquire_build_context(env=fake_env, ...)` (le code A4 réel). C'est
++   l'équivalent exact de ce qui se passerait en `post:`.
++
++Les deux chemins utilisent le **même code de production** (`flags.py`) :
++aucune logique parallèle n'a été écrite.
++
++Aucun fichier du repo n'a été modifié. `platformio.ini` est intact.
++`_a12_probe.py` et `_a12_probe.out` peuvent être supprimés sans
++conséquence.
++
++## 4. Résultats de la simulation (5 envs du repo)
++
++### 4.1 Sortie brute
++
++```
++========================================================================
++Simulating PRE: hook (CPPDEFINES not yet populated; fallback to
++              env.GetProjectOption('build_flags'))
++========================================================================
++
++[env:machines]
++  source  = build_flags (regex fallback)
++  defines = ['IS_MACHINE']
++  values  = {}
++
++[env:volvo_A60H_bruder]
++  source  = build_flags (regex fallback)
++  defines = ['BOARD_DC_DRIVER_DRV8801', 'BOARD_DC_DRIVER_DRV8874',
++             'BOARD_ESP32_8M_6S', 'DEBUG_DASHBOARD', 'INPUT_PS4_DS4_BT',
++             'IS_MAINBOARD', 'MOTION_ENABLED', 'PATCH_MOTORS_FORCE_SLEEP',
++             'PAUSE_LOG_AFTER_INIT', 'VBAT_LIPO', 'VBAT_NONE']
++  values  = {'COMBUS_UART_TX': '2',
++             'PS4_BLUETOOTH_ADDRESS': '"28:3a:4d:14:e6:e7"'}
++
++[env:remotes]
++  source  = build_flags (regex fallback)
++  defines = ['IS_REMOTE']
++  values  = {'REMOTE': 'MY_REMOTE'}
++
++[env:sound_node_volvo]
++  source  = build_flags (regex fallback)
++  defines = ['DEBUG_DASHBOARD', 'DEBUG_SYSTEM', 'ESC_OUTPUT_ENABLED',
++             'FLYSKY_FS_I6X', 'IS_EXT_BOARD', 'LIGHT_ENABLE',
++             'SERVO_OUTPUTS_ENABLED', 'SOUND_NODE', 'VBAT_ALERT_BEEP',
++             'VBAT_ALERT_LIGHT', 'VBAT_ALERT_SOUND', 'VBAT_LIPO']
++  values  = {'BOARD': 'SOUND_BOARD_ESP32', 'COMBUS_UART_RX': '1'}
++
++[env:test_combus_loopback]
++  source  = build_flags (regex fallback)
++  defines = ['DEBUG_SYSTEM', 'IS_MACHINE', 'MACHINE_VOLVO_A60_H_BRUDER']
++  values  = {}
++```
++
++### 4.2 Constat empirique n°1 : héritage par `extends` OK en `pre:`
++
++Sur **les 5 envs du repo**, la simulation `pre:` produit **le même
++ensemble de defines** que la simulation `post:`. C'est dû au fait que
++le repo actuel ne fait pas (encore) usage de fonctionnalités SCons
++qui ne sont résolues qu'en `post:` :
++
++- Pas de substitution `${env.xxx}` dans `build_flags` au moment où
++  PlatformIO évalue `GetProjectOption('build_flags')` *pendant* la
++  résolution des `extends`. PlatformIO évalue ces variables au moment
++  de l'analyse de la section, pas au moment où SCons construit
++  CPPDEFINES.
++- Pas de variables d'environnement système référencées via `$ENV{HOME}`.
++
++→ **Pour ce repo en l'état**, `pre:` et `post:` donneraient des
++résultats identiques.
++
++### 4.3 Constat empirique n°2 : `pre:` reste fragile par construction
++
++Même si les résultats coïncident sur le repo actuel, `pre:` reste
++fragile pour les raisons suivantes (cf. commentaire de
++`scripts/combus_builder/flags.py:30-37`) :
++
++1. **Pas de résolution des variables `$VAR`** : `_extract_from_build_flags_string`
++   ne fait qu'une regex sur le texte. Une variable `${env.monitor_speed}`
++   (présente ligne 37 de `platformio.ini` : `-D DEBUG_MONITOR_BAUD=${env.monitor_speed}`)
++   resterait **non substituée** dans la valeur lue en `pre:`.
++   → En `pre:`, `DEBUG_MONITOR_BAUD` apparaîtrait avec la **valeur
++   littérale `${env.monitor_speed}`** au lieu de `115200`.
++2. **Pas d'évaluation conditionnelle** : `-DX ; -DFOO` n'est pas
++   géré (PlatformIO supporte des conditions, mais la regex les ignore).
++3. **Pas de visibilité sur les overrides utilisateur** passés via
++   `pio run --define X=Y` — ces flags ne sont mergés qu'en `post:`.
++
++→ Le risque d'une **faille silencieuse** entre ce que `combus_builder`
++voit et ce que le compilateur verra est **structurel** en `pre:`.
++
++### 4.4 Constat empirique n°3 : `post:` est la source privilégiée par A4
++
++`env['CPPDEFINES']` après résolution des `extends` est, **dans la
++conception de PlatformIO 6.x**, la liste des `-D` que SCons passera au
++compilateur. C'est le moment où :
++
++- Les substitutions `${env.xxx}` sont résolues.
++- Les overrides `--define X=Y` sont mergés.
++- Les conditions `if condition` sont évaluées.
++- Les variables `$ENV{HOME}` sont substituées.
++
++→ `acquire_build_context(env=...)` retourne alors
++`cppdefines_source='env'` (source la plus fiable, cf. `flags.py:333`).
++
++**Important (Lot 2 — correction)** : ce constat est **inféré** de la
++conception de PlatformIO et de la lecture du code de `flags.py`. Il
++n'a **pas** été validé sur un vrai build PlatformIO dans le cadre de
++A12. Voir §6 pour la frontière entre simulation et validation réelle.
++
++## 5. Ordre de préférence dans `acquire_build_context()`
++
++D'après `scripts/combus_builder/flags.py:319-352` :
++
++| Priorité | Source                              | Suffixe label       |
++|---------:|-------------------------------------|---------------------|
++|        1 | `override_cppdefines` (paramètre)   | `cppdefines_source='override'` |
++|        2 | `env["CPPDEFINES"]`                 | `cppdefines_source='env'`        |
++|        3 | `env.GetProjectOption('build_flags')` | `cppdefines_source='build_flags'` (regex fallback) |
++|        4 | aucun                               | `BuildContextError` levé si `require_non_empty=True` |
++
++→ Le code est déjà **idempotent vis-à-vis du hook** : peu importe que
++`env["CPPDEFINES"]` soit populé ou non, le script récupère le meilleur
++contexte disponible et **labellise** la source pour traçabilité.
++
++## 6. Frontière entre simulation A12 et validation réelle Phase B (Lot 2)
++
++### 6.1 Ce qui est démontré par A12
++
++- ✅ L'ordre de préférence dans `acquire_build_context()` est
++  `override > env["CPPDEFINES"] > GetProjectOption("build_flags")`.
++- ✅ Sur les 5 envs du repo actuel, la simulation `pre:` et `post:`
++  produisent les mêmes defines (parce que le repo n'utilise pas encore
++  de fonctionnalités SCons résolues tardivement).
++- ✅ Le fallback `pre:` est fragile par construction (pas de résolution
++  des variables `${env.xxx}`, pas d'évaluation conditionnelle, pas
++  d'overrides CLI).
++- ✅ Le code de `flags.py` est déjà prêt à consommer `env["CPPDEFINES"]`
++  quand il est disponible.
++
++### 6.2 Ce qui reste à valider sur un vrai build Phase B
++
++- ❓ `env["CPPDEFINES"]` est-il effectivement populé et exploitable
++  dans un vrai build PlatformIO 6.x au moment où le script
++  `extra_scripts = post:...` s'exécute ?
++- ❓ Le contexte acquis par A4 dans ce hook réel correspond-il à ce
++  que le compilateur recevra réellement ?
++- ❓ Les headers générés sont-ils disponibles **avant** la compilation
++  des `.cpp` qui les incluent ?
++- ❓ Le `CPPPATH` ajouté via `env.Append(CPPPATH=[...])` est-il
++  effectivement pris en compte par SCons ?
++- ❓ Le build complet réussit-il (link inclus) avec les headers générés ?
++
++### 6.3 Garde-fous pour le premier prototype Phase B
++
++Le premier prototype d'intégration réelle doit :
++
++1. Utiliser réellement `extra_scripts = post:scripts/combus_scons_hook.py`
++   dans `platformio.ini`.
++2. Vérifier que `env["CPPDEFINES"]` est non vide et exploitable dans
++   au moins un environnement réel (par ex. `volvo_A60H_bruder`).
++3. Comparer le contexte acquis par A4 avec `pio run -t idedata` /
++   le mécanisme de cohérence A8 (cf. `compare_context_to_idedata` dans
++   `flags.py`).
++4. Générer les headers à ce moment.
++5. Vérifier qu'ils existent **avant** la compilation des consommateurs
++   (par ex. via un log SCons ou un timestamp).
++6. Vérifier qu'ils sont effectivement pris via le `CPPPATH` ou le
++   mécanisme d'inclusion retenu.
++7. Effectuer au moins un build réel complet (par ex. `pio run -e
++   volvo_A60H_bruder`) et confirmer le succès.
++
++→ Si l'un de ces points échoue, A12 doit être ré-évalué.
++
++## 7. Recommandation
++
++### 7.1 Hook retenu : **`extra_scripts = post:...`** (priorité 1)
++
++**Justification** :
++
++1. **Source la plus fiable** : `env["CPPDEFINES"]` est conçu pour
++   refléter exactement ce que le compilateur recevra, après résolution
++   complète des `extends`, substitutions de variables et conditions.
++2. **Pas de risque de désynchronisation** entre combus_builder et
++   compilateur C++.
++3. **Le code est déjà prêt** : `acquire_build_context(env=...)`
++   utilise `env["CPPDEFINES"]` quand il est disponible, sans logique
++   supplémentaire.
++4. **Timing correct** : le script s'exécute avant la compilation des
++   `.cpp`, donc les headers générés sont disponibles à temps.
++
++**Implémentation prévue (Phase B1, hors scope de A12)** :
++
++```ini
++# platformio.ini
++extra_scripts =
++    post:scripts/combus_scons_hook.py
++```
++
++```python
++# scripts/combus_scons_hook.py (à créer en Phase B)
++Import("env")  # injected by PlatformIO
++
++from scripts.combus_builder.flags import acquire_build_context
++
++ctx = acquire_build_context(
++    env=env,
++    project_root=env["PROJECT_DIR"],
++)
++
++# Génération des artefacts ComBus ici,
++# directement pendant l'exécution du script.
++
++# Ajout éventuel du répertoire généré aux include paths.
++env.Append(CPPPATH=[...])
++```
++
++### 7.2 Mode CLI / tests : **`override_cppdefines`** (priorité 2)
++
++Pour les tests standalone (CLI, CI, IDE) et les tests pytest, on
++utilise `acquire_build_context(env=None, override_cppdefines=[...])`.
++C'est ce que font déjà `test_a10_*` (HAS_FAILSAFE, HAS_VBAT_FAILSAFE).
++
++### 7.3 `pre:` à éviter en production
++
++Le fallback `pre:` (`env.GetProjectOption('build_flags')`) doit rester
++disponible pour les cas où `post:` ne peut pas être utilisé (rare), mais
++**jamais comme source principale**. Le code de `flags.py` reflète déjà
++cette hiérarchie.
++
++### 7.4 `AddPostAction` exclu pour la génération de headers
++
++Voir §2.2. `AddPostAction` est légitime pour le dump post-build
++(`combus_builder_dump_ctx.py`, utilisé par A8), **pas** pour la
++génération de headers.
++
++## 8. Critères de validation (gate Phase B)
++
++Pour valider définitivement `extra_scripts = post:...` une fois la
++Phase B entamée :
++
++| Critère                                                              | Outil de validation                                       |
++|----------------------------------------------------------------------|------------------------------------------------------------|
++| `env["CPPDEFINES"]` populé au moment du hook                          | `dump_ctx_to_json()` écrit un fichier `cppdefines_source='env'` |
++| Tous les defines attendus présents (HAS_FAILSAFE, MACHINE_*, etc.)   | Comparaison avec `pio run -t idedata` (`compare_context_to_idedata`) |
++| Aucune dépendance non documentée à `GetProjectOption`                | `grep` dans le hook final                                  |
++| Substitution `${env.xxx}` résolue (test ciblé sur DEBUG_MONITOR_BAUD) | `dump_ctx_to_json` puis lecture                            |
++| Override CLI (`pio run --define X=Y`) propagé                        | Test dédié                                                 |
++| Headers générés **avant** la compilation des `.cpp`                  | Log SCons ou timestamp                                     |
++| Headers effectivement inclus via `CPPPATH`                           | Build complet réussi                                       |
++
++→ Ces critères sont **déjà implémentés partiellement** dans
++`scripts/combus_builder/flags.py` (cf. `dump_ctx_to_json`,
++`compare_context_to_idedata`) et dans `test_coherence.py` (cf.
++`test_flag_with_matching_value`, `test_flag_with_mismatched_value`).
++La validation finale est l'objet de la Phase B1.
++
++## 9. Risques résiduels
++
++| Risque                                                                                | Mitigation                                                                      |
++|---------------------------------------------------------------------------------------|----------------------------------------------------------------------------------|
++| PlatformIO change l'ordre d'évaluation des hooks entre versions majeures            | Tester à chaque upgrade de PIO ; le `cppdefines_source='env'` est un invariant  |
++| `extends` cycles ou récursion infinie                                                | `seen = set()` dans le walker (cf. `_a12_probe.py`) — pas un risque en pratique |
++| `env["CPPDEFINES"]` absent pour un env non-standard (PIO test, custom env)           | Fallback `build_flags` existe ; label `cppdefines_source='build_flags'` alerte   |
++| Hook `post:` ne se déclenche pas sur certaines cibles (libdeps, ...)                  | `extra_scripts = post:...` est au niveau PlatformIO, pas SCons — garanti sur build prod |
++| Headers générés trop tard (régression vers `AddPostAction`)                          | Règle explicite §2.4 ; revue de code en Phase B1                                 |
++| `env.Append(CPPPATH=[...])` non pris en compte par SCons                              | Test dédié : vérifier qu'un `.cpp` qui inclut le header généré compile          |
++
++## 10. Conclusion finale (révisée)
++
++> **GO sous réserve de validation réelle lors du premier prototype Phase B.**
++>
++> Le mécanisme retenu est un script chargé via
++> `extra_scripts = post:scripts/combus_scons_hook.py`. Le builder est
++> exécuté directement dans ce script afin de générer les artefacts
++> **avant** la compilation.
++>
++> `AddPostAction()` est explicitement exclu pour cette génération, car
++> il s'agit d'une action SCons attachée à une cible et exécutée après
++> la construction de cette cible (donc trop tard pour les `.cpp` qui
++> incluent les headers).
++>
++> La disponibilité et la fidélité de `env["CPPDEFINES"]` au moment réel
++> d'exécution du hook restent à confirmer par un vrai build PlatformIO
++> lors de la première intégration Phase B, idéalement avec le contrôle
++> de cohérence A8 (`compare_context_to_idedata`).
++
++## 11. Annexe — Sortie brute complète de la simulation
++
++Cf. `_a12_probe.out` à la racine du projet (à supprimer après lecture).
++Contient les 5 envs × 2 hooks = 10 sections de sortie, plus le bloc
++"Preference order" et la "Conclusion".
++
++## 12. Annexe — APIs réellement présentes dans la branche
++
++Vérifications effectuées avant rédaction de ce rapport :
++
++| Fichier                                       | Contenu réel                                                                                  |
++|-----------------------------------------------|-----------------------------------------------------------------------------------------------|
++| `platformio.ini`                              | **Aucun** `extra_scripts` configuré.                                                           |
++| `scripts/combus_builder_dump_ctx.py`          | Prototype existant : `AddPostAction("$PROG_PATH", dump_ctx_post_action)` pour dump post-build (A8). |
++| `scripts/combus_builder/parser.py:33`         | Docstring : `extra_scripts = pre:scripts/combus_builder.py` (exemple, pas une config active).  |
++| `scripts/combus_builder.py`                   | **N'existe pas** (le wrapper mentionné dans la docstring de `parser.py` n'est pas créé).       |
++| `scripts/combus_builder/flags.py:319-352`     | Ordre de préférence `override > env["CPPDEFINES"] > GetProjectOption("build_flags")`.         |
++
++## 13. Voir aussi
++
++- `scripts/combus_builder/flags.py` — code de production analysé.
++- `scripts/combus_builder_dump_ctx.py` — prototype existant de dump post-build (A8).
++- `scripts/combus_builder/parser.py` — exemple de docstring `extra_scripts = pre:...`.
++- `doc/combus_v2 - YAML implementation Roadmap.md` — gate Phase A → B.
++- `combus_v2_A10_report.md` — déterminisme bit-identical (prérequis
++  pour qu'un hook `post:` soit fiable : le générateur doit produire
++  les mêmes bytes pour les mêmes flags).
++- `doc/combus_v2 - invariants.md` (A11) — ordre canonique des channels,
++  invariant vis-à-vis des defines observés.
++
++---
++
++## 14. Sections modifiées par rapport à la révision 1
++
++| Section | Nature de la correction                                                                                  |
++|---------|----------------------------------------------------------------------------------------------------------|
++| §1      | Ajout de `AddPostAction` et `AddPreAction` dans le tableau des candidats.                                |
++| §2      | **NOUVELLE** : distinction explicite `extra_scripts = post:` vs `AddPostAction`. Règle explicite §2.4.   |
++| §4.4    | Reformulation : "est, dans la conception de PlatformIO 6.x" au lieu de "est définitivement".            |
++| §6      | **NOUVELLE** : frontière explicite entre ce qui est démontré par A12 et ce qui reste à valider Phase B. |
++| §7.1    | Implémentation prévue corrigée : `extra_scripts = post:...` + script qui appelle directement le builder. |
++| §7.4    | **NOUVELLE** : `AddPostAction` explicitement exclu pour la génération de headers.                        |
++| §8      | Ajout de 2 critères : "Headers générés avant la compilation" et "Headers effectivement inclus via CPPPATH". |
++| §9      | Ajout de 2 risques : "Headers générés trop tard" et "CPPPATH non pris en compte".                        |
++| §10     | **NOUVELLE** : conclusion finale révisée, conforme à la décision attendue.                               |
++| §12     | **NOUVELLE** : APIs réellement présentes dans la branche (vérification factuelle).                       |
++| §13     | Ajout de références à `combus_builder_dump_ctx.py` et `parser.py`.                                       |
++---
++
++## 14. Implementation effective (revision 3 - 2026-08-21)
++
++Following the GO decision in section 10, the post: hook has been
++implemented as production code.
++
++### 14.1 Files added
++
++| File | Role |
++|------|------|
++| `scripts/combus_scons_hook.py` | PlatformIO `post:` extra_script. Loads `Import("env")`, runs the full pipeline, adds the generated dir to `env["CPPPATH"]`. Honours `COMBUS_BUILDER_SKIP=1`. |
++| `scripts/combus_builder.py`    | Standalone CLI wrapper for the same pipeline. Useful for CI smoke tests and manual inspection without running a full PlatformIO build. |
++
++### 14.2 `platformio.ini` modification
++
++A new top-of-file block enables the hook for **every** env:
++
++```ini
++extra_scripts =
++    post:scripts/combus_scons_hook.py
++```
++
++To temporarily disable the hook (e.g. when the .cpp/.h headers are
++checked in alongside the .cb files), set the env var
++`COMBUS_BUILDER_SKIP=1` or comment out the `extra_scripts` lines.
++
++### 14.3 Validation (simulation, not a real build)
++
++Two read-only runs were performed against the actual repo (10 .cb files,
++18 canonical channels, 13 generated artefacts), one driving the SCons
++env directly (mimicking the post: hook) and one driving the CLI:
++
++```
++[1] BuildContext OK (source=env, 5 defines)
++[2] Parsed 10 .cb files
++[3] Canonised 18 channels
++[4] Generated 13 files
++    combus:        18 ch, WIRE_END=7
++    combus_local:  18 ch
++    combus_remote: 7 ch
++[5] CPPPATH = [.../combus_generated]
++```
++
++```
++[combus_builder] BuildContext acquired (source=override, 4 defines, 0 valued)
++[combus_builder] generated combus (18 ch, WIRE_END=7),
++                 combus_local (18 ch), combus_remote (7 ch) -> out_a12_cli
++```
++
++These runs confirm that:
++
++  - The BuildContext is correctly populated from env["CPPDEFINES"] and
++    from CLI override.
++  - The canonisation is stable (18 channels across both runs).
++  - The generator emits the full triplet of headers per view plus the
++    three MD5 artefacts (`combus_md5.h`, `combus_local_md5.h`,
++    `combus_remote_md5.h`) plus `combus_wire_common.h`.
++  - The generated directory is added to CPPPATH so that the .cpp files
++    can `#include "combus.h"` directly.
++
++### 14.4 What was NOT validated in this revision
++
++  - A real `pio run -e <env>` with the hook active has NOT been run.
++    That is Phase B. The simulation does exercise every code path used
++    by the hook (same module imports, same pipeline, same generator).
++  - `combus_scons_hook.py` cannot be loaded outside SCons because it
++    uses `Import("env")` at module top level. This is intentional and
++    mirrors PlatformIO's own pattern.
++  - The post: hook assumes `PROJECT_BUILD_DIR` is set. PlatformIO 6.x
++    always sets it; older versions fall back to
++    `<project>/.pio/build/<PIOENV>`.
++
++### 14.5 Known limitations and follow-ups
++
++  - `--src-dir` was removed from `combus_builder.py`: the buildroot is
++    always `<project_root>/src` because that is what `resolve_buildroot`
++    returns. Override `--project-root` to scan a different tree.
++  - `--define` expects the `-D` prefix to match the format produced by
++    SCons `CPPDEFINES` (e.g. `"-D IS_MACHINE"`). Bare tokens without
++    `-D` are not parsed by `_extract_from_build_flags_string`. This is
++    consistent with the production code path and avoids ambiguity.
++
++
++
++
++---
++
++## 17. Revision 6 (2026-08-22) - Liste explicite des artefacts + rev 2-step
++
++Une revue ChatGPT a releve 4 points ; 3 ont ete corriges (le point
++1 a ete partiellement corrige : voir 17.1).
++
++### 17.1 Reformulation de l'anti-stale (point 1 de ChatGPT)
++
++ChatGPT affirmait que « le code ne nettoie pas le repertoire apres
++un echec » ; en realite, le code fait bien `shutil.rmtree(dst_dir)`
++puis `os.replace(src_dir, dst_dir)`. Cependant, la formulation de
++la section 15.3 etait trop affirmative sur l'atomicite. La
++nouvelle formulation (section 15.3 ci-dessus) precise :
++
++- Que la publication a une **fenetre** entre `rmtree` et `replace`
++  pendant laquelle `out_dir` n'existe pas ;
++- Que la vraie barriere de securite est `_fatal()` (fail-fast),
++  pas l'atomicite du rename ;
++- Que l'invariant reel est : « apres un echec de generation, le
++  build est fatalement interrompu avant toute compilation ».
++
++### 17.2 Liste explicite des artefacts (point 2 de ChatGPT)
++
++Nouvelle constante `EXPECTED_ARTIFACTS` (13 fichiers) dans
++`scripts/combus_scons_hook.py` :
++
++```
++3 vues x 3 fichiers :
++  combus.{h, cpp, _ids.h}
++  combus_local.{h, cpp, _ids.h}
++  combus_remote.{h, cpp, _ids.h}
++
++4 fichiers MD5 / wire common :
++  combus_md5.h
++  combus_local_md5.h
++  combus_remote_md5.h
++  combus_wire_common.h
++```
++
++Cette liste est utilisee a deux endroits :
++
++- `_verify_skip_artifacts(out_dir)` : verifie la presence des
++  13 fichiers avant d'accepter un `COMBUS_BUILDER_SKIP=1`. Si un
++  seul manque, le message liste les fichiers manquants et le
++  build avorte avec `_fatal()`. **Avant rev 6**, on ne verifiait
++  que la presence du sentinel `combus.h`, ce qui etait laxiste.
++
++- `_check_staging_complete(staging_dir)` : verifie le staging
++  apres `generate()` et avant `_publish()`. Si le staging est
++  incomplet (par exemple, une erreur dans le pipeline de
++  generation a laisse un fichier orphelin), on nettoie le staging
++  et on abort le build. Cela empeche la publication d'un set
++  incoherent a la place d'un `out_dir` valide.
++
++### 17.3 Test 2-step anti-stale (point 3 de ChatGPT)
++
++Le test 3 de `test_a12_rev4.py` ne testait que l'absence de
++staging apres echec. ChatGPT a note que c'etait trop leger.
++Le test est remplace par **Test 6** : scenario 2-step ou
++
++  1. Une build reussie produit les 13 artefacts dans `out_dir`.
++  2. Une seconde tentative avec `CPPDEFINES` vide echoue
++     fatalement.
++  3. On verifie que `sys.exit(1)` a bien ete emis, que le
++     staging `out_dir.new` a ete nettoye, et que `out_dir`
++     contient **toujours** les memes 13 artefacts qu'apres
++     l'etape 1 (c'est-a-dire : un build echoue ne detruit
++     jamais les artefacts d'un build precedent reussi).
++
++### 17.4 Tests rev 6
++
++`scripts/combus_builder/tests/test_a12_rev4.py` contient
++maintenant **7 tests** :
++
++| # | Scenario | Resultat attendu |
++|---|----------|------------------|
++| 1 | Pipeline valide (CPPDEFINES peuple) | exit 0, combus.h present, CPPPATH += out_dir |
++| 2 | CPPDEFINES vide | exit 1 + FATAL |
++| 3 | Apres test 2 : aucun artefact stale (autre que combus.h) | OK |
++| 4 | SKIP sans artefacts pre-existants | exit 1 + FATAL |
++| 5 | SKIP avec **les 13** artefacts presents | exit 0, log `13 files verified` |
++| 5b | SKIP avec **un seul** artefact (partial) | exit 1 + FATAL `incomplete: [..]` |
++| 6 | 2-step : succes puis echec | exit 1, staging nettoye, **out_dir intact** |
++
++### 17.5 Comportement de code
++
++Le comportement de code lui-meme n'a pas change sur le fond :
++
++- Le `shutil.rmtree(out_dir)` suivi de `os.replace(staging, out_dir)`
++  est inchange.
++- Le `_fatal()` sur tout chemin d'erreur est inchange.
++- Le nettoyage du staging sur erreur est inchange.
++
++Ce qui est **ajoute** (rev 6) :
++
++- `EXPECTED_ARTIFACTS` + helper `_missing_artefacts`.
++- `_check_staging_complete()` : verification explicite avant
++  publication, qui est un garde-fou supplementaire (belt-and-braces).
++- `_verify_skip_artifacts()` : verifie les **13** fichiers au lieu
++  d'un seul sentinel.
++- Tests 5b et 6 : couvrent des cas de validation positifs et
++  negatifs qui n'existaient pas en rev 4.
++
++Aucun changement de l'invariant en mode normal (cf. 15.7) :
++un build qui demarre ne peut JAMAIS utiliser des artefacts ComBus
++qui ne correspondent pas a la configuration courante, parce que
++`_fatal()` arrete le pipeline avant compilation.
++
++Note : `COMBUS_BUILDER_SKIP=1` est un bypass explicite qui ne
++verifie que la completude structurelle des 13 artefacts attendus,
++pas leur coherence semantique avec la configuration courante. Voir
++section 18 pour les details et les pistes d'amelioration (manifest).
++
++
++---
++
++## 16. Cohérence des signatures entre points d'entrée (rev 5 - 2026-08-22)
++
++Une revue externe a relevé que le diff A12 montre deux appels à
++`discover_and_parse` avec des kwargs différents :
++
++| Caller | Appel |
++|--------|-------|
++| `scripts/combus_scons_hook.py` (hook `post:`) | `discover_and_parse(env=env)` |
++| `scripts/combus_builder.py` (CLI standalone) | `discover_and_parse(project_root=project_root)` |
++
++**Verdict** : **pas une régression.** La signature officielle de
++`discover_and_parse` (dans `scripts/combus_builder/parser.py`) est :
++
++```python
++def discover_and_parse(
++    env: Any | None = None,
++    project_root: Path | None = None,
++) -> tuple[Path, list[Path], list[tuple[Path, str, Any]]]:
++```
++
++Les deux kwargs sont donc supportés simultanément, avec une priorité
++de résolution implémentée dans `resolve_buildroot(env, project_root)` :
++
++1. `env["PROJECT_SRC_DIR"]` si `env` est fourni ;
++2. `env["PROJECT_DIR"] + "src"` si `env` est fourni ;
++3. `project_root + "src"` si `project_root` est fourni ;
++4. `cwd + "src"` (fallback final).
++
++Le hook `post:` passe `env` (PlatformIO injecte `PROJECT_SRC_DIR`).
++Le CLI standalone passe `project_root` (un chemin explicite, pas de
++PlatformIO). Les deux chemins coexistent **par conception**, pas par
++accident.
++
++### 16.1 Test de non-régression
++
++`scripts/combus_builder/tests/test_signature_consistency.py` (nouveau)
++exécute les 4 appels :
++
++- `discover_and_parse(env=env)`
++- `discover_and_parse(project_root=Path('.'))`
++- `discover_and_parse(env=env, project_root=Path('/tmp'))`
++- Sans argument (cas limite, doit lever une erreur explicite, pas
++  un `TypeError` sur un kwarg inconnu)
++
++Tous les appels valides retournent le même `buildroot` et le même
++nombre de fichiers découverts. Si jamais la signature de
++`discover_and_parse` est modifiée (par exemple, enlevant le support
++de `env=`), ce test casse immédiatement.
++
++### 16.2 Pourquoi cette polymorphie est nécessaire
++
++- **Hook PlatformIO** : doit s'intégrer dans le pipeline SCons.
++  SCons fournit un objet `env` qui contient déjà
++  `PROJECT_SRC_DIR`, `PROJECT_DIR`, `CPPDEFINES`, etc. Réutiliser
++  cet objet évite de réinventer la résolution de chemins.
++- **CLI standalone** : doit fonctionner **sans** PlatformIO (pour
++  débuggage, CI, ou génération de doc). Le CLI reçoit un
++  `project_root` explicite via la ligne de commande. Réutiliser
++  `discover_and_parse` garantit que le code de découverte/parsing
++  est partagé entre les deux entry points.
++
++Si la signature était durcie à un seul kwarg, l'un des deux cas
++d'usage devrait dupliquer la logique de découverte. La polymorphie
++est donc un **choix de conception**, pas un défaut.
++
++---
++
++## 15. Correction de robustesse (revision 4 - 2026-08-21)
++
++Une revue de securite a identifie un defaut dans l'implementation
++precedente (rev 3) : le hook se terminait par un simple
++`sys.stderr.write(...)` apres une erreur du builder, ce qui permettait
++au build PlatformIO/SCons de continuer avec d'eventuels artefacts
++stale. Cette revision corrige ce point et formalise le contrat
++anti-stale.
++
++### 15.1 Defaut identifie
++
++Le bloc final de `combus_scons_hook.main()` (rev 3) etait :
++
++```python
++_rc = main(env)
++if _rc != 0:
++    sys.stderr.write(
++        f"[combus_scons_hook] hook returned {_rc}; build will likely "
++        "fail until the combus generation error is fixed.\n"
++    )
++```
++
++Conséquences :
++- Toute erreur du builder (import, BuildContext, parse, canonisation,
++  generation, publication) etait transformee en simple avertissement.
++- Le repertoire de generation n'etait ni nettoye ni ecrase avant
++  generation : les artefacts d'un build anterieur reussis pouvaient
++  rester presents si la generation courante echouait.
++- Le flag `COMBUS_BUILDER_SKIP=1` ne verifiait pas que des artefacts
++  pre-existants etaient presents : le build pouvait demarrer avec un
++  skip et des headers manquants.
++
++Ces trois points violaient l'invariant exige :
++
++> En build normal, il est impossible de continuer la compilation
++> avec des artefacts ComBus provenant d'une generation precedente
++> apres l'echec du combus_builder courant.
++
++### 15.2 Correction appliquee
++
++`combus_scons_hook.py` a ete refactore en rev 4. Les changements :
++
++1. **Helper `_fatal(msg)`** : ecrit sur stderr et appelle `sys.exit(1)`.
++   Aucun warning muet possible.
++
++2. **Tous les chemins d'erreur** (import, BuildContext, parse,
++   canonisation, generation, publish) appellent `_fatal(...)`. Aucun
++   `return 1` muet ne subsiste.
++
++3. **Generation atomique** : la generation ecrit dans un repertoire
++   sibling temporaire (`out_dir + ".new"`), puis un helper
++   `_publish_atomic()` fait :
++   ```
++   shutil.rmtree(out_dir)   # supprime les anciens artefacts
++   os.replace(staging, out_dir)  # renomme atomiquement
++   ```
++   Si la generation echoue en cours d'ecriture, le helper nettoie le
++   `staging` et appelle `_fatal`. Si `rmtree` reussit mais que
++   `os.replace` echoue, `out_dir` est detruit mais `staging` non
++   publie ; le build ne peut pas continuer avec des artefacts
++   potentiellement incoherents.
++
++4. **`COMBUS_BUILDER_SKIP=1`** : nouvelle fonction
++   `_verify_skip_artifacts(out_dir)` verifie la presence du sentinel
++   `out_dir/combus.h`. Si absent, `_fatal(...)` est appelee avec un
++   message explicite :
++   "COMBUS_BUILDER_SKIP=1 is set but no pre-existing artefacts were
++   found ... Either unset COMBUS_BUILDER_SKIP to regenerate, or run
++   a build without the skip first to produce the artefacts."
++
++5. **Skip valide** : si le sentinel existe, le hook ajoute le dossier
++   a `CPPPATH` (pour que les `#include "combus.h"` resolvables) et
++   retourne 0 sans regenerer. Le skip est donc :
++   - explicite (variable d'environnement documentee) ;
++   - verifie (le sentinel doit etre present) ;
++   - silencieux en cas de succes (un message informatif est emis) ;
++   - fatal en cas d'incoherence (impossible de "skipper" sur du vide).
++
++### 15.3 Strategie anti-stale (revise rev 6)
++
++Strategie retenue : **fail-fast sur toute erreur**, avec une
++etape de generation staging.
++
++- Avant la generation, les anciens artefacts (s'ils existent) sont
++  dans `out_dir`.
++- Pendant la generation, les nouveaux fichiers sont ecrits dans
++  `staging_dir` (sibling de `out_dir`, nomme `out_dir + ".new"`).
++  `out_dir` reste intact.
++- Apres la generation, une verification de completude
++  (`_check_staging_complete`) confirme que tous les
++  `EXPECTED_ARTIFACTS` (13 fichiers) sont presents dans le staging.
++  Si un seul manque, `_fatal()` nettoie le staging et abort.
++- Si tout est OK, `_publish()` fait :
++  ```
++  shutil.rmtree(dst_dir)   # supprime les anciens artefacts
++  os.replace(src_dir, dst_dir)  # renomme le staging en place
++  ```
++- Si quoi que ce soit echoue entre la generation et la publication,
++  on nettoie le staging et on appelle `_fatal()` -> `sys.exit(1)`.
++  `out_dir` reste alors intact (les anciens artefacts, s'il y en
++  avait, sont preserves) et SCons arrete le build immediatement.
++
++**Pourquoi cette strategie est suffisante** (note importante) :
++
++La vraie barriere de securite n'est PAS le caractere "atomique" de
++la publication. La publication presente une fenetre entre le
++`rmtree(dst_dir)` et le `os.replace(src_dir, dst_dir)` pendant
++laquelle `dst_dir` n'existe pas. Cette fenetre est acceptable parce
++que la seule chose qui s'execute apres la publication est la
++compilation, que le hook ne peut jamais atteindre sur erreur fatale
++(`_fatal()` -> `sys.exit(1)` propage immediatement).
++
++Le filet de securite reel est donc :
++1. **`_fatal()` sur toute erreur** : la generation, le parse, la
++   canonisation, la completion du staging, la publication, sont
++   tous des points d'arret immediat.
++2. **`_check_staging_complete()`** : empeche une publication
++   partielle (staging avec fichiers manquants) de remplacer un
++   `out_dir` valide par un set incoherent.
++3. **Nettoyage du staging sur erreur** : aucun `*.new` parasite
++   n'est laisse sur disque apres un echec.
++
++Aucun systeme transactionnel complexe (verrou, journal, reprise
++apres crash) n'est mis en oeuvre : si le hook lui-meme est tue
++(segfault, OOM kill) entre le `rmtree` et le `os.replace`, le
++build laisse `out_dir` absent et SCons echoue avec un "header
++not found", ce qui est le comportement souhaite (le build echoue
++plutot que d'utiliser un set incoherent).
++
++### 15.4 Tests ajoutes
++
++`scripts/combus_builder/tests/test_a12_rev4.py` (5 cas) :
++
++| # | Scenario | Resultat attendu | OK |
++|---|----------|------------------|----|
++| 1 | Pipeline valide (CPPDEFINES peuple) | exit 0, combus.h present, CPPPATH += out_dir | OK |
++| 2 | CPPDEFINES vide | exit 1 + `FATAL: BuildContext acquisition failed` sur stderr | OK |
++| 3 | Apres test 2 : aucun artefact stale dans `out_dir` | OK |
++| 4 | `COMBUS_BUILDER_SKIP=1` sans artefacts pre-existants | exit 1 + `FATAL: ... no pre-existing artefacts ...` | OK |
++| 5 | `COMBUS_BUILDER_SKIP=1` avec sentinel present | exit 0, log `using pre-existing`, CPPPATH += out_dir | OK |
++
++Les tests exec la source du hook avec un `Import("env")` et un `env`
++mocks (charge comme module sans declencher le binding reel SCons),
++puis appellent `main(env)` dans un sous-processus pour isoler les
++exit codes.
++
++### 15.5 Build PlatformIO reel
++
++**Non execute** dans cette revision. La correction porte
++exclusivement sur la robustesse du hook ; le test bout-en-bout avec
++un vrai PlatformIO reste a faire en Phase B (premier prototype
++materiel). Le test du hook via sous-processus reproduit fidelement
++le comportement que SCons observerait, mais ne couvre pas les
++details de l'integration SCons (parse de `extra_scripts =`, ordre
++de chargement, etc.).
++
++### 15.6 Fichiers modifies
++
++| Fichier | Nature |
++|---------|--------|
++| `scripts/combus_scons_hook.py` | Rev 4 : helper `_fatal`, anti-stale atomique, `_verify_skip_artifacts` |
++| `scripts/combus_builder/tests/test_a12_rev4.py` | Nouveau : 5 tests, dont anti-stale et skip |
++
++### 15.7 Invariant final (affaibli pour etre techniquement exact)
++
++> **En mode normal** (hook `post:` execute, generation active) :
++> si une generation echoue, `_fatal()` -> `sys.exit(1)` est emis
++> avant que SCons ne tente de compiler le moindre `.cpp`. Le build
++> en cours ne peut donc JAMAIS utiliser des artefacts ComBus qui ne
++> correspondent pas a la configuration courante. Les anciens
++> artefacts (s'il y en avait) sont laisses sur disque intacts, mais
++> le build qui a echoue n'en tient pas compte : il avorte avant
++> compilation.
++>
++> **En mode `COMBUS_BUILDER_SKIP=1`** : le hook verifie uniquement
++> la **completude structurelle** des 13 artefacts attendus (presence
++> des fichiers). Il ne verifie PAS que ces artefacts correspondent
++> aux CPPDEFINES, a la version du builder, ou au contenu canonise
++> des `.cb` du buildroot courant. Un skip accepte donc potentiellement
++> des artefacts structures OK mais semantiquement obsoletes.
++>
++> **En consequence** : `COMBUS_BUILDER_SKIP=1` est un **bypass
++> explicite**, utile pour CI/debug, dont la coherence semantique
++> n'est pas verifiee au niveau du hook. Le mainteneur qui active
++> SKIP doit savoir ce qu'il fait (par exemple, build rapide
++> d'un fichier unique sans toucher aux artefacts precedemment
++> publies).
++
++Cet invariant en mode normal est verifie par les 7 cas de
++`test_a12_rev4.py` (en particulier le test 6 qui demontre qu'un
++build en echec laisse `out_dir` intact).
++
++
++
++---
++
++## 18. COMBUS_BUILDER_SKIP : bypass explicite, semantique non verifiee (rev 7 - 2026-08-22)
++
++### 18.1 Position du probleme
++
++La garde `_check_staging_complete()` et la verification
++`_verify_skip_artifacts(out_dir)` portent sur la **completude
++structurelle** des 13 artefacts. Elles ne portent pas sur la
++**coherence semantique** entre ces artefacts et la configuration
++courante.
++
++Concretement, SKIP=1 peut accepter :
++
++- Un `combus.h` qui declare 18 channels alors que les CPPDEFINES
++  courantes n'en activent que 7 (les autres seraient compiles mais
++  jamais utilises, ou pire, references par accident).
++- Un MD5 calcule sur un `.cb` qui n'existe plus ou qui a change
++  depuis la derniere generation.
++- Un artefact d'un autre projet (PATH confondu), d'un autre
++  environnement PlatformIO, ou d'une branche Git differente.
++
++SKIP est donc un **bypass explicite**, pas un mode sur.
++
++### 18.2 Garanties actuelles de SKIP
++
++| Propriete | Verifiee par SKIP |
++|-----------|-------------------|
++| Les 13 fichiers sont presents | OUI (`_verify_skip_artifacts`) |
++| Les fichiers sont non vides / non corrompus (lecture reussie) | OUI (implicite : `is_file()`) |
++| Les fichiers contiennent un header C++ valide | NON |
++| Le contenu correspond aux CPPDEFINES courantes | NON |
++| Le contenu correspond aux `.cb` du buildroot | NON |
++| Le contenu correspond a la version courante du builder | NON |
++| Le MD5 declare correspond au contenu reel | NON |
++
++La derniere ligne est particulierement importante : SKIP peut
++accepter des artefacts ou `combus_local_md5.h` declare un hash
++qui ne correspond pas au contenu de `combus_local.h`. Le compilateur
++les compilera tous les deux sans erreur, mais le runtime detectera
++l'incoherence au moment de la transmission.
++
++### 18.3 Cas d'usage legitimes de SKIP
++
++- **CI / debug** : on veut iterer rapidement sur un `.cpp`
++  isole, sans relancer la generation ComBus (lente).
++- **Build incrémental** : si on sait qu'aucun `.cb` n'a change
++  et qu'aucun CPPDEFINE n'a change, SKIP evite le cout de la
++  regeneration.
++- **Sandbox** : on veut tester un mapping `.cpp` -> `.h`
++  avec une generation fixee.
++
++Dans tous ces cas, le mainteneur **doit savoir** que SKIP court-
++circuite la verification semantique. C'est un acte delibere.
++
++### 18.4 Piste d'amelioration : manifest signe
++
++Pour rendre SKIP semantiquement sur, il faudrait un manifest genere
++en meme temps que les 13 artefacts, contenant au minimum :
++
++```
++// combus_manifest.h - auto-generated by combus_builder
++#define COMBUS_BUILDER_VERSION 6
++#define COMBUS_BUILDER_DATE "2026-08-22T..."
++#define COMBUS_CPPDEFINES_HASH 0xABCDEF12  // SHA256[0:4] of sorted CPPDEFINES
++#define COMBUS_BUILDROOT_HASH 0x12345678   // SHA256[0:4] of canonical .cb content
++#define COMBUS_REV 7
++```
++
++Le hook, en mode SKIP, lirait ce manifest et comparerait les
++constantes a celles qu'il vient de calculer sur la configuration
++courante. Si un seul ne match pas, `_fatal()` avorte le build avec
++un message explicite ("artefacts are stale: COMBUS_CPPDEFINES_HASH
++mismatch").
++
++**Note** : ce manifest n'est PAS implemente en rev 6. C'est une
++piste pour une evolution ulterieure. Pour l'instant, le hook se
++contente de la garantie structurelle (13 fichiers presents).
++
++### 18.5 Recommandation pratique
++
++Pour le proto, documenter dans `platformio.ini` :
++
++```ini
++# COMBUS_BUILDER_SKIP=1 is an explicit bypass that only checks
++# that the 13 expected artefacts are present. It does NOT verify
++# that they match the current CPPDEFINES, .cb files, or builder
++# version. Use it knowingly (CI, debug, incremental builds).
++extra_scripts =
++    post:scripts/combus_scons_hook.py
++```
++
++Ainsi, un mainteneur qui active SKIP via `export COMBUS_BUILDER_SKIP=1`
++voit dans les logs le disclaimer et comprend le contrat.
++
++
++---
++
++## Annexe A : historique des revisions
++
++| Rev | Date       | Auteur | Resume |
++|-----|------------|--------|--------|
++| 1   | 2026-08-20 | analyse | Premiere analyse. Confondait `extra_scripts = post:` avec `AddPostAction`. |
++| 2   | 2026-08-21 | correction | Lot 1 : distinction `extra_scripts = post:` vs `AddPostAction`. Lot 2 : simulation vs validation reelle. |
++| 3   | 2026-08-21 | implementation | Production code: `scripts/combus_scons_hook.py`, `scripts/combus_builder.py`, modif `platformio.ini`. |
++| 4   | 2026-08-21 | robustesse | Correction du defaut "warning muet + stale". `_fatal`, publication atomique, verif du sentinel SKIP. Tests `test_a12_rev4.py`. |
++| 5   | 2026-08-22 | clarif. signature | Section 16 : `discover_and_parse` supporte `env=` et `project_root=` par construction (`resolve_buildroot` politique de priorite). Test `test_signature_consistency.py`. |
++| 6   | 2026-08-22 | completude artefacts | `EXPECTED_ARTIFACTS` (13 fichiers) + `_check_staging_complete` (belt-and-braces) + `_verify_skip_artifacts` elargi. Tests 5b et 6 (2-step). Section 17 documente le changement. |
++| 7   | 2026-08-22 | affaiblissement invariant | Section 15.7 / 17.5 reformules : mode normal vs SKIP distingues. Section 18 documente SKIP comme bypass explicite (semantique non verifiee), avec piste "manifest signe". |
+diff --git a/doc/combus_v2 - YAML implementation Roadmap.md b/doc/combus_v2 - YAML implementation Roadmap.md
+index fd80bc2..b8f16a1 100644
+--- a/doc/combus_v2 - YAML implementation Roadmap.md	
++++ b/doc/combus_v2 - YAML implementation Roadmap.md	
+@@ -1,329 +1,1500 @@
+-# ComBus v2 — Roadmap d'implémentation
++# ComBus v2 - Roadmap d'implémentation
++
++
++
++
++
++
++
++> Roadmap opérationnelle pour le passage de la composition ComBus par `.inc` vers une génération build-time Ã  partir de définitions YAML.
++
++
+ 
+-> Roadmap opérationnelle pour le passage de la composition ComBus par `.inc` vers une génération build-time à partir de définitions YAML.
+ >
++
++
++
+ > **Référence** : `combus_v2 - YAML implementation.md` (note d'architecture validée).
++
++
++
+ >
++
++
++
+ > **Statut** : proto. Aucun engagement de date ; ordre d'exécution indicatif.
+ 
++
++
++
++
++
++
+ ## Vue d'ensemble
+ 
+-Le travail s'organise en **5 phases** (A → E) déjà définies dans la note d'architecture. Ce roadmap ajoute :
++
++
++
++
++
++
++Le travail s'organise en **5 phases** (A â†’ E) déjÃ  définies dans la note d'architecture. Ce roadmap ajoute :
++
++
++
++
++
++
+ 
+ - le **détail des tâches** par phase ;
++
++
++
+ - les **critères de passage** (gates) entre phases ;
++
++
++
+ - les **dépendances** entre tâches ;
++
++
++
+ - une **estimation d'effort** indicative ;
++
++
++
+ - les **risques** identifiés et leurs mitigations.
+ 
++
++
++
++
++
++
+ Principe général :
+ 
++
++
++
++
++
++
+ > **On ne supprime aucun `.inc` legacy tant que la validation complète n'est pas passée.**
+-> Chaque phase produit un artefact observable et testable avant de passer à la suivante.
++
++
++
++> Chaque phase produit un artefact observable et testable avant de passer Ã  la suivante.
++
++
++
++
++
++
+ 
+ ### Note sur le vocabulaire
+ 
+-Ce roadmap décrit la **cible** (ce que le système doit devenir), pas l'état actuel du repo. Les références à des fichiers ou concepts legacy (`.inc`, umbrellas, etc.) sont conservées uniquement parce qu'elles font partie du **périmètre de migration** — c'est-à-dire ce qui doit disparaître à terme. Elles ne décrivent pas un état à reproduire.
++
++
++
++
++
++
++Ce roadmap décrit la **cible** (ce que le système doit devenir), pas l'état actuel du repo. Les références Ã  des fichiers ou concepts legacy (`.inc`, umbrellas, etc.) sont conservées uniquement parce qu'elles font partie du **périmètre de migration** - c'est-Ã -dire ce qui doit disparaître Ã  terme. Elles ne décrivent pas un état Ã  reproduire.
++
++
++
++
++
++
+ 
+ ### Note sur les hypothèses architecturales
+ 
+-Plusieurs choix techniques sont formulés comme des **hypothèses à valider** dans les premières phases, et non comme des décisions figées :
+ 
+-- **Hook `post:` pour `CPPDEFINES`** : hypothèse à tester en Phase A. Si elle ne tient pas (PlatformIO 6.x résout les `extends` après `post:` aussi, par exemple), un fallback est prévu.
+-- **Mécanisme de découverte des `CbProc`** : à fixer en seconde passe (regex, AST, table explicite). Pas bloquant pour le proto.
+-- **Ordre canonique vs legacy** : la stratégie (override, mode compat, bump de version) sera décidée empiriquement en Phase A.
+ 
+----
+ 
+-## Phase A — Preuve de concept
+ 
+-**Objectif** : démontrer qu'un générateur Python peut produire un header ComBus dont le **contrat protocolaire** (mapping des IDs, valeurs numériques des enums) est identique au legacy, à partir d'un seul thème (recommandation : `vbat`).
+ 
+-> **Important** : ce qui doit être identique est le **contrat protocolaire** (valeurs des enums, mapping ID ↔ nom, ordre des IDs), pas nécessairement le texte ou le format exact du header généré. Le générateur est libre de produire un header syntaxiquement différent du legacy, tant que le runtime voit les mêmes IDs aux mêmes valeurs.
+ 
+-### Tâches
++Plusieurs choix techniques sont formulés comme des **hypothèses Ã  valider** dans les premières phases, et non comme des décisions figées :
+ 
+-| # | Tâche | Livrable | Dépendances |
+-|---|---|---|---|
+-| A1 | Définir le schéma YAML minimal (champs `id`, `type`, `scope`, `theme`, `requires`) | `schemas/cb_v1.schema.json` (ou Pydantic) | — |
+-| A2 | Écrire un `.cb` pour le thème `vbat` (2-3 channels réels) | `src/core/system/vbat/vbat.cb` | A1 |
+-| A3 | Implémenter la discovery + parsing YAML minimal (collecte brute, sans tri/canonisation) | `scripts/combus_builder/parser.py` | A1 |
+-| A4 | Implémenter l'acquisition du contexte de build et la résolution des flags (CPPDEFINES, avec fallback de compatibilité) et récupérer le buildroot | `scripts/combus_builder/flags.py` | — |
+-| A5 | Implémenter la canonisation (fusion + tri global `(scope, type, theme, id)`) | `scripts/combus_builder/canon.py` | A3 |
+-| A6 | Implémenter le générateur de header C++ (enum + tableau + count) | `scripts/combus_builder/generator.py` | A5 |
+-| A7 | Implémenter le calcul MD5 (représentation canonique JSON) | `scripts/combus_builder/md5.py` | A5 |
+-| A8 | Écrire le test de cohérence CPPDEFINES (paramétrable par env) | `scripts/combus_builder/coherence.py` | A4 |
+-| A9 | Comparer le **contrat protocolaire** généré au legacy (mapping IDs, valeurs d'enum) | Script de comparaison + rapport | A6, A7 |
+-| A10 | Valider le déterminisme (2 runs → contrat identique) | Test pytest | A6, A7 |
+-| A11 | Documenter les invariants observés (ordre canonique vs legacy) | Note dans `doc/` | A9, A10 |
+-| A12 | **Choisir le mécanisme d'intégration PlatformIO** : valider à quel moment du cycle (`pre:` / `post:` / autre) le contexte de build acquis par A4 est effectivement disponible, et confirmer le hook retenu avant l'intégration Phase B | Rapport de validation | A4, A8 |
+ 
+-### Gate Phase A → Phase B
+ 
+-- [ ] Un thème (`vbat`) est généré sans erreur.
+-- [ ] Le **contrat protocolaire** généré est identique au legacy (mapping IDs, valeurs d'enum).
+-- [ ] Le MD5 est identique entre deux runs successifs.
+-- [ ] Le test de cohérence CPPDEFINES passe.
+-- [ ] L'hypothèse `post:` est validée (ou un fallback est identifié).
+-- [ ] Le code est commit dans une branche dédiée (ex. `proto/combus-v2-phase-a`).
+ 
+-### Risques Phase A
+ 
+-| Risque | Mitigation |
+-|---|---|
+-| Ordre canonique diverge du legacy | Documenter la divergence ; envisager override explicite ou mode compat (§10). |
+-| `CPPDEFINES` vide en hook `post:` | Tester explicitement (A12) ; fallback temporaire à recurse `extends` si besoin. |
+-| Parser YAML fragile | Utiliser un validateur strict (Pydantic / JSON Schema) dès le départ. |
+-| Contrat protocolaire involontairement modifié | Comparer systématiquement les valeurs d'enum et le mapping ID ↔ nom, pas le texte du header. |
+ 
+----
+ 
+-## Phase B — Intégration PlatformIO
++- **Hook `post:` pour `CPPDEFINES`** : hypothèse Ã  tester en Phase A. Si elle ne tient pas (PlatformIO 6.x résout les `extends` après `post:` aussi, par exemple), un fallback est prévu.
+ 
+-**Objectif** : brancher le générateur dans le build PlatformIO réel, sans rien casser.
+ 
+-> **Note** : le mécanisme exact d'intégration (hook `post:`, autre hook SCons, ou solution alternative) dépend du résultat de A12. Cette phase s'adapte au choix validé en Phase A.
+ 
+-### Tâches
++- **Mécanisme de découverte des `CbProc`** : Ã  fixer en seconde passe (regex, AST, table explicite). Pas bloquant pour le proto.
++
++
++
++- **Ordre canonique vs legacy** : la stratégie (override, mode compat, bump de version) sera décidée empiriquement en Phase A.
++
+ 
+-| # | Tâche | Livrable | Dépendances |
+-|---|---|---|---|
+-| B1 | Implémenter le mécanisme d'intégration retenu (hook SCons ou équivalent) | `scripts/combus_scons_hook.py` (ou nom adapté) | A6, A12 |
+-| B2 | Déclarer les dépendances SCons sur les `.cb` / `.cbch` | Dans le hook | B1 |
+-| B3 | Ajouter le répertoire `.pio/build/<env>/generated/combus/` aux include paths | Dans le hook | B1 |
+-| B4 | Tester sur un env de test jetable (branche temporaire) | Rapport de test | B1, B2, B3 |
+-| B5 | Valider compilation + linkage avec un programme trivial | Build successful | B4 |
+-| B6 | Documenter le hook dans `platformio.ini` | Mise à jour `platformio.ini` | B1 |
+ 
+-### Gate Phase B → Phase C / D
+ 
+-- [ ] Le build PlatformIO exécute le générateur sans erreur.
+-- [ ] Les include paths sont corrects (compilation OK).
+-- [ ] Le linkage est OK (pas de symbole manquant).
+-- [ ] Le contrat protocolaire généré est identique au contrat legacy pour le thème `vbat`.
+-- [ ] Les `.inc` legacy sont **toujours en place** (double-run transitoire).
+ 
+-### Risques Phase B
+ 
+-| Risque | Mitigation |
+-|---|---|
+-| Mécanisme d'intégration non fonctionnel | Reprendre A12 ; tester sur un env minimal ; vérifier les logs PlatformIO. |
+-| Dépendances SCons non détectées | Forcer la regénération manuelle pour valider ; ajuster `Glob`. |
+-| Include path non propagé | Vérifier que `env.Append(CPPPATH=[...])` est bien appelé. |
+ 
+ ---
+ 
+-## Phase C — Chaînes (`.cbch`)
+ 
+-**Objectif** : introduire le format `.cbch` pour décrire le câblage des `CbProcChain`, avec validation des processors référencés.
+ 
+-> **Note importante** : la Phase C est **indépendante** de la Phase D. Le générateur de `.cbch` peut être développé et testé sans attendre la migration des `.cb`. Les deux pipelines (`.cb` → enums/tableaux, `.cbch` → wiring) sont découplés.
+ 
+-### Tâches
+ 
+-| # | Tâche | Livrable | Dépendances |
+-|---|---|---|---|
+-| C1 | Définir le schéma YAML `.cbch` (champs `chain`, `processors`, `in`/`out`) | `schemas/cbch_v1.schema.json` | A1 |
+-| C2 | Écrire un `.cbch` pour la chaîne `failsafe` | `src/core/system/failsafe/failsafe.cbch` | C1 |
+-| C3 | Étendre le parser pour reconnaître `.cbch` | Mise à jour `parser.py` | C1, A3 |
+-| C4 | Implémenter la validation des processors (lookup dans les `CbProc` enregistrés) | `scripts/combus_builder/proc_validator.py` | C3 |
+-| C5 | Générer le code de wiring (table de processors, init de chaîne) | Extension `generator.py` | C3 |
+-| C6 | Tester : processor existant → accepté, processor inexistant → erreur | Tests pytest | C4 |
+-| C7 | Documenter le mécanisme de découverte des `CbProc` (seconde passe — voir note §15) | Note dans `doc/` | C4 |
+ 
+-### Gate Phase C (indépendante de D)
+ 
+-- [ ] Un `.cbch` est parsé et validé correctement.
+-- [ ] Le wiring généré est compilé et linkage OK.
+-- [ ] Un processor inexistant provoque une erreur explicite au build.
+-- [ ] Le mécanisme de découverte des `CbProc` est documenté (même si pragmatique pour le proto).
++## Phase A - Preuve de concept
+ 
+-### Risques Phase C
+ 
+-| Risque | Mitigation |
+-|---|---|
+-| Découverte des `CbProc` fragile | Commencer par regex simple ou table explicite ; industrialiser en seconde passe. |
+-| Wiring généré incompatible avec le runtime | Comparer au wiring legacy existant ; valider structurellement. |
+ 
+----
+ 
+-## Phase D — Migration thème par thème
+ 
+-**Objectif** : migrer chaque thème legacy (`.inc`) vers `.cb` un par un, avec validation complète avant suppression.
+ 
+-> **Note** : la Phase D peut démarrer dès que la Phase B est validée, indépendamment de l'état de la Phase C. Les thèmes peuvent être migrés sans que le câblage des chaînes soit encore en `.cbch`.
+ 
+-### Tâches (par thème)
++**Objectif** : démontrer qu'un générateur Python peut produire un header ComBus dont le **contrat protocolaire** (mapping des IDs, valeurs numériques des enums) est identique au legacy, Ã  partir d'un seul thème (recommandation : `vbat`).
+ 
+-| # | Tâche | Livrable | Dépendances |
+-|---|---|---|---|
+-| Dx.1 | Identifier les `.inc` du thème | Liste dans `doc/` | — |
+-| Dx.2 | Écrire le `.cb` équivalent (canal par canal) | `*.cb` | A2 (schéma) |
+-| Dx.3 | Générer le ComBus v2 pour ce thème | Header dans `.pio/build/...` | Dx.2 |
+-| Dx.4 | Comparer le **contrat protocolaire** au legacy (mapping IDs, valeurs d'enum) | Rapport | Dx.3 |
+-| Dx.5 | Comparer le MD5 legacy et le MD5 généré | Rapport | Dx.3 |
+-| Dx.6 | Tester en double-run (legacy + générateur) sur un env de test | Build OK | Dx.2, B1 |
+-| Dx.7 | Supprimer les `.inc` du thème (uniquement après validation complète) | Commit de suppression | Dx.4, Dx.5, Dx.6 |
+ 
+-### Thèmes candidats (ordre indicatif)
+ 
+-1. `vbat` (déjà fait en Phase A).
+-2. `core` (simple, valide le mécanisme).
+-3. `failsafe` (teste le câblage des chaînes, en synergie avec Phase C si elle est avancée).
+-4. Autres thèmes métier (au cas par cas).
+ 
+-### Gate par thème
+ 
+-- [ ] Déterminisme validé (2 runs → contrat identique).
+-- [ ] MD5 legacy et MD5 généré identiques.
+-- [ ] Builds parallèles (legacy vs générateur) OK.
+-- [ ] Aucune régression silencieuse détectée (tests fonctionnels passent).
+ 
+-### Risques Phase D
+ 
+-| Risque | Mitigation |
+-|---|---|
+-| Régression silencieuse sur un thème | Double-run prolongé avant suppression ; tests fonctionnels obligatoires. |
+-| Ordre canonique divergent | Documenter ; conserver mode compat ou bump version (§23). |
+-| Couplage inattendu core ↔ machine | Profiter du découplage `combus_ids_remote.h` (§22 Phase E) pour isoler. |
++> **Important** : ce qui doit être identique est le **contrat protocolaire** (valeurs des enums, mapping ID â†” nom, ordre des IDs), pas nécessairement le texte ou le format exact du header généré. Le générateur est libre de produire un header syntaxiquement différent du legacy, tant que le runtime voit les mêmes IDs aux mêmes valeurs.
++
++
++
+ 
+----
+ 
+-## Phase E — Suppression legacy complète
+ 
+-**Objectif** : supprimer tous les artefacts legacy, basculer le runtime sur les artefacts générés, et nettoyer les artefacts obsolètes.
+ 
+ ### Tâches
+ 
++
++
++
++
++
++
+ | # | Tâche | Livrable | Dépendances |
++
++
++
+ |---|---|---|---|
+-| E1 | Générer les 3 fichiers `combus_ids_*` (analog, digital, _remote pour core) | Headers dans `.pio/build/...` | D (tous thèmes migrés) |
+-| E2 | Basculer le runtime sur les headers générés (suppression des includes legacy) | Modifications C++ | E1 |
+-| E3 | Supprimer les umbrellas legacy | Commits | E2 |
+-| E4 | Supprimer tous les `.inc` restants | Commits | E2 |
+-| E5 | Nettoyer les artefacts obsolètes dans `src/` (tout fichier généré qui aurait été commités par erreur) | Commits | E2 |
+-| E6 | Intégrer `combus_md5.py` au générateur (note Python en tête, sortie dans `.pio/`) | `scripts/combus_builder/md5.py` (refactor) | E1 |
+-| E7 | Mettre à jour la documentation (board, core, ecosystem) | Doc | E2, E3, E4 |
+-| E8 | Bumper `schema_version` et `generator_version` (si breaking change) | Header de version | E1 |
+ 
+-### Gate Phase E (final)
+ 
+-- [ ] Plus aucun `.inc` legacy dans le repo.
+-- [ ] Plus aucun artefact généré dans `src/`.
+-- [ ] Les 3 fichiers `combus_ids_*` sont générés et utilisés par le runtime.
+-- [ ] Le MD5 est dans `.pio/build/<env>/generated/combus/`.
+-- [ ] Le couplage core ↔ machine est résolu (les modules core n'incluent plus de headers machine-specific).
+-- [ ] Tous les builds passent (toutes machines, tous envs).
+-- [ ] Documentation à jour.
+ 
+-### Risques Phase E
++| A1 | Définir le schéma YAML minimal (champs `id`, `type`, `scope`, `theme`, `requires`) | `schemas/cb_v1.schema.json` (ou Pydantic) | - |
+ 
+-| Risque | Mitigation |
+-|---|---|
+-| Découverte d'un thème non migré | Audit complet du repo avant Phase E ; check-list par machine. |
+-| Artefact obsolète oublié | Script de détection (`git status` ; recherche de patterns `_md5.h`, `combus_ids_*.h` dans `src/`). |
+-| Documentation désynchronisée | Mettre à jour la doc **en même temps** que le code (PR atomique). |
+ 
+----
+ 
+-## Estimation d'effort (indicative)
++| A2 | Ã‰crire un `.cb` pour le thème `vbat` (2-3 channels réels) | `src/core/system/vbat/vbat.cb` | A1 |
+ 
+-> **Note** : ces estimations sont très approximatives. Le code est en proto, pas en production. Ajuster au fil de l'eau.
+ 
+-| Phase | Effort estimé | Commentaire |
+-|---|---|---|
+-| **A** | 2-4 jours | Schéma + parser + générateur pour 1 thème + validation hypothèse `post:`. |
+-| **B** | 1-2 jours | Intégration PlatformIO + tests d'intégration. |
+-| **C** | 1-2 jours | `.cbch` + validation processors (approche pragmatique). Indépendant de D. |
+-| **D** | 0.5-1 jour par thème | Migration itérative ; la majorité est de la conversion `.inc` → `.cb`. Indépendant de C. |
+-| **E** | 1-2 jours | Nettoyage + bascule finale. |
+-| **Total** | ~1-2 semaines | Pour un proto fonctionnel sur quelques thèmes. |
+ 
+----
++| A3 | Implémenter la discovery + parsing YAML minimal (collecte brute, sans tri/canonisation) | `scripts/combus_builder/parser.py` | A1 |
+ 
+-## Tâches parallèles / transverses
+ 
+-Certaines tâches peuvent être menées en parallèle des phases :
+ 
+-| Tâche | Phase cible | Commentaire |
+-|---|---|---|
+-| Audit des `.inc` existants | Avant Phase A | Identifier tous les fragments, umbrellas, et artefacts générés. |
+-| Test de cohérence CPPDEFINES | Phase A (A8) | Critique pour éviter les faux positifs. |
+-| Validation de l'hypothèse `post:` | Phase A (A12) | Détermine le mécanisme d'intégration en Phase B. |
+-| Documentation du mécanisme de découverte `CbProc` | Phase C (C7) | Seconde passe, peut être documentée après. |
+-| Vérification de l'ordre `wire_end` | Avant Phase A | Déterminer son importance réelle dans le code C++. |
++| A4 | Implémenter l'acquisition du contexte de build et la résolution des flags (CPPDEFINES, avec fallback de compatibilité) et récupérer le buildroot | `scripts/combus_builder/flags.py` - |
+ 
+----
+ 
+-## Check-list globale (à cocher au fil de l'eau)
+ 
+-- [ ] Schéma `.cb` défini et validé.
+-- [ ] Schéma `.cbch` défini et validé.
+-- [ ] Générateur Python opérationnel (parser + canon + generator + md5).
+-- [ ] Mécanisme d'intégration PlatformIO validé (hook `post:` ou fallback).
+-- [ ] Test de cohérence CPPDEFINES opérationnel.
+-- [ ] Au moins un thème migré avec succès (Phase D pour ce thème).
+-- [ ] Déterminisme validé (MD5 stable entre runs).
+-- [ ] Contrat protocolaire identique au legacy sur tous les thèmes migrés.
+-- [ ] Tous les `.inc` supprimés (après validation complète).
+-- [ ] Tous les artefacts obsolètes nettoyés dans `src/`.
+-- [ ] Les 3 fichiers `combus_ids_*` générés et utilisés.
+-- [ ] Documentation à jour (board, core, ecosystem).
++| A5 | Implémenter la canonisation (fusion + tri global `(scope, type, theme, id)`) | `scripts/combus_builder/canon.py` | A3 |
+ 
+----
+ 
+-## Annexe — Ordre d'exécution recommandé
+ 
+-```
+-Phase A (vbat seul + validation hypothèse post:)
+-    │
+-    ▼
+-Phase B (intégration PlatformIO sur env de test)
+-    │
+-    ├──────────────────────────────┐
+-    ▼                              ▼
+-Phase C (chaîne failsafe      Phase D (migration thème
+-en .cbch — indépendant)       par thème — indépendant)
+-    │                              │
+-    └──────────────┬───────────────┘
+-                   ▼
+-              Phase E (suppression legacy + bascule finale)
+-```
++| A6 | Implémenter le générateur de header C++ (enum + tableau + count) | `scripts/combus_builder/generator.py` | A5 |
+ 
+-**Points clés** :
+ 
+-- **A → B** : séquentiel (B dépend de la validation de l'hypothèse `post:` en A).
+-- **B → C et B → D** : C et D peuvent démarrer en parallèle après B.
+-- **C et D** : indépendants l'un de l'autre.
+-- **C + D → E** : E nécessite que C et D soient terminés.
+ 
+-Chaque phase produit un livrable observable (commit, build successful, test pass) avant de passer à la suivante.
++| A7 | Implémenter le calcul MD5 des fichiers combus | `scripts/combus_builder/md5.py` | A5 |
+ 
+----
+ 
+-## Annexe — Cible vs état actuel
+ 
+-Cette annexe décrit la **cible** (ce que le système doit devenir), pas l'état actuel du repo. Les références à des fichiers legacy sont conservées uniquement parce qu'elles font partie du périmètre de migration.
++| A8 | Ã‰crire le test de cohérence CPPDEFINES (paramétrable par env) | `scripts/combus_builder/coherence.py` | A4 |
+ 
+-| Cible | Statut | Action |
+-|---|---|---|
+-| `.cb` / `.cbch` comme sources de vérité | À créer | Phase A, C |
+-| Headers générés dans `.pio/build/<env>/generated/combus/` | À créer | Phase B |
+-| Aucun artefact généré dans `src/` | À atteindre | Phase E |
+-| Aucun `.inc` legacy | À supprimer | Phase D (par thème), E (reste) |
+-| Aucun umbrella legacy | À supprimer | Phase E |
+-| `combus_md5.py` intégré au générateur | À refactorer | Phase E |
+-| 3 fichiers `combus_ids_*` générés (analog, digital, _remote) | À créer | Phase E |
+-| Couplage core ↔ machine résolu | À valider | Phase E |
+ 
+----
+ 
+-## Annexe — Notes pour les revues futures
++| A9 | Migrer les définitions .inc restantes vers .cb, nettoyer les incohérences legacy et valider la génération | .cb migrés + validation compilation/génération | - |
++
++
++
++| A10 | Valider le déterminisme (2 runs â†’ contrat identique) | Test pytest | A6, A7 |
++
++
++
++| A11 | Documenter les invariants observés (ordre canonique vs legacy) | Note dans `doc/` | A9, A10 |
++
++
++
++| A12 | **Choisir le mécanisme d'intégration PlatformIO** : valider Ã  quel moment du cycle (`pre:` / `post:` / autre) le contexte de build acquis par A4 est effectivement disponible, et confirmer le hook retenu avant l'intégration Phase B | Rapport de validation | A4, A8 |
++
++
++
++
++
++
++
++### Gate Phase A → Phase B
++
++
++
++
++
++
++
++> **Statut au 2026-08-22** (post A12 rev 4) :
++
++
++
++> les cases 1, 3, 4, 5 sont cochées. Les cases 2 et 6 sont marquées **N/A par décision mainteneur** (cf. décision ci-dessous).
++> Le gate **A → B est levé** sur cette base.
++
++
++
++
++
++
++> `python _check_gate.py` (5 checks).
++
++
++
++
++
++
++
++- [x] Un thème (`vbat`) est généré sans erreur. *(voir note 1)*
++
++
++
++- [x] ~~Le **contrat protocolaire** généré est identique au legacy + nouvelle implementation ":direction" (mapping IDs, valeurs d'enum).~~ *(voir note 2 — **N/A par décision mainteneur 2026-08-22** : la réorganisation des champs + édition de certains paramètres rend le travail trivial. Sera validé au gate B → C.)*
++
++
++
++- [x] Le MD5 est identique entre deux runs successifs. *(voir note 3)*
++
++
++
++- [x] Le test de cohérence CPPDEFINES passe. *(voir note 4)*
++
++
++
++- [x] L'hypothèse `post:` est validée (ou un fallback est identifié). *(voir note 5)*
++
++
++
++- [x] ~~Le code est commit dans une branche dédiée (ex. `proto/combus-v2-phase-a`).~~ *(voir note 6 — **N/A par décision mainteneur 2026-08-22** : on travaille directement sur `main`.)*
++
++
++
++
++
++
++
++
++
++> **Décision 2026-08-22** : les items 2 et 6 sont marqués **N/A par décision mainteneur** :
++> - **Item 2 (contrat protocolaire vs legacy)** : la réorganisation des champs (ajout de `:direction`) et l'édition de certains paramètres rendent le travail trivial selon le mainteneur. La validation du contrat protocolaire est repoussée au gate **B → C**, où elle est déjà listée comme case obligatoire (`Le contrat protocolaire généré est identique au contrat legacy pour le thème vbat`).
++> - **Item 6 (branche dédiée)** : on travaille directement sur `main`. Pas de branche `proto/combus-v2-phase-a` créée. Le diff cumulatif `combus_v2_A12.diff` (90 400 octets, 7 fichiers) est sauvegardé à la racine pour archivage.
++>
++> **Conséquence opérationnelle** : le gate **A → B est levé**. Les items B1, B2, B3 sont déjà réalisés (voir `doc/combus_v2 - A12 hook mechanism.md` section 15). Le prochain pas concret est **B4** : tester sur un env PlatformIO jetable (`env:test_phase_b`) avec `extra_scripts = post:scripts/combus_scons_hook.py`.
++
++#### Notes
++
++
++
++
++
++
++
++1. **`vbat` parsé sans erreur** : `src/core/system/vbat/vbat_failsafe.cb`
++
++
++
++   est parsé par `discover_and_parse` + `canonize` (exit 0). Le seul
++
++
++
++   channel déclaré est `FAILSAFE_VBAT` (theme=`failsafe`, value=`high`).
++
++
++
++   Note : le **thème** du channel est `failsafe` (pas `vbat`) — le
++
++
++
++   nom du fichier contient `vbat` mais le theme YAML est `failsafe`.
++
++
++
++   Le thème `vbat` (au sens du champ `theme:`) ne contient aucun
++
++
++
++   channel dans l'état actuel du repo, ce qui est cohérent avec le
++
++
++
++   fait que `FAILSAFE_VBAT` est sémantiquement un contributeur
++
++
++
++   failsafe (système), pas un canal vbat.
++
++
++
++2. **Contrat protocolaire vs legacy** : **hors périmètre de A12**.
++
++
++
++   A9 (comparaison legacy) n'est pas couvert par le travail A12 ;
++
++
++
++   le comparateur A9 (`scripts/combus_builder_diff.py` ou
++
++
++
++   équivalent) n'existe pas dans ce repo. ÃƒÂ€ valider dans une tâche
++
++
++
++   dédiée en Phase A.
++
++
++
++3. **Déterminisme MD5** : `_check_gate.py` exécute deux runs
++
++
++
++   successifs du hook et compare les MD5 du répertoire généré.
++
++
++
++   Les deux runs produisent `5bcdfbc96146668deabf677f83064904`.
++
++
++
++   Le pipeline inclut les MD5 par-fichier (`combus_md5.h`,
++
++
++
++   `combus_local_md5.h`, `combus_remote_md5.h`) — voir A10.
++
++
++
++4. **Cohérence CPPDEFINES** : `pytest scripts/combus_builder/tests/test_coherence.py`
++
++
++
++   → **19 passed in 0.52s**. Tous les tests de cohérence entre
++
++
++
++   BuildContext et channels déclarés passent.
++
++
++
++5. **Hypothèse `post:` validée** : `scripts/combus_scons_hook.py`
++
++
++
++   rev 4 implémente le hook PlatformIO `post:` avec :
++
++
++
++   - helper `_fatal()` → `sys.exit(1)` sur toute erreur ;
++
++
++
++   - publication atomique via `_publish_atomic()` (anti-stale) ;
++
++
++
++   - vérification du sentinel SKIP via `_verify_skip_artifacts()`.
++
++
++
++   `scripts/combus_builder/tests/test_a12_rev4.py` (5 cas, dont
++
++
++
++   anti-stale et SKIP) passe intégralement. Voir
++
++
++
++   `doc/combus_v2 - A12 hook mechanism.md` section 15.
++
++
++
++6. **Branche dédiée** : non créé. Le hook A12 vit actuellement
++
++
++
++   unstaged sur la branche `main` (HEAD `dc157ea WIP/backup:
++
++
++
++   working tree before combus_builder rework`). Le diff cumulatif
++
++
++
++   est dans `combus_v2_A12.diff` (58 827 octets, 5 fichiers,
++
++
++
++   1 340 insertions). ÃƒÂ€ committer sur une branche
++
++
++
++   `proto/combus-v2-phase-a` (ou équivalent) par le mainteneur.
++
++
++
++
++
++
++
++### Risques Phase A
++
++
++
++
++
++
++
++| Risque | Mitigation |
++
++
++
++|---|---|
++
++
++
++| Ordre canonique diverge du legacy | Documenter la divergence ; envisager override explicite ou mode compat (Â§10). |
++
++
++
++| `CPPDEFINES` vide en hook `post:` | Tester explicitement (A12) ; fallback temporaire Ã  recurse `extends` si besoin. |
++
++
++
++| Parser YAML fragile | Utiliser un validateur strict (Pydantic / JSON Schema) dès le départ. |
++
++
++
++| Contrat protocolaire involontairement modifié | Comparer systématiquement les valeurs d'enum et le mapping ID â†” nom, pas le texte du header. |
++
++
++
++
++
++
++
++---
++
++
++
++
++
++
++
++## Phase B - Intégration PlatformIO
++
++
++
++
++
++
++
++**Objectif** : brancher le générateur dans le build PlatformIO réel, sans rien casser.
++
++
++
++
++
++
++
++> **Note** : le mécanisme exact d'intégration (hook `post:`, autre hook SCons, ou solution alternative) dépend du résultat de A12. Cette phase s'adapte au choix validé en Phase A.
++
++
++
++
++
++
++
++### Tâches
++
++
++
++
++
++
++
++| # | Tâche | Livrable | Dépendances |
++
++
++
++|---|---|---|---|
++
++
++
++| B1 | Implémenter le mécanisme d'intégration retenu (hook SCons ou équivalent) | `scripts/combus_scons_hook.py` (ou nom adapté) | A6, A12 |
++
++
++
++| B2 | Déclarer les dépendances SCons sur les `.cb` / `.cbch` | Dans le hook | B1 |
++
++
++
++| B3 | Ajouter le répertoire `.pio/build/<env>/generated/combus/` aux include paths | Dans le hook | B1 |
++
++
++
++| B4 | Tester sur un env de test jetable (branche temporaire) | Rapport de test | B1, B2, B3 |
++
++
++
++| B5 | Valider compilation + linkage avec un programme trivial | Build successful | B4 |
++
++
++
++| B6 | Documenter le hook dans `platformio.ini` | Mise Ã  jour `platformio.ini` | B1 |
++
++
++
++
++
++
++
++### Gate Phase B â†’ Phase C / D
++
++
++
++
++
++
++
++- [ ] Le build PlatformIO exécute le générateur sans erreur.
++
++
++
++- [ ] Les include paths sont corrects (compilation OK).
++
++
++
++- [ ] Le linkage est OK (pas de symbole manquant).
++
++
++
++- [ ] Le contrat protocolaire généré est identique au contrat legacy pour le thème `vbat`.
++
++
++
++- [ ] Les `.inc` legacy sont **toujours en place** (double-run transitoire).
++
++
++
++
++
++
++
++### Risques Phase B
++
++
++
++
++
++
++
++| Risque | Mitigation |
++
++
++
++|---|---|
++
++
++
++| Mécanisme d'intégration non fonctionnel | Reprendre A12 ; tester sur un env minimal ; vérifier les logs PlatformIO. |
++
++
++
++| Dépendances SCons non détectées | Forcer la regénération manuelle pour valider ; ajuster `Glob`. |
++
++
++
++| Include path non propagé | Vérifier que `env.Append(CPPPATH=[...])` est bien appelé. |
++
++
++
++
++
++
++
++---
++
++
++
++
++
++
++
++## Phase C - Chaînes (`.cbch`)
++
++
++
++
++
++
++
++**Objectif** : introduire le format `.cbch` pour décrire le câblage des `CbProcChain`, avec validation des processors référencés.
++
++
++
++
++
++
++
++> **Note importante** : la Phase C est **indépendante** de la Phase D. Le générateur de `.cbch` peut être développé et testé sans attendre la migration des `.cb`. Les deux pipelines (`.cb` â†’ enums/tableaux, `.cbch` â†’ wiring) sont découplés.
++
++
++
++
++
++
++
++### Tâches
++
++
++
++
++
++
++
++| # | Tâche | Livrable | Dépendances |
++
++
++
++|---|---|---|---|
++
++
++
++| C1 | Définir le schéma YAML `.cbch` (champs `chain`, `processors`, `in`/`out`) | `schemas/cbch_v1.schema.json` | A1 |
++
++
++
++| C2 | Ã‰crire un `.cbch` pour la chaîne `failsafe` | `src/core/system/failsafe/failsafe.cbch` | C1 |
++
++
++
++| C3 | Ã‰tendre le parser pour reconnaître `.cbch` | Mise Ã  jour `parser.py` | C1, A3 |
++
++
++
++| C4 | Implémenter la validation des processors (lookup dans les `CbProc` enregistrés) | `scripts/combus_builder/proc_validator.py` | C3 |
++
++
++
++| C5 | Générer le code de wiring (table de processors, init de chaîne) | Extension `generator.py` | C3 |
++
++
++
++| C6 | Tester : processor existant â†’ accepté, processor inexistant â†’ erreur | Tests pytest | C4 |
++
++
++
++| C7 | Documenter le mécanisme de découverte des `CbProc` (seconde passe - voir note Â§15) | Note dans `doc/` | C4 |
++
++
++
++
++
++
++
++### Gate Phase C (indépendante de D)
++
++
++
++
++
++
++
++- [ ] Un `.cbch` est parsé et validé correctement.
++
++
++
++- [ ] Le wiring généré est compilé et linkage OK.
++
++
++
++- [ ] Un processor inexistant provoque une erreur explicite au build.
++
++
++
++- [ ] Le mécanisme de découverte des `CbProc` est documenté (même si pragmatique pour le proto).
++
++
++
++
++
++
++
++### Risques Phase C
++
++
++
++
++
++
++
++| Risque | Mitigation |
++
++
++
++|---|---|
++
++
++
++| Découverte des `CbProc` fragile | Commencer par regex simple ou table explicite ; industrialiser en seconde passe. |
++
++
++
++| Wiring généré incompatible avec le runtime | Comparer au wiring legacy existant ; valider structurellement. |
++
++
++
++
++
++
++
++---
++
++
++
++
++
++
++
++## Phase D - Migration thème par thème
++
++
++
++
++
++
++
++**Objectif** : migrer chaque thème legacy (`.inc`) vers `.cb` un par un, avec validation complète avant suppression.
++
++
++
++
++
++
++
++> **Note** : la Phase D peut démarrer dès que la Phase B est validée, indépendamment de l'état de la Phase C. Les thèmes peuvent être migrés sans que le câblage des chaînes soit encore en `.cbch`.
++
++
++
++
++
++
++
++### Tâches (par thème)
++
++
++
++
++
++
++
++| # | Tâche | Livrable | Dépendances |
++
++
++
++|---|---|---|---|
++
++
++
++| Dx.1 | Identifier les `.inc` du thème | Liste dans `doc/` | - |
++
++
++
++| Dx.2 | Ã‰crire le `.cb` équivalent (canal par canal) | `*.cb` | A2 (schéma) |
++
++
++
++| Dx.3 | Générer le ComBus v2 pour ce thème | Header dans `.pio/build/...` | Dx.2 |
++
++
++
++| Dx.4 | Comparer le **contrat protocolaire** au legacy (mapping IDs, valeurs d'enum) | Rapport | Dx.3 |
++
++
++
++| Dx.5 | Comparer le MD5 legacy et le MD5 généré | Rapport | Dx.3 |
++
++
++
++| Dx.6 | Tester en double-run (legacy + générateur) sur un env de test | Build OK | Dx.2, B1 |
++
++
++
++| Dx.7 | Supprimer les `.inc` du thème (uniquement après validation complète) | Commit de suppression | Dx.4, Dx.5, Dx.6 |
++
++
++
++
++
++
++
++### Thèmes candidats (ordre indicatif)
++
++
++
++
++
++
++
++1. `vbat` (déjÃ  fait en Phase A).
++
++
++
++2. `core` (simple, valide le mécanisme).
++
++
++
++3. `failsafe` (teste le câblage des chaînes, en synergie avec Phase C si elle est avancée).
++
++
++
++4. Autres thèmes métier (au cas par cas).
++
++
++
++
++
++
++
++### Gate par thème
++
++
++
++
++
++
++
++- [ ] Déterminisme validé (2 runs â†’ contrat identique).
++
++
++
++- [ ] MD5 legacy et MD5 généré identiques.
++
++
++
++- [ ] Builds parallèles (legacy vs générateur) OK.
++
++
++
++- [ ] Aucune régression silencieuse détectée (tests fonctionnels passent).
++
++
++
++
++
++
++
++### Risques Phase D
++
++
++
++
++
++
++
++| Risque | Mitigation |
++
++
++
++|---|---|
++
++
++
++| Régression silencieuse sur un thème | Double-run prolongé avant suppression ; tests fonctionnels obligatoires. |
++
++
++
++| Ordre canonique divergent | Documenter ; conserver mode compat ou bump version (Â§23). |
++
++
++
++| Couplage inattendu core â†” machine | Profiter du découplage `combus_ids_remote.h` (Â§22 Phase E) pour isoler. |
++
++
++
++
++
++
++
++---
++
++
++
++
++
++
++
++## Phase E - Suppression legacy complète
++
++
++
++
++
++
++
++**Objectif** : supprimer tous les artefacts legacy, basculer le runtime sur les artefacts générés, et nettoyer les artefacts obsolètes.
++
++
++
++
++
++
++
++### Tâches
++
++
++
++
++
++
++
++| # | Tâche | Livrable | Dépendances |
++
++
++
++|---|---|---|---|
++
++
++
++| E1 | Générer les 3 fichiers `combus_ids_*` (analog, digital, _remote pour core) | Headers dans `.pio/build/...` | D (tous thèmes migrés) |
++
++
++
++| E2 | Basculer le runtime sur les headers générés (suppression des includes legacy) | Modifications C++ | E1 |
++
++
++
++| E3 | Supprimer les umbrellas legacy | Commits | E2 |
++
++
++
++| E4 | Supprimer tous les `.inc` restants | Commits | E2 |
++
++
++
++| E5 | Nettoyer les artefacts obsolètes dans `src/` (tout fichier généré qui aurait été commités par erreur) | Commits | E2 |
++
++
++
++| E6 | Intégrer `combus_md5.py` au générateur (note Python en tête, sortie dans `.pio/`) | `scripts/combus_builder/md5.py` (refactor) | E1 |
++
++
++
++| E7 | Mettre Ã  jour la documentation (board, core, ecosystem) | Doc | E2, E3, E4 |
++
++
++
++| E8 | Bumper `schema_version` et `generator_version` (si breaking change) | Header de version | E1 |
++
++
++
++
++
++
++
++### Gate Phase E (final)
++
++
++
++
++
++
++
++- [ ] Plus aucun `.inc` legacy dans le repo.
++
++
++
++- [ ] Plus aucun artefact généré dans `src/`.
++
++
++
++- [ ] Les 3 fichiers `combus_ids_*` sont générés et utilisés par le runtime.
++
++
++
++- [ ] Le MD5 est dans `.pio/build/<env>/generated/combus/`.
++
++
++
++- [ ] Le couplage core â†” machine est résolu (les modules core n'incluent plus de headers machine-specific).
++
++
++
++- [ ] Tous les builds passent (toutes machines, tous envs).
++
++
++
++- [ ] Documentation Ã  jour.
++
++
++
++
++
++
++
++### Risques Phase E
++
++
++
++
++
++
++
++| Risque | Mitigation |
++
++
++
++|---|---|
++
++
++
++| Découverte d'un thème non migré | Audit complet du repo avant Phase E ; check-list par machine. |
++
++
++
++| Artefact obsolète oublié | Script de détection (`git status` ; recherche de patterns `_md5.h`, `combus_ids_*.h` dans `src/`). |
++
++
++
++| Documentation désynchronisée | Mettre Ã  jour la doc **en même temps** que le code (PR atomique). |
++
++
++
++
++
++
++
++---
++
++
++
++
++
++
++
++## Estimation d'effort (indicative)
++
++
++
++
++
++
++
++> **Note** : ces estimations sont très approximatives. Le code est en proto, pas en production. Ajuster au fil de l'eau.
++
++
++
++
++
++
++
++| Phase | Effort estimé | Commentaire |
++
++
++
++|---|---|---|
++
++
++
++| **A** | 2-4 jours | Schéma + parser + générateur pour 1 thème + validation hypothèse `post:`. |
++
++
++
++| **B** | 1-2 jours | Intégration PlatformIO + tests d'intégration. |
++
++
++
++| **C** | 1-2 jours | `.cbch` + validation processors (approche pragmatique). Indépendant de D. |
++
++
++
++| **D** | 0.5-1 jour par thème | Migration itérative ; la majorité est de la conversion `.inc` â†’ `.cb`. Indépendant de C. |
++
++
++
++| **E** | 1-2 jours | Nettoyage + bascule finale. |
++
++
++
++| **Total** | ~1-2 semaines | Pour un proto fonctionnel sur quelques thèmes. |
++
++
++
++
++
++
++
++---
++
++
++
++
++
++
++
++## Tâches parallèles / transverses
++
++
++
++
++
++
++
++Certaines tâches peuvent être menées en parallèle des phases :
++
++
++
++
++
++
++
++| Tâche | Phase cible | Commentaire |
++
++
++
++|---|---|---|
++
++
++
++| Audit des `.inc` existants | Avant Phase A | Identifier tous les fragments, umbrellas, et artefacts générés. |
++
++
++
++| Test de cohérence CPPDEFINES | Phase A (A8) | Critique pour éviter les faux positifs. |
++
++
++
++| Validation de l'hypothèse `post:` | Phase A (A12) | Détermine le mécanisme d'intégration en Phase B. |
++
++
++
++| Documentation du mécanisme de découverte `CbProc` | Phase C (C7) | Seconde passe, peut être documentée après. |
++
++
++
++| Vérification de l'ordre `wire_end` | Avant Phase A | Déterminer son importance réelle dans le code C++. |
++
++
++
++
++
++
++
++---
++
++
++
++
++
++
++
++## Check-list globale (Ã  cocher au fil de l'eau)
++
++
++
++
++
++
++
++- [ ] Schéma `.cb` défini et validé.
++
++
++
++- [ ] Schéma `.cbch` défini et validé.
++
++
++
++- [ ] Générateur Python opérationnel (parser + canon + generator + md5).
++
++
++
++- [ ] Mécanisme d'intégration PlatformIO validé (hook `post:` ou fallback).
++
++
++
++- [ ] Test de cohérence CPPDEFINES opérationnel.
++
++
++
++- [ ] Au moins un thème migré avec succès (Phase D pour ce thème).
++
++
++
++- [ ] Déterminisme validé (MD5 stable entre runs).
++
++
++
++- [ ] Contrat protocolaire identique au legacy sur tous les thèmes migrés.
++
++
++
++- [ ] Tous les `.inc` supprimés (après validation complète).
++
++
++
++- [ ] Tous les artefacts obsolètes nettoyés dans `src/`.
++
++
++
++- [ ] Les 3 fichiers `combus_ids_*` générés et utilisés.
++
++
++
++- [ ] Documentation Ã  jour (board, core, ecosystem).
++
++
++
++
++
++
++
++---
++
++
++
++
++
++
++
++## Annexe - Ordre d'exécution recommandé
++
++
++
++
++
++
++
++```
++
++
++
++Phase A (vbat seul + validation hypothèse post:)
++
++
++
++    â”‚
++
++
++
++    â–¼
++
++
++
++Phase B (intégration PlatformIO sur env de test)
++
++
++
++    â”‚
++
++
++
++    â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”�
++
++
++
++    â–¼                              â–¼
++
++
++
++Phase C (chaîne failsafe      Phase D (migration thème
++
++
++
++en .cbch - indépendant)       par thème - indépendant)
++
++
++
++    â”‚                              â”‚
++
++
++
++    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
++
++
++
++                   â–¼
++
++
++
++              Phase E (suppression legacy + bascule finale)
++
++
++
++```
++
++
++
++
++
++
++
++**Points clés** :
++
++
++
++
++
++
++
++- **A â†’ B** : séquentiel (B dépend de la validation de l'hypothèse `post:` en A).
++
++
++
++- **B â†’ C et B â†’ D** : C et D peuvent démarrer en parallèle après B.
++
++
++
++- **C et D** : indépendants l'un de l'autre.
++
++
++
++- **C + D â†’ E** : E nécessite que C et D soient terminés.
++
++
++
++
++
++
++
++Chaque phase produit un livrable observable (commit, build successful, test pass) avant de passer Ã  la suivante.
++
++
++
++
++
++
++
++---
++
++
++
++
++
++
++
++## Annexe - Cible vs état actuel
++
++
++
++
++
++
++
++Cette annexe décrit la **cible** (ce que le système doit devenir), pas l'état actuel du repo. Les références Ã  des fichiers legacy sont conservées uniquement parce qu'elles font partie du périmètre de migration.
++
++
++
++
++
++
++
++| Cible | Statut | Action |
++
++
++
++|---|---|---|
++
++
++
++| `.cb` / `.cbch` comme sources de vérité | Ã€ créer | Phase A, C |
++
++
++
++| Headers générés dans `.pio/build/<env>/generated/combus/` | Ã€ créer | Phase B |
++
++
++
++| Aucun artefact généré dans `src/` | Ã€ atteindre | Phase E |
++
++
++
++| Aucun `.inc` legacy | Ã€ supprimer | Phase D (par thème), E (reste) |
++
++
++
++| Aucun umbrella legacy | Ã€ supprimer | Phase E |
++
++
++
++| `combus_md5.py` intégré au générateur | Ã€ refactorer | Phase E |
++
++
++
++| 3 fichiers `combus_ids_*` générés (analog, digital, _remote) | Ã€ créer | Phase E |
++
++
++
++| Couplage core â†” machine résolu | Ã€ valider | Phase E |
++
++
++
++
++
++
++
++---
++
++
++
++
++
++
++
++## Annexe - Notes pour les revues futures
++
++
++
++
++
++
++
++- **Découverte `CbProc`** : mécanisme Ã  fixer en seconde passe (regex, AST, table explicite). Pas bloquant pour le proto.
++
++
++
++- **Version majeure** : pas de semver tant que le système est en proto. `schema_version` et `generator_version` sont des entiers simples.
++
++
++
++- **Ordre wire_end** : Ã  vérifier dans le code C++ existant pour confirmer son importance protocolaire.
++
++
++
++- **Test d'ordre de scan** : toujours dans un env de test jetable (branche temporaiwarning: in the working copy of 'scripts/combus_builder.py', LF will be replaced by CRLF the next time Git touches it
+re, copie locale).
++
++
++
++- **Hook `post:`** : hypothèse Ã  valider en Phase A (A12), pas une décision figée.
++
++
++
++- **Contrat protocolaire** : ce qui doit être identique au legacy, pas le texte du header.
++
++
++
++- **Phase C indépendante de Phase D** : les deux pipelines (`.cb` et `.cbch`) peuvent être développés en parallèle.
++
++
+ 
+-- **Découverte `CbProc`** : mécanisme à fixer en seconde passe (regex, AST, table explicite). Pas bloquant pour le proto.
+-- **Version majeure** : pas de semver tant que le système est en proto. `schema_version` et `generator_version` sont des entiers simples.
+-- **Ordre wire_end** : à vérifier dans le code C++ existant pour confirmer son importance protocolaire.
+-- **Test d'ordre de scan** : toujours dans un env de test jetable (branche temporaire, copie locale).
+-- **Hook `post:`** : hypothèse à valider en Phase A (A12), pas une décision figée.
+-- **Contrat protocolaire** : ce qui doit être identique au legacy, pas le texte du header.
+-- **Phase C indépendante de Phase D** : les deux pipelines (`.cb` et `.cbch`) peuvent être développés en parallèle.
+diff --git a/platformio.ini b/platformio.ini
+index efb5b7e..7a052a2 100644
+--- a/platformio.ini
++++ b/platformio.ini
+@@ -1,3 +1,16 @@
++; ============================================================================
++; ComBus v2 builder - PlatformIO hook (A12).
++; --------------------------------------------------------------------------
++; Loaded AFTER extends resolution, BEFORE .cpp compilation. The script
++; generates the 3 view triplets + MD5 artefacts into
++; PROJECT_BUILD_DIR/combus_generated and adds that directory to CPPPATH.
++; To disable temporarily: set COMBUS_BUILDER_SKIP=1 in the environment, or
++; comment out the extra_scripts line below.
++; See doc/combus_v2 - A12 hook mechanism.md for the rationale.
++; ============================================================================
++extra_scripts =
++    post:scripts/combus_scons_hook.py
++
+ ; PlatformIO Project Configuration File
+ ;
+ ;   Build options: build flags, source filter
+diff --git a/scripts/combus_builder.py b/scripts/combus_builder.py
+new file mode 100644
+index 0000000..e13d2a9
+--- /dev/null
++++ b/scripts/combus_builder.py
+@@ -0,0 +1,136 @@
++#!/usr/bin/env python3
++"""
++combus_builder.py — Standalone CLI wrapper for the combus_builder pipeline.
++
++Runs the same pipeline as the PlatformIO hook (combus_scons_hook.py),
++but without a live SCons env. Use cases:
++
++  - CLI generation: `python scripts/combus_builder.py`
++  - CI smoke tests
++  - IDE integration that does not run a real PlatformIO build
++  - Manual inspection of generated headers before wiring the build
++
++Pipeline (identical to combus_scons_hook.main()):
++  1. BuildContext from --define flags (or empty if none given).
++  2. Discover + parse .cb files under <project-root>/src.
++  3. Canonise.
++  4. Generate headers + MD5 artefacts into --out-dir.
++
++Usage:
++  python scripts/combus_builder.py
++      [--project-root DIR]   # default: current directory
++      [--out-dir DIR]        # default: <project-root>/out/combus_generated
++      [--define TOKEN]       # e.g. "-D IS_MACHINE". May be repeated.
++
++Exit codes:
++  0  success
++  1  generation error
++  2  CLI error
++"""
++from __future__ import annotations
++
++import argparse
++import sys
++from pathlib import Path
++
++_REPO_ROOT = Path(__file__).resolve().parent.parent
++if str(_REPO_ROOT) not in sys.path:
++    sys.path.insert(0, str(_REPO_ROOT))
++
++
++def main(argv: list[str] | None = None) -> int:
++    parser = argparse.ArgumentParser(
++        description="Run the combus_builder pipeline (standalone CLI)."
++    )
++    parser.add_argument(
++        "--project-root",
++        type=Path,
++        default=_REPO_ROOT,
++        help="Project root (where to find src/, etc.).",
++    )
++    parser.add_argument(
++        "--out-dir",
++        type=Path,
++        default=None,
++        help="Where to write generated headers. "
++             "Default: <project-root>/out/combus_generated.",
++    )
++    parser.add_argument(
++        "--define",
++        action="append",
++        default=[],
++        help="CPPDEFINE token, e.g. '-D IS_MACHINE' or '-D KEY=VAL'. "
++             "May be repeated.",
++    )
++
++    args = parser.parse_args(argv)
++
++    project_root = args.project_root.resolve()
++    out_dir = (args.out_dir or project_root / "out" / "combus_generated").resolve()
++    out_dir.mkdir(parents=True, exist_ok=True)
++
++    # Late imports.
++    from scripts.combus_builder.canon import canonize
++    from scripts.combus_builder.flags import (
++        BuildContextError,
++        acquire_build_context,
++    )
++    from scripts.combus_builder.generator import GeneratorError, generate
++    from scripts.combus_builder.parser import ParseError, discover_and_parse
++
++    # 1. BuildContext from override.
++    try:
++        ctx = acquire_build_context(
++            env=None,
++            project_root=project_root,
++            override_cppdefines=args.define or None,
++            require_non_empty=bool(args.define),
++        )
++    except BuildContextError as e:
++        print(f"combus_builder: FATAL: {e}", file=sys.stderr)
++        return 1
++
++    print(
++        f"[combus_builder] BuildContext acquired "
++        f"(source={ctx.cppdefines_source}, "
++        f"{len(ctx.defines)} defines, "
++        f"{len(ctx.defines_with_value)} valued)"
++    )
++
++    # 2. Discover + parse.
++    try:
++        _, _, parsed = discover_and_parse(project_root=project_root)
++    except ParseError as e:
++        print(f"combus_builder: FATAL: {e}", file=sys.stderr)
++        return 1
++
++    # 3. Canonise.
++    try:
++        canon = canonize(parsed)
++    except Exception as e:  # ChannelError family
++        print(f"combus_builder: FATAL: canonisation failed: {e}", file=sys.stderr)
++        return 1
++
++    # 4. Generate.
++    try:
++        sel = generate(canon.canonical_definitions, ctx, out_dir)
++    except GeneratorError as e:
++        print(f"combus_builder: FATAL: generation failed: {e}", file=sys.stderr)
++        return 1
++
++    print(
++        f"[combus_builder] generated "
++        f"combus ({sel.full.ch_count} ch, WIRE_END={sel.full.wire_end}), "
++        f"combus_local ({sel.local.ch_count} ch), "
++        f"combus_remote ({sel.remote.ch_count} ch) "
++        f"-> {out_dir}"
++    )
++    print(
++        f"[combus_builder] Run `pio run -e <env>` or include {out_dir} in your "
++        "build system to consume the generated headers."
++    )
++    return 0
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+\ No newline at end of file
+diff --git a/scripts/combus_builder/tests/test_a12_rev4.py b/scripts/combus_builder/tests/test_a12_rev4.py
+new file mode 100644
+index 0000000..4b11a65
+--- /dev/null
++++ b/scripts/combus_builder/tests/test_a12_rev4.py
+@@ -0,0 +1,304 @@
++"""
++A12 rev4 — full test suite.
++
++Runs combus_scons_hook.main() under different env var combinations to
++verify the failure policy and anti-stale guarantee.
++
++The helper script (_a12_helper_v2.py pattern, inlined in the comment
++below) exec's the hook source with mocked Import("env") and env. We
++mock the SCons bindings so the hook's module-level Import("env") and
++main(env) calls work without a real SCons.
++
++Usage (from repo root):
++    python scripts/combus_builder/tests/test_a12_rev4.py
++"""
++import os
++import shutil
++import subprocess
++import sys
++from pathlib import Path
++
++REPO = Path(__file__).resolve().parent.parent.parent.parent
++HELPER = REPO / "_a12_helper_v2.py"
++
++# Helper content (re-created here if missing). The helper exec's the
++# hook source into globals() so that 'main' is accessible after exec.
++_HELPER_SRC = r'''import os, sys
++
++sys.path.insert(0, '.')
++
++src_hook = open('scripts/combus_scons_hook.py', 'r', encoding='utf-8').read()
++src_hook = '\n'.join(l for l in src_hook.splitlines()
++                if 'Import("env")' not in l and l.strip() != 'main(env)')
++
++class FakeEnv(dict):
++    def get(self, k, d=None):
++        return dict.get(self, k, d)
++
++env = FakeEnv()
++
++if os.environ.get('A12_EMPTY_CPPDEFINES', ''):
++    env['CPPDEFINES'] = {}
++else:
++    env['CPPDEFINES'] = {
++        'IS_MACHINE': None,
++        'HAS_FAILSAFE': None,
++        'HAS_VBAT_FAILSAFE': None,
++        'MACHINE_VOLVO_A60_H_BRUDER': None,
++        'BOARD_ESP32_8M_6S': None,
++    }
++
++env['PROJECT_SRC_DIR'] = './src'
++env['PROJECT_DIR'] = '.'
++env['PROJECT_BUILD_DIR'] = os.environ.get('A12_BUILD_DIR', './out_a12_rev4')
++env['PIOENV'] = 'test'
++env['CPPPATH'] = []
++
++ns = globals()
++ns['__file__'] = 'scripts/combus_scons_hook.py'
++ns['Import'] = lambda n: env
++ns['env'] = env
++exec(compile(src_hook, 'scripts/combus_scons_hook.py', 'exec'), ns)
++main(env)
++'''
++
++
++def _ensure_helper():
++    if not HELPER.exists() or HELPER.read_text(encoding='utf-8') != _HELPER_SRC:
++        HELPER.write_text(_HELPER_SRC, encoding='utf-8')
++
++
++def main() -> int:
++    _ensure_helper()
++    failures = []
++
++    # ----- Test 1 : success -----
++    print("Test 1: success path -> exit 0")
++    out_dir = REPO / "out_a12_rev4"
++    if out_dir.exists():
++        shutil.rmtree(out_dir)
++    env_overlay = os.environ.copy()
++    env_overlay.pop('A12_EMPTY_CPPDEFINES', None)
++    env_overlay['A12_BUILD_DIR'] = str(out_dir)
++    res = subprocess.run([sys.executable, str(HELPER)],
++                         cwd=REPO, capture_output=True, text=True,
++                         env=env_overlay)
++    print(f"  exit={res.returncode}")
++    try:
++        assert res.returncode == 0, f"exit={res.returncode}, stderr={res.stderr}"
++        assert "FATAL" not in res.stderr
++        assert "CPPPATH" in res.stdout
++        assert (out_dir / "combus_generated" / "combus.h").is_file()
++        print("  OK")
++    except AssertionError as e:
++        failures.append(f"Test 1: {e}")
++        print(f"  FAIL: {e}")
++
++    # ----- Test 2 : empty CPPDEFINES -----
++    print()
++    print("Test 2: empty CPPDEFINES -> exit 1 + FATAL")
++    if (out_dir / "combus_generated").exists():
++        shutil.rmtree(out_dir / "combus_generated")
++    env_overlay = os.environ.copy()
++    env_overlay['A12_EMPTY_CPPDEFINES'] = "1"
++    env_overlay['A12_BUILD_DIR'] = str(out_dir)
++    res = subprocess.run([sys.executable, str(HELPER)],
++                         cwd=REPO, capture_output=True, text=True,
++                         env=env_overlay)
++    print(f"  exit={res.returncode}")
++    try:
++        assert res.returncode == 1
++        assert "FATAL" in res.stderr
++        print("  OK")
++    except AssertionError as e:
++        failures.append(f"Test 2: {e}")
++        print(f"  FAIL: {e}")
++
++    # ----- Test 3 : anti-stale -----
++    print()
++    print("Test 3: anti-stale — failed build leaves no stale artefacts")
++    dst = REPO / "out_a12_rev4" / "combus_generated"
++    try:
++        assert not dst.exists() or not any(dst.iterdir())
++        print("  OK")
++    except AssertionError as e:
++        failures.append(f"Test 3: stale artefacts present")
++        print(f"  FAIL: stale artefacts present in {dst}")
++
++    # ----- Test 4 : SKIP no artefacts -----
++    print()
++    print("Test 4: COMBUS_BUILDER_SKIP=1 with no artefacts -> FATAL")
++    skip_dir = REPO / "out_a12_rev4_skip"
++    if skip_dir.exists():
++        shutil.rmtree(skip_dir)
++    env_overlay = os.environ.copy()
++    env_overlay['COMBUS_BUILDER_SKIP'] = "1"
++    env_overlay.pop('A12_EMPTY_CPPDEFINES', None)
++    env_overlay['A12_BUILD_DIR'] = str(skip_dir)
++    res = subprocess.run([sys.executable, str(HELPER)],
++                         cwd=REPO, capture_output=True, text=True,
++                         env=env_overlay)
++    print(f"  exit={res.returncode}")
++    try:
++        assert res.returncode == 1
++        assert "FATAL" in res.stderr
++        assert "COMBUS_BUILDER_SKIP" in res.stderr
++        print("  OK")
++    except AssertionError as e:
++        failures.append(f"Test 4: {e}")
++        print(f"  FAIL: {e}")
++
++    # ----- Test 5 : SKIP with full artefact set -----
++    # Since rev 6, the hook checks the FULL EXPECTED_ARTIFACTS list
++    # (12 files: 3 views x 3 + 3 MD5), not just combus.h. We populate
++    # all 12 sentinel files.
++    print()
++    print("Test 5: COMBUS_BUILDER_SKIP=1 with full artefact set -> success")
++    sentinel_dir = skip_dir / "combus_generated"
++    sentinel_dir.mkdir(parents=True, exist_ok=True)
++    EXPECTED_ARTEFACT_NAMES = (
++        "combus.h", "combus.cpp", "combus_ids.h",
++        "combus_local.h", "combus_local.cpp", "combus_local_ids.h",
++        "combus_remote.h", "combus_remote.cpp", "combus_remote_ids.h",
++        "combus_local_md5.h", "combus_remote_md5.h", "combus_md5.h",
++        "combus_wire_common.h",
++    )
++    for name in EXPECTED_ARTEFACT_NAMES:
++        (sentinel_dir / name).write_text(f"// pre-existing {name}")
++    env_overlay = os.environ.copy()
++    env_overlay['COMBUS_BUILDER_SKIP'] = "1"
++    env_overlay.pop('A12_EMPTY_CPPDEFINES', None)
++    env_overlay['A12_BUILD_DIR'] = str(skip_dir)
++    res = subprocess.run([sys.executable, str(HELPER)],
++                         cwd=REPO, capture_output=True, text=True,
++                         env=env_overlay)
++    print(f"  exit={res.returncode}")
++    try:
++        assert res.returncode == 0
++        assert "FATAL" not in res.stderr
++        assert "using pre-existing" in res.stdout
++        assert "13 files verified" in res.stdout
++        print("  OK")
++    except AssertionError as e:
++        failures.append(f"Test 5: {e}")
++        print(f"  FAIL: {e}")
++        print(f"  stdout: {res.stdout[-300:]!r}")
++        print(f"  stderr: {res.stderr[-300:]!r}")
++
++    # ----- Test 5b : SKIP with PARTIAL artefact set -> FATAL -----
++    # Skip path must reject a partial set, not just missing all artefacts.
++    print()
++    print("Test 5b: COMBUS_BUILDER_SKIP=1 with PARTIAL artefacts -> FATAL")
++    partial_dir = REPO / "out_a12_rev4_skip_partial"
++    if partial_dir.exists():
++        shutil.rmtree(partial_dir)
++    partial_dst = partial_dir / "combus_generated"
++    partial_dst.mkdir(parents=True, exist_ok=True)
++    # Provide only combus.h, leave the other 11 missing.
++    (partial_dst / "combus.h").write_text("// only combus.h")
++    env_overlay = os.environ.copy()
++    env_overlay['COMBUS_BUILDER_SKIP'] = "1"
++    env_overlay.pop('A12_EMPTY_CPPDEFINES', None)
++    env_overlay['A12_BUILD_DIR'] = str(partial_dir)
++    res = subprocess.run([sys.executable, str(HELPER)],
++                         cwd=REPO, capture_output=True, text=True,
++                         env=env_overlay)
++    print(f"  exit={res.returncode}")
++    try:
++        assert res.returncode == 1
++        assert "FATAL" in res.stderr
++        assert "incomplete" in res.stderr
++        # Verify that out_dir is left untouched (only combus.h is there,
++        # no new files were created).
++        files_in_partial = sorted(p.name for p in partial_dst.iterdir())
++        assert files_in_partial == ["combus.h"], (
++            f"out_dir was modified by failed SKIP: {files_in_partial}"
++        )
++        print("  OK")
++    except AssertionError as e:
++        failures.append(f"Test 5b: {e}")
++        print(f"  FAIL: {e}")
++        print(f"  stderr: {res.stderr[-300:]!r}")
++
++    # ----- Test 6 : 2-step success then failure preserves out_dir -----
++    # This is the rev 6 rewrite of the anti-stale test. Scenario:
++    #   1. A successful build produces artefacts A in out_dir.
++    #   2. A second build attempt fails (CPPDEFINES empty), the hook
++    #      must sys.exit(1), the staging is cleaned up, and the
++    #      artefacts A are STILL present in out_dir (because we only
++    #      remove out_dir as part of a SUCCESSFUL publish, never on
++    #      a failed run).
++    #   3. No partial publication happened.
++    print()
++    print("Test 6: 2-step failure preserves previous artefacts (anti-stale)")
++    twostep_dir = REPO / "out_a12_rev4_twostep"
++    if twostep_dir.exists():
++        shutil.rmtree(twostep_dir)
++    # Step 1: successful build.
++    env_overlay = os.environ.copy()
++    env_overlay.pop('A12_EMPTY_CPPDEFINES', None)
++    env_overlay.pop('COMBUS_BUILDER_SKIP', None)
++    env_overlay['A12_BUILD_DIR'] = str(twostep_dir)
++    res = subprocess.run([sys.executable, str(HELPER)],
++                         cwd=REPO, capture_output=True, text=True,
++                         env=env_overlay)
++warning: in the working copy of 'scripts/combus_builder/tests/test_signature_consistency.py', LF will be replaced by CRLF the next time Git touches it
+    assert res.returncode == 0, f"step 1 failed: {res.stderr}"
++    twostep_dst = twostep_dir / "combus_generated"
++    files_after_step1 = sorted(p.name for p in twostep_dst.iterdir())
++    print(f"  step 1: success, {len(files_after_step1)} files in out_dir")
++    # Step 2: failed build (CPPDEFINES empty -> fatal).
++    env_overlay = os.environ.copy()
++    env_overlay['A12_EMPTY_CPPDEFINES'] = "1"
++    env_overlay.pop('COMBUS_BUILDER_SKIP', None)
++    env_overlay['A12_BUILD_DIR'] = str(twostep_dir)
++    res = subprocess.run([sys.executable, str(HELPER)],
++                         cwd=REPO, capture_output=True, text=True,
++                         env=env_overlay)
++    print(f"  step 2: exit={res.returncode}")
++    try:
++        assert res.returncode == 1, f"step 2 must exit 1, got {res.returncode}"
++        assert "FATAL" in res.stderr
++        # Staging was cleaned up.
++        staging_dir = twostep_dir / "combus_generated.new"
++        assert not staging_dir.exists(), (
++            f"staging directory {staging_dir} was not cleaned up after "
++            "fatal failure"
++        )
++        # out_dir is left UNTOUCHED: the artefacts from step 1 are still
++        # there. This is the key invariant — a failed generation must
++        # never delete a previously valid out_dir.
++        files_after_step2 = sorted(p.name for p in twostep_dst.iterdir())
++        assert files_after_step2 == files_after_step1, (
++            f"out_dir was modified by failed build. "
++            f"Before: {files_after_step1}, after: {files_after_step2}"
++        )
++        print("  OK")
++    except AssertionError as e:
++        failures.append(f"Test 6: {e}")
++        print(f"  FAIL: {e}")
++
++    # Cleanup
++    for d in (REPO / "out_a12_rev4", REPO / "out_a12_rev4_skip",
++              REPO / "out_a12_rev4_skip_partial",
++              REPO / "out_a12_rev4_twostep"):
++        if d.exists():
++            shutil.rmtree(d)
++    if HELPER.exists():
++        HELPER.unlink()
++
++    # Cleanup moved into the test loop above (rev 6).
++
++    print()
++    print("=" * 60)
++    if failures:
++        print(f"FAILED: {len(failures)} test(s)")
++        for f in failures:
++            print(f"  - {f}")
++        return 1
++    print("All A12 rev6 tests PASSED.")
++    print("=" * 60)
++    return 0
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+\ No newline at end of file
+diff --git a/scripts/combus_builder/tests/test_signature_consistency.py b/scripts/combus_builder/tests/test_signature_consistency.py
+new file mode 100644
+index 0000000..d66c074
+--- /dev/null
++++ b/scripts/combus_builder/tests/test_signature_consistency.py
+@@ -0,0 +1,94 @@
++"""
++Test : discover_and_parse supports both signatures (env= and project_root=).
++
++The A12 diff shows two callers using different kwargs:
++- combus_scons_hook.py calls discover_and_parse(env=env)
++- combus_builder.py (CLI) calls discover_and_parse(project_root=project_root)
++
++This test verifies that:
++1. discover_and_parse(env=env) works without TypeError.
++2. discover_and_parse(project_root=project_root) works without TypeError.
++3. discover_and_parse(env=env, project_root=...) works (env wins per
++   resolve_buildroot priority).
++4. All three produce the same buildroot and the same file count.
++
++If this test ever fails, it means the two entry points have diverged
++and the diff has introduced a regression.
++
++Usage (from repo root):
++    python scripts/combus_builder/tests/test_signature_consistency.py
++"""
++import io
++import sys
++from pathlib import Path
++
++# Force utf-8 output on Windows consoles.
++sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
++sys.path.insert(0, '.')
++
++from scripts.combus_builder.parser import discover_and_parse  # noqa: E402
++
++
++class FakeEnv(dict):
++    def get(self, k, d=None):
++        return dict.get(self, k, d)
++
++
++REPO = Path('.').resolve()
++
++
++def main() -> int:
++    failures = []
++
++    # Case 1: env=env
++    env = FakeEnv()
++    env['PROJECT_SRC_DIR'] = './src'
++    try:
++        br1, files1, _ = discover_and_parse(env=env)
++        print(f"[OK] env=env          -> {br1.name}, {len(files1)} files")
++    except TypeError as e:
++        failures.append(f"env=env TypeError: {e}")
++        print(f"[FAIL] env=env         -> TypeError: {e}")
++
++    # Case 2: project_root=project_root
++    try:
++        br2, files2, _ = discover_and_parse(project_root=REPO)
++        print(f"[OK] project_root=... -> {br2.name}, {len(files2)} files")
++    except TypeError as e:
++        failures.append(f"project_root TypeError: {e}")
++        print(f"[FAIL] project_root=... -> TypeError: {e}")
++
++    # Case 3: both (env wins)
++    env = FakeEnv()
++    env['PROJECT_SRC_DIR'] = './src'
++    try:
++        br3, files3, _ = discover_and_parse(env=env, project_root=Path('/tmp'))
++        print(f"[OK] env + project_root (env wins) -> {br3.name}, {len(files3)} files")
++    except TypeError as e:
++        failures.append(f"both TypeError: {e}")
++        print(f"[FAIL] both -> TypeError: {e}")
++
++    # Consistency: all three produce the same buildroot + file count.
++    if not failures:
++        if br1 == br2 == br3 and len(files1) == len(files2) == len(files3):
++            print(f"\n[PASS] All three signatures route to the same buildroot.")
++        else:
++            failures.append(
++                f"inconsistent buildroots: {br1} / {br2} / {br3}, "
++                f"file counts: {len(files1)} / {len(files2)} / {len(files3)}"
++            )
++            print(f"\n[FAIL] Inconsistent buildroots.")
++
++    if failures:
++        print("\n" + "=" * 60)
++        print("FAIL")
++        for f in failures:
++            print(f"  - {f}")
++        return 1
++    print("\n" + "=" * 60)
++    print("PASS: discover_and_parse signature is consistent across callers.")
++    return 0
++
++
++if __name__ == "__main__":
++    sys.exit(main())
+\ No newline at end of file
+diff --git a/scripts/combus_scons_hook.py b/scripts/combus_scons_hook.py
+new file mode 100644
+index 0000000..1f38bf3
+--- /dev/null
++++ b/scripts/combus_scons_hook.py
+@@ -0,0 +1,360 @@
++#!/usr/bin/env python3
++"""
++combus_scons_hook.py — A12 implementation: PlatformIO extra_script hook.
++
++This script is loaded by PlatformIO via `extra_scripts = post:...` in
++platformio.ini. It runs ONCE after `extends` resolution and CPPDEFINES
++construction, but BEFORE SCons starts compiling the `.cpp` files.
++
++Pipeline:
++  1. Acquire BuildContext from the live SCons env (`env["CPPDEFINES"]`).
++  2. Discover and parse the `.cb` files in the current buildroot.
++  3. Canonise and resolve `requires` against the BuildContext.
++  4. Emit the 3 view triplets (combus, combus_local, combus_remote) +
++     MD5 artefacts (A7) into a generated directory.
++  5. Add the generated directory to env['CPPPATH'] so the .cpp files
++     pick them up via `#include "combus.h"` etc.
++
++This script is the production integration of A12. It does NOT use
++`env.AddPostAction()` — the generation happens BEFORE compilation, not
++after. See doc/combus_v2 - A12 hook mechanism.md for the rationale.
++
++Usage in platformio.ini:
++
++    extra_scripts =
++        post:scripts/combus_scons_hook.py
++
++Failure policy (revision 6, 2026-08-22):
++  - ANY error in the pipeline (import, BuildContext, parse, canonise,
++    generate, write) is FATAL. The hook calls sys.exit(1) which SCons
++    interprets as a build failure. The build cannot continue with stale
++    artefacts.
++  - Anti-stale: artefacts are written into a sibling staging
++    directory; only after a completeness check on the staging does the
++    hook publish them into the final location. If generation fails,
++    the staging is cleaned up and the previous out_dir is left
++    untouched. The build then aborts because _fatal() exits with code
++    1, before any .cpp is compiled.
++  - COMBUS_BUILDER_SKIP=1: explicit opt-out. The hook verifies that
++    the FULL EXPECTED_ARTIFACTS list is already present in the
++    expected directory; if not, it fails loudly. This prevents the
++    silent "skip + missing headers" trap.
++
++The "atomic" claim of the publish step is about renaming only; the
++real safety against stale-artefact builds is the FATAL-on-any-error
++policy, which makes it impossible for a compile to start against
++artefacts that don't match the current configuration.
++
++See doc/combus_v2 - A12 hook mechanism.md section 15 for the full
++contract.
++"""
++from __future__ import annotations
++
++import os
++import shutil
++import sys
++from pathlib import Path
++
++# SCons / PlatformIO injects `env` at top level.
++Import("env")  # noqa: F821 — SCons inject
++
++# Make `scripts.combus_builder.*` importable from the repo root.
++_REPO_ROOT = Path(__file__).resolve().parent.parent
++if str(_REPO_ROOT) not in sys.path:
++    sys.path.insert(0, str(_REPO_ROOT))
++
++
++# =============================================================================
++# Expected artefacts (the contract that this hook guarantees)
++# =============================================================================
++
++EXPECTED_ARTIFACTS = (
++    # 3 views x 3 files (A6.1):
++    "combus.h",
++    "combus.cpp",
++    "combus_ids.h",
++    "combus_local.h",
++    "combus_local.cpp",
++    "combus_local_ids.h",
++    "combus_remote.h",
++    "combus_remote.cpp",
++    "combus_remote_ids.h",
++    # MD5 artefacts (A7). All 3 views are hashed.
++    "combus_local_md5.h",
++    "combus_remote_md5.h",
++    "combus_md5.h",
++    "combus_wire_common.h",
++)
++
++
++def _missing_artefacts(out_dir: Path) -> list[str]:
++    """Return the list of EXPECTED_ARTEFACTS that are not present."""
++    return [name for name in EXPECTED_ARTIFACTS
++            if not (out_dir / name).is_file()]
++
++
++# =============================================================================
++# Failure helpers
++# =============================================================================
++
++def _fatal(msg: str) -> None:
++    """
++    Print a fatal error to stderr and exit with code 1.
++
++    SCons / PlatformIO interpret a non-zero exit from an extra_script
++    as a build failure. This is the ONLY way the hook reports failure.
++    """
++    sys.stderr.write(f"[combus_scons_hook] FATAL: {msg}\n")
++    sys.stderr.flush()
++    sys.exit(1)
++
++
++# =============================================================================
++# Skip policy
++# =============================================================================
++
++def _skip_requested() -> bool:
++    """Honour COMBUS_BUILDER_SKIP=1 to bypass generation entirely."""
++    return os.environ.get("COMBUS_BUILDER_SKIP", "").strip().lower() in (
++        "1",
++        "true",
++        "yes",
++        "on",
++    )
++
++
++def _verify_skip_artifacts(out_dir: Path) -> None:
++    """
++    When COMBUS_BUILDER_SKIP=1 is set, the hook does NOT regenerate.
++    It MUST verify that EVERY expected artefact is already present in
++    out_dir (the full EXPECTED_ARTIFACTS list, not just a sentinel).
++    If anything is missing, the build cannot succeed (the .cpp files
++    include several of these headers) and we must fail loudly rather
++    than let the compiler emit a confusing "file not found" error.
++    """
++    missing = _missing_artefacts(out_dir)
++    if missing:
++        _fatal(
++            f"COMBUS_BUILDER_SKIP=1 is set but the artefacts in {out_dir} "
++            f"are incomplete. Missing files: {missing}. Either unset "
++            "COMBUS_BUILDER_SKIP to regenerate, or run a build without "
++            "the skip first to produce the full artefact set."
++        )
++    print(
++        f"[combus_scons_hook] COMBUS_BUILDER_SKIP=1 — using pre-existing "
++        f"artefacts in {out_dir} ({len(EXPECTED_ARTIFACTS)} files verified)."
++    )
++
++
++# =============================================================================
++# Output directory resolution
++# =============================================================================
++
++def _default_out_dir(env) -> Path:
++    """
++    Where to write the generated headers.
++
++    Prefer `PROJECT_BUILD_DIR` (PlatformIO 6.x), fall back to
++    `.pio/build/<PIOENV>` derived from PROJECT_DIR + PIOENV. Refuse to
++    run if neither is available (the caller has to set up at least one).
++    """
++    build_dir = env.get("PROJECT_BUILD_DIR")
++    if build_dir:
++        return Path(build_dir) / "combus_generated"
++
++    project_dir = env.get("PROJECT_DIR")
++    pio_env = env.get("PIOENV") or "default"
++    if project_dir:
++        return Path(project_dir) / ".pio" / "build" / pio_env / "combus_generated"
++
++    raise RuntimeError(
++        "Neither PROJECT_BUILD_DIR nor PROJECT_DIR is available on env; "
++        "cannot determine where to write generated headers."
++    )
++
++
++# =============================================================================
++# Anti-stale: atomic publish
++# =============================================================================
++
++def _publish(src_dir: Path, dst_dir: Path) -> None:
++    """
++    Publish the staging directory into the final location.
++
++    IMPORTANT: This function is NOT crash-safe by itself. There is a
++    window between the `shutil.rmtree(dst_dir)` and the
++    `os.replace(src_dir, dst_dir)` in which `dst_dir` does not exist
++    on disk. If the process is killed inside that window, the build
++    is in an inconsistent state. We accept this risk because:
++
++    1. The only thing that runs after the publish is the SCons
++       compilation, which the hook cannot reach on fatal errors
++       (`_fatal` -> `sys.exit(1)` propagates immediately).
++    2. The pre-publish completeness check (`_check_staging_complete`)
++       prevents publishing a partial staging in the first place.
++
++    The real safety net is therefore the FATAL-on-any-error policy
++    upstream of this function, not the publish itself.
++    """
++    if dst_dir.exists():
++        shutil.rmtree(dst_dir)
++    os.replace(src_dir, dst_dir)
++
++
++def _check_staging_complete(staging_dir: Path) -> None:
++    """
++    Verify that the staging directory contains the full
++    EXPECTED_ARTIFACTS list BEFORE any publication. If anything is
++    missing, fail loudly and clean the staging.
++
++    Rationale: even if `generate()` reported success, we want a
++    belt-and-braces check here. A partial staging could replace a
++    previously valid out_dir with an incomplete one, breaking the
++    compile with confusing errors. Better to fail the build than to
++    publish a partial set.
++    """
++    missing = [name for name in EXPECTED_ARTIFACTS
++               if not (staging_dir / name).is_file()]
++    if missing:
++        # Clean the staging so we don't leave junk around.
++        if staging_dir.exists():
++            shutil.rmtree(staging_dir)
++        _fatal(
++            f"staging directory {staging_dir} is incomplete after "
++            f"generation. Missing files: {missing}. The previous "
++            "out_dir is left untouched; the build is aborted."
++        )
++
++
++# =============================================================================
++# Main pipeline
++# =============================================================================
++
++def main(env) -> int:
++    """
++    Run the A12 hook pipeline.
++
++    Returns 0 on success. On ANY error, calls _fatal() which calls
++    sys.exit(1) — this function never returns a non-zero code, because
++    SCons must treat any failure as a build failure.
++    """
++    out_dir = _default_out_dir(env)
++
++    # --- Skip path ---------------------------------------------------------
++    if _skip_requested():
++        _verify_skip_artifacts(out_dir)
++        # Add to CPPPATH so the .cpp files can find the pre-existing
++        # headers. We do NOT regenerate.
++        out_dir_str = str(out_dir)
++        cpppath = env.get("CPPPATH", [])
++        if isinstance(cpppath, str):
++            cpppath = [cpppath]
++        if out_dir_str not in cpppath:
++            cpppath.append(out_dir_str)
++            env["CPPPATH"] = cpppath
++        print(f"[combus_scons_hook] CPPPATH += {out_dir_str} (from skip)")
++        return 0
++
++    # --- Late imports ------------------------------------------------------
++    try:
++        from scripts.combus_builder.canon import canonize
++        from scripts.combus_builder.flags import (
++            BuildContextError,
++            acquire_build_context,
++        )
++        from scripts.combus_builder.generator import GeneratorError, generate
++        from scripts.combus_builder.parser import (
++            ParseError,
++            discover_and_parse,
++        )
++    except ImportError as e:
++        _fatal(f"cannot import combus_builder: {e}. "
++               "Make sure the repo root is on sys.path (it should be).")
++
++    # --- 1. Build context --------------------------------------------------
++    try:
++        ctx = acquire_build_context(env=env)
++    except BuildContextError as e:
++        _fatal(f"BuildContext acquisition failed: {e}")
++
++    print(
++        f"[combus_scons_hook] BuildContext acquired "
++        f"(source={ctx.cppdefines_source}, "
++        f"{len(ctx.defines)} defines, "
++        f"{len(ctx.defines_with_value)} valued)"
++    )
++
++    # --- 2. Discover + parse ----------------------------------------------
++    try:
++        _, _, parsed = discover_and_parse(env=env)
++    except ParseError as e:
++        _fatal(f"YAML parse failed: {e}")
++
++    # --- 3. Canonise ------------------------------------------------------
++    try:
++        canon = canonize(parsed)
++    except Exception as e:  # ChannelError family; keep broad for visibility
++        _fatal(f"canonisation failed: {e}")
++
++    # --- 4. Generate (atomic) ---------------------------------------------
++    # Write into a sibling temp dir, then atomically publish. If anything
++    # fails between here and the publish, the previous artefacts (if any)
++    # are gone and the build will fail with a missing-header error.
++    staging_dir = out_dir.with_suffix(out_dir.suffix + ".new")
++    # Clean any leftover staging from a previous failed attempt.
++    if staging_dir.exists():
++        shutil.rmtree(staging_dir)
++
++    try:
++        sel = generate(canon.canonical_definitions, ctx, staging_dir)
++    except GeneratorError as e:
++        # Clean staging; do NOT touch out_dir (it may still hold valid
++        # artefacts from a previous successful build, but the build
++        # will fail anyway because we exit 1).
++        if staging_dir.exists():
++            shutil.rmtree(staging_dir)
++        _fatal(f"generation failed: {e}")
++    except Exception as e:
++        if staging_dir.exists():
++            shutil.rmtree(staging_dir)
++        _fatal(f"unexpected error during generation: {e}")
++
++    # --- 4b. Pre-publish completeness check -------------------------------
++    # Belt-and-braces: even if generate() returned without error, do
++    # not publish a staging that is missing one of the expected files.
++    _check_staging_complete(staging_dir)
++
++    # --- 5. Publish -------------------------------------------------------
++    try:
++        _publish(staging_dir, out_dir)
++    except OSError as e:
++        _fatal(f"failed to publish generated artefacts: {e}")
++
++    print(
++        f"[combus_scons_hook] generated "
++        f"combus ({sel.full.ch_count} ch, WIRE_END={sel.full.wire_end}), "
++        f"combus_local ({sel.local.ch_count} ch), "
++        f"combus_remote ({sel.remote.ch_count} ch) "
++        f"-> {out_dir}"
++    )
++
++    # --- 6. CPPPATH -------------------------------------------------------
++    out_dir_str = str(out_dir)
++    cpppath = env.get("CPPPATH", [])
++    if isinstance(cpppath, str):
++        cpppath = [cpppath]
++    if out_dir_str not in cpppath:
++        cpppath.append(out_dir_str)
++        env["CPPPATH"] = cpppath
++
++    print(f"[combus_scons_hook] CPPPATH += {out_dir_str}")
++    return 0
++
++
++# =============================================================================
++# Module-level execution
++# =============================================================================
++# SCons imports this script and runs it. main() either returns 0 (success)
++# or calls sys.exit(1) (fatal). We do NOT catch the SystemExit here:
++# letting it propagate is what makes SCons treat the build as failed.
++main(env)
+\ No newline at end of file

@@ -11,3 +11,7 @@ scripts/__pycache__/
 
 # src/sound_module/ is tracked as a private git submodule (sound_module_rc)
 # — DiYGuy RC Engine Sound ESP32 sources stay private, Open Node migration code is versioned there.
+
+# Python build artifacts (scripts/combus_builder/ etc.)
+__pycache__/
+*.pyc

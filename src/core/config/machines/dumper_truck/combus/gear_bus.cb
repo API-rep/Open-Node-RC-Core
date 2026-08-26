@@ -1,0 +1,16 @@
+# gear_bus.cb — Active virtual gear (1..3)
+#
+# - Written by inputs module (mechanical gear box) or virtual gear processor
+# 
+# (TBD :Range: 1..3 (NEVER 0; neutral/idle is encoded separately in
+#   DRIVE_STATE_BUS bit0 ACTIVE)).
+
+channels:
+
+- id: GEAR_BUS
+  infoName: "Active gear"
+  type: analog
+  value: 1
+  scope: REMOTE
+  theme: core
+  direction: downlink

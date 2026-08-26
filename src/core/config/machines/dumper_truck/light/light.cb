@@ -1,0 +1,69 @@
+# light.cb — Driver light / indicator / hazard channels (REMOTE) + motion-derived light states (LOCAL)
+#
+# REMOTE channels (driver inputs):
+# - LIGHTS: main lights toggle (head + tail).
+#   Written by input module (PS4 controller).
+#   Read by light module (kLedDescriptors[]).
+# - INDICATOR_LEFT / INDICATOR_RIGHT: turn signals.
+#   Written by input module.
+#   Read by light module (indicator channels).
+# - HAZARDS: hazard flashers (both indicators simultaneously).
+#   Written by input module.
+#   Read by light module.
+#
+# LOCAL channels (motion-derived light states):
+# - BRAKING: ESC braking state (1=braking, 0=not braking).
+#   Written by motion module (MotionOutput::isBraking — future).
+#   Read by light module (light_interpreter.cpp → LightBit::BRAKING).
+#   scope: LOCAL, direction: none — internal state, NOT on the wire.
+#   Theme: light (consumer side), but scope: LOCAL (producer side is motion).
+#
+# Theme: driver_inputs / signals (REMOTE) + motion-derived light states (LOCAL).
+# Migration note: these channels were previously declared in
+# src/machines/config/machines/volvo_A60H_bruder/combus/combus_ids_*.inc
+# as REMOTE — now declared here at the TYPE level (generic to all dumper-trucks).
+
+channels:
+
+# -----------------------------------------------------------------------------
+# DIGITAL — lights + indicators + hazards (REMOTE, driver inputs)
+# -----------------------------------------------------------------------------
+
+- id: LIGHTS
+  infoName: "Main lights toggle"
+  type: digital
+  theme: light
+  scope: REMOTE
+  direction: downlink
+
+- id: INDICATOR_LEFT
+  infoName: "Left turn indicator"
+  type: digital
+  theme: light
+  scope: REMOTE
+  direction: downlink
+
+- id: INDICATOR_RIGHT
+  infoName: "Right turn indicator"
+  type: digital
+  theme: light
+  scope: REMOTE
+  direction: downlink
+
+- id: HAZARDS
+  infoName: "Hazard flashers"
+  type: digital
+  theme: light
+  scope: REMOTE
+  direction: downlink
+
+# -----------------------------------------------------------------------------
+# DIGITAL — motion-derived light states (LOCAL, internal)
+# -----------------------------------------------------------------------------
+
+- id: BRAKING
+  infoName: "ESC braking state (1=braking, 0=not braking)"
+  type: digital
+  theme: light
+  scope: LOCAL
+  direction: none

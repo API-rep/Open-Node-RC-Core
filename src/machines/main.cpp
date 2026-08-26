@@ -15,6 +15,7 @@
 #include <core/system/vbat/vbat_sense.h>
 
 #include <machines/system/sys_manager.h>
+#include <combus_remote_ids.h>   // AnalogComBusRemoteID / DigitalComBusRemoteID (Phase 4)
 
 
 /**
@@ -150,12 +151,19 @@ void loop() {
         // --- 0.5. Idle timeout: no stick/button input for kEngineOffTimeoutMs → IDLE ---
       {
         const int32_t kIdleBand = static_cast<int32_t>(CbusNeutral) / 20;  // ±5 % threshold
+        // Phase 4 (A14) + Phase 5 (A15): each TYPE has its own 0-based
+        // counter, so CH_COUNT is the exact count per type — no
+        // subtraction needed.
+        constexpr uint8_t kRemoteAnalogCount =
+            static_cast<uint8_t>(AnalogComBusRemoteID::CH_COUNT);
+        constexpr uint8_t kRemoteDigitalCount =
+            static_cast<uint8_t>(DigitalComBusRemoteID::CH_COUNT);
         bool active = false;
-        for (uint8_t i = 0; i < static_cast<uint8_t>(AnalogComBusID::WIRE_END) && !active; i++) {
+        for (uint8_t i = 0; i < kRemoteAnalogCount && !active; i++) {
             const int32_t off = static_cast<int32_t>(comBus.analogBus[i].value) - static_cast<int32_t>(CbusNeutral);
             if (off > kIdleBand || off < -kIdleBand) active = true;
         }
-        for (uint8_t i = 0; i < static_cast<uint8_t>(DigitalComBusID::WIRE_END) && !active; i++) {
+        for (uint8_t i = 0; i < kRemoteDigitalCount && !active; i++) {
             if (comBus.digitalBus[i].value) active = true;
         }
         if (active) s_lastActivityMs = millis();

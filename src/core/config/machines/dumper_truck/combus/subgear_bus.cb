@@ -1,0 +1,13 @@
+# subgear_bus.cb --- Active sub-gear index
+#
+# - Written by input module or sub-gear simulation processors 
+# - Range: 0..N (0 = inactive, 1..N = active sub-gear index).
+
+channels:
+- id: SUBGEAR_BUS
+  infoName: "Active sub-gear"
+  type: analog
+  value: 0
+  scope: REMOTE
+  theme: core
+  direction: downlink

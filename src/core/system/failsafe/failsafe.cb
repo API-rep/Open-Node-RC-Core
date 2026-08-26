@@ -1,0 +1,45 @@
+# failsafe.cb — Failsafe aggregator
+#
+# This file declares the ComBus channel FAILSAFE, the Failsafe system
+# aggregator. It is set to 1 (fault) if at least one FAILSAFE_X
+# contributor reports a fault.
+#
+# Legacy equivalent: src/core/system/failsafe/combus_ids_digital_failsafe.inc
+# #ifdef HAS_FAILSAFE
+# FAILSAFE,           ///< Failsafe aggregator channel — set when any FAILSAFE_X contributor reports a fault
+# #ifdef HAS_VBAT_FAILSAFE
+# #include <core/config/vbat/combus_ids_digital_vbat_failsafe.inc>
+# #endif
+# FAILSAFE_END,       ///< Range marker — first index after Failsafe group.
+# #endif
+#
+# Notes:
+# - FAILSAFE is the aggregator, not a contributor.
+# - Contributors (FAILSAFE_VBAT, etc.) are declared in their own .cb
+#   files (e.g. src/core/system/vbat/vbat_failsafe.cb).
+# - FAILSAFE_END is a legacy range marker. The generator deduces it
+#   automatically from the list of channels in the group.
+# - LOCAL scope is required because FAILSAFE is shared by all boards
+#   composing the local node. It allows the Failsafe state to be
+#   propagated to, and collected from, the different boards of that node.
+# - Direction is both uplink and downlink: any board may publish or
+#   consume the local Failsafe state as required by its role.
+# - Remote propagation, if required, is handled separately through a
+#   REMOTE ComBus definition(FAILSAFE_TELEMETRY ...).
+#
+# A6.1 — `direction: [both]` shorthand added (TEMPORARY, pending .inc migration).
+# During A6.1 the legacy .inc channels are not yet migrated, so the runtime
+# writes/reads both ways. To be re-evaluated once .inc migration is complete.
+
+
+channels:
+  - id: FAILSAFE
+    infoName: "Failsafe aggregator"
+    type: digital
+    scope: LOCAL
+    theme: failsafe
+    direction: both
+    value: high    # default to fault state: aggregator is HIGH (= true) until
+                   # any contributor clears it. Failsafe-by-default contract.
+    requires:
+      - HAS_FAILSAFE

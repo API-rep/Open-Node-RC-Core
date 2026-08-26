@@ -74,6 +74,45 @@ enum class ChanLayer : uint8_t {
 
 
 // =============================================================================
+// CHANNEL DIRECTION (bitmask — added by A6.1)
+// =============================================================================
+
+/**
+ * @brief Wire direction of a channel (bitmask, 1 byte).
+ *
+ * @details bit 0 = uplink, bit 1 = downlink.
+ *   None     = 0
+ *   Uplink   = 1
+ *   Downlink = 2
+ *   Both     = 3 (= Uplink | Downlink)
+ *
+ * @note A6.1: added as a runtime field of `AnalogComBus` and `DigitalComBus`
+ *   alongside `ChanLayer`. Does NOT replace `layer` — `layer` is still
+ *   used by `_layer_ok()` for write protection (audit A6 confirmed it is
+ *   functionally required). `direction` is a *data* field, not an
+ *   access-control field.
+ */
+enum class Direction : uint8_t {
+    None     = 0,
+    Uplink   = 1,
+    Downlink = 2,
+    Both     = 3
+};
+
+static constexpr Direction operator|(Direction a, Direction b) {
+    return static_cast<Direction>(static_cast<uint8_t>(a) | static_cast<uint8_t>(b));
+}
+
+static constexpr Direction operator&(Direction a, Direction b) {
+    return static_cast<Direction>(static_cast<uint8_t>(a) & static_cast<uint8_t>(b));
+}
+
+static constexpr Direction operator~(Direction a) {
+    return static_cast<Direction>(~static_cast<uint8_t>(a) & 0x03u);
+}
+
+
+// =============================================================================
 // CHANNEL STRUCTS
 // =============================================================================
 
@@ -81,18 +120,20 @@ enum class ChanLayer : uint8_t {
  * @brief Analog ComBus channel descriptor.
  */
 typedef struct {
-  const char* infoName;                    ///< Short description for debugging and dashboards
-  uint16_t    value;                       ///< Current channel value (0‑65535)
-  ChanLayer   layer = ChanLayer::SYSTEM;   ///< Propagation layer — see ChanLayer
+  const char* infoName;                            ///< Short description for debugging and dashboards
+  uint16_t    value;                               ///< Current channel value (0‑65535)
+  ChanLayer   layer       = ChanLayer::SYSTEM;     ///< Propagation layer — see ChanLayer
+  Direction   direction   = Direction::None;       ///< Wire direction — added by A6.1
 } AnalogComBus;
 
 /**
  * @brief Digital ComBus channel descriptor.
  */
 typedef struct {
-  const char* infoName;                    ///< Short description for debugging and dashboards
-  bool        value;                       ///< Current channel state (true/false)
-  ChanLayer   layer = ChanLayer::SYSTEM;   ///< Propagation layer — see ChanLayer
+  const char* infoName;                            ///< Short description for debugging and dashboards
+  bool        value;                               ///< Current channel state (true/false)
+  ChanLayer   layer       = ChanLayer::SYSTEM;     ///< Propagation layer — see ChanLayer
+  Direction   direction   = Direction::None;       ///< Wire direction — added by A6.1
 } DigitalComBus;
 
 /**

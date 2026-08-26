@@ -39,12 +39,10 @@ static const char* aCh(AnalogComBusID id)
 		case AnalogComBusID::STEERING_BUS:         return "STEER_IN";
 		case AnalogComBusID::DUMP_BUS:             return "DUMP_IN";
 		case AnalogComBusID::ESC_SPEED_BUS:        return "ESC_SPD";
-		case AnalogComBusID::GEAR:                 return "GEAR";
+		case AnalogComBusID::GEAR_BUS:             return "GEAR";
 		case AnalogComBusID::DRIVE_STATE_BUS:      return "DRV_ST";
 		case AnalogComBusID::BRAKE_BUS:            return "BRAKE";
 		case AnalogComBusID::SUBGEAR_BUS:          return "SUBGEAR";
-		case AnalogComBusID::DUMP_RAMPED_BUS:      return "DUMP_R";
-		case AnalogComBusID::STEERING_RAMPED_BUS:  return "STEER_R";
 		case AnalogComBusID::THROTTLE_STICK:       return "THR_STK";
 		case AnalogComBusID::THROTTLE_BUS:         return "THROTTLE";
 		default:                                    return "?";
@@ -159,7 +157,7 @@ static void render_proc_row(uint8_t idx, const CbProc* proc)
 	}
 	else if (strcmp(pname, "gear-ratio") == 0 && proc->cfg) {
 		const GearProcCfg* cfg  = static_cast<const GearProcCfg*>(proc->cfg);
-		const uint16_t     curG = s_bus->analogBus[static_cast<uint8_t>(AnalogComBusID::GEAR)].value;
+		const uint16_t     curG = s_bus->analogBus[static_cast<uint8_t>(AnalogComBusID::GEAR_BUS)].value;
 		{
 			char rbuf[48]; int rp = 0;
 			for (uint8_t g = 0u; g < cfg->profile->gearCount && rp < 40; ++g)
@@ -213,7 +211,7 @@ static void render_sim_view()
 
 		//  out display: GEAR channel shows raw gear integer instead of %.
 		char outDisp[10];
-		if (chOut == AnalogComBusID::GEAR) {
+		if (chOut == AnalogComBusID::GEAR_BUS) {
 			snprintf(outDisp, sizeof(outDisp), "  G:%u    ", (unsigned)outVal);
 		} else {
 			snprintf(outDisp, sizeof(outDisp), "%+6d%%", (int)outPct);

@@ -7,7 +7,7 @@
 
 #include <core/system/input/input_manager.h>   // input_is_connected(), inputAnalogValue[], inputDigitalValue[], inputDev
 #include <core/system/combus/combus_access.h>  // combus_set_analog, combus_set_digital
-#include <machines/config/machines/volvo_A60H_bruder/inputs_map/inputs_map.h>  // InputAnalogMap/DigitalMap arrays
+#include <core/config/machines/dumper_truck/inputs/inputs_map/inputs_map.h>  // A9.9: default mapping (replaces instance-specific inputs_map.h)
 
 void input_update(ComBus &bus) {
 
@@ -26,11 +26,11 @@ void input_update(ComBus &bus) {
                          ? (int16_t)dev.minVal
                          : (int16_t)((dev.minVal + dev.maxVal) / 2);
       uint16_t neutral = (uint16_t)map(restRaw, dev.minVal, dev.maxVal, 0, bus.analogBusMaxVal);
-      combus_set_analog(bus, m.busChannel, neutral, ChanLayer::REMOTE);
+      combus_set_analog(bus, m.busChannel, neutral, ChanLayer::LOCAL);
     }
 
     for (uint8_t i = 0; i < InputDigitalMapCount; i++) {
-      combus_set_digital(bus, InputDigitalMapArray[i].busChannel, false, ChanLayer::REMOTE);
+      combus_set_digital(bus, InputDigitalMapArray[i].busChannel, false, ChanLayer::LOCAL);
     }
     return;   // source inactive — isDrived left as pre-cleared by sys_manager
   }
@@ -47,7 +47,7 @@ void input_update(ComBus &bus) {
     uint16_t val    = map(inputAnalogValue[devID], dev.minVal, dev.maxVal, 0, bus.analogBusMaxVal);
     uint16_t busVal = m.isInverted ? (bus.analogBusMaxVal - val) : val;
 
-    combus_set_analog(bus, m.busChannel, busVal, ChanLayer::REMOTE);
+    combus_set_analog(bus, m.busChannel, busVal, ChanLayer::LOCAL);
   }
 
 // ==========================================================
@@ -62,7 +62,7 @@ void input_update(ComBus &bus) {
     bool raw        = inputDigitalValue[devID];
     bool finalState = (raw != (m.isInverted || dev.isInverted));
 
-    combus_set_digital(bus, m.busChannel, finalState, ChanLayer::REMOTE);
+    combus_set_digital(bus, m.busChannel, finalState, ChanLayer::LOCAL);
   }
 
     // --- Mark bus as driven by this physical source ---
