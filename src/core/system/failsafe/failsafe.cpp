@@ -20,7 +20,8 @@
 
 #include "failsafe.h"
 
-#include "failsafe_chain.h"  // kFailsafeChain, kFailsafeChainCount
+#include "failsafe_chain.h"                     // kFailsafeChain, kFailsafeChainCount
+#include <core/system/combus/processors/proc_chain.h>  // proc_chain_update()
 
 
 // =============================================================================
@@ -48,51 +49,33 @@ void failsafe_init()
 
 /**
  * @brief Failsafe orchestrator — runs every CbChain registered in
- *   `kFailsafeChain[]`.
+ *   `kFailsafeChain[]` via the standard `proc_chain_update()` runner.
  *
- * @details At step 2, the chain contains only the reset processor.
- *   A minimal local runner iterates each chain's CbProc array in
- *   order and calls `proc.fn(&proc, value, claimed)` with a local
- *   scratch `value` (no channel seeding — no Failsafe proc reads a
- *   channel at step 2) and a local `claimed` flag (the reset
- *   processor never claims).
+ * @details Delegates to the shared ComBus chain runner, which already
+ *   implements the full contract:
+ *     - seed `value` from `ch.inCh` (none here → 0);
+ *     - for each proc: read `proc->inCh` into `proc->inValue`,
+ *       call `proc.fn(&proc, value, claimed)`, commit `proc->outValue`
+ *       to `proc->outCh` (using `combus_set_digital` layer-checked);
+ *     - commit final `value` to `ch.outCh` (none here → no-op).
  *
- *   This local runner mirrors the contract of `proc_chain_step()`
- *   (`src/core/system/combus/processors/proc_chain.cpp`) but without
- *   the ComBus parameter. When contributor CbChains (steps 12.5+)
- *   require channel I/O, this runner will be replaced by a call to
- *   `proc_chain_update()` and `failsafe_update()` will accept the
- *   shared ComBus.
- *
- *   WIP invariant: every registered processor is called every cycle,
- *   in order, regardless of `claimed`. `claimed` is a state forwarded
- *   to each processor — it is **not** a chain-break mechanism. This
- *   guarantees that every contributor sees the freshly-reset pivot
- *   and is itself responsible for setting its `FAILSAFE_X` channel.
+ *   WIP invariant: every registered processor is called every cycle
+ *   (the standard runner skips procs when `claimed = true`; Failsafe
+ *   procs MUST therefore never claim — see proc_failsafe_reset.h /
+ *   proc_failsafe_vbat.h).  This guarantees that every contributor
+ *   sees the freshly-reset pivot and is itself responsible for
+ *   resetting its `FAILSAFE_X` channel.
  *
  *   WIP §6 invariant: every source module update must be finished
  *   **before** `failsafe_update()` is called. This ordering is
  *   enforced by `sys_manager_update` and does not depend on the
  *   Failsafe module itself.
+ *
+ * @param bus  Shared ComBus — forwarded to the standard chain runner.
  */
-void failsafe_update()
+void failsafe_update(ComBus& bus)
 {
-    for (uint8_t c = 0; c < kFailsafeChainCount; ++c) {
-        CbChain& ch = kFailsafeChain[c];
-
-        // Local pipeline — no ComBus seeding at step 2.
-        uint16_t value   = 0u;
-        bool     claimed = false;
-
-        for (uint8_t p = 0; p < ch.procCount; ++p) {
-            CbProc& proc = ch.procs[p];
-            if (proc.fn == nullptr) continue;
-
-            // NOTE: every processor is invoked every cycle; `claimed`
-            // is forwarded as state but never short-circuits the chain.
-            proc.fn(&proc, value, claimed);
-        }
-    }
+    proc_chain_update(kFailsafeChain, kFailsafeChainCount, bus);
 }
 
 // EOF failsafe.cpp

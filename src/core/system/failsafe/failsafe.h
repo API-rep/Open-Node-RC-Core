@@ -24,6 +24,7 @@
 #pragma once
 
 #include <stdint.h>  // uint8_t (chain count, future-proof)
+#include <core/system/combus/combus_defs.h>  // ComBus (failsafe_update takes ComBus&)
 
 
 // =============================================================================
@@ -76,20 +77,25 @@ void failsafe_init();
 /**
  * @brief Failsafe orchestrator — called every cycle by `sys_manager`.
  *
- * @details At step 1, **deliberate no-op**: the chain
- *   `kFailsafeChain` is empty (`kFailsafeChainCount == 0` and
- *   `kFailsafeChain == nullptr`), so no iteration is attempted. No
- *   inline reset is executed; the pivot is left untouched.
+ * @details Iterates the main chain `kFailsafeChain[]` and runs each
+ *   CbProc in order. The first entry is `proc_failsafe_reset` (which
+ *   clears the pivot); subsequent entries (e.g. `proc_failsafe_vbat`)
+ *   read their sub-ComBus, may latch `failsafeBus.active` back to
+ *   `true`, and force the sub-ComBus back to fault.
  *
- *   At step 2, this function will iterate the main chain, whose
- *   first entry will be `proc_failsafe_reset` (which will clear the
- *   pivot) followed by the contributor CbChains (steps 12.5+).
+ *   Uses the standard `proc_chain_update()` runner from
+ *   `src/core/system/combus/processors/proc_chain.cpp` — every chain
+ *   step is a full `CbChain` (seed → procs → commit). The shared
+ *   ComBus reference is forwarded so sub-ComBus reads / writes go
+ *   through the layer-checked `combus_set_digital()` accessor.
  *
  *   WIP §6 invariant: every source module update must be finished
  *   **before** `failsafe_update()` is called. This ordering is
  *   enforced by `sys_manager_update` and does not depend on the
  *   Failsafe module itself.
+ *
+ * @param bus  Shared ComBus — forwarded to the standard chain runner.
  */
-void failsafe_update();
+void failsafe_update(ComBus& bus);
 
 // EOF failsafe.h
