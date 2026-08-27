@@ -10,8 +10,11 @@
  *   2. Input acquisition: core `input_refresh()` then machine
  *      `input_update(bus)` — re-asserts `bus.isDrived` when a physical
  *      controller is connected.
- *   3. Battery sensing tick via `vbat_sense_tick()`.
- *   4. Failsafe evaluation: `failsafeActive = !bus.isDrived`.
+ *   3. Battery update via `vbat_update()` — ADC sensing, sliding average,
+ *      low-bat detection, and re-arm of `DigitalComBusID::FAILSAFE_VBAT`.
+ *   4. Failsafe update via `failsafe_update(bus)` — runs the FAILSAFE
+ *      processor chain (reset + contributors), publishes the aggregated
+ *      `DigitalComBusID::FAILSAFE` channel.
  *
  *   **Open-drain invariant:**
  *   - `bus.isDrived = false` is written ONLY by `sys_manager_reset()`.
@@ -36,23 +39,19 @@
  *   `combus_frame_apply()` re-asserts `isDrived` when a valid frame is applied.
  *
  *   **Failsafe deprecation note (WIP §12.4):**
- *   `SysResult::failsafeActive` is kept temporarily for backward compatibility
- *   with the legacy reaction path in `src/machines/main.cpp` and the
- *   `output_manager` / `combus_tx` consumers. The new Failsafe module
- *   (`src/core/system/failsafe/`, see `doc/WIP - Failsafe module design.md`)
- *   publishes `failsafeBus.active` and exposes the read-only accessor
- *   `failsafe_is_active()` (from `failsafe_access.h`). Once the new reaction
- *   chain has been validated end-to-end (WIP §12.9 and §12.12), this field
- *   and its legacy producer (`failsafeActive = !bus.isDrived` in
- *   `sys_manager_update()`) will be removed and all consumers will migrate to
- *   `failsafe_is_active()`.
+ *   `SysResult::failsafeActive` is the legacy open-drain flag (true when no
+ *   physical input source refreshed the bus this cycle). The new Failsafe
+ *   module (`src/core/system/failsafe/`, see
+ *   `doc/WIP - Failsafe module design.md`) publishes the aggregated
+ *   `DigitalComBusID::FAILSAFE` ComBus channel via the processor chain.
+ *   Consumers should migrate from `SysResult::failsafeActive` to
+ *   `comBus.digitalBus[DigitalComBusID::FAILSAFE]`. Both coexist until the
+ *   reaction chain migration is complete (WIP §12.9 / §12.12).
  *
  *   Migration rules in effect until then:
  *     - producers must keep writing `failsafeActive` unchanged;
  *     - consumers must keep reading `failsafeActive` unchanged;
- *     - the legacy reaction path must remain operational;
- *     - `failsafe_init()` and `failsafe_update()` must NOT be called from
- *       `sys_manager_update()` at this step.
+ *     - the legacy reaction path must remain operational.
  *****************************************************************************/
 #pragma once
 
@@ -66,15 +65,19 @@
 /**
  * @brief Return value of sys_manager_update() — system tick summary.
  *
- * @details `failsafeActive` is **kept temporarily** for backward compatibility
- *   with the legacy reaction path. See the file-level deprecation note above.
+ * @details `failsafeActive` is the legacy open-drain flag (true when no
+ *   physical input source refreshed the bus this cycle). Kept temporarily
+ *   for backward compatibility with the legacy reaction path. See the
+ *   file-level deprecation note.
  */
 struct SysResult {
     bool failsafeActive;  ///< true = no active input source detected this cycle.
                           ///<  @deprecated Kept temporarily for backward compatibility.
-                          ///<  Migrate to `failsafe_is_active()` once the new
-                          ///<  reaction chain (WIP §12.9 / §12.12) is validated.
+                          ///<  Migrate to comBus.digitalBus[DigitalComBusID::FAILSAFE]
+                          ///<  once the reaction chain (WIP §12.9 / §12.12) is validated.
     bool vbatChanged;     ///< true = at least one vbat channel changed state
+                          ///<  @deprecated Hard-wired to false since A16.2 — the
+                          ///<  Failsafe chain re-evaluates every cycle.
 };
 
 
@@ -89,13 +92,14 @@ struct SysResult {
  *   1. Pre-clear `bus.isDrived` (open-drain reset).
  *   2. `input_refresh()` (core) — physical acquisition.
  *      `input_update(bus)` (machine) — input -> ComBus mapping.
- *   3. `vbat_sense_tick()` — battery ADC read and low-bat detection.
- *   4. Evaluates `failsafeActive = !bus.isDrived`.
+ *   3. `vbat_update()` — battery sensing + re-arm of `FAILSAFE_VBAT`.
+ *   4. `failsafe_update(bus)` — runs the FAILSAFE chain, publishes
+ *      `DigitalComBusID::FAILSAFE` on the bus.
+ *   5. Returns `SysResult { failsafeActive, vbatChanged }`.
  *
  * @return SysResult with `failsafeActive` and `vbatChanged` flags.
- *         Caller is responsible for battery-channel writes
- *         (`DigitalComBusID::FAILSAFE_VBAT`, written by `vbat_update()`) and the
- *         battery-triggered runlevel transition using `vbatChanged`.
+ *         Consumers should also read `comBus.digitalBus[DigitalComBusID::FAILSAFE]`
+ *         for the aggregated Failsafe state.
  */
 SysResult sys_manager_update(ComBus& bus);
 

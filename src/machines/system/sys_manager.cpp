@@ -8,7 +8,7 @@
 #include <core/system/input/input_manager.h>    // input_refresh() — core acquisition
 #include <machines/system/input/input_update.h> // input_update(bus) — machine mapping
 #include <core/system/vbat/vbat.h>              // vbat_update() — orchestrates vbat_sense + FAILSAFE_VBAT
-#include <core/system/failsafe/failsafe.h>      // failsafe_update() — aggregates FAILSAFE_X into failsafeBus
+#include <core/system/failsafe/failsafe.h>      // failsafe_update() — publishes DigitalComBusID::FAILSAFE
 
 
 // =============================================================================
@@ -27,16 +27,16 @@ SysResult sys_manager_update(ComBus& bus) {
       // --- 3. vbat update (senses + re-arms FAILSAFE_VBAT) ---
     vbat_update();       // vbat_sense_tick() then FAILSAFE_VBAT = vbat_is_low(0)
 
-      // --- 4. Failsafe chain (aggregates FAILSAFE_X into failsafeBus.active) ---
+      // --- 4. Failsafe chain (publishes DigitalComBusID::FAILSAFE) ---
       // Runs after inputs (so sub-combus reads are fresh) and after vbat_update
       // (which has re-armed FAILSAFE_VBAT).  Consumers below may now read
-      // failsafe_is_active() for the current cycle.
+      // comBus.digitalBus[DigitalComBusID::FAILSAFE] for the current cycle.
     failsafe_update(bus);
 
       // --- 5. Legacy failsafe flag (kept until WIP §12.4/12.9/12.12 are done) ---
       // `failsafeActive` is the open-drain flag (no input source) — distinct from
-      // the new aggregated `failsafeBus.active` (Failsafe module).  Both will
-      // coexist until the reaction chain migration is complete.
+      // the new aggregated `DigitalComBusID::FAILSAFE` (Failsafe chain output).
+      // Both will coexist until the reaction chain migration is complete.
       //
       // `vbatChanged` is no longer used by main.cpp (the chain re-evaluates every
       // cycle), so it is hard-wired to false here. The legacy field stays in

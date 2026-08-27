@@ -15,7 +15,6 @@
 #include <core/system/vbat/vbat_sense.h>
 
 #include <machines/system/sys_manager.h>
-#include <core/system/failsafe/failsafe_access.h>  // failsafe_is_active()
 #include <combus_remote_ids.h>   // AnalogComBusRemoteID / DigitalComBusRemoteID (Phase 4)
 
 
@@ -229,13 +228,13 @@ void loop() {
 // =============================================================================
 
 	// --- 1. Failsafe reaction (TRANSITIONAL) ---
-  // Reads the aggregated `failsafeBus.active` flag (computed by
-  // failsafe_update() in sys_manager_update()) and forces RunLevel::SLEEPING
-  // when high.  This is a transitory fallback — the proper reaction will be
-  // a `proc_failsafe_reaction` processor registered in the machine chain
-  // (see doc/WIP - Failsafe module design.md §9). To be removed when that
-  // proc is in place.
-  if (failsafe_is_active()) {
+  // Reads the aggregated `DigitalComBusID::FAILSAFE` ComBus channel
+  // (published by failsafe_update() in sys_manager_update()) and forces
+  // RunLevel::SLEEPING when high.  This is a transitory fallback — the
+  // proper reaction will be a `proc_failsafe_reaction` processor
+  // registered in the machine chain (see doc/WIP - Failsafe module
+  // design.md §9). To be removed when that proc is in place.
+  if (comBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::FAILSAFE)].value) {
     if (comBus.runLevel != RunLevel::SLEEPING) {
       combus_set_runlevel(comBus, RunLevel::SLEEPING);
       sys_log_warn("[SYSTEM][SAFE] reason=failsafe_aggregator action=enter_SLEEPING\n");
