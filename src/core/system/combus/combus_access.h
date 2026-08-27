@@ -92,19 +92,6 @@ bool combus_set_runlevel(ComBus& bus, RunLevel rl, ChanLayer caller);
 
 
 
-/**
- * @brief Write the ComBus batteryIsLow flag.
- * 
- * @param bus    Target ComBus instance.
- * @param val    New batteryIsLow value.
- * @param caller Layer of the calling module — checked against bus.battLowLayer.
- * 
- * @return true if the write was accepted, false if layer mismatch.
- */
-
-bool combus_set_battlow(ComBus& bus, bool val, ChanLayer caller);
-
-
 // =============================================================================
 // 3. SIGN-MAGNITUDE HELPERS
 // =============================================================================
@@ -162,14 +149,6 @@ inline bool combus_set_digital(ComBus& bus, DigitalComBusID ch, bool val) {
  */
 inline bool combus_set_runlevel(ComBus& bus, RunLevel rl) {
     return combus_set_runlevel(bus, rl, ChanLayer::SYSTEM);
-}
-
-/**
- * @brief Internal overload for processors running with SYSTEM-level access.
- * @details Used by CbProcFn implementations (local firmware).
- */
-inline bool combus_set_battlow(ComBus& bus, bool val) {
-    return combus_set_battlow(bus, val, ChanLayer::SYSTEM);
 }
 
 // EOF combus_access.h

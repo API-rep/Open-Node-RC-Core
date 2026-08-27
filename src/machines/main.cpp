@@ -227,17 +227,21 @@ void loop() {
 // 3. SYSTEM TASKS (Battery)
 // =============================================================================
 
-	// --- 1. Battery low-state transition ---
+	// --- 1. Battery low-state transition (FAILSAFE_VBAT) ---
+  // The FAILSAFE aggregator (declared in src/core/system/failsafe/failsafe.cb)
+  // consumes FAILSAFE_VBAT each cycle. The reaction here reads the same
+  // channel directly and forces SLEEPING when any VBAT cell is low.
+  // The vbat module writes FAILSAFE_VBAT from local sensing (or via ComBus RX).
   if (sys.vbatChanged) {
     for (uint8_t i = 0; i < vbat_channel_count(); i++) {
-      if (vbat_is_low(i)) { 
-        combus_set_battlow(comBus, true);
-        combus_set_digital(comBus, DigitalComBusID::BATTERY_LOW, true);
+      if (vbat_is_low(i)) {
+        combus_set_digital(comBus, DigitalComBusID::FAILSAFE_VBAT, true);
         break;
       }
     }
 
-    if (comBus.batteryIsLow) {
+    const bool failsafeVbat = comBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::FAILSAFE_VBAT)].value;
+    if (failsafeVbat) {
         combus_set_runlevel(comBus, RunLevel::SLEEPING);
       sys_log_warn("[SYSTEM][SAFE] reason=low_battery action=enter_SLEEPING\n");}
   }

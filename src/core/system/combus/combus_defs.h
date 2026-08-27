@@ -147,16 +147,14 @@ typedef struct {
     // --- Core state ---
   RunLevel    runLevel;                     ///< Machine run level — written by the system FSM
   ChanLayer   runLevelLayer = ChanLayer::LOCAL;   ///< RunLevel propagation layer (shared within system)
-  bool        batteryIsLow = false;        ///< True when any VBAT channel reports low voltage
-  ChanLayer   battLowLayer = ChanLayer::LOCAL;    ///< Battery low flag propagation layer (shared within system)
-  
+
     // --- Input drive flag ---
   bool        isDrived = false;            ///< True when at least one physical input source refreshed the bus this cycle
                                             ///< Pre‑cleared by sys_manager_reset() each loop; re‑asserted by each active source.
-  
+
     // --- Transport ---
   uint32_t    lastFrameMs = 0;             ///< millis() timestamp of the last successful combus_frame_apply
-  
+
     // --- Channel arrays ---
   AnalogComBus*  analogBus;                ///< Analog channel array
   DigitalComBus* digitalBus;               ///< Digital channel array

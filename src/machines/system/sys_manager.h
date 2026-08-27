@@ -94,7 +94,7 @@ struct SysResult {
  *
  * @return SysResult with `failsafeActive` and `vbatChanged` flags.
  *         Caller is responsible for battery-channel writes
- *         (`DigitalComBusID::BATTERY_LOW`, `combus_set_battlow`) and the
+ *         (`DigitalComBusID::FAILSAFE_VBAT`, written by `vbat_update()`) and the
  *         battery-triggered runlevel transition using `vbatChanged`.
  */
 SysResult sys_manager_update(ComBus& bus);

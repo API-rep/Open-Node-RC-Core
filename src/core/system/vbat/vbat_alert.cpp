@@ -3,12 +3,12 @@
  * @brief Battery low-voltage alert — implementation.
  *
  * @details Triggers compile-flag gated reactions when battery is low.
- *   The `comBus.batteryIsLow` flag is the universal pivot — written by
- *   `vbat_update()` from local sensing (HAS_VBAT_SENSING) or received from
- *   a ComBus RX frame.
+ *   The `DigitalComBusID::FAILSAFE_VBAT` ComBus channel is the universal
+ *   pivot — written by `vbat_update()` from local sensing (HAS_VBAT_SENSING)
+ *   or received from a ComBus RX frame.
  *
  *   VBAT_ALERT_BEEP  — boot beep via Tone32.
- *   VBAT_ALERT_SOUND — (reserved — consumer reads comBus.batteryIsLow directly).
+ *   VBAT_ALERT_SOUND — (reserved — consumer reads FAILSAFE_VBAT directly).
  *   VBAT_ALERT_LIGHT — (reserved — reaction wired by consumer).
  *
  *   No dependency on app-specific headers.
