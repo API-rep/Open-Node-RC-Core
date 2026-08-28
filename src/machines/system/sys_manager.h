@@ -69,15 +69,18 @@
  *   physical input source refreshed the bus this cycle). Kept temporarily
  *   for backward compatibility with the legacy reaction path. See the
  *   file-level deprecation note.
+ *
+ *   `vbatChanged` was removed in A16.4 — it had zero consumers (the Failsafe
+ *   chain re-evaluates every cycle and consumers read
+ *   `comBus.digitalBus[DigitalComBusID::FAILSAFE_VBAT]` directly when they
+ *   need a transition edge).
  */
 struct SysResult {
     bool failsafeActive;  ///< true = no active input source detected this cycle.
-                          ///<  @deprecated Kept temporarily for backward compatibility.
-                          ///<  Migrate to comBus.digitalBus[DigitalComBusID::FAILSAFE]
-                          ///<  once the reaction chain (WIP §12.9 / §12.12) is validated.
-    bool vbatChanged;     ///< true = at least one vbat channel changed state
-                          ///<  @deprecated Hard-wired to false since A16.2 — the
-                          ///<  Failsafe chain re-evaluates every cycle.
+                          ///<  @deprecated Open-drain invariant — reads of the
+                          ///<  open-drain state should migrate to
+                          ///<  `!bus.isDrived` directly (the legacy accessor
+                          ///<  here is only kept for `main.cpp`).
 };
 
 
@@ -95,11 +98,12 @@ struct SysResult {
  *   3. `vbat_update()` — battery sensing + re-arm of `FAILSAFE_VBAT`.
  *   4. `failsafe_update(bus)` — runs the FAILSAFE chain, publishes
  *      `DigitalComBusID::FAILSAFE` on the bus.
- *   5. Returns `SysResult { failsafeActive, vbatChanged }`.
+ *   5. Returns `SysResult { failsafeActive }`.
  *
- * @return SysResult with `failsafeActive` and `vbatChanged` flags.
+ * @return SysResult with the `failsafeActive` (open-drain) flag.
  *         Consumers should also read `comBus.digitalBus[DigitalComBusID::FAILSAFE]`
- *         for the aggregated Failsafe state.
+ *         for the aggregated Failsafe state, and
+ *         `comBus.digitalBus[DigitalComBusID::FAILSAFE_VBAT]` for battery edge.
  */
 SysResult sys_manager_update(ComBus& bus);
 

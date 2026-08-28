@@ -38,10 +38,9 @@ SysResult sys_manager_update(ComBus& bus) {
       // the new aggregated `DigitalComBusID::FAILSAFE` (Failsafe chain output).
       // Both will coexist until the reaction chain migration is complete.
       //
-      // `vbatChanged` is no longer used by main.cpp (the chain re-evaluates every
-      // cycle), so it is hard-wired to false here. The legacy field stays in
-      // SysResult for API compatibility until the migration is complete.
-    return { !bus.isDrived, false };
+      // `vbatChanged` was removed in A16.4 (zero consumers in code, only
+      // referenced in the WIP doc — see sys_manager.h for the rationale).
+    return { !bus.isDrived };
 }
 
 
