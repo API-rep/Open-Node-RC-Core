@@ -15,7 +15,7 @@
 // 1. API IMPLEMENTATION
 // =============================================================================
 
-SysResult sys_manager_update(ComBus& bus) {
+void sys_manager_update(ComBus& bus) {
 
       // --- 1. Open-drain pre-clear ---
     bus.isDrived = false;
@@ -32,15 +32,6 @@ SysResult sys_manager_update(ComBus& bus) {
       // (which has re-armed FAILSAFE_VBAT).  Consumers below may now read
       // comBus.digitalBus[DigitalComBusID::FAILSAFE] for the current cycle.
     failsafe_update(bus);
-
-      // --- 5. Legacy failsafe flag (kept until WIP §12.4/12.9/12.12 are done) ---
-      // `failsafeActive` is the open-drain flag (no input source) — distinct from
-      // the new aggregated `DigitalComBusID::FAILSAFE` (Failsafe chain output).
-      // Both will coexist until the reaction chain migration is complete.
-      //
-      // `vbatChanged` was removed in A16.4 (zero consumers in code, only
-      // referenced in the WIP doc — see sys_manager.h for the rationale).
-    return { !bus.isDrived };
 }
 
 

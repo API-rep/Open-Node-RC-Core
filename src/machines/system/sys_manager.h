@@ -38,20 +38,14 @@
  *   Sound node: call `sys_manager_reset()` before the UART frame interpreter;
  *   `combus_frame_apply()` re-asserts `isDrived` when a valid frame is applied.
  *
- *   **Failsafe deprecation note (WIP §12.4):**
- *   `SysResult::failsafeActive` is the legacy open-drain flag (true when no
- *   physical input source refreshed the bus this cycle). The new Failsafe
- *   module (`src/core/system/failsafe/`, see
- *   `doc/WIP - Failsafe module design.md`) publishes the aggregated
- *   `DigitalComBusID::FAILSAFE` ComBus channel via the processor chain.
- *   Consumers should migrate from `SysResult::failsafeActive` to
- *   `comBus.digitalBus[DigitalComBusID::FAILSAFE]`. Both coexist until the
- *   reaction chain migration is complete (WIP §12.9 / §12.12).
+ *   **Failsafe deprecation note (WIP §12.4 — A16.5):**
+ *   The legacy `SysResult::failsafeActive` accessor has been removed.  The
+ *   open-drain state is now read directly via `!comBus.isDrived` (the
+ *   invariant above guarantees this is the only writer of `false`).
  *
- *   Migration rules in effect until then:
- *     - producers must keep writing `failsafeActive` unchanged;
- *     - consumers must keep reading `failsafeActive` unchanged;
- *     - the legacy reaction path must remain operational.
+ *   The aggregated Failsafe state is published on
+ *   `comBus.digitalBus[DigitalComBusID::FAILSAFE]` by the Failsafe chain
+ *   (see `doc/WIP - Failsafe module design.md`).
  *****************************************************************************/
 #pragma once
 
@@ -59,33 +53,7 @@
 
 
 // =============================================================================
-// 1. RESULT TYPE
-// =============================================================================
-
-/**
- * @brief Return value of sys_manager_update() — system tick summary.
- *
- * @details `failsafeActive` is the legacy open-drain flag (true when no
- *   physical input source refreshed the bus this cycle). Kept temporarily
- *   for backward compatibility with the legacy reaction path. See the
- *   file-level deprecation note.
- *
- *   `vbatChanged` was removed in A16.4 — it had zero consumers (the Failsafe
- *   chain re-evaluates every cycle and consumers read
- *   `comBus.digitalBus[DigitalComBusID::FAILSAFE_VBAT]` directly when they
- *   need a transition edge).
- */
-struct SysResult {
-    bool failsafeActive;  ///< true = no active input source detected this cycle.
-                          ///<  @deprecated Open-drain invariant — reads of the
-                          ///<  open-drain state should migrate to
-                          ///<  `!bus.isDrived` directly (the legacy accessor
-                          ///<  here is only kept for `main.cpp`).
-};
-
-
-// =============================================================================
-// 2. API
+// 1. API
 // =============================================================================
 
 /**
@@ -98,14 +66,13 @@ struct SysResult {
  *   3. `vbat_update()` — battery sensing + re-arm of `FAILSAFE_VBAT`.
  *   4. `failsafe_update(bus)` — runs the FAILSAFE chain, publishes
  *      `DigitalComBusID::FAILSAFE` on the bus.
- *   5. Returns `SysResult { failsafeActive }`.
  *
- * @return SysResult with the `failsafeActive` (open-drain) flag.
- *         Consumers should also read `comBus.digitalBus[DigitalComBusID::FAILSAFE]`
- *         for the aggregated Failsafe state, and
- *         `comBus.digitalBus[DigitalComBusID::FAILSAFE_VBAT]` for battery edge.
+ *   Returns `void` since A16.5 — the legacy `SysResult::failsafeActive`
+ *   accessor has been removed.  Consumers read `!comBus.isDrived` for the
+ *   open-drain state, and `comBus.digitalBus[DigitalComBusID::FAILSAFE]`
+ *   for the aggregated Failsafe state.
  */
-SysResult sys_manager_update(ComBus& bus);
+void sys_manager_update(ComBus& bus);
 
 
 /**

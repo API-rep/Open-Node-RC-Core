@@ -51,9 +51,12 @@ void loop() {
 	// --- Input + battery + failsafe evaluation ---
   static bool s_failsafeWasActive = false;
 
-  SysResult sys = sys_manager_update(comBus);
+  sys_manager_update(comBus);
 
-  if (sys.failsafeActive) {
+    // Open-drain failsafe: no physical input source refreshed the bus this
+    // cycle.  Read directly from `comBus.isDrived` (the open-drain invariant
+    // guarantees `sys_manager_reset()` is the only writer of `false`).
+  if (!comBus.isDrived) {
     if (!s_failsafeWasActive) {
       sys_log_warn("[SYSTEM][SAFE] reason=no_input_source action=force_idle_and_lock\n");
       stopAllDcDrivers(machine);
