@@ -1877,27 +1877,12 @@ perte de la protection SYSTEM-only.**
 **A6 ne touche pas au runtime.** Le runtime continue d'utiliser
 `layer` comme aujourd'hui.
 
-#### Représentation C++ de `direction` (options pour A6)
-
-**Pas de figeage.** Options viables :
-
-| Option | Avantages | Inconvénients |
-|---|---|---|
-| `enum class Direction : uint8_t { None=0, Uplink=1, Downlink=2 }` + bitmask manuel | Simple, pas de dépendance | Pas d'opérateurs bitwise natifs |
-| `enum class Direction : uint8_t { None=0, Uplink=1, Downlink=2, Both=Uplink\|Downlink }` + `operator\|`, `operator&` | Bitwise natif, expressif | `Both` doit être `Uplink\|Downlink` (3), pas 0 |
-| Type dédié encapsulant le bitmask (`struct DirectionBits { uint8_t bits; }`) | Encapsulation, pas d'ambiguïté | Verbosité |
-| `std::bitset<2>` | Standard, opérateurs intégrés | Overhead mémoire, pas de `enum class` |
-
 **Contraintes pour A6** :
 - doit représenter `{uplink}`, `{downlink}`, `{uplink, downlink}`,
   `{}` (4 états) ;
 - doit être sérialisable pour debug/log ;
 - doit être comparable (égalité, sous-ensemble) ;
 - doit tenir sur 1 octet (cohérent avec `ChanLayer`).
-
-**Recommandation (non figée)** : `enum class Direction : uint8_t`
-avec `operator|`, `operator&`, `operator~`, et `Both = Uplink |
-Downlink`. Simple, expressif, 1 octet.
 
 #### Conclusion
 
@@ -2400,27 +2385,12 @@ perte de la protection SYSTEM-only.**
 **A6 ne touche pas au runtime.** Le runtime continue d'utiliser
 `layer` comme aujourd'hui.
 
-#### Représentation C++ de `direction` (options pour A6)
-
-**Pas de figeage.** Options viables :
-
-| Option | Avantages | Inconvénients |
-|---|---|---|
-| `enum class Direction : uint8_t { None=0, Uplink=1, Downlink=2 }` + bitmask manuel | Simple, pas de dépendance | Pas d'opérateurs bitwise natifs |
-| `enum class Direction : uint8_t { None=0, Uplink=1, Downlink=2, Both=Uplink\|Downlink }` + `operator\|`, `operator&` | Bitwise natif, expressif | `Both` doit être `Uplink\|Downlink` (3), pas 0 |
-| Type dédié encapsulant le bitmask (`struct DirectionBits { uint8_t bits; }`) | Encapsulation, pas d'ambiguïté | Verbosité |
-| `std::bitset<2>` | Standard, opérateurs intégrés | Overhead mémoire, pas de `enum class` |
-
 **Contraintes pour A6** :
 - doit représenter `{uplink}`, `{downlink}`, `{uplink, downlink}`,
   `{}` (4 états) ;
 - doit être sérialisable pour debug/log ;
 - doit être comparable (égalité, sous-ensemble) ;
 - doit tenir sur 1 octet (cohérent avec `ChanLayer`).
-
-**Recommandation (non figée)** : `enum class Direction : uint8_t`
-avec `operator|`, `operator&`, `operator~`, et `Both = Uplink |
-Downlink`. Simple, expressif, 1 octet.
 
 #### Conclusion
 

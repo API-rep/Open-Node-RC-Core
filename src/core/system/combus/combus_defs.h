@@ -99,18 +99,6 @@ enum class Direction : uint8_t {
     Both     = 3
 };
 
-static constexpr Direction operator|(Direction a, Direction b) {
-    return static_cast<Direction>(static_cast<uint8_t>(a) | static_cast<uint8_t>(b));
-}
-
-static constexpr Direction operator&(Direction a, Direction b) {
-    return static_cast<Direction>(static_cast<uint8_t>(a) & static_cast<uint8_t>(b));
-}
-
-static constexpr Direction operator~(Direction a) {
-    return static_cast<Direction>(~static_cast<uint8_t>(a) & 0x03u);
-}
-
 
 // =============================================================================
 // CHANNEL STRUCTS
