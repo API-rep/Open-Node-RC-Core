@@ -1,0 +1,14 @@
+# steering_bus.cb — Main steering bus
+#
+# - Written by inputs modules.
+#
+
+channels:
+
+- id: STEERING_BUS
+  infoName: "Steering"
+  type: analog
+  value: CbusNeutral
+  scope: REMOTE
+  theme: core
+  direction: downlink

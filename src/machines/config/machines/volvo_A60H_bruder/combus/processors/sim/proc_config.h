@@ -16,8 +16,8 @@
  *                                  -> GEAR
  *                    gear-inv-ratio converts wheel_speed to engine_rpm and
  *                    writes it to ESC_RPM_BUS (sound node reads engine RPM).
- *     SIM_STEERING : STEERING_BUS -> [bypass, ramp]  -> STEERING_RAMPED_BUS
- *     SIM_DUMP     : DUMP_BUS     -> [bypass, ramp]  -> DUMP_RAMPED_BUS
+ *     SIM_STEERING : STEERING_BUS -> [bypass, ramp]  -> STEERING_BUS
+ *     SIM_DUMP     : DUMP_BUS     -> [bypass, ramp]  -> DUMP_BUS
  *
  *   SUBGEAR_BUS is written by INPUT chain (cb_btn procs) — see input_proc_config.h.
  *******************************************************************************
@@ -43,8 +43,8 @@ enum SimCh {
     SIM_THROTTLE = 0,  ///< THROTTLE_BUS -> [center+abs+scale]           -> ESC_RPM_BUS (wheel_speed)
     SIM_TRACTION,      ///< ESC_RPM_BUS  -> [upshift-damp, subgear-cap, gear-dir] -> ESC_SPEED_BUS
     SIM_GEAR,          ///< ESC_RPM_BUS  -> [gear-inv-ratio, gear-fsm, gear-ramp] -> GEAR; side-effect: engine_rpm -> ESC_RPM_BUS
-    SIM_STEERING,      ///< STEERING_BUS -> [bypass + ramp]          -> STEERING_RAMPED_BUS
-    SIM_DUMP,          ///< DUMP_BUS     -> [bypass + ramp]          -> DUMP_RAMPED_BUS
+    SIM_STEERING,      ///< STEERING_BUS -> [bypass + ramp]          -> STEERING_BUS
+    SIM_DUMP,          ///< DUMP_BUS     -> [bypass + ramp]          -> DUMP_BUS
     SIM_CH_COUNT       ///< Sentinel -- number of CbChain entries.
 };
 

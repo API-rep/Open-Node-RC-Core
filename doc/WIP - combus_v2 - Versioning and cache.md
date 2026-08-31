@@ -249,5 +249,123 @@ consignées dans la backlog.  Aucune des critiques R1 ne remet en
 cause la régression P2 elle-même ni son contenu fonctionnel
 (`s_contractValidated` + lifecycle + skip-compare + 4 tests Group C).
 
+---
+
+## 7. Contrat de cycle ComBus
+
+> **Statut** : spécification du contrat désormais figé (entrée
+> ajoutée le 2026-08-29, snapshot = `failsafe-module` ~84a7403).
+> Cette section est la **référence canonique** du contrat de cycle
+> ComBus — toutes les implémentations RX/TX (côté `combus-frame-handshake`
+> comme côté `failsafe-module`) doivent la respecter.
+
+### 7.1 Séquence par cycle
+
+Le cycle ComBus, tel qu'il s'exécute sur chaque board participant,
+respecte l'ordre suivant — **invariant structurel**, à ne pas
+réordonner sans rouvrir cette section.
+
+| # | Phase       | Action                                                                              | Symbole      |
+|---|-------------|-------------------------------------------------------------------------------------|--------------|
+| 1 | **RESET**   | Remise à zéro des channels à direction `*_OR` (`UPLINK_OR`, `DOWNLINK_OR`, `BOTH_OR`) | `RST`        |
+| 2 | **INGEST**  | Réception et décodage des trames distantes → écriture via l'accesseur ComBus (`combus_set_digital` / `combus_set_analog`) | `RX`         |
+| 3 | **LOCAL**   | Acquisition des inputs locaux → écriture via le même accesseur                      | `LX`         |
+| 4 | (autres)    | Process système (ex. `vbat_update()`, autres sources)                               | `…`          |
+| 5 | **AGGREGATE** | Chaînes de traitement ComBus (ex. chaîne Failsafe) : lecture de l'état **pleinement fusionné** | `AGG`        |
+| 6 | **EMIT**    | Transmission / sortie de l'état final, post-agrégation                              | `TX`         |
+
+### 7.2 Contraintes sur l'ordre
+
+- **RESET avant tout écrivain** (phases 2, 3, 4) : un channel `*_OR`
+  doit être remis à zéro avant la première écriture d'un contributeur
+  du cycle, sans quoi l'OR du cycle courant hériterait de l'état du
+  cycle précédent (last-write-wins accidentel).
+- **AGGREGATE après tous les écrivains du cycle** (phases 2, 3, 4) : la
+  chaîne de lecture (Failsafe, …) doit s'exécuter après la **dernière**
+  écriture, sans quoi elle lirait un état partiellement fusionné.
+- **Ordre INGEST vs LOCAL non contraint** : la fusion `*_OR` étant
+  commutative et idempotente, l'ordre entre les phases 2 et 3 n'a pas
+  d'incidence sur le résultat. Seule compte la présence d'un RESET en
+  tête et d'un AGGREGATE en queue.
+- **EMIT toujours en dernier** : le snapshot TX est lu après AGGREGATE,
+  de sorte que la trame émise reflète l'état pleinement fusionné du
+  cycle.
+
+### 7.3 État d'implémentation actuel (snapshot)
+
+- **`combus_frame_apply` est aujourd'hui une coquille vide** : la
+  fonction est déclarée et définie dans
+  `src/core/system/combus/frame/combus_frame.{h,cpp}`, mais elle
+  n'est **jamais appelée** dans le code de prod (vérifié par `git
+  grep combus_frame_apply src/` — seuls les tests dans
+  `test/test_combus_loopback/` l'utilisent, et le décodage réel RX
+  passe par `combus_rx_update()` →
+  `src/core/system/combus/protocol/combus_rx.cpp::tryDecode()`, pas
+  par `combus_frame_apply`).
+- **Le framing réel est dans `protocol/combus_rx.cpp` /
+  `protocol/combus_tx.cpp`**, pas dans `frame/combus_frame.cpp`. Le
+  fichier `frame/` expose le codec (encode/decode/apply), mais le
+  pipeline runtime est porté par `protocol/` qui ne passe pas (encore)
+  par l'accesseur layer-checké `combus_set_*()` lors de l'apply
+  trame — voir item R7.1 ci-dessous.
+
+### 7.4 Items de roadmap ouverts
+
+#### R7.1 — Repurposer `combus_frame_apply` comme point de traduction unique
+
+**Cible** : faire de `combus_frame_apply()` l'**unique** point par
+lequel une trame décodée écrit dans le ComBus local. Remplacer tout
+accès direct au champ `.value` (ex. `bus.digitalBus[i].value = ...`)
+dans `combus_rx.cpp` (et tout autre site d'apply trame à venir) par
+un appel à `combus_set_digital()` / `combus_set_analog()`.
+
+**Condition de succès** : `git grep "digitalBus\[.*\]\.value\s*=" src/core/system/combus/protocol/` ne retourne **aucun** résultat
+(modulo les commentaires). L'audit détaillé de
+`combus_rx.cpp`/`combus_tx.cpp` est en attente — voir R7.3.
+
+**Pré-requis** : que l'accesseur `combus_set_*` soit lui-même
+layer-checké ET (à terme) `*_OR`-aware. Aujourd'hui seul le
+layer-check est en place.
+
+**Statut** : ❌ non démarré.
+
+#### R7.2 — Emplacement du RESET des channels `*_OR`
+
+**Question ouverte** : le reset des channels `*_OR` (fonction
+générée par le builder ComBus V2, à ajouter — voir 12.11 du WIP
+Failsafe) doit-il être appelé :
+
+- (a) **génériquement** en tête de `sys_manager_update()`
+  (`src/machines/system/sys_manager.cpp`) — garantit un seul point
+  d'entrée pour tous les cycles machine ;
+- (b) **directement intégré** dans l'update de `combus_rx.cpp` — plus
+  local mais couple le reset au câblage RX.
+
+**Les deux options sont considérées valides.** Décision à trancher
+au moment de l'implémentation de cette étape, en arbitrant entre
+séparation des concerns (a) et localité du reset (b). Indiquer le
+choix retenu dans le commit d'implémentation et propager à cette
+section.
+
+**Statut** : 🟡 décision ouverte.
+
+#### R7.3 — Audit des accès directs au champ `.value` dans `protocol/`
+
+**Cible** : confirmer que `combus_rx.cpp` et `combus_tx.cpp`
+passent bien par l'accesseur layer-checké `combus_set_*()` (et non
+par un accès direct `bus.digitalBus[i].value = ...` ou
+`bus.analogBus[i].value = ...`) lors de toute écriture. Condition
+**nécessaire** pour que la fusion `*_OR` fonctionne côté
+inter-board / remote (sans cela, une écriture locale pourrait
+écraser une fusion `_OR` attendue, ou inversement).
+
+**Méthode** : `git grep -nE "digitalBus\[.+\]\.value\s*=" src/core/system/combus/protocol/` et
+`git grep -nE "analogBus\[.+\]\.value\s*=" src/core/system/combus/protocol/`. Tout hit
+doit être soit converti en `combus_set_*()`, soit explicitement
+justifié dans un commentaire adjacent (cas légitime = stub / test
+unitaire hors prod).
+
+**Statut** : ❌ non démarré.
+
 
 

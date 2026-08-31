@@ -15,6 +15,7 @@
 #include <core/system/vbat/vbat_sense.h>
 
 #include <machines/system/sys_manager.h>
+#include <combus_remote_ids.h>   // AnalogComBusRemoteID / DigitalComBusRemoteID (Phase 4)
 
 
 /**
@@ -50,9 +51,12 @@ void loop() {
 	// --- Input + battery + failsafe evaluation ---
   static bool s_failsafeWasActive = false;
 
-  SysResult sys = sys_manager_update(comBus);
+  sys_manager_update(comBus);
 
-  if (sys.failsafeActive) {
+    // Open-drain failsafe: no physical input source refreshed the bus this
+    // cycle.  Read directly from `comBus.isDrived` (the open-drain invariant
+    // guarantees `sys_manager_reset()` is the only writer of `false`).
+  if (!comBus.isDrived) {
     if (!s_failsafeWasActive) {
       sys_log_warn("[SYSTEM][SAFE] reason=no_input_source action=force_idle_and_lock\n");
       stopAllDcDrivers(machine);
@@ -150,12 +154,19 @@ void loop() {
         // --- 0.5. Idle timeout: no stick/button input for kEngineOffTimeoutMs → IDLE ---
       {
         const int32_t kIdleBand = static_cast<int32_t>(CbusNeutral) / 20;  // ±5 % threshold
+        // Phase 4 (A14) + Phase 5 (A15): each TYPE has its own 0-based
+        // counter, so CH_COUNT is the exact count per type — no
+        // subtraction needed.
+        constexpr uint8_t kRemoteAnalogCount =
+            static_cast<uint8_t>(AnalogComBusRemoteID::CH_COUNT);
+        constexpr uint8_t kRemoteDigitalCount =
+            static_cast<uint8_t>(DigitalComBusRemoteID::CH_COUNT);
         bool active = false;
-        for (uint8_t i = 0; i < static_cast<uint8_t>(AnalogComBusID::WIRE_END) && !active; i++) {
+        for (uint8_t i = 0; i < kRemoteAnalogCount && !active; i++) {
             const int32_t off = static_cast<int32_t>(comBus.analogBus[i].value) - static_cast<int32_t>(CbusNeutral);
             if (off > kIdleBand || off < -kIdleBand) active = true;
         }
-        for (uint8_t i = 0; i < static_cast<uint8_t>(DigitalComBusID::WIRE_END) && !active; i++) {
+        for (uint8_t i = 0; i < kRemoteDigitalCount && !active; i++) {
             if (comBus.digitalBus[i].value) active = true;
         }
         if (active) s_lastActivityMs = millis();
@@ -216,22 +227,21 @@ void loop() {
   }
   
 // =============================================================================
-// 3. SYSTEM TASKS (Battery)
+// 3. SYSTEM TASKS (Failsafe reaction + output dispatch)
 // =============================================================================
 
-	// --- 1. Battery low-state transition ---
-  if (sys.vbatChanged) {
-    for (uint8_t i = 0; i < vbat_channel_count(); i++) {
-      if (vbat_is_low(i)) { 
-        combus_set_battlow(comBus, true);
-        combus_set_digital(comBus, DigitalComBusID::BATTERY_LOW, true);
-        break;
-      }
+	// --- 1. Failsafe reaction (TRANSITIONAL) ---
+  // Reads the aggregated `DigitalComBusID::FAILSAFE` ComBus channel
+  // (published by failsafe_update() in sys_manager_update()) and forces
+  // RunLevel::SLEEPING when high.  This is a transitory fallback — the
+  // proper reaction will be a `proc_failsafe_reaction` processor
+  // registered in the machine chain (see doc/WIP - Failsafe module
+  // design.md §9). To be removed when that proc is in place.
+  if (comBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::FAILSAFE)].value) {
+    if (comBus.runLevel != RunLevel::SLEEPING) {
+      combus_set_runlevel(comBus, RunLevel::SLEEPING);
+      sys_log_warn("[SYSTEM][SAFE] reason=failsafe_aggregator action=enter_SLEEPING\n");
     }
-
-    if (comBus.batteryIsLow) {
-        combus_set_runlevel(comBus, RunLevel::SLEEPING);
-      sys_log_warn("[SYSTEM][SAFE] reason=low_battery action=enter_SLEEPING\n");}
   }
 
 	// --- 2. Output dispatch (sound TX, …) ---

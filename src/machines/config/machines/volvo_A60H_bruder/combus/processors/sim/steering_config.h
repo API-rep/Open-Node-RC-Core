@@ -7,9 +7,9 @@
  *     CbRampCfg, CbRampState, CbProc, cb_sym_ramp_fn, cb_bypass_fn,
  *     DigitalComBusID, CbusNeutral, pctToCbus.
  *
- *   Chain function: STEERING_BUS → [bypass?] → ramp → STEERING_RAMPED_BUS.
+ *   Chain function: STEERING_BUS → [bypass?] → ramp → STEERING_BUS.
  *   In:  STEERING_BUS (raw stick), DIRECT_DRIVE.
- *   Out: STEERING_RAMPED_BUS (ramped steering for servo).
+ *   Out: STEERING_BUS (ramped steering for servo).
  *
  *   bypass: DIRECT_DRIVE HIGH → claim; raw steering skips ramp (direct servo control).
  *   ramp: progressive start (5 %/tick at 20 ms), instant stop (brakeSteps = CbusNeutral).

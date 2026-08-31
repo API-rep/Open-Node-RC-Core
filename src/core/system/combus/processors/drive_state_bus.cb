@@ -1,0 +1,26 @@
+# drive_state_bus.cb — Drive state (FWD/REV) side-effect channel (REMOTE)
+#
+# - DRIVE_STATE_BUS: sole writer is the SIM_THROTTLE chain (dir proc).
+#   Encodes the drive direction (FWD/REV) as a signed value derived from
+#   the ramped throttle sign. Read by SIM_GEAR (gear-fsm), SIM_TRACTION
+#   (gear-dir), INPUT_SUBGEAR (neutral-gate), INPUT_DIRECT_DRIVE (neutral-gate).
+#
+# Theme: traction / drive_state.
+# TEMPORARY LOCATION: this file lives at the root of src/core/system/combus/processors
+# because DRIVE_STATE_BUS is a side-effect of the throttle processor chain.
+# Final destination: a "package" that bundles processor + combus together
+# (created on-the-fly by the combus_builder).
+
+channels:
+
+# -----------------------------------------------------------------------------
+# ANALOG — drive state (FWD/REV)
+# -----------------------------------------------------------------------------
+
+- id: DRIVE_STATE_BUS
+  infoName: "Drive state (FWD/REV, side-effect of throttle dir proc)"
+  type: analog
+  value: CbusNeutral
+  theme: core
+  scope: REMOTE
+  direction: none

@@ -1,0 +1,34 @@
+# vbat_failsafe.cb — VBAT-as-Failsafe-contributor
+#
+# This file declares the VBAT Failsafe contributor channel. It is the
+# single, authoritative battery-failure signal consumed by the
+# FAILSAFE aggregator (declared in src/core/system/failsafe/failsafe.cb).
+#
+# Notes:
+# - LOCAL scope: the contributor is shared by all boards composing the
+#   local node. Any board performing battery sensing (sensing-board,
+#   mainboard, …) may publish the local "battery healthy" state. Other
+#   boards (sound node, dashboard) consume it through the same LOCAL bus.
+# - Direction [both]: uplink + downlink — any board may write (re-arm
+#   each cycle) or read (react) the channel.
+# - value: high = fail-safe by default. The contributor reports fault
+#   until proven healthy each cycle (see WIP - Failsafe module design.md §5).
+# - requires: [HAS_FAILSAFE, HAS_VBAT_FAILSAFE] — the contributor is
+#   only emitted when both flags are set (no aggregator → no contributor).
+# - The legacy BATTERY_LOW channel and comBus.batteryIsLow struct field
+#   have been removed. Consumers must migrate to FAILSAFE_VBAT (or its
+#   derived local signal) directly.
+
+
+channels:
+  - id: FAILSAFE_VBAT
+    infoName: "VBAT failsafe contributor"
+    type: digital
+    scope: LOCAL
+    theme: failsafe
+    direction: both
+    value: high    # default to fault state: contributor reports fault until
+                   # proven healthy. Failsafe-by-default contract.
+    requires:
+      - HAS_FAILSAFE
+      - HAS_VBAT_FAILSAFE

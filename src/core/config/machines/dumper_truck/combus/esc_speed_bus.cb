@@ -1,0 +1,14 @@
+# esc_speed_bus.cb — ESC speed (inertia-smoothed, bipolar)
+#
+# - Written by the ESC_SPEED_BUS processing chain (by default)
+
+
+channels:
+
+- id: ESC_SPEED_BUS
+  infoName: "ESC speed"
+  type: analog
+  value: CbusNeutral
+  scope: REMOTE
+  theme: core
+  direction: none

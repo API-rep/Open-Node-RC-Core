@@ -47,7 +47,7 @@
       .DevType    = DcDevType::DC_MOTOR,
       .usage      = DevUsage::STEER_MOTOR,
       .signal     = DcDrvSignal::PWM_TWO_WAY_NEUTRAL_CENTER,
-      .comChannel = AnalogComBusID::STEERING_RAMPED_BUS,  ///< reads inertia-smoothed position from sim_ramp
+      .comChannel = AnalogComBusID::STEERING_BUS,  ///< reads inertia-smoothed position from sim_ramp
       .pwmFreq    = M_DEF_PWM_FREQ,
       .polInv     = true
     },
@@ -108,7 +108,7 @@
       .ID         = DUMP_ACTUATOR,
       .infoName   = "dump actuators",         ///< two actuators wired in //
       .drvPort    = &drvPortArray[DRV_PORT_2A],
-      .comChannel = AnalogComBusID::DUMP_RAMPED_BUS,  ///< reads inertia-smoothed position from sim_ramp
+      .comChannel = AnalogComBusID::DUMP_BUS,  ///< reads inertia-smoothed position from sim_ramp
       .parentID   = STEERING
     },
   };

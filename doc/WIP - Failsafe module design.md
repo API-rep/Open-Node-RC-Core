@@ -972,3 +972,65 @@ pio test -e test_combus_loopback
 8. **Ordre des sources** : toute nouvelle chaîne doit finir avant `failsafe_update()`.
 9. **Staleness** : chaque contributeur doit avoir un test où son propriétaire cesse de réarmer son `FAILSAFE_X`.
 10. **Premier cycle** : pas de grace period ; la sûreté repose sur l'ordre d'exécution et le premier passage des sources avant la première évaluation.
+
+---
+
+## 12.18 — Journal d'étapes (validation)
+
+Cette section consigne la validation de chaque étape une fois terminée.
+Elle est ajoutée au WIP pour matérialiser les étapes "validation pure"
+(aucun changement de code) dans l'historique git.
+
+### Étape 3 — Façade `failsafe_access.h` (validation, sans modification)
+
+**Date** : 8/12/2026
+**Branche** : `failsafe-module`
+**Commit parent** : `3d6e62d` (étape 2)
+
+**Conclusion** : `failsafe_access.h` créé à l'étape 1 satisfait déjà le
+contrat. Aucune modification du code n'est nécessaire.
+
+Contrat validé :
+
+```cpp
+inline bool failsafe_is_active() { return failsafeBus.active; }
+```
+
+Vérifications effectuées :
+
+- Compilation `volvo_A60H_bruder` SUCCESS (1 139 029 octets Flash,
+  45 748 octets RAM).
+- Smoke-test temporaire `_smoke_access.cpp` compilé sans erreur ni
+  warning. Le fichier a été supprimé après validation.
+- Aucune dépendance vers `machines/`.
+- Aucun header lourd non justifié (`failsafe.h` inclut uniquement
+  `<stdint.h>`).
+
+Diff vs étape 2 : 0 octet, 0 fichier modifié.
+
+
+TMP
+
+Étape	Action A16.5	Risque	Commit attendu
+D1	Réécrire doc/WIP - Failsafe module design.md §6, §7, §12.1-12.3, §12.14 (aligner sur l'architecture actuelle)
+12.5	Hors scope — TODO ajoutée dans WIP	—	—
+12.7	Hors scope	—	—
+12.9 partiel	Créer cb_set_runlevel (générique, proc->cfg->target). PAS de câblage dans failsafe_chain.	Faible — code isolé, testé au build.	A16.5
+12.10	Hors scope	—	—
+12.11	Audit seulement (lecture combus_struct.h + combus_set_digital). Proposition de modèle, pas de code.	Aucun (lecture seule).	(rapport)
+12.12	Fusionné avec D2 (suppression de l'inférence Failsafe depuis isDrived, pas suppression d'isDrived).	—	A16.5
+12.13	Dépend 12.11
+
+
+1. Oui
+2. Oui si plus utilisé et remplacé par la nouvelle implémentation failsafe. Si 
+3. Topo :
+- 12.5 - bus.isDrived : Déprécié pour moi ... Il s'agit d'une dette de l'ancien enbrillon failsafe. Je supprimerai au profit de combus failsafe dédié aux inputs. Donc, pour ce point, analyse le débranchement + supression du paramètre (structure combus) et supression de l'ancien code failsafe qui s'y raporte. Les modules reprendront cette charge lors de leur rework (dès qu'on en a fini avec failsafe)
+- 12.7 - sera de la responsabilité du module link. Etape à ignorer.
+- 12.9 - Réaction à failsafe : Je pencherai aussi pour un processeur combus, en fin de chaine. Genre "set runlevel". J'aimerai juste ne pas figer le runlevel pour toutes les machines. Un runlevel failsafe branché quelquepart dans la config machine (runlevel failsafe = runlevel iddle) me semble le plus propre. Les runlevels sont de toute façon défini dans le main, côté machine.
+12.10 : hors scope. On s'en occupera plus tard.
+12.11 :  Le point soulève une notion assez importante du failsafe, et des canneaux combus en général. "Qui a la main dessus?" (propriétaire) et "comment fusionner les données" (encas d'input par exemple). Un ownership a déjà été tenté, sans succes, et le layering REMOTE/LOCAL/SYSTEM s'avère le plus efficace. Pour continuer dans ce sens, j'ajouterai don une petite surcouche au paramètre de direction des cobus. Ex : un "both_or" permettrait d'indiquer que si un des deux combus à fusionner lors de l'input est true, écrire true. C'est fort semblable au cb_proc_or créé tout à l'heure, pais pour la gestion de l'import des combus par input module.
+12.12 - Suppression de l'ancien chemin -> se raporter au point 12.5 ci haut. Donc oui, avec adaptation future des modules d'input au mécanisme de failsafe
+12.13 - Publication TX de `COMBUS_FLAG_FAILSAFE` -> résolu par le point 12.11. FAILSAFE sera LOCAL, de direction "booth_or"
+
+Je t'invite à analyser ces propositions, faire une petite audite de leu mise en place et me proposer ton champs d'action avant toute modif.

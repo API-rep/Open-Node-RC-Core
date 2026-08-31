@@ -18,6 +18,7 @@
 #include <core/system/vbat/vbat_sense.h>
 #include <struct/simulation_struct.h>   // DriveStateBus
 #include <machines/config/config.h>  // Combus definitions
+#include <combus_remote_ids.h>   // AnalogComBusRemoteID (Phase 4)
 
 #include <Arduino.h>
 #include <stdio.h>
@@ -123,7 +124,8 @@ static void render_overview() {
 
 		// --- 3. Channel summary (wire channels only: 0..WIRE_END-1) ---
 	dMid();
-	const uint8_t wireEnd = static_cast<uint8_t>(AnalogComBusID::WIRE_END);
+	// Phase 4 (A14): wire dimension derived from Remote view enum directly.
+	const uint8_t wireEnd = static_cast<uint8_t>(AnalogComBusRemoteID::CH_COUNT);
 	for (uint8_t i = 0; i < wireEnd && i < s_analogCh; i++) {
 		uint16_t    raw  = s_bus->analogBus[i].value;
 		int16_t     pct  = dashPctBipolar(raw, s_bus->analogBusMaxVal);

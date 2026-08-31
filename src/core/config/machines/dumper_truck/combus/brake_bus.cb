@@ -1,0 +1,19 @@
+# brake_bus.cb --- Brake pedal input (L2)
+# A9.8: REMOTE, analog, downlink.
+# 
+# - Written by the input module (PS4 controller, L2 trigger).
+# - Read by sim_brake (throttle chain), sound_module (legacy), dashboard (debug).
+# - Range: 0..CbusMaxVal (unipolar magnitude).
+# - Failsafe enforced by sys_manager failsafe_fn.
+# 
+# Theme: core (per machine sensor/generic signal, not module-attributed).
+# The .cb is documentation-only at this stage; the legacy .inc still holds
+# the BRAKE_BUS enum entry. Migration deferred to a later step.
+
+channels:
+- id: BRAKE_BUS
+  infoName: "Brake pedal"
+  type: analog
+  scope: REMOTE
+  theme: core
+  direction: downlink

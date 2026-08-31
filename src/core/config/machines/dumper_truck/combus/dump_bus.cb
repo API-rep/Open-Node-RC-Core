@@ -1,0 +1,14 @@
+# dump_bus.cb — Main dump bus
+#
+# - Written by an input modules.
+
+channels:
+
+- id: DUMP_BUS
+  infoName: "Dump"
+  type: analog
+  value: CbusNeutral
+  scope: REMOTE
+  theme: core
+  direction: downlink
+

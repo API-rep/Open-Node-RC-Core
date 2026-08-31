@@ -1,0 +1,14 @@
+# throttle_bus.cb — Main throttle bus (conditioned)
+#
+# - Written by input modules.
+# - Map by default to ESC_SPEED_BUS
+
+channels:
+
+- id: THROTTLE_BUS
+  infoName: "Throttle"
+  type: analog
+  value: CbusNeutral
+  scope: REMOTE
+  theme: core
+  direction: downlink
