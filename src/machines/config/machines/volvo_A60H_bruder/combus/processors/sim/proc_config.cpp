@@ -35,7 +35,7 @@
 
 #include <machines/config/machines/volvo_A60H_bruder/combus/combus.h>  // AnalogComBusID, DigitalComBusID, comBus
 #include <core/config/hw/simulation_presets.h>    // kVolvoD16J_steps, kGearShift_VolvoD16J
-#include <struct/combus_struct.h>                 // ChanLayer
+#include <core/system/combus/combus_defs.h>                 // ChanLayer
 #include <core/system/combus/combus_res.h>        // CbusNeutral, pctToCbus
 #include <core/system/combus/processors/motion/cb_ramp.h>  // cb_sym_ramp_fn, CbRampCfg, CbRampState
 #include <core/system/combus/processors/base/cb_bypass.h>  // cb_bypass_fn

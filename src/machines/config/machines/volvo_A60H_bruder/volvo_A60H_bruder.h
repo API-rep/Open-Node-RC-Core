@@ -27,7 +27,7 @@
 #if defined (MACHINE_VOLVO_A60_H_BRUDER)
 
   /// Machine class selector — activates the MACHINE_TYPE_* dispatch branch used
-  /// by the type-level ComBus configuration (see machine_type_combus_ids.h).
+  /// by the type-level ComBus configuration (see machine_type.h).
   #define MACHINE_TYPE_DUMPER_TRUCK
 
 

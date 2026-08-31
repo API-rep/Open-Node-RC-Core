@@ -45,7 +45,8 @@
 #include <stdbool.h>
 
 #include <core/system/hw/node_com.h>
-#include <struct/outputs_struct.h>
+#include <core/system/combus/frame/combus_frame_defs.h>
+#include <core/system/combus/frame/combus_handshake.h>   // CombusHandshakeContext (P3)
 
 
 // =============================================================================
@@ -72,12 +73,13 @@
  * @param analogBuf  Caller-owned backing buffer for analog channels (RX side).
  * @param digitalBuf Caller-owned backing buffer for digital channels (RX side).
  */
-void combus_protocol_init( NodeCom*        com,
-                           ComBusFrameCfg  txCfg,
-                           uint32_t        txHz,
-                           ComBusFrameCfg  rxCfg,
-                           uint16_t*       analogBuf,
-                           bool*           digitalBuf );
+void combus_protocol_init( NodeCom*               com,
+                           ComBusFrameCfg         txCfg,
+                           uint32_t               txHz,
+                           ComBusFrameCfg         rxCfg,
+                           uint16_t*              analogBuf,
+                           bool*                  digitalBuf,
+                           CombusHandshakeContext* handshakeCtx );
 
 #endif  // COMBUS_UART_TX / COMBUS_UART_RX / COMBUS_UART
 

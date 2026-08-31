@@ -11,7 +11,7 @@
 
 #pragma once
 
-#include <struct/combus_struct.h>   // ComBus
+#include <core/system/combus/combus_defs.h>   // ComBus
 
 /**
  * @brief Map current input device values onto this machine's ComBus channels.

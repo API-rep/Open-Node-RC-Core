@@ -56,7 +56,7 @@ static const char* dCh(DigitalComBusID id)
 		case DigitalComBusID::HORN_BTN:      return "HORN_BTN";
 		case DigitalComBusID::LIGHTS:        return "LIGHTS";
 		case DigitalComBusID::KEY_BTN:       return "KEY_BTN";
-		case DigitalComBusID::BATTERY_LOW:   return "BAT_LOW";
+		case DigitalComBusID::FAILSAFE_VBAT:  return "FS_VBAT";
 		case DigitalComBusID::BRAKING:       return "BRAKING";
 		case DigitalComBusID::DIRECT_DRIVE:     return "DIR_DRV";
 		case DigitalComBusID::DIRECT_DRIVE_BTN: return "DIR_BTN";

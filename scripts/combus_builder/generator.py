@@ -577,7 +577,7 @@ def _render_header(view: View, ctx: BuildContext) -> str:
     body.append("")
     body.append(f"#include \"{view.name}_ids.h\"")
     body.append("")
-    body.append("#include <struct/combus_struct.h>")
+    body.append("#include <core/system/combus/combus_defs.h>")
     body.append("")
     body.append("// =============================================================================")
     body.append("// 1. EXTERN ARRAYS")

@@ -116,14 +116,4 @@ bool combus_set_runlevel(ComBus& bus, RunLevel rl, ChanLayer caller) {
 }
 
 
-bool combus_set_battlow(ComBus& bus, bool val, ChanLayer caller) {
-    if (!_layer_ok(bus.battLowLayer, caller)) {
-        _warn_denied("battLow", 0xFF, caller, bus.battLowLayer);
-        return false;
-    }
-    bus.batteryIsLow = val;
-    return true;
-}
-
-
 // EOF combus_access.cpp

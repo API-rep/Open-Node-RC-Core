@@ -5,7 +5,7 @@
 
 #include "proc_chain.h"
 
-#include <struct/combus_struct.h>              // ComBus
+#include <core/system/combus/combus_defs.h>              // ComBus
 #include <core/system/combus/combus_access.h>  // combus_set_analog, combus_set_digital
 
 

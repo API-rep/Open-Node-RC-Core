@@ -1,28 +1,23 @@
 # vbat_failsafe.cb — VBAT-as-Failsafe-contributor
 #
-# This file declares the ComBus channels related to the vbat module:
-#   - FAILSAFE_VBAT : the Failsafe contributor (current contract).
-#   - BATTERY_LOW   : DEPRECATED alias kept for the duration of the
-#                     combus_builder v2 migration. Will be removed once
-#                     the consumers (main.cpp, sound_module/main.cpp,
-#                     sys_manager.h, dashboard_simulation.cpp) are
-#                     migrated to FAILSAFE_VBAT.
-#
-# Legacy equivalent: src/core/config/vbat/combus_ids_digital_vbat_failsafe.inc
-# FAILSAFE_VBAT,    ///< VBAT-as-Failsafe-contributor test channel — wired only when HAS_VBAT_FAILSAFE is set.
+# This file declares the VBAT Failsafe contributor channel. It is the
+# single, authoritative battery-failure signal consumed by the
+# FAILSAFE aggregator (declared in src/core/system/failsafe/failsafe.cb).
 #
 # Notes:
-# - LOCAL scope is required because both channels are shared by all boards
-#   composing the local node. Battery sensing may be performed by any of
-#   these boards.
-# - The channels are therefore readable and writable on the local wire:
-#   both uplink and downlink are enabled.
-# - Remote feedback, if required, is handled through a dedicated GLOBAL
-#   ComBus definition and is outside the scope of these channels.
-#
-# A6.1 — `direction: [both]` shorthand added (TEMPORARY, pending .inc migration).
-# During A6.1 the legacy .inc channels are not yet migrated, so the runtime
-# writes/reads both ways. To be re-evaluated once .inc migration is complete.
+# - LOCAL scope: the contributor is shared by all boards composing the
+#   local node. Any board performing battery sensing (sensing-board,
+#   mainboard, …) may publish the local "battery healthy" state. Other
+#   boards (sound node, dashboard) consume it through the same LOCAL bus.
+# - Direction [both]: uplink + downlink — any board may write (re-arm
+#   each cycle) or read (react) the channel.
+# - value: high = fail-safe by default. The contributor reports fault
+#   until proven healthy each cycle (see WIP - Failsafe module design.md §5).
+# - requires: [HAS_FAILSAFE, HAS_VBAT_FAILSAFE] — the contributor is
+#   only emitted when both flags are set (no aggregator → no contributor).
+# - The legacy BATTERY_LOW channel and comBus.batteryIsLow struct field
+#   have been removed. Consumers must migrate to FAILSAFE_VBAT (or its
+#   derived local signal) directly.
 
 
 channels:
@@ -36,18 +31,4 @@ channels:
                    # proven healthy. Failsafe-by-default contract.
     requires:
       - HAS_FAILSAFE
-      - HAS_VBAT_FAILSAFE
-
-  - id: BATTERY_LOW
-    infoName: "Battery low flag (DEPRECATED — use FAILSAFE_VBAT)"
-    type: digital
-    scope: LOCAL
-    theme: vbat
-    direction: both
-    value: low     # default: battery healthy. Written by vbat module when
-                   # the cell voltage drops below the configured threshold.
-                   # DEPRECATED: kept here only so the combus_builder v2
-                   # migration compiles. Consumers should migrate to
-                   # FAILSAFE_VBAT and this entry should then be removed.
-    requires:
       - HAS_VBAT_FAILSAFE

@@ -11,7 +11,7 @@
 #include <struct/struct.h>
 #include <defs/defs.h>
 
-#include <core/config/machines/combus_ids_remote.h>  // AnalogComBusRemoteID, DigitalComBusRemoteID
+#include <core/config/machines/machine_type.h>        // dispatches by MACHINE_TYPE_*; pulls combus_remote.h transitively (AnalogComBusRemoteID / DigitalComBusRemoteID)
 #include "inputs/inputs.h"
 #include "outputs/outputs.h"
 

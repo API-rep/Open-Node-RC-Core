@@ -25,8 +25,8 @@
 #include <stdbool.h>
 
 #include <core/system/hw/node_com.h>
-#include <struct/combus_struct.h>
-#include <struct/outputs_struct.h>
+#include <core/system/combus/combus_defs.h>
+#include <core/system/combus/frame/combus_frame_defs.h>
 
 
 // =============================================================================
@@ -59,4 +59,29 @@ void combus_tx_init( NodeCom*        nodeCom,
  */
 void combus_tx_update( const ComBus* bus, bool failSafe );
 
+
+
+// =============================================================================
+// 2. PER-LINK HANDSHAKE CONTEXT WIRING (P3)
+// =============================================================================
+
+// Forward declaration — the full definition lives in combus_handshake.h.
+struct CombusHandshakeContext;
+
+/**
+ * @brief Wire the per-link handshake context to the TX module.
+ *
+ * @details P3 — must be called BEFORE `combus_tx_init()` so the burst
+ *   is armed on init.  Typically called from `combus_protocol_init()`
+ *   with the same context as `combus_rx_init()` (shared between TX
+ *   and RX of the same link).
+ *
+ *   Multiple independent ComBus interfaces may coexist; each link has
+ *   its own context.  See CombusHandshakeContext in combus_handshake.h.
+ *
+ * @param ctx  Per-link handshake context (may be null to disable burst).
+ */
+void combus_tx_set_handshake_ctx( CombusHandshakeContext* ctx );
+
 // EOF combus_tx.h
+

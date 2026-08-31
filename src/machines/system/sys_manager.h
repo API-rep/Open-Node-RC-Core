@@ -10,8 +10,11 @@
  *   2. Input acquisition: core `input_refresh()` then machine
  *      `input_update(bus)` — re-asserts `bus.isDrived` when a physical
  *      controller is connected.
- *   3. Battery sensing tick via `vbat_sense_tick()`.
- *   4. Failsafe evaluation: `failsafeActive = !bus.isDrived`.
+ *   3. Battery update via `vbat_update()` — ADC sensing, sliding average,
+ *      low-bat detection, and re-arm of `DigitalComBusID::FAILSAFE_VBAT`.
+ *   4. Failsafe update via `failsafe_update(bus)` — runs the FAILSAFE
+ *      processor chain (reset + contributors), publishes the aggregated
+ *      `DigitalComBusID::FAILSAFE` channel.
  *
  *   **Open-drain invariant:**
  *   - `bus.isDrived = false` is written ONLY by `sys_manager_reset()`.
@@ -34,27 +37,23 @@
  *
  *   Sound node: call `sys_manager_reset()` before the UART frame interpreter;
  *   `combus_frame_apply()` re-asserts `isDrived` when a valid frame is applied.
+ *
+ *   **Failsafe deprecation note (WIP §12.4 — A16.5):**
+ *   The legacy `SysResult::failsafeActive` accessor has been removed.  The
+ *   open-drain state is now read directly via `!comBus.isDrived` (the
+ *   invariant above guarantees this is the only writer of `false`).
+ *
+ *   The aggregated Failsafe state is published on
+ *   `comBus.digitalBus[DigitalComBusID::FAILSAFE]` by the Failsafe chain
+ *   (see `doc/WIP - Failsafe module design.md`).
  *****************************************************************************/
 #pragma once
 
-#include <struct/combus_struct.h>
+#include <core/system/combus/combus_defs.h>
 
 
 // =============================================================================
-// 1. RESULT TYPE
-// =============================================================================
-
-/**
- * @brief Return value of sys_manager_update() — system tick summary.
- */
-struct SysResult {
-    bool failsafeActive;  ///< true = no active input source detected this cycle
-    bool vbatChanged;     ///< true = at least one vbat channel changed state
-};
-
-
-// =============================================================================
-// 2. API
+// 1. API
 // =============================================================================
 
 /**
@@ -64,15 +63,16 @@ struct SysResult {
  *   1. Pre-clear `bus.isDrived` (open-drain reset).
  *   2. `input_refresh()` (core) — physical acquisition.
  *      `input_update(bus)` (machine) — input -> ComBus mapping.
- *   3. `vbat_sense_tick()` — battery ADC read and low-bat detection.
- *   4. Evaluates `failsafeActive = !bus.isDrived`.
+ *   3. `vbat_update()` — battery sensing + re-arm of `FAILSAFE_VBAT`.
+ *   4. `failsafe_update(bus)` — runs the FAILSAFE chain, publishes
+ *      `DigitalComBusID::FAILSAFE` on the bus.
  *
- * @return SysResult with `failsafeActive` and `vbatChanged` flags.
- *         Caller is responsible for battery-channel writes
- *         (`DigitalComBusID::BATTERY_LOW`, `combus_set_battlow`) and the
- *         battery-triggered runlevel transition using `vbatChanged`.
+ *   Returns `void` since A16.5 — the legacy `SysResult::failsafeActive`
+ *   accessor has been removed.  Consumers read `!comBus.isDrived` for the
+ *   open-drain state, and `comBus.digitalBus[DigitalComBusID::FAILSAFE]`
+ *   for the aggregated Failsafe state.
  */
-SysResult sys_manager_update(ComBus& bus);
+void sys_manager_update(ComBus& bus);
 
 
 /**

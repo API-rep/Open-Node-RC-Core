@@ -24,7 +24,7 @@
 #include <optional>
 #include <variant>
 
-#include <struct/combus_struct.h>              // AnalogComBusID, DigitalComBusID (forward), ComBus
+#include <core/system/combus/combus_defs.h>              // AnalogComBusID, DigitalComBusID (forward), ComBus
 #include <struct/combus_proc_struct.h>                  // CbProc, CbChain, CbProcFn
 #include <defs/defs.h>                                         // ChanLayer
 #include <struct/combus/processors/modules/gear_struct.h>      // GearStepCfg, GearShiftProfile, GearFsmState, GearProcCfg (migrated)

@@ -1223,6 +1223,77 @@ Une définition peut éventuellement être bidirectionnelle si elle porte les de
 | `FAILSAFE` (failsafe.cb) | LOCAL | `downlink` | Le core failsafe publie l'état agrégé FAILSAFE en aval vers les consommateurs (machine, sound node, etc.). Pas d'uplink (le core ne consomme pas directement les contributeurs — il passe par l'agrégateur). |
 
 
+#### A2.1 — Variantes `*_OR` (UPLINK_OR, DOWNLINK_OR, BOTH_OR) : fusion logique des contributeurs
+
+> **Statut** : spécification introduite le 2026-08-29 (snapshot
+> `failsafe-module` ~84a7403). Les variantes `*_OR` **ne sont pas
+> implémentées** dans le code C++ à ce jour — voir R7.1 dans
+> `doc/WIP - combus_v2 - Versioning and cache.md` pour la roadmap
+> d'implémentation.
+
+**Sémantique** : les variantes `UPLINK_OR`, `DOWNLINK_OR` et
+`BOTH_OR` ajoutent une politique de **fusion OR logique** à la
+direction wire déjà décrite par `uplink` / `downlink`. Concrètement,
+lorsque plusieurs sources écrivent sur le même channel au cours d'un
+même cycle ComBus, l'accesseur central `combus_set_digital()` (ou
+`combus_set_analog()` pour les magnitudes) combine les contributions
+par `OR` booléen (`slot.value = slot.value || val`) au lieu de
+l'écraser (last-write-wins, comportement actuel).
+
+**Délégation exclusive à l'accesseur** : un module écrivain ne doit
+**jamais** reproduire cette logique lui-même. Si un module veut
+"ajouter" une contribution à un channel `*_OR`, il appelle
+`combus_set_digital()` avec sa valeur ; la fusion est gérée en un
+seul point (l'accesseur) et reste cohérente pour tous les écrivains.
+Toute logique de fusion répliquée localement doit être considérée
+comme un bug.
+
+**Contraintes de validité** :
+
+- **Type digital uniquement** : la sémantique `*_OR` n'a de sens
+  que sur des channels `type: digital` (booléens). Sur un channel
+  `type: analog` (magnitude), un OR bitwise n'a aucune
+  interprétation utile. Le builder doit donc rejeter `*_OR` sur
+  `type: analog` (validation à ajouter au générateur ComBus V2).
+- **Scopes `LOCAL` / `REMOTE` uniquement** : un channel `scope:
+  SYSTEM` n'a par construction qu'un seul écrivain possible (le
+  firmware local) — la fusion `*_OR` n'a pas de sens, on est
+  toujours en last-write-wins effectif. Le builder doit donc
+  rejeter `*_OR` sur `scope: SYSTEM`. Cette restriction est
+  cohérente avec la convention `direction` existante (SYSTEM →
+  direction implicite = none, voir table §1).
+- **Pas de mélange uplink / downlink purs avec `*_OR` sur le même
+  channel** : par exemple, `direction: [uplink, uplink_or]` n'a
+  pas de sens (la fusion OR n'ajoute rien à un canal purement
+  uplink où il n'y a qu'un seul émetteur). Le builder doit
+  normaliser : `direction: [uplink_or]` ≡ `direction: [uplink]`
+  si un seul émetteur est attendu. (Décision à confirmer à
+  l'implémentation.)
+
+**Dépendance au contrat de cycle ComBus** : la fusion `*_OR` n'est
+correcte que si l'ordre du cycle
+`RESET → INGEST → LOCAL → … → AGGREGATE → EMIT` (défini en §7 de
+`doc/WIP - combus_v2 - Versioning and cache.md`) est respecté. En
+particulier, la phase **RESET** doit remettre à zéro les channels
+`*_OR` avant la première écriture du cycle, sans quoi l'OR du
+cycle courant hériterait de l'état du cycle précédent. Voir §7.2
+de ce document pour le détail des contraintes d'ordre. Pas de
+duplication de l'explication ici — renvoi explicite.
+
+**Limite connue et acceptée — retard d'un cycle si INGEST est
+asynchrone** : si l'ingestion distante (`INGEST` = RX combus) est
+déclenchée par interruption plutôt que par appel synchrone dans la
+boucle principale, un retard d'au plus un cycle est possible avant
+qu'une fusion multi-board soit pleinement reflétée localement
+(l'OR du cycle N ne verra pas une écriture IT arrivée après la
+phase INGEST de N, mais bien celle du cycle N+1). Ce comportement
+est documenté comme **acceptable** — pas un bug, pas une dette,
+simplement la conséquence directe du modèle asynchrone. Si une
+garantie stricte de synchronisation devient nécessaire à terme, elle
+devra être obtenue par un mécanisme de niveau supérieur (verrou
+explicite, double buffer, …), pas en tordant la sémantique `*_OR`.
+
+
 
 ### A3 — Discovery + parsing YAML minimal (implémentation)
 
@@ -1877,27 +1948,12 @@ perte de la protection SYSTEM-only.**
 **A6 ne touche pas au runtime.** Le runtime continue d'utiliser
 `layer` comme aujourd'hui.
 
-#### Représentation C++ de `direction` (options pour A6)
-
-**Pas de figeage.** Options viables :
-
-| Option | Avantages | Inconvénients |
-|---|---|---|
-| `enum class Direction : uint8_t { None=0, Uplink=1, Downlink=2 }` + bitmask manuel | Simple, pas de dépendance | Pas d'opérateurs bitwise natifs |
-| `enum class Direction : uint8_t { None=0, Uplink=1, Downlink=2, Both=Uplink\|Downlink }` + `operator\|`, `operator&` | Bitwise natif, expressif | `Both` doit être `Uplink\|Downlink` (3), pas 0 |
-| Type dédié encapsulant le bitmask (`struct DirectionBits { uint8_t bits; }`) | Encapsulation, pas d'ambiguïté | Verbosité |
-| `std::bitset<2>` | Standard, opérateurs intégrés | Overhead mémoire, pas de `enum class` |
-
 **Contraintes pour A6** :
 - doit représenter `{uplink}`, `{downlink}`, `{uplink, downlink}`,
   `{}` (4 états) ;
 - doit être sérialisable pour debug/log ;
 - doit être comparable (égalité, sous-ensemble) ;
 - doit tenir sur 1 octet (cohérent avec `ChanLayer`).
-
-**Recommandation (non figée)** : `enum class Direction : uint8_t`
-avec `operator|`, `operator&`, `operator~`, et `Both = Uplink |
-Downlink`. Simple, expressif, 1 octet.
 
 #### Conclusion
 
@@ -2400,27 +2456,12 @@ perte de la protection SYSTEM-only.**
 **A6 ne touche pas au runtime.** Le runtime continue d'utiliser
 `layer` comme aujourd'hui.
 
-#### Représentation C++ de `direction` (options pour A6)
-
-**Pas de figeage.** Options viables :
-
-| Option | Avantages | Inconvénients |
-|---|---|---|
-| `enum class Direction : uint8_t { None=0, Uplink=1, Downlink=2 }` + bitmask manuel | Simple, pas de dépendance | Pas d'opérateurs bitwise natifs |
-| `enum class Direction : uint8_t { None=0, Uplink=1, Downlink=2, Both=Uplink\|Downlink }` + `operator\|`, `operator&` | Bitwise natif, expressif | `Both` doit être `Uplink\|Downlink` (3), pas 0 |
-| Type dédié encapsulant le bitmask (`struct DirectionBits { uint8_t bits; }`) | Encapsulation, pas d'ambiguïté | Verbosité |
-| `std::bitset<2>` | Standard, opérateurs intégrés | Overhead mémoire, pas de `enum class` |
-
 **Contraintes pour A6** :
 - doit représenter `{uplink}`, `{downlink}`, `{uplink, downlink}`,
   `{}` (4 états) ;
 - doit être sérialisable pour debug/log ;
 - doit être comparable (égalité, sous-ensemble) ;
 - doit tenir sur 1 octet (cohérent avec `ChanLayer`).
-
-**Recommandation (non figée)** : `enum class Direction : uint8_t`
-avec `operator|`, `operator&`, `operator~`, et `Both = Uplink |
-Downlink`. Simple, expressif, 1 octet.
 
 #### Conclusion
 

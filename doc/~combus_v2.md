@@ -118,7 +118,7 @@ Les 3 layers définis :
    - `src/core/system/combus/combus_struct.h` → Structure `ComBus` avec champ `layer`
    - `src/core/system/combus/combus_access.cpp` → Règles d'accès `_layer_ok()`
    - `src/core/config/machines/*/combus/combus.cpp` → Configuration des layers par canal
-   - `include/struct/combus_struct.h` → Définition `ChanLayer` enum
+   - `include/core/system/combus/combus_defs.h` → Définition `ChanLayer` enum
 
 ### Point d'attention
 1. **Conflits entre layers** :
@@ -198,7 +198,7 @@ Implémenter l'architecture à 3 pointeurs pour la superposition de layers :
 - `include/struct/combus_v2_layers.h` → Énumérations par layer
 
 **Modifications existantes** :
-- `include/struct/combus_struct.h` → Ajout types v2, adaptation `ChanLayer`
+- `include/core/system/combus/combus_defs.h` → Ajout types v2, adaptation `ChanLayer`
 - `src/core/system/combus/combus_access.cpp` → Adaptation règles d'accès pour v2
 - `src/core/config/machines/*/combus/` → Réorganisation configs par layer
 

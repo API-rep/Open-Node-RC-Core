@@ -7,8 +7,14 @@
  *   their respective compile flags.
  *
  *   When only VBAT_ALERT_* flags are set (no HAS_VBAT_SENSING), the sensing
- *   steps are skipped and `sense` may be nullptr.  `comBus.batteryIsLow`
+ *   steps are skipped and `sense` may be nullptr.  `FAILSAFE_VBAT`
  *   is then populated externally (ComBus RX) before each `vbat_update()`.
+ *
+ *   Since the BATTERY_LOW channel and comBus.batteryIsLow field have been
+ *   removed (A16.1), the vbat module now writes FAILSAFE_VBAT directly:
+ *     - low  (=false) when the cell voltage drops below threshold
+ *     - high (=true)  when the cell is healthy
+ *   The FAILSAFE aggregator consumes FAILSAFE_VBAT each cycle.
  *****************************************************************************/
 
 #include "vbat.h"
@@ -16,8 +22,9 @@
 // Include config.h first so HAS_VBAT_SENSING is defined before we test it
 #include <core/config/vbat/config.h>
 
-#ifdef HAS_VBAT_SENSING
-#include <struct/combus_struct.h>
+#if defined(HAS_VBAT_SENSING) || defined(HAS_VBAT_FAILSAFE)
+#include <core/config/machines/combus_types.h>     // DigitalComBusID::FAILSAFE_VBAT (machine family dispatch)
+#include <core/system/combus/combus_access.h>      // combus_set_digital()
 extern ComBus comBus;
 #endif
 
@@ -71,12 +78,19 @@ void vbat_update()
 		// --- 1. Sensing (if available) ---
 #ifdef HAS_VBAT_SENSING
 	vbat_sense_tick();
-	comBus.batteryIsLow = vbat_is_low(0);
 #endif
 
-		// --- 2. (future: ComBus runlevel) ---
+#ifdef HAS_VBAT_FAILSAFE
+	// --- 2. Re-arm FAILSAFE_VBAT (proof-of-life for the Failsafe aggregator) ---
+	// low voltage => FAILSAFE_VBAT = true (HIGH = fault per failsafe-by-default).
+	// healthy    => FAILSAFE_VBAT = false (LOW = healthy).
+	// The aggregator consumes this each cycle (see failsafe.cb + WIP §5).
+	combus_set_digital(comBus, DigitalComBusID::FAILSAFE_VBAT, vbat_is_low(0));
+#endif
 
-		// --- 3. Alert reactions ---
+		// --- 3. (future: ComBus runlevel) ---
+
+		// --- 4. Alert reactions ---
 	vbat_alert_tick();
 }
 

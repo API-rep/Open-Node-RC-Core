@@ -5,8 +5,13 @@
 
 #include "combus_tx.h"
 
-#include <core/system/combus/combus_frame.h>
+#include <Arduino.h>  // millis()
+
+#include <core/system/combus/frame/combus_frame.h>
+#include <core/system/combus/frame/combus_handshake.h>
+#include <core/system/combus/frame/combus_handshake_tx.h>
 #include <core/system/debug/logging/debug.h>
+
 
 
 // =============================================================================
@@ -28,12 +33,33 @@ struct CombusTxState {
 	NodeCom*        nodeCom  = nullptr;  ///< active transport interface
 	ComBusFrameCfg  frameCfg       = {};  ///< static layout descriptor (nAnalog, nDigital)
 
-	uint8_t         seq       = 0u;  ///< rolling frame sequence counter (0�255)
+	uint8_t         seq       = 1u;  ///< rolling frame sequence counter (1..255). Value 0 is RESERVED for future handshake frames.
 	uint32_t        lastTxMs  = 0u;  ///< timestamp of last transmitted frame (ms)
 	uint32_t        periodMs  = 0u;  ///< transmit period derived from txHz (0 = uninit)
+
+	// P3 — per-link handshake context.  Points to the same context as
+	// CombusRxState::handshakeCtx (shared between TX and RX of the same
+	// link).  Wired by combus_protocol_init() — see combus_protocol.cpp.
+	// Multiple independent ComBus interfaces may coexist; each link has
+	// its own context.  See CombusHandshakeContext in combus_handshake.h.
+	CombusHandshakeContext* handshakeCtx = nullptr;
 };
 
+
+
 static CombusTxState comBusTx;  ///< Combus transmitter instance state
+
+
+
+// =============================================================================
+// 1b. PER-LINK HANDSHAKE CONTEXT WIRING (P3)
+// =============================================================================
+
+void combus_tx_set_handshake_ctx( CombusHandshakeContext* ctx )
+{
+    comBusTx.handshakeCtx = ctx;
+}
+
 
 
 
@@ -67,10 +93,20 @@ void combus_tx_init(
 		// --- 3. Derive transmit period ---
 	comBusTx.periodMs = 1000u / txHz;
 
-		// --- 4. Log init confirmation ---
+		// --- 4. Reset handshake burst state on the linked context (P3).
+	//    combus_protocol_init() wires comBusTx.handshakeCtx to the same
+	//    context as comBusRx.handshakeCtx BEFORE calling combus_tx_init().
+	//    If the wiring is missing (legacy caller), the burst is simply
+	//    not armed — no crash, no UB.
+	if (comBusTx.handshakeCtx) {
+		combus_handshake_internal::startBurst(comBusTx.handshakeCtx);
+	}
+
+		// --- 5. Log init confirmation ---
 	sys_log_info("[COMBUS_TX] init — transport='%s'  rate=%uHz  A%u+D%u\n",
 	             nodeCom->name, txHz, (unsigned)frameCfg.nAnalog, (unsigned)frameCfg.nDigital);
 }
+
 
 
 
@@ -95,10 +131,20 @@ void combus_tx_update(
 		// --- 1. Guard check ---
 	if (!comBusTx.nodeCom || comBusTx.periodMs == 0u || !bus) { return; }
 
+		// --- 1b. P3 — drive the boot-time handshake burst on the linked
+	//    context.  Independent of the control-frame timer below — if
+	//    both timers expire on the same call, two write() calls happen
+	//    back-to-back (no priority / contention logic, per P3 constraint
+	//    #2).  No-op when the burst is inactive or already validated.
+	if (comBusTx.handshakeCtx) {
+		combus_handshake_tx_update(comBusTx.handshakeCtx, comBusTx.nodeCom);
+	}
+
 		// --- 2. Timer gate ---
 	uint32_t now = millis();
 	if ((now - comBusTx.lastTxMs) < comBusTx.periodMs) { return; }
 	comBusTx.lastTxMs = now;
+
 
 		// --- 3. Encode ---
 	static uint8_t frame[255u];
@@ -114,13 +160,29 @@ void combus_tx_update(
 
 		// --- 4. Send via transport ---
 	comBusTx.nodeCom->write(comBusTx.nodeCom->ctx, frame, frameLen);
+
+		// Capture the seq value that was actually written on the wire BEFORE
+		// advancing — used by the debug log below. Important because the new
+		// wrap rule (255 → 1, never 0) breaks the old "comBusTx.seq - 1u"
+		// trick: after a real wrap, seq==1 and that expression would print
+		// 0, which is misleading since value 0 is RESERVED for handshake
+		// frames (see combus_handshake.h) and must NEVER appear in a control
+		// frame log line.
+	const uint8_t seqSent = comBusTx.seq;
+
+		// Advance seq counter. The control-frame range is 1..255 — value 0 is
+		// reserved for future handshake frames (see combus_handshake.h) and must
+		// never appear in a normal frame on the wire. Wrap from 255 → 1.
 	comBusTx.seq++;
+	if (comBusTx.seq == 0u) { comBusTx.seq = 1u; }
 
 	output_log_dbg("[COMBUS_TX] seq=%u  len=%u  rl=%d  flags=0x%02X\n",
-	               (unsigned)(comBusTx.seq - 1u),
+	               (unsigned)seqSent,
 	               (unsigned)frameLen,
 	               (int)bus->runLevel,
 	               (unsigned)(failSafe ? COMBUS_FLAG_FAILSAFE : 0u));
 }
+
+
 
 // EOF combus_tx.cpp

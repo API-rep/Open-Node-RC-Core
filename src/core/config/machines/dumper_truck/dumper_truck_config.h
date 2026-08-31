@@ -23,15 +23,41 @@
 
 
 #if defined(MACHINE_TYPE_DUMPER_TRUCK)
-  
+
   // =============================================================================
   // 1. COMBUS  (always)
   // =============================================================================
-  
-  // REMOTE-only vocabulary for generic dumper-truck code
-  // Machine-specific code includes the concrete machine's combus.h directly
-  #include <core/config/machines/dumper_truck/combus/combus_ids_remote.h>
-  
+
+  // ---- 1a. Path macros — SINGLE source of truth for the .inc file paths.
+  //
+  // Every ComBus .inc fragment under dumper_truck/combus/ is referenced by
+  // its macro here (and ONLY here).  Consumers (per-instance combus_ids.h,
+  // combus.cpp) #include the macros, never a hard-coded path.  This is the
+  // canonical point of resolution — adding a new Remote/Local/System .inc
+  // requires exactly one new COMBUS_*_INC macro below.
+  //
+  // Paths are POSIX-style so the C preprocessor can consume them directly
+  // in `#include COMBUS_*_INC` directives (incl. inside instance-scoped
+  // arrays that live outside dumper_truck/'s include search root).
+  //
+  //   combus_ids_remote_*.inc  — TYPE-level IDs (one set per enum, shared
+  //                                across ALL dumper-truck instances).
+  //   combus_remote_*.inc      — TYPE-level non-ID channel fragments.
+  //   combus_ids_*_local_*.inc — INSTANCE-level IDs (Volvo A60H Bruder).
+  //   combus_channels_*_local_*.inc / combus_channels_*_system_*.inc — not
+  //     routed through this file (they live under the per-instance
+  //     volvo_A60H_bruder/combus/ folder and are included via the relative
+  //     #include "..." form in the instance's combus.cpp / combus_ids.h).
+
+  #define COMBUS_IDS_REMOTE_ANALOG_INC  <core/config/machines/dumper_truck/combus/combus_ids_remote_analog.inc>
+  #define COMBUS_IDS_REMOTE_DIGITAL_INC <core/config/machines/dumper_truck/combus/combus_ids_remote_digital.inc>
+  #define COMBUS_REMOTE_ANALOG_INC      <core/config/machines/dumper_truck/combus/combus_remote_analog.inc>
+  #define COMBUS_REMOTE_DIGITAL_INC     <core/config/machines/dumper_truck/combus/combus_remote_digital.inc>
+
+	// REMOTE-only vocabulary for generic dumper-truck code.  Machine-specific
+	// code includes the concrete machine's combus.h directly.
+	#include <core/config/machines/dumper_truck/combus/combus_ids_remote.h>
+
   
   // =============================================================================
   // 2. MOTION PRESET ALIAS  (always)

@@ -37,7 +37,7 @@
 #include <optional>
 #include <variant>
 
-#include <struct/combus_struct.h>              // ChanLayer
+#include <core/system/combus/combus_defs.h>              // ChanLayer
 
 // Forward declaration only — AnalogComBusID/DigitalComBusID used
 // below solely as type parameters for SrvDevice structure.

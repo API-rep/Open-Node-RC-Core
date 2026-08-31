@@ -14,7 +14,7 @@
 
 #include <stdint.h>
 #include <defs/machines_defs.h>
-#include <struct/combus_struct.h>
+#include <core/system/combus/combus_defs.h>
 
 struct GearShiftProfile;  // forward decl — full type in simulation_struct.h
 

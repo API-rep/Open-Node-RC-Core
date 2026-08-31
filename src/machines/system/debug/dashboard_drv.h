@@ -1,6 +1,6 @@
 /******************************************************************************
  * @file dashboard_drv.h
- * @brief ANSI terminal dashboard — Layer 3 DC-driver module view.
+ * @brief ANSI terminal dashboard ï¿½ Layer 3 DC-driver module view.
  *
  * @details Shows live combus command values per DC device (top section) and
  *   the static device configuration snapshot captured at init (bottom section).
@@ -11,7 +11,7 @@
 #ifdef DEBUG_DASHBOARD
 
 #include <stdint.h>
-#include <struct/combus_struct.h>
+#include <core/system/combus/combus_defs.h>
 #include <struct/machines_struct.h>
 
 /**

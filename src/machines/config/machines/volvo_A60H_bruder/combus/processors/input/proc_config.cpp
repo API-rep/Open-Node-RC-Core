@@ -32,7 +32,7 @@
 
 #include <machines/config/machines/volvo_A60H_bruder/combus/combus.h>       // AnalogComBusID, DigitalComBusID, comBus
 #include <core/config/machines/dumper_truck/motion/dumper_truck_motion.h>  // kDumperTruckGearShift
-#include <struct/combus_struct.h>                                          // ChanLayer
+#include <core/system/combus/combus_defs.h>                                          // ChanLayer
 #include <core/system/combus/processors/input/cb_btn.h>    // cb_btn_push_fn, cb_btn_toggle_fn, cb_btn_inc_fn, cb_btn_dec_fn, CbBtnCfg, CbBtnState, CbBtnTrigger
 #include <core/system/combus/processors/base/cb_runlevel.h>               // cb_runlevel_fn, CbRunlevelCfg, CbRunlevelState
 #include <core/system/combus/processors/base/cb_bypass.h>                 // cb_bypass_fn
