@@ -666,8 +666,9 @@ def _render_source(view: View, ctx: BuildContext) -> str:
         body.append("// =============================================================================")
         body.append("")
         body.append("ComBus comBus {")
-        body.append("    .runLevel        = RunLevel::NOT_YET_SET,")
-        body.append("    .runLevelLayer   = ChanLayer::LOCAL,")
+        # RL3: runLevel + runLevelLayer removed from struct. RUNLEVEL is a
+        #       plain analog channel; initialise via combus_set_analog() at
+        #       runtime in machine_init().
         body.append(f"    .analogBus       = Analog{cap}Array,")
         body.append(f"    .digitalBus      = Digital{cap}Array,")
         body.append("    .analogBusMaxVal = (1UL << (sizeof(uint16_t) * 8)) - 1")

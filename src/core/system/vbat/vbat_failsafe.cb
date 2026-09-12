@@ -26,7 +26,7 @@ channels:
     type: digital
     scope: LOCAL
     theme: failsafe
-    direction: both
+    direction: uplink_or
     value: high    # default to fault state: contributor reports fault until
                    # proven healthy. Failsafe-by-default contract.
     requires:

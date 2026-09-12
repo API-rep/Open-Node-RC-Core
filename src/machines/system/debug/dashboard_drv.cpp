@@ -7,6 +7,7 @@
 
 #include "dashboard_drv.h"
 #include <core/system/debug/dashboard/dashboard.h>
+#include "combus_ids.h"   // RL3: AnalogComBusID::RUNLEVEL — uses the generated combus_generated/ CPPPATH
 
 #include <Arduino.h>
 #include <stdio.h>
@@ -101,8 +102,9 @@ static void render_drv_view() {
 		else snprintf(fwStr, sizeof(fwStr), "100%%");
 		if (s_mach->maxBackSpeed.has_value()) snprintf(bkStr, sizeof(bkStr), "%.0f%%", (double)*s_mach->maxBackSpeed);
 		else snprintf(bkStr, sizeof(bkStr), "100%%");
+		// RL3: runLevel is now a plain analog channel — read from analogBus[RUNLEVEL].
 		dLine("  RunLevel: %-12s  DC devices: %u  Max FW: %-6s  Max BK: %s",
-		      dashRunLevelStr(s_bus->runLevel), s_mach->dcDevCount, fwStr, bkStr);
+		      dashRunLevelStr((RunLevel)s_bus->analogBus[static_cast<uint8_t>(AnalogComBusID::RUNLEVEL)].value), s_mach->dcDevCount, fwStr, bkStr);
 	}
 	dMid();
 	dLine("  %-2s  %-32s  %-3s  %-6s  %-5s  %-7s  %s",

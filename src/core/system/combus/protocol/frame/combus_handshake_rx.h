@@ -13,7 +13,7 @@
 
 #include <stdint.h>
 
-#include <core/system/combus/frame/combus_handshake.h> // umbrella (constants, logBootWarning, formatMd5Hex, COMBUS_MD5_CHECK_DISABLE)
+#include <core/system/combus/protocol/frame/combus_handshake.h> // umbrella (constants, logBootWarning, formatMd5Hex, COMBUS_MD5_CHECK_DISABLE)
 
 
 
@@ -56,6 +56,15 @@ uint8_t combus_handshake_tryDecode(
  *        is active.  Pulled out of combus_handshake.cpp so unit tests can
  *        exercise the compare path without an RX ring buffer.
  *
+ * @details LY4 — the local MD5 pointer is now passed explicitly (was
+ *   hardcoded to `combus::wire::kCombusComBusMd5` before).  This lets the
+ *   RX path compare against the per-link MD5 resolved at init from
+ *   `link->layer` (REMOTE / LOCAL / FULL), instead of always against
+ *   the FULL view.
+ *
+ * @param[in] localMd5   Pointer to 16 bytes — the locally-generated MD5
+ *                       for this link's layer (typically
+ *                       `ctx->expectedMd5`).
  * @param[in] wireMd5    Pointer to 16 bytes received on the wire.
  * @param[in] wireMajor  On-wire project version MAJOR.
  * @param[in] wireMinor  On-wire project version MINOR.
@@ -66,6 +75,7 @@ uint8_t combus_handshake_tryDecode(
  *         switch and is NOT considered a validated contract.
  */
 bool combus_handshake_compareAndLog(
+    const uint8_t* localMd5,
     const uint8_t* wireMd5,
     uint8_t        wireMajor,
     uint8_t        wireMinor );

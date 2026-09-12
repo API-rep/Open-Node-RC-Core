@@ -1,0 +1,15 @@
+Processing volvo_A60H_bruder (platform: espressif32@6.7.0; board: esp32dev; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+[combus_scons_hook] CPPPATH += C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\combus_generated (env)
+[combus_scons_hook] CPPPATH += c:\Users\Arnaud\Documents\Modèlisme\RC chantier\Code RC\Open Node RC Core\.pio\libdeps\volvo_A60H_bruder\common_defs\include
+[combus_scons_hook] PIOBUILDFILES += C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\combus_generated\combus.cpp
+[combus_scons_hook] registered deferred Command (targets=9, sources=19, varlist=[CPPDEFINES, CPPPATH, LIBDEPS])
+Removing C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder
+Done cleaning
+========================= [SUCCESS] Took 1.73 seconds =========================
+
+Environment        Status    Duration
+-----------------  --------  ------------
+volvo_A60H_bruder  SUCCESS   00:00:01.726
+========================= 1 succeeded in 00:00:01.726 =========================

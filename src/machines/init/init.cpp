@@ -56,7 +56,8 @@ void machine_init() {
 
 	  // --- 5. Boot-safe runlevel ---
   sys_log_info("[SYSTEM] Applying boot-safe runlevel...\n");
-  combus_set_runlevel(comBus, DEF_RUNLEVEL, ChanLayer::LOCAL);
+  // RL3: runLevel is now a plain analog channel — write via generic accessor.
+  combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)DEF_RUNLEVEL, ChanLayer::LOCAL);
   stopAllDcDrivers(machine);
   sleepAllDcDrivers(machine);
   disableAllDcDrivers(machine);
@@ -85,7 +86,7 @@ void machine_init() {
         if (c == '\r' || c == '\n') goto pause_exit;
       }
         // Exit via remote KEY channel
-      if (comBus.isDrived && comBus.digitalBus[keyCh].value) break;
+      if (!comBus.isNotDrived && comBus.digitalBus[keyCh].value) break;
 
       vTaskDelay(10);  // yield — avoid starving the scheduler
     }

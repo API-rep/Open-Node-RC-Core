@@ -8,116 +8,100 @@
 #include <stddef.h>
 #include <Arduino.h>
 
-#include <core/system/combus/frame/combus_frame.h>
-#include <core/system/combus/frame/combus_handshake.h>
-#include <core/system/combus/frame/combus_handshake_rx.h>  // combus_handshake_tryDecode
+#include <core/system/combus/protocol/frame/combus_frame.h>
+#include <core/system/combus/protocol/frame/combus_handshake.h>
+#include <core/system/combus/protocol/frame/combus_handshake_rx.h>  // combus_handshake_tryDecode
 #include <core/system/debug/logging/debug.h>
 
-
-
-// =============================================================================
-// 1. PRIVATE STATE
-// =============================================================================
-
-/**
- * Ring buffer — raw byte accumulator between the transport ISR and the frame decoder.
- * Sized to `UINT8_MAX` (255): the protocol length field is a `uint8_t`, so no
- * single frame can ever exceed that. `rxBufSize` and `frameMaxLen` are kept as
- * separate constants so each use site reads with its own intent.
- */
-
-	// buffer sizing
-static constexpr uint8_t frameMaxLen = UINT8_MAX;    ///< max encodable frame size
-static constexpr uint8_t rxBufSize   = frameMaxLen;  ///< ring buffer capacity
-
-	// ring buffer instance
-static uint8_t rxBuf[rxBufSize];  ///< raw incomming storage ring buffer
-
-
-/**
- * @brief Persistent state of the ComBus receiver module.
- *
- * @details Filled once by `combus_rx_init()` and updated every cycle by
- *   `combus_rx_update()`. Holds the transport interface, the static frame
- *   layout, the ring buffer state (head + count), and the decoded snapshot
- *   with its validity flags.
- *
- *   The analog and digital pointers inside `snap` are wired to the
- *   caller-provided buffers at init time and never reallocated.
- *
- *   Lifetime: static — valid for the entire program run after init.
- */
-
-struct CombusRxState {
-	NodeCom*        nodeCom      = nullptr;   ///< active transport interface
-	ComBusFrameCfg  frameCfg     = {};        ///< static layout descriptor (buffer capacities)
-	uint8_t         rxHead       = 0u;        ///< ring buffer read index
-	uint8_t         rxCount      = 0u;        ///< bytes currently in ring buffer
-	ComBusFrame     snap         = {};        ///< latest decoded snapshot
-	bool            snapValid    = false;     ///< true once at least one frame decoded
-	uint32_t        lastRxMs     = 0u;        ///< millis() at last successful decode
-	bool            everReceived = false;     ///< true after first valid frame received
-	CombusHandshakeContext* handshakeCtx = nullptr; ///< per-link handshake state (P3, shared with TX)
-};
-
-static CombusRxState comBusRx;  ///< Single receiver instance (one ComBus RX per node)
+// RL5 — auto-apply support.  combus_frame_apply() takes a ChanLayer
+// caller identity (see combus_frame.h).  No ChanOwner / makeChanOwner
+// needed — the layer check is delegated to combus_set_*() inside
+// combus_frame_apply().
+#include <core/system/combus/combus_defs.h>  // ChanLayer
 
 
 
 // =============================================================================
-// 1b. PER-LINK HANDSHAKE CONTEXT WIRING (P3)
+// 1. POOL REGISTRY  (externally-owned storage — see combus_rx_register_pool)
 // =============================================================================
 
-void combus_rx_set_handshake_ctx( CombusHandshakeContext* ctx )
+// Per-link state array — caller-owned static storage, registered at boot
+// via combus_rx_register_pool().  Core never allocates this.  The number
+// of links is decided by the caller (typically the size of the
+// ComBusLink[] array passed to combus_protocol_init_all()); this module
+// never imposes a hard cap.
+static CombusRxState* s_rxStates = nullptr;
+static uint8_t        s_capacity = 0u;
+
+void combus_rx_register_pool( CombusRxState* buffer, uint8_t capacity )
 {
-    comBusRx.handshakeCtx = ctx;
+    if (s_rxStates != nullptr) {
+        sys_log_err("[COMBUS_RX] pool already registered — ignoring second call\n");
+        return;
+    }
+    if (buffer == nullptr || capacity == 0u) {
+        sys_log_err("[COMBUS_RX] register_pool called with null buffer or zero capacity\n");
+        return;
+    }
+    s_rxStates = buffer;
+    s_capacity = capacity;
 }
 
 
 
 
+// =============================================================================
+// 2. PER-LINK HANDSHAKE CONTEXT WIRING (P3)
+// =============================================================================
+
+void combus_rx_set_handshake_ctx( uint8_t                linkIdx,
+                                  CombusHandshakeContext* ctx )
+{
+    if (!s_rxStates || linkIdx >= s_capacity) { return; }
+    s_rxStates[linkIdx].handshakeCtx = ctx;
+}
+
+
 
 
 // =============================================================================
-// 2. PRIVATE HELPERS
+// 3. PRIVATE HELPERS  (per-link — take CombusRxState&)
 // =============================================================================
 
-/** 
+/**
  * @brief Append one byte to the ring buffer. Drops oldest byte on overflow.
  */
-
-static void rxBufPush(uint8_t byte) {
-	if (comBusRx.rxCount < rxBufSize) {
-		uint8_t idx    = (uint8_t)((comBusRx.rxHead + comBusRx.rxCount) % rxBufSize);
-		rxBuf[idx]   = byte;
-		comBusRx.rxCount++;
-	}
-	
-	else {
-			// Overflow: drop oldest byte by advancing head
-		rxBuf[comBusRx.rxHead] = byte;
-		comBusRx.rxHead = (uint8_t)((comBusRx.rxHead + 1u) % rxBufSize);
-	}
+static void rxBufPush( CombusRxState& st, uint8_t byte )
+{
+    if (st.rxCount < CombusRxBufSize) {
+        uint8_t idx = (uint8_t)((st.rxHead + st.rxCount) % CombusRxBufSize);
+        st.rxBuf[idx] = byte;
+        st.rxCount++;
+    } else {
+        // Overflow: drop oldest byte by advancing head
+        st.rxBuf[st.rxHead] = byte;
+        st.rxHead = (uint8_t)((st.rxHead + 1u) % CombusRxBufSize);
+    }
 }
 
 
-/** 
+/**
  * @brief Return byte at logical index i (0 = oldest).
  */
-
-static uint8_t rxBufAt(uint8_t i) {
-	return rxBuf[(comBusRx.rxHead + i) % rxBufSize];
+static uint8_t rxBufAt( const CombusRxState& st, uint8_t i )
+{
+    return st.rxBuf[(st.rxHead + i) % CombusRxBufSize];
 }
 
 
-/** 
+/**
  * @brief Discard the n oldest bytes from the ring buffer.
  */
-
-static void rxBufConsume(uint8_t n) {
-	if (n > comBusRx.rxCount) { n = comBusRx.rxCount; }
-	comBusRx.rxHead  = (uint8_t)((comBusRx.rxHead + n) % rxBufSize);
-	comBusRx.rxCount = (uint8_t)(comBusRx.rxCount - n);
+static void rxBufConsume( CombusRxState& st, uint8_t n )
+{
+    if (n > st.rxCount) { n = st.rxCount; }
+    st.rxHead  = (uint8_t)((st.rxHead + n) % CombusRxBufSize);
+    st.rxCount = (uint8_t)(st.rxCount - n);
 }
 
 
@@ -139,139 +123,161 @@ static void rxBufConsume(uint8_t n) {
  *      without any refactor of the control-frame path.
  *   3. Control-frame path — reads `nAnalog` / `nDigital` from the wire
  *      header, computes the expected frame length, discards SOF and
- *      re-syncs if the size would exceed `frameMaxLen`, copies the frame
+ *      re-syncs if the size would exceed `CombusRxBufSize`, copies the frame
  *      into a linear buffer and calls `combus_frame_decode()`.  On CRC
  *      success, updates the snapshot and consumes the frame bytes.  On
  *      CRC failure, discards only the SOF and re-syncs.
  *
  * @return Number of bytes consumed, or 0 if no complete valid frame was found.
  */
+static uint8_t tryDecode( CombusRxState& st )
+{
+    // --- 1. Scan for SOF ---
+    while (st.rxCount > 0u && rxBufAt(st, 0u) != CombusFrameSof) {
+        rxBufConsume(st, 1u);
+    }
 
-static uint8_t tryDecode() {
+    if (st.rxCount < CombusFrameHeaderLen) {
+        // Not enough bytes yet even to peek the seq byte — wait for more.
+        return 0u;
+    }
 
-		// --- 1. Scan for SOF ---
-	while (comBusRx.rxCount > 0u && rxBufAt(0u) != CombusFrameSof) {
-		rxBufConsume(1u);
-	}
+    // --- 2. Peek `seq` byte (wire offset 3) to discriminate frame kind ---
+    uint8_t seqByte = rxBufAt(st, 1u + offsetof(CombusFrameHeader, cfg) +
+                                    offsetof(ComBusFrameCfg, nDigital) + 1u);
 
-	if (comBusRx.rxCount < CombusFrameHeaderLen) {
-			// Not enough bytes yet even to peek the seq byte — wait for more.
-		return 0u;
-	}
-
-		// --- 2. Peek `seq` byte (wire offset 3) to discriminate frame kind ---
-	uint8_t seqByte = rxBufAt(1u + offsetof(CombusFrameHeader, cfg) +
-	                          offsetof(ComBusFrameCfg, nDigital) + 1u);
-
-	if (seqByte == 0u) {
-			// --- 2a. HANDSHAKE PATH — structurally separate from control ---
-			// Handshake decoder owns its ring-buffer consumption and CRC check.
-			// Returning 0 here means "try again next poll" or "no handshake
-			// available yet" — the SOF stays in place until either a full
-			// handshake frame arrives or the stub decides to drop it.
-		return combus_handshake_tryDecode(comBusRx.handshakeCtx,
-		                                  rxBuf, rxBufSize,
-		                                  comBusRx.rxHead, comBusRx.rxCount);
-
-	}
+    if (seqByte == 0u) {
+        // --- 2a. HANDSHAKE PATH — structurally separate from control ---
+        // Handshake decoder owns its ring-buffer consumption and CRC check.
+        // Returning 0 here means "try again next poll" or "no handshake
+        // available yet" — the SOF stays in place until either a full
+        // handshake frame arrives or the stub decides to drop it.
+        return combus_handshake_tryDecode(st.handshakeCtx,
+                                          st.rxBuf, CombusRxBufSize,
+                                          st.rxHead, st.rxCount);
+    }
 
 
-		// --- 3. CONTROL-FRAME PATH ---
-		// From here on, `seq` is guaranteed in 1..255 — no handshake leak possible.
-	if (comBusRx.rxCount < CombusFrameMinLen) {
-		return 0u;
-	}
+    // --- 3. CONTROL-FRAME PATH ---
+    // From here on, `seq` is guaranteed in 1..255 — no handshake leak possible.
+    if (st.rxCount < CombusFrameMinLen) {
+        return 0u;
+    }
 
-	uint8_t nAnalog   = rxBufAt(1u + offsetof(CombusFrameHeader, cfg) + offsetof(ComBusFrameCfg, nAnalog));
-	uint8_t nDigital  = rxBufAt(1u + offsetof(CombusFrameHeader, cfg) + offsetof(ComBusFrameCfg, nDigital));
-	uint8_t nDigBytes = (nDigital + 7u) / 8u;
+    uint8_t nAnalog   = rxBufAt(st, 1u + offsetof(CombusFrameHeader, cfg) + offsetof(ComBusFrameCfg, nAnalog));
+    uint8_t nDigital  = rxBufAt(st, 1u + offsetof(CombusFrameHeader, cfg) + offsetof(ComBusFrameCfg, nDigital));
+    uint8_t nDigBytes = (nDigital + 7u) / 8u;
 
-	uint16_t expectedLenW = CombusFrameHeaderLen
-	                      + (uint16_t)nDigBytes
-	                      + (uint16_t)nAnalog * 2u
-	                      + 1u;
-	if (expectedLenW > frameMaxLen) {
-			// Impossible frame size — discard SOF and re-sync
-		rxBufConsume(1u);
-		return 0u;
-	}
-	uint8_t expectedLen = (uint8_t)expectedLenW;
-	if (comBusRx.rxCount < expectedLen) {
-		return 0u;
-	}
+    uint16_t expectedLenW = CombusFrameHeaderLen
+                          + (uint16_t)nDigBytes
+                          + (uint16_t)nAnalog * 2u
+                          + 1u;
+    if (expectedLenW > CombusRxBufSize) {
+        // Impossible frame size — discard SOF and re-sync
+        rxBufConsume(st, 1u);
+        return 0u;
+    }
+    uint8_t expectedLen = (uint8_t)expectedLenW;
+    if (st.rxCount < expectedLen) {
+        return 0u;
+    }
 
-		// --- 4. Copy frame into a linear buffer and decode ---
-	uint8_t linear[frameMaxLen];
-	for (uint8_t i = 0u; i < expectedLen; ++i) {
-		linear[i] = rxBufAt(i);
-	}
+    // --- 4. Copy frame into a linear buffer and decode ---
+    uint8_t linear[CombusRxBufSize];
+    for (uint8_t i = 0u; i < expectedLen; ++i) {
+        linear[i] = rxBufAt(st, i);
+    }
 
-		// CRC validated before any write — failed decode leaves comBusRx.snap untouched.
-	if (combus_frame_decode(comBusRx.frameCfg, &comBusRx.snap, linear, expectedLen)) {
-		comBusRx.snapValid    = true;
-		comBusRx.lastRxMs     = millis();
-		comBusRx.everReceived = true;
-		rxBufConsume(expectedLen);
-		return expectedLen;
-	} else {
-			// CRC mismatch — discard SOF and re-sync
-		rxBufConsume(1u);
-		return 0u;
-	}
+    // CRC validated before any write — failed decode leaves st.snap untouched.
+    // LY2 — decode is layer-agnostic.  It writes by index into the
+    // caller-provided buffers without any notion of layer.
+    if (combus_frame_decode(st.frameCfg, &st.snap, linear, expectedLen)) {
+        st.snapValid    = true;
+        st.lastRxMs     = millis();
+        st.everReceived = true;
+
+        // RL5 — auto-apply: if the caller wired a target ComBus at init
+        // time, push the decoded channels into it now.  This makes
+        // combus_frame_apply() a generic capability of the core, triggered
+        // automatically by the mere presence of rxCfg + buffers + target.
+        // When target == nullptr (test env, legacy callers), no apply is
+        // performed — the caller is responsible for calling
+        // combus_frame_apply() manually.
+        //
+        // combus_frame_apply() takes a ChanLayer caller identity (see
+        // combus_frame.h).  We pass ChanLayer::REMOTE because the RX
+        // path is receiving frames from a remote source — the layer
+        // check inside combus_set_*() will accept writes to channels
+        // whose declared layer is REMOTE or LOCAL (LOCAL inherits REMOTE).
+        if (st.target != nullptr) {
+            combus_frame_apply(st.frameCfg, st.target, &st.snap,
+                               ChanLayer::REMOTE);
+        }
+
+        rxBufConsume(st, expectedLen);
+        return expectedLen;
+    } else {
+        // CRC mismatch — discard SOF and re-sync
+        rxBufConsume(st, 1u);
+        return 0u;
+    }
 }
 
 
 
 
 // =============================================================================
-// 3. PUBLIC API
+// 4. PUBLIC API
 // =============================================================================
 
 /**
- * @brief Initialize the ComBus receiver.
+ * @brief Initialize the ComBus receiver for one link.
  *
  * @details Initialization sequence:
- *   1. Guard check — null transport or buffer pointer; returns immediately.
+ *   1. Guard check — null transport or buffer pointer, or out-of-range
+ *      linkIdx; returns immediately.
  *   2. Store transport interface and frame layout descriptor.
  *   3. Wire caller-provided buffers into the snapshot struct.
  *   4. Reset ring buffer and link state.
  */
-
 void combus_rx_init(
-    NodeCom*       nodeCom,     // claimed transport interface (from uart_com_init or similar)
-    ComBusFrameCfg frameCfg,    // static frame layout descriptor (nAnalog, nDigital)
-    uint16_t*      analogBuf,   // caller-allocated array of frameCfg.nAnalog entries
-
-    bool*          digitalBuf ) // caller-allocated array of frameCfg.nDigital entries
+    uint8_t        linkIdx,    // index of this link in the per-link state array
+    NodeCom*       nodeCom,    // claimed transport interface (from uart_com_init or similar)
+    ComBusFrameCfg frameCfg,   // static frame layout descriptor (nAnalog, nDigital)
+    uint16_t*      analogBuf,  // caller-allocated array of frameCfg.nAnalog entries
+    bool*          digitalBuf,// caller-allocated array of frameCfg.nDigital entries
+    ComBus*        target )    // RL5 — optional apply target (nullptr = no auto-apply)
 {
-		// --- 1. Guard check ---
-	if (!nodeCom || !analogBuf || !digitalBuf) { return; }
+    // --- 1. Guard check ---
+    if (!s_rxStates || linkIdx >= s_capacity) { return; }
+    if (!nodeCom || !analogBuf || !digitalBuf) { return; }
 
-		// --- 2. Store transport interface and frame layout ---
-	comBusRx.nodeCom  = nodeCom;
-	comBusRx.frameCfg = frameCfg;
+    CombusRxState& st = s_rxStates[linkIdx];
 
-		// --- 3. Wire caller-provided buffers into the snapshot struct ---
-	comBusRx.snap.analog  = analogBuf;
-	comBusRx.snap.digital = digitalBuf;
+    // --- 2. Store transport interface and frame layout ---
+    st.nodeCom  = nodeCom;
+    st.frameCfg = frameCfg;
+    st.target   = target;   // RL5 — may be nullptr (legacy / test behaviour)
 
-		// --- 4. Reset ring buffer and link state ---
-	comBusRx.rxHead       = 0u;
-	comBusRx.rxCount      = 0u;
-	comBusRx.snapValid    = false;
-	comBusRx.everReceived = false;
+    // --- 3. Wire caller-provided buffers into the snapshot struct ---
+    st.snap.analog  = analogBuf;
+    st.snap.digital = digitalBuf;
 
-		// Reset the handshake contract-validated flag too — a fresh RX
-		// session must re-validate the MD5+version before any optimisation
-		// of subsequent handshake frames kicks in.
-	combus_handshake_internal::clearContractValidated(comBusRx.handshakeCtx);
+    // --- 4. Reset ring buffer and link state ---
+    st.rxHead       = 0u;
+    st.rxCount      = 0u;
+    st.snapValid    = false;
+    st.everReceived = false;
 
+    // Reset the handshake contract-validated flag too — a fresh RX
+    // session must re-validate the MD5+version before any optimisation
+    // of subsequent handshake frames kicks in.
+    combus_handshake_internal::clearContractValidated(st.handshakeCtx);
 
-
-
-	sys_log_info("[COMBUS_RX] init — transport='%s'  A%u+D%u\n",
-	             nodeCom->name,
-	             (unsigned)frameCfg.nAnalog, (unsigned)frameCfg.nDigital);
+    sys_log_info("[COMBUS_RX] init — link=%u  transport='%s'  A%u+D%u\n",
+                 (unsigned)linkIdx,
+                 nodeCom->name,
+                 (unsigned)frameCfg.nAnalog, (unsigned)frameCfg.nDigital);
 }
 
 
@@ -279,56 +285,72 @@ void combus_rx_init(
 /**
  * @brief Poll transport and decode incoming frames — call every loop iteration.
  *
- * @details Timer-gated, non-blocking — safe to call every loop:
- *   1. Guard check — returns immediately if uninit.
+ * @details Timer-gated, non-blocking — safe to call every loop.  Iterates
+ *   over every link registered by combus_rx_register_pool(); each link
+ *   has its own transport, ring buffer, and snapshot.
+ *   1. Guard check — returns immediately if no pool is registered.
  *   2. Drain available bytes from the transport into the ring buffer.
  *   3. Try to decode frames until the buffer holds fewer than `CombusFrameMinLen`
  *      bytes or `tryDecode()` finds nothing to consume.
  */
+void combus_rx_update()
+{
+    // --- 1. Guard check ---
+    if (!s_rxStates) { return; }
 
-void combus_rx_update() {
-		// --- 1. Guard check ---
-	if (!comBusRx.nodeCom) { return; }
+    // --- Iterate over every registered link ---
+    for (uint8_t i = 0u; i < s_capacity; ++i) {
+        CombusRxState& st = s_rxStates[i];
 
-		// --- 2. Drain available bytes into ring buffer ---
-	while (comBusRx.nodeCom->available(comBusRx.nodeCom->ctx) > 0) {
-		int b = comBusRx.nodeCom->readByte(comBusRx.nodeCom->ctx);
-		if (b >= 0) { rxBufPush((uint8_t)b); }
-	}
+        // --- 2. Per-link guard check ---
+        if (!st.nodeCom) { continue; }
 
-		// --- 3. Try to decode (may process multiple back-to-back frames) ---
-	while (comBusRx.rxCount >= CombusFrameMinLen) {
-		if (tryDecode() == 0u) {
-			break;
-		}
-	}
+        // --- 3. Drain available bytes into ring buffer ---
+        while (st.nodeCom->available(st.nodeCom->ctx) > 0) {
+            int b = st.nodeCom->readByte(st.nodeCom->ctx);
+            if (b >= 0) { rxBufPush(st, (uint8_t)b); }
+        }
+
+        // --- 4. Try to decode (may process multiple back-to-back frames) ---
+        while (st.rxCount >= CombusFrameMinLen) {
+            if (tryDecode(st) == 0u) {
+                break;
+            }
+        }
+    }
 }
 
 
 
-/** @brief Return latest valid snapshot, or nullptr if no frame received yet. */
-
-const ComBusFrame* combus_rx_snapshot() {
-	return comBusRx.snapValid ? &comBusRx.snap : nullptr;
+/** @brief Return latest valid snapshot for one link, or nullptr if no frame received yet. */
+const ComBusFrame* combus_rx_snapshot( uint8_t linkIdx )
+{
+    if (!s_rxStates || linkIdx >= s_capacity) { return nullptr; }
+    const CombusRxState& st = s_rxStates[linkIdx];
+    return st.snapValid ? &st.snap : nullptr;
 }
 
 
 
-/** @brief Milliseconds elapsed since the last valid frame, or UINT32_MAX if never received. */
-
-uint32_t combus_rx_age_ms() {
-	if (!comBusRx.everReceived) {
-		return UINT32_MAX;
-	}
-	return (uint32_t)(millis() - comBusRx.lastRxMs);
+/** @brief Milliseconds elapsed since the last valid frame on one link, or UINT32_MAX if never received. */
+uint32_t combus_rx_age_ms( uint8_t linkIdx )
+{
+    if (!s_rxStates || linkIdx >= s_capacity) { return UINT32_MAX; }
+    const CombusRxState& st = s_rxStates[linkIdx];
+    if (!st.everReceived) {
+        return UINT32_MAX;
+    }
+    return (uint32_t)(millis() - st.lastRxMs);
 }
 
 
 
-/** @brief True if a valid frame was received within the last timeoutMs milliseconds. */
-
-bool combus_rx_is_alive(uint32_t timeoutMs) {
-	return comBusRx.everReceived && (combus_rx_age_ms() < timeoutMs);
+/** @brief True if a valid frame was received within the last timeoutMs milliseconds on one link. */
+bool combus_rx_is_alive( uint8_t linkIdx, uint32_t timeoutMs )
+{
+    if (!s_rxStates || linkIdx >= s_capacity) { return false; }
+    const CombusRxState& st = s_rxStates[linkIdx];
+    return st.everReceived && (combus_rx_age_ms(linkIdx) < timeoutMs);
 }
 
 // EOF combus_rx.cpp

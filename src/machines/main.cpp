@@ -54,9 +54,10 @@ void loop() {
   sys_manager_update(comBus);
 
     // Open-drain failsafe: no physical input source refreshed the bus this
-    // cycle.  Read directly from `comBus.isDrived` (the open-drain invariant
-    // guarantees `sys_manager_reset()` is the only writer of `false`).
-  if (!comBus.isDrived) {
+    // cycle.  Read directly from `comBus.isNotDrived` (FS1 — inverted semantics,
+    // true = fault).  The open-drain invariant guarantees `sys_manager_reset()`
+    // is the only writer of `true`.
+  if (comBus.isNotDrived) {
     if (!s_failsafeWasActive) {
       sys_log_warn("[SYSTEM][SAFE] reason=no_input_source action=force_idle_and_lock\n");
       stopAllDcDrivers(machine);
@@ -69,7 +70,8 @@ void loop() {
                          ChanLayer::LOCAL);
       s_failsafeWasActive = true;
     }
-    combus_set_runlevel(comBus, RunLevel::IDLE);
+    // RL3: runLevel is now a plain analog channel — write RUNLEVEL=IDLE via the generic accessor.
+    combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::IDLE, ChanLayer::LOCAL);
     return;  // dashboard runs on its own FreeRTOS task (Core 0)
   }
   s_failsafeWasActive = false;
@@ -86,15 +88,17 @@ void loop() {
 // =============================================================================
 
 	// --- 1. RunLevel tracking and timing tokens ---
+  // RL3: lastRunLevel reads from the generic analog channel RUNLEVEL (no dedicated struct field).
   static RunLevel lastRunLevel = RunLevel::NOT_YET_SET;
   static uint32_t stateTM      = 0;
 
 	// --- 2. RunLevel change detection ---
-  bool isNewRunLevel = (comBus.runLevel != lastRunLevel);
-  lastRunLevel = comBus.runLevel;  // Capture BEFORE switch — prevents mid-loop transitions from masking isNewRunLevel
+  const RunLevel curRunLevel = (RunLevel)comBus.analogBus[static_cast<uint8_t>(AnalogComBusID::RUNLEVEL)].value;
+  bool isNewRunLevel = (curRunLevel != lastRunLevel);
+  lastRunLevel = curRunLevel;  // Capture BEFORE switch — prevents mid-loop transitions from masking isNewRunLevel
 
 	// --- 3. RunLevel Execution ---
-  switch (comBus.runLevel) {
+  switch (curRunLevel) {
 
     // ---------------------------------------------------------
     case RunLevel::IDLE : {
@@ -112,7 +116,8 @@ void loop() {
       const bool keyActive = comBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::KEY_ACTIVE)].value;
       if (!keyActive && (millis() - stateTM >= kSleepTimeoutMs)) {
           sys_log_info("[SYSTEM][EVENT] reason=sleep_timeout action=enter_SLEEPING\n");
-          combus_set_runlevel(comBus, RunLevel::SLEEPING);
+          // RL3: generic analog write via RUNLEVEL channel.
+          combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::SLEEPING, ChanLayer::LOCAL);
       }
       break;
     }
@@ -129,7 +134,8 @@ void loop() {
       }
 
         // --- 1. Auto-transition to RUNNING ---
-        combus_set_runlevel(comBus, RunLevel::RUNNING);
+        // RL3: generic analog write via RUNLEVEL channel.
+        combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::RUNNING, ChanLayer::LOCAL);
       break;
     }
 
@@ -172,7 +178,8 @@ void loop() {
         if (active) s_lastActivityMs = millis();
         if (millis() - s_lastActivityMs >= kEngineOffTimeoutMs) {
             sys_log_info("[SYSTEM][EVENT] reason=idle_timeout action=enter_IDLE\n");
-            combus_set_runlevel(comBus, RunLevel::IDLE);
+            // RL3: generic analog write via RUNLEVEL channel.
+            combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::IDLE, ChanLayer::LOCAL);
             break;
         }
       }
@@ -205,7 +212,8 @@ void loop() {
         disableAllDcDrivers(machine);
       }
         // Auto-transition to IDLE — no shutdown sequence implemented yet (winter 2026).
-        combus_set_runlevel(comBus, RunLevel::IDLE);
+        // RL3: generic analog write via RUNLEVEL channel.
+        combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::IDLE, ChanLayer::LOCAL);
       break;
     }
 
@@ -238,8 +246,9 @@ void loop() {
   // registered in the machine chain (see doc/WIP - Failsafe module
   // design.md §9). To be removed when that proc is in place.
   if (comBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::FAILSAFE)].value) {
-    if (comBus.runLevel != RunLevel::SLEEPING) {
-      combus_set_runlevel(comBus, RunLevel::SLEEPING);
+    if (curRunLevel != RunLevel::SLEEPING) {
+      // RL3: generic analog write via RUNLEVEL channel.
+      combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::SLEEPING, ChanLayer::LOCAL);
       sys_log_warn("[SYSTEM][SAFE] reason=failsafe_aggregator action=enter_SLEEPING\n");
     }
   }

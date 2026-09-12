@@ -7,6 +7,7 @@
 
 #include "dashboard_sig.h"
 #include <core/system/debug/dashboard/dashboard.h>
+#include "combus_ids.h"   // RL3: AnalogComBusID::RUNLEVEL — uses the generated combus_generated/ CPPPATH
 
 #include <Arduino.h>
 #include <stdio.h>
@@ -75,8 +76,8 @@ static void sigValFmt(const SigDevice& d, char* out, size_t sz) {
  * @brief Return true if the ComBus channel backing @p d is presently driven.
  */
 static bool sigIsDriven(const SigDevice& d) {
-	(void)d;   // channel granularity removed — isDrived is bus-level
-	return s_bus ? s_bus->isDrived : false;
+	(void)d;   // channel granularity removed — isNotDrived is bus-level (FS1 — inverted)
+	return s_bus ? !s_bus->isNotDrived : false;  // FS1 — inverted: true = healthy (driven)
 }
 
 
@@ -103,8 +104,9 @@ static void render_sig_view() {
 		dLine("%s%*s%s", left, (int)DashInnerW - lLen - rLen, "", right);
 	}
 	dMid();
-	dLine("  RunLevel: %-12s  Sig devices: %u",
-	      dashRunLevelStr(s_bus->runLevel), (unsigned)s_mach->sigDevCount);
+		// RL3: runLevel is now a plain analog channel — read from analogBus[RUNLEVEL].
+		dLine("  RunLevel: %-12s  Sig devices: %u",
+		      dashRunLevelStr((RunLevel)s_bus->analogBus[static_cast<uint8_t>(AnalogComBusID::RUNLEVEL)].value), (unsigned)s_mach->sigDevCount);
 	dMid();
 	dLine("  %-2s  %-32s  %-12s  %-6s  %-5s  %s",
 	      "ID", "Name", "Usage", "Chan", "Value", "Drv");

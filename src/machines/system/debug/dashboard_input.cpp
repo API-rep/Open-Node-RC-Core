@@ -43,7 +43,7 @@ static void renderDigitalCompact(const ComBus* bus, uint8_t n)
 		for (uint8_t j = r; j < r + 4u && j < n; ++j) {
 			const char* nm  = bus->digitalBus[j].infoName ? bus->digitalBus[j].infoName : "?";
 			const char* val = bus->digitalBus[j].value    ? "ON " : "off";
-			const char  drv = bus->isDrived ? '*' : ' ';
+			const char  drv = bus->isNotDrived ? ' ' : '*';  // FS1 — inverted: '*' = healthy (driven)
 			p += snprintf(buf + p, sizeof(buf) - (size_t)p,
 			              "#%-2u %-14.14s:%-3s%c  ", j, nm, val, drv);
 		}
@@ -81,7 +81,7 @@ static void render_input_view() {
 		const char* name = s_bus->analogBus[i].infoName ? s_bus->analogBus[i].infoName : "?";
 		dLine("  %2u   %-40.40s  %5u  %+4d%%  %s",
 		      i, name, raw, pct,
-		      s_bus->isDrived ? "yes" : "no");
+		      s_bus->isNotDrived ? "no" : "yes");  // FS1 — inverted: "yes" = healthy (driven)
 	}
 
 		// --- Digital channels ---
@@ -94,8 +94,9 @@ static void render_input_view() {
 	dMid();
 	dLine("  combus state");
 	dMid();
+	// RL3: runLevel is now a plain analog channel — read from analogBus[RUNLEVEL].
 	dLine("  RunLevel: %-14s  keyOn: %-5s  battLow: %-5s  analogBusMax: %-7u  %u analog + %u digital ch",
-	      dashRunLevelStr(s_bus->runLevel),
+	      dashRunLevelStr((RunLevel)s_bus->analogBus[static_cast<uint8_t>(AnalogComBusID::RUNLEVEL)].value),
 	      s_bus->digitalBus[static_cast<uint8_t>(DigitalComBusID::KEY_ACTIVE)].value ? "YES" : "NO",
 	      s_bus->digitalBus[static_cast<uint8_t>(DigitalComBusID::FAILSAFE_VBAT)].value ? "FAIL" : "OK",
 	      (unsigned)s_bus->analogBusMaxVal, s_analogCh, s_digitalCh);

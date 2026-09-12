@@ -32,7 +32,7 @@ void input_update(ComBus &bus) {
     for (uint8_t i = 0; i < InputDigitalMapCount; i++) {
       combus_set_digital(bus, InputDigitalMapArray[i].busChannel, false, ChanLayer::LOCAL);
     }
-    return;   // source inactive — isDrived left as pre-cleared by sys_manager
+    return;   // source inactive — isNotDrived left as pre-set by sys_manager (FS1 — inverted semantics)
   }
 
 // ==========================================================
@@ -65,8 +65,9 @@ void input_update(ComBus &bus) {
     combus_set_digital(bus, m.busChannel, finalState, ChanLayer::LOCAL);
   }
 
-    // --- Mark bus as driven by this physical source ---
-  bus.isDrived    = true;
+    // --- Mark bus as driven by this physical source (FS1 — inverted semantics) ---
+    // Clear isNotDrived: at least one source refreshed the bus this cycle (healthy).
+  bus.isNotDrived = false;
   bus.lastFrameMs = millis();
 }
 

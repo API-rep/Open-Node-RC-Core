@@ -11,21 +11,32 @@
  *   Incoming bytes are accumulated in an internal ring buffer.
  *   A SOF-scan re-synchronizes framing on corruption or line garbage.
  *
- * Typical integration:
+ * Typical integration (via combus_protocol_init_all — preferred):
  * @code
- *    // Caller-owned backing storage:
+ *   // Caller-owned backing storage:
  *   static uint16_t analog[N_ANALOG];
  *   static bool     digital[N_DIGITAL];
  *
- *    // In setup():
+ *   // In setup():
  *   NodeCom* com = uart_com_init(&Serial2, BAUD, RX_PIN, TX_PIN, "sound_rx");
  *   constexpr ComBusFrameCfg cfg = { N_ANALOG, N_DIGITAL };
- *   combus_rx_init(com, cfg, analog, digital);
-
  *
- *    // In loop():
+ *   // Caller-owned per-link state pool (size = link count):
+ *   static CombusRxState rxStates[1];
+ *   combus_rx_register_pool(rxStates, 1);
+ *
+ *   // Caller-owned link descriptor (single source of truth):
+ *   ComBusLink link{};
+ *   link.com        = com;
+ *   link.rxCfg      = cfg;
+ *   link.analogBuf  = analog;
+ *   link.digitalBuf = digital;
+ *   link.layer      = ChanLayer::LOCAL;
+ *   combus_protocol_init(0, &link);
+ *
+ *   // In loop():
  *   combus_rx_update();
- *   const ComBusFrame* snap = combus_rx_snapshot();
+ *   const ComBusFrame* snap = combus_rx_snapshot(0);
  * @endcode
  *****************************************************************************/
 #pragma once
@@ -34,79 +45,187 @@
 #include <stdbool.h>
 
 #include <core/system/hw/node_com.h>
-#include <core/system/combus/frame/combus_frame.h>
-#include <core/system/combus/frame/combus_frame_defs.h>
+#include <core/system/combus/combus_defs.h>
+#include <core/system/combus/protocol/frame/combus_frame.h>
+#include <core/system/combus/protocol/frame/combus_handshake.h>   // CombusHandshakeContext (full def needed for CombusRxState)
 
 
 // =============================================================================
-// 1. PUBLIC API
+// 1. PROTOCOL CONSTANT  (single source of truth for the ring buffer size)
 // =============================================================================
 
 /**
- * @brief Initialize the ComBus receiver.
+ * @brief Ring buffer capacity for one ComBus RX link.
  *
- * @param nodeCom    NodeCom transport interface (from *_com_init).
- * @param frameCfg   Combus frame config (buffer sizes: nAnalog, nDigital)
- * @param analogBuf  Caller-allocated analog buffer array
-
- * @param digitalBuf Caller-allocated digital buffer array
+ * @details Fixed protocol constraint, not a link count.  The protocol
+ *   length field is a `uint8_t`, so no single frame can ever exceed
+ *   UINT8_MAX.  This constant is the single source of truth for the
+ *   per-link ring buffer size — used both as the array dimension in
+ *   `CombusRxState::rxBuf` and as the modulo bound in the ring-buffer
+ *   helpers in `combus_rx.cpp`.
  */
-void combus_rx_init( NodeCom*            nodeCom,
-                     ComBusFrameCfg      frameCfg,
-                     uint16_t*           analogBuf,
-                     bool*               digitalBuf );
+static constexpr uint8_t CombusRxBufSize = UINT8_MAX;  ///< max encodable frame size — protocol length field is uint8_t
 
 
+
+// =============================================================================
+// 2. PER-LINK RX STATE  (storage layout — allocated and owned by the caller)
+// =============================================================================
 
 /**
- * @brief Check input buffer and decode incoming frames.
+ * @brief One ComBus RX link state slot.
  *
- * @details Drains available bytes into a ring buffer and attempts
- * to decode complete frames. May process multiple back-to-back frames per call.
- * Updates the internal snapshot on each valid frame.
+ * @details Exposed (not opaque) so the caller (board) can declare its
+ *   static array directly, without an internal core header.  Core never
+ *   allocates this — only writes into slots of a buffer handed to it via
+ *   combus_rx_register_pool().
+ *
+ *   Filled once by `combus_rx_init()` and updated every cycle by
+ *   `combus_rx_update()`.  Holds the transport interface, the static
+ *   frame layout, the per-link ring buffer (raw byte accumulator between
+ *   the transport ISR and the frame decoder), the decoded snapshot with
+ *   its validity flags, and the per-link handshake context.
+ *
+ *   The analog and digital pointers inside `snap` are wired to the
+ *   caller-provided buffers at init time and never reallocated.
+ *
+ *   Lifetime: static — valid for the entire program run after init.
  */
+struct CombusRxState {
+    NodeCom*                nodeCom          = nullptr; ///< active transport interface
+    ComBusFrameCfg          frameCfg         = {};      ///< static layout descriptor (nAnalog, nDigital)
 
+    // Per-link ring buffer — raw byte accumulator between the transport
+    // ISR and the frame decoder.  Sized to CombusRxBufSize (UINT8_MAX)
+    // because the protocol length field is uint8_t.
+    uint8_t                 rxBuf[CombusRxBufSize] = {};
+    uint8_t                 rxHead           = 0u;      ///< write index (ISR side)
+    uint8_t                 rxCount          = 0u;      ///< number of valid bytes in the ring buffer
+
+    // Decoded snapshot — updated on each valid frame, read by the
+    // application via combus_rx_snapshot().  The analog/digital pointers
+    // are wired to caller-provided buffers at init time.
+    ComBusFrame             snap             = {};
+    bool                    snapValid        = false;   ///< true if snap holds a freshly-decoded frame
+    uint32_t                lastRxMs         = 0u;      ///< timestamp of last successfully decoded frame (ms)
+    bool                    everReceived     = false;   ///< true once at least one valid frame has been decoded
+
+    // P3 — per-link handshake context.  Points to the same context as
+    // CombusTxState::handshakeCtx (shared between TX and RX of the same
+    // link).  Wired by combus_protocol_init() — see combus_protocol.cpp.
+    // Multiple independent ComBus interfaces may coexist; each link has
+    // its own context.  See CombusHandshakeContext in combus_handshake.h.
+    CombusHandshakeContext* handshakeCtx     = nullptr;
+
+    // RL5 — optional apply target.  When non-null, combus_rx_update()
+    // calls combus_frame_apply() automatically after each successful
+    // decode, writing the decoded channels into this ComBus instance.
+    // When null (default), the caller is responsible for calling
+    // combus_frame_apply() manually (legacy behaviour, used by tests).
+    ComBus*                target            = nullptr;
+};
+
+
+
+// =============================================================================
+// 3. POOL REGISTRATION  (call ONCE at boot, before any combus_rx_init)
+// =============================================================================
+
+/**
+ * @brief Register the ComBus RX state pool storage.
+ *
+ * @details Core owns ZERO static storage for the per-link RX state.  The
+ *   caller (machine, sound node, or any future integrator) allocates a
+ *   static CombusRxState[] array sized to its own real needs and hands
+ *   it to core exactly once via combus_rx_register_pool(), before the
+ *   first combus_rx_init() call.  This pool is shared by every ComBus
+ *   link in the program — its capacity is fixed for the program's
+ *   lifetime.
+ *
+ *   A second call is rejected (logged, ignored) — the pool is meant to
+ *   be wired once at boot, by whichever init sequence runs first.
+ *
+ * @param buffer    Statically-allocated CombusRxState array (caller-owned,
+ *                  must outlive the program — no heap, no local/temporary
+ *                  storage).
+ * @param capacity  Number of usable slots in @p buffer.
+ */
+void combus_rx_register_pool( CombusRxState* buffer, uint8_t capacity );
+
+
+
+// =============================================================================
+// 4. PER-LINK INIT
+// =============================================================================
+
+/**
+ * @brief Initialize the ComBus receiver for one link.
+ *
+ * @details Writes into the per-link state slot registered by
+ *   combus_rx_register_pool().  linkIdx must be < the capacity passed
+ *   to combus_rx_register_pool(); out-of-range indices are silently
+ *   rejected.
+ *
+ * @param linkIdx     Index of this link in the per-link state array.
+ * @param nodeCom     Claimed transport interface (from *_com_init).
+ * @param frameCfg    ComBus layout descriptor (nAnalog, nDigital).
+ * @param analogBuf   Caller-owned analog output buffer (size = frameCfg.nAnalog).
+ * @param digitalBuf  Caller-owned digital output buffer (size = frameCfg.nDigital).
+ * @param target      RL5 — optional ComBus instance to auto-apply decoded
+ *                    frames onto.  When non-null, combus_rx_update() calls
+ *                    combus_frame_apply() after each successful decode.
+ *                    When null (default), no auto-apply is performed —
+ *                    the caller must call combus_frame_apply() manually
+ *                    (legacy behaviour, used by tests).
+ */
+void combus_rx_init( uint8_t            linkIdx,
+                     NodeCom*           nodeCom,
+                     ComBusFrameCfg     frameCfg,
+                     uint16_t*          analogBuf,
+                     bool*              digitalBuf,
+                     ComBus*            target   = nullptr );
+
+
+
+// =============================================================================
+// 5. RECEIVE UPDATE
+// =============================================================================
+
+/**
+ * @brief Drain the transport and decode any pending frame.
+ *
+ * @details Non-blocking.  Drains all available bytes from the transport
+ *   into the per-link ring buffer, then attempts to decode one frame.
+ *   Updates the internal snapshot on each valid frame.  Iterates over
+ *   every link registered by combus_rx_register_pool().
+ */
 void combus_rx_update();
 
 
 
-/**
- * @brief Return a pointer to the latest valid decoded snapshot.
- *
- * @details Returns nullptr until at least one valid frame has been received.
- * The pointer is stable until the next valid frame overwrites the snapshot.
- *
- * @return Const pointer to the latest ComBusFrame, or nullptr.
- */
-
-const ComBusFrame* combus_rx_snapshot();
-
-
+// =============================================================================
+// 6. SNAPSHOT ACCESS
+// =============================================================================
 
 /**
- * @brief Milliseconds since the last valid frame was received.
+ * @brief Get the latest decoded frame for one link.
  *
- * @return Age in ms, or UINT32_MAX if no frame has ever been received.
+ * @details Returns a pointer to the per-link snapshot.  The pointer is
+ *   valid for the entire program run; the contents are updated on each
+ *   valid frame by combus_rx_update().  The caller must check the
+ *   `valid` flag before reading analog/digital values.
+ *
+ * @param linkIdx  Index of this link in the per-link state array.
+ * @return         Pointer to the per-link snapshot, or nullptr if
+ *                 linkIdx is out of range.
  */
-
-uint32_t combus_rx_age_ms();
-
-
-
-/**
- * @brief True if a valid frame was received within the last timeoutMs ms.
- */
-
-bool combus_rx_is_alive(uint32_t timeoutMs = 500u);
+const ComBusFrame* combus_rx_snapshot( uint8_t linkIdx );
 
 
 
 // =============================================================================
-// 2. PER-LINK HANDSHAKE CONTEXT WIRING (P3)
+// 7. PER-LINK HANDSHAKE CONTEXT WIRING (P3)
 // =============================================================================
-
-// Forward declaration — the full definition lives in combus_handshake.h.
-struct CombusHandshakeContext;
 
 /**
  * @brief Wire the per-link handshake context to the RX module.
@@ -119,9 +238,10 @@ struct CombusHandshakeContext;
  *   Multiple independent ComBus interfaces may coexist; each link has
  *   its own context.  See CombusHandshakeContext in combus_handshake.h.
  *
- * @param ctx  Per-link handshake context (may be null).
+ * @param linkIdx  Index of this link in the per-link state array.
+ * @param ctx      Per-link handshake context (may be null to disable sharing).
  */
-void combus_rx_set_handshake_ctx( CombusHandshakeContext* ctx );
+void combus_rx_set_handshake_ctx( uint8_t                linkIdx,
+                                  CombusHandshakeContext* ctx );
 
 // EOF combus_rx.h
-

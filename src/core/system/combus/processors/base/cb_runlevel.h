@@ -21,6 +21,7 @@
 #include <defs/machines_defs.h>         // RunLevel
 #include <core/system/combus/combus_defs.h>        // ComBus, ChanLayer
 #include <struct/combus_proc_struct.h>   // CbProc
+#include "combus_ids.h"   // RL3: AnalogComBusID::RUNLEVEL — uses the generated combus_generated/ CPPPATH
 
 
 // =============================================================================

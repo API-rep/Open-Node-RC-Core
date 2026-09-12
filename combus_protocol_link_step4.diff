@@ -1,0 +1,737 @@
+diff --git a/src/core/system/combus/protocol/combus_protocol.cpp b/src/core/system/combus/protocol/combus_protocol.cpp
+index b328225..939bf08 100644
+--- a/src/core/system/combus/protocol/combus_protocol.cpp
++++ b/src/core/system/combus/protocol/combus_protocol.cpp
+@@ -3,49 +3,74 @@
+  * @brief ComBus protocol layer — transport-agnostic implementation.
+  *****************************************************************************/
+ 
+-#if defined(COMBUS_UART_TX) || defined(COMBUS_UART_RX) || defined(COMBUS_UART)
+-
+ #include "combus_protocol.h"
+ 
+ #include <core/system/combus/protocol/combus_tx.h>
+ #include <core/system/combus/protocol/combus_rx.h>
+-#include <core/system/combus/frame/combus_handshake.h>  // CombusHandshakeContext
+-#include <core/system/combus/frame/combus_handshake_rx.h>  // (no-op, ensures include path)
++#include <core/system/combus/protocol/frame/combus_handshake.h>  // CombusHandshakeContext
++#include <core/system/combus/protocol/frame/combus_handshake_rx.h>  // (no-op, ensures include path)
++#include <core/system/debug/logging/debug.h>                       // sys_log_err
+ 
+ 
+ 
+ // =============================================================================
+-// 1. COMBUS PROTOCOL INIT
++// 1. COMBUS PROTOCOL INIT — ONE-SHOT ALLOCATION
+ // =============================================================================
+ 
+ 
+-void combus_protocol_init( NodeCom*               com,
+-                           ComBusFrameCfg         txCfg,
+-                           uint32_t               txHz,
+-                           ComBusFrameCfg         rxCfg,
+-                           uint16_t*              analogBuf,
+-                           bool*                  digitalBuf,
+-                           CombusHandshakeContext* handshakeCtx )
++void combus_protocol_init_all( ComBusLink* links, uint8_t count )
+ {
+-        // --- Wire the per-link handshake context BEFORE init so the
++        // --- 1. Allocate the per-link TX state array ---
++    combus_tx_init_all(count);
++
++        // --- 2. Allocate the per-link RX state array ---
++        // TODO(step5): combus_rx_init_all(count) — RX side will be
++        //   dynamised in the next step.  Until then, combus_rx_init()
++        //   still uses its singleton and the RX side will not compile
++        //   for multi-link callers.  This is expected and tracked.
++
++        // --- 3. Initialise every link in the caller-owned array ---
++    for (uint8_t i = 0u; i < count; ++i) {
++        combus_protocol_init(i, &links[i]);
++    }
++}
++
++
++// =============================================================================
++// 2. COMBUS PROTOCOL INIT — PER-LINK
++// =============================================================================
++
++
++void combus_protocol_init( uint8_t linkIdx, ComBusLink* link )
++{
++        // --- 1. Null guard ---
++    if (!link || !link->com) { return; }
++
++        // --- 2. Layer guard — UNDEFINED and SYSTEM are rejected silently
++        //    (logged, no crash).  Only REMOTE and LOCAL are valid for a
++        //    physically transported link.
++    if (link->layer == ChanLayer::UNDEFINED || link->layer == ChanLayer::SYSTEM) {
++        sys_log_err("[COMBUS_PROTOCOL] init rejected — invalid layer for link '%s'\n",
++                    link->name);
++        return;
++    }
++
++        // --- 3. Wire the per-link handshake context BEFORE init so the
+         //    burst is armed on combus_tx_init() and the contract-
+         //    validated flag is shared between TX and RX.  P3.
+-    combus_tx_set_handshake_ctx(handshakeCtx);
+-    combus_rx_set_handshake_ctx(handshakeCtx);
+-
++    combus_tx_set_handshake_ctx(linkIdx, link->handshakeCtx);
++    combus_rx_set_handshake_ctx(link->handshakeCtx);
+ 
+-        // --- TX protocol layer ---
+-    #if defined(COMBUS_UART_TX) || defined(COMBUS_UART)
+-      combus_tx_init(com, txCfg, txHz);
+-    #endif
++        // --- 4. TX protocol layer — only if txCfg is present ---
++    if (link->txCfg) {
++        combus_tx_init(linkIdx, link->com, *link->txCfg, link->txHz);
++    }
+ 
+-        // --- RX protocol layer ---
+-    #if defined(COMBUS_UART_RX) || defined(COMBUS_UART)
+-      combus_rx_init(com, rxCfg, analogBuf, digitalBuf);
+-    #endif
++        // --- 5. RX protocol layer — only if rxCfg is present ---
++    if (link->rxCfg) {
++        combus_rx_init(link->com, *link->rxCfg, link->analogBuf, link->digitalBuf);
++    }
+ }
+ 
+ 
+-#endif  // COMBUS_UART_TX / COMBUS_UART_RX / COMBUS_UART
+-
+ // EOF combus_protocol.cpp
+diff --git a/src/core/system/combus/protocol/combus_protocol.h b/src/core/system/combus/protocol/combus_protocol.h
+index 8b17676..7ade2ba 100644
+--- a/src/core/system/combus/protocol/combus_protocol.h
++++ b/src/core/system/combus/protocol/combus_protocol.h
+@@ -1,19 +1,18 @@
+ /******************************************************************************
+- * @file combus_uart.h
+- * @brief ComBus UART protocol layer — wire TX/RX protocol layers to transport.
++ * @file combus_protocol.h
++ * @brief ComBus protocol layer — wire TX/RX protocol layers to a transport.
+  *
+- * @details Initialises the TX and/or RX ComBus protocol layers over the UART
+- * transport that was already opened by uart_init().  Called after hw_init(),
+- * from the env-level com_init() wrapper.
++ * @details Initialises the TX and/or RX ComBus protocol layers over any
++ * NodeCom* transport that was already opened by the caller (e.g.
++ * uart_com_init()).  Called after hw_init(), from the env-level com_init()
++ * wrapper.
+  *
+- * The UART port and its NodeCom* must have been opened beforehand via
+- * uart_init() — this function only wires the protocol layers to the existing
+- * transport handle.
+- *
+- * Build-flag behaviour:
+- *   -D COMBUS_UART=N     — full-duplex: TX and RX layers both initialised
+- *   -D COMBUS_UART_TX=N  — TX layer only
+- *   -D COMBUS_UART_RX=N  — RX layer only
++ * The transport handle and its configuration are passed in as a single
++ * ComBusLink descriptor (see section 1 below).  The function inspects
++ * link->txCfg and link->rxCfg to decide which protocol layers to bring up:
++ *   - txCfg present  → combus_tx_init() is called
++ *   - rxCfg present  → combus_rx_init() is called
++ *   - both absent    → no-op (link is fully inactive)
+  *
+  * The caller retains ownership of analogBuf and digitalBuf — they must have
+  * static storage duration because the RX module holds a live pointer to them.
+@@ -26,61 +25,133 @@
+  * Typical TX-only caller (env wrapper):
+  * @code
+  *   constexpr ComBusFrameCfg txCfg = { N_ANALOG, N_DIGITAL };
+- *   combus_protocol_init(txCfg, ComBusUartTxHz, {}, nullptr, nullptr);
++ *   ComBusLink link = {};
++ *   link.com   = uart_get_combus_com();
++ *   link.txCfg = txCfg;
++ *   link.txHz  = ComBusUartTxHz;
++ *   link.layer = ChanLayer::REMOTE;
++ *   combus_protocol_init(&link);
+  * @endcode
+-
+  *
+  * Typical RX-only caller (env wrapper):
+  * @code
+  *   static uint16_t analog[N_ANALOG];
+  *   static bool     digital[N_DIGITAL];
+  *   constexpr ComBusFrameCfg rxCfg = { N_ANALOG, N_DIGITAL };
+- *   combus_protocol_init({}, 0, rxCfg, analog, digital);
+-
++ *   ComBusLink link = {};
++ *   link.com        = uart_get_combus_com();
++ *   link.rxCfg      = rxCfg;
++ *   link.analogBuf  = analog;
++ *   link.digitalBuf = digital;
++ *   link.layer      = ChanLayer::REMOTE;
++ *   combus_protocol_init(&link);
+  * @endcode
+  *****************************************************************************/
+ #pragma once
+ 
+ #include <stdint.h>
+ #include <stdbool.h>
++#include <optional>
+ 
+ #include <core/system/hw/node_com.h>
+-#include <core/system/combus/frame/combus_frame_defs.h>
+-#include <core/system/combus/frame/combus_handshake.h>   // CombusHandshakeContext (P3)
++#include <core/system/combus/combus_defs.h>                       // ChanLayer
++#include <core/system/combus/protocol/frame/combus_frame_defs.h>
++#include <core/system/combus/protocol/frame/combus_handshake.h>   // CombusHandshakeContext (P3)
+ 
+ 
+ // =============================================================================
+-// 1. PUBLIC API
++// 1. COMBUS LINK DESCRIPTOR
+ // =============================================================================
+ 
+-#if defined(COMBUS_UART_TX) || defined(COMBUS_UART_RX) || defined(COMBUS_UART)
+-
+ /**
+- * @brief Initialise the ComBus protocol layers over any open transport.
++ * @brief Descriptive structure of one ComBus physical link.
+  *
+- * @details Passes @p com to combus_tx_init() and/or combus_rx_init()
+- * depending on which build flags are active.  The transport itself is
+- * opened by the caller (e.g. uart_com_init()) before calling this function.
++ * @details Aggregates every parameter needed to bring up a single ComBus
++ *   link over any NodeCom* transport. A link is the unit of physical
++ *   connectivity between two nodes (e.g. machine <-> sound node over
++ *   UART2, or machine <-> remote over ESP-NOW). Multiple links may
++ *   coexist in the same program; each owns its own transport handle,
++ *   its own handshake context, and its own RX buffers.
+  *
+- * TX side parameters are ignored when only COMBUS_UART_RX is defined.
+- * RX side parameters are ignored when only COMBUS_UART_TX is defined.
++ *   The struct is purely descriptive at this stage — combus_protocol_init()
++ *   still consumes its parameters positionally. A future revision will
++ *   accept a ComBusLink (or an array of them) directly.
+  *
+- * @param com        Open NodeCom* handle (from any *_com_init).
+- * @param txCfg      ComBus frame config for TX (nAnalog, nDigital).
+- * @param txHz       TX frame rate in Hz.
+- * @param rxCfg      ComBus frame config for RX (nAnalog, nDigital).
++ * @note Only ChanLayer::REMOTE and ChanLayer::LOCAL are valid here.
++ *   ChanLayer::SYSTEM describes an intra-device loopback that is never
++ *   transported over a physical link and must therefore never populate
++ *   a ComBusLink.
++ */
++struct ComBusLink {
++    NodeCom*                       com          = nullptr;  ///< Transport handle, shared by TX and RX of this link.
++    std::optional<ComBusFrameCfg>  txCfg        = std::nullopt; ///< TX frame layout — absent = TX inactive on this link.
++    uint32_t                       txHz         = 0u;        ///< TX frame rate (Hz) — ignored when txCfg is absent.
++    std::optional<ComBusFrameCfg>  rxCfg        = std::nullopt; ///< RX frame layout — absent = RX inactive on this link.
++    uint16_t*                      analogBuf    = nullptr;   ///< Caller-owned RX analog buffer — ignored when rxCfg is absent.
++    bool*                          digitalBuf   = nullptr;   ///< Caller-owned RX digital buffer — ignored when rxCfg is absent.
++    CombusHandshakeContext*        handshakeCtx = nullptr;   ///< Per-link handshake state (P3) — shared between TX and RX of this link.
++    ChanLayer                      layer        = ChanLayer::UNDEFINED; ///< Propagation layer of this link — REMOTE or LOCAL only (never SYSTEM).
++    const char*                    name         = "combus";  ///< Descriptive tag for logs and debug output.
++};
++
+ 
+- * @param analogBuf  Caller-owned backing buffer for analog channels (RX side).
+- * @param digitalBuf Caller-owned backing buffer for digital channels (RX side).
++// =============================================================================
++// 2. PUBLIC API
++// =============================================================================
++
++/**
++ * @brief One-shot allocation of the per-link state arrays (TX + RX).
++ *
++ * @details Called exactly once at boot, before any combus_protocol_init()
++ *   call.  The number of links is decided by the caller (typically
++ *   std::size(links) on a caller-owned ComBusLink[] array).  This module
++ *   never imposes a hard cap on the link count.
++ *
++ *   Subsequent calls are silently ignored (one-shot guard).
++ *
++ * @param links  Caller-owned array of ComBusLink descriptors (only used
++ *               here to read its size — the array itself is iterated
++ *               later by combus_protocol_init()).
++ * @param count  Number of entries in @p links.
+  */
+-void combus_protocol_init( NodeCom*               com,
+-                           ComBusFrameCfg         txCfg,
+-                           uint32_t               txHz,
+-                           ComBusFrameCfg         rxCfg,
+-                           uint16_t*              analogBuf,
+-                           bool*                  digitalBuf,
+-                           CombusHandshakeContext* handshakeCtx );
++void combus_protocol_init_all( ComBusLink* links, uint8_t count );
++
++
+ 
+-#endif  // COMBUS_UART_TX / COMBUS_UART_RX / COMBUS_UART
++/**
++ * @brief Initialise the ComBus protocol layers for one physical link.
++ *
++ * @details Inspects @p link to decide which protocol layers to bring up:
++ *   - link->txCfg present  → combus_tx_init() is called with link->com,
++ *                             *link->txCfg, link->txHz
++ *   - link->rxCfg present  → combus_rx_init() is called with link->com,
++ *                             *link->rxCfg, link->analogBuf, link->digitalBuf
++ *   - both absent          → no-op (link is fully inactive)
++ *
++ *   The per-link handshake context (link->handshakeCtx) is wired to both
++ *   TX and RX BEFORE their respective init calls, so the burst is armed
++ *   on combus_tx_init() and the contract-validated flag is shared between
++ *   TX and RX of the same link (P3).
++ *
++ *   The transport itself (link->com) must have been opened by the caller
++ *   (e.g. uart_com_init()) before calling this function.
++ *
++ *   The caller retains ownership of link->analogBuf and link->digitalBuf —
++ *   they must have static storage duration because the RX module holds a
++ *   live pointer to them.
++ *
++ *   Silent failure modes (logged via sys_log_err, no crash):
++ *     - link == nullptr or link->com == nullptr  → return immediately
++ *     - link->layer == ChanLayer::UNDEFINED      → return (uninitialised)
++ *     - link->layer == ChanLayer::SYSTEM         → return (loopback, never
++ *                                                   transported physically)
++ *
++ * @param linkIdx  Index of this link in the per-link state array
++ *                 (allocated by combus_protocol_init_all()).
++ * @param link     Fully-populated ComBusLink descriptor (see section 1).
++ *                 Must outlive the program — the protocol layers retain
++ *                 pointers to its members.
++ */
++void combus_protocol_init( uint8_t linkIdx, ComBusLink* link );
+ 
+ // EOF combus_protocol.h
+diff --git a/src/core/system/combus/protocol/combus_tx.cpp b/src/core/system/combus/protocol/combus_tx.cpp
+index a101017..369c781 100644
+--- a/src/core/system/combus/protocol/combus_tx.cpp
++++ b/src/core/system/combus/protocol/combus_tx.cpp
+@@ -7,9 +7,9 @@
+ 
+ #include <Arduino.h>  // millis()
+ 
+-#include <core/system/combus/frame/combus_frame.h>
+-#include <core/system/combus/frame/combus_handshake.h>
+-#include <core/system/combus/frame/combus_handshake_tx.h>
++#include <core/system/combus/protocol/frame/combus_frame.h>
++#include <core/system/combus/protocol/frame/combus_handshake.h>
++#include <core/system/combus/protocol/frame/combus_handshake_tx.h>
+ #include <core/system/debug/logging/debug.h>
+ 
+ 
+@@ -47,7 +47,27 @@ struct CombusTxState {
+ 
+ 
+ 
+-static CombusTxState comBusTx;  ///< Combus transmitter instance state
++// Per-link state array — allocated exactly once at boot by
++// combus_tx_init_all().  The number of links is decided by the caller
++// (typically the size of the ComBusLink[] array passed to
++// combus_protocol_init_all()); this module never imposes a hard cap.
++static CombusTxState* s_txStates  = nullptr;
++static uint8_t        s_linkCount = 0u;
++
++
++
++// =============================================================================
++// 1a. ONE-SHOT ALLOCATION
++// =============================================================================
++
++void combus_tx_init_all( uint8_t count )
++{
++        // One-shot guard — silently ignore re-entry or zero count.
++    if (s_txStates || count == 0u) { return; }
++
++    s_txStates  = new CombusTxState[count]();
++    s_linkCount = count;
++}
+ 
+ 
+ 
+@@ -55,9 +75,11 @@ static CombusTxState comBusTx;  ///< Combus transmitter instance state
+ // 1b. PER-LINK HANDSHAKE CONTEXT WIRING (P3)
+ // =============================================================================
+ 
+-void combus_tx_set_handshake_ctx( CombusHandshakeContext* ctx )
++void combus_tx_set_handshake_ctx( uint8_t                linkIdx,
++                                  CombusHandshakeContext* ctx )
+ {
+-    comBusTx.handshakeCtx = ctx;
++    if (!s_txStates || linkIdx >= s_linkCount) { return; }
++    s_txStates[linkIdx].handshakeCtx = ctx;
+ }
+ 
+ 
+@@ -68,42 +90,48 @@ void combus_tx_set_handshake_ctx( CombusHandshakeContext* ctx )
+ // =============================================================================
+ 
+ /**
+- * @brief Initialize the ComBus transmitter.
++ * @brief Initialize the ComBus transmitter for one link.
+  *
+  * @details Initialization sequence:
+- *   1. Guard check � null transport pointer or zero rate; returns immediately.
++ *   1. Guard check — null transport pointer, zero rate, or out-of-range
++ *      linkIdx; returns immediately.
+  *   2. Store the transport interface and frame layout descriptor.
+  *   3. Derive the transmit period from txHz (integer division, ms).
+  *   4. Log init confirmation.
+  */
+ 
+ void combus_tx_init(
++    uint8_t        linkIdx,  // index of this link in the per-link state array
+     NodeCom*       nodeCom,  // claimed transport interface (from uart_com_init or similar)
+     ComBusFrameCfg frameCfg, // static frame layout descriptor (nAnalog, nDigital)
+     uint32_t       txHz )    // frame transmit rate in Hz
+ 
+ {
+ 		// --- 1. Guard check ---
++	if (!s_txStates || linkIdx >= s_linkCount) { return; }
+ 	if (!nodeCom || txHz == 0u) { return; }
+ 
++	CombusTxState& st = s_txStates[linkIdx];
++
+ 		// --- 2. Store transport interface and frame layout ---
+-	comBusTx.nodeCom = nodeCom;
+-	comBusTx.frameCfg = frameCfg;
++	st.nodeCom  = nodeCom;
++	st.frameCfg = frameCfg;
+ 
+ 		// --- 3. Derive transmit period ---
+-	comBusTx.periodMs = 1000u / txHz;
++	st.periodMs = 1000u / txHz;
+ 
+ 		// --- 4. Reset handshake burst state on the linked context (P3).
+-	//    combus_protocol_init() wires comBusTx.handshakeCtx to the same
+-	//    context as comBusRx.handshakeCtx BEFORE calling combus_tx_init().
++	//    combus_protocol_init() wires st.handshakeCtx to the same
++	//    context as the RX side BEFORE calling combus_tx_init().
+ 	//    If the wiring is missing (legacy caller), the burst is simply
+ 	//    not armed — no crash, no UB.
+-	if (comBusTx.handshakeCtx) {
+-		combus_handshake_internal::startBurst(comBusTx.handshakeCtx);
++	if (st.handshakeCtx) {
++		combus_handshake_internal::startBurst(st.handshakeCtx);
+ 	}
+ 
+ 		// --- 5. Log init confirmation ---
+-	sys_log_info("[COMBUS_TX] init — transport='%s'  rate=%uHz  A%u+D%u\n",
++	sys_log_info("[COMBUS_TX] init — link=%u  transport='%s'  rate=%uHz  A%u+D%u\n",
++	             (unsigned)linkIdx,
+ 	             nodeCom->name, txHz, (unsigned)frameCfg.nAnalog, (unsigned)frameCfg.nDigital);
+ }
+ 
+@@ -117,9 +145,11 @@ void combus_tx_init(
+ /**
+  * @brief Encode and transmit one ComBus frame if the period has elapsed.
+  *
+- * @details Timer-gated, non-blocking � safe to call every loop:
+- *   1. Guard check � returns immediately if uninit or bus pointer is null.
+- *   2. Timer gate � returns if the transmit period has not elapsed.
++ * @details Timer-gated, non-blocking — safe to call every loop.  Iterates
++ *   over every link allocated by combus_tx_init_all(); each link has its
++ *   own timer gate, sequence counter, and handshake burst state.
++ *   1. Guard check — returns immediately if uninit or bus pointer is null.
++ *   2. Timer gate — returns if the transmit period has not elapsed.
+  *   3. Encode the ComBus state into a binary frame via `combus_frame_encode()`.
+  *   4. Send the frame through the transport interface and advance the sequence counter.
+  */
+@@ -128,59 +158,71 @@ void combus_tx_update(
+     const ComBus* bus,      // live ComBus state to encode
+     bool          failSafe) // set true to flag the frame as failsafe-active
+ {
+-		// --- 1. Guard check ---
+-	if (!comBusTx.nodeCom || comBusTx.periodMs == 0u || !bus) { return; }
+-
+-		// --- 1b. P3 — drive the boot-time handshake burst on the linked
+-	//    context.  Independent of the control-frame timer below — if
+-	//    both timers expire on the same call, two write() calls happen
+-	//    back-to-back (no priority / contention logic, per P3 constraint
+-	//    #2).  No-op when the burst is inactive or already validated.
+-	if (comBusTx.handshakeCtx) {
+-		combus_handshake_tx_update(comBusTx.handshakeCtx, comBusTx.nodeCom);
+-	}
++		// --- 0. Top-level guard ---
++	if (!s_txStates || !bus) { return; }
+ 
+-		// --- 2. Timer gate ---
+-	uint32_t now = millis();
+-	if ((now - comBusTx.lastTxMs) < comBusTx.periodMs) { return; }
+-	comBusTx.lastTxMs = now;
+-
+-
+-		// --- 3. Encode ---
++		// Shared scratch buffer — written then consumed synchronously inside
++		// the loop body, so no overlap between iterations is possible.
+ 	static uint8_t frame[255u];
+-	uint8_t frameLen = combus_frame_encode(
+-	    comBusTx.frameCfg,
+-	    frame,
+-	    bus,
+-	    comBusTx.seq,
+-	    failSafe
+-	);
+-
+-	if (frameLen == 0u) { return; }
+-
+-		// --- 4. Send via transport ---
+-	comBusTx.nodeCom->write(comBusTx.nodeCom->ctx, frame, frameLen);
+-
+-		// Capture the seq value that was actually written on the wire BEFORE
+-		// advancing — used by the debug log below. Important because the new
+-		// wrap rule (255 → 1, never 0) breaks the old "comBusTx.seq - 1u"
+-		// trick: after a real wrap, seq==1 and that expression would print
+-		// 0, which is misleading since value 0 is RESERVED for handshake
+-		// frames (see combus_handshake.h) and must NEVER appear in a control
+-		// frame log line.
+-	const uint8_t seqSent = comBusTx.seq;
+-
+-		// Advance seq counter. The control-frame range is 1..255 — value 0 is
+-		// reserved for future handshake frames (see combus_handshake.h) and must
+-		// never appear in a normal frame on the wire. Wrap from 255 → 1.
+-	comBusTx.seq++;
+-	if (comBusTx.seq == 0u) { comBusTx.seq = 1u; }
+-
+-	output_log_dbg("[COMBUS_TX] seq=%u  len=%u  rl=%d  flags=0x%02X\n",
+-	               (unsigned)seqSent,
+-	               (unsigned)frameLen,
+-	               (int)bus->runLevel,
+-	               (unsigned)(failSafe ? COMBUS_FLAG_FAILSAFE : 0u));
++
++		// --- Iterate over every allocated link ---
++	for (uint8_t i = 0u; i < s_linkCount; ++i) {
++		CombusTxState& st = s_txStates[i];
++
++			// --- 1. Per-link guard check ---
++		if (!st.nodeCom || st.periodMs == 0u) { continue; }
++
++			// --- 1b. P3 — drive the boot-time handshake burst on the linked
++		//    context.  Independent of the control-frame timer below — if
++		//    both timers expire on the same call, two write() calls happen
++		//    back-to-back (no priority / contention logic, per P3 constraint
++		//    #2).  No-op when the burst is inactive or already validated.
++		if (st.handshakeCtx) {
++			combus_handshake_tx_update(st.handshakeCtx, st.nodeCom);
++		}
++
++			// --- 2. Timer gate ---
++		uint32_t now = millis();
++		if ((now - st.lastTxMs) < st.periodMs) { continue; }
++		st.lastTxMs = now;
++
++
++			// --- 3. Encode ---
++		uint8_t frameLen = combus_frame_encode(
++		    st.frameCfg,
++		    frame,
++		    bus,
++		    st.seq,
++		    failSafe
++		);
++
++		if (frameLen == 0u) { continue; }
++
++			// --- 4. Send via transport ---
++		st.nodeCom->write(st.nodeCom->ctx, frame, frameLen);
++
++			// Capture the seq value that was actually written on the wire BEFORE
++		//    advancing — used by the debug log below. Important because the new
++		//    wrap rule (255 → 1, never 0) breaks the old "st.seq - 1u"
++		//    trick: after a real wrap, seq==1 and that expression would print
++		//    0, which is misleading since value 0 is RESERVED for handshake
++		//    frames (see combus_handshake.h) and must NEVER appear in a control
++		//    frame log line.
++		const uint8_t seqSent = st.seq;
++
++			// Advance seq counter. The control-frame range is 1..255 — value 0 is
++		//    reserved for future handshake frames (see combus_handshake.h) and must
++		//    never appear in a normal frame on the wire. Wrap from 255 → 1.
++		st.seq++;
++		if (st.seq == 0u) { st.seq = 1u; }
++
++		output_log_dbg("[COMBUS_TX] link=%u  seq=%u  len=%u  rl=%d  flags=0x%02X\n",
++		               (unsigned)i,
++		               (unsigned)seqSent,
++		               (unsigned)frameLen,
++		               (int)bus->runLevel,
++		               (unsigned)(failSafe ? COMBUS_FLAG_FAILSAFE : 0u));
++	}
+ }
+ 
+ 
+diff --git a/src/core/system/combus/protocol/combus_tx.h b/src/core/system/combus/protocol/combus_tx.h
+index 4f3a0d9..b3e9226 100644
+--- a/src/core/system/combus/protocol/combus_tx.h
++++ b/src/core/system/combus/protocol/combus_tx.h
+@@ -26,7 +26,7 @@
+ 
+ #include <core/system/hw/node_com.h>
+ #include <core/system/combus/combus_defs.h>
+-#include <core/system/combus/frame/combus_frame_defs.h>
++#include <core/system/combus/protocol/frame/combus_frame_defs.h>
+ 
+ 
+ // =============================================================================
+@@ -34,15 +34,36 @@
+ // =============================================================================
+ 
+ /**
+- * @brief Initialize the ComBus transmitter.
++ * @brief One-shot allocation of the per-link TX state array.
+  *
++ * @details Called exactly once at boot, before any combus_tx_init() call.
++ *   The number of links is decided by the caller (typically the size of
++ *   the ComBusLink[] array passed to combus_protocol_init_all()).  This
++ *   module never imposes a hard cap on the link count.
++ *
++ *   Subsequent calls are silently ignored (one-shot guard).
++ *
++ * @param count  Number of TX links to allocate state for.  Zero is a
++ *               no-op (no allocation performed).
++ */
++void combus_tx_init_all( uint8_t count );
++
++
++
++/**
++ * @brief Initialize the ComBus transmitter for one link.
++ *
++ * @details Writes into the per-link state slot allocated by
++ *   combus_tx_init_all().  linkIdx must be < the count passed to
++ *   combus_tx_init_all(); out-of-range indices are silently rejected.
++ *
++ * @param linkIdx   Index of this link in the per-link state array.
+  * @param nodeCom   Claimed transport interface (from *_com_init).
+  * @param frameCfg  ComBus layout descriptor (nAnalog, nDigital).
+  * @param txHz      Frame transmit rate in Hz.
+-
+  */
+-
+-void combus_tx_init( NodeCom*        nodeCom,
++void combus_tx_init( uint8_t         linkIdx,
++                     NodeCom*        nodeCom,
+                      ComBusFrameCfg  frameCfg,
+                      uint32_t        txHz );
+ 
+@@ -52,7 +73,9 @@ void combus_tx_init( NodeCom*        nodeCom,
+  * @brief Encode and transmit one ComBus frame if the period has elapsed.
+  *
+  * @details Timer-gated and non-blocking. Does nothing if the transmit interval
+- *   has not elapsed since the last frame.
++ *   has not elapsed since the last frame.  Iterates over every link
++ *   allocated by combus_tx_init_all() — each link has its own timer gate,
++ *   sequence counter, and handshake burst state.
+  *
+  * @param bus         Live ComBus to encode.
+  * @param failSafe    Set true to flag the frame as failsafe-active.
+@@ -79,9 +102,11 @@ struct CombusHandshakeContext;
+  *   Multiple independent ComBus interfaces may coexist; each link has
+  *   its own context.  See CombusHandshakeContext in combus_handshake.h.
+  *
+- * @param ctx  Per-link handshake context (may be null to disable burst).
++ * @param linkIdx  Index of this link in the per-link state array.
++ * @param ctx      Per-link handshake context (may be null to disable burst).
+  */
+-void combus_tx_set_handshake_ctx( CombusHandshakeContext* ctx );
++void combus_tx_set_handshake_ctx( uint8_t                linkIdx,
++                                  CombusHandshakeContext* ctx );
+ 
+ // EOF combus_tx.h
+ 
+diff --git a/src/machines/init/com/combus_uart_init.cpp b/src/machines/init/com/combus_uart_init.cpp
+index fadf77f..7d6d68d 100644
+--- a/src/machines/init/com/combus_uart_init.cpp
++++ b/src/machines/init/com/combus_uart_init.cpp
+@@ -10,7 +10,7 @@
+ #include <machines/config/config.h>   // transitively includes <combus_remote_ids.h> via dumper_truck/combus_ids_remote.h
+ #include <core/config/outputs/combus_uart.h>         // ComBusUartBaud, ComBusUartTxHz, UartMaxBaud
+ #include <core/system/combus/protocol/combus_protocol.h>
+-#include <core/system/combus/frame/combus_handshake.h>  // CombusHandshakeContext (P3)
++#include <core/system/combus/protocol/frame/combus_handshake.h>  // CombusHandshakeContext (P3)
+ #include <core/system/hw/transport/uart_com.h>
+ #include <core/system/debug/logging/debug.h>
+ 
+@@ -46,7 +46,21 @@ void combus_uart_init()
+     };
+ 
+ 
+-    // --- Full-duplex: also initialise RX side ---
++    // --- Build the ComBusLink descriptor (single source of truth) ---
++    ComBusLink link{};
++    link.com          = uart_get_combus_com();
++    link.layer        = ChanLayer::REMOTE;   ///< See audit note in commit message — REMOTE matches the
++                                             ///< "Remote" suffix in AnalogComBusRemoteID / kRemoteAnalogCount.
++    link.handshakeCtx = &s_linkHandshakeCtx;
++    link.name         = "combus";
++
++    // --- TX side: active when COMBUS_UART_TX or full-duplex COMBUS_UART ---
++    #if defined(COMBUS_UART_TX) || defined(COMBUS_UART)
++      link.txCfg = txCfg;
++      link.txHz  = ComBusUartTxHz;
++    #endif
++
++    // --- RX side: active only when full-duplex COMBUS_UART ---
+     #if defined(COMBUS_UART)
+       static uint16_t s_analog[kRemoteAnalogCount];
+       static bool     s_digital[kRemoteDigitalCount];
+@@ -54,11 +68,14 @@ void combus_uart_init()
+           kRemoteAnalogCount,                             ///< Analog wire channels only.
+           kRemoteDigitalCount,                            ///< Digital wire channels only.
+       };
+-
+-      combus_protocol_init(uart_get_combus_com(), txCfg, ComBusUartTxHz, rxCfg, s_analog, s_digital, &s_linkHandshakeCtx);
+-    #else
+-      combus_protocol_init(uart_get_combus_com(), txCfg, ComBusUartTxHz, {}, nullptr, nullptr, &s_linkHandshakeCtx);
++      link.rxCfg      = rxCfg;
++      link.analogBuf  = s_analog;
++      link.digitalBuf = s_digital;
+     #endif
++
++    // --- Caller-owned link array — its size IS the link count ---
++    ComBusLink links[] = { link };
++    combus_protocol_init_all(links, sizeof(links) / sizeof(links[0]));
+ }
+ 
+ #endif  // COMBUS_UART_TX / COMBUS_UART
+""  
+"diff --git a/src/sound_module/init/com/combus_uart_init.cpp b/src/sound_module/init/com/combus_uart_init.cpp"  
+"--- a/src/sound_module/init/com/combus_uart_init.cpp"  
+"+++ b/src/sound_module/init/com/combus_uart_init.cpp"  
+"@@ -20,11 +20,28 @@"  
+" void combus_uart_init()"  
+" {"  
+"     static uint16_t s_analog[static_cast<uint8_t>(AnalogComBusID::CH_COUNT)];"  
+"     static bool     s_digital[static_cast<uint8_t>(DigitalComBusID::CH_COUNT)];"  
+"+"  
+"+        // P3 - caller-owned per-link handshake context.  Zero-initialised"  
+"+        //    at boot, shared between TX and RX of the same ComBus link"  
+"+        //    by combus_protocol_init().  This sound node is RX-only, so"  
+"+        //    the context is wired to RX only (TX side stays null)."  
+"+    static CombusHandshakeContext s_linkHandshakeCtx = {};"  
+"+"  
+"     constexpr ComBusFrameCfg rxCfg = {"  
+"         SOUND_TRANSPORT_ENV_ID,"  
+"         SOUND_TRANSPORT_N_ANALOG,"  
+"         SOUND_TRANSPORT_N_DIGITAL,"  
+"     };"  
+"-    combus_protocol_init(uart_get_combus_com(), {}, 0, rxCfg, s_analog, s_digital);"  
+"+"  
+"+    // --- Build the ComBusLink descriptor (RX-only) ---"  
+"+    ComBusLink link{};"  
+"+    link.com          = uart_get_combus_com();"  
+"+    link.layer        = ChanLayer::LOCAL;   ///< Sound node is a board of the same system as the"  
+"+                                            ///< machine mainboard - LOCAL matches ChanLayer::LOCAL"  
+"+                                            ///< (\"shared between all boards of the same system\")."  
+"+    link.handshakeCtx = &s_linkHandshakeCtx;"  
+"+    link.name         = \"combus_sound\";"  
+"+    link.rxCfg        = rxCfg;"  
+"+    link.analogBuf    = s_analog;"  
+"+    link.digitalBuf   = s_digital;"  
+"+"  
+"+    // --- Caller-owned link array - its size IS the link count ---"  
+"+    ComBusLink links[] = { link };"  
+"+    combus_protocol_init_all(links, sizeof(links) / sizeof(links[0]));"  
+" }"  
+""  
+" #endif  // COMBUS_UART_RX / COMBUS_UART"  
+""  

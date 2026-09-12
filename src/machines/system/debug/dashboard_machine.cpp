@@ -94,7 +94,8 @@ static void render_overview() {
 	{
 		char left[56], right[36];
 		int lLen = snprintf(left,  sizeof(left),  "  [ OVERVIEW ]  %s", s_mach->infoName);
-		int rLen = snprintf(right, sizeof(right), "%-12s  uptime: %s  ", dashRunLevelStr(s_bus->runLevel), upt);
+		// RL3: runLevel is now a plain analog channel — read from analogBus[RUNLEVEL].
+		int rLen = snprintf(right, sizeof(right), "%-12s  uptime: %s  ", dashRunLevelStr((RunLevel)s_bus->analogBus[static_cast<uint8_t>(AnalogComBusID::RUNLEVEL)].value), upt);
 		dLine("%s%*s%s", left, (int)DashInnerW - lLen - rLen, "", right);
 	}
 
@@ -109,10 +110,12 @@ static void render_overview() {
 		snprintf(batStr, sizeof(batStr), "N/A    ");
 	}
 
-	bool ctrlConn = s_bus->isDrived;
+	bool ctrlConn = !s_bus->isNotDrived;  // FS1 — inverted: ctrlConn = true when healthy (driven)
 
-	bool drvEnabled = (s_bus->runLevel == RunLevel::RUNNING ||
-	                   s_bus->runLevel == RunLevel::STARTING);
+	// RL3: runLevel is now a plain analog channel — read from analogBus[RUNLEVEL].
+	const RunLevel curRl = (RunLevel)s_bus->analogBus[static_cast<uint8_t>(AnalogComBusID::RUNLEVEL)].value;
+	bool drvEnabled = (curRl == RunLevel::RUNNING ||
+	                   curRl == RunLevel::STARTING);
 	const bool keyActive = s_bus->digitalBus[static_cast<uint8_t>(DigitalComBusID::KEY_ACTIVE)].value;
 
 	dLine("  BAT: %-8s  CTRL: %-4s  DRV: %-3s (%u dev)  KEY: %-3s",
@@ -129,7 +132,7 @@ static void render_overview() {
 	for (uint8_t i = 0; i < wireEnd && i < s_analogCh; i++) {
 		uint16_t    raw  = s_bus->analogBus[i].value;
 		int16_t     pct  = dashPctBipolar(raw, s_bus->analogBusMaxVal);
-		bool        drv  = s_bus->isDrived;
+		bool        drv  = !s_bus->isNotDrived;  // FS1 — inverted: drv = true when healthy (driven)
 		const char* name = s_bus->analogBus[i].infoName ? s_bus->analogBus[i].infoName : "?";
 
 		// Special decoding for DRIVE_STATE_BUS (index 5) — display readable text

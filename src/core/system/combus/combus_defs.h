@@ -133,12 +133,15 @@ typedef struct {
  */
 typedef struct {
     // --- Core state ---
-  RunLevel    runLevel;                     ///< Machine run level — written by the system FSM
-  ChanLayer   runLevelLayer = ChanLayer::LOCAL;   ///< RunLevel propagation layer (shared within system)
+  // RL3: runLevel + runLevelLayer removed — runLevel is now a plain analog channel
+  //       (RUNLEVEL, scope LOCAL, see runlevel.cb). Read/write it directly via the
+  //       generic analog accessor (combus_set_analog / analogBus[RUNLEVEL].value).
+  //       This is the same pattern as any other LOCAL analog channel (e.g. THROTTLE_STICK).
 
     // --- Input drive flag ---
-  bool        isDrived = false;            ///< True when at least one physical input source refreshed the bus this cycle
-                                            ///< Pre‑cleared by sys_manager_reset() each loop; re‑asserted by each active source.
+  bool        isNotDrived = true;          ///< True when NO physical input source refreshed the bus this cycle (FS1 — inverted semantics, see RL0 audit)
+                                            ///< Pre‑set by sys_manager_reset() each loop (failsafe-by-default); cleared by each active source.
+                                            ///< Replaces the historical `isDrived` flag. Semantics inverted to match the Failsafe aggregator convention (true = fault).
 
     // --- Transport ---
   uint32_t    lastFrameMs = 0;             ///< millis() timestamp of the last successful combus_frame_apply

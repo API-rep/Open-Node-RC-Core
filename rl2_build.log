@@ -1,0 +1,83 @@
+Processing volvo_A60H_bruder (platform: espressif32@6.7.0; board: esp32dev; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+[combus_scons_hook] CPPPATH += C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\combus_generated (env)
+[combus_scons_hook] CPPPATH += c:\Users\Arnaud\Documents\Modèlisme\RC chantier\Code RC\Open Node RC Core\.pio\libdeps\volvo_A60H_bruder\common_defs\include
+[combus_scons_hook] PIOBUILDFILES += C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\combus_generated\combus.cpp
+[combus_scons_hook] registered deferred Command (targets=9, sources=19, varlist=[CPPDEFINES, CPPPATH, LIBDEPS])
+CONFIGURATION: https://docs.platformio.org/page/boards/espressif32/esp32dev.html
+PLATFORM: Espressif 32 (6.7.0) > Espressif ESP32 Dev Module
+HARDWARE: ESP32 240MHz, 320KB RAM, 4MB Flash
+DEBUG: Current (cmsis-dap) External (cmsis-dap, esp-bridge, esp-prog, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa)
+PACKAGES: 
+ - framework-arduinoespressif32 @ 3.20016.0 (2.0.16) 
+ - tool-esptoolpy @ 1.40501.0 (4.5.1) 
+ - toolchain-xtensa-esp32 @ 8.4.0+2021r2-patch5
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 40 compatible libraries
+Scanning dependencies...
+Dependency Graph
+|-- PS4_Controller_Host @ 1.1.1+sha.b58a05d
+|-- common_defs @ 0.0.0+20260903184243.sha.45b8759
+|-- PwmBroker @ 1.0.0+sha.ae043d5
+|-- DcMotorCore @ 1.0.0+sha.b23fa87
+|-- ServoCore @ 0.1.0+sha.e6e4b45
+|-- statusLED @ 1.0.0-fork
+Building in release mode
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\core\system\combus\protocol\combus_protocol.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\core\system\combus\protocol\combus_rx.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\core\system\combus\protocol\combus_tx.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\core\system\combus\protocol\frame\combus_frame.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\core\system\combus\protocol\frame\combus_handshake.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\core\system\combus\protocol\frame\combus_handshake_rx.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\core\system\combus\protocol\frame\combus_handshake_tx.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\core\system\hw\dev\esc_dev.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\core\system\output\output_manager.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\machines\init\com\combus_uart_init.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\machines\init\hw\hw_init.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\machines\init\hw\hw_init_com.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\machines\init\init.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\machines\init\output\output_init.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\machines\init\sys\sys_init.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\machines\main.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\machines\system\debug\dashboard_input.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\machines\system\debug\dashboard_machine.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\src\machines\system\debug\dashboard_simulation.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\lib763\PS4_Controller_Host\PS4Controller.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\lib763\PS4_Controller_Host\ps4.c.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\lib763\PS4_Controller_Host\ps4_l2cap.c.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\lib763\PS4_Controller_Host\ps4_parser.c.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\lib763\PS4_Controller_Host\ps4_spp.c.o
+.pio/libdeps/volvo_A60H_bruder/PS4_Controller_Host/src/ps4.c: In function 'ps4Deinit':
+.pio/libdeps/volvo_A60H_bruder/PS4_Controller_Host/src/ps4.c:70:4: warning: implicit declaration of function 'spp_deinit'; did you mean 'sppInit'? [-Wimplicit-function-declaration]
+    spp_deinit();
+    ^~~~~~~~~~
+    sppInit
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\liba46\PwmBroker\Esp32PwmBroker.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\liba46\PwmBroker\Esp32PwmControl.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\lib248\DcMotorCore\DcMotorCore.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\lib45d\ServoCore\ServoCore.cpp.o
+Compiling C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\lib599\statusLED\statusLED.cpp.o
+Archiving C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\liba46\libPwmBroker.a
+Archiving C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\lib763\libPS4_Controller_Host.a
+Archiving C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\lib248\libDcMotorCore.a
+Archiving C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\lib45d\libServoCore.a
+Archiving C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\lib599\libstatusLED.a
+Linking C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\firmware.elf
+Retrieving maximum program size C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\firmware.elf
+Checking size C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\firmware.elf
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [=         ]  14.0% (used 46020 bytes from 327680 bytes)
+Flash: [====      ]  36.3% (used 1141173 bytes from 3145728 bytes)
+Building C:\Users\Arnaud\AppData\Local\Temp\PlatformIO\build\Open_Node_RC_Core\volvo_A60H_bruder\firmware.bin
+esptool.py v4.5.1
+Creating esp32 image...
+Merged 27 ELF sections
+Successfully created esp32 image.
+========================= [SUCCESS] Took 67.44 seconds =========================
+
+Environment        Status    Duration
+-----------------  --------  ------------
+volvo_A60H_bruder  SUCCESS   00:01:07.437
+========================= 1 succeeded in 00:01:07.437 =========================

@@ -1,0 +1,84 @@
+diff --git a/src/machines/init/com/combus_uart_init.cpp b/src/machines/init/com/combus_uart_init.cpp
+index fadf77f..b579615 100644
+--- a/src/machines/init/com/combus_uart_init.cpp
++++ b/src/machines/init/com/combus_uart_init.cpp
+@@ -10,9 +10,12 @@
+ #include <machines/config/config.h>   // transitively includes <combus_remote_ids.h> via dumper_truck/combus_ids_remote.h
+ #include <core/config/outputs/combus_uart.h>         // ComBusUartBaud, ComBusUartTxHz, UartMaxBaud
+ #include <core/system/combus/protocol/combus_protocol.h>
+-#include <core/system/combus/frame/combus_handshake.h>  // CombusHandshakeContext (P3)
++#include <core/system/combus/protocol/combus_tx.h>    // CombusTxState, combus_tx_register_pool
++#include <core/system/combus/protocol/combus_rx.h>    // CombusRxState, combus_rx_register_pool
++#include <core/system/combus/protocol/frame/combus_handshake.h>  // CombusHandshakeContext (P3)
+ #include <core/system/hw/transport/uart_com.h>
+ #include <core/system/debug/logging/debug.h>
++#include "../sys/sys_init.h"          // pinReg (machine env)
+ 
+ 
+ // =============================================================================
+@@ -46,7 +49,36 @@ void combus_uart_init()
+     };
+ 
+ 
+-    // --- Full-duplex: also initialise RX side ---
++    // --- Resolve UART channel and GPIO pins from build flag (was in uart_init()) ---
++    #if defined(COMBUS_UART)
++        constexpr int uartCh    = COMBUS_UART;
++        const     int uartTxPin = uartPins[uartCh].tx;
++        const     int uartRxPin = uartPins[uartCh].rx;
++    #elif defined(COMBUS_UART_TX)
++        constexpr int uartCh    = COMBUS_UART_TX;
++        const     int uartTxPin = uartPins[uartCh].tx;
++        constexpr int uartRxPin = -1;
++    #endif
++
++    // --- Open the ComBus UART port directly (no single-link helper in uart_com.h) ---
++    NodeCom* com = uart_com_init(uart_serial_for(uartCh), ComBusUartBaud,
++                                 uartTxPin, uartRxPin, "combus", &pinReg);
++
++    // --- Build the ComBusLink descriptor (single source of truth) ---
++    ComBusLink link{};
++    link.com          = com;
++    link.layer        = ChanLayer::REMOTE;   ///< See audit note in commit message — REMOTE matches the
++                                             ///< "Remote" suffix in AnalogComBusRemoteID / kRemoteAnalogCount.
++    link.handshakeCtx = &s_linkHandshakeCtx;
++    link.name         = "combus";
++
++    // --- TX side: active when COMBUS_UART_TX or full-duplex COMBUS_UART ---
++    #if defined(COMBUS_UART_TX) || defined(COMBUS_UART)
++      link.txCfg = txCfg;
++      link.txHz  = ComBusUartTxHz;
++    #endif
++
++    // --- RX side: active only when full-duplex COMBUS_UART ---
+     #if defined(COMBUS_UART)
+       static uint16_t s_analog[kRemoteAnalogCount];
+       static bool     s_digital[kRemoteDigitalCount];
+@@ -54,11 +86,23 @@ void combus_uart_init()
+           kRemoteAnalogCount,                             ///< Analog wire channels only.
+           kRemoteDigitalCount,                            ///< Digital wire channels only.
+       };
+-
+-      combus_protocol_init(uart_get_combus_com(), txCfg, ComBusUartTxHz, rxCfg, s_analog, s_digital, &s_linkHandshakeCtx);
+-    #else
+-      combus_protocol_init(uart_get_combus_com(), txCfg, ComBusUartTxHz, {}, nullptr, nullptr, &s_linkHandshakeCtx);
++      link.rxCfg      = rxCfg;
++      link.analogBuf  = s_analog;
++      link.digitalBuf = s_digital;
+     #endif
++
++    // --- Caller-owned link array — its size IS the link count ---
++    ComBusLink links[] = { link };
++
++    // --- Caller-owned TX state pool — its size IS the link count ---
++    static CombusTxState txStates[sizeof(links) / sizeof(links[0])];
++    combus_tx_register_pool(txStates, sizeof(links) / sizeof(links[0]));
++
++    // --- Caller-owned RX state pool — its size IS the link count ---
++    static CombusRxState rxStates[sizeof(links) / sizeof(links[0])];
++    combus_rx_register_pool(rxStates, sizeof(links) / sizeof(links[0]));
++
++    combus_protocol_init_all(links, sizeof(links) / sizeof(links[0]));
+ }
+ 
+ #endif  // COMBUS_UART_TX / COMBUS_UART

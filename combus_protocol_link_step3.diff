@@ -1,0 +1,92 @@
+diff --git a/src/machines/init/com/combus_uart_init.cpp b/src/machines/init/com/combus_uart_init.cpp
+index fadf77f..19885d1 100644
+--- a/src/machines/init/com/combus_uart_init.cpp
++++ b/src/machines/init/com/combus_uart_init.cpp
+@@ -10,7 +10,7 @@
+ #include <machines/config/config.h>   // transitively includes <combus_remote_ids.h> via dumper_truck/combus_ids_remote.h
+ #include <core/config/outputs/combus_uart.h>         // ComBusUartBaud, ComBusUartTxHz, UartMaxBaud
+ #include <core/system/combus/protocol/combus_protocol.h>
+-#include <core/system/combus/frame/combus_handshake.h>  // CombusHandshakeContext (P3)
++#include <core/system/combus/protocol/frame/combus_handshake.h>  // CombusHandshakeContext (P3)
+ #include <core/system/hw/transport/uart_com.h>
+ #include <core/system/debug/logging/debug.h>
+
+@@ -46,7 +46,21 @@ void combus_uart_init()
+     };
+
+
+-    // --- Full-duplex: also initialise RX side ---
++    // --- Build the ComBusLink descriptor (single source of truth) ---
++    ComBusLink link{};
++    link.com          = uart_get_combus_com();
++    link.layer        = ChanLayer::REMOTE;   ///< See audit note in commit message — REMOTE matches the
++                                             ///< "Remote" suffix in AnalogComBusRemoteID / kRemoteAnalogCount.
++    link.handshakeCtx = &s_linkHandshakeCtx;
++    link.name         = "combus";
++
++    // --- TX side: active when COMBUS_UART_TX or full-duplex COMBUS_UART ---
++    #if defined(COMBUS_UART_TX) || defined(COMBUS_UART)
++      link.txCfg = txCfg;
++      link.txHz  = ComBusUartTxHz;
++    #endif
++
++    // --- RX side: active only when full-duplex COMBUS_UART ---
+     #if defined(COMBUS_UART)
+       static uint16_t s_analog[kRemoteAnalogCount];
+       static bool     s_digital[kRemoteDigitalCount];
+@@ -54,11 +68,12 @@ void combus_uart_init()
+           kRemoteAnalogCount,                             ///< Analog wire channels only.
+           kRemoteDigitalCount,                            ///< Digital wire channels only.
+       };
+-
+-      combus_protocol_init(uart_get_combus_com(), txCfg, ComBusUartTxHz, rxCfg, s_analog, s_digital, &s_linkHandshakeCtx);
+-    #else
+-      combus_protocol_init(uart_get_combus_com(), txCfg, ComBusUartTxHz, {}, nullptr, nullptr, &s_linkHandshakeCtx);
++      link.rxCfg      = rxCfg;
++      link.analogBuf  = s_analog;
++      link.digitalBuf = s_digital;
+     #endif
++
++    combus_protocol_init(&link);
+ }
+
+ #endif  // COMBUS_UART_TX / COMBUS_UART
+
+diff --git a/src/sound_module/init/com/combus_uart_init.cpp b/src/sound_module/init/com/combus_uart_init.cpp
+--- a/src/sound_module/init/com/combus_uart_init.cpp
++++ b/src/sound_module/init/com/combus_uart_init.cpp
+@@ -20,11 +20,28 @@
+ void combus_uart_init()
+ {
+     static uint16_t s_analog[static_cast<uint8_t>(AnalogComBusID::CH_COUNT)];
+     static bool     s_digital[static_cast<uint8_t>(DigitalComBusID::CH_COUNT)];
++
++        // P3 — caller-owned per-link handshake context.  Zero-initialised
++        //    at boot, shared between TX and RX of the same ComBus link
++        //    by combus_protocol_init().  This sound node is RX-only, so
++        //    the context is wired to RX only (TX side stays null).
++    static CombusHandshakeContext s_linkHandshakeCtx = {};
++
+     constexpr ComBusFrameCfg rxCfg = {
+         SOUND_TRANSPORT_ENV_ID,
+         SOUND_TRANSPORT_N_ANALOG,
+         SOUND_TRANSPORT_N_DIGITAL,
+     };
+-    combus_protocol_init(uart_get_combus_com(), {}, 0, rxCfg, s_analog, s_digital);
++
++    // --- Build the ComBusLink descriptor (RX-only) ---
++    ComBusLink link{};
++    link.com          = uart_get_combus_com();
++    link.layer        = ChanLayer::LOCAL;   ///< Sound node is a board of the same system as the
++                                            ///< machine mainboard — LOCAL matches ChanLayer::LOCAL
++                                            ///< ("shared between all boards of the same system").
++    link.handshakeCtx = &s_linkHandshakeCtx;
++    link.name         = "combus_sound";
++    link.rxCfg        = rxCfg;
++    link.analogBuf    = s_analog;
++    link.digitalBuf   = s_digital;
++
++    combus_protocol_init(&link);
+ }
+
+ #endif  // COMBUS_UART_RX / COMBUS_UART
