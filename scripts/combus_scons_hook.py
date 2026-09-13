@@ -367,6 +367,7 @@ def _generate_per_board(
     project_dir: Path | None,
     canonical_definitions: Any,
     staging_dir: Path,
+    board_ctx: Any = None,
 ) -> _BoardResult:
     """Generate the artefacts for one board (mother or sister sub-env).
 
@@ -388,8 +389,13 @@ def _generate_per_board(
                             env actually being built.
       project_dir:          The PlatformIO project root.
       canonical_definitions: The canonised channel definitions
-                            (board-agnostic, shared across boards).
+                            (board-specific, after ND2 diffusion).
       staging_dir:          Where to write the artefacts.
+      board_ctx:            Optional pre-resolved BuildContext. If
+                            provided, skip the internal resolution
+                            (used by ND2 to avoid resolving the same
+                            board twice — once for diffusion, once
+                            for generation).
 
     Returns:
       _BoardResult wrapping the Selection and the BuildContext used.
@@ -410,7 +416,11 @@ def _generate_per_board(
     )
 
     # --- Resolve the BuildContext for this board -----------------------
-    if board_id is None:
+    if board_ctx is not None:
+        # Pre-resolved by the caller (ND2: resolved once for diffusion,
+        # reused here for generation).
+        prefix = "" if board_id is None else board_id
+    elif board_id is None:
         # Mother env entry. The unprefixed artefacts (combus.h,
         # combus.cpp, combus_ids.h, ...) MUST reflect the mother
         # env's defines, not the sub-env's. If the current build IS
@@ -664,12 +674,108 @@ def _generate_combus_action(target, source, env):
             f"-> {staging_dir}"
         )
     else:
-        # --- 7b. ND1 node mode: one generate() call per board -----------
-        # The .cb pool is repo-wide and board-agnostic (discover_and_parse
-        # + canonize ran once above), so we reuse the same
-        # `canon.canonical_definitions` for every board. Only the
-        # BuildContext and the filename_prefix change between boards.
+        # --- 7b. ND1+ND2 node mode: one generate() call per board -------
+        # ND2: LOCAL channels are diffused across boards BEFORE
+        # canonize(). This requires resolving every board's
+        # BuildContext first (so diffusion knows which declarations
+        # are active for which board), then calling
+        # diffuse_local_channels(), then calling canonize() PER
+        # BOARD on the diffused data.
+        #
+        # The .cb pool is repo-wide and board-agnostic
+        # (discover_and_parse ran once above), but the canonised
+        # channel list is now PER BOARD (it depends on which LOCAL
+        # channels are active for that board after diffusion).
+        from scripts.combus_builder.diffusion import (
+            DiffusionError,
+            diffuse_local_channels,
+        )
+        from scripts.combus_builder.node_context import NodeContext
+
+        # --- 7b.1. Resolve all boards' BuildContexts (needed for diffusion) ---
+        node_boards_ctx: dict[str | None, Any] = {}
         for board_id, board_env_name in boards:
+            if board_id is None:
+                # Mother env: use live ctx if building the mother,
+                # otherwise resolve statically.
+                if pio_env == node.mother_env:
+                    node_boards_ctx[board_id] = ctx
+                else:
+                    if not project_dir:
+                        sys.stderr.write(
+                            f"[combus_scons_action] FATAL: cannot resolve "
+                            f"mother env {node.mother_env!r} statically: "
+                            f"PROJECT_DIR is not available on env.\n"
+                        )
+                        return 1
+                    try:
+                        node_boards_ctx[board_id] = resolve_build_context_static(
+                            Path(project_dir), node.mother_env,
+                        )
+                    except (NodeContextError, BuildContextError) as e:
+                        sys.stderr.write(
+                            f"[combus_scons_action] FATAL: static resolution "
+                            f"failed for mother env {node.mother_env!r}: {e}\n"
+                        )
+                        return 1
+            else:
+                # Sister sub-env: resolve statically.
+                if not project_dir:
+                    sys.stderr.write(
+                        f"[combus_scons_action] FATAL: cannot resolve board "
+                        f"env {board_env_name!r} statically: PROJECT_DIR is "
+                        f"not available on env.\n"
+                    )
+                    return 1
+                try:
+                    node_boards_ctx[board_id] = resolve_build_context_static(
+                        Path(project_dir), board_env_name,
+                    )
+                except (NodeContextError, BuildContextError) as e:
+                    sys.stderr.write(
+                        f"[combus_scons_action] FATAL: static resolution "
+                        f"failed for board env {board_env_name!r}: {e}\n"
+                    )
+                    return 1
+
+        node_resolved = NodeContext(
+            mother_env=node.mother_env,
+            boards=node_boards_ctx,
+            is_node=True,
+        )
+
+        # --- 7b.2. Diffuse LOCAL channels across boards ---
+        try:
+            diffused = diffuse_local_channels(parsed, node_resolved)
+        except DiffusionError as e:
+            if staging_dir.exists():
+                shutil.rmtree(staging_dir)
+            sys.stderr.write(
+                f"[combus_scons_action] FATAL: diffusion failed: {e}\n"
+            )
+            return 1
+
+        # --- 7b.3. Per-board canonize() + generate() ---
+        for board_id, board_env_name in boards:
+            board_parsed = diffused.get(board_id)
+            if board_parsed is None:
+                sys.stderr.write(
+                    f"[combus_scons_action] FATAL: diffusion did not produce "
+                    f"a resolved list for board {board_id!r}\n"
+                )
+                if staging_dir.exists():
+                    shutil.rmtree(staging_dir)
+                return 1
+            try:
+                board_canon = canonize(board_parsed)
+            except Exception as e:
+                if staging_dir.exists():
+                    shutil.rmtree(staging_dir)
+                sys.stderr.write(
+                    f"[combus_scons_action] FATAL: canonisation failed for "
+                    f"board {board_id!r}: {e}\n"
+                )
+                return 1
             try:
                 result = _generate_per_board(
                     board_id=board_id,
@@ -678,8 +784,9 @@ def _generate_combus_action(target, source, env):
                     node_mother_env=node.mother_env,
                     live_ctx=ctx,
                     project_dir=Path(project_dir) if project_dir else None,
-                    canonical_definitions=canon.canonical_definitions,
+                    canonical_definitions=board_canon.canonical_definitions,
                     staging_dir=staging_dir,
+                    board_ctx=node_boards_ctx[board_id],
                 )
             except _BoardGenerationError as e:
                 if staging_dir.exists():
