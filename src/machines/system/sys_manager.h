@@ -45,7 +45,7 @@
  *
  *   The aggregated Failsafe state is published on
  *   `comBus.digitalBus[DigitalComBusID::FAILSAFE]` by the Failsafe chain
- *   (see `doc/WIP - Failsafe module design.md`).
+ *   (see `doc/failsafe_module.md`).
  *****************************************************************************/
 #pragma once
 

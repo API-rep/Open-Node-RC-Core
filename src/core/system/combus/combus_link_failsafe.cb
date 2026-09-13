@@ -12,7 +12,7 @@
 # - Direction [both]: uplink + downlink — any board may write (re-arm
 #   each cycle) or read (react) the channel.
 # - value: high = fail-safe by default. The contributor reports fault
-#   until proven healthy each cycle (see WIP - Failsafe module design.md §5).
+#   until proven healthy each cycle (see failsafe_module.md).
 # - requires: [HAS_FAILSAFE, HAS_COMBUS_LINK_FAILSAFE] — the contributor
 #   is only emitted when both flags are set (no aggregator → no contributor).
 # - This channel replaces the historical `isDrived` open-drain flag on

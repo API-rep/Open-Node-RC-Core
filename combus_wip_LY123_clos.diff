@@ -260,7 +260,7 @@ index 261be54..f9bf662 100644
 +| _P3_ | ~~Rafale courte au boot (3–5 répétitions)~~ | ✅ Clos — voir T16 en §9.1. Rafale de `kCombusHandshakeBurstCount` (5) trames handshake au boot, cadence `kCombusHandshakeBurstPeriodMs` (50 ms), arrêt anticipé sur contrat validé côté RX (`stopBurst()` depuis `protocol/frame/combus_handshake_rx.cpp`). Compteur d'état portée par `CombusHandshakeContext::burstRemaining` / `lastBurstMs`. Driver : `combus_handshake_tx_update(ctx, nodeCom)` appelé depuis `combus_tx.cpp::combus_tx_update()` avant la gate timer de la trame de contrôle (donc indépendant du Hz de contrôle). 5 tests Group D ajoutés dans `test_combus_loopback.cpp` (start/stop arms, première émission, no-op intra-period, stop-on-validated). Per-link : contexte partagé TX↔RX filé par `combus_protocol.cpp::combus_protocol_init()`. | — |
  
  | P4 | Slot unique vidé au runlevel IDLE/SLEEPING | Concept documenté (délègue au failsafe) ; pas de hook | Ajouter callback `onRunlevelChanged()` dans le cache, abonné au failsafe existant |
- | P5 | Failsafe ↔ handshake bridge | Failsafe séparé (`doc/WIP - Failsafe module design.md` ouvert) | Synchroniser les deux WIP — voir section 5.4 |
+ | P5 | Failsafe ↔ handshake bridge | Failsafe séparé (`doc/failsafe_module.md` ouvert) | Synchroniser les deux WIP — voir section 5.4 |
  
 -### 5.3 Points non démarrés ❌
 +### 9.3 Points non démarrés ❌
@@ -453,7 +453,7 @@ index 261be54..f9bf662 100644
 +>   `WIRE_END` → `CH_COUNT` (A14), tests Phase 3 (A13).
 +> - **docs** : `combus_v2 - YAML implementation.md`,
 +>   `combus_v2 - YAML implementation Roadmap.md`,
-+>   `combus_v2 - YALM hook mechanism.md`, `WIP - Failsafe module design.md`
++>   `combus_v2 - YALM hook mechanism.md`, `failsafe_module.md`
 +>   (archivé), `~combus_v2.md` (archive).
 +>
 +> **Pas de conflit sémantique** entre ces imports et le travail
