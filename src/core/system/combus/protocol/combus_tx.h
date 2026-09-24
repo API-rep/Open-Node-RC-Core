@@ -26,7 +26,7 @@
  *   combus_protocol_init(0, &link);
  *
  *   // In loop:
- *   combus_tx_update(&comBus, failsafeActive);
+ *   combus_tx_update(&comBus);
  * @endcode
  *****************************************************************************/
 #pragma once
@@ -159,7 +159,7 @@ void combus_tx_init( uint8_t         linkIdx,
  * @param bus         Live ComBus to encode.
  * @param failSafe    Set true to flag the frame as failsafe-active.
  */
-void combus_tx_update( const ComBus* bus, bool failSafe );
+void combus_tx_update( const ComBus* bus );
 
 
 

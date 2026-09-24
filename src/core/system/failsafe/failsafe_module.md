@@ -257,9 +257,18 @@ env/config/failsafe   → décide de la réaction
 
 **✅ Validées** (voir journal §12.18) : `failsafe.h/.cpp`, `failsafe_channels.inc`, `failsafe_processors.inc`, `proc_failsafe_reset`, `failsafe_access.h` (`failsafe_is_active()`) sont en place et compilent.
 
-### 12.4 — Dépréciation de `failsafeActive` dans `SysResult`
+### 12.4 — Dépréciation de `failsafeActive` dans `SysResult`  ✅ CLOS (FS2)
 
-`failsafeActive` reste présent pendant la transition. Règle de migration : l'ancien chemin de réaction ne peut être supprimé qu'après validation de la nouvelle chaîne de réaction environnementale.
+**Statut** : clos en FS2.  Le accessor `SysResult::failsafeActive` était déjà supprimé en A16.5 ; FS2 a finalisé le retrait de toutes les occurrences actives :
+- Variable locale `failsafeActive` dans `main.cpp` : supprime (bloc ad-hoc retiré).
+- `s_failsafeWasActive` : supprimé (`isNewRunLevel` du `switch(curRunLevel)` fait le travail).
+- Paramètre `failsafeActive` de `output_update()` / `combus_tx_update()` : supprimé.
+- Paramètre `failSafe` de `combus_frame_encode()` : supprimé.
+- Bit hors-bande `COMBUS_FLAG_FAILSAFE` : supprimé (cf. §12.13, `FAILSAFE` est un canal ComBus LOCAL `both_or`).
+
+**Remplacé par** : la chaîne `kRunlevelProcs[]` (proc `failsafe` câblé sur `DigitalComBusID::FAILSAFE`) écrit `RunLevel::FAILSAFE` (= 6, valeur dédiée ajoutée à l'enum), qui déclenche un `case RunLevel::FAILSAFE` dans le `switch(curRunLevel)` de `main.cpp` exécutant le `stopAllDcDrivers` / `sleepAllDcDrivers` / `disableAllDcDrivers` sur `isNewRunLevel`.
+
+**Règle de migration historique** : l'ancien chemin de réaction ne peut être supprimé qu'après validation de la nouvelle chaîne de réaction environnementale.  Cette condition est remplie — la nouvelle chaîne est active et validée sur `volvo_A60H_bruder` (compile SUCCESS, 36.3% Flash, -8 bytes vs avant).
 
 ### 12.5 — Dépréciation de `bus.isDrived`
 

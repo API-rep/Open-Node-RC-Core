@@ -94,20 +94,23 @@ uint8_t combus_frame_crc8(const uint8_t* data, uint8_t len) {
  * @param[in]  seq              Rolling sequence counter for control frames
  *                              (1..255 — caller increments; value 0 is RESERVED
  *                              for handshake frames, see combus_handshake.h).
- * @param[in]  failSafe         Upstream failsafe flag (sets COMBUS_FLAG_FAILSAFE).
- * @param[in]  analogWireEnd    LY2 — number of analog channels to encode
+ * @param[in]  analogWireEnd   LY2 — number of analog channels to encode
  *                              (resolved at TX init from link->layer).
  * @param[in]  digitalWireEnd   LY2 — number of digital channels to encode
  *                              (resolved at TX init from link->layer).
  *
  * @return Number of bytes written into outputBuffer, 0 on error.
+ *
+ * @note FS2 — the legacy `failSafe` parameter has been removed.  The
+ *   failsafe state is now carried by the `DigitalComBusID::FAILSAFE`
+ *   channel (LOCAL, both_or) — no out-of-band bit needed.  See
+ *   doc/WIP - Failsafe module design.md §12.13.
  */
 
 uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
                              uint8_t*              outputBuffer,
                              const ComBus*         combus,
                              uint8_t               seq,
-                             bool                  failSafe,
                              uint8_t               analogWireEnd,
                              uint8_t               digitalWireEnd ) {
 
@@ -143,7 +146,9 @@ uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
 		// 2. Build flags byte
 	uint8_t flags = 0;   // transport-level status bits (COMBUS_FLAG_*)
 
-	if (failSafe) { flags |= COMBUS_FLAG_FAILSAFE; }
+	// FS2 — COMBUS_FLAG_FAILSAFE removed.  Failsafe state is now carried
+	// by the DigitalComBusID::FAILSAFE channel (LOCAL, both_or) — no
+	// out-of-band bit needed.  See doc/WIP - Failsafe module design.md §12.13.
 	//if (...)     { flags |= COMBUS_FLAG_... ; }       // next flag — bit 1
 	//if (...)     { flags |= COMBUS_FLAG_... ; }       // next flag — bit 2
 

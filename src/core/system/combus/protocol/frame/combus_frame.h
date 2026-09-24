@@ -96,20 +96,23 @@ static constexpr uint8_t CombusFrameMinLen = CombusFrameHeaderLen + sizeof(uint8
  * @param[out] outputBuffer    Output buffer pointer (sized by the caller).
  * @param[in]  combus          Source ComBus instance to encode.
  * @param[in]  seq             Sequence counter (caller increments).
- * @param[in]  failSafe        Upstream failsafe flag.
  * @param[in]  analogWireEnd   LY2 — number of analog channels to encode
  *                             (resolved at TX init from link->layer).
  * @param[in]  digitalWireEnd  LY2 — number of digital channels to encode
  *                             (resolved at TX init from link->layer).
  *
  * @return Number of bytes written into outputBuffer, 0 on error.
+ *
+ * @note FS2 — the legacy `failSafe` parameter has been removed.  The
+ *   failsafe state is now carried by the `DigitalComBusID::FAILSAFE`
+ *   channel (LOCAL, both_or) — no out-of-band bit needed.  See
+ *   doc/WIP - Failsafe module design.md §12.13.
  */
 
 uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
                              uint8_t*              outputBuffer,
                              const ComBus*         combus,
                              uint8_t               seq,
-                             bool                  failSafe,
                              uint8_t               analogWireEnd,
                              uint8_t               digitalWireEnd );
 

@@ -184,8 +184,7 @@ void combus_tx_init(
  */
 
 void combus_tx_update(
-    const ComBus* bus,      // live ComBus state to encode
-    bool          failSafe) // set true to flag the frame as failsafe-active
+    const ComBus* bus)      // live ComBus state to encode
 {
 		// --- 0. Top-level guard ---
 	if (!s_txStates || !bus) { return; }
@@ -226,7 +225,6 @@ void combus_tx_update(
 		    frame,
 		    bus,
 		    st.seq,
-		    failSafe,
 		    st.analogWireEnd,
 		    st.digitalWireEnd
 		);
@@ -252,12 +250,11 @@ void combus_tx_update(
 		if (st.seq == 0u) { st.seq = 1u; }
 
 		// RL3: runLevel is now a plain analog channel — read from analogBus[RUNLEVEL].
-		output_log_dbg("[COMBUS_TX] link=%u  seq=%u  len=%u  rl=%d  flags=0x%02X\n",
+		output_log_dbg("[COMBUS_TX] link=%u  seq=%u  len=%u  rl=%d\n",
 		               (unsigned)i,
 		               (unsigned)seqSent,
 		               (unsigned)frameLen,
-		               (int)bus->analogBus[static_cast<uint8_t>(AnalogComBusID::RUNLEVEL)].value,
-		               (unsigned)(failSafe ? COMBUS_FLAG_FAILSAFE : 0u));
+		               (int)bus->analogBus[static_cast<uint8_t>(AnalogComBusID::RUNLEVEL)].value);
 	}
 }
 

@@ -48,33 +48,7 @@ void loop() {
 // 1. SYSTEM TICK
 // =============================================================================
 
-	// --- Input + battery + failsafe evaluation ---
-  static bool s_failsafeWasActive = false;
-
   sys_manager_update(comBus);
-
-    // Open-drain failsafe: no physical input source refreshed the bus this
-    // cycle.  Read directly from `comBus.isNotDrived` (FS1 — inverted semantics,
-    // true = fault).  The open-drain invariant guarantees `sys_manager_reset()`
-    // is the only writer of `true`.
-  if (comBus.isNotDrived) {
-    if (!s_failsafeWasActive) {
-      sys_log_warn("[SYSTEM][SAFE] reason=no_input_source action=force_idle_and_lock\n");
-      stopAllDcDrivers(machine);
-      sleepAllDcDrivers(machine);
-      disableAllDcDrivers(machine);
-        // Clear KEY_ACTIVE so cb_runlevel can detect a fresh rising edge on reconnect.
-        // Without this, prevValue stays true (last engine-on state) and the rising
-        // edge is never re-armed — the machine would be stuck in IDLE after reconnect.
-      combus_set_digital(comBus, DigitalComBusID::KEY_ACTIVE, false,
-                         ChanLayer::LOCAL);
-      s_failsafeWasActive = true;
-    }
-    // RL3: runLevel is now a plain analog channel — write RUNLEVEL=IDLE via the generic accessor.
-    combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::IDLE, ChanLayer::LOCAL);
-    return;  // dashboard runs on its own FreeRTOS task (Core 0)
-  }
-  s_failsafeWasActive = false;
 
 // =============================================================================
 // 2. INPUT CHAIN (always — before RunLevel FSM)
@@ -225,7 +199,24 @@ void loop() {
         stateTM = millis();
         stopAllDcDrivers(machine);
         sleepAllDcDrivers(machine);
-        disableAllDcDrivers(machine);     
+        disableAllDcDrivers(machine);
+      }
+      break;
+    }
+
+    // ---------------------------------------------------------
+    case RunLevel::FAILSAFE : {
+    // ---------------------------------------------------------
+      // FS2 — dedicated hardware safety reaction.  Triggered by the
+      // `cb_runlevel_fn` instance in runlevelProcs[] when FAILSAFE=true.
+      // Runs the same stop/sleep/disable sequence as the legacy ad-hoc
+      // block (removed in FS2).  isNewRunLevel guards against re-running
+      // the sequence every cycle while FAILSAFE stays asserted.
+      if (isNewRunLevel) {
+        sys_log_warn("[SYSTEM][SAFE] reason=failsafe_aggregator action=force_idle_and_lock\n");
+        stopAllDcDrivers(machine);
+        sleepAllDcDrivers(machine);
+        disableAllDcDrivers(machine);
       }
       break;
     }
@@ -233,28 +224,13 @@ void loop() {
     default:
       break;
   }
-  
+
 // =============================================================================
-// 3. SYSTEM TASKS (Failsafe reaction + output dispatch)
+// 3. SYSTEM TASKS (Output dispatch)
 // =============================================================================
 
-	// --- 1. Failsafe reaction (TRANSITIONAL) ---
-  // Reads the aggregated `DigitalComBusID::FAILSAFE` ComBus channel
-  // (published by failsafe_update() in sys_manager_update()) and forces
-  // RunLevel::SLEEPING when high.  This is a transitory fallback — the
-  // proper reaction will be a `proc_failsafe_reaction` processor
-  // registered in the machine chain (see doc/WIP - Failsafe module
-  // design.md §9). To be removed when that proc is in place.
-  if (comBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::FAILSAFE)].value) {
-    if (curRunLevel != RunLevel::SLEEPING) {
-      // RL3: generic analog write via RUNLEVEL channel.
-      combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::SLEEPING, ChanLayer::LOCAL);
-      sys_log_warn("[SYSTEM][SAFE] reason=failsafe_aggregator action=enter_SLEEPING\n");
-    }
-  }
-
-	// --- 2. Output dispatch (sound TX, …) ---
-  output_update(comBus, false);
+	// --- Output dispatch (sound TX, …) ---
+  output_update(comBus);
 
 	// dashboard_update() removed — handled by dedicated FreeRTOS task on Core 0.
 	// See dashboard_start_task() called from dashboard_machine_setup().

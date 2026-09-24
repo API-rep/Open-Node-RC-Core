@@ -1,75 +1,116 @@
 /******************************************************************************
  * @file  cb_runlevel.h
- * @brief CbProc — ComBus RunLevel writer driven by a digital channel.
+ * @brief CbProc — RunLevel setters (continuous + edge-triggered variants).
  *
- * @details Watches the pipeline input for 0↔1 transitions and updates the
- *   ComBus RunLevel accordingly:
- *     - Rising  edge (0→1) while idle/sleeping → sets `activeLevel`  (e.g. STARTING)
- *     - Falling edge (1→0) while starting/running → sets `defaultLevel` (e.g. TURNING_OFF)
+ * @details Two processor functions are provided, both sharing the same
+ *   `CbRunlevelCfg` (high/low/claim) but differing in WHEN they write:
  *
- *   The pipeline `value` is **not modified** — this processor is a side-effect
- *   only.  It is typically placed at the end of a chain, after the output proc
- *   has already committed the new state to the ComBus channel.
+ *   - cb_runlevel_fn (continuous / stateless):
+ *       Writes `value` to `cfg->high` or `cfg->low` on EVERY cycle, depending
+ *       on the lever state.  No state required.  Use when the lever must
+ *       keep the channel pinned to a value as long as the condition holds
+ *       (e.g. failsafe: while FAILSAFE=true, force RUNLEVEL=IDLE).
  *
- *   Placement in a proc chain:
+ *   - cb_runlevel_once_fn (edge-triggered / stateful):
+ *       Writes `value` ONLY on a transition of the lever (inValue != prevValue).
+ *       Requires a `CbRunlevelOnceState` per instance.  Use when the lever
+ *       drives a one-shot transition (e.g. KEY_ACTIVE 0→1 → STARTING, then
+ *       leave RUNLEVEL alone so the FSM in main.cpp can progress to RUNNING).
+ *
+ *   Both variants manipulate the pipeline `value` directly (read-modify-write
+ *   pattern), NOT via a side-effect call to `combus_set_analog()`.
+ *
+ *   Behaviour (shared by both variants, applied only when the variant decides
+ *   to act):
+ *     - lever == true  AND cfg->high.has_value()  → value = cfg->high.value()
+ *     - lever == false AND cfg->low.has_value()   → value = cfg->low.value()
+ *     - if cfg->claim == true AND a write occurred → claimed = true
+ *     - if the corresponding branch is std::nullopt → no write, no claim
+ *
+ *   Typical usage in a dedicated runlevel chain (inCh = RUNLEVEL, outCh = RUNLEVEL):
  *   @code
- *     ... → cb_out_fn(KEY_ACTIVE) → cb_runlevel_fn    // KEY_ACTIVE already written
+ *     // failsafe instance — continuous: forces IDLE while FAILSAFE=true
+ *     { .inCh = FAILSAFE, .fn = cb_runlevel_fn,
+ *       .cfg = { .high = RunLevel::FAILSAFE, .low = std::nullopt, .claim = true } }
+ *     // runlevel instance — edge-triggered: KEY_ACTIVE 0→1 → STARTING (once)
+ *     { .inCh = KEY_ACTIVE, .fn = cb_runlevel_once_fn,
+ *       .cfg = { .high = RunLevel::STARTING, .low = RunLevel::TURNING_OFF, .claim = false } }
  *   @endcode
- *****************************************************************************/
+ ******************************************************************************/
 #pragma once
 
+#include <optional>
 #include <defs/machines_defs.h>         // RunLevel
-#include <core/system/combus/combus_defs.h>        // ComBus, ChanLayer
 #include <struct/combus_proc_struct.h>   // CbProc
-#include "combus_ids.h"   // RL3: AnalogComBusID::RUNLEVEL — uses the generated combus_generated/ CPPPATH
 
 
 // =============================================================================
-// 1. CONFIG & STATE
+// 1. CONFIG
 // =============================================================================
 
 /**
- * @brief Static configuration for the RunLevel writer processor.
+ * @brief Static configuration for the RunLevel setter processors.
+ *
+ * @details `high` and `low` are independent — either may be std::nullopt to
+ *   disable that branch.  When the lever selects a branch whose value is
+ *   nullopt, the proc performs no write and does not claim the chain.
  */
 struct CbRunlevelCfg {
-    RunLevel activeLevel;    ///< RunLevel to set on rising edge  (e.g. STARTING).
-    RunLevel defaultLevel;   ///< RunLevel to set on falling edge (e.g. TURNING_OFF).
+    std::optional<RunLevel> high;   ///< Value to write when lever == true.  nullopt = no write.
+    std::optional<RunLevel> low;    ///< Value to write when lever == false. nullopt = no write.
+    bool                     claim; ///< Claim the chain when a write actually occurred.
 };
 
+
+// =============================================================================
+// 2. STATE (edge-triggered variant only)
+// =============================================================================
+
 /**
- * @brief Mutable runtime state for the RunLevel writer processor.
+ * @brief Mutable runtime state for the edge-triggered RunLevel setter.
  *
- * @details Assign `bus` before the proc chain runs for the first time.
- *   Zero-init is valid for `prevValue`.
+ * @details Zero-init is valid — `prevValue = 0` means "no prior lever state".
+ *   Assign one instance per CbProc that uses `cb_runlevel_once_fn`.
  */
-struct CbRunlevelState {
-    ComBus* bus;        ///< ComBus instance to write.  Must not be nullptr.
-    bool    prevValue;  ///< Previous active state for edge detection.
+struct CbRunlevelOnceState {
+    uint16_t prevValue = 0u;   ///< Previous lever reading (0 or non-zero).
 };
 
 
 // =============================================================================
-// 2. PUBLIC API
+// 3. PUBLIC API
 // =============================================================================
 
 /**
- * @brief RunLevel writer processor function.
+ * @brief Continuous (stateless) RunLevel setter processor function.
  *
- * @details Matches `CbProcFn` signature.  Reads the channel state from
- *   `proc->inValue` (injected by the runner from the configured `inCh`).
+ * @details Reads the lever state from `proc->inValue` (injected by the runner
+ *   from the configured `inCh`).  Writes `value` to `cfg->high` or `cfg->low`
+ *   on EVERY cycle depending on the lever.  Sets `claimed = true` when
+ *   `cfg->claim` is true AND a write actually occurred.
  *
- *   Transition rules (RunLevel guards prevent redundant writes):
- *     - 0→1 AND runLevel ∈ {IDLE, SLEEPING}        → combus_set_runlevel(activeLevel)
- *     - 1→0 AND runLevel ∈ {STARTING, RUNNING}     → combus_set_runlevel(defaultLevel)
- *
- *   `value` is passed through unchanged.
- *
- * @param proc        CbProc descriptor.  `cfg` = CbRunlevelCfg*,
- *                    `state` = CbRunlevelState*, `inCh` = monitored channel.
- * @param value       Pipeline value — unchanged (pass-through).
- * @param claimed     Unused — this processor never claims the channel.
+ * @param proc     CbProc descriptor.  `cfg` = CbRunlevelCfg*.  No state used.
+ * @param value    Pipeline value (in/out) — modified when the selected branch is defined.
+ * @param claimed  Set to `true` when `cfg->claim` is true and a write occurred.
  */
 void cb_runlevel_fn(CbProc* proc, uint16_t& value, bool& claimed);
+
+
+/**
+ * @brief Edge-triggered (stateful) RunLevel setter processor function.
+ *
+ * @details Reads the lever state from `proc->inValue`.  Compares it to
+ *   `state->prevValue`:
+ *     - No transition (inValue == prevValue) → no write, no claim, exit.
+ *     - Transition detected (inValue != prevValue) → apply the same logic
+ *       as `cb_runlevel_fn` (write cfg->high or cfg->low, claim if requested).
+ *   In all cases, `state->prevValue` is updated to `proc->inValue` on exit.
+ *
+ * @param proc     CbProc descriptor.  `cfg` = CbRunlevelCfg*, `state` = CbRunlevelOnceState*.
+ * @param value    Pipeline value (in/out) — modified only on transition.
+ * @param claimed  Set to `true` when `cfg->claim` is true and a write occurred.
+ */
+void cb_runlevel_once_fn(CbProc* proc, uint16_t& value, bool& claimed);
 
 
 // EOF cb_runlevel.h

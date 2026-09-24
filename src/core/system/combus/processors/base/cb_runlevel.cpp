@@ -1,45 +1,79 @@
 /******************************************************************************
  * @file  cb_runlevel.cpp
- * @brief CbProc — ComBus RunLevel writer — implementation.
- *****************************************************************************/
+ * @brief CbProc — RunLevel setters (continuous + edge-triggered) — implementation.
+ ******************************************************************************/
 
 #include "cb_runlevel.h"
 
-#include <core/system/combus/combus_access.h>   // combus_set_analog()
-
 
 // =============================================================================
-// 1. PROCESSOR FUNCTION
+// 1. CONTINUOUS (STATELESS) VARIANT
 // =============================================================================
 
 void cb_runlevel_fn(CbProc* proc, uint16_t& value, bool& claimed) {
-    (void)value;    // pass-through — intentionally not modified.
-    (void)claimed;  // never claims the channel.
+    const auto* cfg = static_cast<const CbRunlevelCfg*>(proc->cfg);
 
+    const bool lever = (proc->inValue != 0u);
+
+    // --- Select branch and write value if defined ---
+    bool wrote = false;
+    if (lever) {
+        if (cfg->high.has_value()) {
+            value = static_cast<uint16_t>(cfg->high.value());
+            wrote = true;
+        }
+    } else {
+        if (cfg->low.has_value()) {
+            value = static_cast<uint16_t>(cfg->low.value());
+            wrote = true;
+        }
+    }
+
+    // --- Claim only if a write actually occurred ---
+    if (wrote && cfg->claim) {
+        claimed = true;
+    }
+}
+
+
+// =============================================================================
+// 2. EDGE-TRIGGERED (STATEFUL) VARIANT
+// =============================================================================
+
+void cb_runlevel_once_fn(CbProc* proc, uint16_t& value, bool& claimed) {
     const auto* cfg   = static_cast<const CbRunlevelCfg*>(proc->cfg);
-    auto*       state = static_cast<CbRunlevelState*>(proc->state);
+    auto*       state = static_cast<CbRunlevelOnceState*>(proc->state);
 
-    const bool     active = (proc->inValue != 0u);
-    // RL3: runLevel is now a plain analog channel — read from analogBus[RUNLEVEL].
-    const RunLevel rl     = (RunLevel)state->bus->analogBus[static_cast<uint8_t>(AnalogComBusID::RUNLEVEL)].value;
+    const uint16_t cur = proc->inValue;
 
-    // --- Rising edge: activate ---
-    if (active && !state->prevValue) {
-        if (rl == RunLevel::IDLE || rl == RunLevel::SLEEPING) {
-            // RL3: write via generic analog accessor (no dedicated runLevel API).
-            combus_set_analog(*state->bus, AnalogComBusID::RUNLEVEL, (uint16_t)cfg->activeLevel, ChanLayer::LOCAL);
+    // --- No transition: do nothing, just update prevValue and exit ---
+    if (cur == state->prevValue) {
+        state->prevValue = cur;
+        return;
+    }
+
+    // --- Transition detected: apply the same logic as cb_runlevel_fn ---
+    const bool lever = (cur != 0u);
+
+    bool wrote = false;
+    if (lever) {
+        if (cfg->high.has_value()) {
+            value = static_cast<uint16_t>(cfg->high.value());
+            wrote = true;
+        }
+    } else {
+        if (cfg->low.has_value()) {
+            value = static_cast<uint16_t>(cfg->low.value());
+            wrote = true;
         }
     }
 
-    // --- Falling edge: deactivate ---
-    if (!active && state->prevValue) {
-        if (rl == RunLevel::STARTING || rl == RunLevel::RUNNING) {
-            // RL3: write via generic analog accessor (no dedicated runLevel API).
-            combus_set_analog(*state->bus, AnalogComBusID::RUNLEVEL, (uint16_t)cfg->defaultLevel, ChanLayer::LOCAL);
-        }
+    if (wrote && cfg->claim) {
+        claimed = true;
     }
 
-    state->prevValue = active;
+    // --- Always update prevValue on exit ---
+    state->prevValue = cur;
 }
 
 

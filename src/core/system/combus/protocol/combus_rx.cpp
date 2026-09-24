@@ -19,6 +19,16 @@
 // combus_frame_apply().
 #include <core/system/combus/combus_defs.h>  // ChanLayer
 
+#if defined(HAS_FAILSAFE)
+// P4 — failsafe reaction needs to read the aggregated FAILSAFE channel.
+// combus_rx.cpp is a core module and does not own the global comBus
+// instance; we declare it extern here, gated by HAS_FAILSAFE so the
+// dependency is only pulled in when the feature is compiled in.
+// Same pattern as src/core/system/vbat/vbat.cpp:28.
+#include <core/config/machines/combus_types.h>  // DigitalComBusID::FAILSAFE (machine family dispatch)
+extern ComBus comBus;
+#endif
+
 
 
 // =============================================================================
@@ -304,6 +314,19 @@ void combus_rx_update()
 
         // --- 2. Per-link guard check ---
         if (!st.nodeCom) { continue; }
+
+#if defined(HAS_FAILSAFE)
+        // --- 2b. P4 — Failsafe reaction: invalidate the cached handshake
+        //     contract so the next handshake frame is re-validated against
+        //     MD5+version.  Without this, a transient link drop leaves the
+        //     contractValidated flag stuck at true and the optimisation in
+        //     combus_handshake_rx.cpp skips re-validation on reconnect.
+        //     Per-link: each link has its own handshakeCtx, so we only
+        //     invalidate THIS link's cache — other links are unaffected.
+        if (comBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::FAILSAFE)].value) {
+            combus_handshake_internal::clearContractValidated(st.handshakeCtx);
+        }
+#endif
 
         // --- 3. Drain available bytes into ring buffer ---
         while (st.nodeCom->available(st.nodeCom->ctx) > 0) {

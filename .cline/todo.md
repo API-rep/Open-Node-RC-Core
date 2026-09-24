@@ -1,0 +1,5 @@
+- [ ] Vérifier l'état git actuel
+- [ ] Ajouter tous les fichiers modifiés/non-suivis
+- [ ] Commit WIP "backup chantier 12.5 + travaux en cours"
+- [ ] Push backup sur origin
+- [ ] Démarrer la Phase 1 (création remote_link_lost.cb)
