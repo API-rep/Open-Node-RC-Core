@@ -110,7 +110,16 @@ static void render_overview() {
 		snprintf(batStr, sizeof(batStr), "N/A    ");
 	}
 
-	bool ctrlConn = !s_bus->isNotDrived;  // FS1 — inverted: ctrlConn = true when healthy (driven)
+	// Chantier 12.6: ctrlConn now derived from REMOTE_LINK_LOST contributor
+	// (LOCAL aggregator published by the remote_link_fallback_chain).  For
+	// backward compatibility, fallback to the historical `lastFrameMs` proxy
+	// when the channel is not active (autonomous builds without HAS_REMOTE_LINK_LOST_FALLBACK).
+	bool ctrlConn;
+#if defined(HAS_REMOTE_LINK_LOST_FALLBACK)
+	ctrlConn = !s_bus->digitalBus[static_cast<uint8_t>(DigitalComBusID::REMOTE_LINK_LOST)].value;
+#else
+	ctrlConn = (millis() - s_bus->lastFrameMs) < 2000u;
+#endif
 
 	// RL3: runLevel is now a plain analog channel — read from analogBus[RUNLEVEL].
 	const RunLevel curRl = (RunLevel)s_bus->analogBus[static_cast<uint8_t>(AnalogComBusID::RUNLEVEL)].value;
@@ -132,7 +141,13 @@ static void render_overview() {
 	for (uint8_t i = 0; i < wireEnd && i < s_analogCh; i++) {
 		uint16_t    raw  = s_bus->analogBus[i].value;
 		int16_t     pct  = dashPctBipolar(raw, s_bus->analogBusMaxVal);
-		bool        drv  = !s_bus->isNotDrived;  // FS1 — inverted: drv = true when healthy (driven)
+		// Chantier 12.6: same heuristic as ctrlConn — see above.
+		bool        drv;
+#if defined(HAS_REMOTE_LINK_LOST_FALLBACK)
+		drv = !s_bus->digitalBus[static_cast<uint8_t>(DigitalComBusID::REMOTE_LINK_LOST)].value;
+#else
+		drv = (millis() - s_bus->lastFrameMs) < 2000u;
+#endif
 		const char* name = s_bus->analogBus[i].infoName ? s_bus->analogBus[i].infoName : "?";
 
 		// Special decoding for DRIVE_STATE_BUS (index 5) — display readable text

@@ -131,17 +131,12 @@ static void fillRandom(uint32_t seed) {
     combus_set_analog(txComBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::RUNNING, ChanLayer::LOCAL);
     for (uint8_t i = 0u; i < kTestNAnalog; ++i) {
         txAnalogBus[i].value    = (uint16_t)(rand() % 1001u);
-        // Note: the per-channel 'isDrived' flag was removed in A6.1 (it
-        // is now on the ComBus struct, not on individual channels). See
-        // Phase 3 / A13 fix below (fillRandom still works because the
-        // codec test only cares about `value`).
     }
     for (uint8_t i = 0u; i < kTestNDigital; ++i) {
         txDigitalBus[i].value    = (rand() % 2) == 1;
     }
-    // Drive the bus once for this test (the runtime flag is per-bus, not
-    // per-channel in A6.1+).
-        txComBus.isNotDrived = false;  // FS1 — inverted: false = healthy (driven)
+    // Chantier 12.6: `bus.isNotDrived` (FS1 open-drain flag) has been removed.
+    // The codec test no longer needs to drive the flag — it only cares about `value`.
 }
 
 /** Assert that rxFrame fields match txComBus content. */
@@ -677,91 +672,14 @@ static void test_md5_resolution_system(void) {
         (const void*)ctx.expectedMd5);
 }
 
-// =============================================================================
-// GROUP F — FAILSAFE TRIGGER ON COMBUS LINK LOSS (FS1)
+// Chantier 12.6 (cleanup): Group F (FAILSAFE_COMBUS_LINK / isNotDrived FS1
+// tests) REMOVED — the FAILSAFE_COMBUS_LINK channel no longer exists in the
+// combus view, and `bus.isNotDrived` has been removed from the ComBus struct.
+// Link health is now monitored by the new *_LINK_LOST contributors (see
+// failsafe_module.md §12.5 new design).
 //
-// Verifies that the FAILSAFE_COMBUS_LINK sub-combus is correctly re-armed
-// by sys_manager_update() based on the isNotDrived flag. This is the
-// scenario historically covered by the `isDrived` open-drain flag (see
-// RL0 audit). The test simulates the sys_manager_update() sequence:
-//   1. Pre-clear: bus.isNotDrived = true (failsafe-by-default)
-//   2. Re-arm:   combus_set_digital(bus, FAILSAFE_COMBUS_LINK, isNotDrived, LOCAL)
-//
-// The test does NOT call failsafe_update() directly (would require adding
-// core/system/failsafe/ to the test build_src_filter). Instead, it verifies
-// the re-arm contract: FAILSAFE_COMBUS_LINK must mirror isNotDrived after
-// the re-arm step. The OR-guard contributor (cb_or_fn) is tested separately
-// in the failsafe module's own test suite.
-// =============================================================================
-
-/** isNotDrived = true → FAILSAFE_COMBUS_LINK must be re-armed to true (fault). */
-static void test_failsafe_combus_link_rearm_on_loss(void) {
-    // --- 1. Pre-clear (simulates sys_manager_update() step 1) ---
-    txComBus.isNotDrived = true;
-
-    // --- 2. Re-arm (simulates sys_manager_update() step 4) ---
-    combus_set_digital(txComBus, DigitalComBusID::FAILSAFE_COMBUS_LINK,
-                       txComBus.isNotDrived, ChanLayer::LOCAL);
-
-    // --- 3. Verify: FAILSAFE_COMBUS_LINK is true (fault) ---
-    TEST_ASSERT_TRUE_MESSAGE(
-        txComBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::FAILSAFE_COMBUS_LINK)].value,
-        "FAILSAFE_COMBUS_LINK must be true when isNotDrived is true (combus link lost)");
-}
-
-/** isNotDrived = false → FAILSAFE_COMBUS_LINK must be re-armed to false (healthy). */
-static void test_failsafe_combus_link_rearm_when_alive(void) {
-    // --- 1. Pre-clear (simulates sys_manager_update() step 1) ---
-    txComBus.isNotDrived = true;
-
-    // --- 2. Simulate input_update() clearing isNotDrived (source active) ---
-    txComBus.isNotDrived = false;
-
-    // --- 3. Re-arm (simulates sys_manager_update() step 4) ---
-    combus_set_digital(txComBus, DigitalComBusID::FAILSAFE_COMBUS_LINK,
-                       txComBus.isNotDrived, ChanLayer::LOCAL);
-
-    // --- 4. Verify: FAILSAFE_COMBUS_LINK is false (healthy) ---
-    TEST_ASSERT_FALSE_MESSAGE(
-        txComBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::FAILSAFE_COMBUS_LINK)].value,
-        "FAILSAFE_COMBUS_LINK must be false when isNotDrived is false (combus link alive)");
-}
-
-/** Pre-clear invariant: isNotDrived must be true at cycle start (failsafe-by-default). */
-static void test_failsafe_combus_link_preclear_invariant(void) {
-    // --- 1. Simulate a previous cycle where isNotDrived was cleared ---
-    txComBus.isNotDrived = false;
-
-    // --- 2. Simulate sys_manager_update() step 1 (pre-clear) ---
-    txComBus.isNotDrived = true;
-
-    // --- 3. Verify: isNotDrived is true at cycle start ---
-    TEST_ASSERT_TRUE_MESSAGE(txComBus.isNotDrived,
-        "isNotDrived must be pre-cleared to true at cycle start (failsafe-by-default)");
-}
-
-/** Full cycle simulation: loss → re-arm → recovery → re-arm. */
-static void test_failsafe_combus_link_full_cycle(void) {
-    // --- Cycle 1: combus link lost ---
-    txComBus.isNotDrived = true;  // pre-clear
-    combus_set_digital(txComBus, DigitalComBusID::FAILSAFE_COMBUS_LINK,
-                       txComBus.isNotDrived, ChanLayer::LOCAL);
-    TEST_ASSERT_TRUE(txComBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::FAILSAFE_COMBUS_LINK)].value);
-
-    // --- Cycle 2: combus link recovered ---
-    txComBus.isNotDrived = true;  // pre-clear
-    txComBus.isNotDrived = false; // input_update() clears it
-    combus_set_digital(txComBus, DigitalComBusID::FAILSAFE_COMBUS_LINK,
-                       txComBus.isNotDrived, ChanLayer::LOCAL);
-    TEST_ASSERT_FALSE(txComBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::FAILSAFE_COMBUS_LINK)].value);
-
-    // --- Cycle 3: combus link lost again ---
-    txComBus.isNotDrived = true;  // pre-clear
-    combus_set_digital(txComBus, DigitalComBusID::FAILSAFE_COMBUS_LINK,
-                       txComBus.isNotDrived, ChanLayer::LOCAL);
-    TEST_ASSERT_TRUE(txComBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::FAILSAFE_COMBUS_LINK)].value);
-}
-
+// The replacement tests (link health via REMOTE_LINK_LOST aggregation) will
+// be added in a future chantier once the contract is finalised.
 
 /** combus_handshake_compareAndLog() must match when given the right local MD5. */
 static void test_md5_compare_match_with_correct_local(void) {
@@ -843,13 +761,8 @@ void setup() {
     RUN_TEST(test_md5_resolution_system);
     RUN_TEST(test_md5_compare_match_with_correct_local);
 
-    // --- Group F: Failsafe trigger on combus link loss (FS1) ---
-    // Verifies the re-arm contract: FAILSAFE_COMBUS_LINK must mirror
-    // isNotDrived after the re-arm step in sys_manager_update().
-    RUN_TEST(test_failsafe_combus_link_rearm_on_loss);
-    RUN_TEST(test_failsafe_combus_link_rearm_when_alive);
-    RUN_TEST(test_failsafe_combus_link_preclear_invariant);
-    RUN_TEST(test_failsafe_combus_link_full_cycle);
+    // Chantier 12.6: Group F (FAILSAFE_COMBUS_LINK re-arm) removed — see
+    // header docstring above.
 
     UNITY_END();
 }

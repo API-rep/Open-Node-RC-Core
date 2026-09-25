@@ -74,10 +74,21 @@ static void sigValFmt(const SigDevice& d, char* out, size_t sz) {
 
 /**
  * @brief Return true if the ComBus channel backing @p d is presently driven.
+ *
+ * Chantier 12.6: the historical `bus.isNotDrived` open-drain flag is gone.
+ * "Driven" is now expressed per-channel: for sig devices we treat the
+ * channel as driven if any activity has been seen recently (we use the
+ * bus-level `lastFrameMs` timestamp as a coarse proxy — not yet wire-level).
  */
 static bool sigIsDriven(const SigDevice& d) {
-	(void)d;   // channel granularity removed — isNotDrived is bus-level (FS1 — inverted)
-	return s_bus ? !s_bus->isNotDrived : false;  // FS1 — inverted: true = healthy (driven)
+	(void)d;
+	if (!s_bus) return false;
+	// Simple heuristic: the bus is considered driven if the last frame
+	// is recent (< 2s).  This will be refined in a future chantier to
+	// inspect the relevant *_LINK_LOST contributor directly.
+	const uint32_t lastSeen = s_bus->lastFrameMs;
+	const uint32_t now      = millis();
+	return (now - lastSeen) < 2000u;
 }
 
 

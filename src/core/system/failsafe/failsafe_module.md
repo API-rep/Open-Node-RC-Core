@@ -91,11 +91,9 @@ Chaque source possède son propre sous-ComBus :
 ```text
 FAILSAFE
 FAILSAFE_VBAT
-FAILSAFE_COMBUS_LINK
 FAILSAFE_XXX
 ```
 
-> Nom réellement retenu à l'implémentation : `FAILSAFE_COMBUS_LINK` (pas `FAILSAFE_COMBUS` comme esquissé initialement ici) — cohérent avec le terme `ComBusLink` déjà établi côté chantier combus-handshake.
 
 La relation est :
 
@@ -164,7 +162,7 @@ Pas d'early exit global de la chaîne — tous les processors tournent à chaque
 [ FAILSAFE VBAT ]
         │
         ▼
-[ FAILSAFE COMBUS_LINK ]
+[ FAILSAFE ... ]
         │
         ▼
 [ FAILSAFE XXX ]
@@ -225,8 +223,7 @@ env/config/failsafe   → décide de la réaction
        vbatSense      combus link     autre
           │ réarme       │ réarme       │ réarme
           ▼              ▼              ▼
-     FAILSAFE_VBAT  FAILSAFE_       FAILSAFE_X
-                     COMBUS_LINK
+     FAILSAFE_VBAT  FAILSAFE_X       FAILSAFE_Y
           └──────────────┼──────────────┘
                          ▼
                  chaîne failsafe → FAILSAFE global
@@ -270,23 +267,46 @@ env/config/failsafe   → décide de la réaction
 
 **Règle de migration historique** : l'ancien chemin de réaction ne peut être supprimé qu'après validation de la nouvelle chaîne de réaction environnementale.  Cette condition est remplie — la nouvelle chaîne est active et validée sur `volvo_A60H_bruder` (compile SUCCESS, 36.3% Flash, -8 bytes vs avant).
 
-### 12.5 — Dépréciation de `bus.isDrived`
+### 12.5 — Dépréciation de `bus.isDrived`  ✅ CLOS (chantier 12.5 final, 2026‑09‑25)
 
 **Décision actée** : `isDrived` est une dette de l'ancien embryon failsafe. À supprimer au profit du combus failsafe dédié aux inputs. Les modules reprendront cette charge à leur rework, une fois le chantier failsafe terminé.
 
-> **Convergence avec le chantier combus-handshake** : `FS1` (clos) a déjà implémenté ce renommage — `isDrived` → `isNotDrived` (sémantique inversée, `true` = fault, cohérente avec la convention failsafe), et créé `FAILSAFE_COMBUS_LINK` comme contributeur consommant ce signal via `sys_manager_update()`. **À vérifier avant de considérer cette étape close** : le vieux code de décision failsafe (`main.cpp`, `sys_manager.cpp`) lit-il encore `isNotDrived` directement pour sa réaction, ou passe-t-il déjà exclusivement par `FAILSAFE`/`FAILSAFE_COMBUS_LINK` ?
+**Statut** : clos lors du chantier 12.5 final (2026‑09‑25).  Voir §12.6 pour le détail des suppressions code et §12.18 (entrée "chantier 12.5 final") pour la validation build.
 
-### 12.6 — Câblage VBAT
+### 12.6 — Nettoyage FS1 legacy (`bus.isDrived` / `bus.isNotDrived`)  ✅ CLOS (chantier 12.6, 2026‑09‑25)
+
+Une fois le §12.5 validé, le flag open‑drain historique n'a plus de raison d'exister. Ce chantier de cleanup le supprime partout dans la base de code, sans changer le comportement fonctionnel (la sémantique est déjà portée par `REMOTE_LINK_LOST`).
+
+**Actions réalisées** :
+
+| Fichier | Avant | Après |
+|---|---|---|
+| `src/core/system/combus/combus_defs.h` | champ `bool isNotDrived = true;` dans `ComBus` | champ supprimé ; commentaire de section remplacé par une note explicative |
+| `src/machines/system/sys_manager.cpp` | `bus.isNotDrived = true;` au début de `sys_manager_update()` + corps de `sys_manager_reset(ComBus&)` | pré‑clear supprimé ; `sys_manager_reset()` réduit à un stub no‑op (commenté) |
+| `src/machines/system/input/input_update.cpp` | `bus.isNotDrived = false;` en fin de fonction (commentaire "legacy FS1") | ligne supprimée ; commentaire remplacé par la référence à `PS4_DS4_BT_LINK_LOST` |
+| `src/core/system/combus/protocol/frame/combus_frame.cpp` | `combus->isNotDrived = false;` en fin de `combus_frame_apply()` (commentaire "legacy FS1") | ligne supprimée ; codec reste 100 % pur |
+| `src/machines/system/debug/dashboard_*.cpp` (3 fichiers) | lecture directe de `bus.isNotDrived` pour afficher l'état "driven" | remplacée par lecture de `REMOTE_LINK_LOST` (avec fallback `lastFrameMs` proxy sur builds autonomes sans `HAS_REMOTE_LINK_LOST_FALLBACK`) |
+| `src/machines/init/init.cpp` (pause bloc) | condition de sortie sur `!comBus.isNotDrived && KEY` | remplacée par `!REMOTE_LINK_LOST && KEY` (avec même fallback) |
+| `src/core/system/combus/combus_manager.h` | commentaire obsolète sur `isDrived` | remplacé par référence au §12.5 / §12.6 |
+| `src/core/system/combus/processors/proc_chain.cpp` | note "they do not set bus.isDrived" | reformulée pour refléter le nouveau design par contributeurs |
+| `src/machines/system/sys_manager.h` | doc détaillée de l'invariant open‑drain | remplacée par la description de la nouvelle chaîne (input → vbat → failsafe → link‑fallback) |
+| `src/machines/main.cpp` | commentaire "isDrived always true when RUNNING is reached" | remplacé par la note chantier 12.6 |
+
+**Test suite** : `test/test_combus_loopback/test_combus_loopback.cpp` — le groupe **Group F** (FAILSAFE_COMBUS_LINK re‑arm) a été supprimé (canal + champ n'existent plus) ; les autres groupes (A codec, B loopback, C view identity, D wire‑end, E MD5, G RUNLEVEL) restent valides.
+
+**Garanties préservées** :
+
+* Le codec `combus_frame.cpp` n'écrit plus aucun état de lien — il est strictement "decode + apply".
+* Les dashboards affichent toujours un indicateur `DRV / ---` lisible, dérivé de `REMOTE_LINK_LOST` quand la chaîne est active, sinon d'un proxy `lastFrameMs` (compatible builds autonomes sans contributeur de lien).
+* Le bloc `PAUSE_LOG_AFTER_INIT` sort toujours sur "remote KEY pressé ET bus driven" — la condition est juste dérivée d'un autre signal (sémantiquement équivalent : on n'a plus de driver, donc pas de drive).
+* `sys_manager_reset(ComBus&)` est conservé en stub pour la compatibilité source avec les callers out‑of‑tree (sound node historique, etc.).
+
+### 12.7 — Câblage VBAT
 
 Processor `proc_failsafe_vbat` (pattern reset-first, cf. §6), réarmé par `vbat_update()`. Validation attendue : batterie faible → `failsafe_is_active() == true` ; test de staleness (empêcher le réarmement, vérifier le passage à `true` au cycle suivant sans modifier la logique du processor).
 
 **Statut réel non vérifié** — à confirmer sur le code actuel avant de supposer cette étape close.
 
-### 12.7 — `FAILSAFE_COMBUS_LINK`
-
-**Décision actée** : la responsabilité du mécanisme de détection (timeout, perte de frame, checksum...) revient au module `ComBusLink`/protocole, pas au module failsafe lui-même — failsafe ne fait qu'agréger le signal produit.
-
-> **Dépassée par `FS1`** : le chantier combus-handshake a déjà implémenté ce contributeur en entier (pas seulement réservé le point d'intégration comme prévu ici), en suivant le pattern `FAILSAFE_VBAT` (`cb_reset_fn` + `cb_or_fn`).
 
 ### 12.8 — Enregistrement runtime de la chaîne
 
@@ -333,13 +353,13 @@ La réaction intervient donc avant la FSM du même cycle.
 
 **Décision actée** : le layering REMOTE/LOCAL/SYSTEM reste le bon modèle — un mécanisme d'ownership dédié a déjà été tenté par le passé sans succès. Ajout d'une nuance sur le paramètre `direction` des combus : **`both_or`**, qui indique qu'à la fusion d'un import, une valeur `true` de n'importe quel côté suffit à donner `true` (similaire au `cb_or_fn` du module failsafe, mais appliqué à la fusion d'imports en général).
 
-> **Convergence spontanée avec le chantier combus-handshake** : `both_or` vient d'être implémenté côté combus-builder (chantier `ND6`), indépendamment de cette réflexion — même solution trouvée des deux côtés. `FAILSAFE_COMBUS_LINK` (`FS1`) l'utilise déjà.
-
 ### 12.12 — Suppression de l'ancien chemin
 
 **Décision actée**, conditionnée à `12.5` : oui, avec adaptation future des modules d'input au nouveau mécanisme failsafe — pas immédiat, pas avant que la nouvelle chaîne de réaction soit validée.
 
-Précondition dure : la nouvelle chaîne de réaction environnementale doit être active et validée avant toute suppression de `SysResult.failsafeActive` ou de l'ancien chemin de réaction. `isDrived`/`isNotDrived` reste un signal open-drain, pas une décision failsafe en soi.
+Précondition dure : la nouvelle chaîne de réaction environnementale doit être active et validée avant toute suppression de `SysResult.failsafeActive` ou de l'ancien chemin de réaction.
+
+> **Chantier 12.6 (cleanup, 2026‑09‑25)** : la précondition est désormais remplie.  `isDrived` / `isNotDrived` ont été retirés complètement de la base de code (voir §12.6).  Le nouvel invariant est : "chaque contributeur `*_LINK_LOST` est indépendant et réarmé par son propre backend — pas de flag partagé, pas d'ordonnancement à respecter pour l'état de lien".
 
 ### 12.13 — Publication TX de l'état failsafe
 
@@ -349,7 +369,7 @@ Précondition dure : la nouvelle chaîne de réaction environnementale doit êtr
 
 ## 12.14 — Fichiers impactés (consolidé)
 
-**Création** : `src/core/system/failsafe/*` ; `vbat/failsafe_channels.inc`, `vbat/failsafe_processors.inc`, `vbat/proc_failsafe_vbat.*` ; `combus/failsafe_channels.inc`, `combus/failsafe_processors.inc`, `combus/proc_failsafe_combus_link.*` (fait via `FS1`, sous d'autres noms — à réconcilier) ; `machines/config/failsafe/*` ; `remotes/config/failsafe/*` (reporté).
+**Création** : `src/core/system/failsafe/*` ; `vbat/failsafe_channels.inc`, `vbat/failsafe_processors.inc`, `vbat/proc_failsafe_vbat.*` ; `combus/failsafe_channels.inc`, `combus/failsafe_processors.inc`, ; `machines/config/failsafe/*` ; `remotes/config/failsafe/*` (reporté).
 
 **Modification** : `machines/main.cpp`, `machines/init/init.cpp`, `machines/system/sys_manager.{h,cpp}`, `output/output_manager.*` (si nécessaire), `combus/protocol/combus_tx.cpp` (obsolète depuis `12.13`), `combus/frame/combus_frame.h` (obsolète depuis `12.13`), `vbat/vbat.cpp`, `sound_module/system/combus_sound_interpreter.cpp`.
 
@@ -365,7 +385,6 @@ Précondition dure : la nouvelle chaîne de réaction environnementale doit êtr
 4. Dépréciation de `failsafeActive`, ancien comportement intact.
 5. `proc_failsafe_input_link` / dépréciation `isDrived` → **couvert par `FS1`**, à vérifier (voir `12.5`).
 6. VBAT contributor + test de staleness — statut réel à vérifier.
-7. `FAILSAFE_COMBUS_LINK` → **fait par `FS1`**.
 8. Branchement runtime de `failsafe_update()`.
 9. Réaction via `env/config/failsafe/` (processor "set runlevel").
 10. **Validation obligatoire de la détection et de la réaction ensemble.**
@@ -425,3 +444,28 @@ Vérifications : compilation `volvo_A60H_bruder` SUCCESS (1 139 029 octets Flash
 ### À faire — nouvelle entrée à ajouter après audit croisé avec `FS1`
 
 Une entrée de journal reste à écrire une fois confirmé si `12.5`/`12.7` sont réellement closes par `FS1`, ou s'il reste un travail de câblage (voir §12.16 point 1 et le prompt d'audit en cours).
+
+### Chantier 12.5 final — `REMOTE_LINK_LOST` aggregator + retrait `FAILSAFE_COMBUS_LINK`  ✅ CLOS (2026‑09‑25)
+
+**Date** : 25/09/2026 · **Branche** : `failsafe-module` · **Scope** : §12.5 + §12.7
+
+**Conclusion** : le chantier 12.5 final est clos.  La nouvelle chaîne `REMOTE_LINK_LOST` est active et validée.  Le contributeur historique `FAILSAFE_COMBUS_LINK` a été retiré (la sémantique est portée directement par les contributeurs `*_LINK_LOST` — un pour chaque backend de transport).  Le codec `combus_frame.cpp` reste 100 % pur (decode + apply uniquement, sans toucher à l'état de lien).
+
+**Fichiers livrés** :
+- 3 canaux combus : `src/core/system/inputs/{remote_link_lost,ps4_ds4_bt_link_lost,uart_link_lost}.cb`
+- Chaîne d'agrégation : `src/core/system/inputs/remote_link_fallback_chain.{h,cpp}` (reset + OR‑guard, gérée par `sys_manager_update()` via le guard `HAS_REMOTE_LINK_LOST_FALLBACK`)
+- Processor `cb_runlevel_fn` (runlevel.cb) câblé pour forcer `RUNLEVEL = IDLE` sur front montant de `REMOTE_LINK_LOST`
+- Écritures migrées : `ps4_ds4_bt.cpp` publie `PS4_DS4_BT_LINK_LOST = false` quand le contrôleur est actif, `combus_sound_interpreter.cpp` publie `UART_LINK_LOST` selon le RX‑timeout
+- Dashboards : indicateurs `DRV / ---` dérivés de `REMOTE_LINK_LOST` (avec fallback `lastFrameMs` proxy)
+- Build : SUCCESS (les deux builds cibles `volvo_A60H_bruder` et `remotes`)
+
+**Rétention `FAILSAFE_COMBUS_LINK`** : NON — le canal a été retiré.  Le rôle d'agrégateur de "lien perdu" est joué directement par `REMOTE_LINK_LOST` (qui est lui-même un contributeur du `FAILSAFE` global via la chaîne de processors).
+
+### Chantier 12.6 — Nettoyage FS1 legacy (`bus.isDrived` / `bus.isNotDrived`)  ✅ CLOS (2026‑09‑25)
+
+**Date** : 25/09/2026 · **Branche** : `failsafe-module` · **Scope** : §12.6
+
+**Conclusion** : le flag open-drain historique `bus.isDrived` / `bus.isNotDrived` a été complètement retiré de la base de code.  Le comportement fonctionnel est préservé (la sémantique est portée par `REMOTE_LINK_LOST`).  Voir §12.6 pour le détail des 10 fichiers modifiés et la table de correspondance avant/après.
+
+**Build** : SUCCESS (les trois builds cibles `volvo_A60H_bruder`, `remotes`, `sound_node_volvo`).
+**Test suite** : `pio test -e test_combus_loopback` — Group F (FAILSAFE_COMBUS_LINK re-arm) supprimé ; autres groupes valides.

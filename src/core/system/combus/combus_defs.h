@@ -11,9 +11,14 @@
  * 
  * NOTE:
  * - do not change uint16_t size for AnalogComBus. Some system sub value depend of this size
- * - "isDrived" flag have to be set true if its channel is perodicaly update.
- *   For safety, a watchdog should manage a disconnect timout an set "isDrived" false after a delay.
  * - All input/output modules had to write/read this struct to share data
+ *
+ * @note Chantier 12.6: the historical `isDrived` / `isNotDrived` open-drain
+ *   flags have been REMOVED. Link health is now monitored at transport
+ *   level by per-link contributors (PS4_DS4_BT_LINK_LOST, UART_LINK_LOST,
+ *   ...) declared in the `.cb` channel files, and aggregated by
+ *   `remote_link_fallback_chain.cpp` into the LOCAL `REMOTE_LINK_LOST`
+ *   channel. See failsafe_module.md §12.5 for the new design.
  *******************************************************************************/// 
 #pragma once
 
@@ -138,10 +143,9 @@ typedef struct {
   //       generic analog accessor (combus_set_analog / analogBus[RUNLEVEL].value).
   //       This is the same pattern as any other LOCAL analog channel (e.g. THROTTLE_STICK).
 
-    // --- Input drive flag ---
-  bool        isNotDrived = true;          ///< True when NO physical input source refreshed the bus this cycle (FS1 — inverted semantics, see RL0 audit)
-                                            ///< Pre‑set by sys_manager_reset() each loop (failsafe-by-default); cleared by each active source.
-                                            ///< Replaces the historical `isDrived` flag. Semantics inverted to match the Failsafe aggregator convention (true = fault).
+    // Chantier 12.6: `isNotDrived` (FS1 open-drain flag) REMOVED. Link
+    // health is now monitored by per-link contributors aggregated into
+    // REMOTE_LINK_LOST — see failsafe_module.md §12.5.
 
     // --- Transport ---
   uint32_t    lastFrameMs = 0;             ///< millis() timestamp of the last successful combus_frame_apply

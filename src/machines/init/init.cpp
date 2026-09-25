@@ -86,7 +86,16 @@ void machine_init() {
         if (c == '\r' || c == '\n') goto pause_exit;
       }
         // Exit via remote KEY channel
-      if (!comBus.isNotDrived && comBus.digitalBus[keyCh].value) break;
+        // Chantier 12.6: `bus.isNotDrived` removed — use REMOTE_LINK_LOST
+        // (LOCAL aggregator) when HAS_REMOTE_LINK_LOST_FALLBACK is defined,
+        // otherwise fall back to the lastFrameMs proxy.
+#if defined(HAS_REMOTE_LINK_LOST_FALLBACK)
+      if (!comBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::REMOTE_LINK_LOST)].value
+          && comBus.digitalBus[keyCh].value) break;
+#else
+      if ((millis() - comBus.lastFrameMs) < 2000u
+          && comBus.digitalBus[keyCh].value) break;
+#endif
 
       vTaskDelay(10);  // yield — avoid starving the scheduler
     }

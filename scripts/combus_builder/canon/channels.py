@@ -89,6 +89,7 @@ VALID_THEMES: frozenset[str] = frozenset({
     "failsafe",
     "vbat",
     "light",
+    "input",       # chantier 12.5: REMOTE_LINK_LOST (replaces FAILSAFE_COMBUS_LINK)
     # Ajouter ici les nouveaux thèmes légitimes.
 })
 

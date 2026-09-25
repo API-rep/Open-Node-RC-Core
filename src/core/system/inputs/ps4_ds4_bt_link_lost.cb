@@ -1,0 +1,45 @@
+# ps4_ds4_bt_link_lost.cb — PS4 DualShock Bluetooth link health signal
+#
+# This file declares the PS4_DS4_BT_LINK_LOST ComBus channel. It is the
+# dedicated "PS4 BT link alive" signal for the PS4 DualShock Bluetooth input
+# backend, consumed by the REMOTE_LINK_LOST fallback chain (declared in
+# src/core/system/inputs/remote_link_fallback_chain.cpp) when
+# HAS_REMOTE_LINK_LOST_FALLBACK is defined.
+#
+# Notes:
+# - LOCAL scope: the channel is shared by all boards composing the local
+#   node. The mainboard (or any board connected to a PS4 controller over
+#   Bluetooth) publishes the local "PS4 BT link alive" state each cycle.
+#   Other boards consume it through the same LOCAL bus.
+# - Direction [both_or]: uplink + downlink + OR-merge on import.  Any
+#   board may write (re-arm each cycle to false = healthy) or read
+#   (react) the channel.  At import, any source reporting fault (true)
+#   wins — coherent with failsafe-by-default semantics.
+# - value: high = PS4 link lost (failsafe-by-default).  The channel stays
+#   "lost" until the PS4 backend re-arms it to false (= healthy) this
+#   cycle.  The reset is performed by the first proc in the consumer
+#   chain (cb_reset_fn) — see remote_link_fallback_chain.cpp.
+# - type: digital (bool).
+# - ALWAYS emitted (no `requires`): the combus-builder's `requires`
+#   mechanism is a pure AND (every listed flag must be present), and
+#   the PS4_BT_LINK_LOST activation is conditional in the C++ writer
+#   (`#if defined(INPUT_PS4_DS4_BT)`).  Emitting the channel always
+#   keeps the channel set and ID space stable across configurations;
+#   projects without INPUT_PS4_DS4_BT simply never write to the
+#   channel, so it stays at its default `high` (= lost) value with
+#   no effect on the aggregated REMOTE_LINK_LOST (the OR-guard picks
+#   it up, but no consumer reacts on a machine with no PS4 backend).
+# - This channel is a CONTRIBUTOR to REMOTE_LINK_LOST (chantier 12.5
+#   new design).  The REMOTE_LINK_LOST channel is the OR-aggregated
+#   result of all *_LINK_LOST contributors.  See failsafe_module.md
+#   §12.5 (new design).
+
+
+channels:
+  - id: PS4_DS4_BT_LINK_LOST
+    infoName: "PS4 DualShock Bluetooth link lost"
+    type: digital
+    scope: SYSTEM        # private to the board owning the PS4 backend (NOT shared)
+    theme: input          # generic "input subsystem" theme
+    direction: none       # SYSTEM scope: pure in-board state, no wire transport
+    value: high         # default to "lost" (failsafe-by-default — see chain reset)

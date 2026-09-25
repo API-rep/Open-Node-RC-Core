@@ -65,25 +65,12 @@ CbProc kFailsafeProcs[] = {
     },
 #endif
 
-#if defined(HAS_COMBUS_LINK_FAILSAFE)
-    // --- 2. ComBus-link OR-guard contributor (FS1, optional) ---------------
-    // Reads FAILSAFE_COMBUS_LINK (proof-of-life from sys_manager_update).
-    // If no physical input source refreshed the bus this cycle
-    // (isNotDrived == true), FAILSAFE_COMBUS_LINK is true; this OR-guard
-    // latches the pipeline value to 1 (= DigitalComBusID::FAILSAFE fault)
-    // and resets FAILSAFE_COMBUS_LINK back to fault (consume + guard).
-    //
-    // This contributor replaces the historical `isDrived` open-drain flag
-    // on ComBus (see RL0 audit). The semantics are inverted: `true` =
-    // fault (no combus update this cycle), `false` = healthy (at least
-    // one source refreshed the bus).
-    {
-        .name    = "failsafe_or_combus_link",
-        .inCh    = DigitalComBusID::FAILSAFE_COMBUS_LINK,
-        .outCh   = DigitalComBusID::FAILSAFE_COMBUS_LINK,
-        .fn      = cb_or_fn,
-    },
-#endif
+    // Chantier 12.5 (final): FAILSAFE_COMBUS_LINK contributor REMOVED.
+    // The historical isNotDrived open-drain flag (FS1) is now obsolete —
+    // link health is monitored at transport level by the new
+    // *_LINK_LOST contributors (PS4_DS4_BT_LINK_LOST, UART_LINK_LOST, …)
+    // and aggregated by the remote_link_fallback_chain.  See
+    // failsafe_module.md §12.5 (new design).
 
     // Add new contributors here with their own #if defined(HAS_XXX_FAILSAFE)
     // blocks.  Each must follow the same shape: inCh == outCh, fn = cb_or_fn,
