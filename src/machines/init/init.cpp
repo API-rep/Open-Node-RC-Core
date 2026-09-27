@@ -76,6 +76,12 @@ void machine_init() {
     uint8_t keyCh = static_cast<uint8_t>(DigitalComBusID::KEY_BTN);
     sys_log_info("[SYSTEM] ** Paused ** — press ENTER or IGNITION KEY to continue...\n");
 
+      // Edge detection: the KEY button semantics is an EVENT (rising edge),
+      // not a LEVEL.  A brief PS4_BT press (< 50 ms) is enough to release the
+      // pause — we no longer require the player to hold TRIANGLE while the
+      // loop polls.  The previous level-based check forced operators to use
+      // Serial ENTER because the BT poll latency could miss short presses.
+    bool prevKey = comBus.digitalBus[keyCh].value;
     while (true) {
         // Keep the combus alive during the wait (BT connection, input watchdog)
       input_update(comBus);
@@ -85,17 +91,21 @@ void machine_init() {
         char c = (char)Serial.read();
         if (c == '\r' || c == '\n') goto pause_exit;
       }
-        // Exit via remote KEY channel
+        // Exit via remote KEY channel — RISING EDGE (false → true).
         // Chantier 12.6: `bus.isNotDrived` removed — use REMOTE_LINK_LOST
         // (LOCAL aggregator) when HAS_REMOTE_LINK_LOST_FALLBACK is defined,
-        // otherwise fall back to the lastFrameMs proxy.
+        // otherwise fall back to the lastFrameMs proxy.  The link check only
+        // applies to the rising-edge condition; a disconnected controller
+        // cannot legitimately trigger KEY.
+      bool currKey = comBus.digitalBus[keyCh].value;
 #if defined(HAS_REMOTE_LINK_LOST_FALLBACK)
       if (!comBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::REMOTE_LINK_LOST)].value
-          && comBus.digitalBus[keyCh].value) break;
+          && currKey && !prevKey) break;
 #else
       if ((millis() - comBus.lastFrameMs) < 2000u
-          && comBus.digitalBus[keyCh].value) break;
+          && currKey && !prevKey) break;
 #endif
+      prevKey = currKey;
 
       vTaskDelay(10);  // yield — avoid starving the scheduler
     }
