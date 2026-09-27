@@ -15,8 +15,8 @@
  *   channel. Consumers (e.g. `main.cpp`) then read `FAILSAFE` directly
  *   on the bus to trigger their reaction.
  *
- *   Future contributors (combus link, temperature, …) will be appended
- *   to `kFailsafeProcs[]` after the reset, each under its own
+ *   Future contributors (temperature, …) will be appended to
+ *   `kFailsafeProcs[]` after the reset, each under its own
  *   `#if defined(HAS_XXX_FAILSAFE)` block — always with `cb_or_fn`.
  *
  *   The reset entry is always the FIRST one in the table so that every
@@ -64,13 +64,6 @@ CbProc kFailsafeProcs[] = {
         .fn      = cb_or_fn,
     },
 #endif
-
-    // Chantier 12.5 (final): FAILSAFE_COMBUS_LINK contributor REMOVED.
-    // The historical isNotDrived open-drain flag (FS1) is now obsolete —
-    // link health is monitored at transport level by the new
-    // *_LINK_LOST contributors (PS4_DS4_BT_LINK_LOST, UART_LINK_LOST, …)
-    // and aggregated by the remote_link_fallback_chain.  See
-    // failsafe_module.md §12.5 (new design).
 
     // Add new contributors here with their own #if defined(HAS_XXX_FAILSAFE)
     // blocks.  Each must follow the same shape: inCh == outCh, fn = cb_or_fn,

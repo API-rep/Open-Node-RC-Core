@@ -20,6 +20,7 @@
  */
 #pragma once
 
+#if defined(HAS_IGNIT_KEY)  // Chantier 12.5: this machine has a physical ignition key (KEY_BTN → KEY_ACTIVE chain).
 
 // =============================================================================
 // 1. CONFIG
@@ -75,5 +76,7 @@ static CbProc kKeyRunlevelProcs[] = {
       .state = &gKeyOffState,
     },
 };
+
+#endif  // HAS_IGNIT_KEY
 
 // EOF key_runlevel_config.h

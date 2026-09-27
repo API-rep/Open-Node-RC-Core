@@ -72,7 +72,7 @@ static constexpr CbRunlevelCfg kRunlevelCfg {
   ///  Sits AFTER failsafe so a FAILSAFE condition always wins.
 static constexpr CbRunlevelCfg kRemoteLinkRunlevelCfg {
     .high  = RunLevel::IDLE,        ///< REMOTE_LINK_LOST 0→1 → write IDLE.
-    .low   = std::nullopt,          ///< REMOTE_LINK_LOST 1→0 → no write (manual recovery).
+    .low   = RunLevel::STARTING,    ///< REMOTE_LINK_LOST 1→0 → write STARTING (recovery — REMOTE_LINK_LOST engenders IDLE mode, no cold-start).
     .claim = true,                  ///< Block KEY_ACTIVE proc on link loss.
 };
 #endif  // HAS_REMOTE_LINK_LOST_FALLBACK

@@ -9,8 +9,6 @@
 #include <machines/system/input/input_update.h> // input_update(bus) — machine mapping
 #include <core/system/vbat/vbat.h>              // vbat_update() — orchestrates vbat_sense + FAILSAFE_VBAT
 #include <core/system/failsafe/failsafe.h>      // failsafe_update() — publishes DigitalComBusID::FAILSAFE
-#include <core/system/combus/combus_access.h>   // combus_set_digital() — FS1 re-arm FAILSAFE_COMBUS_LINK
-#include <core/config/machines/combus_types.h>  // DigitalComBusID::FAILSAFE_COMBUS_LINK (FS1)
 #include <core/system/inputs/remote_link_fallback_chain.h>  // chantier 12.5: REMOTE_LINK_LOST → IDLE fallback
 
 

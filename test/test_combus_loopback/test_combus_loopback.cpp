@@ -36,13 +36,15 @@
  *     given the right local MD5 pointer.  Same pattern as Group D —
  *     verify the resolution at init, not the per-frame behaviour.
  *
- *   Group F — Failsafe trigger on combus link loss (FS1):
- *     Verifies that the FAILSAFE aggregator publishes FAILSAFE = true
- *     when no physical input source refreshes the bus (isNotDrived = true).
- *     This is the scenario historically covered by the `isDrived` open-drain
- *     flag (see RL0 audit). The test simulates the full sys_manager_update()
- *     sequence: pre-clear isNotDrived, re-arm FAILSAFE_COMBUS_LINK, then
- *     run failsafe_update() and assert FAILSAFE is latched.
+ *   Group F — REMOVED (chantier 12.6 cleanup):
+ *     The historical "failsafe trigger on combus link loss" test relied on
+ *     the FS1 open-drain `isNotDrived` flag and a dedicated FS1 contributor
+ *     channel.  Both have been removed in chantier 12.5/12.6: link health
+ *     is now monitored at transport level by per-backend *_LINK_LOST
+ *     contributors (PS4_DS4_BT_LINK_LOST, UART_LINK_LOST, ...) and
+ *     aggregated by `remote_link_fallback_chain.cpp` into REMOTE_LINK_LOST,
+ *     which feeds the top-level FAILSAFE aggregator.
+ *     See failsafe_module.md §12.5 (new design) and §12.6 (cleanup).
  *
  * @note Group B requires a physical TX↔RX jumper on the Serial2 pins of
  *   the target board. Run via: pio test -e volvo_A60H_bruder
@@ -57,7 +59,7 @@
 #include <core/system/combus/protocol/combus_rx.h>
 #include <core/system/combus/combus_defs.h>
 #include <core/system/combus/protocol/frame/combus_frame_defs.h>
-#include <core/system/combus/combus_access.h>          // combus_set_digital() — FS1 Group F
+#include <core/system/combus/combus_access.h>          // combus_set_digital() — generic accessor
 #include <core/system/combus/protocol/combus_protocol.h> // ComBusLink, combus_protocol_init() — Group E
 #include <core/system/combus/protocol/frame/combus_handshake.h> // combus_handshake_compareAndLog() — Group E
 #include <core/system/combus/protocol/frame/combus_handshake_rx.h> // combus_handshake_compareAndLog() — Group E (RX-side declaration)
@@ -672,14 +674,14 @@ static void test_md5_resolution_system(void) {
         (const void*)ctx.expectedMd5);
 }
 
-// Chantier 12.6 (cleanup): Group F (FAILSAFE_COMBUS_LINK / isNotDrived FS1
-// tests) REMOVED — the FAILSAFE_COMBUS_LINK channel no longer exists in the
-// combus view, and `bus.isNotDrived` has been removed from the ComBus struct.
-// Link health is now monitored by the new *_LINK_LOST contributors (see
-// failsafe_module.md §12.5 new design).
+// Chantier 12.6 (cleanup): Group F (FS1 failsafe re-arm) REMOVED — link
+// health is now monitored by the per-backend *_LINK_LOST contributors
+// (PS4_DS4_BT_LINK_LOST, UART_LINK_LOST, ...) aggregated into
+// REMOTE_LINK_LOST, which feeds the top-level FAILSAFE aggregator
+// (see failsafe_module.md §12.5 new design).
 //
-// The replacement tests (link health via REMOTE_LINK_LOST aggregation) will
-// be added in a future chantier once the contract is finalised.
+// The replacement tests (link health via REMOTE_LINK_LOST aggregation)
+// will be added in a future chantier once the contract is finalised.
 
 /** combus_handshake_compareAndLog() must match when given the right local MD5. */
 static void test_md5_compare_match_with_correct_local(void) {
@@ -761,8 +763,8 @@ void setup() {
     RUN_TEST(test_md5_resolution_system);
     RUN_TEST(test_md5_compare_match_with_correct_local);
 
-    // Chantier 12.6: Group F (FAILSAFE_COMBUS_LINK re-arm) removed — see
-    // header docstring above.
+    // Chantier 12.6: Group F (FS1 failsafe re-arm) removed — see
+    // header docstring above (5 independent test groups A/B/C/D/E).
 
     UNITY_END();
 }

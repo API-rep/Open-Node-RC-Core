@@ -72,12 +72,14 @@ CbChain kInputChains[INPUT_CH_COUNT] = {
     .procCount  = static_cast<uint8_t>(std::size(kDirectDriveProcs)),
   },
 
+#if defined(HAS_IGNIT_KEY)
   { .name       = "key_runlevel",
     .inCh       = DigitalComBusID::KEY_ACTIVE,
     .outCh      = DigitalComBusID::KEY_ACTIVE,
     .procs      = kKeyRunlevelProcs,
     .procCount  = static_cast<uint8_t>(std::size(kKeyRunlevelProcs)),
   },
+#endif  // HAS_IGNIT_KEY
 
   { .name       = "runlevel",
     .inCh       = AnalogComBusID::RUNLEVEL,           // seed current RunLevel into pipeline value

@@ -89,7 +89,7 @@ VALID_THEMES: frozenset[str] = frozenset({
     "failsafe",
     "vbat",
     "light",
-    "input",       # chantier 12.5: REMOTE_LINK_LOST (replaces FAILSAFE_COMBUS_LINK)
+    "input",       # chantier 12.5: PS4_DS4_BT_LINK_LOST, UART_LINK_LOST, REMOTE_LINK_LOST
     # Ajouter ici les nouveaux thèmes légitimes.
 })
 
