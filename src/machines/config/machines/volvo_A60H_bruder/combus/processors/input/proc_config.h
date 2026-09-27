@@ -44,6 +44,10 @@ enum InputCh {
     INPUT_CRUISE_NORMAL = 4,    ///< CRUISE_ACTIVE → [gate(SUBGEAR), toggle(□)] → CRUISE_ACTIVE
     INPUT_THROTTLE = 5,         ///< THROTTLE_STICK (raw bipolar) → [passthrough for now] → THROTTLE_BUS.
                                 ///<   Future: center+abs+scale+dir — splits conditioning from SIM chain.
+    INPUT_STEERING = 6,         ///< STEERING_STICK (raw bipolar) → [passthrough for now] → STEERING_BUS.
+                                ///<   Future: center+abs+scale+dir — splits conditioning from SIM chain.
+    INPUT_DUMP = 7,             ///< DUMP_STICK (raw bipolar) → [passthrough for now] → DUMP_BUS.
+                                ///<   Future: center+abs+scale+dir — splits conditioning from SIM chain.
     INPUT_CH_COUNT              ///< Sentinel — number of CbChain entries.
 };
 

@@ -104,6 +104,26 @@ CbChain kInputChains[INPUT_CH_COUNT] = {
     .procCount  = 0u,
   },
 
+  // INPUT_STEERING — passthrough: STEERING_STICK (raw bipolar) → STEERING_BUS.
+  // No procs yet — conditioning (center+abs+scale+dir) added in the next migration step.
+  // The SIM_STEERING chain (ramp) reads STEERING_BUS and writes back to STEERING_BUS.
+  { .name       = "steering",
+    .inCh       = AnalogComBusID::STEERING_STICK,
+    .outCh      = AnalogComBusID::STEERING_BUS,
+    .procs      = nullptr,
+    .procCount  = 0u,
+  },
+
+  // INPUT_DUMP — passthrough: DUMP_STICK (raw bipolar) → DUMP_BUS.
+  // No procs yet — conditioning (center+abs+scale+dir) added in the next migration step.
+  // The SIM_DUMP chain (asymmetric ramp) reads DUMP_BUS and writes back to DUMP_BUS.
+  { .name       = "dump",
+    .inCh       = AnalogComBusID::DUMP_STICK,
+    .outCh      = AnalogComBusID::DUMP_BUS,
+    .procs      = nullptr,
+    .procCount  = 0u,
+  },
+
 };
 
 #endif  // IS_MAINBOARD
