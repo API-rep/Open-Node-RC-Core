@@ -77,37 +77,31 @@ void machine_init() {
   
 	  // --- 7. Post-init pause (compiled in only when -D PAUSE_LOG_AFTER_INIT is set) ---
   //
-  //   Scope of this block:  ONLY the wait before the dashboard task is started.
-  //   The default runlevel is already applied above (step 5, boot-safe) and is
-  //   independent of this flag — the system always starts at DEF_RUNLEVEL
-  //   (RunLevel::IDLE) at the general code level.
+  //   Scope:  ONLY a "give the operator time to read the boot log" gate.
+  //   Default runlevel (DEF_RUNLEVEL = RunLevel::IDLE) is already applied
+  //   above at step 5 — independent of this flag, runs at every boot.
   //
-  //   This block exists purely to give the operator time to read the boot
-  //   log on the serial monitor before the dashboard takes over the terminal.
-  //   Only ENTER (CR or LF) on Serial releases the pause.  No remote control
-  //   input is accepted here — KEY_BTN is reserved for the runlevel FSM,
-  //   which becomes active once the main loop starts.
+  //   Implementation: non-blocking.  The dashboard FreeRTOS task is started
+  //   FIRST (step 7) so the suspend flag has an active owner.  Setting
+  //   s_suspended = true (step 7b) before the task is created would have
+  //   no effect — the task never observes it.  The application loop
+  //   continues normally during the pause; only dashboard output is gated.
+  //   No `goto`, no busy-loop on Serial.
+  //
+  //   Resuming is identical to the in-session suspend (Q key): any serial
+  //   byte resumes the dashboard, no specific key required.
   if constexpr (PauseAfterInit) {
-    sys_log_info("[SYSTEM] ** Paused ** — press ENTER to start the dashboard...\n");
-
-    while (true) {
-        // Exit via serial: ENTER only (CR or LF) — discard stray bytes (ROM noise, BT traces)
-      while (Serial.available()) {
-        char c = (char)Serial.read();
-        if (c == '\r' || c == '\n') goto pause_exit;
-      }
-
-      vTaskDelay(10);  // yield — avoid starving the scheduler
-    }
-    pause_exit:
-
-    sys_log_info("[SYSTEM] Pause released — starting dashboard.\n\n");
+      // 7a. Spawn the FreeRTOS task on Core 0 (priority 1, 16 KB stack).
+    dashboard_start_task();
+      // 7b. Mark the dashboard as suspended and print the resume prompt.
+      //     The task is now running and will sit in dashboard_update()'s
+      //     s_suspended branch, consuming one character to resume.
+    sys_log_info("[SYSTEM] Boot log complete — dashboard suspended, press any key to start.\n");
+    dashboard_suspend_for_input("[DASH] Boot paused — press any key to start dashboard.");
+  } else {
+      // Release build: start the task immediately (no boot pause).
+    dashboard_start_task();
   }
-
-	  // --- 8. Start dashboard FreeRTOS task (after pause, on Core 0) ---
-	  // Called here — and not inside dashboard_machine_setup() — so the task
-	  // does not activate during the PAUSE_LOG_AFTER_INIT wait.
-  dashboard_start_task();
 }
 
 // EOF init.cpp
