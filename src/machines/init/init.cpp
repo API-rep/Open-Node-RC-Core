@@ -28,13 +28,18 @@
  *   dashboard_setup() is called last so the dashboard starts with a fully
  *   initialized bus and machine config.
  *
- * @note When -D PAUSE_LOG_AFTER_INIT is set, execution holds after INIT COMPLETE
- *   until the operator releases the pause — either by pressing ENTER on the
- *   serial monitor, or by holding the KEY button on the remote.
- *   Only CR/LF is accepted as a serial exit trigger — stray bytes (ESP32 ROM
- *   boot noise, BT stack traces) are silently discarded.
- *   The input module is polled actively during the wait so the combus stays live.
- *   The pause block is fully stripped from the binary when the flag is absent.
+ * @note Two independent concerns live in this init sequence:
+ *   1. **Default runlevel** — applied unconditionally at step 5 below
+ *      (DEF_RUNLEVEL = RunLevel::IDLE).  This is a general-code decision
+ *      independent of any build flag.
+ *   2. **Dashboard pause** — when -D PAUSE_LOG_AFTER_INIT is set, the main
+ *      loop is held until the operator presses ENTER on the serial monitor.
+ *      This is purely a "give the operator time to read the boot log"
+ *      gate.  Only CR/LF is accepted as a serial exit trigger — stray bytes
+ *      (ESP32 ROM boot noise, BT stack traces) are silently discarded.
+ *      The pause block is fully stripped from the binary when the flag is
+ *      absent.  No remote control input is consulted here — KEY_BTN is
+ *      reserved for the runlevel FSM, which activates once loop() starts.
  */
 void machine_init() {
 
@@ -71,47 +76,32 @@ void machine_init() {
 
   
 	  // --- 7. Post-init pause (compiled in only when -D PAUSE_LOG_AFTER_INIT is set) ---
+  //
+  //   Scope of this block:  ONLY the wait before the dashboard task is started.
+  //   The default runlevel is already applied above (step 5, boot-safe) and is
+  //   independent of this flag — the system always starts at DEF_RUNLEVEL
+  //   (RunLevel::IDLE) at the general code level.
+  //
+  //   This block exists purely to give the operator time to read the boot
+  //   log on the serial monitor before the dashboard takes over the terminal.
+  //   Only ENTER (CR or LF) on Serial releases the pause.  No remote control
+  //   input is accepted here — KEY_BTN is reserved for the runlevel FSM,
+  //   which becomes active once the main loop starts.
   if constexpr (PauseAfterInit) {
-      // KEY channel index in the digital bus (TRIANGLE on PS4 in dumper-truck layout)
-    uint8_t keyCh = static_cast<uint8_t>(DigitalComBusID::KEY_BTN);
-    sys_log_info("[SYSTEM] ** Paused ** — press ENTER or IGNITION KEY to continue...\n");
+    sys_log_info("[SYSTEM] ** Paused ** — press ENTER to start the dashboard...\n");
 
-      // Edge detection: the KEY button semantics is an EVENT (rising edge),
-      // not a LEVEL.  A brief PS4_BT press (< 50 ms) is enough to release the
-      // pause — we no longer require the player to hold TRIANGLE while the
-      // loop polls.  The previous level-based check forced operators to use
-      // Serial ENTER because the BT poll latency could miss short presses.
-    bool prevKey = comBus.digitalBus[keyCh].value;
     while (true) {
-        // Keep the combus alive during the wait (BT connection, input watchdog)
-      input_update(comBus);
-
         // Exit via serial: ENTER only (CR or LF) — discard stray bytes (ROM noise, BT traces)
       while (Serial.available()) {
         char c = (char)Serial.read();
         if (c == '\r' || c == '\n') goto pause_exit;
       }
-        // Exit via remote KEY channel — RISING EDGE (false → true).
-        // Chantier 12.6: `bus.isNotDrived` removed — use REMOTE_LINK_LOST
-        // (LOCAL aggregator) when HAS_REMOTE_LINK_LOST_FALLBACK is defined,
-        // otherwise fall back to the lastFrameMs proxy.  The link check only
-        // applies to the rising-edge condition; a disconnected controller
-        // cannot legitimately trigger KEY.
-      bool currKey = comBus.digitalBus[keyCh].value;
-#if defined(HAS_REMOTE_LINK_LOST_FALLBACK)
-      if (!comBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::REMOTE_LINK_LOST)].value
-          && currKey && !prevKey) break;
-#else
-      if ((millis() - comBus.lastFrameMs) < 2000u
-          && currKey && !prevKey) break;
-#endif
-      prevKey = currKey;
 
       vTaskDelay(10);  // yield — avoid starving the scheduler
     }
     pause_exit:
 
-    sys_log_info("[SYSTEM] Pause released — entering main loop.\n\n");
+    sys_log_info("[SYSTEM] Pause released — starting dashboard.\n\n");
   }
 
 	  // --- 8. Start dashboard FreeRTOS task (after pause, on Core 0) ---
