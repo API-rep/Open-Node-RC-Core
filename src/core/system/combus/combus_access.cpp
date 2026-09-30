@@ -102,18 +102,4 @@ bool combus_set_digital(ComBus& bus, DigitalComBusID ch, bool val, ChanLayer cal
 }
 
 
-// =============================================================================
-// 3. HEADER FIELD WRITE ACCESSORS
-// =============================================================================
-
-bool combus_set_runlevel(ComBus& bus, RunLevel rl, ChanLayer caller) {
-    if (!_layer_ok(bus.runLevelLayer, caller)) {
-        _warn_denied("runLevel", 0xFF, caller, bus.runLevelLayer);
-        return false;
-    }
-    bus.runLevel = rl;
-    return true;
-}
-
-
 // EOF combus_access.cpp

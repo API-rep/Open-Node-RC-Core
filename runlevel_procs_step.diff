@@ -1,0 +1,511 @@
+warning: in the working copy of 'include/defs/machines_defs.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/core/system/combus/processors/base/cb_runlevel.cpp', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/core/system/combus/processors/base/cb_runlevel.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/machines/config/machines/volvo_A60H_bruder/combus/processors/input/key_runlevel_config.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/machines/config/machines/volvo_A60H_bruder/combus/processors/input/proc_config.cpp', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/machines/config/machines/volvo_A60H_bruder/combus/processors/input/proc_config.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/machines/main.cpp', LF will be replaced by CRLF the next time Git touches it
+diff --git a/include/defs/machines_defs.h b/include/defs/machines_defs.h
+index 160188b..eba7205 100644
+--- a/include/defs/machines_defs.h
++++ b/include/defs/machines_defs.h
+@@ -18,6 +18,7 @@
+ enum class RunLevel : int8_t {
+     NOT_YET_SET = -1,
+     IDLE        =  0,
++    FAILSAFE    =  0,    ///< Alias of IDLE — same numeric value (0). No consumer needs a dedicated case.
+     STARTING    =  1,
+     RUNNING     =  2,
+     TURNING_OFF =  3,
+diff --git a/src/core/system/combus/processors/base/cb_runlevel.cpp b/src/core/system/combus/processors/base/cb_runlevel.cpp
+index 8f6483f..63b407e 100644
+--- a/src/core/system/combus/processors/base/cb_runlevel.cpp
++++ b/src/core/system/combus/processors/base/cb_runlevel.cpp
+@@ -1,46 +1,39 @@
+ /******************************************************************************
+  * @file  cb_runlevel.cpp
+- * @brief CbProc — ComBus RunLevel writer — implementation.
+- *****************************************************************************/
++ * @brief CbProc — Generic state-driven RunLevel setter — implementation.
++ ******************************************************************************/
+ 
+ #include "cb_runlevel.h"
+ 
+-#include <core/system/combus/combus_access.h>   // combus_set_analog()
+-
+ 
+ // =============================================================================
+ // 1. PROCESSOR FUNCTION
+ // =============================================================================
+ 
+ void cb_runlevel_fn(CbProc* proc, uint16_t& value, bool& claimed) {
+-    (void)value;    // pass-through — intentionally not modified.
+-    (void)claimed;  // never claims the channel.
+-
+-    const auto* cfg   = static_cast<const CbRunlevelCfg*>(proc->cfg);
+-    auto*       state = static_cast<CbRunlevelState*>(proc->state);
++    const auto* cfg = static_cast<const CbRunlevelCfg*>(proc->cfg);
+ 
+-    const bool     active = (proc->inValue != 0u);
+-    // RL3: runLevel is now a plain analog channel — read from analogBus[RUNLEVEL].
+-    const RunLevel rl     = (RunLevel)state->bus->analogBus[static_cast<uint8_t>(AnalogComBusID::RUNLEVEL)].value;
++    const bool lever = (proc->inValue != 0u);
+ 
+-    // --- Rising edge: activate ---
+-    if (active && !state->prevValue) {
+-        if (rl == RunLevel::IDLE || rl == RunLevel::SLEEPING) {
+-            // RL3: write via generic analog accessor (no dedicated runLevel API).
+-            combus_set_analog(*state->bus, AnalogComBusID::RUNLEVEL, (uint16_t)cfg->activeLevel, ChanLayer::LOCAL);
++    // --- Select branch and write value if defined ---
++    bool wrote = false;
++    if (lever) {
++        if (cfg->high.has_value()) {
++            value = static_cast<uint16_t>(cfg->high.value());
++            wrote = true;
+         }
+-    }
+-
+-    // --- Falling edge: deactivate ---
+-    if (!active && state->prevValue) {
+-        if (rl == RunLevel::STARTING || rl == RunLevel::RUNNING) {
+-            // RL3: write via generic analog accessor (no dedicated runLevel API).
+-            combus_set_analog(*state->bus, AnalogComBusID::RUNLEVEL, (uint16_t)cfg->defaultLevel, ChanLayer::LOCAL);
++    } else {
++        if (cfg->low.has_value()) {
++            value = static_cast<uint16_t>(cfg->low.value());
++            wrote = true;
+         }
+     }
+ 
+-    state->prevValue = active;
++    // --- Claim only if a write actually occurred ---
++    if (wrote && cfg->claim) {
++        claimed = true;
++    }
+ }
+ 
+ 
+-// EOF cb_runlevel.cpp
++// EOF cb_runlevel.cpp
+\ No newline at end of file
+diff --git a/src/core/system/combus/processors/base/cb_runlevel.h b/src/core/system/combus/processors/base/cb_runlevel.h
+index 8ef8294..3a1f181 100644
+--- a/src/core/system/combus/processors/base/cb_runlevel.h
++++ b/src/core/system/combus/processors/base/cb_runlevel.h
+@@ -1,50 +1,57 @@
+ /******************************************************************************
+  * @file  cb_runlevel.h
+- * @brief CbProc — ComBus RunLevel writer driven by a digital channel.
++ * @brief CbProc — Generic state-driven RunLevel setter.
+  *
+- * @details Watches the pipeline input for 0↔1 transitions and updates the
+- *   ComBus RunLevel accordingly:
+- *     - Rising  edge (0→1) while idle/sleeping → sets `activeLevel`  (e.g. STARTING)
+- *     - Falling edge (1→0) while starting/running → sets `defaultLevel` (e.g. TURNING_OFF)
++ * @details Reads a boolean lever via `proc->inValue` (injected by the runner
++ *   from the configured `inCh`) and writes the pipeline `value` to either
++ *   `cfg->high` or `cfg->low` depending on the lever state.
+  *
+- *   The pipeline `value` is **not modified** — this processor is a side-effect
+- *   only.  It is typically placed at the end of a chain, after the output proc
+- *   has already committed the new state to the ComBus channel.
++ *   The pipeline `value` is the in/out parameter of the chain — the runner
++ *   seeds it from `CbChain::inCh` before the first proc and commits it to
++ *   `CbChain::outCh` after the last proc.  This proc manipulates `value`
++ *   directly (read-modify-write pattern), NOT via a side-effect call to
++ *   `combus_set_analog()`.
+  *
+- *   Placement in a proc chain:
++ *   Behaviour:
++ *     - lever == true  AND cfg->high.has_value()  → value = cfg->high.value()
++ *     - lever == false AND cfg->low.has_value()   → value = cfg->low.value()
++ *     - if cfg->claim == true AND a write occurred → claimed = true
++ *     - if the corresponding branch is std::nullopt → no write, no claim
++ *
++ *   Typical usage in a dedicated runlevel chain (inCh = RUNLEVEL, outCh = RUNLEVEL):
+  *   @code
+- *     ... → cb_out_fn(KEY_ACTIVE) → cb_runlevel_fn    // KEY_ACTIVE already written
++ *     // failsafe instance — forces IDLE when FAILSAFE=true, claims chain
++ *     { .inCh = FAILSAFE, .cfg = { .high = RunLevel::FAILSAFE,
++ *                                  .low  = std::nullopt,
++ *                                  .claim = true } }
++ *     // runlevel instance — KEY_ACTIVE drives STARTING/TURNING_OFF
++ *     { .inCh = KEY_ACTIVE, .cfg = { .high = RunLevel::STARTING,
++ *                                    .low  = RunLevel::TURNING_OFF,
++ *                                    .claim = false } }
+  *   @endcode
+- *****************************************************************************/
++ ******************************************************************************/
+ #pragma once
+ 
++#include <optional>
+ #include <defs/machines_defs.h>         // RunLevel
+-#include <core/system/combus/combus_defs.h>        // ComBus, ChanLayer
+ #include <struct/combus_proc_struct.h>   // CbProc
+-#include "combus_ids.h"   // RL3: AnalogComBusID::RUNLEVEL — uses the generated combus_generated/ CPPPATH
+ 
+ 
+ // =============================================================================
+-// 1. CONFIG & STATE
++// 1. CONFIG
+ // =============================================================================
+ 
+ /**
+- * @brief Static configuration for the RunLevel writer processor.
+- */
+-struct CbRunlevelCfg {
+-    RunLevel activeLevel;    ///< RunLevel to set on rising edge  (e.g. STARTING).
+-    RunLevel defaultLevel;   ///< RunLevel to set on falling edge (e.g. TURNING_OFF).
+-};
+-
+-/**
+- * @brief Mutable runtime state for the RunLevel writer processor.
++ * @brief Static configuration for the generic RunLevel setter processor.
+  *
+- * @details Assign `bus` before the proc chain runs for the first time.
+- *   Zero-init is valid for `prevValue`.
++ * @details `high` and `low` are independent — either may be std::nullopt to
++ *   disable that branch.  When the lever selects a branch whose value is
++ *   nullopt, the proc performs no write and does not claim the chain.
+  */
+-struct CbRunlevelState {
+-    ComBus* bus;        ///< ComBus instance to write.  Must not be nullptr.
+-    bool    prevValue;  ///< Previous active state for edge detection.
++struct CbRunlevelCfg {
++    std::optional<RunLevel> high;   ///< Value to write when lever == true.  nullopt = no write.
++    std::optional<RunLevel> low;    ///< Value to write when lever == false. nullopt = no write.
++    bool                     claim; ///< Claim the chain when a write actually occurred.
+ };
+ 
+ 
+@@ -53,23 +60,20 @@ struct CbRunlevelState {
+ // =============================================================================
+ 
+ /**
+- * @brief RunLevel writer processor function.
++ * @brief Generic state-driven RunLevel setter processor function.
+  *
+- * @details Matches `CbProcFn` signature.  Reads the channel state from
++ * @details Matches `CbProcFn` signature.  Reads the lever state from
+  *   `proc->inValue` (injected by the runner from the configured `inCh`).
+  *
+- *   Transition rules (RunLevel guards prevent redundant writes):
+- *     - 0→1 AND runLevel ∈ {IDLE, SLEEPING}        → combus_set_runlevel(activeLevel)
+- *     - 1→0 AND runLevel ∈ {STARTING, RUNNING}     → combus_set_runlevel(defaultLevel)
+- *
+- *   `value` is passed through unchanged.
++ *   Writes `value` (the pipeline in/out) to `cfg->high` or `cfg->low`
++ *   depending on the lever.  Sets `claimed = true` when `cfg->claim` is
++ *   true AND a write actually occurred (the selected branch was defined).
+  *
+- * @param proc        CbProc descriptor.  `cfg` = CbRunlevelCfg*,
+- *                    `state` = CbRunlevelState*, `inCh` = monitored channel.
+- * @param value       Pipeline value — unchanged (pass-through).
+- * @param claimed     Unused — this processor never claims the channel.
++ * @param proc     CbProc descriptor.  `cfg` = CbRunlevelCfg*.
++ * @param value    Pipeline value (in/out) — modified when the selected branch is defined.
++ * @param claimed  Set to `true` when `cfg->claim` is true and a write occurred.
+  */
+ void cb_runlevel_fn(CbProc* proc, uint16_t& value, bool& claimed);
+ 
+ 
+-// EOF cb_runlevel.h
++// EOF cb_runlevel.h
+\ No newline at end of file
+diff --git a/src/machines/config/machines/volvo_A60H_bruder/combus/processors/input/key_runlevel_config.h b/src/machines/config/machines/volvo_A60H_bruder/combus/processors/input/key_runlevel_config.h
+index 0418285..63a8fa5 100644
+--- a/src/machines/config/machines/volvo_A60H_bruder/combus/processors/input/key_runlevel_config.h
++++ b/src/machines/config/machines/volvo_A60H_bruder/combus/processors/input/key_runlevel_config.h
+@@ -1,22 +1,21 @@
+ /*!****************************************************************************
+  * @file  key_runlevel_config.h
+- * @brief Dumper truck — INPUT key-runlevel chain: cfg, state, proc array.
++ * @brief Dumper truck — INPUT key chain: cfg, state, proc array.
+  *
+  * @details Private include — included only from proc_config.cpp.
+  *   Context provided by umbrella (do not include standalone):
+- *     CbBtnCfg, CbBtnState, CbBtnTrigger, CbRunlevelCfg, CbRunlevelState,
+- *     CbProc, cb_btn_push_fn, cb_runlevel_fn,
+- *     DigitalComBusID, RunLevel, comBus.
++ *     CbBtnCfg, CbBtnState, CbBtnTrigger, CbProc, cb_btn_push_fn,
++ *     DigitalComBusID, comBus.
+  *
+- *   Chain function: KEY_BTN → [key_on, key_off, runlevel] → KEY_ACTIVE + RunLevel.
++ *   Chain function: KEY_BTN → [key_on, key_off] → KEY_ACTIVE.
+  *   In:  KEY_BTN (physical key switch).
+  *   Out: KEY_ACTIVE (flag — 0 = engine off, 1 = engine on).
+  *
+  *   1  key_on:    immediate ON_PRESS (holdMs=0) → KEY_ACTIVE = 1 on rising edge.
+  *   2  key_off:   long ON_PRESS (holdMs=3000) → KEY_ACTIVE = 0 while held >= 3 s.
+- *   3  runlevel:  edge detection on KEY_ACTIVE → drives system RunLevel.
+- *      KEY_ACTIVE 0→1 → STARTING; 1→0 → TURNING_OFF.
+- *      Skipped one frame when key_on/key_off claims (1-frame ~10 ms delay).
++ *
++ *   The RunLevel FSM (KEY_ACTIVE → RUNLEVEL) is now handled by the dedicated
++ *   runlevelProcs[] chain (see runlevel_config.h), NOT by this chain.
+  *******************************************************************************
+  */
+ #pragma once
+@@ -40,12 +39,6 @@ static constexpr CbBtnCfg kKeyOffCfg {
+     .trigger = CbBtnTrigger::ON_PRESS,
+ };
+ 
+-  ///  RunLevel config — KEY_ACTIVE 0→1 → STARTING; 1→0 → TURNING_OFF.
+-static constexpr CbRunlevelCfg kKeyRunlevelCfg {
+-    .activeLevel  = RunLevel::STARTING,
+-    .defaultLevel = RunLevel::TURNING_OFF,
+-};
+-
+ 
+ // =============================================================================
+ // 2. STATE
+@@ -55,23 +48,16 @@ static constexpr CbRunlevelCfg kKeyRunlevelCfg {
+ static CbBtnState gKeyOnState  {};
+ static CbBtnState gKeyOffState {};
+ 
+-  //  KEY runlevel state — &comBus resolved at startup (pointer init is zero-init safe).
+-static CbRunlevelState gKeyRunlevelState {
+-    .bus       = &comBus,
+-    .prevValue = false,
+-};
+-
+ 
+ // =============================================================================
+ // 3. PROC ARRAY
+ // =============================================================================
+ 
+ /**
+- * @brief  Key-runlevel chain proc array.
++ * @brief  Key chain proc array.
+  * @details Steps:
+  *   1  key_on   : press-down → KEY_ACTIVE = 1.  Once per press (repeat-guarded).
+  *   2  key_off  : hold >= 3 s WHILE pressed → KEY_ACTIVE = 0.  Fires before release.
+- *   3  runlevel : edge detection on KEY_ACTIVE → drives RunLevel FSM.
+  */
+ static CbProc kKeyRunlevelProcs[] = {
+       // 1. key_on — press-down → KEY_ACTIVE = 1.  Once per press (repeat-guarded).
+@@ -81,21 +67,13 @@ static CbProc kKeyRunlevelProcs[] = {
+       .cfg   = &kKeyOnCfg,
+       .state = &gKeyOnState,
+     },
+-      // 2. key_off — hold >= 3 s WHILE pressed → KEY_ACTIVE = 0.  Fires before release.
++      // 2. key_off — hold >= 3 s WHILE pressed → KEY_ACTIVE = 0.
+     { .name  = "key_off",
+       .inCh  = DigitalComBusID::KEY_BTN,
+       .fn    = cb_btn_push_fn,
+       .cfg   = &kKeyOffCfg,
+       .state = &gKeyOffState,
+     },
+-      // 3. runlevel — edge detection on KEY_ACTIVE → drives RunLevel.
+-      //    Skipped one frame when key_on/key_off claims; 1-frame (~10 ms) delay is imperceptible.
+-    { .name  = "runlevel",
+-      .inCh  = DigitalComBusID::KEY_ACTIVE,
+-      .fn    = cb_runlevel_fn,
+-      .cfg   = &kKeyRunlevelCfg,
+-      .state = &gKeyRunlevelState,
+-    },
+ };
+ 
+-// EOF key_runlevel_config.h
++// EOF key_runlevel_config.h
+\ No newline at end of file
+diff --git a/src/machines/config/machines/volvo_A60H_bruder/combus/processors/input/proc_config.cpp b/src/machines/config/machines/volvo_A60H_bruder/combus/processors/input/proc_config.cpp
+index b54f116..cead570 100644
+--- a/src/machines/config/machines/volvo_A60H_bruder/combus/processors/input/proc_config.cpp
++++ b/src/machines/config/machines/volvo_A60H_bruder/combus/processors/input/proc_config.cpp
+@@ -15,12 +15,16 @@
+  *                          (DRIVE_STATE_BUS != 0 → claim, value unchanged).
+  *     INPUT_DIRECT_DRIVE : in(DIRECT_DRIVE_BTN) → toggle(bound=1) → out(DIRECT_DRIVE)
+  *     INPUT_KEY_RUNLEVEL : in(KEY_ACTIVE) -> key_on(ON_PRESS, 0ms) -> key_off(ON_PRESS, 3000ms)
+- *                                         -> runlevel(KEY_ACTIVE) -> out(KEY_ACTIVE)
+- *                          key_on fires on press-down; key_off fires WHILE held >= 3 s. *
++ *                                         -> out(KEY_ACTIVE)
++ *                          key_on fires on press-down; key_off fires WHILE held >= 3 s.
++ *     INPUT_RUNLEVEL     : in(RUNLEVEL) -> failsafe(FAILSAFE) -> runlevel(KEY_ACTIVE)
++ *                                         -> out(RUNLEVEL)
++ *                          failsafe forces RUNLEVEL=IDLE when FAILSAFE=true (claims chain).
++ *                          runlevel drives STARTING/TURNING_OFF from KEY_ACTIVE.
+  *     INPUT_CRUISE_NORMAL : in(CRUISE_ACTIVE) -> gate(SUBGEAR_BUS != 0 → force 0)
+  *                                              -> toggle(CRUISE_TOGGLE_BTN)
+  *                                            → out(CRUISE_ACTIVE)
+- *                          gate forces CRUISE_ACTIVE=0 while in subgear/crawler mode. *
++ *                          gate forces CRUISE_ACTIVE=0 while in subgear/crawler mode.
+  *   Read-modify-write pattern: each proc reads current value, modifies it,
+  *   passes to next proc.  Last proc (cb_out_fn) commits to the output channel.
+  *******************************************************************************
+@@ -34,7 +38,7 @@
+ #include <core/config/machines/dumper_truck/motion/dumper_truck_motion.h>  // kDumperTruckGearShift
+ #include <core/system/combus/warning: in the working copy of 'src/machines/config/machines/volvo_A60H_bruder/combus/processors/input/runlevel_config.h', LF will be replaced by CRLF the next time Git touches it
+combus_defs.h>                                          // ChanLayer
+ #include <core/system/combus/processors/input/cb_btn.h>    // cb_btn_push_fn, cb_btn_toggle_fn, cb_btn_inc_fn, cb_btn_dec_fn, CbBtnCfg, CbBtnState, CbBtnTrigger
+-#include <core/system/combus/processors/base/cb_runlevel.h>               // cb_runlevel_fn, CbRunlevelCfg, CbRunlevelState
++#include <core/system/combus/processors/base/cb_runlevel.h>               // cb_runlevel_fn, CbRunlevelCfg
+ #include <core/system/combus/processors/base/cb_bypass.h>                 // cb_bypass_fn
+ 
+ 
+@@ -42,7 +46,8 @@
+ // All types and function pointers are resolved by the common includes above.
+ #include "subgear_config.h"        // kSubGearProcs — neutral-gate + toggle + inc + dec
+ #include "direct_drive_config.h"   // kDirectDriveProcs — toggle
+-#include "key_runlevel_config.h"   // kKeyRunlevelProcs — key_on + key_off + runlevel
++#include "key_runlevel_config.h"   // kKeyRunlevelProcs — key_on + key_off
++#include "runlevel_config.h"       // kRunlevelProcs — failsafe + runlevel
+ #include "cruise_input_config.h"   // kCruiseInputProcs — gate(SUBGEAR) + toggle(□)
+ 
+ 
+@@ -74,6 +79,13 @@ CbChain kInputChains[INPUT_CH_COUNT] = {
+     .procCount  = static_cast<uint8_t>(std::size(kKeyRunlevelProcs)),
+   },
+ 
++  { .name       = "runlevel",
++    .inCh       = AnalogComBusID::RUNLEVEL,           // seed current RunLevel into pipeline value
++    .outCh      = AnalogComBusID::RUNLEVEL,           // commit final value back to RUNLEVEL
++    .procs      = kRunlevelProcs,
++    .procCount  = static_cast<uint8_t>(std::size(kRunlevelProcs)),
++  },
++
+   { .name       = "cruise_normal",
+     .inCh       = DigitalComBusID::CRUISE_ACTIVE,   // seeds current toggle state into value
+     .outCh      = DigitalComBusID::CRUISE_ACTIVE,
+@@ -94,4 +106,4 @@ CbChain kInputChains[INPUT_CH_COUNT] = {
+ 
+ #endif  // IS_MAINBOARD
+ 
+-// EOF proc_config.cpp
++// EOF proc_config.cpp
+\ No newline at end of file
+diff --git a/src/machines/config/machines/volvo_A60H_bruder/combus/processors/input/proc_config.h b/src/machines/config/machines/volvo_A60H_bruder/combus/processors/input/proc_config.h
+index 2e06db7..af2ff73 100644
+--- a/src/machines/config/machines/volvo_A60H_bruder/combus/processors/input/proc_config.h
++++ b/src/machines/config/machines/volvo_A60H_bruder/combus/processors/input/proc_config.h
+@@ -39,9 +39,10 @@
+ enum InputCh {
+     INPUT_SUBGEAR = 0,          ///< SUBGEAR_BUS → [toggle+inc+dec] → SUBGEAR_BUS
+     INPUT_DIRECT_DRIVE = 1,     ///< DIRECT_DRIVE_BTN → [toggle] → DIRECT_DRIVE
+-    INPUT_KEY_RUNLEVEL = 2,     ///< KEY_BTN → [key_runlevel] → KEY_ACTIVE + runLevel write
+-    INPUT_CRUISE_NORMAL = 3,    ///< CRUISE_ACTIVE → [gate(SUBGEAR), toggle(□)] → CRUISE_ACTIVE
+-    INPUT_THROTTLE = 4,         ///< THROTTLE_STICK (raw bipolar) → [passthrough for now] → THROTTLE_BUS.
++    INPUT_KEY_RUNLEVEL = 2,     ///< KEY_BTN → [key_on, key_off] → KEY_ACTIVE
++    INPUT_RUNLEVEL = 3,         ///< RUNLEVEL → [failsafe, runlevel] → RUNLEVEL
++    INPUT_CRUISE_NORMAL = 4,    ///< CRUISE_ACTIVE → [gate(SUBGEAR), toggle(□)] → CRUISE_ACTIVE
++    INPUT_THROTTLE = 5,         ///< THROTTLE_STICK (raw bipolar) → [passthrough for now] → THROTTLE_BUS.
+                                 ///<   Future: center+abs+scale+dir — splits conditioning from SIM chain.
+     INPUT_CH_COUNT              ///< Sentinel — number of CbChain entries.
+ };
+diff --git a/src/machines/config/machines/volvo_A60H_bruder/combus/processors/input/runlevel_config.h b/src/machines/config/machines/volvo_A60H_bruder/combus/processors/input/runlevel_config.h
+new file mode 100644
+index 0000000..1d34e8a
+--- /dev/null
++++ b/src/machines/config/machines/volvo_A60H_bruder/combus/processors/input/runlevel_config.h
+@@ -0,0 +1,74 @@
++/*!****************************************************************************
++ * @file  runlevel_config.h
++ * @brief Dumper truck — INPUT runlevel chain: cfg, proc array.
++ *
++ * @details Private include — included only from proc_config.cpp.
++ *   Context provided by umbrella (do not include standalone):
++ *     CbRunlevelCfg, CbProc, cb_runlevel_fn,
++ *     AnalogComBusID, DigitalComBusID, RunLevel, comBus.
++ *
++ *   Chain function: RUNLEVEL → [failsafe, runlevel] → RUNLEVEL.
++ *   In:  RUNLEVEL (current RunLevel value, seeded into pipeline value).
++ *   Out: RUNLEVEL (committed after pipeline).
++ *
++ *   1  failsafe:  inCh = FAILSAFE.  When FAILSAFE=true → write RUNLEVEL=FAILSAFE
++ *                 (= IDLE alias) and claim the chain (blocks runlevel proc).
++ *                 When FAILSAFE=false → no write, no claim.
++ *   2  runlevel:  inCh = KEY_ACTIVE.  When KEY_ACTIVE=true → write RUNLEVEL=STARTING.
++ *                 When KEY_ACTIVE=false → write RUNLEVEL=TURNING_OFF.
++ *                 No claim (last proc in chain).
++ *
++ *   The chain uses read-modify-write: the runner seeds `value` from RUNLEVEL,
++ *   each proc may overwrite it, and the final value is committed back to RUNLEVEL.
++ *******************************************************************************
++ */
++#pragma once
++
++
++// =============================================================================
++// 1. CONFIG
++// =============================================================================
++
++  ///  failsafe — FAILSAFE=true → force RUNLEVEL=FAILSAFE (alias of IDLE), claim chain.
++static constexpr CbRunlevelCfg kFailsafeRunlevelCfg {
++    .high  = RunLevel::FAILSAFE,    ///< FAILSAFE=true → write FAILSAFE (= IDLE).
++    .low   = std::nullopt,          ///< FAILSAFE=false → no write.
++    .claim = true,                  ///< Block runlevel proc when failsafe is active.
++};
++
++  ///  runlevel — KEY_ACTIVE drives STARTING/TURNING_OFF.
++static constexpr CbRunlevelCfg kRunlevelCfg {
++    .high  = RunLevel::STARTING,    ///< KEY_ACTIVE=true → write STARTING.
++    .low   = RunLevel::TURNING_OFF, ///< KEY_ACTIVE=false → write TURNING_OFF.
++    .claim = false,                 ///< Last proc — nothing to protect behind.
++};
++
++
++// =============================================================================
++// 2. PROC ARRAY
++// =============================================================================
++
++/**
++ * @brief  Runlevel chain proc array.
++ * @details Steps:
++ *   1  failsafe : FAILSAFE=true → RUNLEVEL=FAILSAFE + claim (blocks runlevel).
++ *   2  runlevel : KEY_ACTIVE → RUNLEVEL=STARTING (true) or TURNING_OFF (false).
++ */
++static CbProc kRunlevelProcs[] = {
++      // 1. failsafe — FAILSAFE=true → force IDLE + claim chain.
++    { .name  = "failsafe",
++      .inCh  = DigitalComBusID::FAILSAFE,
++      .fn    = cb_runlevel_fn,
++      .cfg   = &kFailsafeRunlevelCfg,
++      .state = nullptr,
++    },
++      // 2. runlevel — KEY_ACTIVE drives STARTING/TURNING_OFF.
++    { .name  = "runlevel",
++      .inCh  = DigitalComBusID::KEY_ACTIVE,
++      .fn    = cb_runlevel_fn,
++      .cfg   = &kRunlevelCfg,
++      .state = nullptr,
++    },
++};
++
++// EOF runlevel_config.h
+\ No newline at end of file
+diff --git a/src/machines/main.cpp b/src/machines/main.cpp
+index aee6ddc..185f8fd 100644
+--- a/src/machines/main.cpp
++++ b/src/machines/main.cpp
+@@ -48,7 +48,6 @@ void loop() {
+ // 1. SYSTEM TICK
+ // =============================================================================
+ 
+-	// --- Input + battery + failsafe evaluation ---
+   static bool s_failsafeWasActive = false;
+ 
+   sys_manager_update(comBus);
+@@ -57,21 +56,16 @@ void loop() {
+     // cycle.  Read directly from `comBus.isNotDrived` (FS1 — inverted semantics,
+     // true = fault).  The open-drain invariant guarantees `sys_manager_reset()`
+     // is the only writer of `true`.
++    // The dedicated runlevelProcs[] chain (failsafe proc) handles the
++    // RUNLEVEL=IDLE write + KEY_ACTIVE clear — no ad-hoc block needed here.
+   if (comBus.isNotDrived) {
+     if (!s_failsafeWasActive) {
+       sys_log_warn("[SYSTEM][SAFE] reason=no_input_source action=force_idle_and_lock\n");
+       stopAllDcDrivers(machine);
+       sleepAllDcDrivers(machine);
+       disableAllDcDrivers(machine);
+-        // Clear KEY_ACTIVE so cb_runlevel can detect a fresh rising edge on reconnect.
+-        // Without this, prevValue stays true (last engine-on state) and the rising
+-        // edge is never re-armed — the machine would be stuck in IDLE after reconnect.
+-      combus_set_digital(comBus, DigitalComBusID::KEY_ACTIVE, false,
+-                         ChanLayer::LOCAL);
+       s_failsafeWasActive = true;
+     }
+-    // RL3: runLevel is now a plain analog channel — write RUNLEVEL=IDLE via the generic accessor.
+-    combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::IDLE, ChanLayer::LOCAL);
+     return;  // dashboard runs on its own FreeRTOS task (Core 0)
+   }
+   s_failsafeWasActive = false;

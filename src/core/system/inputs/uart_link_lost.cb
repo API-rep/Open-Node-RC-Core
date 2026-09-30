@@ -1,0 +1,54 @@
+# uart_link_lost.cb — UART link health signal (any UART-backed transport)
+#
+# This file declares the UART_LINK_LOST ComBus channel. It is the dedicated
+# "UART link alive" signal for any UART-backed transport (ComBus UART TX/RX
+# to a paired board — sound node, extension board, remote receiver, …),
+# consumed by the REMOTE_LINK_LOST fallback chain (declared in
+# src/core/system/inputs/remote_link_fallback_chain.cpp) when
+# HAS_REMOTE_LINK_LOST_FALLBACK is defined.
+#
+# Notes:
+# - LOCAL scope: the channel is shared by all boards composing the local
+#   node. Any board owning a UART link (TX side, RX side, or full-duplex)
+#   may publish the local "UART link alive" state each cycle.  Other
+#   boards consume it through the same LOCAL bus.
+# - Multi-instance handling: a node may own several UART links (one per
+#   `COMBUS_UART_TX=N` / `COMBUS_UART_RX=N` / `COMBUS_UART=N` flag).  All
+#   owners write to the SAME `UART_LINK_LOST` channel using the `both_or`
+#   direction — any owner reporting fault (true) wins on import.  This
+#   matches the "failsafe-by-default" contract: if even one UART link
+#   is down, the aggregated signal is "lost".  Per-link detail (which
+#   specific UART is down) is kept at the application level (logs,
+#   dashboard) and intentionally NOT exposed through the combus to keep
+#   the aggregator channel count bounded.
+# - Direction [both_or]: uplink + downlink + OR-merge on import.  Any
+#   board may write (re-arm each cycle to false = healthy) or read
+#   (react) the channel.  At import, any source reporting fault (true)
+#   wins — coherent with failsafe-by-default semantics.
+# - value: high = UART link lost (failsafe-by-default).  The channel
+#   stays "lost" until any UART owner re-arms it to false (= healthy)
+#   this cycle.  The reset is performed by the first proc in the
+#   consumer chain (cb_reset_fn) — see remote_link_fallback_chain.cpp.
+# - type: digital (bool).
+# - ALWAYS emitted (no `requires`): the combus-builder's `requires`
+#   mechanism is a pure AND (every listed flag must be present), which
+#   does not fit the "at least one of {COMBUS_UART_TX, COMBUS_UART_RX,
+#   COMBUS_UART}" semantics.  Emitting the channel always keeps the
+#   channel set and ID space stable across configurations; projects
+#   without any UART transport simply never write to the channel, so
+#   it stays at its default `high` (= lost) value with no effect on
+#   the aggregated REMOTE_LINK_LOST.
+# - This channel is a CONTRIBUTOR to REMOTE_LINK_LOST (chantier 12.5
+#   new design).  The REMOTE_LINK_LOST channel is the OR-aggregated
+#   result of all *_LINK_LOST contributors.  See failsafe_module.md
+#   §12.5 (new design).
+
+
+channels:
+  - id: UART_LINK_LOST
+    infoName: "UART link lost (any UART-backed transport)"
+    type: digital
+    scope: SYSTEM        # private to the board owning the UART transport (NOT shared)
+    theme: input          # generic "input subsystem" theme
+    direction: none       # SYSTEM scope: pure in-board state, no wire transport
+    value: high         # default to "lost" (failsafe-by-default — see chain reset)

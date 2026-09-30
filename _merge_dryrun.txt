@@ -1,0 +1,17 @@
+usage: git merge-tree [--write-tree] [<options>] <branch1> <branch2>
+   or: git merge-tree [--trivial-merge] <base-tree> <branch1> <branch2>
+
+    --write-tree          do a real merge instead of a trivial merge
+    --trivial-merge       do a trivial merge only
+    --[no-]messages       also show informational/conflict messages
+    --quiet               suppress all output; only exit status wanted
+    -z                    separate paths with the NUL character
+    --name-only           list filenames without modes/oids/stages
+    --allow-unrelated-histories
+                          allow merging unrelated histories
+    --stdin               perform multiple merges, one per line of input
+    --[no-]merge-base <tree-ish>
+                          specify a merge-base for the merge
+    -X, --[no-]strategy-option <option=value>
+                          option for selected merge strategy
+

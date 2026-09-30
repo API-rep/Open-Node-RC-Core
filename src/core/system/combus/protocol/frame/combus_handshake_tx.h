@@ -10,7 +10,7 @@
 
 #include <stdint.h>
 
-#include <core/system/combus/frame/combus_handshake.h> // umbrella (constants, logBootWarning, formatMd5Hex)
+#include <core/system/combus/protocol/frame/combus_handshake.h> // umbrella (constants, logBootWarning, formatMd5Hex)
 #include <core/system/hw/node_com.h>                  // NodeCom
 
 

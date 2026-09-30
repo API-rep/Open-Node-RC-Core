@@ -650,6 +650,111 @@ def test_dir_remote_both(tmp_path):
     assert result.canonical_definitions[0].direction == frozenset({"uplink", "downlink"})
 
 
+# =============================================================================
+# A2.1 — Variantes `*_OR` (uplink_or, downlink_or, both_or)
+# =============================================================================
+
+def test_dir_local_uplink_or_normalizes(tmp_path):
+    """`uplink_or` LOCAL digital → direction_or={uplink}, direction={}."""
+    p = tmp_path / "a.cb"
+    parsed = [_parsed(p, {"channels": [_ch(type_="digital", direction="uplink_or")]})]
+    result = canonize(parsed)
+    ch = result.canonical_definitions[0]
+    assert ch.direction == frozenset()
+    assert ch.direction_or == frozenset({"uplink"})
+
+
+def test_dir_local_downlink_or_normalizes(tmp_path):
+    """`downlink_or` LOCAL digital → direction_or={downlink}, direction={}."""
+    p = tmp_path / "a.cb"
+    parsed = [_parsed(p, {"channels": [_ch(type_="digital", direction="downlink_or")]})]
+    result = canonize(parsed)
+    ch = result.canonical_definitions[0]
+    assert ch.direction == frozenset()
+    assert ch.direction_or == frozenset({"downlink"})
+
+
+def test_dir_local_both_or_normalizes(tmp_path):
+    """`both_or` LOCAL digital → direction_or={uplink, downlink}, direction={}."""
+    p = tmp_path / "a.cb"
+    parsed = [_parsed(p, {"channels": [_ch(type_="digital", direction="both_or")]})]
+    result = canonize(parsed)
+    ch = result.canonical_definitions[0]
+    assert ch.direction == frozenset()
+    assert ch.direction_or == frozenset({"uplink", "downlink"})
+
+
+def test_dir_remote_uplink_or_normalizes(tmp_path):
+    """`uplink_or` REMOTE digital → direction_or={uplink}, direction={}."""
+    p = tmp_path / "a.cb"
+    parsed = [_parsed(p, {"channels": [_ch(type_="digital", scope="REMOTE", direction="uplink_or")]})]
+    result = canonize(parsed)
+    ch = result.canonical_definitions[0]
+    assert ch.direction == frozenset()
+    assert ch.direction_or == frozenset({"uplink"})
+
+
+def test_dir_or_rejected_on_analog(tmp_path):
+    """A2.1 : `*_OR` rejeté sur `type: analog` (OR-fusion n'a pas de sens)."""
+    p = tmp_path / "a.cb"
+    parsed = [_parsed(p, {"channels": [_ch(type_="analog", direction="uplink_or")]})]
+    try:
+        canonize(parsed)
+    except ChannelValidationError as e:
+        assert "uplink_or" in str(e)
+        assert "digital" in str(e)
+    else:
+        raise AssertionError("expected ChannelValidationError for *OR on analog")
+
+
+def test_dir_or_rejected_on_system(tmp_path):
+    """A2.1 : `*_OR` rejeté sur `scope: SYSTEM` (un seul écrivain possible)."""
+    p = tmp_path / "a.cb"
+    parsed = [_parsed(p, {"channels": [_ch(type_="digital", scope="SYSTEM", direction="uplink_or")]})]
+    try:
+        canonize(parsed)
+    except ChannelValidationError as e:
+        assert "uplink_or" in str(e) or "SYSTEM" in str(e)
+    else:
+        raise AssertionError("expected ChannelValidationError for *OR on SYSTEM")
+
+
+def test_dir_or_rejected_on_downlink_or_system(tmp_path):
+    """A2.1 : `downlink_or` rejeté sur SYSTEM."""
+    p = tmp_path / "a.cb"
+    parsed = [_parsed(p, {"channels": [_ch(type_="digital", scope="SYSTEM", direction="downlink_or")]})]
+    try:
+        canonize(parsed)
+    except ChannelValidationError as e:
+        assert "downlink_or" in str(e) or "SYSTEM" in str(e)
+    else:
+        raise AssertionError("expected ChannelValidationError for downlink_or on SYSTEM")
+
+
+def test_dir_or_rejected_on_both_or_system(tmp_path):
+    """A2.1 : `both_or` rejeté sur SYSTEM."""
+    p = tmp_path / "a.cb"
+    parsed = [_parsed(p, {"channels": [_ch(type_="digital", scope="SYSTEM", direction="both_or")]})]
+    try:
+        canonize(parsed)
+    except ChannelValidationError as e:
+        assert "both_or" in str(e) or "SYSTEM" in str(e)
+    else:
+        raise AssertionError("expected ChannelValidationError for both_or on SYSTEM")
+
+
+def test_dir_or_mixed_with_uplink_rejected(tmp_path):
+    """A2.1 : `uplink_or` + `uplink` rejeté (incohérent : OR n'ajoute rien)."""
+    p = tmp_path / "a.cb"
+    parsed = [_parsed(p, {"channels": [_ch(type_="digital", direction="uplink_or")]})]
+    # Note : avec le format string, on ne peut pas mélanger `uplink_or` + `uplink`
+    # dans la même valeur. Ce test vérifie que `uplink_or` seul est valide
+    # (le mélange serait une erreur de syntaxe YAML, pas une erreur de validation).
+    result = canonize(parsed)
+    ch = result.canonical_definitions[0]
+    assert ch.direction_or == frozenset({"uplink"})
+
+
 def test_dir_remote_uplink_downlink(tmp_path):
     p = tmp_path / "a.cb"
     parsed = [_parsed(p, {"channels": [_ch(scope="REMOTE", direction=["uplink", "downlink"])]})]

@@ -15,8 +15,8 @@
  *   channel. Consumers (e.g. `main.cpp`) then read `FAILSAFE` directly
  *   on the bus to trigger their reaction.
  *
- *   Future contributors (combus link, temperature, …) will be appended
- *   to `kFailsafeProcs[]` after the reset, each under its own
+ *   Future contributors (temperature, …) will be appended to
+ *   `kFailsafeProcs[]` after the reset, each under its own
  *   `#if defined(HAS_XXX_FAILSAFE)` block — always with `cb_or_fn`.
  *
  *   The reset entry is always the FIRST one in the table so that every

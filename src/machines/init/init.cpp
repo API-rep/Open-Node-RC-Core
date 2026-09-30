@@ -28,13 +28,18 @@
  *   dashboard_setup() is called last so the dashboard starts with a fully
  *   initialized bus and machine config.
  *
- * @note When -D PAUSE_LOG_AFTER_INIT is set, execution holds after INIT COMPLETE
- *   until the operator releases the pause — either by pressing ENTER on the
- *   serial monitor, or by holding the KEY button on the remote.
- *   Only CR/LF is accepted as a serial exit trigger — stray bytes (ESP32 ROM
- *   boot noise, BT stack traces) are silently discarded.
- *   The input module is polled actively during the wait so the combus stays live.
- *   The pause block is fully stripped from the binary when the flag is absent.
+ * @note Two independent concerns live in this init sequence:
+ *   1. **Default runlevel** — applied unconditionally at step 5 below
+ *      (DEF_RUNLEVEL = RunLevel::IDLE).  This is a general-code decision
+ *      independent of any build flag.
+ *   2. **Dashboard pause** — when -D PAUSE_LOG_AFTER_INIT is set, the main
+ *      loop is held until the operator presses ENTER on the serial monitor.
+ *      This is purely a "give the operator time to read the boot log"
+ *      gate.  Only CR/LF is accepted as a serial exit trigger — stray bytes
+ *      (ESP32 ROM boot noise, BT stack traces) are silently discarded.
+ *      The pause block is fully stripped from the binary when the flag is
+ *      absent.  No remote control input is consulted here — KEY_BTN is
+ *      reserved for the runlevel FSM, which activates once loop() starts.
  */
 void machine_init() {
 
@@ -56,7 +61,8 @@ void machine_init() {
 
 	  // --- 5. Boot-safe runlevel ---
   sys_log_info("[SYSTEM] Applying boot-safe runlevel...\n");
-  combus_set_runlevel(comBus, DEF_RUNLEVEL, ChanLayer::LOCAL);
+  // RL3: runLevel is now a plain analog channel — write via generic accessor.
+  combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)DEF_RUNLEVEL, ChanLayer::LOCAL);
   stopAllDcDrivers(machine);
   sleepAllDcDrivers(machine);
   disableAllDcDrivers(machine);
@@ -70,34 +76,32 @@ void machine_init() {
 
   
 	  // --- 7. Post-init pause (compiled in only when -D PAUSE_LOG_AFTER_INIT is set) ---
+  //
+  //   Scope:  ONLY a "give the operator time to read the boot log" gate.
+  //   Default runlevel (DEF_RUNLEVEL = RunLevel::IDLE) is already applied
+  //   above at step 5 — independent of this flag, runs at every boot.
+  //
+  //   Implementation: non-blocking.  The dashboard FreeRTOS task is started
+  //   FIRST (step 7) so the suspend flag has an active owner.  Setting
+  //   s_suspended = true (step 7b) before the task is created would have
+  //   no effect — the task never observes it.  The application loop
+  //   continues normally during the pause; only dashboard output is gated.
+  //   No `goto`, no busy-loop on Serial.
+  //
+  //   Resuming is identical to the in-session suspend (Q key): any serial
+  //   byte resumes the dashboard, no specific key required.
   if constexpr (PauseAfterInit) {
-      // KEY channel index in the digital bus (TRIANGLE on PS4 in dumper-truck layout)
-    uint8_t keyCh = static_cast<uint8_t>(DigitalComBusID::KEY_BTN);
-    sys_log_info("[SYSTEM] ** Paused ** — press ENTER or IGNITION KEY to continue...\n");
-
-    while (true) {
-        // Keep the combus alive during the wait (BT connection, input watchdog)
-      input_update(comBus);
-
-        // Exit via serial: ENTER only (CR or LF) — discard stray bytes (ROM noise, BT traces)
-      while (Serial.available()) {
-        char c = (char)Serial.read();
-        if (c == '\r' || c == '\n') goto pause_exit;
-      }
-        // Exit via remote KEY channel
-      if (comBus.isDrived && comBus.digitalBus[keyCh].value) break;
-
-      vTaskDelay(10);  // yield — avoid starving the scheduler
-    }
-    pause_exit:
-
-    sys_log_info("[SYSTEM] Pause released — entering main loop.\n\n");
+      // 7a. Spawn the FreeRTOS task on Core 0 (priority 1, 16 KB stack).
+    dashboard_start_task();
+      // 7b. Mark the dashboard as suspended and print the resume prompt.
+      //     The task is now running and will sit in dashboard_update()'s
+      //     s_suspended branch, consuming one character to resume.
+    sys_log_info("[SYSTEM] Boot log complete — dashboard suspended, press any key to start.\n");
+    dashboard_suspend_for_input("[DASH] Boot paused — press any key to start dashboard.");
+  } else {
+      // Release build: start the task immediately (no boot pause).
+    dashboard_start_task();
   }
-
-	  // --- 8. Start dashboard FreeRTOS task (after pause, on Core 0) ---
-	  // Called here — and not inside dashboard_machine_setup() — so the task
-	  // does not activate during the PAUSE_LOG_AFTER_INIT wait.
-  dashboard_start_task();
 }
 
 // EOF init.cpp

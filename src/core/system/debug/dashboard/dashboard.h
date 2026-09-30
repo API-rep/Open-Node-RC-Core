@@ -1,6 +1,6 @@
 /******************************************************************************
  * @file dashboard.h
- * @brief ANSI terminal dashboard — Layer 1 core shell.
+ * @brief ANSI terminal dashboard â€” Layer 1 core shell.
  *
  * @details Pure rendering primitives, slot registration, keyboard dispatch,
  *   event ring buffer, and refresh timer.  Zero knowledge of any machine
@@ -10,14 +10,14 @@
  *   declared here to compose their own screens.
  *
  *   All public functions degrade to inline no-ops when DEBUG_DASHBOARD is
- *   not defined — callers compile cleanly in release builds without any
+ *   not defined â€” callers compile cleanly in release builds without any
  *   #ifdef guards.
  *****************************************************************************/
 #pragma once
 
 
 // =============================================================================
-// 1. GUARDED SECTION — compiles only with -D DEBUG_DASHBOARD
+// 1. GUARDED SECTION â€” compiles only with -D DEBUG_DASHBOARD
 // =============================================================================
 
 #ifdef DEBUG_DASHBOARD
@@ -79,7 +79,7 @@ void dMid();
 /**
  * @brief Print a mid-frame separator with an embedded label.
  *
- *   +--- label ----------------------------------------¦
+ *   +--- label ----------------------------------------Â¦
  *
  * @param label  Short section title embedded into the separator.
  */
@@ -201,7 +201,7 @@ return (int16_t)((int32_t)raw * 100 / (int32_t)maxVal);
 // =============================================================================
 
 /**
- * @brief Initialize the core dashboard shell — record start time, reset state.
+ * @brief Initialize the core dashboard shell â€” record start time, reset state.
  *
  * @details Called internally by the env-layer setup (dashboard_machine_setup).
  *   Not intended to be called directly from application code.
@@ -253,7 +253,7 @@ uint8_t dashboard_detail_index();
 void dashboard_push_event(const char* msg);
 
 /**
- * @brief Non-blocking update — keyboard handling + timed redraw.
+ * @brief Non-blocking update â€” keyboard handling + timed redraw.
  *
  * @details Intended as the FreeRTOS task body.  May also be called
  *   directly from loop() when the task is not used (e.g. bare-metal
@@ -286,8 +286,21 @@ void dashboard_update();
  */
 void dashboard_start_task();
 
+/**
+ * @brief Suspend the dashboard and print a one-shot prompt.
+ *
+ * @details Reuses the Q-key suspend mechanism so any subsequent serial key
+ *   will resume the dashboard.  Intended for post-init boot-log pauses â€”
+ *   the caller logs its message, calls this, then continues with non-blocking
+ *   setup.  The dashboard task (Core 0) sits idle until the operator presses
+ *   any key on Serial.
+ *
+ * @param msg  NUL-terminated message printed after the suspend banner.
+ */
+void dashboard_suspend_for_input(const char* msg);
 
-#else // !DEBUG_DASHBOARD — empty stubs
+
+#else // !DEBUG_DASHBOARD â€” empty stubs
 
 using DashRenderFn    = void (*)(void);
 using DashDetailFn    = void (*)(void);
@@ -315,6 +328,7 @@ inline uint8_t dashboard_detail_index()                                         
 inline void    dashboard_push_event(const char*)                                         {}
 inline void    dashboard_update()                                                        {}
 inline void    dashboard_start_task()                                                    {}
+inline void    dashboard_suspend_for_input(const char*)                                  {}
 inline bool    dashboard_serial_trylock()                                                { return true; }
 inline void    dashboard_serial_unlock()                                                 {}
 

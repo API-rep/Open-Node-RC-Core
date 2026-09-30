@@ -23,8 +23,7 @@
  * Call once per main loop iteration after the RunLevel state machine.
  *
  * @param bus           Current ComBus snapshot (read-only).
- * @param failsafeActive True when the input watchdog has triggered failsafe.
  */
-void output_update(const ComBus& bus, bool failsafeActive);
+void output_update(const ComBus& bus);
 
 // EOF output_manager.h

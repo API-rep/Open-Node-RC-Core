@@ -37,13 +37,20 @@ static uint8_t       s_digitalCh  = 0;
  */
 static void renderDigitalCompact(const ComBus* bus, uint8_t n)
 {
+	// Chantier 12.6: '*' = healthy is now derived from REMOTE_LINK_LOST
+	// (LOCAL aggregator).  Fallback to lastFrameMs proxy on autonomous builds.
+#if defined(HAS_REMOTE_LINK_LOST_FALLBACK)
+	const bool busDriven = !bus->digitalBus[static_cast<uint8_t>(DigitalComBusID::REMOTE_LINK_LOST)].value;
+#else
+	const bool busDriven = (millis() - bus->lastFrameMs) < 2000u;
+#endif
 	for (uint8_t r = 0u; r < n; r += 4u) {
 		char buf[DashInnerW + 4];
 		int  p = snprintf(buf, sizeof(buf), "  ");
 		for (uint8_t j = r; j < r + 4u && j < n; ++j) {
 			const char* nm  = bus->digitalBus[j].infoName ? bus->digitalBus[j].infoName : "?";
 			const char* val = bus->digitalBus[j].value    ? "ON " : "off";
-			const char  drv = bus->isDrived ? '*' : ' ';
+			const char  drv = busDriven ? '*' : ' ';
 			p += snprintf(buf + p, sizeof(buf) - (size_t)p,
 			              "#%-2u %-14.14s:%-3s%c  ", j, nm, val, drv);
 		}
@@ -75,13 +82,15 @@ static void render_input_view() {
 	dLine("  %-3s  %-40s  %-6s  %-5s  %s",
 	      "CH", "Name", "Raw", "Pct", "Drived");
 	dMid();
+	// Chantier 12.6: same heuristic as renderDigitalCompact() — see above.
+	const bool busDrivenIn = (millis() - s_bus->lastFrameMs) < 2000u;
 	for (uint8_t i = 0; i < s_analogCh; i++) {
 		uint16_t    raw  = s_bus->analogBus[i].value;
 		int16_t     pct  = dashPctBipolar(raw, s_bus->analogBusMaxVal);
 		const char* name = s_bus->analogBus[i].infoName ? s_bus->analogBus[i].infoName : "?";
 		dLine("  %2u   %-40.40s  %5u  %+4d%%  %s",
 		      i, name, raw, pct,
-		      s_bus->isDrived ? "yes" : "no");
+		      busDrivenIn ? "yes" : "no");
 	}
 
 		// --- Digital channels ---
@@ -94,8 +103,9 @@ static void render_input_view() {
 	dMid();
 	dLine("  combus state");
 	dMid();
+	// RL3: runLevel is now a plain analog channel — read from analogBus[RUNLEVEL].
 	dLine("  RunLevel: %-14s  keyOn: %-5s  battLow: %-5s  analogBusMax: %-7u  %u analog + %u digital ch",
-	      dashRunLevelStr(s_bus->runLevel),
+	      dashRunLevelStr((RunLevel)s_bus->analogBus[static_cast<uint8_t>(AnalogComBusID::RUNLEVEL)].value),
 	      s_bus->digitalBus[static_cast<uint8_t>(DigitalComBusID::KEY_ACTIVE)].value ? "YES" : "NO",
 	      s_bus->digitalBus[static_cast<uint8_t>(DigitalComBusID::FAILSAFE_VBAT)].value ? "FAIL" : "OK",
 	      (unsigned)s_bus->analogBusMaxVal, s_analogCh, s_digitalCh);

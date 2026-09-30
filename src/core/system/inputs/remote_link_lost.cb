@@ -1,0 +1,55 @@
+# remote_link_lost.cb — REMOTE_LINK_LOST aggregator channel
+#
+# This file declares the REMOTE_LINK_LOST ComBus channel. It is the
+# AGGREGATED "any remote input source is alive" signal — the OR-merge
+# result of all *_LINK_LOST contributors (PS4_DS4_BT_LINK_LOST,
+# UART_LINK_LOST, future ESP_NOW_LINK_LOST, …).
+#
+# REMOTE_LINK_LOST is COMPUTED, not directly written by input sources:
+#   - Input sources write their dedicated *_LINK_LOST channel each cycle
+#     (false = healthy, true = fault — failsafe-by-default).
+#   - The REMOTE_LINK_LOST → IDLE fallback chain (see
+#     src/core/system/inputs/remote_link_fallback_chain.cpp) reads each
+#     contributor, OR-merges them, and writes the result to REMOTE_LINK_LOST
+#     via the same `both_or` direction semantics.
+#   - Downstream consumers (FSM, runlevel handler, dashboards) only read
+#     REMOTE_LINK_LOST — they never look at the per-source contributors.
+#
+# This indirection solves the "open-drain ordering" issue raised during the
+# chantier 12.5 review: instead of having every source clear a single shared
+# "isAlive" flag (fragile — depends on evaluation order, easy to miss a source),
+# each source owns its own contributor with explicit reset+OR semantics in
+# the consumer chain.  The model mirrors failsafe_chain.cpp exactly.
+#
+# Notes:
+# - LOCAL scope: the channel is shared by all boards composing the local
+#   node. Any board may read REMOTE_LINK_LOST to react (FSM, dashboards).
+#   Only the consumer chain (remote_link_fallback_update) writes it.
+# - Direction [both_or]: uplink + downlink + OR-merge on import.  In
+#   practice only the consumer chain writes; external code should read.
+#   any fault wins on import.
+# - value: high = remote link lost (failsafe-by-default).  The channel
+#   stays "lost" until the consumer chain re-arms it to false (= healthy)
+#   this cycle, which happens only if NO contributor reports fault.
+# - type: digital (bool).
+# - requires: none — the channel is always emitted (it's the public
+#   aggregator).  The contributors are optional (PS4_DS4_BT_LINK_LOST
+#   requires INPUT_PS4_DS4_BT, UART_LINK_LOST requires COMBUS_UART_*).
+# - NOT a contributor to the FAILSAFE aggregator (only "hard" faults
+#   like VBAT / temperature are).  REMOTE_LINK_LOST feeds its own,
+#   optional fallback chain (IDLE on loss).
+# - This channel replaces the historical FAILSAFE_COMBUS_LINK (FS1)
+#   and the underlying `isDrived` / `isNotDrived` open-drain flag on
+#   ComBus (see failsafe_module.md §12.5 new design).  The semantics
+#   are equivalent, but the responsibility is moved out of the Failsafe
+#   module and into the input chain (machine-autonomy friendly).
+
+
+channels:
+  - id: REMOTE_LINK_LOST
+    infoName: "Remote input link lost (aggregated)"
+    type: digital
+    scope: LOCAL
+    theme: input          # generic "input subsystem" theme
+    direction: both_or   # aggregator writes via the consumer chain; readers consume
+    value: high         # default to "lost" (failsafe-by-default — see chain reset)

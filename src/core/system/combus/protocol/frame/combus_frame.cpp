@@ -5,6 +5,16 @@
  * @details Implements frame encoding, decoding, CRC-8/MAXIM and
  * frame-to-ComBus application. The algorithm is platform-independent
  * (no Arduino or ESP-IDF calls) so it compiles on both ESP32 targets.
+ *
+ * LY2 — the codec now takes two counters `analogWireEnd` /
+ * `digitalWireEnd` on encode.  These are resolved at TX init time
+ * from the link's `ChanLayer` (REMOTE → CH_COUNT of the Remote view,
+ * LOCAL → CH_COUNT of the Local view, FULL → CH_COUNT of the Full
+ * view).  The codec iterates only over `comBus.analogBus[0..analogWireEnd)`
+ * and `comBus.digitalBus[0..digitalWireEnd)` — this is the ONLY
+ * behavioural change vs. the pre-LY2 codec.  Decode and apply are
+ * layer-agnostic: they write by index into the caller-provided
+ * buffers without any notion of layer.
  *****************************************************************************/
 
 #include "combus_frame.h"
@@ -12,6 +22,8 @@
 #include <string.h>
 #include <Arduino.h>
 #include <core/system/combus/combus_access.h>
+#include <core/config/machines/combus_types.h>  // DigitalComBusID::REMOTE_LINK_LOST (chantier 12.5)
+
 
 
 // =============================================================================
@@ -58,7 +70,10 @@ uint8_t combus_frame_crc8(const uint8_t* data, uint8_t len) {
  * @details Serialization sequence:
  *   1. Null pointer and frame size overflow guard (returns 0 on failure).
  *   2. Build flags byte from transport-level inputs (failSafe, ...).
- *   3. Write fixed 6-byte header: SOF, nAnalog, nDigital, seq, runLevel, flags.
+ *   3. Write fixed 5-byte header: SOF, nAnalog, nDigital, seq, flags.
+ *      RL2: runLevel is no longer a header field — it travels as a
+ *      standard combus channel (RUNLEVEL, scope LOCAL, see runlevel.cb).
+ *      The header is now 5 bytes (was 6 before RL2).
  *   4. Pack digital channel values as bits, LSB-first, ceil(nDigital/8) bytes.
  *   5. Write analog channel values as uint16_t little-endian, nAnalog entries.
  *   6. Append CRC-8/MAXIM over all preceding bytes.
@@ -66,26 +81,48 @@ uint8_t combus_frame_crc8(const uint8_t* data, uint8_t len) {
  * The caller is responsible for sizing outputBuffer to at least
  * CombusFrameHeaderLen + ceil(nDigital/8) + nAnalog*2 + 1 bytes.
  *
- * @param[out] outputBuffer  Destination buffer (sized by caller).
- * @param[in]  combus        Source ComBus instance to encode.
- * @param[in]  nAnalog       Number of analog channels to include.
- * @param[in]  nDigital      Number of digital channels to include.
- * @param[in]  seq           Rolling sequence counter for control frames
- *                           (1..255 — caller increments; value 0 is RESERVED
- *                           for handshake frames, see combus_handshake.h).
- * @param[in]  failSafe      Upstream failsafe flag (sets COMBUS_FLAG_FAILSAFE).
+ * LY2 — the codec iterates only over `comBus.analogBus[0..analogWireEnd)`
+ * and `comBus.digitalBus[0..digitalWireEnd)`.  These two counters are
+ * resolved at TX init time from the link's `ChanLayer` (REMOTE → CH_COUNT
+ * of the Remote view, LOCAL → CH_COUNT of the Local view, FULL → CH_COUNT
+ * of the Full view).  The wire payload is now sized to the layer's
+ * prefix length instead of the full enum set.
+ *
+ * @param[out] outputBuffer     Destination buffer (sized by caller).
+ * @param[in]  combus           Source ComBus instance to encode.
+ * @param[in]  nAnalog          Number of analog channels to include.
+ * @param[in]  nDigital         Number of digital channels to include.
+ * @param[in]  seq              Rolling sequence counter for control frames
+ *                              (1..255 — caller increments; value 0 is RESERVED
+ *                              for handshake frames, see combus_handshake.h).
+ * @param[in]  analogWireEnd   LY2 — number of analog channels to encode
+ *                              (resolved at TX init from link->layer).
+ * @param[in]  digitalWireEnd   LY2 — number of digital channels to encode
+ *                              (resolved at TX init from link->layer).
  *
  * @return Number of bytes written into outputBuffer, 0 on error.
+ *
+ * @note FS2 — the legacy `failSafe` parameter has been removed.  The
+ *   failsafe state is now carried by the `DigitalComBusID::FAILSAFE`
+ *   channel (LOCAL, both_or) — no out-of-band bit needed.  See
+ *   doc/WIP - Failsafe module design.md §12.13.
  */
 
 uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
                              uint8_t*              outputBuffer,
                              const ComBus*         combus,
                              uint8_t               seq,
-                             bool                  failSafe ) {
+                             uint8_t               analogWireEnd,
+                             uint8_t               digitalWireEnd ) {
 
-	const uint8_t nAnalog  = cfg.nAnalog;
-	const uint8_t nDigital = cfg.nDigital;
+		// LY2 — the wire payload is sized to the layer's prefix length.
+		// analogWireEnd / digitalWireEnd are resolved at TX init time
+		// from the link's ChanLayer (REMOTE → CH_COUNT of the Remote
+		// view, LOCAL → CH_COUNT of the Local view, FULL → CH_COUNT of
+		// the Full view).  Clamp to cfg.nAnalog / cfg.nDigital as a
+		// safety net (the caller-provided buffers cannot be exceeded).
+	const uint8_t nAnalog  = (analogWireEnd  < cfg.nAnalog)  ? analogWireEnd  : cfg.nAnalog;
+	const uint8_t nDigital = (digitalWireEnd < cfg.nDigital) ? digitalWireEnd : cfg.nDigital;
 
 		// 1. Guard conditions — null pointer + frame size overflow
 	if (!outputBuffer || !combus) {
@@ -110,7 +147,9 @@ uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
 		// 2. Build flags byte
 	uint8_t flags = 0;   // transport-level status bits (COMBUS_FLAG_*)
 
-	if (failSafe) { flags |= COMBUS_FLAG_FAILSAFE; }
+	// FS2 — COMBUS_FLAG_FAILSAFE removed.  Failsafe state is now carried
+	// by the DigitalComBusID::FAILSAFE channel (LOCAL, both_or) — no
+	// out-of-band bit needed.  See doc/WIP - Failsafe module design.md §12.13.
 	//if (...)     { flags |= COMBUS_FLAG_... ; }       // next flag — bit 1
 	//if (...)     { flags |= COMBUS_FLAG_... ; }       // next flag — bit 2
 
@@ -121,7 +160,9 @@ uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
 	outputBuffer[pos++] = nAnalog;
 	outputBuffer[pos++] = nDigital;
 	outputBuffer[pos++] = seq;
-	outputBuffer[pos++] = (uint8_t)combus->runLevel;
+		// RL2: runLevel removed from header — travels as standard combus
+		// channel RUNLEVEL (scope LOCAL, see runlevel.cb). The header is
+		// now 5 bytes (was 6 before RL2).
 	outputBuffer[pos++] = flags;
 
 		// 4. Pack digital bits values into bytes (bitbool lsb mode)
@@ -176,6 +217,10 @@ uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
  *
  * Digital channels exceeding digitalBufSize are silently dropped (not an error).
  * outputFrame->header.cfg.nDigital reflects the clamped count after decoding.
+ *
+ * LY2 — decode is layer-agnostic.  It writes by index into the
+ * caller-provided buffers without any notion of layer.  The layer
+ * resolution happens at apply time (see combus_frame_apply).
  *
  * @param[out] outputFrame     Destination frame — analog/digital pointers must be
  *                              pre-set by the caller to buffers of at least
@@ -269,16 +314,21 @@ bool combus_frame_decode( const ComBusFrameCfg& cfg,
  * Application sequence:
  *   1. Null pointer guard (returns on failure).
  *   2. Write runLevel from frame header; stamp combus->lastFrameMs = millis()
- *      so combus_watchdog can detect frame loss and clear isDrived.
+ *      (Chantier 12.6: link-loss detection is no longer the codec's
+ *      responsibility — it now lives at transport level, in the
+ *      `UART_LINK_LOST` contributor channel.)
  *   3. Reserved — transport flags (unused for now).
- *   4. Write analog channels [0 .. min(cfg.nAnalog, header.cfg.nAnalog)-1]
- *      and mark isDrived = true.
- *   5. Write digital channels [0 .. min(cfg.nDigital, header.cfg.nDigital)-1]
- *      and mark isDrived = true.
+ *   4. Write analog channels [0 .. min(cfg.nAnalog, header.cfg.nAnalog)-1].
+ *   5. Write digital channels [0 .. min(cfg.nDigital, header.cfg.nDigital)-1].
  *
  * Channels beyond the effective count are left untouched in the live bus.
  * Caller must ensure combus->analogBus and combus->digitalBus arrays are
  * allocated and sized to at least cfg.nAnalog / cfg.nDigital entries.
+ *
+ * LY2 — apply is layer-agnostic.  It writes by index into the
+ * caller-provided ComBus arrays without any notion of layer.  The
+ * layer check is delegated to combus_set_*() which reads the
+ * channel's declared `layer` from the shared backing storage.
  *
  * @param[in]  cfg         Layout descriptor used as upper clamp (nAnalog, nDigital).
  * @param[out] combus      Target ComBus instance to update.
@@ -299,8 +349,10 @@ void combus_frame_apply( const ComBusFrameCfg& cfg,
 		return;
 	}
 
-		// 2. RunLevel + watchdog timestamp
-	combus_set_runlevel(*combus, (RunLevel)inputFrame->header.runLevel, caller);
+		// 2. Watchdog timestamp only.
+		// RL3: runLevel propagation moved out of combus_frame_apply() and into
+		// the generic analog channel RUNLEVEL (see cb_runlevel.cpp). The codec
+		// stays 100% channel-agnostic — no special-cased runLevel here.
 	combus->lastFrameMs = millis();   // used by sound node liveness check
 
 		// 3. Flags (transport status only)
@@ -311,6 +363,11 @@ void combus_frame_apply( const ComBusFrameCfg& cfg,
 
 	if (combus->analogBus) {
 		for (uint8_t i = 0; i < nAnalogEff; ++i) {
+				// LY2 — apply is layer-agnostic.  The layer check is
+				// delegated to combus_set_analog() which reads the
+				// channel's declared `layer` from the shared backing
+				// storage.  We write by index without any notion of
+				// layer here.
 			combus_set_analog(*combus, (AnalogComBusID)i, inputFrame->analog[i], caller);
 		}
 	}
@@ -320,12 +377,27 @@ void combus_frame_apply( const ComBusFrameCfg& cfg,
 
 	if (combus->digitalBus) {
 		for (uint8_t i = 0; i < nDigitalEff; ++i) {
+				// LY2 — see analog loop above.
 			combus_set_digital(*combus, (DigitalComBusID)i, inputFrame->digital[i], caller);
 		}
 	}
 
-		// 6. Mark bus as actively driven by this frame
-	combus->isDrived = true;
+		// 6. Mark bus as actively driven by this frame.
+		// chantier 12.5 (new design): the codec stays PURE — it does NOT
+		// touch any *_LINK_LOST channel.  The UART link health is monitored
+		// at a HIGHER level (combus_sound_interpreter::update on the sound
+		// node side), which polls combus_rx_is_alive() each cycle and writes
+		// UART_LINK_LOST accordingly.  REMOTE_LINK_LOST is then the
+		// OR-aggregated result computed by the remote_link_fallback_chain
+		// (reset + OR-guard).
+		//
+		// This separation keeps combus_frame.cpp transport-agnostic and
+		// single-responsibility (decode + apply only — no link-state).
+	// Chantier 12.6: the `combus->isNotDrived = false;` line is REMOVED.
+	// The codec stays 100% pure (decode + apply).  Link-loss detection is
+	// now the transport layer's job — see combus_sound_interpreter (côté
+	// sound node) which publishes UART_LINK_LOST when no frame arrives
+	// within the timeout window.
 }
 
 // EOF combus_frame.cpp

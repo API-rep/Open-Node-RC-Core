@@ -32,7 +32,7 @@ void input_update(ComBus &bus) {
     for (uint8_t i = 0; i < InputDigitalMapCount; i++) {
       combus_set_digital(bus, InputDigitalMapArray[i].busChannel, false, ChanLayer::LOCAL);
     }
-    return;   // source inactive — isDrived left as pre-cleared by sys_manager
+    return;   // source inactive — PS4_DS4_BT_LINK_LOST stays at its failsafe default (true = lost)
   }
 
 // ==========================================================
@@ -65,9 +65,19 @@ void input_update(ComBus &bus) {
     combus_set_digital(bus, m.busChannel, finalState, ChanLayer::LOCAL);
   }
 
-    // --- Mark bus as driven by this physical source ---
-  bus.isDrived    = true;
+    // Chantier 12.6 (cleanup): the legacy `bus.isNotDrived = false;` line
+    // is REMOVED — the open-drain flag no longer exists.  Each input
+    // backend now writes its own *_LINK_LOST contributor (see below).
+    //
+    // PS4_BT backend publishes PS4_DS4_BT_LINK_LOST here.  If the PS4
+    // controller stops refreshing the input device (no analog/digital
+    // values), input_is_connected() above returns false and this block
+    // is skipped — the channel stays at its failsafe default (true =
+    // lost), and the aggregator chain picks it up next cycle.
   bus.lastFrameMs = millis();
+#if defined(INPUT_PS4_DS4_BT)
+  combus_set_digital(bus, DigitalComBusID::PS4_DS4_BT_LINK_LOST, false, ChanLayer::LOCAL);
+#endif
 }
 
 // EOF input_update.cpp

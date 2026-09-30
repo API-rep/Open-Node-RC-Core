@@ -11,9 +11,14 @@
  * 
  * NOTE:
  * - do not change uint16_t size for AnalogComBus. Some system sub value depend of this size
- * - "isDrived" flag have to be set true if its channel is perodicaly update.
- *   For safety, a watchdog should manage a disconnect timout an set "isDrived" false after a delay.
  * - All input/output modules had to write/read this struct to share data
+ *
+ * @note Chantier 12.6: the historical `isDrived` / `isNotDrived` open-drain
+ *   flags have been REMOVED. Link health is now monitored at transport
+ *   level by per-link contributors (PS4_DS4_BT_LINK_LOST, UART_LINK_LOST,
+ *   ...) declared in the `.cb` channel files, and aggregated by
+ *   `remote_link_fallback_chain.cpp` into the LOCAL `REMOTE_LINK_LOST`
+ *   channel. See failsafe_module.md §12.5 for the new design.
  *******************************************************************************/// 
 #pragma once
 
@@ -133,12 +138,14 @@ typedef struct {
  */
 typedef struct {
     // --- Core state ---
-  RunLevel    runLevel;                     ///< Machine run level — written by the system FSM
-  ChanLayer   runLevelLayer = ChanLayer::LOCAL;   ///< RunLevel propagation layer (shared within system)
+  // RL3: runLevel + runLevelLayer removed — runLevel is now a plain analog channel
+  //       (RUNLEVEL, scope LOCAL, see runlevel.cb). Read/write it directly via the
+  //       generic analog accessor (combus_set_analog / analogBus[RUNLEVEL].value).
+  //       This is the same pattern as any other LOCAL analog channel (e.g. THROTTLE_STICK).
 
-    // --- Input drive flag ---
-  bool        isDrived = false;            ///< True when at least one physical input source refreshed the bus this cycle
-                                            ///< Pre‑cleared by sys_manager_reset() each loop; re‑asserted by each active source.
+    // Chantier 12.6: `isNotDrived` (FS1 open-drain flag) REMOVED. Link
+    // health is now monitored by per-link contributors aggregated into
+    // REMOTE_LINK_LOST — see failsafe_module.md §12.5.
 
     // --- Transport ---
   uint32_t    lastFrameMs = 0;             ///< millis() timestamp of the last successful combus_frame_apply

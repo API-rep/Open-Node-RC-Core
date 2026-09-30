@@ -1,10 +1,10 @@
 /******************************************************************************
  * @file uart_com.h
- * @brief UART transport — port init, claim guard and ComBus channel helpers.
+ * @brief UART transport — port init, claim guard and channel helpers.
  *
  * @details Groups all transport-layer UART concerns: low-level port opening
- * with claim guard, ComBus-channel init driven by compile flags, and a
- * convenience accessor that resolves the active channel for protocol layers.
+ * with claim guard, and a convenience accessor that maps an ESP32 UART
+ * index to its HardwareSerial instance.
  *
  * Core owns ZERO static storage for the port registry. The caller (machine,
  * sound node, or any future integrator) allocates a static UartCtx[] array
@@ -16,18 +16,19 @@
  * Serial0 (USB/UART) is pre-claimed in sys_init() when any DEBUG_* or
  * DEBUG_DASHBOARD flag is set, preventing accidental reuse by other modules.
  *
- * Call sequence:
+ * Call sequence (per ComBus link, board-side):
  * @code
  *   sys_init();                                    // debug serial + pin registry
- *   static UartCtx pool[UartComMaxPorts];           // machine: static storage
- *   uart_com_register_pool(pool, UartComMaxPorts);  // machine: register once
- *   uart_init(ComBusUartBaud, UartComMaxPorts, &pinReg);  // machine: open port
- *   hw_init();                                      // hardware peripherals
- *   combus_protocol_init(...);                    // protocol layers wired to transport
+ *   static UartCtx pool[UartComMaxPorts];          // machine: static storage
+ *   uart_com_register_pool(pool, UartComMaxPorts); // machine: register once
+ *   combus_uart_init();                            // env: opens one NodeCom per ComBusLink[]
+ *   hw_init();                                     // hardware peripherals
+ *   combus_protocol_init(...);                     // protocol layers wired to transport
  * @endcode
  *
- * When no COMBUS_UART* flag is defined, all ComBus helpers compile to inline
- * no-ops — zero overhead at call sites.
+ * Each ComBusLink entry resolves its own UART channel + pins from the
+ * active COMBUS_UART* build flag and calls uart_com_init() directly — there
+ * is no longer a single-link helper in this header.
  *****************************************************************************/
 #pragma once
 
@@ -80,6 +81,13 @@ void uart_com_register_pool(UartCtx* buffer, uint8_t capacity);
 // =============================================================================
 
 /**
+ * @brief ESP32 exposes 3 UART peripherals (Serial/Serial1/Serial2), matching
+ *   uart_serial_for(). Fixed architectural fact, useful when sizing a
+ *   board's own uartPins[] table.
+ */
+static constexpr uint8_t UartHwChannelMax = 3u;
+
+/**
  * @brief Initialize a UART port and return a claimed NodeCom*.
  *
  * @details Calls serial.begin() once and registers the port in the pool
@@ -113,57 +121,5 @@ NodeCom* uart_com_init( HardwareSerial* serial,
  */
 HardwareSerial* uart_serial_for(int n);
 
-
-// =============================================================================
-// 4. COMBUS UART CHANNEL INIT  (compile-flag driven)
-// =============================================================================
-//
-//   uart_init(baud, maxChannels, reg) — open the ComBus UART port from the active flag.
-//   uart_get_com(ch)                  — NodeCom* for a given UART channel index.
-//   uart_get_combus_com()             — shortcut: resolve active channel → uart_get_com().
-//
-// =============================================================================
-
-#if defined(COMBUS_UART_TX) || defined(COMBUS_UART_RX) || defined(COMBUS_UART)
-
-/**
- * @brief Open the ComBus UART port and store the resulting NodeCom*.
- *
- * @param baud        UART baud rate.
- * @param maxChannels Number of hardware UART channels this board exposes to
- *                     ComBus — bounds uart_get_com() only. Unrelated to the
- *                     shared port pool from uart_com_register_pool(); this is
- *                     purely a channel-index sanity ceiling, capped internally
- *                     at the ESP32's 3 physical UARTs.
- * @param reg         Optional pin registry — TX and RX pins are claimed if non-null.
- */
-void uart_init(uint32_t baud, uint8_t maxChannels, PinReg* reg = nullptr);
-
-/**
- * @brief Return the NodeCom* opened by uart_init() for the given UART channel.
- */
-NodeCom* uart_get_com(int uartCh);
-
-/**
- * @brief Return the NodeCom* for the active ComBus channel.
- */
-inline NodeCom* uart_get_combus_com()
-{
-#if defined(COMBUS_UART)
-    return uart_get_com(COMBUS_UART);
-#elif defined(COMBUS_UART_TX)
-    return uart_get_com(COMBUS_UART_TX);
-#else
-    return uart_get_com(COMBUS_UART_RX);
-#endif
-}
-
-#else   // No COMBUS_UART* flag
-
-inline void     uart_init(uint32_t, uint8_t, PinReg* = nullptr) {}
-inline NodeCom* uart_get_com(int)                                { return nullptr; }
-inline NodeCom* uart_get_combus_com()                             { return nullptr; }
-
-#endif  // COMBUS_UART_TX / COMBUS_UART_RX / COMBUS_UART
 
 // EOF uart_com.h

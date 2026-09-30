@@ -7,6 +7,7 @@
 
 #include "dashboard_sig.h"
 #include <core/system/debug/dashboard/dashboard.h>
+#include "combus_ids.h"   // RL3: AnalogComBusID::RUNLEVEL — uses the generated combus_generated/ CPPPATH
 
 #include <Arduino.h>
 #include <stdio.h>
@@ -73,10 +74,21 @@ static void sigValFmt(const SigDevice& d, char* out, size_t sz) {
 
 /**
  * @brief Return true if the ComBus channel backing @p d is presently driven.
+ *
+ * Chantier 12.6: the historical `bus.isNotDrived` open-drain flag is gone.
+ * "Driven" is now expressed per-channel: for sig devices we treat the
+ * channel as driven if any activity has been seen recently (we use the
+ * bus-level `lastFrameMs` timestamp as a coarse proxy — not yet wire-level).
  */
 static bool sigIsDriven(const SigDevice& d) {
-	(void)d;   // channel granularity removed — isDrived is bus-level
-	return s_bus ? s_bus->isDrived : false;
+	(void)d;
+	if (!s_bus) return false;
+	// Simple heuristic: the bus is considered driven if the last frame
+	// is recent (< 2s).  This will be refined in a future chantier to
+	// inspect the relevant *_LINK_LOST contributor directly.
+	const uint32_t lastSeen = s_bus->lastFrameMs;
+	const uint32_t now      = millis();
+	return (now - lastSeen) < 2000u;
 }
 
 
@@ -103,8 +115,9 @@ static void render_sig_view() {
 		dLine("%s%*s%s", left, (int)DashInnerW - lLen - rLen, "", right);
 	}
 	dMid();
-	dLine("  RunLevel: %-12s  Sig devices: %u",
-	      dashRunLevelStr(s_bus->runLevel), (unsigned)s_mach->sigDevCount);
+		// RL3: runLevel is now a plain analog channel — read from analogBus[RUNLEVEL].
+		dLine("  RunLevel: %-12s  Sig devices: %u",
+		      dashRunLevelStr((RunLevel)s_bus->analogBus[static_cast<uint8_t>(AnalogComBusID::RUNLEVEL)].value), (unsigned)s_mach->sigDevCount);
 	dMid();
 	dLine("  %-2s  %-32s  %-12s  %-6s  %-5s  %s",
 	      "ID", "Name", "Usage", "Chan", "Value", "Drv");

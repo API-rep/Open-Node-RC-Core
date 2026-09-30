@@ -40,8 +40,8 @@ Acquisition strategy (real PlatformIO environment):
   "fragile implementation that hides the problem" trap.
 
   We do NOT merge `extends` chains by hand (the doc marks this as a
-  transient hack in combus_md5.py). If we observe `extends` failures in
-  `pre:` we document them and rely on `post:` instead.
+  transient hack in scripts/combus_builder/md5.py). If we observe
+  `extends` failures in `pre:` we document them and rely on `post:` instead.
 
 Real-build ground-truth validation (post: hook):
 
