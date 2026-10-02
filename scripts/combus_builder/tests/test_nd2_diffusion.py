@@ -38,6 +38,8 @@ Exit codes:
 """
 from __future__ import annotations
 
+import contextlib
+import io
 import sys
 import tempfile
 from pathlib import Path
@@ -119,17 +121,23 @@ def _make_parsed(
 
 
 # =============================================================================
-# Test 1: Mirror simple
+# Test 1: Single uplink producer (ND2 generalised rule 5)
 # =============================================================================
 
 def test_mirror_simple() -> bool:
-    """BAT_LOW declared uplink on mainboard only -> soundboard gets downlink.
+    """BAT_LOW declared uplink on mainboard only -> soundboard (absent) gets downlink.
 
     Ownership via requires:
       - mainboard.cb: BAT_LOW with requires=[IS_MAINBOARD] -> active for mainboard only
       - soundboard.cb: SPK_VOL with requires=[IS_EXT_BOARD] -> active for soundboard only
+
+    Per the generalised ND2 rule:
+      - BAT_LOW: rule 5 (n_up==1, n_down==0) -> soundboard (absent) becomes downlink.
+      - SPK_VOL: rule 6 (n_up==0, n_down==1) -> WARNING 'canal mort', mainboard (absent) becomes none.
+        (The old 'mirror' behavior is gone in the N-board version: if there's
+         no producer uplink anywhere, we don't invent one.)
     """
-    print("\n=== Test 1: Mirror simple ===")
+    print("\n=== Test 1: Single uplink producer (rule 5) ===")
     with tempfile.TemporaryDirectory() as td:
         tmp_path = Path(td)
         project_root = tmp_path / "proj"
@@ -166,31 +174,32 @@ channels:
             "soundboard": {"IS_EXT_BOARD"},
         })
 
-        result = diffuse_local_channels(parsed, node)
+        # Capture stderr: SPK_VOL should emit a rule-6 warning.
+        captured = io.StringIO()
+        with contextlib.redirect_stderr(captured):
+            result = diffuse_local_channels(parsed, node)
+        stderr_output = captured.getvalue()
+        assert "SPK_VOL" in stderr_output and "canal mort" in stderr_output, (
+            f"expected a rule-6 warning for SPK_VOL, got: {stderr_output!r}"
+        )
 
-        # mainboard should have BAT_LOW (uplink, own) + SPK_VOL (synthetic uplink, mirrored from soundboard's downlink).
+        # mainboard: BAT_LOW=own uplink. SPK_VOL: rule 6, absent board gets `none`.
         mainboard_decls = _extract_channel_ids_and_dirs(result["mainboard"])
-        assert "BAT_LOW" in mainboard_decls, f"mainboard missing BAT_LOW: {mainboard_decls}"
         assert mainboard_decls["BAT_LOW"] == "uplink", (
             f"mainboard BAT_LOW should be uplink, got {mainboard_decls['BAT_LOW']}"
         )
-        assert "SPK_VOL" in mainboard_decls, f"mainboard missing SPK_VOL (synthetic): {mainboard_decls}"
-        assert mainboard_decls["SPK_VOL"] == "uplink", (
-            f"mainboard SPK_VOL should be uplink (mirrored from soundboard's downlink), "
-            f"got {mainboard_decls['SPK_VOL']}"
+        assert mainboard_decls.get("SPK_VOL") == "none", (
+            f"mainboard SPK_VOL (absent) should be `none` (rule 6, no producer), "
+            f"got {mainboard_decls.get('SPK_VOL')!r}"
         )
         print(f"  OK   mainboard: {mainboard_decls}")
 
-        # soundboard should have SPK_VOL (downlink, own) + BAT_LOW (synthetic downlink, mirrored from mainboard's uplink).
+        # soundboard: SPK_VOL=own downlink. BAT_LOW: rule 5, absent board gets `downlink`.
         soundboard_decls = _extract_channel_ids_and_dirs(result["soundboard"])
-        assert "SPK_VOL" in soundboard_decls, f"soundboard missing SPK_VOL: {soundboard_decls}"
-        assert soundboard_decls["SPK_VOL"] == "downlink", (
-            f"soundboard SPK_VOL should be downlink, got {soundboard_decls['SPK_VOL']}"
-        )
-        assert "BAT_LOW" in soundboard_decls, f"soundboard missing BAT_LOW (synthetic): {soundboard_decls}"
-        assert soundboard_decls["BAT_LOW"] == "downlink", (
-            f"soundboard BAT_LOW should be downlink (mirrored from mainboard's uplink), "
-            f"got {soundboard_decls['BAT_LOW']}"
+        assert soundboard_decls["SPK_VOL"] == "downlink"
+        assert soundboard_decls.get("BAT_LOW") == "downlink", (
+            f"soundboard BAT_LOW (absent) should be downlink (rule 5, single uplink), "
+            f"got {soundboard_decls.get('BAT_LOW')!r}"
         )
         print(f"  OK   soundboard: {soundboard_decls}")
 
@@ -301,20 +310,36 @@ channels:
             return False
         except DiffusionConflictError as e:
             assert e.channel_id == "BAT_LOW"
-            assert e.direction_a == "uplink"
-            assert e.direction_b == "uplink"
             assert not e.semantic
+            # The N-board error has an `involved` list; both boards
+            # should be there with direction "uplink".
+            assert len(e.involved) == 2
+            directions = sorted(d for _b, d, _p in e.involved)
+            assert directions == ["uplink", "uplink"], (
+                f"expected both directions 'uplink', got {directions}"
+            )
             print(f"  OK   raised DiffusionConflictError: {e}")
             return True
 
 
 # =============================================================================
-# Test 4: Conflict downlink/downlink
+# Test 4: downlink/downlink (CHANGED: warning + none, not fatal)
 # =============================================================================
 
-def test_conflict_downlink_downlink() -> bool:
-    """Both boards declare BAT_LOW as downlink -> FATAL."""
-    print("\n=== Test 4: Conflict downlink/downlink ===")
+def test_downlink_downlink_now_warning() -> bool:
+    """Both boards declare BAT_LOW as downlink -> WARNING (canal mort), not fatal.
+
+    CHANGED BEHAVIOUR (ND2 generalised to N boards): in the
+    2-board version this was a fatal DiffusionConflictError. The
+    generalised rule (point 6) says: n_up == 0, n_down >= 1 ->
+    emit a warning and let absent boards receive `none`. Build
+    continues.
+
+    To verify the warning is emitted we capture stderr.
+    """
+    import io
+    import contextlib
+    print("\n=== Test 4: downlink/downlink (warning, not fatal) ===")
     with tempfile.TemporaryDirectory() as td:
         tmp_path = Path(td)
         project_root = tmp_path / "proj"
@@ -351,17 +376,31 @@ channels:
             "soundboard": {"IS_EXT_BOARD"},
         })
 
-        try:
-            diffuse_local_channels(parsed, node)
-            print("  FAIL expected DiffusionConflictError, got none")
-            return False
-        except DiffusionConflictError as e:
-            assert e.channel_id == "BAT_LOW"
-            assert e.direction_a == "downlink"
-            assert e.direction_b == "downlink"
-            assert not e.semantic
-            print(f"  OK   raised DiffusionConflictError: {e}")
-            return True
+        # Should NOT raise. Capture stderr to verify the warning.
+        captured = io.StringIO()
+        with contextlib.redirect_stderr(captured):
+            result = diffuse_local_channels(parsed, node)
+
+        stderr_output = captured.getvalue()
+        assert "WARNING" in stderr_output, (
+            f"expected a WARNING on stderr, got: {stderr_output!r}"
+        )
+        assert "canal mort" in stderr_output, (
+            f"expected 'canal mort' in warning, got: {stderr_output!r}"
+        )
+        assert "BAT_LOW" in stderr_output, (
+            f"expected channel id in warning, got: {stderr_output!r}"
+        )
+        print(f"  OK   warning emitted: {stderr_output.strip()}")
+
+        # Both boards should keep their explicit downlink declarations.
+        mainboard_decls = _extract_channel_ids_and_dirs(result["mainboard"])
+        soundboard_decls = _extract_channel_ids_and_dirs(result["soundboard"])
+        assert mainboard_decls["BAT_LOW"] == "downlink"
+        assert soundboard_decls["BAT_LOW"] == "downlink"
+        print(f"  OK   both boards retain BAT_LOW=downlink (no fatal error)")
+
+    return True
 
 
 # =============================================================================
@@ -723,18 +762,412 @@ def _extract_channel_ids_and_dirs(
 # Main
 # =============================================================================
 
+# =============================================================================
+# 3-BOARD TESTS (ND2 generalised to N >= 2)
+# =============================================================================
+
+def test_3b_uplink_2downlink_explicit() -> bool:
+    """1 uplink + 2 downlink explicites sur 3 boards -> pas d'erreur, rien à diffuser."""
+    print("\n=== Test 11: 3b — 1 uplink + 2 downlink explicites ===")
+    with tempfile.TemporaryDirectory() as td:
+        tmp_path = Path(td)
+        project_root = tmp_path / "proj"
+        src_dir = project_root / "src"
+        src_dir.mkdir(parents=True)
+
+        parsed = _make_parsed({
+            "mainboard.cb": """\
+channels:
+  - id: BAT_LOW
+    infoName: "Battery low"
+    type: digital
+    scope: LOCAL
+    theme: vbat
+    direction: uplink
+    requires:
+      - IS_MAINBOARD
+""",
+            "soundboard.cb": """\
+channels:
+  - id: BAT_LOW
+    infoName: "Battery low"
+    type: digital
+    scope: LOCAL
+    theme: vbat
+    direction: downlink
+    requires:
+      - IS_SOUNDBOARD
+""",
+            "lightboard.cb": """\
+channels:
+  - id: BAT_LOW
+    infoName: "Battery low"
+    type: digital
+    scope: LOCAL
+    theme: vbat
+    direction: downlink
+    requires:
+      - IS_LIGHTBOARD
+""",
+        }, src_dir)
+
+        node = _make_node(project_root, {
+            "mainboard": {"IS_MAINBOARD"},
+            "soundboard": {"IS_SOUNDBOARD"},
+            "lightboard": {"IS_LIGHTBOARD"},
+        })
+
+        # Should NOT raise.
+        captured = io.StringIO()
+        with contextlib.redirect_stderr(captured):
+            result = diffuse_local_channels(parsed, node)
+        assert "WARNING" not in captured.getvalue(), (
+            f"no warning expected (1 uplink + 2 downlink is compatible), "
+            f"got: {captured.getvalue()!r}"
+        )
+
+        main = _extract_channel_ids_and_dirs(result["mainboard"])
+        snd = _extract_channel_ids_and_dirs(result["soundboard"])
+        lgt = _extract_channel_ids_and_dirs(result["lightboard"])
+        assert main["BAT_LOW"] == "uplink"
+        assert snd["BAT_LOW"] == "downlink"
+        assert lgt["BAT_LOW"] == "downlink"
+        print(f"  OK   main=uplink, sound=downlink, light=downlink (no synthesis)")
+
+    return True
+
+
+def test_3b_uplink_downlink_absent() -> bool:
+    """1 uplink + 1 downlink explicite + 1 board absente -> absente devient downlink."""
+    print("\n=== Test 12: 3b — 1 uplink + 1 downlink + 1 absente ===")
+    with tempfile.TemporaryDirectory() as td:
+        tmp_path = Path(td)
+        project_root = tmp_path / "proj"
+        src_dir = project_root / "src"
+        src_dir.mkdir(parents=True)
+
+        parsed = _make_parsed({
+            "mainboard.cb": """\
+channels:
+  - id: BAT_LOW
+    infoName: "Battery low"
+    type: digital
+    scope: LOCAL
+    theme: vbat
+    direction: uplink
+    requires:
+      - IS_MAINBOARD
+""",
+            "soundboard.cb": """\
+channels:
+  - id: BAT_LOW
+    infoName: "Battery low"
+    type: digital
+    scope: LOCAL
+    theme: vbat
+    direction: downlink
+    requires:
+      - IS_SOUNDBOARD
+""",
+            # lightboard.cb is absent — no declaration for BAT_LOW there.
+        }, src_dir)
+
+        node = _make_node(project_root, {
+            "mainboard": {"IS_MAINBOARD"},
+            "soundboard": {"IS_SOUNDBOARD"},
+            "lightboard": {"IS_LIGHTBOARD"},
+        })
+
+        captured = io.StringIO()
+        with contextlib.redirect_stderr(captured):
+            result = diffuse_local_channels(parsed, node)
+        assert "WARNING" not in captured.getvalue(), (
+            f"no warning expected, got: {captured.getvalue()!r}"
+        )
+
+        main = _extract_channel_ids_and_dirs(result["mainboard"])
+        snd = _extract_channel_ids_and_dirs(result["soundboard"])
+        lgt = _extract_channel_ids_and_dirs(result["lightboard"])
+        assert main["BAT_LOW"] == "uplink"
+        assert snd["BAT_LOW"] == "downlink"
+        assert lgt["BAT_LOW"] == "downlink", (
+            f"lightboard (absent) should receive synthetic downlink, got {lgt.get('BAT_LOW')!r}"
+        )
+        print(f"  OK   main=uplink, sound=downlink, light=synthetic downlink")
+
+    return True
+
+
+def test_3b_2uplink_conflict() -> bool:
+    """2 uplink sur 2 boards différentes, 3e absente -> conflit fatal, message nomme les 2 boards en uplink."""
+    print("\n=== Test 13: 3b — 2 uplink (conflit fatal) ===")
+    with tempfile.TemporaryDirectory() as td:
+        tmp_path = Path(td)
+        project_root = tmp_path / "proj"
+        src_dir = project_root / "src"
+        src_dir.mkdir(parents=True)
+
+        parsed = _make_parsed({
+            "mainboard.cb": """\
+channels:
+  - id: BAT_LOW
+    infoName: "Battery low"
+    type: digital
+    scope: LOCAL
+    theme: vbat
+    direction: uplink
+    requires:
+      - IS_MAINBOARD
+""",
+            "soundboard.cb": """\
+channels:
+  - id: BAT_LOW
+    infoName: "Battery low"
+    type: digital
+    scope: LOCAL
+    theme: vbat
+    direction: uplink
+    requires:
+      - IS_SOUNDBOARD
+""",
+            # lightboard absent.
+        }, src_dir)
+
+        node = _make_node(project_root, {
+            "mainboard": {"IS_MAINBOARD"},
+            "soundboard": {"IS_SOUNDBOARD"},
+            "lightboard": {"IS_LIGHTBOARD"},
+        })
+
+        try:
+            diffuse_local_channels(parsed, node)
+            print("  FAIL expected DiffusionConflictError, got none")
+            return False
+        except DiffusionConflictError as e:
+            assert e.channel_id == "BAT_LOW"
+            assert not e.semantic
+            # The message must name BOTH uplink boards.
+            msg = str(e)
+            assert "mainboard" in msg, f"mainboard should be named in message: {msg}"
+            assert "soundboard" in msg, f"soundboard should be named in message: {msg}"
+            # The conflict involves the 2 explicit uplink boards; the
+            # `involved` list contains them.
+            involved_boards = [b for b, _d, _p in e.involved]
+            assert "mainboard" in involved_boards
+            assert "soundboard" in involved_boards
+            print(f"  OK   raised DiffusionConflictError naming both uplink boards")
+            return True
+
+
+def test_3b_3downlink_warning() -> bool:
+    """3 downlink explicites, aucun uplink -> warning 'canal mort', pas d'erreur fatale."""
+    print("\n=== Test 14: 3b — 3 downlink (warning, pas fatal) ===")
+    with tempfile.TemporaryDirectory() as td:
+        tmp_path = Path(td)
+        project_root = tmp_path / "proj"
+        src_dir = project_root / "src"
+        src_dir.mkdir(parents=True)
+
+        parsed = _make_parsed({
+            "mainboard.cb": """\
+channels:
+  - id: BAT_LOW
+    infoName: "Battery low"
+    type: digital
+    scope: LOCAL
+    theme: vbat
+    direction: downlink
+    requires:
+      - IS_MAINBOARD
+""",
+            "soundboard.cb": """\
+channels:
+  - id: BAT_LOW
+    infoName: "Battery low"
+    type: digital
+    scope: LOCAL
+    theme: vbat
+    direction: downlink
+    requires:
+      - IS_SOUNDBOARD
+""",
+            "lightboard.cb": """\
+channels:
+  - id: BAT_LOW
+    infoName: "Battery low"
+    type: digital
+    scope: LOCAL
+    theme: vbat
+    direction: downlink
+    requires:
+      - IS_LIGHTBOARD
+""",
+        }, src_dir)
+
+        node = _make_node(project_root, {
+            "mainboard": {"IS_MAINBOARD"},
+            "soundboard": {"IS_SOUNDBOARD"},
+            "lightboard": {"IS_LIGHTBOARD"},
+        })
+
+        # Should NOT raise. Capture stderr to verify the warning.
+        captured = io.StringIO()
+        with contextlib.redirect_stderr(captured):
+            result = diffuse_local_channels(parsed, node)
+
+        stderr_output = captured.getvalue()
+        assert "WARNING" in stderr_output, (
+            f"expected WARNING on stderr, got: {stderr_output!r}"
+        )
+        assert "canal mort" in stderr_output, (
+            f"expected 'canal mort' in warning, got: {stderr_output!r}"
+        )
+        # All 3 boards should be named in the warning.
+        assert "mainboard" in stderr_output
+        assert "soundboard" in stderr_output
+        assert "lightboard" in stderr_output
+        print(f"  OK   warning emitted naming all 3 downlink boards")
+
+        # All boards keep their explicit downlink.
+        for board_id in ("mainboard", "soundboard", "lightboard"):
+            decls = _extract_channel_ids_and_dirs(result[board_id])
+            assert decls["BAT_LOW"] == "downlink"
+        print(f"  OK   all 3 boards retain BAT_LOW=downlink (no fatal error)")
+
+    return True
+
+
+def test_3b_1both_2absent() -> bool:
+    """1 both + 2 boards absentes -> les 2 absentes deviennent both (rule 3)."""
+    print("\n=== Test 15: 3b — 1 both + 2 absentes ===")
+    with tempfile.TemporaryDirectory() as td:
+        tmp_path = Path(td)
+        project_root = tmp_path / "proj"
+        src_dir = project_root / "src"
+        src_dir.mkdir(parents=True)
+
+        parsed = _make_parsed({
+            "mainboard.cb": """\
+channels:
+  - id: BAT_LOW
+    infoName: "Battery low"
+    type: digital
+    scope: LOCAL
+    theme: vbat
+    direction: both
+    requires:
+      - IS_MAINBOARD
+""",
+            # soundboard.cb and lightboard.cb absent.
+        }, src_dir)
+
+        node = _make_node(project_root, {
+            "mainboard": {"IS_MAINBOARD"},
+            "soundboard": {"IS_SOUNDBOARD"},
+            "lightboard": {"IS_LIGHTBOARD"},
+        })
+
+        captured = io.StringIO()
+        with contextlib.redirect_stderr(captured):
+            result = diffuse_local_channels(parsed, node)
+        assert "WARNING" not in captured.getvalue(), (
+            f"no warning expected, got: {captured.getvalue()!r}"
+        )
+
+        main = _extract_channel_ids_and_dirs(result["mainboard"])
+        snd = _extract_channel_ids_and_dirs(result["soundboard"])
+        lgt = _extract_channel_ids_and_dirs(result["lightboard"])
+        assert main["BAT_LOW"] == "both"
+        assert snd["BAT_LOW"] == "both", (
+            f"soundboard (absent) should receive synthetic both, got {snd.get('BAT_LOW')!r}"
+        )
+        assert lgt["BAT_LOW"] == "both", (
+            f"lightboard (absent) should receive synthetic both, got {lgt.get('BAT_LOW')!r}"
+        )
+        print(f"  OK   main=both, sound=synthetic both, light=synthetic both")
+
+    return True
+
+
+def test_3b_1both_1uplink_1absent_semantic() -> bool:
+    """1 both + 1 uplink (2 autres absentes) -> conflit sémantique fatal."""
+    print("\n=== Test 16: 3b — 1 both + 1 uplink (conflit sémantique) ===")
+    with tempfile.TemporaryDirectory() as td:
+        tmp_path = Path(td)
+        project_root = tmp_path / "proj"
+        src_dir = project_root / "src"
+        src_dir.mkdir(parents=True)
+
+        parsed = _make_parsed({
+            "mainboard.cb": """\
+channels:
+  - id: BAT_LOW
+    infoName: "Battery low"
+    type: digital
+    scope: LOCAL
+    theme: vbat
+    direction: both
+    requires:
+      - IS_MAINBOARD
+""",
+            "soundboard.cb": """\
+channels:
+  - id: BAT_LOW
+    infoName: "Battery low"
+    type: digital
+    scope: LOCAL
+    theme: vbat
+    direction: uplink
+    requires:
+      - IS_SOUNDBOARD
+""",
+            # lightboard absent.
+        }, src_dir)
+
+        node = _make_node(project_root, {
+            "mainboard": {"IS_MAINBOARD"},
+            "soundboard": {"IS_SOUNDBOARD"},
+            "lightboard": {"IS_LIGHTBOARD"},
+        })
+
+        try:
+            diffuse_local_channels(parsed, node)
+            print("  FAIL expected DiffusionConflictError (semantic), got none")
+            return False
+        except DiffusionConflictError as e:
+            assert e.channel_id == "BAT_LOW"
+            assert e.semantic, "should be a semantic conflict"
+            print(f"  OK   raised DiffusionConflictError (semantic): {e}")
+            return True
+
+
+# =============================================================================
+# Main
+# =============================================================================
+
 def main() -> int:
+    import io
+    import contextlib
+
     results = []
+    # 2-board tests (existing + adapted).
     results.append(("mirror_simple", test_mirror_simple()))
     results.append(("complementary_pair", test_complementary_pair()))
     results.append(("conflict_uplink_uplink", test_conflict_uplink_uplink()))
-    results.append(("conflict_downlink_downlink", test_conflict_downlink_downlink()))
+    results.append(("downlink_downlink_now_warning", test_downlink_downlink_now_warning()))
     results.append(("both_both_ok", test_both_both_ok()))
     results.append(("none_x_ok", test_none_x_ok()))
     results.append(("semantic_conflict_both_uplink", test_semantic_conflict_both_uplink()))
     results.append(("local_conflict", test_local_conflict()))
     results.append(("remote_passthrough", test_remote_passthrough()))
     results.append(("legacy_mode_not_called", test_legacy_mode_not_called()))
+    # 3-board tests (new, ND2 generalised).
+    results.append(("3b_uplink_2downlink_explicit", test_3b_uplink_2downlink_explicit()))
+    results.append(("3b_uplink_downlink_absent", test_3b_uplink_downlink_absent()))
+    results.append(("3b_2uplink_conflict", test_3b_2uplink_conflict()))
+    results.append(("3b_3downlink_warning", test_3b_3downlink_warning()))
+    results.append(("3b_1both_2absent", test_3b_1both_2absent()))
+    results.append(("3b_1both_1uplink_1absent_semantic", test_3b_1both_1uplink_1absent_semantic()))
 
     print("\n=== Summary ===")
     all_ok = True
