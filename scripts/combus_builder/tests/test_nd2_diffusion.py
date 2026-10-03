@@ -1142,6 +1142,98 @@ channels:
 
 
 # =============================================================================
+# Test 17: PIPELINE COMPLET — requires stale fix
+# =============================================================================
+
+def test_pipeline_full_requires_stale_fix() -> bool:
+    """End-to-end pipeline test: diffuse + canonize + generate.
+
+    Scenario: BAT_LOW declared with `requires=[IS_MAINBOARD]` on
+    mainboard only, direction uplink. The synthetic declaration
+    diffused to soundboard must NOT carry the stale `requires`
+    field — otherwise resolve_requires() in the downstream
+    pipeline would raise RequiresResolutionError on soundboard
+    (which does NOT have IS_MAINBOARD).
+
+    This test exercises the FULL pipeline (not just
+    diffuse_local_channels() in isolation) and would FAIL on the
+    pre-fix code with RequiresResolutionError.
+    """
+    print("\n=== Test 17: pipeline complet — requires stale fix ===")
+    with tempfile.TemporaryDirectory() as td:
+        tmp_path = Path(td)
+        project_root = tmp_path / "proj"
+        src_dir = project_root / "src"
+        src_dir.mkdir(parents=True)
+
+        parsed = _make_parsed({
+            "mainboard.cb": """\
+channels:
+  - id: BAT_LOW
+    infoName: "Battery low"
+    type: digital
+    scope: LOCAL
+    theme: vbat
+    direction: uplink
+    requires:
+      - IS_MAINBOARD
+""",
+            # soundboard.cb absent — no declaration for BAT_LOW.
+        }, src_dir)
+
+        node = _make_node(project_root, {
+            "mainboard": {"IS_MAINBOARD"},
+            "soundboard": {"IS_EXT_BOARD"},  # does NOT have IS_MAINBOARD
+        })
+
+        # Step 1: diffuse.
+        captured = io.StringIO()
+        with contextlib.redirect_stderr(captured):
+            diffused = diffuse_local_channels(parsed, node)
+
+        # Step 2: canonize the soundboard list.
+        from scripts.combus_builder.canon import canonize
+        soundboard_canon = canonize(diffused["soundboard"])
+
+        # Step 3: generate() with the REAL soundboard BuildContext
+        # (which does NOT have IS_MAINBOARD). This is where the
+        # pre-fix code would raise RequiresResolutionError.
+        from scripts.combus_builder.generator import (
+            RequiresResolutionError,
+            generate,
+        )
+        soundboard_ctx = node.boards["soundboard"]
+        out_dir = tmp_path / "out_soundboard"
+        out_dir.mkdir()
+        try:
+            sel = generate(
+                soundboard_canon.canonical_definitions,
+                soundboard_ctx,
+                out_dir,
+                filename_prefix="soundboard",
+            )
+        except RequiresResolutionError as e:
+            print(f"  FAIL RequiresResolutionError raised: {e}")
+            return False
+
+        # Verify BAT_LOW is present, active, in downlink.
+        # The full view contains all LOCAL channels.
+        all_ids = [vc.ch.id for vc in sel.full.channels]
+        assert "BAT_LOW" in all_ids, (
+            f"BAT_LOW should be in soundboard's full view, got {all_ids}"
+        )
+        bat_low_vc = next(vc for vc in sel.full.channels if vc.ch.id == "BAT_LOW")
+        # direction_bits: 0=none, 1=uplink, 2=downlink, 3=both
+        assert bat_low_vc.direction_bits == 2, (
+            f"BAT_LOW direction_bits should be 2 (downlink, mirrored from mainboard's uplink), "
+            f"got {bat_low_vc.direction_bits}"
+        )
+        print(f"  OK   BAT_LOW present in soundboard, direction=downlink (no RequiresResolutionError)")
+
+    return True
+
+
+# =============================================================================
 # Main
 # =============================================================================
 
@@ -1168,6 +1260,8 @@ def main() -> int:
     results.append(("3b_3downlink_warning", test_3b_3downlink_warning()))
     results.append(("3b_1both_2absent", test_3b_1both_2absent()))
     results.append(("3b_1both_1uplink_1absent_semantic", test_3b_1both_1uplink_1absent_semantic()))
+    # Pipeline-complet test (requires stale fix).
+    results.append(("pipeline_full_requires_stale_fix", test_pipeline_full_requires_stale_fix()))
 
     print("\n=== Summary ===")
     all_ok = True

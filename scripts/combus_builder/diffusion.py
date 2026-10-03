@@ -695,6 +695,25 @@ def diffuse_local_channels(
                     continue
                 synthetic_raw = dict(source_decl.raw)
                 synthetic_raw["direction"] = synth_dir
+                # ND2 fix (2026-10-03): strip the `requires` field
+                # from the synthetic declaration. The original
+                # `requires` belongs to the SOURCE board (e.g.
+                # `requires=[IS_MAINBOARD]` for a channel declared
+                # conditionally on mainboard). Copying it as-is
+                # would make resolve_requires() in the downstream
+                # pipeline re-evaluate it against the TARGET
+                # board's BuildContext — which typically does NOT
+                # satisfy it (that's often WHY the original
+                # declaration was inactive for the target board).
+                # This would raise RequiresResolutionError exactly
+                # on the scenario ND2 is supposed to solve
+                # (conditional channel diffused to a sister board).
+                #
+                # A synthetic declaration has, by construction,
+                # already been decided as active for the target
+                # board by the diffusion logic. It must NOT be
+                # re-filtered by `requires` downstream.
+                synthetic_raw["requires"] = []
                 # Use a virtual Path to mark the synthetic origin.
                 virtual_path = Path(f"<diffusion:{board_id}>")
                 local_decls_for_board.append((
