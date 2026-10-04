@@ -59,14 +59,55 @@ from .generator import View, ViewChannel
 # CANONICAL SERIALIZATION
 # =============================================================================
 
-def _view_channel_canonical(vc: ViewChannel) -> dict:
+def _canonical_direction_for_hash(direction: frozenset[str]) -> list[str]:
+    """Canonise `direction` for MD5 hashing (ND7 — ONE_WAY).
+
+    Rationale (ND7):
+      In a multi-board node, the same LOCAL channel can legitimately
+      appear as `uplink` on one board and `downlink` on another — this
+      is a role mirror, not a contract drift. The MD5 must NOT flag
+      this as a divergence between boards.
+
+      `both` and `none` are real contract signals (the channel is
+      genuinely bidirectional, or genuinely absent on the wire) and
+      must remain distinguishable from each other and from the
+      one-way cases.
+
+    Mapping:
+      - frozenset({'uplink'})        → ['ONE_WAY']
+      - frozenset({'downlink'})      → ['ONE_WAY']
+      - frozenset({'uplink','downlink'}) (both) → ['downlink','uplink']
+      - frozenset() (none)           → []
+
+    This function is HASH-ONLY. It must NEVER be used for code
+    generation — the generated C++ must preserve the real direction
+    so that the runtime can dispatch on uplink/downlink/both/none.
+    """
+    if direction == frozenset({"uplink", "downlink"}):
+        # both — keep sorted as-is
+        return sorted(direction)
+    if direction == frozenset({"uplink"}) or direction == frozenset({"downlink"}):
+        # one-way — neutralise the uplink/downlink distinction
+        return ["ONE_WAY"]
+    # none (or any other unexpected value) — keep as-is
+    return sorted(direction)
+
+
+def _view_channel_canonical(vc: ViewChannel, apply_one_way: bool = False) -> dict:
     """Return a JSON-serialisable dict representing one channel.
 
     The dict keys are a fixed list (no per-channel metadata). The direction
-    is sorted to remove any ordering ambiguity. `infoName` is included so
-    that renaming a debug label changes the hash.
+    is canonised via `_canonical_direction_for_hash()` (ND7 ONE_WAY) ONLY
+    when `apply_one_way` is True — i.e. for the LOCAL view. For REMOTE and
+    full views, the raw direction is kept (sorted) so that real contract
+    signals (uplink vs downlink on REMOTE channels) are preserved.
+
+    `infoName` is included so that renaming a debug label changes the hash.
     """
-    direction = sorted(vc.ch.direction)
+    if apply_one_way:
+        direction = _canonical_direction_for_hash(vc.ch.direction)
+    else:
+        direction = sorted(vc.ch.direction)
     return {
         "id": vc.ch.id,
         "type": vc.ch.type,
@@ -78,10 +119,17 @@ def _view_channel_canonical(vc: ViewChannel) -> dict:
 
 
 def canonical_bytes(view: View) -> bytes:
-    """Return the canonical byte representation of a view, suitable for hashing."""
+    """Return the canonical byte representation of a view, suitable for hashing.
+
+    ND7 ONE_WAY canonisation is applied ONLY to the LOCAL view (the role
+    mirror between boards of the same node is a LOCAL concept). REMOTE and
+    full views keep the raw direction so that real contract signals
+    (uplink vs downlink on REMOTE channels) are preserved.
+    """
+    apply_one_way = (view.name == "combus_local")
     payload = {
         "view": view.name,
-        "channels": [_view_channel_canonical(vc) for vc in view.channels],
+        "channels": [_view_channel_canonical(vc, apply_one_way) for vc in view.channels],
     }
     return json.dumps(
         payload,

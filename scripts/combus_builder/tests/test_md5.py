@@ -681,3 +681,230 @@ def test_a10_md5_deterministic_across_file_discovery_order(tmp_path: Path):
         b1 = (out1 / fname).read_bytes()
         b2 = (out2 / fname).read_bytes()
         assert b1 == b2, f"A10 FAIL: {fname} differs across file-order runs"
+
+
+# =============================================================================
+# ND7 — ONE_WAY canonisation for MD5 hashing
+# =============================================================================
+#
+# Rationale: in a multi-board node, the same LOCAL channel can legitimately
+# appear as `uplink` on one board and `downlink` on another — this is a
+# role mirror, not a contract drift. The MD5 must NOT flag this as a
+# divergence between boards.
+#
+# `both` and `none` are real contract signals and must remain
+# distinguishable from each other and from the one-way cases.
+#
+# Mapping (hash-only, NEVER for code generation):
+#   frozenset({'uplink'})        → ['ONE_WAY']
+#   frozenset({'downlink'})      → ['ONE_WAY']
+#   frozenset({'uplink','downlink'}) (both) → ['downlink','uplink']
+#   frozenset() (none)           → []
+
+from scripts.combus_builder.md5 import _canonical_direction_for_hash
+
+
+def test_canonical_direction_uplink_is_one_way():
+    """frozenset({'uplink'}) → ['ONE_WAY']."""
+    assert _canonical_direction_for_hash(frozenset({"uplink"})) == ["ONE_WAY"]
+
+
+def test_canonical_direction_downlink_is_one_way():
+    """frozenset({'downlink'}) → ['ONE_WAY']."""
+    assert _canonical_direction_for_hash(frozenset({"downlink"})) == ["ONE_WAY"]
+
+
+def test_canonical_direction_uplink_and_downlink_collide():
+    """uplink and downlink must produce the SAME canonical value.
+
+    This is the core ND7 invariant: the role mirror between boards
+    must not produce a hash divergence.
+    """
+    assert _canonical_direction_for_hash(frozenset({"uplink"})) == \
+           _canonical_direction_for_hash(frozenset({"downlink"}))
+
+
+def test_canonical_direction_both_unchanged():
+    """frozenset({'uplink','downlink'}) → ['downlink','uplink'] (sorted)."""
+    assert _canonical_direction_for_hash(
+        frozenset({"uplink", "downlink"})
+    ) == ["downlink", "uplink"]
+
+
+def test_canonical_direction_none_unchanged():
+    """frozenset() → [] (none is a real contract signal)."""
+    assert _canonical_direction_for_hash(frozenset()) == []
+
+
+def test_canonical_direction_both_distinct_from_one_way():
+    """both must be distinguishable from ONE_WAY."""
+    assert _canonical_direction_for_hash(
+        frozenset({"uplink", "downlink"})
+    ) != _canonical_direction_for_hash(frozenset({"uplink"}))
+
+
+def test_canonical_direction_none_distinct_from_one_way():
+    """none must be distinguishable from ONE_WAY."""
+    assert _canonical_direction_for_hash(frozenset()) != \
+           _canonical_direction_for_hash(frozenset({"uplink"}))
+
+
+def test_canonical_direction_both_distinct_from_none():
+    """both must be distinguishable from none."""
+    assert _canonical_direction_for_hash(
+        frozenset({"uplink", "downlink"})
+    ) != _canonical_direction_for_hash(frozenset())
+
+
+# -----------------------------------------------------------------------------
+# Integration: the canonisation must flow through canonical_bytes() and
+# compute_view_hash() for ALL three views (canonical_bytes is shared).
+# -----------------------------------------------------------------------------
+
+
+def test_nd7_uplink_vs_downlink_same_hash_on_local_view():
+    """Two channels identical except uplink vs downlink must produce
+    the SAME MD5 on the LOCAL view (ND7 ONE_WAY canonisation).
+
+    This is the end-to-end ND7 invariant: the role mirror between
+    boards must not produce a hash divergence on the LOCAL view.
+
+    REMOTE and full views are NOT affected by ONE_WAY (uplink/downlink
+    are real contract signals on REMOTE channels).
+    """
+    chs_uplink = _canon_from_yamls(_ch(scope="LOCAL", direction="uplink"))
+    chs_downlink = _canon_from_yamls(_ch(scope="LOCAL", direction="downlink"))
+    sel_u = select_views(chs_uplink)
+    sel_d = select_views(chs_downlink)
+    h_u = compute_view_hash(sel_u.local)
+    h_d = compute_view_hash(sel_d.local)
+    assert h_u.md5_hex == h_d.md5_hex, (
+        f"ND7 FAIL: local hash diverges between uplink and downlink "
+        f"(uplink={h_u.md5_hex}, downlink={h_d.md5_hex})"
+    )
+
+
+def test_nd7_uplink_vs_downlink_different_hash_on_remote_view():
+    """On the REMOTE view, uplink and downlink MUST produce different
+    hashes (they are real contract signals on REMOTE channels).
+
+    This guards against an over-aggressive canonisation that would
+    collapse REMOTE uplink/downlink into ONE_WAY.
+    """
+    chs_uplink = _canon_from_yamls(_ch(scope="REMOTE", direction="uplink"))
+    chs_downlink = _canon_from_yamls(_ch(scope="REMOTE", direction="downlink"))
+    sel_u = select_views(chs_uplink)
+    sel_d = select_views(chs_downlink)
+    h_u = compute_view_hash(sel_u.remote)
+    h_d = compute_view_hash(sel_d.remote)
+    assert h_u.md5_hex != h_d.md5_hex, (
+        f"ND7 FAIL: remote hash does not diverge between uplink and downlink "
+        f"(uplink={h_u.md5_hex}, downlink={h_d.md5_hex})"
+    )
+
+
+def test_nd7_both_vs_uplink_different_hash():
+    """A channel that changes from both to uplink MUST produce a
+    different hash on all 3 views — regression of real contract
+    drift detection.
+
+    This guards against an over-aggressive canonisation that would
+    collapse both into ONE_WAY.
+    """
+    chs_both = _canon_from_yamls(_ch(scope="REMOTE", direction="both"))
+    chs_uplink = _canon_from_yamls(_ch(scope="REMOTE", direction="uplink"))
+    sel_b = select_views(chs_both)
+    sel_u = select_views(chs_uplink)
+    for attr in ("remote", "local", "full"):
+        h_b = compute_view_hash(getattr(sel_b, attr))
+        h_u = compute_view_hash(getattr(sel_u, attr))
+        assert h_b.md5_hex != h_u.md5_hex, (
+            f"ND7 FAIL: {attr} hash does not diverge between both and uplink "
+            f"(both={h_b.md5_hex}, uplink={h_u.md5_hex})"
+        )
+
+
+def test_nd7_none_vs_downlink_different_hash():
+    """A channel that changes from none to downlink MUST produce a
+    different hash on all 3 views — regression of real contract
+    drift detection.
+
+    This guards against an over-aggressive canonisation that would
+    collapse none into ONE_WAY.
+    """
+    chs_none = _canon_from_yamls(_ch(scope="REMOTE", direction="none"))
+    chs_downlink = _canon_from_yamls(_ch(scope="REMOTE", direction="downlink"))
+    sel_n = select_views(chs_none)
+    sel_d = select_views(chs_downlink)
+    for attr in ("remote", "local", "full"):
+        h_n = compute_view_hash(getattr(sel_n, attr))
+        h_d = compute_view_hash(getattr(sel_d, attr))
+        assert h_n.md5_hex != h_d.md5_hex, (
+            f"ND7 FAIL: {attr} hash does not diverge between none and downlink "
+            f"(none={h_n.md5_hex}, downlink={h_d.md5_hex})"
+        )
+
+
+def test_nd7_both_vs_none_different_hash():
+    """A channel that changes from both to none MUST produce a
+    different hash on all 3 views — regression of real contract
+    drift detection.
+    """
+    chs_both = _canon_from_yamls(_ch(scope="REMOTE", direction="both"))
+    chs_none = _canon_from_yamls(_ch(scope="REMOTE", direction="none"))
+    sel_b = select_views(chs_both)
+    sel_n = select_views(chs_none)
+    for attr in ("remote", "local", "full"):
+        h_b = compute_view_hash(getattr(sel_b, attr))
+        h_n = compute_view_hash(getattr(sel_n, attr))
+        assert h_b.md5_hex != h_n.md5_hex, (
+            f"ND7 FAIL: {attr} hash does not diverge between both and none "
+            f"(both={h_b.md5_hex}, none={h_n.md5_hex})"
+        )
+
+
+def test_nd7_canonical_bytes_local_view_applies_one_way():
+    """The `direction` field in canonical_bytes() for the LOCAL view
+    must reflect the ONE_WAY canonisation, not the raw frozenset.
+    """
+    chs = _canon_from_yamls(_ch(scope="LOCAL", direction="uplink"))
+    sel = select_views(chs)
+    payload = json.loads(canonical_bytes(sel.local))
+    assert payload["channels"][0]["direction"] == ["ONE_WAY"]
+
+
+def test_nd7_canonical_bytes_remote_view_keeps_raw_direction():
+    """The `direction` field in canonical_bytes() for the REMOTE view
+    must keep the raw direction (no ONE_WAY canonisation).
+    """
+    chs = _canon_from_yamls(_ch(scope="REMOTE", direction="uplink"))
+    sel = select_views(chs)
+    payload = json.loads(canonical_bytes(sel.remote))
+    assert payload["channels"][0]["direction"] == ["uplink"]
+
+
+def test_nd7_canonical_bytes_full_view_keeps_raw_direction():
+    """The `direction` field in canonical_bytes() for the full view
+    must keep the raw direction (no ONE_WAY canonisation).
+    """
+    chs = _canon_from_yamls(_ch(scope="REMOTE", direction="uplink"))
+    sel = select_views(chs)
+    payload = json.loads(canonical_bytes(sel.full))
+    assert payload["channels"][0]["direction"] == ["uplink"]
+
+
+def test_nd7_canonical_bytes_both_unchanged_on_local():
+    """The `direction` field for `both` must remain ['downlink','uplink']
+    on the LOCAL view (both is a real contract signal)."""
+    chs = _canon_from_yamls(_ch(scope="LOCAL", direction="both"))
+    sel = select_views(chs)
+    payload = json.loads(canonical_bytes(sel.local))
+    assert payload["channels"][0]["direction"] == ["downlink", "uplink"]
+
+
+def test_nd7_canonical_bytes_none_unchanged_on_local():
+    """The `direction` field for `none` must remain [] on the LOCAL view."""
+    chs = _canon_from_yamls(_ch(scope="LOCAL", direction="none"))
+    sel = select_views(chs)
+    payload = json.loads(canonical_bytes(sel.local))
+    assert payload["channels"][0]["direction"] == []
