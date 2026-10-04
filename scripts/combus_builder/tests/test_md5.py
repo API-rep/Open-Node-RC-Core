@@ -81,7 +81,7 @@ def _ch(
     requires=None,
 ):
     if direction is None:
-        direction = ["uplink"]
+        direction = "uplink"
     if requires is None:
         requires = []
     return {
@@ -144,15 +144,16 @@ def test_canonical_bytes_view_name_included():
 
 
 def test_canonical_bytes_direction_is_sorted():
-    chs = _canon_from_yamls(_ch(scope="REMOTE", direction=["downlink", "uplink"]))
+    """`direction: 'both'` normalises to ['downlink','uplink'] (sorted)."""
+    chs = _canon_from_yamls(_ch(scope="REMOTE", direction="both"))
     sel = select_views(chs)
     payload = json.loads(canonical_bytes(sel.remote))
     assert payload["channels"][0]["direction"] == ["downlink", "uplink"]
 
 
 def test_canonical_bytes_independent_of_yaml_key_order():
-    ch1 = {"id": "FOO", "infoName": "Foo", "type": "digital", "scope": "LOCAL", "theme": "failsafe", "direction": ["uplink"], "requires": []}
-    ch2 = {"theme": "failsafe", "scope": "LOCAL", "type": "digital", "infoName": "Foo", "id": "FOO", "direction": ["uplink"], "requires": []}
+    ch1 = {"id": "FOO", "infoName": "Foo", "type": "digital", "scope": "LOCAL", "theme": "failsafe", "direction": "uplink", "requires": []}
+    ch2 = {"theme": "failsafe", "scope": "LOCAL", "type": "digital", "infoName": "Foo", "id": "FOO", "direction": "uplink", "requires": []}
     chs1 = _canon_from_yamls(ch1)
     chs2 = _canon_from_yamls(ch2)
     sel1 = select_views(chs1)
@@ -211,14 +212,30 @@ def test_compute_view_hash_independent_of_file_order():
 
 
 def test_compute_view_hash_changes_when_direction_changes():
-    chs1 = _canon_from_yamls(_ch(scope="REMOTE", direction=["uplink"]))
-    chs2 = _canon_from_yamls(_ch(scope="REMOTE", direction=["downlink"]))
+    """A direction change on a REMOTE channel must change the hash on
+    REMOTE and full views (real contract signal).
+
+    On the LOCAL view, uplink and downlink collapse to ONE_WAY (ND7),
+    so the hash is the SAME — this is the documented ND7 invariant.
+    """
+    chs1 = _canon_from_yamls(_ch(scope="REMOTE", direction="uplink"))
+    chs2 = _canon_from_yamls(_ch(scope="REMOTE", direction="downlink"))
     sel1 = select_views(chs1)
     sel2 = select_views(chs2)
-    for name in ("remote", "local", "full"):
+    # REMOTE and full views: hash MUST differ (real contract signal).
+    for name in ("remote", "full"):
         v1 = getattr(sel1, name)
         v2 = getattr(sel2, name)
-        assert compute_view_hash(v1).md5_hex != compute_view_hash(v2).md5_hex
+        assert compute_view_hash(v1).md5_hex != compute_view_hash(v2).md5_hex, (
+            f"FAIL: {name} hash does not diverge between uplink and downlink"
+        )
+    # LOCAL view: hash MUST be the SAME (ND7 ONE_WAY canonisation).
+    h_local_u = compute_view_hash(sel1.local)
+    h_local_d = compute_view_hash(sel2.local)
+    assert h_local_u.md5_hex == h_local_d.md5_hex, (
+        f"ND7 FAIL: local hash diverges between uplink and downlink "
+        f"(uplink={h_local_u.md5_hex}, downlink={h_local_d.md5_hex})"
+    )
 
 
 def test_compute_view_hash_changes_when_infoName_changes():
@@ -259,7 +276,7 @@ def test_compute_view_hash_changes_when_scope_moves():
     """LOCAL -> REMOTE must change the hash for all 3 views (the channel
     is no longer in the view at all)."""
     chs1 = _canon_from_yamls(_ch(scope="LOCAL"))
-    chs2 = _canon_from_yamls(_ch(scope="REMOTE", direction=["uplink"]))
+    chs2 = _canon_from_yamls(_ch(scope="REMOTE", direction="uplink"))
     sel1 = select_views(chs1)
     sel2 = select_views(chs2)
     for name in ("remote", "local", "full"):
@@ -276,7 +293,7 @@ def test_remote_influences_all_three_hashes():
     """REMOTE-only change -> all 3 hashes change."""
     base   = _canon_from_yamls(_ch(id_="OTHER", info_name="X", scope="LOCAL"))
     with_r = _canon_from_yamls(_ch(id_="OTHER", info_name="X", scope="LOCAL"),
-                               _ch(id_="REM", info_name="R", scope="REMOTE", direction=["uplink"]))
+                               _ch(id_="REM", info_name="R", scope="REMOTE", direction="uplink"))
     sel_base = select_views(base)
     sel_with = select_views(with_r)
     for name in ("remote", "local", "full"):
@@ -286,9 +303,9 @@ def test_remote_influences_all_three_hashes():
 def test_local_influences_local_and_full_not_remote():
     """LOCAL-only change -> combus_local and combus change; combus_remote
     does NOT change (REMOTE view is scope-isolated)."""
-    base = _canon_from_yamls(_ch(id_="REM1", info_name="R1", scope="REMOTE", direction=["uplink"]))
-    with_loc = _canon_from_yamls(_ch(id_="REM1", info_name="R1", scope="REMOTE", direction=["uplink"]),
-                                 _ch(id_="LOC1", info_name="L1", scope="LOCAL", direction=["uplink"]))
+    base = _canon_from_yamls(_ch(id_="REM1", info_name="R1", scope="REMOTE", direction="uplink"))
+    with_loc = _canon_from_yamls(_ch(id_="REM1", info_name="R1", scope="REMOTE", direction="uplink"),
+                                 _ch(id_="LOC1", info_name="L1", scope="LOCAL", direction="uplink"))
     sel_base   = select_views(base)
     sel_with_l = select_views(with_loc)
 
@@ -305,9 +322,9 @@ def test_local_influences_local_and_full_not_remote():
 def test_system_influences_only_full():
     """SYSTEM-only change -> combus changes; combus_local and combus_remote
     are unchanged."""
-    base = _canon_from_yamls(_ch(id_="REM1", info_name="R1", scope="REMOTE", direction=["uplink"]))
-    with_sys = _canon_from_yamls(_ch(id_="REM1", info_name="R1", scope="REMOTE", direction=["uplink"]),
-                                 _ch(id_="SYS1", info_name="S1", scope="SYSTEM", direction=["none"]))
+    base = _canon_from_yamls(_ch(id_="REM1", info_name="R1", scope="REMOTE", direction="uplink"))
+    with_sys = _canon_from_yamls(_ch(id_="REM1", info_name="R1", scope="REMOTE", direction="uplink"),
+                                 _ch(id_="SYS1", info_name="S1", scope="SYSTEM", direction="none"))
     sel_base   = select_views(base)
     sel_with_s = select_views(with_sys)
 
@@ -328,7 +345,7 @@ def test_combus_remote_hash_matches_a71_value():
     of the same channels. We verify by running both the legacy (A7.1)
     single-view path and the A7.2 three-view path and comparing.
     """
-    raw = _ch(scope="REMOTE", direction=["uplink"])
+    raw = _ch(scope="REMOTE", direction="uplink")
     chs = _canon_from_yamls(raw)
     sel = select_views(chs)
 
@@ -343,7 +360,7 @@ def test_combus_remote_hash_matches_a71_value():
 def test_same_inputs_produce_same_hashes():
     """Determinism: same canonical channels -> same MD5 across re-runs
     and across the three views independently."""
-    raw = _ch(scope="REMOTE", direction=["uplink"])
+    raw = _ch(scope="REMOTE", direction="uplink")
     chs = _canon_from_yamls(raw)
     sel1 = select_views(chs)
     sel2 = select_views(chs)
@@ -358,7 +375,7 @@ def test_same_inputs_produce_same_hashes():
 # =============================================================================
 
 def test_generate_md5_artifacts_emits_four_files():
-    chs = _canon_from_yamls(_ch(scope="REMOTE", direction=["uplink"]))
+    chs = _canon_from_yamls(_ch(scope="REMOTE", direction="uplink"))
     sel = select_views(chs)
     with tempfile.TemporaryDirectory() as tmp_dir:
         hashes, written = generate_md5_artifacts(sel, Path(tmp_dir))
@@ -376,7 +393,7 @@ def test_generate_md5_artifacts_emits_remote_first():
     """Order matters: the shared header must be written FIRST so a
     consumer that includes a view-specific header after the shared
     header sees a stable on-disk order."""
-    chs = _canon_from_yamls(_ch(scope="REMOTE", direction=["uplink"]))
+    chs = _canon_from_yamls(_ch(scope="REMOTE", direction="uplink"))
     sel = select_views(chs)
     with tempfile.TemporaryDirectory() as tmp_dir:
         _, written = generate_md5_artifacts(sel, Path(tmp_dir))
@@ -384,7 +401,7 @@ def test_generate_md5_artifacts_emits_remote_first():
 
 
 def test_generate_md5_artifacts_hash_matches_written_bytes():
-    chs = _canon_from_yamls(_ch(scope="REMOTE", direction=["uplink"]))
+    chs = _canon_from_yamls(_ch(scope="REMOTE", direction="uplink"))
     sel = select_views(chs)
     with tempfile.TemporaryDirectory() as tmp_dir:
         hashes, written = generate_md5_artifacts(sel, Path(tmp_dir))
@@ -476,7 +493,7 @@ def test_view_header_has_md5_array_uppercase():
 # =============================================================================
 
 def test_md5_deterministic_across_re_runs():
-    chs = _canon_from_yamls(_ch(scope="REMOTE", direction=["uplink"]))
+    chs = _canon_from_yamls(_ch(scope="REMOTE", direction="uplink"))
     sel = select_views(chs)
     with tempfile.TemporaryDirectory() as tmp1, tempfile.TemporaryDirectory() as tmp2:
         h1, _ = generate_md5_artifacts(sel, Path(tmp1))
@@ -486,8 +503,8 @@ def test_md5_deterministic_across_re_runs():
 
 
 def test_md5_deterministic_across_file_discovery_order():
-    raw = _ch(scope="REMOTE", direction=["uplink"])
-    chs1 = _canon_from_yamls(raw, _ch(id_="BAR", info_name="Bar", scope="REMOTE", direction=["uplink"]))
+    raw = _ch(scope="REMOTE", direction="uplink")
+    chs1 = _canon_from_yamls(raw, _ch(id_="BAR", info_name="Bar", scope="REMOTE", direction="uplink"))
     chs2 = list(reversed(chs1))
     sel1 = select_views(chs1)
     sel2 = select_views(chs2)
@@ -504,7 +521,7 @@ def test_md5_deterministic_across_file_discovery_order():
 
 def test_four_headers_compile_together(tmp_path):
     """All four headers must include cleanly in a single TU."""
-    chs = _canon_from_yamls(_ch(scope="REMOTE", direction=["uplink"]))
+    chs = _canon_from_yamls(_ch(scope="REMOTE", direction="uplink"))
     generate(chs, _ctx([]), tmp_path)
     tu = tmp_path / "compile_check.cpp"
     tu.write_text(
