@@ -617,6 +617,82 @@ def diffuse_local_channels(
         if group.warning is not None:
             _warn(group.warning)
 
+        # ---- ND6: both_or warnings ----------------------------------
+        # 1. Detect divergence: a board declares both_or=true and
+        #    another declares it false (or absent) for the same LOCAL
+        #    id in direction both. Not a fatal conflict (the diffusion
+        #    rule only judges `direction`), but a real config
+        #    inconsistency: one board protects against oscillation, the
+        #    other doesn't, for the same channel.
+        # 2. Detect both_or on a channel active on a SINGLE board only:
+        #    the anti-oscillation flag has no effect with one writer.
+        #
+        # Both warnings are emitted BEFORE synthesis, on the explicit
+        # set, so we see the real config not the synthetic copies.
+        # We do NOT warn for absent fields (= not declared) on the
+        # other board — that's the normal "only one board declares
+        # both_or" case, which becomes a synthesis scenario, not a
+        # divergence.
+        both_or_values: dict[str, bool] = {}
+        for board_id in all_board_ids:
+            for d in decls_by_board.get(board_id, []):
+                if (
+                    d.raw.get("id") == cid
+                    and d.raw.get("scope") == "LOCAL"
+                    and _is_active_for_board(d.raw, node.boards[board_id])
+                ):
+                    v = d.raw.get("both_or")
+                    if isinstance(v, bool):
+                        both_or_values[str(board_id)] = v
+                    break
+        # Only consider explicit `both_or` declarations. Absent fields
+        # do not count as divergence — a board that didn't mention
+        # both_or at all is the canonical baseline, and its synthetic
+        # copy will inherit the explicit value (see step 4b).
+        if both_or_values:
+            distinct = set(both_or_values.values())
+            if len(distinct) >= 2:
+                # Explicit divergence: at least one board says True,
+                # at least one says False. NOT a fatal ND2/ND3 error,
+                # but a real config warning.
+                boards_true = [b for b, v in both_or_values.items() if v]
+                boards_false = [b for b, v in both_or_values.items() if not v]
+                _warn(
+                    f"channel {cid!r}: both_or divergent across boards — "
+                    f"True on {sorted(boards_true)}, False on "
+                    f"{sorted(boards_false)}. This is a config "
+                    f"inconsistency: only the boards with both_or=True "
+                    f"will apply anti-oscillation OR aggregation at "
+                    f"runtime. Build continues."
+                )
+        # Writer count after resolution. The spec says: "si both_or=true
+        # est déclaré mais que ce channel n'est actif explicitement que
+        # sur UNE SEULE board au final (après diffusion)". The key word
+        # is "explicitement" — we count only the EXPLICIT declarations
+        # (boards that actually declared the channel in their own .cb
+        # files), not the synthetic ones injected by diffusion. A
+        # channel declared on one board with `requires=[IS_MAINBOARD]`
+        # is explicitly active on 1 board only, even if diffusion
+        # synthesises a `both` declaration on the sister board.
+        #
+        # We also exclude `none` directions from the count (a `none`
+        # declaration is not a writer).
+        explicit_active_count = sum(
+            1 for _b, d, _p in explicit if d != "none"
+        )
+        # Did at least one board EXPLICITLY set both_or=true?
+        any_explicit_both_or_true = any(
+            v for v in both_or_values.values()
+        )
+        if any_explicit_both_or_true and explicit_active_count < 2:
+            _warn(
+                f"channel {cid!r}: both_or=true declared but channel is "
+                f"active on a single board only post-diffusion. The "
+                f"anti-oscillation OR aggregation has no effect with one "
+                f"writer. Verify this flag is intentional (probably a "
+                f"forward-declared config or an error). Build continues."
+            )
+
     # Step 4: build the per-board resolved lists.
     # For each board, we need:
     #   - Its own LOCAL declarations (unchanged).

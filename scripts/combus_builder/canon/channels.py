@@ -57,6 +57,12 @@ ALLOWED_FIELDS: frozenset[str] = frozenset({
     "direction",
     "requires",
     "value",
+    # ND6: anti-oscillation flag for LOCAL channels in direction `both`.
+    # When True, the runtime must apply `local OR received` instead of
+    # `overwrite` on combus_frame_apply(). Validation enforces the
+    # constraints (scope=LOCAL, direction=both, type=digital) at this
+    # layer; the C++ runtime wiring is deferred to a separate chantier.
+    "both_or",
 })
 
 # Tokens acceptés pour `value` sur un channel analog.
@@ -180,6 +186,10 @@ class ChannelDefinition:
     source_path: Path
     raw: dict[str, Any] = field(default_factory=dict)
     value: str | int | None = None
+    # ND6: anti-oscillation flag. Validated to be True only when
+    # scope=LOCAL, direction=both, type=digital. The C++ runtime
+    # wiring (combus_frame_apply) is deferred to a separate chantier.
+    both_or: bool = False
 
     def sort_key(self) -> tuple[int, str, str, str]:
         """Clé de tri canonique : (scope, type, theme, id)."""
@@ -576,6 +586,49 @@ def validate_channel(
     _check_value_explicit_null(path, cid, raw)
     value = _validate_value(path, cid, ctype, raw.get("value"))
 
+    # --- both_or (ND6: optionnel, défaut False) ---
+    # Anti-oscillation runtime flag: when True, the runtime must apply
+    # `local OR received` instead of `overwrite` on combus_frame_apply().
+    # Valid here only for scope=LOCAL, direction=both, type=digital.
+    # - Absent or False → no flag (default behaviour: overwrite).
+    # - True on a non-LOCAL / non-both / non-digital channel → explicit
+    #   rejection (config error, would be a no-op at runtime).
+    both_or_raw = raw.get("both_or")
+    if both_or_raw is None or both_or_raw is False:
+        both_or = False
+    elif both_or_raw is True:
+        both_or = True
+    else:
+        raise ChannelValidationError(
+            path, cid,
+            f"`both_or` must be a boolean (true/false), got "
+            f"{type(both_or_raw).__name__} ({both_or_raw!r})",
+        )
+    if both_or:
+        if cscope != "LOCAL":
+            raise ChannelValidationError(
+                path, cid,
+                f"`both_or` is only valid for scope=LOCAL; channel {cid!r} "
+                f"has scope={cscope!r}. No anti-oscillation case has been "
+                f"identified for REMOTE/SYSTEM channels.",
+            )
+        if ctype != "digital":
+            raise ChannelValidationError(
+                path, cid,
+                f"`both_or` is only valid for type=digital; channel {cid!r} "
+                f"has type={ctype!r}. The OR semantics is boolean and does "
+                f"not apply to analog values.",
+            )
+        if direction != frozenset({"uplink", "downlink"}):
+            # Find the raw direction for a clearer error message.
+            raw_dir = raw.get("direction")
+            raise ChannelValidationError(
+                path, cid,
+                f"`both_or` is only valid for direction=both; channel "
+                f"{cid!r} has direction={raw_dir!r}. `both_or` is an "
+                f"anti-oscillation flag, not a direction of its own.",
+            )
+
     return ChannelDefinition(
         id=cid,
         info_name=info_name,
@@ -587,6 +640,7 @@ def validate_channel(
         source_path=path,
         raw=dict(raw),
         value=value,
+        both_or=both_or,
     )
 
 

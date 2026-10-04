@@ -122,6 +122,14 @@ typedef struct {
   bool        value;                               ///< Current channel state (true/false)
   ChanLayer   layer       = ChanLayer::SYSTEM;     ///< Propagation layer — see ChanLayer
   Direction   direction   = Direction::None;       ///< Wire direction — added by A6.1
+  // ND6: anti-oscillation flag for LOCAL channels in direction `both`.
+  // When true, the runtime must apply `local OR received` instead of
+  // `overwrite` on combus_frame_apply(). The C++ wiring of this flag
+  // is deferred to a separate chantier (after the merge of the
+  // Python-only branch). Today, the field is emitted by the generator
+  // and initialised to its YAML value, but combus_frame_apply() does
+  // NOT read it yet — it remains inert.
+  bool        bothOr      = false;                 ///< Anti-oscillation OR-aggregation flag — added by ND6
 } DigitalComBus;
 
 /**

@@ -736,7 +736,7 @@ def _emit_channel_init(body: list[str], vc: ViewChannel, type_: str) -> None:
 
     Output format (matches runtime AnalogComBus/DigitalComBus struct):
 
-        { .infoName = "...", .value = ..., .layer = ChanLayer::X, .direction = Direction::Y },
+        { .infoName = "...", .value = ..., .layer = ChanLayer::X, .direction = Direction::Y, .bothOr = false },
 
     The `.value` field is rendered from the canonical channel value
     (see _render_value). It honours the YAML `value:` contract :
@@ -746,17 +746,35 @@ def _emit_channel_init(body: list[str], vc: ViewChannel, type_: str) -> None:
 
     The `.layer` field comes from the channel's scope (REMOTE/LOCAL/SYSTEM).
     The `.direction` field is the bitmask from Direction.from_frozenset.
+
+    The `.bothOr` field (ND6) is ONLY emitted for digital channels.
+    It is initialised to `vc.ch.both_or` (validated to be True only
+    for scope=LOCAL, direction=both, type=digital — see canon/channels.py).
+    The C++ runtime wiring (combus_frame_apply) is deferred to a
+    separate chantier; the field is emitted but currently inert.
     """
     escaped_info = _escape_cpp_string(vc.ch.info_name)
     layer = _SCOPE_TO_CHANLAYER[vc.ch.scope]
     dir_name = Direction.to_cpp_enum_name(vc.direction_bits)
     value_literal = _render_value(vc.ch, type_)
-    body.append(
-        f"    {{ .infoName = \"{escaped_info}\", "
-        f".value = {value_literal}, "
-        f".layer = {layer}, "
-        f".direction = {dir_name} }}, // {vc.ch.id}"
-    )
+    if type_ == "digital":
+        both_or_lit = "true" if vc.ch.both_or else "false"
+        body.append(
+            f"    {{ .infoName = \"{escaped_info}\", "
+            f".value = {value_literal}, "
+            f".layer = {layer}, "
+            f".direction = {dir_name}, "
+            f".bothOr = {both_or_lit} }}, // {vc.ch.id}"
+        )
+    else:
+        # analog: .bothOr does not exist (validation rejects
+        # both_or=true on analog channels at the canon layer).
+        body.append(
+            f"    {{ .infoName = \"{escaped_info}\", "
+            f".value = {value_literal}, "
+            f".layer = {layer}, "
+            f".direction = {dir_name} }}, // {vc.ch.id}"
+        )
 
 
 # =============================================================================
