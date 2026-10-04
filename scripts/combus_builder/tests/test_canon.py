@@ -952,6 +952,156 @@ def test_requires_duplicate_rejected(tmp_path):
 
 
 # =============================================================================
+# ND4 bis: REMOTE n'accepte pas de requires
+# =============================================================================
+
+def _ch_remote(id_: str = "STEER_CMD", requires=None) -> dict:
+    """Build a minimal valid REMOTE channel dict (direction as string).
+
+    The _ch() helper above uses `direction` as a list (legacy format),
+    but the current canon code expects a string. This helper builds a
+    REMOTE channel with the correct string format for `direction`.
+    """
+    return {
+        "id": id_,
+        "infoName": f"{id_} channel",
+        "type": "analog",
+        "scope": "REMOTE",
+        "theme": "core",
+        "direction": "downlink",
+        **({"requires": requires} if requires is not None else {}),
+    }
+
+
+def test_remote_without_requires_accepted(tmp_path):
+    """REMOTE channel without `requires` (or with empty list) -> OK.
+
+    Comportement actuel inchangé : un channel REMOTE sans requires
+    (champ absent ou liste vide) doit passer la validation sans
+    erreur. C'est le cas normal pour une frame fixe de type de
+    machine.
+    """
+    p = tmp_path / "a.cb"
+    # Cas 1 : champ `requires` absent.
+    parsed = [_parsed(p, {"channels": [_ch_remote()]})]
+    result = canonize(parsed)
+    assert len(result.canonical_definitions) == 1
+    assert result.canonical_definitions[0].scope == "REMOTE"
+    assert result.canonical_definitions[0].requires == frozenset()
+
+    # Cas 2 : `requires: []` (liste vide explicite).
+    parsed = [_parsed(p, {"channels": [_ch_remote(requires=[])]})]
+    result = canonize(parsed)
+    assert len(result.canonical_definitions) == 1
+    assert result.canonical_definitions[0].scope == "REMOTE"
+    assert result.canonical_definitions[0].requires == frozenset()
+
+
+def test_remote_with_requires_rejected(tmp_path):
+    """REMOTE channel with non-empty `requires` -> ChannelValidationError.
+
+    Un channel REMOTE représente une frame fixe, héritée d'une
+    config générique de type de machine, partagée telle quelle
+    entre le nœud machine et la télécommande. `requires` (activation
+    conditionnelle à la compilation) n'a pas de sens sur REMOTE :
+    ça introduirait des variantes de frame selon la config buildée,
+    alors que la frame doit rester fixe par type de machine.
+
+    Le message d'erreur doit nommer le channel et expliquer
+    pourquoi (move to LOCAL/SYSTEM scope, or remove the requires).
+    """
+    p = tmp_path / "a.cb"
+    parsed = [_parsed(p, {"channels": [
+        _ch_remote(requires=["HAS_FAILSAFE"]),
+    ]})]
+    try:
+        canonize(parsed)
+    except ChannelValidationError as e:
+        msg = str(e)
+        assert "STEER_CMD" in msg, (
+            f"error message should name the channel id, got: {msg!r}"
+        )
+        assert "REMOTE" in msg, (
+            f"error message should mention REMOTE scope, got: {msg!r}"
+        )
+        assert "requires" in msg, (
+            f"error message should mention requires, got: {msg!r}"
+        )
+        # Le message doit orienter vers les alternatives.
+        assert "LOCAL" in msg or "SYSTEM" in msg, (
+            f"error message should suggest LOCAL/SYSTEM scope as "
+            f"alternative, got: {msg!r}"
+        )
+    else:
+        raise AssertionError("expected ChannelValidationError")
+
+
+def test_remote_with_multiple_requires_rejected(tmp_path):
+    """REMOTE channel with multiple requires -> ChannelValidationError.
+
+    Variante du test précédent avec plusieurs flags dans requires,
+    pour vérifier que le message d'erreur liste bien tous les flags.
+    """
+    p = tmp_path / "a.cb"
+    parsed = [_parsed(p, {"channels": [
+        _ch_remote(requires=["HAS_FAILSAFE", "HAS_VBAT"]),
+    ]})]
+    try:
+        canonize(parsed)
+    except ChannelValidationError as e:
+        msg = str(e)
+        assert "STEER_CMD" in msg
+        assert "HAS_FAILSAFE" in msg
+        assert "HAS_VBAT" in msg
+    else:
+        raise AssertionError("expected ChannelValidationError")
+
+
+def test_local_with_requires_still_accepted(tmp_path):
+    """LOCAL channel with requires -> OK (sanity check, comportement inchangé).
+
+    Le garde-fou ND4 bis ne s'applique qu'à REMOTE. LOCAL continue
+    d'accepter requires normalement.
+    """
+    p = tmp_path / "a.cb"
+    parsed = [_parsed(p, {"channels": [{
+        "id": "BAT_LOW",
+        "infoName": "Battery low",
+        "type": "digital",
+        "scope": "LOCAL",
+        "theme": "vbat",
+        "direction": "uplink",
+        "requires": ["IS_MAINBOARD"],
+    }]})]
+    result = canonize(parsed)
+    assert len(result.canonical_definitions) == 1
+    assert result.canonical_definitions[0].scope == "LOCAL"
+    assert result.canonical_definitions[0].requires == frozenset({"IS_MAINBOARD"})
+
+
+def test_system_with_requires_still_accepted(tmp_path):
+    """SYSTEM channel with requires -> OK (sanity check, comportement inchangé).
+
+    Le garde-fou ND4 bis ne s'applique qu'à REMOTE. SYSTEM continue
+    d'accepter requires normalement (filtrage par board géré par
+    diffuse_local_channels()).
+    """
+    p = tmp_path / "a.cb"
+    parsed = [_parsed(p, {"channels": [{
+        "id": "VBAT_PRIVATE",
+        "infoName": "Private vbat",
+        "type": "digital",
+        "scope": "SYSTEM",
+        "theme": "vbat",
+        "requires": ["IS_MAINBOARD"],
+    }]})]
+    result = canonize(parsed)
+    assert len(result.canonical_definitions) == 1
+    assert result.canonical_definitions[0].scope == "SYSTEM"
+    assert result.canonical_definitions[0].requires == frozenset({"IS_MAINBOARD"})
+
+
+# =============================================================================
 # ID uniqueness (across types/scopes/themes)
 # =============================================================================
 

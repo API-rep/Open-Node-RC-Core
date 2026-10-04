@@ -516,6 +516,35 @@ def validate_channel(
             f"`scope` must be one of {sorted(VALID_SCOPES)}, got {cscope!r}",
         )
 
+    # --- ND4 bis (2026-10-04): REMOTE n'accepte pas de requires ---
+    # Un channel scope REMOTE représente une frame fixe, héritée
+    # d'une config générique de type de machine, partagée telle
+    # quelle entre le nœud machine et la télécommande. `requires`
+    # (activation conditionnelle à la compilation) n'a pas de sens
+    # sur REMOTE : ça introduirait des variantes de frame selon la
+    # config buildée, alors que la frame doit rester fixe par type
+    # de machine. On rejette donc explicitement tout `requires`
+    # non vide sur un channel REMOTE, avec un message qui pointe
+    # vers les alternatives (LOCAL/SYSTEM scope, ou suppression du
+    # requires).
+    if cscope == "REMOTE":
+        raw_req = raw.get("requires")
+        if raw_req is not None:
+            # Normalise pour le message : on accepte une liste vide
+            # (équivalent à "pas de requires"), on rejette tout le
+            # reste.
+            if isinstance(raw_req, list) and len(raw_req) == 0:
+                pass  # requires: [] est OK (équivalent à absent)
+            else:
+                raise ChannelValidationError(
+                    path, cid,
+                    f"channel REMOTE {cid!r} declares requires={raw_req!r} "
+                    f"— REMOTE channels represent a fixed machine-type "
+                    f"frame and cannot be conditionally compiled; move "
+                    f"this channel to LOCAL/SYSTEM scope, or remove the "
+                    f"requires",
+                )
+
     # --- theme (cadré) ---
     ctheme = raw.get("theme")
     if ctheme is None:
