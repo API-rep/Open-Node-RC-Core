@@ -1234,6 +1234,143 @@ channels:
 
 
 # =============================================================================
+# Test 18: SYSTEM scope — not diffused, requires-filtered per board (ND4)
+# =============================================================================
+
+def test_system_not_diffused_requires_filtered() -> bool:
+    """SYSTEM channel with requires=[IS_MAINBOARD] on mainboard only.
+
+    After diffusion:
+      - mainboard: SYSTEM channel PRESENT (requires satisfied).
+      - soundboard: SYSTEM channel ABSENT (requires NOT satisfied).
+
+    This is the opposite of a LOCAL channel with the same requires,
+    which WOULD be diffused/mirrored to soundboard (rule 5).
+
+    SYSTEM channels are strictly private to the firmware of a board
+    and must NEVER be copied to a sister board where they were not
+    active. The pass-through in step 4c must filter by
+    _is_active_for_board() per board.
+    """
+    print("\n=== Test 18: SYSTEM not diffused, requires-filtered per board ===")
+    with tempfile.TemporaryDirectory() as td:
+        tmp_path = Path(td)
+        project_root = tmp_path / "proj"
+        src_dir = project_root / "src"
+        src_dir.mkdir(parents=True)
+
+        parsed = _make_parsed({
+            "mainboard.cb": """\
+channels:
+  - id: VBAT_PRIVATE
+    infoName: "Private vbat sensor"
+    type: digital
+    scope: SYSTEM
+    theme: vbat
+    requires:
+      - IS_MAINBOARD
+""",
+            # soundboard.cb absent — no declaration for VBAT_PRIVATE.
+        }, src_dir)
+
+        node = _make_node(project_root, {
+            "mainboard": {"IS_MAINBOARD"},
+            "soundboard": {"IS_EXT_BOARD"},  # does NOT have IS_MAINBOARD
+        })
+
+        result = diffuse_local_channels(parsed, node)
+
+        # mainboard: VBAT_PRIVATE should be PRESENT (requires satisfied).
+        mainboard_decls = _extract_channel_ids_and_dirs(result["mainboard"])
+        assert "VBAT_PRIVATE" in mainboard_decls, (
+            f"mainboard should have VBAT_PRIVATE (requires satisfied), "
+            f"got {mainboard_decls}"
+        )
+        print(f"  OK   mainboard has VBAT_PRIVATE (requires satisfied)")
+
+        # soundboard: VBAT_PRIVATE should be ABSENT (requires NOT satisfied).
+        soundboard_decls = _extract_channel_ids_and_dirs(result["soundboard"])
+        assert "VBAT_PRIVATE" not in soundboard_decls, (
+            f"soundboard should NOT have VBAT_PRIVATE (requires NOT satisfied), "
+            f"got {soundboard_decls}"
+        )
+        print(f"  OK   soundboard does NOT have VBAT_PRIVATE (requires NOT satisfied)")
+
+    return True
+
+
+# =============================================================================
+# Test 19: SYSTEM scope — apparent conflict is ignored (ND4)
+# =============================================================================
+
+def test_system_apparent_conflict_ignored() -> bool:
+    """Two SYSTEM declarations of the same id on 2 boards -> NO error.
+
+    SYSTEM channels are NEVER examined by the inter-board rule
+    (_resolve_group is only called for LOCAL). So even if two
+    boards declare the same SYSTEM id with different directions
+    (or the same direction), no DiffusionConflictError is raised.
+
+    This is the key difference from LOCAL: a LOCAL conflict on the
+    same id would be FATAL (rule 4: n_up >= 2), but a SYSTEM
+    conflict is simply ignored because SYSTEM is out of scope for
+    diffusion.
+    """
+    print("\n=== Test 19: SYSTEM apparent conflict ignored ===")
+    with tempfile.TemporaryDirectory() as td:
+        tmp_path = Path(td)
+        project_root = tmp_path / "proj"
+        src_dir = project_root / "src"
+        src_dir.mkdir(parents=True)
+
+        parsed = _make_parsed({
+            "mainboard.cb": """\
+channels:
+  - id: VBAT_PRIVATE
+    infoName: "Private vbat sensor (mainboard)"
+    type: digital
+    scope: SYSTEM
+    theme: vbat
+    requires:
+      - IS_MAINBOARD
+""",
+            "soundboard.cb": """\
+channels:
+  - id: VBAT_PRIVATE
+    infoName: "Private vbat sensor (soundboard)"
+    type: digital
+    scope: SYSTEM
+    theme: vbat
+    requires:
+      - IS_EXT_BOARD
+""",
+        }, src_dir)
+
+        node = _make_node(project_root, {
+            "mainboard": {"IS_MAINBOARD"},
+            "soundboard": {"IS_EXT_BOARD"},
+        })
+
+        # Should NOT raise DiffusionConflictError.
+        # (If it did, the test would fail with an unhandled exception.)
+        result = diffuse_local_channels(parsed, node)
+
+        # Each board should have its own SYSTEM declaration (requires-filtered).
+        mainboard_decls = _extract_channel_ids_and_dirs(result["mainboard"])
+        soundboard_decls = _extract_channel_ids_and_dirs(result["soundboard"])
+        assert "VBAT_PRIVATE" in mainboard_decls, (
+            f"mainboard should have VBAT_PRIVATE, got {mainboard_decls}"
+        )
+        assert "VBAT_PRIVATE" in soundboard_decls, (
+            f"soundboard should have VBAT_PRIVATE, got {soundboard_decls}"
+        )
+        print(f"  OK   no DiffusionConflictError raised (SYSTEM is out of scope for diffusion)")
+        print(f"  OK   mainboard has VBAT_PRIVATE, soundboard has VBAT_PRIVATE (each own)")
+
+    return True
+
+
+# =============================================================================
 # Main
 # =============================================================================
 
@@ -1262,6 +1399,9 @@ def main() -> int:
     results.append(("3b_1both_1uplink_1absent_semantic", test_3b_1both_1uplink_1absent_semantic()))
     # Pipeline-complet test (requires stale fix).
     results.append(("pipeline_full_requires_stale_fix", test_pipeline_full_requires_stale_fix()))
+    # ND4: SYSTEM scope exclusion tests.
+    results.append(("system_not_diffused_requires_filtered", test_system_not_diffused_requires_filtered()))
+    results.append(("system_apparent_conflict_ignored", test_system_apparent_conflict_ignored()))
 
     print("\n=== Summary ===")
     all_ok = True

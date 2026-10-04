@@ -728,14 +728,39 @@ def diffuse_local_channels(
         # pair. In practice, all boards see the same REMOTE/SYSTEM
         # declarations (they come from the same repo-wide .cb files),
         # so picking the first is fine.
+        #
+        # ND4 (2026-10-04): SYSTEM channels are strictly private to
+        # the firmware of a board. Unlike REMOTE (which is shared by
+        # definition and passed through to every board), a SYSTEM
+        # channel with `requires=[IS_MAINBOARD]` must NOT be copied
+        # to a sister board where it was not active. We therefore
+        # filter SYSTEM pass-through by `_is_active_for_board()` per
+        # board. REMOTE channels are still passed through to every
+        # board (no requires filter).
         seen_passthrough: set[tuple[str, str]] = set()
         for (cid, scope), entries in passthrough.items():
             if (cid, scope) in seen_passthrough:
                 continue
             seen_passthrough.add((cid, scope))
-            # Pick the first entry (any board will do, content is
-            # identical).
-            _bd, raw_decl, source_path = entries[0]
+            # ND4: SYSTEM requires-filter per board. Pick the first
+            # declaration that is active for the current board (not
+            # just the first declaration overall), so that each board
+            # sees its own declaration when multiple boards declare
+            # the same SYSTEM id with different `requires`. REMOTE
+            # is always passed through (shared by definition).
+            if scope == "SYSTEM":
+                active_entry = None
+                for _bd, raw_decl, source_path in entries:
+                    if _is_active_for_board(raw_decl, node.boards[board_id]):
+                        active_entry = (raw_decl, source_path)
+                        break
+                if active_entry is None:
+                    continue
+                raw_decl, source_path = active_entry
+            else:
+                # REMOTE: pick the first entry (any board will do,
+                # content is identical).
+                _bd, raw_decl, source_path = entries[0]
             local_decls_for_board.append((
                 source_path,
                 "channel_def",
