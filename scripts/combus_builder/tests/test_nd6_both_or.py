@@ -42,9 +42,8 @@ from combus_builder.diffusion import (
     DiffusionConflictError,
     _resolve_group,
 )
-from combus_builder.generator import Direction
+from combus_builder.generator import Direction, View, ViewChannel, _emit_channel_init
 from combus_builder.md5 import compute_view_hash
-from combus_builder.generator import View, ViewChannel
 
 
 # =============================================================================
