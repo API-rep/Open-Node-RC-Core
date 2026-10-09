@@ -59,6 +59,26 @@ Generation directory:
   - Default: .pio/build/<env>/combus_generated/
   - Configurable via CLI flag --out-dir
   - Files are written atomically (write to .tmp, then rename).
+
+ND1 (multiboard):
+  - generate() accepts an optional `filename_prefix: str = ""` parameter.
+  - When non-empty, every emitted file is renamed with the prefix
+    inserted between the view name and the suffix:
+        combus_ids.h        -> combus_<prefix>_ids.h
+        combus.h            -> combus_<prefix>.h
+        combus.cpp          -> combus_<prefix>.cpp
+        combus_local_ids.h  -> combus_local_<prefix>_ids.h
+        combus_remote_ids.h -> combus_remote_<prefix>_ids.h
+        combus_md5.h        -> combus_<prefix>_md5.h
+        combus_local_md5.h  -> combus_local_<prefix>_md5.h
+        combus_remote_md5.h -> combus_remote_<prefix>_md5.h
+    combus_wire_common.h is NOT prefixed (it is a shared header).
+  - The C++ enum identifiers (AnalogComBusID, etc.) are NOT prefixed —
+    they remain stable across boards so application code does not need
+    to change per board.
+  - The `#include` directives inside the generated .h/.cpp files are
+    updated to reference the prefixed filenames.
+  - No selection / sort / numbering logic is touched.
 """
 
 from __future__ import annotations
@@ -216,6 +236,27 @@ _SCOPE_TO_CHANLAYER: dict[str, str] = {
 
 
 # =============================================================================
+# ND1: filename prefix helper
+# =============================================================================
+
+def _file_base(view_name: str, filename_prefix: str) -> str:
+    """
+    Return the file basename for a view, with the ND1 prefix applied.
+
+    Legacy (filename_prefix == ""): returns view_name unchanged.
+    Node mode (filename_prefix != ""): returns "<view_name>_<prefix>".
+
+    Example:
+        _file_base("combus", "")            -> "combus"
+        _file_base("combus", "mainboard")   -> "combus_mainboard"
+        _file_base("combus_local", "mainboard") -> "combus_local_mainboard"
+    """
+    if filename_prefix:
+        return f"{view_name}_{filename_prefix}"
+    return view_name
+
+
+# =============================================================================
 # STEP 1: requires RESOLUTION
 # =============================================================================
 
@@ -329,7 +370,7 @@ def _select_view(
         view_channels.append(ViewChannel(
             numeric_id=analog_idx,
             ch=ch,
-            direction_bits=Direction.from_frozenset(ch.direction),
+            direction_bits=Direction.from_frozenset(ch.effective_direction),
         ))
         if ch.scope == "REMOTE":
             wire_end_analog += 1
@@ -338,7 +379,7 @@ def _select_view(
         view_channels.append(ViewChannel(
             numeric_id=digital_idx,
             ch=ch,
-            direction_bits=Direction.from_frozenset(ch.direction),
+            direction_bits=Direction.from_frozenset(ch.effective_direction),
         ))
         if ch.scope == "REMOTE":
             wire_end_digital += 1
@@ -557,7 +598,7 @@ def _render_ids_header(view: View, ctx: BuildContext) -> str:
     return "\n".join(body) + "\n"
 
 
-def _render_header(view: View, ctx: BuildContext) -> str:
+def _render_header(view: View, ctx: BuildContext, *, filename_prefix: str = "") -> str:
     """
     Render the `<view>.h` file.
 
@@ -565,8 +606,15 @@ def _render_header(view: View, ctx: BuildContext) -> str:
       - Forward declaration / inclusion of the IDs header
       - extern declarations of the channel arrays
       - extern declaration of the bus instance (combus view only)
+
+    `filename_prefix` (ND1): when non-empty, the `#include` directive
+    targets the prefixed ids header (e.g. `combus_mainboard_ids.h`).
+    The C++ enum identifiers (AnalogComBusID, etc.) are NOT prefixed —
+    they remain stable across boards so application code does not need
+    to change per board.
     """
     cap = _VIEW_ID_PREFIX[view.name]
+    base = _file_base(view.name, filename_prefix)
     body: list[str] = []
     body.append(_HEADER_PROLOGUE
                 .replace("<generator_version>", "A6.1")
@@ -575,7 +623,7 @@ def _render_header(view: View, ctx: BuildContext) -> str:
     body.append("")
     body.append("#pragma once")
     body.append("")
-    body.append(f"#include \"{view.name}_ids.h\"")
+    body.append(f"#include \"{base}_ids.h\"")
     body.append("")
     body.append("#include <core/system/combus/combus_defs.h>")
     body.append("")
@@ -608,7 +656,7 @@ def _render_header(view: View, ctx: BuildContext) -> str:
     return "\n".join(body) + "\n"
 
 
-def _render_source(view: View, ctx: BuildContext) -> str:
+def _render_source(view: View, ctx: BuildContext, *, filename_prefix: str = "") -> str:
     """
     Render the `<view>.cpp` file.
 
@@ -616,8 +664,12 @@ def _render_source(view: View, ctx: BuildContext) -> str:
       - AnalogComBusArray[] (if analog channels exist)
       - DigitalComBusArray[] (if digital channels exist)
       - comBus definition (combus view only)
+
+    `filename_prefix` (ND1): when non-empty, the `#include` directive
+    targets the prefixed header (e.g. `combus_mainboard.h`).
     """
     cap = _VIEW_ID_PREFIX[view.name]
+    base = _file_base(view.name, filename_prefix)
     analog = [vc for vc in view.channels if vc.ch.type == "analog"]
     digital = [vc for vc in view.channels if vc.ch.type == "digital"]
 
@@ -627,7 +679,7 @@ def _render_source(view: View, ctx: BuildContext) -> str:
                 .replace("<view_name>", view.name)
                 .replace("<ctx_summary>", _ctx_summary(ctx)))
     body.append("")
-    body.append(f"#include \"{view.name}.h\"")
+    body.append(f"#include \"{base}.h\"")
     if any(vc.ch.type == "analog" for vc in view.channels):
         body.append("#include <core/system/combus/combus_res.h>  // CbusNeutral")
     body.append("")
@@ -685,7 +737,7 @@ def _emit_channel_init(body: list[str], vc: ViewChannel, type_: str) -> None:
 
     Output format (matches runtime AnalogComBus/DigitalComBus struct):
 
-        { .infoName = "...", .value = ..., .layer = ChanLayer::X, .direction = Direction::Y },
+        { .infoName = "...", .value = ..., .layer = ChanLayer::X, .direction = Direction::Y, .bothOr = false },
 
     The `.value` field is rendered from the canonical channel value
     (see _render_value). It honours the YAML `value:` contract :
@@ -695,17 +747,44 @@ def _emit_channel_init(body: list[str], vc: ViewChannel, type_: str) -> None:
 
     The `.layer` field comes from the channel's scope (REMOTE/LOCAL/SYSTEM).
     The `.direction` field is the bitmask from Direction.from_frozenset.
+
+    The `.bothOr` field (A2.1) is ONLY emitted for digital channels.
+    It is initialised to `true` iff the channel's `direction_or` is
+    exactly `{uplink, downlink}` (i.e. the YAML token was `both_or`).
+    For all other digital channels (uplink/downlink/both/none and
+    uplink_or/downlink_or), it is `false`. For analog channels, the
+    field is NOT emitted at all (the C++ struct has no `.bothOr` on
+    AnalogComBus). The `bool bothOr` field in DigitalComBus
+    (combus_defs.h) remains in place but is currently inert — the
+    runtime wiring (combus_frame_apply) is deferred to a separate
+    chantier.
     """
     escaped_info = _escape_cpp_string(vc.ch.info_name)
     layer = _SCOPE_TO_CHANLAYER[vc.ch.scope]
     dir_name = Direction.to_cpp_enum_name(vc.direction_bits)
     value_literal = _render_value(vc.ch, type_)
-    body.append(
-        f"    {{ .infoName = \"{escaped_info}\", "
-        f".value = {value_literal}, "
-        f".layer = {layer}, "
-        f".direction = {dir_name} }}, // {vc.ch.id}"
-    )
+    if type_ == "digital":
+        # A2.1 : .bothOr = true iff direction_or == {uplink, downlink}
+        # (i.e. the YAML token was `both_or`). All other digital
+        # tokens (uplink, downlink, both, none, uplink_or, downlink_or)
+        # yield .bothOr = false.
+        both_or_lit = "true" if vc.ch.direction_or == frozenset({"uplink", "downlink"}) else "false"
+        body.append(
+            f"    {{ .infoName = \"{escaped_info}\", "
+            f".value = {value_literal}, "
+            f".layer = {layer}, "
+            f".direction = {dir_name}, "
+            f".bothOr = {both_or_lit} }}, // {vc.ch.id}"
+        )
+    else:
+        # analog: .bothOr does not exist (validation rejects
+        # both_or=true on analog channels at the canon layer).
+        body.append(
+            f"    {{ .infoName = \"{escaped_info}\", "
+            f".value = {value_literal}, "
+            f".layer = {layer}, "
+            f".direction = {dir_name} }}, // {vc.ch.id}"
+        )
 
 
 # =============================================================================
@@ -740,7 +819,13 @@ def _safe_write(path: Path, content: str) -> None:
 _NO_EMIT_RUNTIME_VIEWS = frozenset({"combus_local", "combus_remote"})
 
 
-def emit_view(view: View, out_dir: Path, ctx: BuildContext) -> list[Path]:
+def emit_view(
+    view: View,
+    out_dir: Path,
+    ctx: BuildContext,
+    *,
+    filename_prefix: str = "",
+) -> list[Path]:
     """
     Emit the ids header for a view into out_dir.
 
@@ -752,19 +837,24 @@ def emit_view(view: View, out_dir: Path, ctx: BuildContext) -> list[Path]:
     (see md5.canonical_bytes), so the .h/.cpp files are not needed as
     an intermediate for hashing.
 
+    `filename_prefix` (ND1): when non-empty, every emitted file is
+    renamed with the prefix inserted between the view name and the
+    suffix (e.g. `combus_mainboard_ids.h`).
+
     Returns the list of written paths.
     """
     written: list[Path] = []
+    base = _file_base(view.name, filename_prefix)
     # Always emit the ids header (this is the only artifact the rest
     # of the codebase includes via `#include "combus_local_ids.h"` etc.).
-    _safe_write(out_dir / f"{view.name}_ids.h", _render_ids_header(view, ctx))
-    written.append(out_dir / f"{view.name}_ids.h")
+    _safe_write(out_dir / f"{base}_ids.h", _render_ids_header(view, ctx))
+    written.append(out_dir / f"{base}_ids.h")
     # Skip the .h/.cpp emission for views that don't need them.
     if view.name in _NO_EMIT_RUNTIME_VIEWS:
         return written
     # For combus (full view), emit the .h/.cpp as before.
-    written.append(_safe_write_collect(out_dir / f"{view.name}.h", _render_header(view, ctx)))
-    written.append(_safe_write_collect(out_dir / f"{view.name}.cpp", _render_source(view, ctx)))
+    written.append(_safe_write_collect(out_dir / f"{base}.h", _render_header(view, ctx, filename_prefix=filename_prefix)))
+    written.append(_safe_write_collect(out_dir / f"{base}.cpp", _render_source(view, ctx, filename_prefix=filename_prefix)))
     return written
 
 
@@ -774,10 +864,31 @@ def _safe_write_collect(path: Path, content: str) -> Path:
     return path
 
 
+def _rename_md5_files(out_dir: Path, filename_prefix: str) -> None:
+    """
+    Rename the three view-specific _md5.h files with the ND1 prefix.
+
+    ND1 deliberately avoids touching md5.py: the prefix is applied here,
+    after generate_md5_artifacts() has written the un-prefixed files.
+    combus_wire_common.h is NOT renamed (it is a shared header).
+
+    No-op when filename_prefix is empty (legacy mode).
+    """
+    if not filename_prefix:
+        return
+    for view_name in ("combus", "combus_local", "combus_remote"):
+        src = out_dir / f"{view_name}_md5.h"
+        if src.is_file():
+            dst = out_dir / f"{view_name}_{filename_prefix}_md5.h"
+            src.replace(dst)
+
+
 def generate(
     channels: list[ChannelDefinition],
     ctx: BuildContext,
     out_dir: Path,
+    *,
+    filename_prefix: str = "",
 ) -> ViewSelection:
     """
     Full A7 + A12 generation pipeline.
@@ -794,19 +905,27 @@ def generate(
     4. Emit MD5 artifacts (combus_md5.h, combus_local_md5.h,
        combus_remote_md5.h, combus_wire_common.h).
 
+    `filename_prefix` (ND1): when non-empty, every emitted file is
+    renamed with the prefix inserted between the view name and the
+    suffix (e.g. `combus_mainboard_ids.h`). The C++ enum identifiers
+    are NOT prefixed — they remain stable across boards. No selection /
+    sort / numbering logic is touched.
+
     Returns the ViewSelection so callers (tests, diagnostics) can
     inspect what was generated.
     """
     active = resolve_requires(channels, ctx)
     sel = select_views(active)
-    emit_view(sel.full, out_dir, ctx)
-    emit_view(sel.local, out_dir, ctx)
-    emit_view(sel.remote, out_dir, ctx)
+    emit_view(sel.full, out_dir, ctx, filename_prefix=filename_prefix)
+    emit_view(sel.local, out_dir, ctx, filename_prefix=filename_prefix)
+    emit_view(sel.remote, out_dir, ctx, filename_prefix=filename_prefix)
     # A7.1: MD5 artifact for combus_remote only.
     # projectVersion is a placeholder until project_version.h is introduced
     # (out of A7 scope — see md5.py docstring).
     from .md5 import generate_md5_artifacts
     generate_md5_artifacts(sel, out_dir)
+    # ND1: rename the _md5.h files with the prefix (avoids touching md5.py).
+    _rename_md5_files(out_dir, filename_prefix)
     return sel
 
 
@@ -818,21 +937,26 @@ def main(
     channels: list[ChannelDefinition],
     ctx: BuildContext,
     out_dir: Path,
+    *,
+    filename_prefix: str = "",
 ) -> int:
     """CLI entry point: generate artifacts and print a summary."""
     try:
-        sel = generate(channels, ctx, out_dir)
+        sel = generate(channels, ctx, out_dir, filename_prefix=filename_prefix)
     except GeneratorError as e:
         sys.stderr.write(f"[combus_builder] FATAL: {e}\n")
         return 1
 
+    base_full = _file_base("combus", filename_prefix)
+    base_local = _file_base("combus_local", filename_prefix)
+    base_remote = _file_base("combus_remote", filename_prefix)
     print(f"[combus_builder] generated view 'combus' "
           f"({sel.full.ch_count} channels, WIRE_END={sel.full.wire_end}) "
-          f"-> {out_dir}/combus.{{h,cpp,_ids.h}}")
+          f"-> {out_dir}/{base_full}.{{h,cpp,_ids.h}}")
     print(f"[combus_builder] generated view 'combus_local' "
           f"({sel.local.ch_count} channels, WIRE_END={sel.local.wire_end}) "
-          f"-> {out_dir}/combus_local.{{h,cpp,_ids.h}}")
+          f"-> {out_dir}/{base_local}.{{h,cpp,_ids.h}}")
     print(f"[combus_builder] generated view 'combus_remote' "
           f"({sel.remote.ch_count} channels, WIRE_END={sel.remote.wire_end}) "
-          f"-> {out_dir}/combus_remote.{{h,cpp,_ids.h}}")
+          f"-> {out_dir}/{base_remote}.{{h,cpp,_ids.h}}")
     return 0

@@ -59,29 +59,131 @@ from .generator import View, ViewChannel
 # CANONICAL SERIALIZATION
 # =============================================================================
 
-def _view_channel_canonical(vc: ViewChannel) -> dict:
+def _canonical_direction_for_hash(
+    direction: frozenset[str],
+    direction_or: frozenset[str],
+) -> list[str]:
+    """Canonise `direction` + `direction_or` for MD5 hashing (ND7 — ONE_WAY, A2.1).
+
+    Rationale (ND7):
+      In a multi-board node, the same LOCAL channel can legitimately
+      appear as `uplink` on one board and `downlink` on another — this
+      is a role mirror, not a contract drift. The MD5 must NOT flag
+      this as a divergence between boards.
+
+      `both`, `both_or` and `none` are real contract signals (the
+      channel is genuinely bidirectional, anti-oscillation OR, or
+      genuinely absent on the wire) and must remain distinguishable
+      from each other and from the one-way cases.
+
+    A2.1 mapping (direction + direction_or → canonical list):
+      - uplink        → ['ONE_WAY']
+      - downlink      → ['ONE_WAY']
+      - uplink_or     → ['ONE_WAY']   (same family as uplink)
+      - downlink_or   → ['ONE_WAY']   (same family as downlink)
+      - both          → ['downlink','uplink']
+      - both_or       → ['both_or','downlink','uplink']  (distinct from both)
+      - none          → []
+
+    This function is HASH-ONLY. It must NEVER be used for code
+    generation — the generated C++ must preserve the real direction
+    so that the runtime can dispatch on uplink/downlink/both/none.
+    """
+    # A2.1 : direction and direction_or are mutually exclusive.
+    # The effective direction is direction | direction_or.
+    if direction_or:
+        # *OR token — direction is empty, direction_or carries the wire sense.
+        if direction_or == frozenset({"uplink", "downlink"}):
+            # both_or — distinct from both (anti-oscillation flag matters)
+            return ["both_or", "downlink", "uplink"]
+        # uplink_or or downlink_or — one-way, neutralise uplink/downlink
+        return ["ONE_WAY"]
+    # No OR — plain direction.
+    if direction == frozenset({"uplink", "downlink"}):
+        # both — keep sorted as-is
+        return sorted(direction)
+    if direction == frozenset({"uplink"}) or direction == frozenset({"downlink"}):
+        # one-way — neutralise the uplink/downlink distinction
+        return ["ONE_WAY"]
+    # none (or any other unexpected value) — keep as-is
+    return sorted(direction)
+
+
+def _view_channel_canonical(vc: ViewChannel, apply_one_way: bool = False) -> dict:
     """Return a JSON-serialisable dict representing one channel.
 
     The dict keys are a fixed list (no per-channel metadata). The direction
-    is sorted to remove any ordering ambiguity. `infoName` is included so
-    that renaming a debug label changes the hash.
+    is canonised via `_canonical_direction_for_hash()` (ND7 ONE_WAY) ONLY
+    when `apply_one_way` is True — i.e. for the LOCAL view. For REMOTE and
+    full views, the raw direction is kept (sorted) so that real contract
+    signals (uplink vs downlink on REMOTE channels) are preserved.
+
+    `infoName` is included so that renaming a debug label changes the hash.
+
+    A2.1 (2c-bis) : `direction_or` is emitted as a separate field so
+    that two channels identical except on the anti-oscillation flag
+    produce different hashes. This matters for the LOCAL view: `both`
+    and `both_or` share the same frozenset direction
+    (`{uplink, downlink}`) but are treated as a real config
+    divergence by diffusion.py (warning, not don't-care). The hash
+    must therefore distinguish them so that a drift between boards
+    built separately is detected — otherwise the runtime wiring of
+    `bothOr` (next chantier) would silently mask a config bug.
+
+    ONE_WAY canonisation is unaffected: it only neutralises the
+    uplink/downlink distinction, never the both_or flag (carried by
+    `direction_or`).
     """
-    direction = sorted(vc.ch.direction)
+    if apply_one_way:
+        direction = _canonical_direction_for_hash(vc.ch.direction, vc.ch.direction_or)
+        # A2.1 (2c-bis) : for LOCAL, direction_or must also be
+        # canonised so that uplink/downlink/uplink_or/downlink_or
+        # all collapse to the same hash. The ONE_WAY canonisation
+        # neutralises the uplink/downlink distinction AND the
+        # OR/non-OR distinction (the OR policy is local to the
+        # producer — it is not a contract signal between boards).
+        # both_or stays distinct (anti-oscillation flag matters for
+        # the contract).
+        if vc.ch.direction_or == frozenset({"uplink", "downlink"}):
+            # both_or — distinct from both (anti-oscillation flag matters)
+            direction_or = ["both_or", "downlink", "uplink"]
+        elif direction == ["ONE_WAY"]:
+            # uplink/downlink/uplink_or/downlink_or all collapse here.
+            # direction_or must be [] so that uplink_or and downlink
+            # produce the same hash (handshake between a producer
+            # uplink_or and its mirror board downlink must succeed).
+            direction_or = []
+        else:
+            direction_or = []
+    else:
+        # Remote / full views: no ONE_WAY canonisation.
+        # direction is the raw frozenset (sorted), direction_or is
+        # emitted separately so both/both_or remain distinguishable.
+        direction = sorted(vc.ch.direction)
+        direction_or = sorted(vc.ch.direction_or)
     return {
         "id": vc.ch.id,
         "type": vc.ch.type,
         "scope": vc.ch.scope,
         "theme": vc.ch.theme,
         "direction": direction,
+        "direction_or": direction_or,
         "infoName": vc.ch.info_name,
     }
 
 
 def canonical_bytes(view: View) -> bytes:
-    """Return the canonical byte representation of a view, suitable for hashing."""
+    """Return the canonical byte representation of a view, suitable for hashing.
+
+    ND7 ONE_WAY canonisation is applied ONLY to the LOCAL view (the role
+    mirror between boards of the same node is a LOCAL concept). REMOTE and
+    full views keep the raw direction so that real contract signals
+    (uplink vs downlink on REMOTE channels) are preserved.
+    """
+    apply_one_way = (view.name == "combus_local")
     payload = {
         "view": view.name,
-        "channels": [_view_channel_canonical(vc) for vc in view.channels],
+        "channels": [_view_channel_canonical(vc, apply_one_way) for vc in view.channels],
     }
     return json.dumps(
         payload,
