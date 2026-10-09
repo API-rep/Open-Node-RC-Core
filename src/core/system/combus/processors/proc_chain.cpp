@@ -29,8 +29,11 @@ static uint16_t cbRead(const ComBus& bus, const ChanOpt& ch)
 /** @brief Write a uint16_t value to a channel variant on the bus.
  *
  *  @note  Proc-chain outputs are internal computed values, not physical inputs.
- *         They do not set bus.isDrived — that flag is managed exclusively by
- *         sys_manager_reset() (pre-clear) and active input sources (re-assert).
+ *         Chantier 12.6: the legacy `bus.isDrived` flag is gone — proc-chain
+ *         outputs no longer touch link-health state.  Each input backend
+ *         (PS4_BT, UART, ...) writes its own *_LINK_LOST contributor channel,
+ *         and the aggregator chain (`remote_link_fallback_chain.cpp`) handles
+ *         the OR-aggregation into `REMOTE_LINK_LOST`.
  */
 static void cbWrite(ComBus& bus, const ChanOpt& ch, uint16_t value)
 {

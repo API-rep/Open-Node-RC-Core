@@ -17,11 +17,11 @@
 /**
  * @brief Dispatch all active output module updates.
  */
-void output_update(const ComBus& bus, bool failsafeActive) {
+void output_update(const ComBus& bus) {
 
 	// --- ComBus UART TX (50 Hz timer-gated, non-blocking) ---
 #if defined(COMBUS_UART_TX) || defined(COMBUS_UART)
-  combus_tx_update(&bus, failsafeActive);
+  combus_tx_update(&bus);
 #endif
 
 }

@@ -370,7 +370,7 @@ def _select_view(
         view_channels.append(ViewChannel(
             numeric_id=analog_idx,
             ch=ch,
-            direction_bits=Direction.from_frozenset(ch.direction),
+            direction_bits=Direction.from_frozenset(ch.effective_direction),
         ))
         if ch.scope == "REMOTE":
             wire_end_analog += 1
@@ -379,7 +379,7 @@ def _select_view(
         view_channels.append(ViewChannel(
             numeric_id=digital_idx,
             ch=ch,
-            direction_bits=Direction.from_frozenset(ch.direction),
+            direction_bits=Direction.from_frozenset(ch.effective_direction),
         ))
         if ch.scope == "REMOTE":
             wire_end_digital += 1
@@ -718,8 +718,9 @@ def _render_source(view: View, ctx: BuildContext, *, filename_prefix: str = "") 
         body.append("// =============================================================================")
         body.append("")
         body.append("ComBus comBus {")
-        body.append("    .runLevel        = RunLevel::NOT_YET_SET,")
-        body.append("    .runLevelLayer   = ChanLayer::LOCAL,")
+        # RL3: runLevel + runLevelLayer removed from struct. RUNLEVEL is a
+        #       plain analog channel; initialise via combus_set_analog() at
+        #       runtime in machine_init().
         body.append(f"    .analogBus       = Analog{cap}Array,")
         body.append(f"    .digitalBus      = Digital{cap}Array,")
         body.append("    .analogBusMaxVal = (1UL << (sizeof(uint16_t) * 8)) - 1")
@@ -747,18 +748,27 @@ def _emit_channel_init(body: list[str], vc: ViewChannel, type_: str) -> None:
     The `.layer` field comes from the channel's scope (REMOTE/LOCAL/SYSTEM).
     The `.direction` field is the bitmask from Direction.from_frozenset.
 
-    The `.bothOr` field (ND6) is ONLY emitted for digital channels.
-    It is initialised to `vc.ch.both_or` (validated to be True only
-    for scope=LOCAL, direction=both, type=digital — see canon/channels.py).
-    The C++ runtime wiring (combus_frame_apply) is deferred to a
-    separate chantier; the field is emitted but currently inert.
+    The `.bothOr` field (A2.1) is ONLY emitted for digital channels.
+    It is initialised to `true` iff the channel's `direction_or` is
+    exactly `{uplink, downlink}` (i.e. the YAML token was `both_or`).
+    For all other digital channels (uplink/downlink/both/none and
+    uplink_or/downlink_or), it is `false`. For analog channels, the
+    field is NOT emitted at all (the C++ struct has no `.bothOr` on
+    AnalogComBus). The `bool bothOr` field in DigitalComBus
+    (combus_defs.h) remains in place but is currently inert — the
+    runtime wiring (combus_frame_apply) is deferred to a separate
+    chantier.
     """
     escaped_info = _escape_cpp_string(vc.ch.info_name)
     layer = _SCOPE_TO_CHANLAYER[vc.ch.scope]
     dir_name = Direction.to_cpp_enum_name(vc.direction_bits)
     value_literal = _render_value(vc.ch, type_)
     if type_ == "digital":
-        both_or_lit = "true" if vc.ch.both_or else "false"
+        # A2.1 : .bothOr = true iff direction_or == {uplink, downlink}
+        # (i.e. the YAML token was `both_or`). All other digital
+        # tokens (uplink, downlink, both, none, uplink_or, downlink_or)
+        # yield .bothOr = false.
+        both_or_lit = "true" if vc.ch.direction_or == frozenset({"uplink", "downlink"}) else "false"
         body.append(
             f"    {{ .infoName = \"{escaped_info}\", "
             f".value = {value_literal}, "

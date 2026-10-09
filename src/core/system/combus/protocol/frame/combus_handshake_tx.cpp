@@ -20,7 +20,7 @@
 
 #include <Arduino.h>  // millis()
 
-#include <core/system/combus/frame/combus_frame.h>
+#include <core/system/combus/protocol/frame/combus_frame.h>
 #include <core/system/debug/logging/debug.h>
 
 
@@ -45,16 +45,24 @@ uint8_t combus_handshake_sendOnce( NodeCom* nodeCom )
         return 0u;
     }
 
+    // LY4 — use the per-link expected MD5 pointer resolved at init from
+    // link->layer.  Falls back to the FULL view MD5 if the pointer is
+    // null (legacy caller that bypassed combus_protocol_init).
+    const uint8_t* md5ToSend = s_txBootCtx.expectedMd5
+        ? s_txBootCtx.expectedMd5
+        : combus::wire::kCombusComBusMd5;
+
     // Frame layout (mirror of RX):
     //   [0]                          SOF
     //   [1..sizeof(Header)]          CombusFrameHeader (nAnalog=0,
-    //                                  nDigital=0, seq=0, runLevel=0)
+    //                                  nDigital=0, seq=0, flags=0)
     //   [..+kCombusHandshakePayloadLen]  MD5 (16) + major + minor
     //   [..+1]                       CRC-8/MAXIM over header + payload
     //
     // nAnalog / nDigital carry no meaning on the handshake path (payload
     // is fixed-length by contract), but the header must stay well-formed
     // because the CRC covers it.  We zero them.
+    // RL2: runLevel removed from header — no longer written here.
     uint8_t frame[ sizeof(CombusFrameSof)
                  + sizeof(CombusFrameHeader)
                  + kCombusHandshakePayloadLen
@@ -66,22 +74,22 @@ uint8_t combus_handshake_sendOnce( NodeCom* nodeCom )
     frame[0] = CombusFrameSof;
 
     // Header — nAnalog=0, nDigital=0, seq=0 (RESERVED for handshake),
-    // runLevel=0 (kept deterministic for CRC).
+    // flags=0 (kept deterministic for CRC).
     {
         const CombusFrameHeader hdr = {
             .cfg = { .nAnalog = 0u, .nDigital = 0u },
             .seq = 0u,
-            .runLevel = 0u,
+            .flags = 0u,
         };
         frame[sizeof(CombusFrameSof) + 0u] = hdr.cfg.nAnalog;
         frame[sizeof(CombusFrameSof) + 1u] = hdr.cfg.nDigital;
         frame[sizeof(CombusFrameSof) + 2u] = hdr.seq;
-        frame[sizeof(CombusFrameSof) + 3u] = hdr.runLevel;
+        frame[sizeof(CombusFrameSof) + 3u] = hdr.flags;
     }
 
     // Payload — MD5 then version.
     for (uint8_t i = 0u; i < 16u; ++i) {
-        frame[payloadStart + i] = combus::wire::kCombusWireMd5[i];
+        frame[payloadStart + i] = md5ToSend[i];
     }
     frame[payloadStart + 16u] = combus::wire::kProjectVersionMajor;
     frame[payloadStart + 17u] = combus::wire::kProjectVersionMinor;
@@ -94,7 +102,7 @@ uint8_t combus_handshake_sendOnce( NodeCom* nodeCom )
     const uint8_t totalLen = (uint8_t)(crcByteIndex + 1u);
 
     char md5Hex[33];
-    combus_handshake_formatMd5Hex(combus::wire::kCombusWireMd5, md5Hex);
+    combus_handshake_formatMd5Hex(md5ToSend, md5Hex);
     sys_log_info(
         "[COMBUS_HANDSHAKE] TX oneshot  bytes=%u  md5=%s  ver=%u.%u\n",
         (unsigned)totalLen, md5Hex,
@@ -164,6 +172,14 @@ uint8_t combus_handshake_tx_update( CombusHandshakeContext* ctx,
     //    We do NOT call sendOnce() directly because it would re-emit the
     //    boot banner on every burst frame.  Instead we inline the
     //    minimal frame build + write here.
+    //
+    //    LY4 — use the per-link expected MD5 pointer resolved at init
+    //    from link->layer.  Falls back to the FULL view MD5 if the
+    //    pointer is null (legacy caller that bypassed combus_protocol_init).
+    const uint8_t* md5ToSend = ctx->expectedMd5
+        ? ctx->expectedMd5
+        : combus::wire::kCombusComBusMd5;
+
     uint8_t frame[ sizeof(CombusFrameSof)
                  + sizeof(CombusFrameHeader)
                  + kCombusHandshakePayloadLen
@@ -175,10 +191,10 @@ uint8_t combus_handshake_tx_update( CombusHandshakeContext* ctx,
     frame[sizeof(CombusFrameSof) + 0u] = 0u;  // nAnalog
     frame[sizeof(CombusFrameSof) + 1u] = 0u;  // nDigital
     frame[sizeof(CombusFrameSof) + 2u] = 0u;  // seq = 0 (RESERVED handshake)
-    frame[sizeof(CombusFrameSof) + 3u] = 0u;  // runLevel
+    frame[sizeof(CombusFrameSof) + 3u] = 0u;  // flags (RL2: was runLevel)
 
     for (uint8_t i = 0u; i < 16u; ++i) {
-        frame[payloadStart + i] = combus::wire::kCombusWireMd5[i];
+        frame[payloadStart + i] = md5ToSend[i];
     }
     frame[payloadStart + 16u] = combus::wire::kProjectVersionMajor;
     frame[payloadStart + 17u] = combus::wire::kProjectVersionMinor;

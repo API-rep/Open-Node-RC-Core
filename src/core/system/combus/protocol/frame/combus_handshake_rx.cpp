@@ -19,7 +19,7 @@
 #include <string.h>
 #include <stddef.h>
 
-#include <core/system/combus/frame/combus_frame.h>
+#include <core/system/combus/protocol/frame/combus_frame.h>
 #include <core/system/debug/logging/debug.h>
 
 
@@ -53,6 +53,7 @@ static uint8_t ringByteAt(const uint8_t* ringBuf,
  *        (real MD5+version match OR bypass mode).  See combus_handshake_rx.h.
  */
 bool combus_handshake_compareAndLog(
+    const uint8_t* localMd5,
     const uint8_t* wireMd5,
     uint8_t        wireMajor,
     uint8_t        wireMinor )
@@ -74,8 +75,22 @@ bool combus_handshake_compareAndLog(
         return false;
     }
 
-    const bool md5Match = (memcmp(wireMd5,
-                                 combus::wire::kCombusWireMd5, 16) == 0);
+    // LY4 — compare against the per-link localMd5 pointer (resolved at
+    // init from link->layer), not the hardcoded FULL view MD5.  A null
+    // pointer means the link was not properly initialised via
+    // combus_protocol_init() — this is a config error and must NOT be
+    // silently substituted with a fallback MD5 (same pattern as the
+    // UNDEFINED FATAL in combus_protocol_init() and combus_tx_init()).
+    if (!localMd5) {
+        sys_log_err(
+            "[COMBUS_HANDSHAKE] FATAL: CombusHandshakeContext::expectedMd5 is null "
+            "— link was not properly initialized via combus_protocol_init() "
+            "— system halted\n");
+        while (1) { /* halt */ }
+    }
+    const uint8_t* md5ToCompare = localMd5;
+
+    const bool md5Match = (memcmp(wireMd5, md5ToCompare, 16) == 0);
     const bool verMatch = (wireMajor == combus::wire::kProjectVersionMajor)
                        && (wireMinor == combus::wire::kProjectVersionMinor);
 
@@ -90,7 +105,7 @@ bool combus_handshake_compareAndLog(
 
     // Mismatch — single compact line with local + wire side by side.
     char localMd5Hex[33];
-    combus_handshake_formatMd5Hex(combus::wire::kCombusWireMd5, localMd5Hex);
+    combus_handshake_formatMd5Hex(md5ToCompare, localMd5Hex);
 
     sys_log_info(
         "[COMBUS_HANDSHAKE] MISMATCH  local md5=%s ver=%u.%u  "
@@ -190,7 +205,7 @@ uint8_t combus_handshake_tryDecode(
     const uint8_t  wireMajor = linear[payloadOffset + 16u];
     const uint8_t  wireMinor = linear[payloadOffset + 17u];
 
-    if (combus_handshake_compareAndLog(wireMd5, wireMajor, wireMinor)) {
+    if (combus_handshake_compareAndLog(ctx->expectedMd5, wireMd5, wireMajor, wireMinor)) {
         // First successful contract match on this transport — flip the
         // validated flag so subsequent handshake frames can skip the MD5
         // compare (other frame-level checks stay active).  Idempotent:

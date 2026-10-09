@@ -228,13 +228,23 @@ def _warn(msg: str) -> None:
 # Mirror table for diffusion (ND2).
 # When a channel is declared on exactly one board, the other board
 # receives a synthetic declaration with the direction MIRRORED.
-# NOTE (correctif 2/3): `both_or` mirrors to `both_or` (no inversion,
-# same as `both`). The both_or flag is preserved through diffusion.
+# A2.1 (2d-bis) : the OR policy is NEVER recopiée, SAUF `both_or`
+# qui se propage tel quel (l'anti-oscillation est un contrat
+# inter-boards, pas une politique locale au producteur).
+#   uplink        → downlink
+#   uplink_or     → downlink   (OR policy dropped on the mirror)
+#   downlink      → uplink
+#   downlink_or   → uplink     (OR policy dropped on the mirror)
+#   both          → both
+#   both_or       → both_or    (anti-oscillation flag IS propagated)
+#   none          → none
 _DIRECTION_MIRROR: dict[str, str] = {
     "uplink": "downlink",
+    "uplink_or": "downlink",   # A2.1 (2d-bis) : OR dropped on mirror
     "downlink": "uplink",
+    "downlink_or": "uplink",   # A2.1 (2d-bis) : OR dropped on mirror
     "both": "both",
-    "both_or": "both_or",
+    "both_or": "both_or",      # A2.1 (2d-bis) : anti-oscillation IS propagated
     "none": "none",
 }
 
@@ -394,12 +404,15 @@ def _resolve_group(
     absent = [b for b in all_board_ids if b not in explicit_set]
 
     # Tally directions across explicit declarations.
-    # NOTE (correctif 2/3): `both_or` is counted in n_both (same family
-    # as `both` for the inter-board rule). The distinction between
-    # `both` and `both_or` is captured separately (n_both_or) to
-    # detect the divergence warning (both vs both_or on the same id).
-    n_up = sum(1 for _b, d, _p in explicit if d == "uplink")
-    n_down = sum(1 for _b, d, _p in explicit if d == "downlink")
+    # A2.1 : work on FAMILIES, not on individual tokens.
+    #   uplink-ish   = {uplink, uplink_or}
+    #   downlink-ish = {downlink, downlink_or}
+    #   both-ish     = {both, both_or}
+    # The inter-board rule is applied per family. The distinction
+    # between `both` and `both_or` is captured separately (n_both_or)
+    # to detect the divergence warning (both vs both_or on the same id).
+    n_up = sum(1 for _b, d, _p in explicit if d in ("uplink", "uplink_or"))
+    n_down = sum(1 for _b, d, _p in explicit if d in ("downlink", "downlink_or"))
     n_both = sum(1 for _b, d, _p in explicit if d == "both")
     n_both_or = sum(1 for _b, d, _p in explicit if d == "both_or")
     n_none = sum(1 for _b, d, _p in explicit if d == "none")
@@ -443,10 +456,11 @@ def _resolve_group(
             semantic=True,
         )
 
-    # --- Rule 3: both only (no uplink, no downlink) -> OR aggregation -
-    # NOTE (correctif 2/3): if any board declared `both_or`, the
-    # synthesis direction is `both_or` (preserve the anti-oscillation
-    # flag on the synthetic copy). Otherwise it's plain `both`.
+    # --- Rule 3: both-ish only (no uplink-ish, no downlink-ish) -------
+    # A2.1 : both-ish = {both, both_or}. If any board declared
+    # `both_or`, the synthesis direction is `both_or` (preserve the
+    # anti-oscillation flag on the synthetic copy). Otherwise it's
+    # plain `both`.
     if (n_both + n_both_or) >= 1 and n_up == 0 and n_down == 0:
         synth_dir = "both_or" if n_both_or >= 1 else "both"
         synth = [(b, synth_dir) for b in absent]

@@ -12,7 +12,7 @@
 # - Direction [both]: uplink + downlink — any board may write (re-arm
 #   each cycle) or read (react) the channel.
 # - value: high = fail-safe by default. The contributor reports fault
-#   until proven healthy each cycle (see WIP - Failsafe module design.md §5).
+#   until proven healthy each cycle (see failsafe_module.md).
 # - requires: [HAS_FAILSAFE, HAS_VBAT_FAILSAFE] — the contributor is
 #   only emitted when both flags are set (no aggregator → no contributor).
 # - The legacy BATTERY_LOW channel and comBus.batteryIsLow struct field
@@ -26,7 +26,7 @@ channels:
     type: digital
     scope: LOCAL
     theme: failsafe
-    direction: both
+    direction: uplink_or
     value: high    # default to fault state: contributor reports fault until
                    # proven healthy. Failsafe-by-default contract.
     requires:

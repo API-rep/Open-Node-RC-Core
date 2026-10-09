@@ -80,16 +80,16 @@ inline bool combus_set_digital(ComBus& bus, const std::optional<DigitalComBusID>
 
 /**
  * @brief Write the ComBus run level.
- * 
+ *
  * @param bus    Target ComBus instance.
  * @param rl     New RunLevel value.
  * @param caller Layer of the calling module — checked against bus.runLevelLayer.
- * 
+ *
  * @return true if the write was accepted, false if layer mismatch.
  */
 
-bool combus_set_runlevel(ComBus& bus, RunLevel rl, ChanLayer caller);
-
+// RL3: combus_set_runlevel() removed — runLevel is now a plain analog channel (RUNLEVEL).
+//       Write it via combus_set_analog(bus, AnalogComBusID::RUNLEVEL, (uint16_t)rl, ChanLayer::LOCAL).
 
 
 // =============================================================================
@@ -143,12 +143,6 @@ inline bool combus_set_digital(ComBus& bus, DigitalComBusID ch, bool val) {
     return combus_set_digital(bus, ch, val, ChanLayer::SYSTEM);
 }
 
-/**
- * @brief Internal overload for processors running with SYSTEM-level access.
- * @details Used by CbProcFn implementations (local firmware).
- */
-inline bool combus_set_runlevel(ComBus& bus, RunLevel rl) {
-    return combus_set_runlevel(bus, rl, ChanLayer::SYSTEM);
-}
+// RL3: inline combus_set_runlevel() overload removed — runLevel is a plain analog channel.
 
 // EOF combus_access.h

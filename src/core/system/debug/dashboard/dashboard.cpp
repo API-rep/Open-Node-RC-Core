@@ -786,6 +786,24 @@ void dashboard_start_task() {
 	);
 }
 
+/**
+ * @brief Suspend the dashboard and print a one-shot prompt.
+ *
+ * @details Reuses the existing Q-key suspend mechanism (s_suspended flag) so
+ *   the runtime keyboard handler will resume on the next serial character.
+ *   Intended for post-init boot-log pause: the caller logs its message,
+ *   calls this, then continues with non-blocking setup.  The dashboard task
+ *   (Core 0) will sit idle until the operator presses any key.
+ *
+ * @param msg  NUL-terminated message printed after the suspend banner.
+ */
+void dashboard_suspend_for_input(const char* msg) {
+	s_suspended     = true;
+	s_lastRefresh   = 0;
+	Serial.print("\x1B[?25h");  // restore cursor while suspended
+	Serial.println(msg);
+}
+
 #endif // DEBUG_DASHBOARD
 
 // EOF dashboard.cpp

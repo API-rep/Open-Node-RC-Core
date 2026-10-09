@@ -13,6 +13,7 @@
 #include <stdbool.h>
 
 
+
 // =============================================================================
 // 1. COMBUS TRANSPORT FRAME STRUCTURE
 // =============================================================================
@@ -55,8 +56,8 @@ struct ComBusFrameCfg {
  *   after the SOF byte (offset 0). The same struct is embedded in ComBusFrame,
  *   giving a single source of truth for both wire layout and decoded representation.
  *
- *   Wire byte order (offsets 1–5 after SOF):
- *     0: nAnalog   1: nDigital   2: seq   3: runLevel   4: flags
+ *   Wire byte order (offsets 1–4 after SOF):
+ *     0: nAnalog   1: nDigital   2: seq   3: flags
  *
  *   The first two bytes map directly to `ComBusFrameCfg`, enabling a
  *   memcpy-based decode without manual field extraction.
@@ -66,14 +67,18 @@ struct ComBusFrameCfg {
  *   <-> remote link.  See `combus_handshake.h` for the dedicated
  *   structurally-separate decoder that will pick it up once the
  *   handshake / versioning mechanism is implemented.
+ *
+ * @note RL2: `runLevel` is NOT a header field — it travels as a standard
+ *   combus channel (RUNLEVEL, scope LOCAL, see runlevel.cb). The header
+ *   is now 4 bytes (was 5 before RL2). The wire contract is broken on
+ *   purpose: any peer still sending the old 5-byte header will be
+ *   rejected by the static_assert in combus_frame.h.
 
  */
 
 struct CombusFrameHeader {
     ComBusFrameCfg cfg;   ///< Static layout snapshot: nAnalog, nDigital (wire offsets 0–1).
     uint8_t seq;          ///< Rolling frame counter (1..255 for control frames; 0 is RESERVED for handshake — see combus_handshake.h).
-    uint8_t runLevel;     ///< Combus RunLevel cast to uint8_t.
-
     uint8_t flags;        ///< COMBUS_FLAG_* bits (transport status only).
 };
 
@@ -86,13 +91,13 @@ struct CombusFrameHeader {
  *   Their effective sizes are `header.nAnalog` and `header.nDigital`, which are
  *   themselves derived from `AnalogComBusID::CH_COUNT` / `DigitalComBusID::CH_COUNT`
  *   defined in the machine's combus layout (combus_types.h).
- *   
+ *
  *   Correct decoding and application of the ComBus state is guaranteed by the
  *   fact that both nodes (machine and receiver) share the same combus_types.h.
  */
 
 struct ComBusFrame {
-    CombusFrameHeader header;   ///< Wire header fields (offsets 1–5 of the frame).
+    CombusFrameHeader header;   ///< Wire header fields (offsets 1–4 of the frame, RL2: was 1–5).
     uint16_t*         analog;   ///< Caller-provided buffer (≥ header.nAnalog entries)
     bool*             digital;  ///< Caller-provided buffer (≥ header.nDigital entries)
 };

@@ -1,6 +1,6 @@
 /******************************************************************************
  * @file uart_com.cpp
- * @brief UART transport — port init, claim guard and ComBus channel helpers.
+ * @brief UART transport — port init, claim guard and channel helpers.
  *****************************************************************************/
 
 #include "uart_com.h"
@@ -137,59 +137,5 @@ HardwareSerial* uart_serial_for(int n) {
 	}
 }
 
-
-// =============================================================================
-// 5. COMBUS UART CHANNEL INIT  (compile-flag driven)
-// =============================================================================
-
-#if defined(COMBUS_UART_TX) || defined(COMBUS_UART_RX) || defined(COMBUS_UART)
-
-// Board-level UART pin table — defined in the active env's board .cpp, resolved at link time.
-extern const UartPinCfg uartPins[];
-
-  // Hardware ceiling — ESP32 exposes 3 UART peripherals (Serial/Serial1/Serial2),
-  // matching uart_serial_for() above. This is a fixed architectural fact, not
-  // a board/machine choice — safe for core to own as a constant.
-static constexpr uint8_t UART_HW_CHANNEL_MAX = 3u;
-
-static NodeCom* s_com[UART_HW_CHANNEL_MAX] = {};
-static uint8_t  s_maxChannels              = 0u;  ///< caller-declared count of ComBus channels actually exposed
-
-
-void uart_init(uint32_t baud, uint8_t maxChannels, PinReg* reg)
-{
-	s_maxChannels = (maxChannels <= UART_HW_CHANNEL_MAX) ? maxChannels : UART_HW_CHANNEL_MAX;
-
-		// --- Resolve UART channel and GPIO pins from build flag ---
-	#if defined(COMBUS_UART)
-		constexpr int uartCh    = COMBUS_UART;
-		const     int uartTxPin = uartPins[uartCh].tx;
-		const     int uartRxPin = uartPins[uartCh].rx;
-	#elif defined(COMBUS_UART_TX)
-		constexpr int uartCh    = COMBUS_UART_TX;
-		const     int uartTxPin = uartPins[uartCh].tx;
-		constexpr int uartRxPin = -1;
-	#else  // COMBUS_UART_RX
-		constexpr int uartCh    = COMBUS_UART_RX;
-		constexpr int uartTxPin = -1;
-		const     int uartRxPin = uartPins[uartCh].rx;
-	#endif
-
-		// --- Open UART port once ---
-	s_com[uartCh] = uart_com_init(uart_serial_for(uartCh), baud,
-	                              uartTxPin, uartRxPin, "combus", reg);
-}
-
-
-NodeCom* uart_get_com(int uartCh)
-{
-	if (uartCh < 0 || uartCh >= (int)s_maxChannels) {
-		sys_log_err("[UART_COM] uart_get_com: channel %d out of range (max %u).\n", uartCh, (unsigned)s_maxChannels);
-		return nullptr;
-	}
-	return s_com[uartCh];
-}
-
-#endif  // COMBUS_UART_TX / COMBUS_UART_RX / COMBUS_UART
 
 // EOF uart_com.cpp

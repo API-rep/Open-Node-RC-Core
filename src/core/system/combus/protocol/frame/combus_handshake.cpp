@@ -31,7 +31,7 @@
 #include <string.h>
 #include <stddef.h>
 
-#include <core/system/combus/frame/combus_frame.h>
+#include <core/system/combus/protocol/frame/combus_frame.h>
 #include <core/system/debug/logging/debug.h>
 
 
@@ -42,8 +42,8 @@
 // Handshake payload length MUST equal what the auto-generated header
 // advertises as the wire length.  This is the SOLE guard — the previous
 // `static_assert(..., 18u)` was redundant with the one below and has been
-// removed: 18u is the wire magic that combus_md5.py writes, but the
-// authoritative source of truth lives in the generated header itself.
+// removed: 18u is the wire magic that scripts/combus_builder/md5.py writes,
+// but the authoritative source of truth lives in the generated header itself.
 static_assert(kCombusHandshakePayloadLen ==
                    combus::wire::kCombusHandshakeWirePayloadLen,
                "kCombusHandshakePayloadLen disagrees with "
@@ -117,8 +117,15 @@ void combus_handshake_logBootWarningIfNeeded(CombusHandshakeContext* ctx)
 {
     if (!ctx || ctx->bootWarningLogged) { return; }
 
+    // LY4 — use the per-link expected MD5 pointer resolved at init from
+    // link->layer.  Falls back to the FULL view MD5 if the pointer is
+    // null (legacy caller that bypassed combus_protocol_init).
+    const uint8_t* md5ToShow = ctx->expectedMd5
+        ? ctx->expectedMd5
+        : combus::wire::kCombusComBusMd5;
+
     char md5Hex[33];
-    combus_handshake_formatMd5Hex(combus::wire::kCombusWireMd5, md5Hex);
+    combus_handshake_formatMd5Hex(md5ToShow, md5Hex);
 
     if (COMBUS_MD5_CHECK_DISABLE) {
         sys_log_info(

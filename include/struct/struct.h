@@ -17,7 +17,7 @@
 // local quoted includes.  Both files have been relocated as part of the
 // combus-frame-handshake refactor:
 //   - combus_struct.h     -> <core/system/combus/combus_defs.h>
-//   - outputs_struct.h    -> <core/system/combus/frame/combus_frame_defs.h>
+//   - outputs_struct.h    -> <core/system/combus/protocol/frame/combus_frame_defs.h>
 // Translation units that need them now include those paths directly.
 
 

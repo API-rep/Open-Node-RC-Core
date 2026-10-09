@@ -19,7 +19,6 @@
 * Environement variable
 */
 
-static constexpr uint32_t ComBusDisconnectTimeoutMs = 500u;  // isDrived cleared after this gap without a valid frame
 static constexpr uint32_t DebounceMs               = 100u;  // digital input debounce delay
 
 

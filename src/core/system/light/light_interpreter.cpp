@@ -45,7 +45,8 @@ void light_interp_update(const ComBus& bus, const LightModuleCfg& mod, LightStat
   const bool indicatorRight = bus.digitalBus[static_cast<uint8_t>(DigitalComBusID::INDICATOR_RIGHT)].value;
   const bool hazard         = bus.digitalBus[static_cast<uint8_t>(DigitalComBusID::HAZARDS)].value;
   const bool roofLight      = bus.digitalBus[static_cast<uint8_t>(DigitalComBusID::ROOF_LIGHT)].value;
-  const bool engineRunning  = (bus.runLevel == RunLevel::RUNNING || bus.runLevel == RunLevel::TURNING_OFF);
+  // RL3: runLevel is now a plain analog channel — read from analogBus[RUNLEVEL].
+  const bool engineRunning  = ((RunLevel)bus.analogBus[static_cast<uint8_t>(AnalogComBusID::RUNLEVEL)].value == RunLevel::RUNNING || (RunLevel)bus.analogBus[static_cast<uint8_t>(AnalogComBusID::RUNLEVEL)].value == RunLevel::TURNING_OFF);
   const uint16_t centre     = static_cast<uint16_t>(bus.analogBusMaxVal / 2u);
   const bool escInReverse   = (bus.analogBus[static_cast<uint8_t>(AnalogComBusID::ESC_SPEED_BUS)].value < centre);
   const bool escIsBraking   = bus.digitalBus[static_cast<uint8_t>(DigitalComBusID::BRAKING)].value;
@@ -54,7 +55,9 @@ void light_interp_update(const ComBus& bus, const LightModuleCfg& mod, LightStat
   const bool batteryLow     = bus.digitalBus[static_cast<uint8_t>(DigitalComBusID::FAILSAFE_VBAT)].value;
 
   // --- 2. Compute the permission mask (runLevelMask) according to current RunLevel
-  const uint8_t rl = (bus.runLevel >= RunLevel::IDLE) ? static_cast<uint8_t>(bus.runLevel) : 0u;
+  // RL3: runLevel is now a plain analog channel — read from analogBus[RUNLEVEL].
+  const RunLevel rl_raw = (RunLevel)bus.analogBus[static_cast<uint8_t>(AnalogComBusID::RUNLEVEL)].value;
+  const uint8_t rl = (rl_raw >= RunLevel::IDLE) ? static_cast<uint8_t>(rl_raw) : 0u;
   state.runLevelMask = mod.runLevelMask[rl];
 
   // --- 3. Build the runtimeMask (active bits) from flags, RunLevel, and ComBus
@@ -62,17 +65,18 @@ void light_interp_update(const ComBus& bus, const LightModuleCfg& mod, LightStat
   LightBitmask mask = 0u;
 
   // RunLevel auto-bits (structural lights driven by machine state)
-  if (bus.runLevel == RunLevel::IDLE){
+  // RL3: runLevel is now a plain analog channel — read from analogBus[RUNLEVEL].
+  if (rl_raw == RunLevel::IDLE){
     mask |= LightBit::PARKING_ON;
   }
 
-  else if (bus.runLevel == RunLevel::STARTING  ||
-           bus.runLevel == RunLevel::RUNNING    ||
-           bus.runLevel == RunLevel::TURNING_OFF){
+  else if (rl_raw == RunLevel::STARTING  ||
+           rl_raw == RunLevel::RUNNING    ||
+           rl_raw == RunLevel::TURNING_OFF){
     mask |= LightBit::PARKING_ON | LightBit::CAB_ON;
   }
-  
-  if (bus.runLevel == RunLevel::STARTING){
+
+  if (rl_raw == RunLevel::STARTING){
     mask |= LightBit::CRANKING;
   }
 

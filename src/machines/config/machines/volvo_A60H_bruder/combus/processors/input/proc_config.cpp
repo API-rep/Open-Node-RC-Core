@@ -15,12 +15,16 @@
  *                          (DRIVE_STATE_BUS != 0 → claim, value unchanged).
  *     INPUT_DIRECT_DRIVE : in(DIRECT_DRIVE_BTN) → toggle(bound=1) → out(DIRECT_DRIVE)
  *     INPUT_KEY_RUNLEVEL : in(KEY_ACTIVE) -> key_on(ON_PRESS, 0ms) -> key_off(ON_PRESS, 3000ms)
- *                                         -> runlevel(KEY_ACTIVE) -> out(KEY_ACTIVE)
- *                          key_on fires on press-down; key_off fires WHILE held >= 3 s. *
+ *                                         -> out(KEY_ACTIVE)
+ *                          key_on fires on press-down; key_off fires WHILE held >= 3 s.
+ *     INPUT_RUNLEVEL     : in(RUNLEVEL) -> failsafe(FAILSAFE) -> runlevel(KEY_ACTIVE)
+ *                                         -> out(RUNLEVEL)
+ *                          failsafe forces RUNLEVEL=IDLE when FAILSAFE=true (claims chain).
+ *                          runlevel drives STARTING/TURNING_OFF from KEY_ACTIVE.
  *     INPUT_CRUISE_NORMAL : in(CRUISE_ACTIVE) -> gate(SUBGEAR_BUS != 0 → force 0)
  *                                              -> toggle(CRUISE_TOGGLE_BTN)
  *                                            → out(CRUISE_ACTIVE)
- *                          gate forces CRUISE_ACTIVE=0 while in subgear/crawler mode. *
+ *                          gate forces CRUISE_ACTIVE=0 while in subgear/crawler mode.
  *   Read-modify-write pattern: each proc reads current value, modifies it,
  *   passes to next proc.  Last proc (cb_out_fn) commits to the output channel.
  *******************************************************************************
@@ -34,7 +38,7 @@
 #include <core/config/machines/dumper_truck/motion/dumper_truck_motion.h>  // kDumperTruckGearShift
 #include <core/system/combus/combus_defs.h>                                          // ChanLayer
 #include <core/system/combus/processors/input/cb_btn.h>    // cb_btn_push_fn, cb_btn_toggle_fn, cb_btn_inc_fn, cb_btn_dec_fn, CbBtnCfg, CbBtnState, CbBtnTrigger
-#include <core/system/combus/processors/base/cb_runlevel.h>               // cb_runlevel_fn, CbRunlevelCfg, CbRunlevelState
+#include <core/system/combus/processors/base/cb_runlevel.h>               // cb_runlevel_fn, CbRunlevelCfg
 #include <core/system/combus/processors/base/cb_bypass.h>                 // cb_bypass_fn
 
 
@@ -42,7 +46,8 @@
 // All types and function pointers are resolved by the common includes above.
 #include "subgear_config.h"        // kSubGearProcs — neutral-gate + toggle + inc + dec
 #include "direct_drive_config.h"   // kDirectDriveProcs — toggle
-#include "key_runlevel_config.h"   // kKeyRunlevelProcs — key_on + key_off + runlevel
+#include "key_runlevel_config.h"   // kKeyRunlevelProcs — key_on + key_off
+#include "runlevel_config.h"       // kRunlevelProcs — failsafe + runlevel
 #include "cruise_input_config.h"   // kCruiseInputProcs — gate(SUBGEAR) + toggle(□)
 
 
@@ -67,11 +72,20 @@ CbChain kInputChains[INPUT_CH_COUNT] = {
     .procCount  = static_cast<uint8_t>(std::size(kDirectDriveProcs)),
   },
 
+#if defined(HAS_IGNIT_KEY)
   { .name       = "key_runlevel",
     .inCh       = DigitalComBusID::KEY_ACTIVE,
     .outCh      = DigitalComBusID::KEY_ACTIVE,
     .procs      = kKeyRunlevelProcs,
     .procCount  = static_cast<uint8_t>(std::size(kKeyRunlevelProcs)),
+  },
+#endif  // HAS_IGNIT_KEY
+
+  { .name       = "runlevel",
+    .inCh       = AnalogComBusID::RUNLEVEL,           // seed current RunLevel into pipeline value
+    .outCh      = AnalogComBusID::RUNLEVEL,           // commit final value back to RUNLEVEL
+    .procs      = kRunlevelProcs,
+    .procCount  = static_cast<uint8_t>(std::size(kRunlevelProcs)),
   },
 
   { .name       = "cruise_normal",
@@ -86,6 +100,26 @@ CbChain kInputChains[INPUT_CH_COUNT] = {
   { .name       = "throttle",
     .inCh       = AnalogComBusID::THROTTLE_STICK,
     .outCh      = AnalogComBusID::THROTTLE_BUS,
+    .procs      = nullptr,
+    .procCount  = 0u,
+  },
+
+  // INPUT_STEERING — passthrough: STEERING_STICK (raw bipolar) → STEERING_BUS.
+  // No procs yet — conditioning (center+abs+scale+dir) added in the next migration step.
+  // The SIM_STEERING chain (ramp) reads STEERING_BUS and writes back to STEERING_BUS.
+  { .name       = "steering",
+    .inCh       = AnalogComBusID::STEERING_STICK,
+    .outCh      = AnalogComBusID::STEERING_BUS,
+    .procs      = nullptr,
+    .procCount  = 0u,
+  },
+
+  // INPUT_DUMP — passthrough: DUMP_STICK (raw bipolar) → DUMP_BUS.
+  // No procs yet — conditioning (center+abs+scale+dir) added in the next migration step.
+  // The SIM_DUMP chain (asymmetric ramp) reads DUMP_BUS and writes back to DUMP_BUS.
+  { .name       = "dump",
+    .inCh       = AnalogComBusID::DUMP_STICK,
+    .outCh      = AnalogComBusID::DUMP_BUS,
     .procs      = nullptr,
     .procCount  = 0u,
   },

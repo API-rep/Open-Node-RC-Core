@@ -184,7 +184,7 @@ src/core/system/
 ```
 
 > **Notes de migration** :
-> - `src/core/system/combus/frame/` **créé** — extraction du codec trame + handshake depuis l'ancien chemin plat.
+> - `src/core/system/combus/protocol/frame/` **créé** — extraction du codec trame + handshake depuis l'ancien chemin plat.
 > - `combus_handshake.{h,cpp}` **splitté** en `combus_handshake.{h,cpp}` (umbrella) + `combus_handshake_rx.{h,cpp}` + `combus_handshake_tx.{h,cpp}`.
 > - `combus_tx.h/cpp` **créé** (mirror du split RX/TX déjà en place pour le transport).
 > - `COMBUS_PROCESSORS_ROADMAP.md` **déplacé** depuis `dumper_truck/combus/` vers `processors/` (sa place canonique).

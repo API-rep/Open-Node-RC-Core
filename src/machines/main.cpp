@@ -48,31 +48,7 @@ void loop() {
 // 1. SYSTEM TICK
 // =============================================================================
 
-	// --- Input + battery + failsafe evaluation ---
-  static bool s_failsafeWasActive = false;
-
   sys_manager_update(comBus);
-
-    // Open-drain failsafe: no physical input source refreshed the bus this
-    // cycle.  Read directly from `comBus.isDrived` (the open-drain invariant
-    // guarantees `sys_manager_reset()` is the only writer of `false`).
-  if (!comBus.isDrived) {
-    if (!s_failsafeWasActive) {
-      sys_log_warn("[SYSTEM][SAFE] reason=no_input_source action=force_idle_and_lock\n");
-      stopAllDcDrivers(machine);
-      sleepAllDcDrivers(machine);
-      disableAllDcDrivers(machine);
-        // Clear KEY_ACTIVE so cb_runlevel can detect a fresh rising edge on reconnect.
-        // Without this, prevValue stays true (last engine-on state) and the rising
-        // edge is never re-armed — the machine would be stuck in IDLE after reconnect.
-      combus_set_digital(comBus, DigitalComBusID::KEY_ACTIVE, false,
-                         ChanLayer::LOCAL);
-      s_failsafeWasActive = true;
-    }
-    combus_set_runlevel(comBus, RunLevel::IDLE);
-    return;  // dashboard runs on its own FreeRTOS task (Core 0)
-  }
-  s_failsafeWasActive = false;
 
 // =============================================================================
 // 2. INPUT CHAIN (always — before RunLevel FSM)
@@ -86,15 +62,17 @@ void loop() {
 // =============================================================================
 
 	// --- 1. RunLevel tracking and timing tokens ---
+  // RL3: lastRunLevel reads from the generic analog channel RUNLEVEL (no dedicated struct field).
   static RunLevel lastRunLevel = RunLevel::NOT_YET_SET;
   static uint32_t stateTM      = 0;
 
 	// --- 2. RunLevel change detection ---
-  bool isNewRunLevel = (comBus.runLevel != lastRunLevel);
-  lastRunLevel = comBus.runLevel;  // Capture BEFORE switch — prevents mid-loop transitions from masking isNewRunLevel
+  const RunLevel curRunLevel = (RunLevel)comBus.analogBus[static_cast<uint8_t>(AnalogComBusID::RUNLEVEL)].value;
+  bool isNewRunLevel = (curRunLevel != lastRunLevel);
+  lastRunLevel = curRunLevel;  // Capture BEFORE switch — prevents mid-loop transitions from masking isNewRunLevel
 
 	// --- 3. RunLevel Execution ---
-  switch (comBus.runLevel) {
+  switch (curRunLevel) {
 
     // ---------------------------------------------------------
     case RunLevel::IDLE : {
@@ -112,7 +90,8 @@ void loop() {
       const bool keyActive = comBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::KEY_ACTIVE)].value;
       if (!keyActive && (millis() - stateTM >= kSleepTimeoutMs)) {
           sys_log_info("[SYSTEM][EVENT] reason=sleep_timeout action=enter_SLEEPING\n");
-          combus_set_runlevel(comBus, RunLevel::SLEEPING);
+          // RL3: generic analog write via RUNLEVEL channel.
+          combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::SLEEPING, ChanLayer::LOCAL);
       }
       break;
     }
@@ -129,7 +108,8 @@ void loop() {
       }
 
         // --- 1. Auto-transition to RUNNING ---
-        combus_set_runlevel(comBus, RunLevel::RUNNING);
+        // RL3: generic analog write via RUNLEVEL channel.
+        combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::RUNNING, ChanLayer::LOCAL);
       break;
     }
 
@@ -172,7 +152,8 @@ void loop() {
         if (active) s_lastActivityMs = millis();
         if (millis() - s_lastActivityMs >= kEngineOffTimeoutMs) {
             sys_log_info("[SYSTEM][EVENT] reason=idle_timeout action=enter_IDLE\n");
-            combus_set_runlevel(comBus, RunLevel::IDLE);
+            // RL3: generic analog write via RUNLEVEL channel.
+            combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::IDLE, ChanLayer::LOCAL);
             break;
         }
       }
@@ -182,7 +163,7 @@ void loop() {
         uint8_t  chIdx    = static_cast<uint8_t>(machine.dcDev[i].comChannel.value());
         uint16_t busVal   = comBus.analogBus[chIdx].value;  ///< read-only — ComBus is never modified here
 
-        uint16_t motorCmd = busVal;   // isDrived always true when RUNNING is reached (failsafe returned above)
+        uint16_t motorCmd = busVal;   // Chantier 12.6: legacy `isDrived` comment removed — link health is now monitored by REMOTE_LINK_LOST.
 
 #ifndef PATCH_MOTORS_FORCE_SLEEP
         float finalSpeed = (float)map(motorCmd, 0, comBus.analogBusMaxVal, -PERCENT_MAX, PERCENT_MAX);
@@ -205,7 +186,8 @@ void loop() {
         disableAllDcDrivers(machine);
       }
         // Auto-transition to IDLE — no shutdown sequence implemented yet (winter 2026).
-        combus_set_runlevel(comBus, RunLevel::IDLE);
+        // RL3: generic analog write via RUNLEVEL channel.
+        combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::IDLE, ChanLayer::LOCAL);
       break;
     }
 
@@ -217,7 +199,24 @@ void loop() {
         stateTM = millis();
         stopAllDcDrivers(machine);
         sleepAllDcDrivers(machine);
-        disableAllDcDrivers(machine);     
+        disableAllDcDrivers(machine);
+      }
+      break;
+    }
+
+    // ---------------------------------------------------------
+    case RunLevel::FAILSAFE : {
+    // ---------------------------------------------------------
+      // FS2 — dedicated hardware safety reaction.  Triggered by the
+      // `cb_runlevel_fn` instance in runlevelProcs[] when FAILSAFE=true.
+      // Runs the same stop/sleep/disable sequence as the legacy ad-hoc
+      // block (removed in FS2).  isNewRunLevel guards against re-running
+      // the sequence every cycle while FAILSAFE stays asserted.
+      if (isNewRunLevel) {
+        sys_log_warn("[SYSTEM][SAFE] reason=failsafe_aggregator action=force_idle_and_lock\n");
+        stopAllDcDrivers(machine);
+        sleepAllDcDrivers(machine);
+        disableAllDcDrivers(machine);
       }
       break;
     }
@@ -225,27 +224,13 @@ void loop() {
     default:
       break;
   }
-  
+
 // =============================================================================
-// 3. SYSTEM TASKS (Failsafe reaction + output dispatch)
+// 3. SYSTEM TASKS (Output dispatch)
 // =============================================================================
 
-	// --- 1. Failsafe reaction (TRANSITIONAL) ---
-  // Reads the aggregated `DigitalComBusID::FAILSAFE` ComBus channel
-  // (published by failsafe_update() in sys_manager_update()) and forces
-  // RunLevel::SLEEPING when high.  This is a transitory fallback — the
-  // proper reaction will be a `proc_failsafe_reaction` processor
-  // registered in the machine chain (see doc/WIP - Failsafe module
-  // design.md §9). To be removed when that proc is in place.
-  if (comBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::FAILSAFE)].value) {
-    if (comBus.runLevel != RunLevel::SLEEPING) {
-      combus_set_runlevel(comBus, RunLevel::SLEEPING);
-      sys_log_warn("[SYSTEM][SAFE] reason=failsafe_aggregator action=enter_SLEEPING\n");
-    }
-  }
-
-	// --- 2. Output dispatch (sound TX, …) ---
-  output_update(comBus, false);
+	// --- Output dispatch (sound TX, …) ---
+  output_update(comBus);
 
 	// dashboard_update() removed — handled by dedicated FreeRTOS task on Core 0.
 	// See dashboard_start_task() called from dashboard_machine_setup().
