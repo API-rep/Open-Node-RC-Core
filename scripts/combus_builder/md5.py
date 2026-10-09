@@ -61,7 +61,7 @@ from .generator import View, ViewChannel
 
 def _canonical_direction_for_hash(
     direction: frozenset[str],
-    direction_or: frozenset[str],
+    direction_or: frozenset[str] = frozenset(),
 ) -> list[str]:
     """Canonise `direction` + `direction_or` for MD5 hashing (ND7 — ONE_WAY, A2.1).
 
