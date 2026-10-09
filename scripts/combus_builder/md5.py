@@ -103,6 +103,18 @@ def _view_channel_canonical(vc: ViewChannel, apply_one_way: bool = False) -> dic
     signals (uplink vs downlink on REMOTE channels) are preserved.
 
     `infoName` is included so that renaming a debug label changes the hash.
+
+    `both_or` (bool) is included so that two channels identical except on
+    the anti-oscillation flag produce different hashes. This matters for
+    the LOCAL view: `both` and `both_or` share the same frozenset
+    direction (`{uplink, downlink}`) but are treated as a real config
+    divergence by diffusion.py (warning, not don't-care). The hash must
+    therefore distinguish them so that a drift between boards built
+    separately is detected — otherwise the runtime wiring of `bothOr`
+    (next chantier) would silently mask a config bug.
+
+    ONE_WAY canonisation is unaffected: it only neutralises the
+    uplink/downlink distinction, never the both_or flag.
     """
     if apply_one_way:
         direction = _canonical_direction_for_hash(vc.ch.direction)
@@ -114,6 +126,7 @@ def _view_channel_canonical(vc: ViewChannel, apply_one_way: bool = False) -> dic
         "scope": vc.ch.scope,
         "theme": vc.ch.theme,
         "direction": direction,
+        "both_or": vc.ch.both_or,
         "infoName": vc.ch.info_name,
     }
 

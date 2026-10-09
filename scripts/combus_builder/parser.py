@@ -29,6 +29,16 @@ Buildroot strategy:
   remotes/, sound_module/, ...): the actual src_dir is taken from the
   PlatformIO configuration for the environment currently being built.
 
+ND8 (correctif 1/3): the discovery layer now accepts an optional
+`machine_type` parameter. When provided, files under
+`core/config/machines/<other_type>/` are excluded from the result. The
+filter is applied AFTER the file walk (single implementation) and BEFORE
+parsing — so the canonization, diffusion (ND2) and generation all
+operate on the already-filtered pool. The filter runs ONCE for the
+whole node (not per board) because the orchestrator
+(combus_scons_hook._generate_combus_action) calls discover_and_parse()
+exactly once before ND2 diffusion.
+
 Usage as PlatformIO extra_script:
     extra_scripts = pre:scripts/combus_builder.py
 where scripts/combus_builder.py is a thin wrapper that calls
@@ -122,7 +132,10 @@ def resolve_buildroot(env: Any | None, project_root: Path | None = None) -> Path
 # DISCOVERY
 # =============================================================================
 
-def discover_config_files(buildroot: Path) -> list[Path]:
+def discover_config_files(
+    buildroot: Path,
+    machine_type: str | None = None,
+) -> list[Path]:
     """
     Recursively walk `buildroot` and return every file whose extension
     is in CONFIG_EXTENSIONS.
@@ -130,6 +143,21 @@ def discover_config_files(buildroot: Path) -> list[Path]:
     - .pio/ is excluded explicitly.
     - Other noisy directories (git, pycache, node_modules) are excluded.
     - Results are returned in raw os.walk order (no sort, no canonicalization).
+
+    Args:
+      buildroot:    the source dir to walk.
+      machine_type: optional active machine type (e.g. "dumper_truck").
+                    When provided, files under
+                    core/config/machines/<other_type>/ are excluded from
+                    the result. When None (default), no machine-type
+                    filtering is applied (legacy behaviour — non-machine
+                    builds do not need the exclusion).
+
+    ND8 (correctif 1/3): the machine-type filter is applied HERE — after
+    the file walk, before the returned list is consumed by the rest of
+    the pipeline. This guarantees the filter runs ONCE per node (not per
+    board) and the diffusion (ND2) operates on the already-filtered
+    pool, exactly as the spec requires.
     """
     if not buildroot.is_dir():
         raise FileNotFoundError(
@@ -145,6 +173,16 @@ def discover_config_files(buildroot: Path) -> list[Path]:
             ext = os.path.splitext(name)[1].lower()
             if ext in CONFIG_EXTENSIONS:
                 found.append(Path(dirpath) / name)
+
+    # ND8: machine-type filter. Done AFTER the walk so we keep a single
+    # implementation (this is the only place where the full set of files
+    # is materialised). The helper is pure and unit-tested separately.
+    if machine_type is not None:
+        # Local import to keep parser.py importable even if the
+        # machine_type module is in flux (the unit tests can import
+        # parser.py without triggering the machine_type dependency).
+        from .machine_type import filter_files_by_machine_type
+        found = filter_files_by_machine_type(found, machine_type)
 
     return found
 
@@ -228,6 +266,7 @@ def parse_all(files: list[Path]) -> list[tuple[Path, str, Any]]:
 def discover_and_parse(
     env: Any | None = None,
     project_root: Path | None = None,
+    machine_type: str | None = None,
 ) -> tuple[Path, list[Path], list[tuple[Path, str, Any]]]:
     """
     A3 pipeline: resolve buildroot, discover config files, parse them.
@@ -235,9 +274,17 @@ def discover_and_parse(
     Returns (buildroot, discovered_files, parsed_data).
     `parsed_data` is a list of (path, type_label, raw_dict) tuples in
     discovery order. No sorting, no filtering, no canonization.
+
+    ND8 (correctif 1/3): the optional `machine_type` parameter is
+    forwarded to discover_config_files(). When provided, files under
+    core/config/machines/<other_type>/ are excluded before parsing.
+
+    This filter is applied ONCE for the whole node (the orchestrator
+    calls discover_and_parse() exactly once before ND2 diffusion). See
+    combus_scons_hook._generate_combus_action for the call site.
     """
     buildroot = resolve_buildroot(env, project_root)
-    files = discover_config_files(buildroot)
+    files = discover_config_files(buildroot, machine_type=machine_type)
     parsed = parse_all(files)
     return buildroot, files, parsed
 

@@ -228,10 +228,13 @@ def _warn(msg: str) -> None:
 # Mirror table for diffusion (ND2).
 # When a channel is declared on exactly one board, the other board
 # receives a synthetic declaration with the direction MIRRORED.
+# NOTE (correctif 2/3): `both_or` mirrors to `both_or` (no inversion,
+# same as `both`). The both_or flag is preserved through diffusion.
 _DIRECTION_MIRROR: dict[str, str] = {
     "uplink": "downlink",
     "downlink": "uplink",
     "both": "both",
+    "both_or": "both_or",
     "none": "none",
 }
 
@@ -391,15 +394,48 @@ def _resolve_group(
     absent = [b for b in all_board_ids if b not in explicit_set]
 
     # Tally directions across explicit declarations.
+    # NOTE (correctif 2/3): `both_or` is counted in n_both (same family
+    # as `both` for the inter-board rule). The distinction between
+    # `both` and `both_or` is captured separately (n_both_or) to
+    # detect the divergence warning (both vs both_or on the same id).
     n_up = sum(1 for _b, d, _p in explicit if d == "uplink")
     n_down = sum(1 for _b, d, _p in explicit if d == "downlink")
     n_both = sum(1 for _b, d, _p in explicit if d == "both")
+    n_both_or = sum(1 for _b, d, _p in explicit if d == "both_or")
     n_none = sum(1 for _b, d, _p in explicit if d == "none")
 
+    # --- ND6 (correctif 2/3): both vs both_or divergence warning ------
+    # If at least one board declares `both` and at least one declares
+    # `both_or` for the same id, this is a config inconsistency: one
+    # board applies anti-oscillation OR aggregation, the other does
+    # plain overwrite. NOT a fatal conflict (the inter-board rule
+    # treats them as the same family), but a real config warning.
+    # The warning is attached to the _ResolvedGroup.warning field so
+    # the caller (diffuse_local_channels) routes it to _warn().
+    both_vs_both_or_warning: str | None = None
+    if n_both >= 1 and n_both_or >= 1:
+        both_boards = sorted(
+            f"{b!r}" for b, d, _p in explicit if d == "both"
+        )
+        both_or_boards = sorted(
+            f"{b!r}" for b, d, _p in explicit if d == "both_or"
+        )
+        both_vs_both_or_warning = (
+            f"channel {channel_id!r}: both vs both_or divergence across "
+            f"boards — `both` on {both_boards}, `both_or` on "
+            f"{both_or_boards}. This is a config inconsistency: only "
+            f"the boards with `both_or` will apply anti-oscillation OR "
+            f"aggregation at runtime. Build continues."
+        )
+
     # --- Rule 2: both + (uplink or downlink) -> semantic FATAL --------
-    if n_both >= 1 and (n_up >= 1 or n_down >= 1):
+    # NOTE (correctif 2/3): `both_or` is treated as `both` here (same
+    # family "bidirectionnel"). Mixing `both_or` with `uplink`/`downlink`
+    # is the same fatal semantic conflict as mixing `both` with them.
+    if (n_both + n_both_or) >= 1 and (n_up >= 1 or n_down >= 1):
         # Build the involved list: all explicit declarations (the
-        # both ones and the simple-direction ones are the conflict).
+        # both/both_or ones and the simple-direction ones are the
+        # conflict).
         involved = list(explicit)
         raise DiffusionConflictError(
             channel_id=channel_id,
@@ -408,12 +444,17 @@ def _resolve_group(
         )
 
     # --- Rule 3: both only (no uplink, no downlink) -> OR aggregation -
-    if n_both >= 1 and n_up == 0 and n_down == 0:
-        synth = [(b, "both") for b in absent]
+    # NOTE (correctif 2/3): if any board declared `both_or`, the
+    # synthesis direction is `both_or` (preserve the anti-oscillation
+    # flag on the synthetic copy). Otherwise it's plain `both`.
+    if (n_both + n_both_or) >= 1 and n_up == 0 and n_down == 0:
+        synth_dir = "both_or" if n_both_or >= 1 else "both"
+        synth = [(b, synth_dir) for b in absent]
         return _ResolvedGroup(
             explicit=explicit,
             absent=absent,
             synth_for_absent=synth,
+            warning=both_vs_both_or_warning,
         )
 
     # --- Rule 4: n_up >= 2 -> FATAL -----------------------------------
@@ -617,80 +658,37 @@ def diffuse_local_channels(
         if group.warning is not None:
             _warn(group.warning)
 
-        # ---- ND6: both_or warnings ----------------------------------
-        # 1. Detect divergence: a board declares both_or=true and
-        #    another declares it false (or absent) for the same LOCAL
-        #    id in direction both. Not a fatal conflict (the diffusion
-        #    rule only judges `direction`), but a real config
-        #    inconsistency: one board protects against oscillation, the
-        #    other doesn't, for the same channel.
-        # 2. Detect both_or on a channel active on a SINGLE board only:
-        #    the anti-oscillation flag has no effect with one writer.
+        # ---- ND6 (correctif 2/3): both_or single-writer warning ------
+        # Detect `direction: both_or` on a channel active on a SINGLE
+        # board only post-diffusion: the anti-oscillation flag has no
+        # effect with one writer. The both-vs-both_or divergence is
+        # already handled in _resolve_group() (warning attached to
+        # _ResolvedGroup.warning, routed to _warn() above).
         #
-        # Both warnings are emitted BEFORE synthesis, on the explicit
-        # set, so we see the real config not the synthetic copies.
-        # We do NOT warn for absent fields (= not declared) on the
-        # other board — that's the normal "only one board declares
-        # both_or" case, which becomes a synthesis scenario, not a
-        # divergence.
-        both_or_values: dict[str, bool] = {}
-        for board_id in all_board_ids:
-            for d in decls_by_board.get(board_id, []):
-                if (
-                    d.raw.get("id") == cid
-                    and d.raw.get("scope") == "LOCAL"
-                    and _is_active_for_board(d.raw, node.boards[board_id])
-                ):
-                    v = d.raw.get("both_or")
-                    if isinstance(v, bool):
-                        both_or_values[str(board_id)] = v
-                    break
-        # Only consider explicit `both_or` declarations. Absent fields
-        # do not count as divergence — a board that didn't mention
-        # both_or at all is the canonical baseline, and its synthetic
-        # copy will inherit the explicit value (see step 4b).
-        if both_or_values:
-            distinct = set(both_or_values.values())
-            if len(distinct) >= 2:
-                # Explicit divergence: at least one board says True,
-                # at least one says False. NOT a fatal ND2/ND3 error,
-                # but a real config warning.
-                boards_true = [b for b, v in both_or_values.items() if v]
-                boards_false = [b for b, v in both_or_values.items() if not v]
-                _warn(
-                    f"channel {cid!r}: both_or divergent across boards — "
-                    f"True on {sorted(boards_true)}, False on "
-                    f"{sorted(boards_false)}. This is a config "
-                    f"inconsistency: only the boards with both_or=True "
-                    f"will apply anti-oscillation OR aggregation at "
-                    f"runtime. Build continues."
-                )
-        # Writer count after resolution. The spec says: "si both_or=true
-        # est déclaré mais que ce channel n'est actif explicitement que
-        # sur UNE SEULE board au final (après diffusion)". The key word
-        # is "explicitement" — we count only the EXPLICIT declarations
-        # (boards that actually declared the channel in their own .cb
-        # files), not the synthetic ones injected by diffusion. A
-        # channel declared on one board with `requires=[IS_MAINBOARD]`
-        # is explicitly active on 1 board only, even if diffusion
-        # synthesises a `both` declaration on the sister board.
+        # We count only the EXPLICIT declarations (boards that
+        # actually declared the channel in their own .cb files), not
+        # the synthetic ones injected by diffusion. A channel declared
+        # on one board with `requires=[IS_MAINBOARD]` is explicitly
+        # active on 1 board only, even if diffusion synthesises a
+        # `both_or` declaration on the sister board.
         #
         # We also exclude `none` directions from the count (a `none`
         # declaration is not a writer).
         explicit_active_count = sum(
             1 for _b, d, _p in explicit if d != "none"
         )
-        # Did at least one board EXPLICITLY set both_or=true?
-        any_explicit_both_or_true = any(
-            v for v in both_or_values.values()
+        # Did at least one board EXPLICITLY declare direction=both_or?
+        any_explicit_both_or = any(
+            d == "both_or" for _b, d, _p in explicit
         )
-        if any_explicit_both_or_true and explicit_active_count < 2:
+        if any_explicit_both_or and explicit_active_count < 2:
             _warn(
-                f"channel {cid!r}: both_or=true declared but channel is "
-                f"active on a single board only post-diffusion. The "
-                f"anti-oscillation OR aggregation has no effect with one "
-                f"writer. Verify this flag is intentional (probably a "
-                f"forward-declared config or an error). Build continues."
+                f"channel {cid!r}: direction=both_or declared but "
+                f"channel is active on a single board only "
+                f"post-diffusion. The anti-oscillation OR aggregation "
+                f"has no effect with one writer. Verify this token is "
+                f"intentional (probably a forward-declared config or "
+                f"an error). Build continues."
             )
 
     # Step 4: build the per-board resolved lists.

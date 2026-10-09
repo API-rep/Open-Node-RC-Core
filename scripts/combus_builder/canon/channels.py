@@ -48,6 +48,11 @@ from typing import Any, Iterable
 # =============================================================================
 
 # Champs autorisés par channel. Toute autre clé est une erreur.
+# NOTE (correctif 2/3): `both_or` n'est PLUS un champ YAML à part
+# entière. C'est désormais un TOKEN de `direction` (cf. DIRECTION_TOKENS
+# ci-dessous). L'ancien champ `both_or: true` se réécrit en
+# `direction: both_or`. Le booléen `both_or` reste exposé sur
+# ChannelDefinition mais dérivé en interne (jamais lu depuis le YAML).
 ALLOWED_FIELDS: frozenset[str] = frozenset({
     "id",
     "infoName",
@@ -57,12 +62,6 @@ ALLOWED_FIELDS: frozenset[str] = frozenset({
     "direction",
     "requires",
     "value",
-    # ND6: anti-oscillation flag for LOCAL channels in direction `both`.
-    # When True, the runtime must apply `local OR received` instead of
-    # `overwrite` on combus_frame_apply(). Validation enforces the
-    # constraints (scope=LOCAL, direction=both, type=digital) at this
-    # layer; the C++ runtime wiring is deferred to a separate chantier.
-    "both_or",
 })
 
 # Tokens acceptés pour `value` sur un channel analog.
@@ -106,11 +105,20 @@ SCOPE_ORDER: dict[str, int] = {
 }
 
 # Tokens de surface autorisés dans `direction`.
-DIRECTION_TOKENS: frozenset[str] = frozenset({"uplink", "downlink", "both", "none"})
+# NOTE (correctif 2/3): `both_or` est désormais un token de direction
+# (et non plus un champ YAML séparé). Il porte la même sémantique
+# "bidirectionnel" que `both` mais active en plus l'agrégation OR
+# anti-oscillation au runtime. Les contraintes (scope=LOCAL,
+# type=digital) sont vérifiées dans _normalize_direction().
+DIRECTION_TOKENS: frozenset[str] = frozenset({
+    "uplink", "downlink", "both", "none", "both_or",
+})
 
 # Tokens autorisés par scope (en surface).
+# `both_or` n'est accepté que sur LOCAL (anti-oscillation runtime
+# n'a de sens que sur les channels locaux). REMOTE/SYSTEM l'interdisent.
 DIRECTION_BY_SCOPE: dict[str, frozenset[str]] = {
-    "LOCAL": frozenset({"uplink", "downlink", "both", "none"}),
+    "LOCAL": frozenset({"uplink", "downlink", "both", "none", "both_or"}),
     "REMOTE": frozenset({"uplink", "downlink", "both", "none"}),
     "SYSTEM": frozenset({"none"}),  # seule valeur de surface acceptée
 }
@@ -205,30 +213,42 @@ def _normalize_direction(
     path: Path,
     channel_id: str | None,
     scope: str,
+    type_: str,
     raw_dir: Any,
-) -> frozenset[str]:
+) -> tuple[frozenset[str], bool]:
     """
-    Valide et normalise `direction` selon le scope.
+    Valide et normalise `direction` selon le scope et le type.
 
     Règles (decision mainteneur 2026-08-22 : direction = string, pas liste) :
       - Champ absent pour SYSTEM → frozenset() (= none implicite).
-      - Doit être une STRING unique ∈ {uplink, downlink, both, none}.
+      - Doit être une STRING unique ∈ {uplink, downlink, both, none, both_or}.
       - SYSTEM : seule 'none' (ou champ absent) est acceptée.
-      - LOCAL/REMOTE : 'uplink', 'downlink', 'both', 'none' tous OK
-                       selon la politique par scope.
+      - LOCAL : 'uplink', 'downlink', 'both', 'none', 'both_or' tous OK
+                selon la politique par scope.
+      - REMOTE : 'uplink', 'downlink', 'both', 'none' (PAS 'both_or' :
+                 l'anti-oscillation n'a de sens que sur LOCAL).
       - `both` est un raccourci pour {uplink, downlink}.
+      - `both_or` est un raccourci pour {uplink, downlink} + flag both_or=True.
       - `none` est un raccourci pour {}.
 
     Pourquoi une string (et non une liste) : les valeurs possibles sont
     mutuellement exclusives. Une liste n'apporte rien et complique la
     syntaxe YAML.
 
-    Retourne un frozenset normalisé (uniquement uplink/downlink).
+    Contraintes additionnelles (correctif 2/3) :
+      - `both_or` n'est accepté que si scope=LOCAL ET type=digital.
+        Sur REMOTE/SYSTEM ou sur analog, c'est une erreur explicite
+        (le runtime n'a pas de cas d'usage identifié en dehors de
+        LOCAL digital).
+
+    Retourne un tuple (frozenset normalisé, both_or bool).
+      - frozenset : uniquement uplink/downlink (jamais both/none/both_or).
+      - both_or   : True si le token brut était 'both_or', False sinon.
     """
     # Cas SYSTEM : champ absent → frozenset()
     if raw_dir is None:
         if scope == "SYSTEM":
-            return frozenset()
+            return (frozenset(), False)
         raise ChannelValidationError(
             path, channel_id,
             f"`direction` is required for scope={scope!r} "
@@ -240,13 +260,14 @@ def _normalize_direction(
         raise ChannelValidationError(
             path, channel_id,
             f"`direction` must be a string, got {type(raw_dir).__name__} "
-            f"({raw_dir!r}); accepted values: 'uplink', 'downlink', 'both', 'none'",
+            f"({raw_dir!r}); accepted values: 'uplink', 'downlink', "
+            f"'both', 'none', 'both_or'",
         )
 
     # SYSTEM : seule 'none' est acceptée.
     if scope == "SYSTEM":
         if raw_dir == "none":
-            return frozenset()
+            return (frozenset(), False)
         raise ChannelValidationError(
             path, channel_id,
             f"scope=SYSTEM does not have a wire direction; "
@@ -271,13 +292,36 @@ def _normalize_direction(
             f"allowed for this scope: {sorted(allowed)}",
         )
 
-    # Normalisation : `both` → {uplink, downlink}, `none` → {},
-    # `uplink`/`downlink` → {uplink}/{downlink}.
+    # Contraintes additionnelles sur `both_or` (correctif 2/3) :
+    # uniquement LOCAL + digital. On vérifie ici (au plus près de la
+    # validation du token) plutôt que dans validate_channel() pour
+    # garder la logique de direction centralisée.
+    if raw_dir == "both_or":
+        if scope != "LOCAL":
+            raise ChannelValidationError(
+                path, channel_id,
+                f"`direction: both_or` is only valid for scope=LOCAL; "
+                f"channel {channel_id!r} has scope={scope!r}. The "
+                f"anti-oscillation OR aggregation has no identified use "
+                f"case for REMOTE/SYSTEM channels.",
+            )
+        if type_ != "digital":
+            raise ChannelValidationError(
+                path, channel_id,
+                f"`direction: both_or` is only valid for type=digital; "
+                f"channel {channel_id!r} has type={type_!r}. The OR "
+                f"semantics is boolean and does not apply to analog values.",
+            )
+
+    # Normalisation : `both` et `both_or` → {uplink, downlink},
+    # `none` → {}, `uplink`/`downlink` → {uplink}/{downlink}.
     if raw_dir == "both":
-        return frozenset({"uplink", "downlink"})
+        return (frozenset({"uplink", "downlink"}), False)
+    if raw_dir == "both_or":
+        return (frozenset({"uplink", "downlink"}), True)
     if raw_dir == "none":
-        return frozenset()
-    return frozenset({raw_dir})
+        return (frozenset(), False)
+    return (frozenset({raw_dir}), False)
 
 
 # =============================================================================
@@ -575,7 +619,13 @@ def validate_channel(
         )
 
     # --- direction (contrat par scope) ---
-    direction = _normalize_direction(path, cid, cscope, raw.get("direction"))
+    # NOTE (correctif 2/3): _normalize_direction() retourne maintenant
+    # un tuple (frozenset, both_or). Le booléen both_or est dérivé du
+    # token brut (True si le token était 'both_or', False sinon). Il
+    # n'est plus jamais lu directement depuis le YAML.
+    direction, both_or = _normalize_direction(
+        path, cid, cscope, ctype, raw.get("direction"),
+    )
 
     # --- requires ---
     requires = _validate_requires(path, cid, raw.get("requires"))
@@ -585,49 +635,6 @@ def validate_channel(
     # None pour les deux cas).
     _check_value_explicit_null(path, cid, raw)
     value = _validate_value(path, cid, ctype, raw.get("value"))
-
-    # --- both_or (ND6: optionnel, défaut False) ---
-    # Anti-oscillation runtime flag: when True, the runtime must apply
-    # `local OR received` instead of `overwrite` on combus_frame_apply().
-    # Valid here only for scope=LOCAL, direction=both, type=digital.
-    # - Absent or False → no flag (default behaviour: overwrite).
-    # - True on a non-LOCAL / non-both / non-digital channel → explicit
-    #   rejection (config error, would be a no-op at runtime).
-    both_or_raw = raw.get("both_or")
-    if both_or_raw is None or both_or_raw is False:
-        both_or = False
-    elif both_or_raw is True:
-        both_or = True
-    else:
-        raise ChannelValidationError(
-            path, cid,
-            f"`both_or` must be a boolean (true/false), got "
-            f"{type(both_or_raw).__name__} ({both_or_raw!r})",
-        )
-    if both_or:
-        if cscope != "LOCAL":
-            raise ChannelValidationError(
-                path, cid,
-                f"`both_or` is only valid for scope=LOCAL; channel {cid!r} "
-                f"has scope={cscope!r}. No anti-oscillation case has been "
-                f"identified for REMOTE/SYSTEM channels.",
-            )
-        if ctype != "digital":
-            raise ChannelValidationError(
-                path, cid,
-                f"`both_or` is only valid for type=digital; channel {cid!r} "
-                f"has type={ctype!r}. The OR semantics is boolean and does "
-                f"not apply to analog values.",
-            )
-        if direction != frozenset({"uplink", "downlink"}):
-            # Find the raw direction for a clearer error message.
-            raw_dir = raw.get("direction")
-            raise ChannelValidationError(
-                path, cid,
-                f"`both_or` is only valid for direction=both; channel "
-                f"{cid!r} has direction={raw_dir!r}. `both_or` is an "
-                f"anti-oscillation flag, not a direction of its own.",
-            )
 
     return ChannelDefinition(
         id=cid,

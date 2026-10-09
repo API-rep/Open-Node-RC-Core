@@ -569,6 +569,10 @@ def _generate_combus_action(target, source, env):
             acquire_build_context,
         )
         from scripts.combus_builder.generator import GeneratorError, generate
+        from scripts.combus_builder.machine_type import (
+            AmbiguousMachineTypeError,
+            detect_machine_type,
+        )
         from scripts.combus_builder.node_context import (
             NodeContextError,
             parse_env_hierarchy,
@@ -599,13 +603,34 @@ def _generate_combus_action(target, source, env):
         f"{len(ctx.defines_with_value)} valued)"
     )
 
-    # --- 5. Discover + parse ---------------------------------------------
+    # --- 4b. ND8: detect machine type for the .cb discovery filter ------
+    # The machine type is derived from the LIVE BuildContext. In legacy
+    # single-board mode this is the only context. In node mode the
+    # boards of a node all share the same machine type (verified later
+    # at step 6c); the live ctx is either the mother's (when
+    # pio_env == node.mother_env) or a sub-env's, and in both cases
+    # the MACHINE_TYPE_* flag is identical across boards of the same
+    # node (ND1 invariant). Boards that resolve to a different
+    # machine type are detected at step 6c below and raise a build
+    # error there.
     try:
-        _, _, parsed = discover_and_parse(env=env)
+        machine_type = detect_machine_type(ctx)
+    except AmbiguousMachineTypeError as e:
+        sys.stderr.write(f"[combus_scons_action] FATAL: {e}\n")
+        return 1
+    if machine_type is not None:
+        print(
+            f"[combus_scons_action] ND8 machine-type filter active: "
+            f"machine_type={machine_type!r} (excludes "
+            f"core/config/machines/<other>/)"
+        )
+
+    # --- 5. Discover + parse (ND8: with machine_type filter) ------------
+    try:
+        _, _, parsed = discover_and_parse(env=env, machine_type=machine_type)
     except ParseError as e:
         sys.stderr.write(
-            f"[combus_scons_action] FATAL: YAML parse failed: {e}\n"
-        )
+            f"[combus_scons_action] FATAL: YAML parse failed: {e}\n"        )
         return 1
 
     # --- 6. Canonise ----------------------------------------------------
@@ -642,6 +667,51 @@ def _generate_combus_action(target, source, env):
             f"mother_env={node.mother_env!r}, "
             f"boards={[b[0] for b in boards]}"
         )
+
+    # --- 6c. ND8: verify all boards of a node agree on machine type ------
+    # In node mode, every board's BuildContext must resolve to the
+    # same machine type as the live ctx (or to None). If any board
+    # disagrees, the build fails loudly. This check is what makes the
+    # discovery filter safe: a divergence detected here means two
+    # boards of the node would have received different .cb pools, so
+    # the cross-board diffusion (ND2) would mix incompatible
+    # contracts.
+    if node.is_node and machine_type is not None:
+        try:
+            for _bid, board_env_name in boards:
+                if _bid is None and pio_env == node.mother_env:
+                    # Mother env: already verified via the live ctx.
+                    continue
+                if not project_dir:
+                    sys.stderr.write(
+                        f"[combus_scons_action] FATAL: cannot resolve "
+                        f"board env {board_env_name!r} for machine type "
+                        f"consistency check: PROJECT_DIR is not available "
+                        f"on env.\n"                    )
+                    return 1
+                try:
+                    bctx = resolve_build_context_static(
+                        Path(project_dir), board_env_name,
+                    )
+                except (NodeContextError, BuildContextError) as e:
+                    sys.stderr.write(
+                        f"[combus_scons_action] FATAL: static "
+                        f"resolution failed for board env "
+                        f"{board_env_name!r}: {e}\n"                    )
+                    return 1
+                board_mt = detect_machine_type(bctx)
+                if board_mt is not None and board_mt != machine_type:
+                    sys.stderr.write(
+                        f"[combus_scons_action] FATAL: board env "
+                        f"{board_env_name!r} resolves to machine type "
+                        f"{board_mt!r}, which differs from the active "
+                        f"machine type {machine_type!r} (from the live "
+                        f"ctx). All boards of a node must share the "
+                        f"same MACHINE_TYPE_*. Check platformio.ini.\n"                    )
+                    return 1
+        except AmbiguousMachineTypeError as e:
+            sys.stderr.write(f"[combus_scons_action] FATAL: {e}\n")
+            return 1
 
     # --- 7. Generate (atomic) -------------------------------------------
     staging_dir = out_dir.with_suffix(out_dir.suffix + ".new")
