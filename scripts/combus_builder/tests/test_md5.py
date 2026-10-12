@@ -604,7 +604,7 @@ def _run_full_pipeline(out_dir: Path):
     # The real repo has channels with `requires: [HAS_FAILSAFE, HAS_VBAT_FAILSAFE]`.
     # We must declare these flags in the BuildContext, otherwise generate() raises
     # RequiresResolutionError. This mirrors what test_generator.py does.
-    ctx = _ctx(["HAS_FAILSAFE", "HAS_VBAT_FAILSAFE"])
+    ctx = _ctx(["HAS_FAILSAFE", "HAS_VBAT_FAILSAFE", "HAS_RUNLEVEL_MANAGER"])
     # generate() takes the raw list of ChannelDefinitions, not the ViewSelection.
     generate(result.canonical_definitions, ctx, out_dir)
     return sel
@@ -675,7 +675,7 @@ def test_a10_md5_deterministic_across_file_discovery_order(tmp_path: Path):
     _, _, parsed1 = discover_and_parse(project_root=buildroot.parent)
     result1 = canonize(parsed1)
     sel1 = select_views(result1.canonical_definitions)
-    ctx = _ctx(["HAS_FAILSAFE", "HAS_VBAT_FAILSAFE"])
+    ctx = _ctx(["HAS_FAILSAFE", "HAS_VBAT_FAILSAFE", "HAS_RUNLEVEL_MANAGER"])
     generate(result1.canonical_definitions, ctx, out1)
 
     # Run 2: reverse the file order to stress the parser/canon.

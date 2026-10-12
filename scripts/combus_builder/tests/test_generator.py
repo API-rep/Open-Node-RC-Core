@@ -6,7 +6,7 @@ A6.1 corrections vs A6:
   - ChannelDescriptor is REMOVED.
   - The generator emits REAL AnalogComBus / DigitalComBus runtime
     structures (infoName, value, layer, direction) — matching
-    include/struct/combus_struct.h.
+    src/core/system/combus/combus_defs.h.
   - ChanLayer is preserved (audit A6 confirmed _layer_ok() requires it).
   - direction is a fourth field on each runtime struct entry.
 
@@ -164,7 +164,7 @@ def test_no_channel_descriptor_in_full_generation(tmp_path):
 
 def test_chanlayer_enum_in_combus_struct():
     """combus_struct.h still defines ChanLayer (audit A6 confirmed _layer_ok)."""
-    h = (REPO_ROOT / "include" / "struct" / "combus_struct.h").read_text(encoding="utf-8")
+    h = (REPO_ROOT / "src" / "core" / "system" / "combus" / "combus_defs.h").read_text(encoding="utf-8")
     assert "enum class ChanLayer" in h
     for v in ("SYSTEM", "LOCAL", "REMOTE", "UNDEFINED"):
         assert v in h, f"ChanLayer::{v} missing from combus_struct.h"
@@ -175,7 +175,7 @@ def test_generated_initializers_use_chanlayer():
     chs = _canon_from_yamls({"channels": [
         _ch("R1", scope="REMOTE", type_="digital"),
         _ch("L1", scope="LOCAL", type_="digital"),
-        _ch("S1", scope="SYSTEM", type_="digital", direction=["none"]),
+        _ch("S1", scope="SYSTEM", type_="digital", direction="none"),
     ]})
     with tempfile.TemporaryDirectory() as tmp_dir:
         generate(chs, _ctx([]), Path(tmp_dir))
@@ -187,11 +187,11 @@ def test_generated_initializers_use_chanlayer():
 
 
 def test_generated_header_includes_combus_struct():
-    """Generated .h must #include <struct/combus_struct.h> for ChanLayer / Direction."""
+    """Generated .h must #include <core/system/combus/combus_defs.h> for ChanLayer / Direction."""
     chs = _canon_from_yamls({"channels": [_ch("FOO")]})
     view = _build_view_with_channels(chs)
     out = _render_header(view, _ctx([]))
-    assert "#include <struct/combus_struct.h>" in out
+    assert "#include <core/system/combus/combus_defs.h>" in out
 
 
 # =============================================================================
@@ -200,17 +200,17 @@ def test_generated_header_includes_combus_struct():
 
 def test_direction_field_in_combus_struct():
     """AnalogComBus and DigitalComBus both have a `direction` field."""
-    h = (REPO_ROOT / "include" / "struct" / "combus_struct.h").read_text(encoding="utf-8")
+    h = (REPO_ROOT / "src" / "core" / "system" / "combus" / "combus_defs.h").read_text(encoding="utf-8")
     assert "Direction   direction" in h or "Direction direction" in h
 
 
 def test_generated_initializers_have_direction_field():
     """Each generated entry must include `.direction = Direction::X`."""
     chs = _canon_from_yamls({"channels": [
-        _ch("UP",   direction=["uplink"]),
-        _ch("DOWN", direction=["downlink"]),
-        _ch("BOTH", direction=["both"]),
-        _ch("NONE", direction=["none"]),
+        _ch("UP",   direction="uplink"),
+        _ch("DOWN", direction="downlink"),
+        _ch("BOTH", direction="both"),
+        _ch("NONE", direction="none"),
     ]})
     view = _build_view_with_channels(chs)
     out = _render_source(view, _ctx([]))
@@ -223,7 +223,7 @@ def test_generated_initializers_have_direction_field():
 def test_generated_init_order_infoName_value_layer_direction():
     """Each entry must keep the field order: infoName, value, layer, direction."""
     chs = _canon_from_yamls({"channels": [
-        _ch("FOO", info_name="Foo channel", direction=["uplink"]),
+        _ch("FOO", info_name="Foo channel", direction="uplink"),
     ]})
     view = _build_view_with_channels(chs)
     out = _render_source(view, _ctx([]))
@@ -629,10 +629,10 @@ def test_select_views_same_id_in_both_views():
 def test_view_channel_direction_bits():
     chs = _canon_from_yamls({
         "channels": [
-            _ch("UP", direction=["uplink"]),
-            _ch("DOWN", direction=["downlink"]),
-            _ch("BOTH", direction=["both"]),
-            _ch("NONE", direction=["none"]),
+            _ch("UP", direction="uplink"),
+            _ch("DOWN", direction="downlink"),
+            _ch("BOTH", direction="both"),
+            _ch("NONE", direction="none"),
         ]
     })
     full = _select_view(chs, "combus", {"REMOTE", "LOCAL", "SYSTEM"})
@@ -858,8 +858,8 @@ def test_render_header_remote_view_no_bus_instance():
 def test_render_source_real_runtime_structs():
     """A6.1: source defines AnalogComBusArray[] / DigitalComBusArray[] directly."""
     chs = _canon_from_yamls({"channels": [
-        _ch("FOO", info_name="Foo channel", direction=["uplink"]),
-        _ch("BAR", type_="analog", info_name="Bar analog", direction=["both"]),
+        _ch("FOO", info_name="Foo channel", direction="uplink"),
+        _ch("BAR", type_="analog", info_name="Bar analog", direction="both"),
     ]})
     view = _build_view_with_channels(chs)
     out = _render_source(view, _ctx([]))
@@ -1104,8 +1104,8 @@ def test_generated_ids_header_parses():
     with tempfile.TemporaryDirectory() as tmp_dir:
         sel = generate(chs, _ctx([]), Path(tmp_dir))
         ids = (Path(tmp_dir) / "combus_ids.h").read_text(encoding="utf-8")
-    assert re.search(r"enum\s+class\s+AnalogCombusID\s*:\s*uint8_t", ids)
-    assert re.search(r"enum\s+class\s+DigitalCombusID\s*:\s*uint8_t", ids)
+    assert re.search(r"enum\s+class\s+AnalogComBusID\s*:\s*uint8_t", ids)
+    assert re.search(r"enum\s+class\s+DigitalComBusID\s*:\s*uint8_t", ids)
     assert re.search(r"A1\s*=\s*0", ids)
     assert re.search(r"D1\s*=\s*1", ids)
     assert re.search(r"CH_COUNT", ids)
@@ -1142,7 +1142,7 @@ def test_generated_cpp_compiles_cleanly_with_cpp_check():
     """
     If a C++ compiler is available, validate that the generated
     combus.h / combus.cpp / combus_ids.h parse and type-check
-    against the real runtime include/struct/combus_struct.h.
+    against the real runtime src/core/system/combus/combus_defs.h.
 
     Toolchain target: -std=gnu++17 (matches platformio.ini line 34,
     espressif32 Xtensa GCC 12.2.0). Designated initializers for
@@ -1180,9 +1180,9 @@ int main() {
     // enum class does not implicitly convert to int: use static_cast.
     // The view sort puts analog before digital within each scope,
     // so REMOTE[0]=A1 (analog), REMOTE[1]=D1 (digital).
-    static_assert(static_cast<int>(AnalogCombusID::A1) == 0, "A1");
-    static_assert(static_cast<int>(DigitalCombusID::D1) == 1, "D1");
-    static_assert(static_cast<int>(AnalogCombusID::CH_COUNT) > 0, "count");
+    static_assert(static_cast<int>(AnalogComBusID::A1) == 0, "A1");
+    static_assert(static_cast<int>(DigitalComBusID::D1) == 1, "D1");
+    static_assert(static_cast<int>(AnalogComBusID::CH_COUNT) > 0, "count");
     // Read .direction to ensure it is publicly accessible.
     Direction d = comBus.analogBus[0].direction;
     (void)d;
@@ -1343,7 +1343,7 @@ def test_python_direction_constants_match_cpp_enum():
     assert expected_py == {"NONE": 0, "UPLINK": 1, "DOWNLINK": 2, "BOTH": 3}
 
     # Parse the C++ enum from the real header.
-    h = (REPO_ROOT / "include" / "struct" / "combus_struct.h").read_text(encoding="utf-8")
+    h = (REPO_ROOT / "src" / "core" / "system" / "combus" / "combus_defs.h").read_text(encoding="utf-8")
     cpp_enum = _parse_direction_enum(h)
 
     # The C++ enum must declare the same four enumerators with the same values.
@@ -1408,7 +1408,7 @@ def test_runtime_struct_field_order_matches_python_emission():
     """The runtime struct (AnalogComBus / DigitalComBus) must declare its
     fields in the same order as the generator emits initializers:
     infoName, value, layer, direction."""
-    h = (REPO_ROOT / "include" / "struct" / "combus_struct.h").read_text(encoding="utf-8")
+    h = (REPO_ROOT / "src" / "core" / "system" / "combus" / "combus_defs.h").read_text(encoding="utf-8")
     for struct_name in ("AnalogComBus", "DigitalComBus"):
         # Find the struct definition body.
         m = re.search(rf"typedef\s+struct\s+\{{([^}}]*)\}}\s*{struct_name};", h, re.DOTALL)
@@ -1426,7 +1426,7 @@ def test_runtime_struct_field_order_matches_python_emission():
 
 def test_generated_cpp_direction_for_both():
     chs = _canon_from_yamls({"channels": [
-        _ch("FOO", direction=["both"]),
+        _ch("FOO", direction="both"),
     ]})
     view = _build_view_with_channels(chs)
     out = _render_source(view, _ctx([]))
@@ -1435,7 +1435,7 @@ def test_generated_cpp_direction_for_both():
 
 def test_generated_cpp_direction_for_none():
     chs = _canon_from_yamls({"channels": [
-        _ch("FOO", scope="SYSTEM", direction=["none"]),
+        _ch("FOO", scope="SYSTEM", direction="none"),
     ]})
     view = _build_view_with_channels(chs)
     out = _render_source(view, _ctx([]))
@@ -1444,7 +1444,7 @@ def test_generated_cpp_direction_for_none():
 
 def test_generated_cpp_direction_for_uplink():
     chs = _canon_from_yamls({"channels": [
-        _ch("FOO", direction=["uplink"]),
+        _ch("FOO", direction="uplink"),
     ]})
     view = _build_view_with_channels(chs)
     out = _render_source(view, _ctx([]))
@@ -1453,7 +1453,7 @@ def test_generated_cpp_direction_for_uplink():
 
 def test_generated_cpp_direction_for_downlink():
     chs = _canon_from_yamls({"channels": [
-        _ch("FOO", direction=["downlink"]),
+        _ch("FOO", direction="downlink"),
     ]})
     view = _build_view_with_channels(chs)
     out = _render_source(view, _ctx([]))
