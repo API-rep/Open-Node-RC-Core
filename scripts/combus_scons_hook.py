@@ -826,7 +826,14 @@ def _generate_combus_action(target, source, env):
             return 1
 
         # --- 7b.3. Per-board canonize() + generate() ---
+        # ND2 fix (2026-10-12, "mere = board fantome"): skip the mother
+        # env (board_id=None) in the generation loop. The mother is a
+        # meta env (shared build_flags only), not a runtime board, so
+        # it does not produce combus artifacts. The diffusion step
+        # (7b.2) also excludes it from the resolved list.
         for board_id, board_env_name in boards:
+            if node.is_node and board_id is None:
+                continue
             board_parsed = diffused.get(board_id)
             if board_parsed is None:
                 sys.stderr.write(

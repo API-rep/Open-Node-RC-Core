@@ -584,9 +584,21 @@ def diffuse_local_channels(
     # use this to compute the `absent` set per (id, scope) below.
     all_board_ids: list[str | None] = list(node.boards.keys())
 
+    # Mere = meta env (build_flags partages), pas une board runtime : en node mode
+    # (au moins un sous-env) elle est EXCLUE de la diffusion LOCAL. Point unique
+    # d'exclusion : `diffusion_boards`, utilise partout a la place de node.boards.
+    # Mono-board (is_node False) : comportement inchange.
+    if node.is_node and None in node.boards:
+        diffusion_boards: dict[str | None, BuildContext] = {
+            b: c for b, c in node.boards.items() if b is not None
+        }
+        all_board_ids = [b for b in all_board_ids if b is not None]
+    else:
+        diffusion_boards = node.boards
+
     # Step 1: collect raw declarations per board.
     decls_by_board: dict[str | None, list[_RawChannelDecl]] = {}
-    for board_id, ctx in node.boards.items():
+    for board_id, ctx in diffusion_boards.items():
         decls_by_board[board_id] = _extract_raw_declarations(parsed, board_id)
 
     # Step 2: bucket declarations by (id, scope).
@@ -600,7 +612,7 @@ def diffuse_local_channels(
     passthrough: dict[tuple[str, str], list[tuple[str | None, dict[str, Any], Path]]] = {}
 
     for board_id, decls in decls_by_board.items():
-        ctx = node.boards[board_id]
+        ctx = diffusion_boards[board_id]
         for decl in decls:
             cid = decl.raw.get("id")
             scope = decl.raw.get("scope")
@@ -713,7 +725,7 @@ def diffuse_local_channels(
     #   - All REMOTE/SYSTEM declarations (pass-through, one per id).
     result: dict[str | None, list[tuple[Path, str, Any]]] = {}
 
-    for board_id in node.boards:
+    for board_id in diffusion_boards:
         # Collect this board's own LOCAL declarations (by id), so
         # we know which ids to NOT synthesise on this board.
         own_local_ids: set[str] = set()
@@ -723,7 +735,7 @@ def diffuse_local_channels(
             if not isinstance(cid, str) or not cid:
                 continue
             if scope == "LOCAL" and _is_active_for_board(
-                decl.raw, node.boards[board_id]
+                decl.raw, diffusion_boards[board_id]
             ):
                 own_local_ids.add(cid)
 
@@ -738,7 +750,7 @@ def diffuse_local_channels(
                 continue
             if scope != "LOCAL":
                 continue
-            if not _is_active_for_board(decl.raw, node.boards[board_id]):
+            if not _is_active_for_board(decl.raw, diffusion_boards[board_id]):
                 continue
             local_decls_for_board.append((
                 decl.source_path,
@@ -774,7 +786,7 @@ def diffuse_local_channels(
                         d.raw.get("id") == cid
                         and d.raw.get("scope") == "LOCAL"
                         and _is_active_for_board(
-                            d.raw, node.boards[source_board]
+                            d.raw, diffusion_boards[source_board]
                         )
                     ):
                         source_decl = d
@@ -839,7 +851,7 @@ def diffuse_local_channels(
             if scope == "SYSTEM":
                 active_entry = None
                 for _bd, raw_decl, source_path in entries:
-                    if _is_active_for_board(raw_decl, node.boards[board_id]):
+                    if _is_active_for_board(raw_decl, diffusion_boards[board_id]):
                         active_entry = (raw_decl, source_path)
                         break
                 if active_entry is None:
