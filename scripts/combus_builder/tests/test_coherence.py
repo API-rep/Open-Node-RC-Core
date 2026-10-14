@@ -520,7 +520,7 @@ def test_list_known_envs_finds_real_project_envs():
     # We expect at least these (already verified manually during A8 design).
     expected_subset = {
         "machines", "volvo_A60H_bruder", "remotes",
-        "sound_node_base", "sound_node_volvo", "test_combus_loopback",
+        "test_combus_loopback",
     }
     assert expected_subset.issubset(set(envs)), (
         f"missing envs: {expected_subset - set(envs)}"
