@@ -122,7 +122,7 @@ def _extract_channel_ids_and_dirs(
 # Test 1: Mere + 2 sous-envs, uplink on mainboard only
 # =============================================================================
 
-def test_mere_excluded_uplink_mainboard_only() -> bool:
+def test_mere_excluded_uplink_mainboard_only() -> None:
     """Mere + mainboard + soundboard. uplink on mainboard only.
 
     Expected:
@@ -230,7 +230,7 @@ channels:
 # Test 2: Mere + 2 sous-envs, uplink on BOTH mainboard and soundboard
 # =============================================================================
 
-def test_mere_excluded_uplink_conflict_names_real_boards() -> bool:
+def test_mere_excluded_uplink_conflict_names_real_boards() -> None:
     """Mere + mainboard + soundboard. uplink on BOTH.
 
     Expected:
@@ -314,7 +314,7 @@ channels:
 # Test 3: Mono-board (mere sans sous-env) -> comportement INCHANGE
 # =============================================================================
 
-def test_mono_board_unchanged() -> bool:
+def test_mono_board_unchanged() -> None:
     """Mono-board: mere is the only board, no sub-env.
 
     Expected:
@@ -394,37 +394,6 @@ channels:
 # Main
 # =============================================================================
 
-def main() -> int:
-    results: list[tuple[str, bool]] = []
-    for fn in (
-        test_mere_excluded_uplink_mainboard_only,
-        test_mere_excluded_uplink_conflict_names_real_boards,
-        test_mono_board_unchanged,
-    ):
-        try:
-            fn()  # les tests levent AssertionError en cas d'échec ; pas de valeur de retour
-            results.append((fn.__name__, True))
-        except AssertionError as e:
-            print(f"  FAIL  {fn.__name__}: {e}")
-            results.append((fn.__name__, False))
-        except Exception as e:
-            print(f"  ERROR {fn.__name__}: {type(e).__name__}: {e}")
-            results.append((fn.__name__, False))
-
-    print("\n=== Summary ===")
-    all_ok = True
-    for name, ok in results:
-        status = "[OK  ]" if ok else "[FAIL]"
-        print(f"  {status} {name}")
-        if not ok:
-            all_ok = False
-
-    if all_ok:
-        print("\nAll mother-not-a-board tests passed.")
-        return 0
-    print("\nSome mother-not-a-board tests FAILED.")
-    return 1
-
-
 if __name__ == "__main__":
-    sys.exit(main())
+    import pytest
+    sys.exit(pytest.main([__file__, "-q"]))

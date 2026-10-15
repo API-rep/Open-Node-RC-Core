@@ -544,23 +544,17 @@ def test_four_headers_compile_together(tmp_path):
         "}\n",
         encoding="utf-8",
     )
-    for compiler in ("xtensa-esp32-elf-g++", "g++"):
-        try:
-            r = subprocess.run(
-                [compiler, "-std=c++17", "-I", str(tmp_path), "-c", str(tu),
-                 "-o", str(tmp_path / "out.o")],
-                capture_output=True, text=True, timeout=30,
-            )
-        except FileNotFoundError:
-            continue
-        if r.returncode == 0:
-            return
-        # If we got a returncode != 0 with the first compiler and g++
-        # is the fallback, break so the error message can be reported.
-    if compiler == "g++":
-            assert False, f"compile failed: {r.stderr}"
+    from scripts.combus_builder.tests._cpp_compiler import find_cpp_compiler
     import pytest
-    pytest.skip("No C++ compiler available for compile-check")
+    found = find_cpp_compiler()
+    if found is None:
+        pytest.skip("No C++ compiler available for compile-check")
+    argv0, label = found
+    r = subprocess.run(
+        argv0 + ["-std=c++17", "-I", str(tmp_path), "-fsyntax-only", str(tu)],
+        capture_output=True, text=True, timeout=60,
+    )
+    assert r.returncode == 0, f"compile failed with {label}: {r.stderr}"
 
 
 # =============================================================================
@@ -637,9 +631,11 @@ def test_a10_full_pipeline_deterministic_bit_identical(tmp_path: Path):
         "combus_remote_md5.h",
         "combus_local_md5.h",
         "combus_md5.h",
-        "combus_remote.h",
-        "combus_local.h",
+        "combus_remote_ids.h",
+        "combus_local_ids.h",
+        "combus_ids.h",
         "combus.h",
+        "combus.cpp",
     ]
     for fname in expected_files:
         p1 = out1 / fname
@@ -691,9 +687,11 @@ def test_a10_md5_deterministic_across_file_discovery_order(tmp_path: Path):
         "combus_remote_md5.h",
         "combus_local_md5.h",
         "combus_md5.h",
-        "combus_remote.h",
-        "combus_local.h",
+        "combus_remote_ids.h",
+        "combus_local_ids.h",
+        "combus_ids.h",
         "combus.h",
+        "combus.cpp",
     ):
         b1 = (out1 / fname).read_bytes()
         b2 = (out2 / fname).read_bytes()
@@ -925,3 +923,27 @@ def test_nd7_canonical_bytes_none_unchanged_on_local():
     sel = select_views(chs)
     payload = json.loads(canonical_bytes(sel.local))
     assert payload["channels"][0]["direction"] == []
+
+
+# =============================================================================
+# A2.1 — hash canonisation of the `*_or` direction variants (direct contract)
+# =============================================================================
+
+import pytest  # noqa: E402
+
+
+@pytest.mark.parametrize(
+    "direction, direction_or, expected",
+    [
+        (frozenset({"uplink"}), frozenset(), ["ONE_WAY"]),
+        (frozenset({"downlink"}), frozenset(), ["ONE_WAY"]),
+        (frozenset(), frozenset({"uplink"}), ["ONE_WAY"]),      # uplink_or
+        (frozenset(), frozenset({"downlink"}), ["ONE_WAY"]),    # downlink_or
+        (frozenset({"uplink", "downlink"}), frozenset(), ["downlink", "uplink"]),  # both
+        (frozenset(), frozenset({"uplink", "downlink"}),
+         ["both_or", "downlink", "uplink"]),                    # both_or
+        (frozenset(), frozenset(), []),                         # none
+    ],
+)
+def test_canonical_direction_for_hash_full_mapping(direction, direction_or, expected):
+    assert _canonical_direction_for_hash(direction, direction_or) == expected

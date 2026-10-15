@@ -61,7 +61,7 @@ def _make_analog(value=None):
     return ChannelDefinition(
         id="X", info_name="x", type="analog", scope="REMOTE",
         theme="core", direction=frozenset({"uplink"}),
-        requires=frozenset(), source_path=Path("/tmp/x.cb"),
+        direction_or=frozenset(), requires=frozenset(), source_path=Path("/tmp/x.cb"),
         raw={}, value=value,
     )
 
@@ -71,7 +71,7 @@ def _make_digital(value=None):
     return ChannelDefinition(
         id="Y", info_name="y", type="digital", scope="REMOTE",
         theme="core", direction=frozenset({"uplink"}),
-        requires=frozenset(), source_path=Path("/tmp/x.cb"),
+        direction_or=frozenset(), requires=frozenset(), source_path=Path("/tmp/x.cb"),
         raw={}, value=value,
     )
 
@@ -95,7 +95,7 @@ def _raw_channel(
         "type": type_,
         "scope": scope,
         "theme": theme,
-        "direction": ["uplink"],
+        "direction": "uplink",
     }
     if value is not Ellipsis:
         raw["value"] = value

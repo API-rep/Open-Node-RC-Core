@@ -142,7 +142,7 @@ def _make_fake_build_context(
 # Test 1: legacy single-board mode (ND1: strictly unchanged)
 # =============================================================================
 
-def test_legacy_mode() -> bool:
+def test_legacy_mode() -> None:
     """Verify that legacy single-board mode is strictly unchanged.
 
     In legacy mode:
@@ -198,14 +198,13 @@ def test_legacy_mode() -> bool:
         print(f"  OK   generated {len(expected_files)} legacy files (no prefix)")
         print(f"  OK   sel.full.ch_count={sel.full.ch_count}, "
               f"sel.full.wire_end={sel.full.wire_end}")
-    return True
 
 
 # =============================================================================
 # Test 2: node mode with 2 fictitious sub-envs
 # =============================================================================
 
-def test_node_mode_2_boards() -> bool:
+def test_node_mode_2_boards() -> None:
     """Verify that node mode with 2 sub-envs works correctly.
 
     In node mode:
@@ -377,14 +376,13 @@ def test_node_mode_2_boards() -> bool:
             f'"combus_mainboard.h"'
         )
         print(f"  OK   combus_mainboard.cpp #include is correctly prefixed")
-    return True
 
 
 # =============================================================================
 # Test 3: parse_env_hierarchy edge cases
 # =============================================================================
 
-def test_parse_env_hierarchy_edge_cases() -> bool:
+def test_parse_env_hierarchy_edge_cases() -> None:
     """Verify edge cases of parse_env_hierarchy()."""
     print("\n=== Test 3: parse_env_hierarchy edge cases ===")
 
@@ -394,8 +392,7 @@ def test_parse_env_hierarchy_edge_cases() -> bool:
     except NodeContextError:
         print("  OK   empty env_name raises NodeContextError")
     else:
-        print("  FAIL empty env_name should raise NodeContextError")
-        return False
+        raise AssertionError("empty env_name should raise NodeContextError")
 
     # Case 2: env_name not in all_env_names → legacy mode.
     node = parse_env_hierarchy("standalone_env", ["other_env"])
@@ -431,35 +428,12 @@ def test_parse_env_hierarchy_edge_cases() -> bool:
     assert node.mother_env == "volvo_A60H_bruder"
     print(f"  OK   building mother env directly: is_node={node.is_node}")
 
-    return True
 
 
 # =============================================================================
 # Main
 # =============================================================================
 
-def main() -> int:
-    results = []
-    results.append(("legacy_mode", test_legacy_mode()))
-    results.append(("node_mode_2_boards", test_node_mode_2_boards()))
-    results.append(("parse_env_hierarchy_edge_cases",
-                    test_parse_env_hierarchy_edge_cases()))
-
-    print("\n=== Summary ===")
-    all_ok = True
-    for name, ok in results:
-        status = "OK  " if ok else "FAIL"
-        print(f"  [{status}] {name}")
-        if not ok:
-            all_ok = False
-
-    if all_ok:
-        print("\nAll ND1 validation tests passed.")
-        return 0
-    else:
-        print("\nSome ND1 validation tests FAILED.")
-        return 1
-
-
 if __name__ == "__main__":
-    sys.exit(main())
+    import pytest
+    sys.exit(pytest.main([__file__, "-q"]))

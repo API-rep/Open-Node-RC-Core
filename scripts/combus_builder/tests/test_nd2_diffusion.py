@@ -124,7 +124,7 @@ def _make_parsed(
 # Test 1: Single uplink producer (ND2 generalised rule 5)
 # =============================================================================
 
-def test_mirror_simple() -> bool:
+def test_mirror_simple() -> None:
     """BAT_LOW declared uplink on mainboard only -> soundboard (absent) gets downlink.
 
     Ownership via requires:
@@ -203,14 +203,13 @@ channels:
         )
         print(f"  OK   soundboard: {soundboard_decls}")
 
-    return True
 
 
 # =============================================================================
 # Test 2: Complementary pair (explicit uplink + explicit downlink)
 # =============================================================================
 
-def test_complementary_pair() -> bool:
+def test_complementary_pair() -> None:
     """uplink on mainboard + explicit downlink on soundboard -> OK."""
     print("\n=== Test 2: Complementary pair ===")
     with tempfile.TemporaryDirectory() as td:
@@ -258,14 +257,13 @@ channels:
         assert soundboard_decls["BAT_LOW"] == "downlink"
         print(f"  OK   mainboard BAT_LOW= uplink, soundboard BAT_LOW= downlink")
 
-    return True
 
 
 # =============================================================================
 # Test 3: Conflict uplink/uplink
 # =============================================================================
 
-def test_conflict_uplink_uplink() -> bool:
+def test_conflict_uplink_uplink() -> None:
     """Both boards declare BAT_LOW as uplink -> FATAL."""
     print("\n=== Test 3: Conflict uplink/uplink ===")
     with tempfile.TemporaryDirectory() as td:
@@ -306,8 +304,7 @@ channels:
 
         try:
             diffuse_local_channels(parsed, node)
-            print("  FAIL expected DiffusionConflictError, got none")
-            return False
+            raise AssertionError("expected DiffusionConflictError, got none")
         except DiffusionConflictError as e:
             assert e.channel_id == "BAT_LOW"
             assert not e.semantic
@@ -319,14 +316,14 @@ channels:
                 f"expected both directions 'uplink', got {directions}"
             )
             print(f"  OK   raised DiffusionConflictError: {e}")
-            return True
+            return
 
 
 # =============================================================================
 # Test 4: downlink/downlink (CHANGED: warning + none, not fatal)
 # =============================================================================
 
-def test_downlink_downlink_now_warning() -> bool:
+def test_downlink_downlink_now_warning() -> None:
     """Both boards declare BAT_LOW as downlink -> WARNING (canal mort), not fatal.
 
     CHANGED BEHAVIOUR (ND2 generalised to N boards): in the
@@ -400,14 +397,13 @@ channels:
         assert soundboard_decls["BAT_LOW"] == "downlink"
         print(f"  OK   both boards retain BAT_LOW=downlink (no fatal error)")
 
-    return True
 
 
 # =============================================================================
 # Test 5: both/both on 2 boards -> OK
 # =============================================================================
 
-def test_both_both_ok() -> bool:
+def test_both_both_ok() -> None:
     """Both boards declare BAT_LOW as both -> OK (BOTH_OR aggregation)."""
     print("\n=== Test 5: both/both -> OK ===")
     with tempfile.TemporaryDirectory() as td:
@@ -454,14 +450,13 @@ channels:
         assert soundboard_decls["BAT_LOW"] == "both"
         print(f"  OK   both boards have BAT_LOW=both")
 
-    return True
 
 
 # =============================================================================
 # Test 6: none/X -> OK
 # =============================================================================
 
-def test_none_x_ok() -> bool:
+def test_none_x_ok() -> None:
     """none on mainboard + uplink on soundboard -> OK."""
     print("\n=== Test 6: none/X -> OK ===")
     with tempfile.TemporaryDirectory() as td:
@@ -508,14 +503,13 @@ channels:
         assert soundboard_decls["BAT_LOW"] == "uplink"
         print(f"  OK   mainboard BAT_LOW=none, soundboard BAT_LOW=uplink")
 
-    return True
 
 
 # =============================================================================
 # Test 7: Semantic conflict both/uplink
 # =============================================================================
 
-def test_semantic_conflict_both_uplink() -> bool:
+def test_semantic_conflict_both_uplink() -> None:
     """both on mainboard + uplink on soundboard -> FATAL (semantic)."""
     print("\n=== Test 7: Semantic conflict both/uplink ===")
     with tempfile.TemporaryDirectory() as td:
@@ -556,20 +550,19 @@ channels:
 
         try:
             diffuse_local_channels(parsed, node)
-            print("  FAIL expected DiffusionConflictError, got none")
-            return False
+            raise AssertionError("expected DiffusionConflictError, got none")
         except DiffusionConflictError as e:
             assert e.channel_id == "BAT_LOW"
             assert e.semantic, "should be a semantic conflict"
             print(f"  OK   raised DiffusionConflictError (semantic): {e}")
-            return True
+            return
 
 
 # =============================================================================
 # Test 8: Local conflict (intra-board)
 # =============================================================================
 
-def test_local_conflict() -> bool:
+def test_local_conflict() -> None:
     """Two declarations of same id active for the SAME board -> FATAL (local).
 
     Both declarations have requires=[IS_MAINBOARD], so both are active
@@ -625,20 +618,19 @@ channels:
 
         try:
             diffuse_local_channels(parsed, node)
-            print("  FAIL expected DiffusionLocalConflictError, got none")
-            return False
+            raise AssertionError("expected DiffusionLocalConflictError, got none")
         except DiffusionLocalConflictError as e:
             assert e.channel_id == "BAT_LOW"
             assert e.board_id == "mainboard"
             print(f"  OK   raised DiffusionLocalConflictError: {e}")
-            return True
+            return
 
 
 # =============================================================================
 # Test 9: REMOTE channel pass-through (no mirroring)
 # =============================================================================
 
-def test_remote_passthrough() -> bool:
+def test_remote_passthrough() -> None:
     """REMOTE channel present on one board only -> passed through to both, no mirroring.
 
     REMOTE channels are NOT subject to diffusion (ND5 is out of scope).
@@ -697,14 +689,13 @@ channels:
         )
         print(f"  OK   STEER_CMD passed through to both boards with direction=downlink (no mirroring)")
 
-    return True
 
 
 # =============================================================================
 # Test 10: Legacy mode (diffusion.py not called)
 # =============================================================================
 
-def test_legacy_mode_not_called() -> bool:
+def test_legacy_mode_not_called() -> None:
     """Verify that diffusion.py is NOT called in legacy mode.
 
     This is a documentation test: the orchestrator (combus_scons_hook.py)
@@ -731,7 +722,6 @@ def test_legacy_mode_not_called() -> bool:
             )
     assert found_call, "diffuse_local_channels() not found in combus_scons_hook.py"
     print(f"  OK   diffuse_local_channels() is only called inside node.is_node branch")
-    return True
 
 
 # =============================================================================
@@ -766,7 +756,7 @@ def _extract_channel_ids_and_dirs(
 # 3-BOARD TESTS (ND2 generalised to N >= 2)
 # =============================================================================
 
-def test_3b_uplink_2downlink_explicit() -> bool:
+def test_3b_uplink_2downlink_explicit() -> None:
     """1 uplink + 2 downlink explicites sur 3 boards -> pas d'erreur, rien à diffuser."""
     print("\n=== Test 11: 3b — 1 uplink + 2 downlink explicites ===")
     with tempfile.TemporaryDirectory() as td:
@@ -834,10 +824,9 @@ channels:
         assert lgt["BAT_LOW"] == "downlink"
         print(f"  OK   main=uplink, sound=downlink, light=downlink (no synthesis)")
 
-    return True
 
 
-def test_3b_uplink_downlink_absent() -> bool:
+def test_3b_uplink_downlink_absent() -> None:
     """1 uplink + 1 downlink explicite + 1 board absente -> absente devient downlink."""
     print("\n=== Test 12: 3b — 1 uplink + 1 downlink + 1 absente ===")
     with tempfile.TemporaryDirectory() as td:
@@ -895,10 +884,9 @@ channels:
         )
         print(f"  OK   main=uplink, sound=downlink, light=synthetic downlink")
 
-    return True
 
 
-def test_3b_2uplink_conflict() -> bool:
+def test_3b_2uplink_conflict() -> None:
     """2 uplink sur 2 boards différentes, 3e absente -> conflit fatal, message nomme les 2 boards en uplink."""
     print("\n=== Test 13: 3b — 2 uplink (conflit fatal) ===")
     with tempfile.TemporaryDirectory() as td:
@@ -941,8 +929,7 @@ channels:
 
         try:
             diffuse_local_channels(parsed, node)
-            print("  FAIL expected DiffusionConflictError, got none")
-            return False
+            raise AssertionError("expected DiffusionConflictError, got none")
         except DiffusionConflictError as e:
             assert e.channel_id == "BAT_LOW"
             assert not e.semantic
@@ -956,10 +943,10 @@ channels:
             assert "mainboard" in involved_boards
             assert "soundboard" in involved_boards
             print(f"  OK   raised DiffusionConflictError naming both uplink boards")
-            return True
+            return
 
 
-def test_3b_3downlink_warning() -> bool:
+def test_3b_3downlink_warning() -> None:
     """3 downlink explicites, aucun uplink -> warning 'canal mort', pas d'erreur fatale."""
     print("\n=== Test 14: 3b — 3 downlink (warning, pas fatal) ===")
     with tempfile.TemporaryDirectory() as td:
@@ -1034,10 +1021,9 @@ channels:
             assert decls["BAT_LOW"] == "downlink"
         print(f"  OK   all 3 boards retain BAT_LOW=downlink (no fatal error)")
 
-    return True
 
 
-def test_3b_1both_2absent() -> bool:
+def test_3b_1both_2absent() -> None:
     """1 both + 2 boards absentes -> les 2 absentes deviennent both (rule 3)."""
     print("\n=== Test 15: 3b — 1 both + 2 absentes ===")
     with tempfile.TemporaryDirectory() as td:
@@ -1086,10 +1072,9 @@ channels:
         )
         print(f"  OK   main=both, sound=synthetic both, light=synthetic both")
 
-    return True
 
 
-def test_3b_1both_1uplink_1absent_semantic() -> bool:
+def test_3b_1both_1uplink_1absent_semantic() -> None:
     """1 both + 1 uplink (2 autres absentes) -> conflit sémantique fatal."""
     print("\n=== Test 16: 3b — 1 both + 1 uplink (conflit sémantique) ===")
     with tempfile.TemporaryDirectory() as td:
@@ -1132,20 +1117,19 @@ channels:
 
         try:
             diffuse_local_channels(parsed, node)
-            print("  FAIL expected DiffusionConflictError (semantic), got none")
-            return False
+            raise AssertionError("expected DiffusionConflictError (semantic), got none")
         except DiffusionConflictError as e:
             assert e.channel_id == "BAT_LOW"
             assert e.semantic, "should be a semantic conflict"
             print(f"  OK   raised DiffusionConflictError (semantic): {e}")
-            return True
+            return
 
 
 # =============================================================================
 # Test 17: PIPELINE COMPLET — requires stale fix
 # =============================================================================
 
-def test_pipeline_full_requires_stale_fix() -> bool:
+def test_pipeline_full_requires_stale_fix() -> None:
     """End-to-end pipeline test: diffuse + canonize + generate.
 
     Scenario: BAT_LOW declared with `requires=[IS_MAINBOARD]` on
@@ -1213,8 +1197,7 @@ channels:
                 filename_prefix="soundboard",
             )
         except RequiresResolutionError as e:
-            print(f"  FAIL RequiresResolutionError raised: {e}")
-            return False
+            raise AssertionError(f"RequiresResolutionError raised: {e}")
 
         # Verify BAT_LOW is present, active, in downlink.
         # The full view contains all LOCAL channels.
@@ -1230,14 +1213,13 @@ channels:
         )
         print(f"  OK   BAT_LOW present in soundboard, direction=downlink (no RequiresResolutionError)")
 
-    return True
 
 
 # =============================================================================
 # Test 18: SYSTEM scope — not diffused, requires-filtered per board (ND4)
 # =============================================================================
 
-def test_system_not_diffused_requires_filtered() -> bool:
+def test_system_not_diffused_requires_filtered() -> None:
     """SYSTEM channel with requires=[IS_MAINBOARD] on mainboard only.
 
     After diffusion:
@@ -1296,14 +1278,13 @@ channels:
         )
         print(f"  OK   soundboard does NOT have VBAT_PRIVATE (requires NOT satisfied)")
 
-    return True
 
 
 # =============================================================================
 # Test 19: SYSTEM scope — apparent conflict is ignored (ND4)
 # =============================================================================
 
-def test_system_apparent_conflict_ignored() -> bool:
+def test_system_apparent_conflict_ignored() -> None:
     """Two SYSTEM declarations of the same id on 2 boards -> NO error.
 
     SYSTEM channels are NEVER examined by the inter-board rule
@@ -1367,57 +1348,12 @@ channels:
         print(f"  OK   no DiffusionConflictError raised (SYSTEM is out of scope for diffusion)")
         print(f"  OK   mainboard has VBAT_PRIVATE, soundboard has VBAT_PRIVATE (each own)")
 
-    return True
 
 
 # =============================================================================
 # Main
 # =============================================================================
 
-def main() -> int:
-    import io
-    import contextlib
-
-    results = []
-    # 2-board tests (existing + adapted).
-    results.append(("mirror_simple", test_mirror_simple()))
-    results.append(("complementary_pair", test_complementary_pair()))
-    results.append(("conflict_uplink_uplink", test_conflict_uplink_uplink()))
-    results.append(("downlink_downlink_now_warning", test_downlink_downlink_now_warning()))
-    results.append(("both_both_ok", test_both_both_ok()))
-    results.append(("none_x_ok", test_none_x_ok()))
-    results.append(("semantic_conflict_both_uplink", test_semantic_conflict_both_uplink()))
-    results.append(("local_conflict", test_local_conflict()))
-    results.append(("remote_passthrough", test_remote_passthrough()))
-    results.append(("legacy_mode_not_called", test_legacy_mode_not_called()))
-    # 3-board tests (new, ND2 generalised).
-    results.append(("3b_uplink_2downlink_explicit", test_3b_uplink_2downlink_explicit()))
-    results.append(("3b_uplink_downlink_absent", test_3b_uplink_downlink_absent()))
-    results.append(("3b_2uplink_conflict", test_3b_2uplink_conflict()))
-    results.append(("3b_3downlink_warning", test_3b_3downlink_warning()))
-    results.append(("3b_1both_2absent", test_3b_1both_2absent()))
-    results.append(("3b_1both_1uplink_1absent_semantic", test_3b_1both_1uplink_1absent_semantic()))
-    # Pipeline-complet test (requires stale fix).
-    results.append(("pipeline_full_requires_stale_fix", test_pipeline_full_requires_stale_fix()))
-    # ND4: SYSTEM scope exclusion tests.
-    results.append(("system_not_diffused_requires_filtered", test_system_not_diffused_requires_filtered()))
-    results.append(("system_apparent_conflict_ignored", test_system_apparent_conflict_ignored()))
-
-    print("\n=== Summary ===")
-    all_ok = True
-    for name, ok in results:
-        status = "OK  " if ok else "FAIL"
-        print(f"  [{status}] {name}")
-        if not ok:
-            all_ok = False
-
-    if all_ok:
-        print("\nAll ND2 diffusion tests passed.")
-        return 0
-    else:
-        print("\nSome ND2 diffusion tests FAILED.")
-        return 1
-
-
 if __name__ == "__main__":
-    sys.exit(main())
+    import pytest
+    sys.exit(pytest.main([__file__, "-q"]))

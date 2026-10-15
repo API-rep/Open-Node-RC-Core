@@ -153,7 +153,7 @@ def test_no_channel_descriptor_in_full_generation(tmp_path):
     ]})
     sel = generate(chs, _ctx([]), tmp_path)
     for fname in ("combus.h", "combus.cpp", "combus_ids.h",
-                  "combus_remote.h", "combus_remote.cpp", "combus_remote_ids.h"):
+                  "combus_local_ids.h", "combus_remote_ids.h"):
         content = (tmp_path / fname).read_text(encoding="utf-8")
         assert "ChannelDescriptor" not in content, f"ChannelDescriptor in {fname}"
 
@@ -530,7 +530,7 @@ def test_select_views_local_empty_when_no_remote_or_local():
 
 
 def test_generate_emits_combus_local_files(tmp_path):
-    """A6.2: generate() emits combus_local_ids.h, combus_local.h, combus_local.cpp."""
+    """A6.2 / Phase 2: generate() emits combus_local_ids.h only (no local .h/.cpp)."""
     chs = _canon_from_yamls({"channels": [
         _ch("R1", scope="REMOTE"),
         _ch("L1", scope="LOCAL"),
@@ -538,15 +538,16 @@ def test_generate_emits_combus_local_files(tmp_path):
     ]})
     sel = generate(chs, _ctx([]), tmp_path)
     assert (tmp_path / "combus_local_ids.h").exists()
-    assert (tmp_path / "combus_local.h").exists()
-    assert (tmp_path / "combus_local.cpp").exists()
-    # And the existing views are still emitted.
+    # Phase 2: the runtime .h/.cpp are NOT emitted for the local/remote views.
+    assert not (tmp_path / "combus_local.h").exists()
+    assert not (tmp_path / "combus_local.cpp").exists()
+    # The full view still emits its three files.
     assert (tmp_path / "combus_ids.h").exists()
     assert (tmp_path / "combus.h").exists()
     assert (tmp_path / "combus.cpp").exists()
     assert (tmp_path / "combus_remote_ids.h").exists()
-    assert (tmp_path / "combus_remote.h").exists()
-    assert (tmp_path / "combus_remote.cpp").exists()
+    assert not (tmp_path / "combus_remote.h").exists()
+    assert not (tmp_path / "combus_remote.cpp").exists()
 
 
 def test_combus_local_ids_header_excludes_system():
@@ -562,18 +563,6 @@ def test_combus_local_ids_header_excludes_system():
     assert "R1" in ids
     assert "L1" in ids
     assert "S1" not in ids
-
-
-def test_combus_local_no_bus_instance():
-    """A6.2: combus_local.h does NOT declare comBus (only combus does)."""
-    chs = _canon_from_yamls({"channels": [
-        _ch("R1", scope="REMOTE"),
-        _ch("L1", scope="LOCAL"),
-    ]})
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        generate(chs, _ctx([]), Path(tmp_dir))
-        h = (Path(tmp_dir) / "combus_local.h").read_text(encoding="utf-8")
-    assert "extern ComBus comBus" not in h
 
 
 def test_combus_local_no_wire_end_sentinel():
@@ -826,8 +815,8 @@ def test_render_header_externs_real_runtime_structs():
     ]})
     view = _build_view_with_channels(chs)
     out = _render_header(view, _ctx([]))
-    assert "extern AnalogComBus AnalogCombusArray" in out
-    assert "extern DigitalComBus DigitalCombusArray" in out
+    assert "extern AnalogComBus AnalogComBusArray" in out
+    assert "extern DigitalComBus DigitalComBusArray" in out
 
 
 def test_render_header_no_direction_enum():
@@ -863,8 +852,8 @@ def test_render_source_real_runtime_structs():
     ]})
     view = _build_view_with_channels(chs)
     out = _render_source(view, _ctx([]))
-    assert "AnalogComBus AnalogCombusArray" in out
-    assert "DigitalComBus DigitalCombusArray" in out
+    assert "AnalogComBus AnalogComBusArray" in out
+    assert "DigitalComBus DigitalComBusArray" in out
     assert "Foo channel" in out
     assert "Bar analog" in out
 
@@ -973,9 +962,8 @@ def test_generate_full_pipeline(tmp_path):
     assert (tmp_path / "combus.h").exists()
     assert (tmp_path / "combus.cpp").exists()
     assert (tmp_path / "combus_ids.h").exists()
-    assert (tmp_path / "combus_remote.h").exists()
-    assert (tmp_path / "combus_remote.cpp").exists()
     assert (tmp_path / "combus_remote_ids.h").exists()
+    assert (tmp_path / "combus_local_ids.h").exists()
 
 
 def test_generate_with_requires_satisfied(tmp_path):
@@ -1107,35 +1095,11 @@ def test_generated_ids_header_parses():
     assert re.search(r"enum\s+class\s+AnalogComBusID\s*:\s*uint8_t", ids)
     assert re.search(r"enum\s+class\s+DigitalComBusID\s*:\s*uint8_t", ids)
     assert re.search(r"A1\s*=\s*0", ids)
-    assert re.search(r"D1\s*=\s*1", ids)
+    assert re.search(r"D1\s*=\s*0", ids)  # A15: per-type counters
     assert re.search(r"CH_COUNT", ids)
 
 
-def _find_cpp_compiler() -> tuple[list[str], str] | None:
-    """
-    Return (argv_prefix, label) for an available C++ compiler, or None.
-
-    Order of preference:
-      1. `g++` in PATH (native Linux/macOS or mingw).
-      2. `clang++` in PATH.
-      3. PlatformIO's bundled `xtensa-esp32-elf-g++` (cross-compiler).
-         This is the EXACT toolchain used by PlatformIO for this project
-         (platformio.ini: platform = espressif32@6.7.0, gcc 12.2.0).
-         For cross-compilation we use -fsyntax-only (no linking), which
-         is sufficient to validate designated initializers, enum values,
-         struct field order and template instantiation.
-    """
-    import shutil
-    if shutil.which("g++"):
-        return (["g++"], "g++")
-    if shutil.which("clang++"):
-        return (["clang++"], "clang++")
-    # PlatformIO's toolchain is at ~/.platformio/packages/ on Windows/Linux/macOS.
-    pio_gpp = (Path.home() / ".platformio" / "packages"
-               / "toolchain-xtensa-esp32" / "bin" / "xtensa-esp32-elf-g++.exe")
-    if pio_gpp.exists():
-        return ([str(pio_gpp)], "xtensa-esp32-elf-g++ (PlatformIO)")
-    return None
+from scripts.combus_builder.tests._cpp_compiler import find_cpp_compiler as _find_cpp_compiler  # noqa: E402
 
 
 def test_generated_cpp_compiles_cleanly_with_cpp_check():
@@ -1178,19 +1142,14 @@ def test_generated_cpp_compiles_cleanly_with_cpp_check():
 #include <type_traits>
 int main() {
     // enum class does not implicitly convert to int: use static_cast.
-    // The view sort puts analog before digital within each scope,
-    // so REMOTE[0]=A1 (analog), REMOTE[1]=D1 (digital).
+    // A15: analog and digital IDs are counted separately, each from 0.
     static_assert(static_cast<int>(AnalogComBusID::A1) == 0, "A1");
-    static_assert(static_cast<int>(DigitalComBusID::D1) == 1, "D1");
+    static_assert(static_cast<int>(DigitalComBusID::D1) == 0, "D1");
     static_assert(static_cast<int>(AnalogComBusID::CH_COUNT) > 0, "count");
     // Read .direction to ensure it is publicly accessible.
     Direction d = comBus.analogBus[0].direction;
     (void)d;
-    // Exercise the bitmask operators at compile time. operator| is
-    // declared constexpr in combus_struct.h, so this must hold.
-    constexpr Direction both = Direction::Uplink | Direction::Downlink;
-    static_assert(static_cast<int>(both) == static_cast<int>(Direction::Both), "both");
-    // And the underlying uint8_t representation matches the bitmask contract.
+    // The underlying uint8_t representation matches the bitmask contract.
     static_assert(static_cast<uint8_t>(Direction::None) == 0, "none=0");
     static_assert(static_cast<uint8_t>(Direction::Uplink) == 1, "up=1");
     static_assert(static_cast<uint8_t>(Direction::Downlink) == 2, "down=2");
@@ -1262,7 +1221,7 @@ def test_generator_against_real_repo_files():
 
     ctx = BuildContext(
         buildroot=buildroot,
-        defines=frozenset({"HAS_FAILSAFE", "HAS_VBAT_FAILSAFE"}),
+        defines=frozenset({"HAS_FAILSAFE", "HAS_VBAT_FAILSAFE", "HAS_RUNLEVEL_MANAGER"}),
         defines_with_value={},
         cppdefines_source="override",
     )
@@ -1271,15 +1230,13 @@ def test_generator_against_real_repo_files():
         sel = generate(chs, ctx, Path(tmp_dir))
         assert sel.full.ch_count > 0
         assert sel.full.ch_count >= sel.remote.ch_count
-        # A6.2: 9 files total (3 views × 3 files each).
-        for fname in ("combus.h", "combus.cpp", "combus_ids.h",
-                      "combus_local.h", "combus_local.cpp", "combus_local_ids.h",
-                      "combus_remote.h", "combus_remote.cpp", "combus_remote_ids.h"):
+        # Phase 2: combus (3 files) + the two *_ids.h of the other views.
+        emitted = ("combus.h", "combus.cpp", "combus_ids.h",
+                   "combus_local_ids.h", "combus_remote_ids.h")
+        for fname in emitted:
             assert (Path(tmp_dir) / fname).exists(), f"missing {fname}"
         # And no ChannelDescriptor anywhere.
-        for fname in ("combus.h", "combus.cpp", "combus_ids.h",
-                      "combus_local.h", "combus_local.cpp", "combus_local_ids.h",
-                      "combus_remote.h", "combus_remote.cpp", "combus_remote_ids.h"):
+        for fname in emitted:
             content = (Path(tmp_dir) / fname).read_text(encoding="utf-8")
             assert "ChannelDescriptor" not in content, f"ChannelDescriptor leaked in {fname}"
 

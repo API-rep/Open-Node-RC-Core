@@ -261,7 +261,7 @@ def _load_generate_per_board():
 # Test 1: per-board loop, building a SUB-env — mother must use static
 # =============================================================================
 
-def test_generate_per_board_mother_uses_static_resolution() -> bool:
+def test_generate_per_board_mother_uses_static_resolution() -> None:
     """When building a sub-env, the mother entry must use static resolution.
 
     This is the bug that was missed by test_node_mode_2_boards: the
@@ -337,8 +337,7 @@ def test_generate_per_board_mother_uses_static_resolution() -> bool:
                         staging_dir=staging_dir,
                     )
                 except _BoardGenerationError as e:
-                    print(f"  FAIL _generate_per_board raised: {e}")
-                    return False
+                    raise AssertionError(f"_generate_per_board raised: {e}")
                 results[board_id] = (result.sel, result.board_ctx)
 
         # --- Verify: mother entry uses MOTHER defines, not mainboard ---
@@ -412,14 +411,13 @@ def test_generate_per_board_mother_uses_static_resolution() -> bool:
         print(f"  OK   unprefixed combus.h + prefixed combus_mainboard.h + "
               f"combus_soundboard.h all present")
 
-    return True
 
 
 # =============================================================================
 # Test 2: per-board loop, building the MOTHER env — mother uses live ctx
 # =============================================================================
 
-def test_generate_per_board_mother_uses_live_ctx() -> bool:
+def test_generate_per_board_mother_uses_live_ctx() -> None:
     """When building the mother env, the mother entry must use the live ctx.
 
     Setup:
@@ -481,8 +479,7 @@ def test_generate_per_board_mother_uses_live_ctx() -> bool:
                         staging_dir=staging_dir,
                     )
                 except _BoardGenerationError as e:
-                    print(f"  FAIL _generate_per_board raised: {e}")
-                    return False
+                    raise AssertionError(f"_generate_per_board raised: {e}")
                 results[board_id] = (result.sel, result.board_ctx)
 
         # --- Verify: mother entry uses the LIVE ctx ---
@@ -506,14 +503,13 @@ def test_generate_per_board_mother_uses_live_ctx() -> bool:
             print(f"  OK   {board_id} ctx: defines={sorted(ctx.defines)}, "
                   f"source={ctx.cppdefines_source!r}")
 
-    return True
 
 
 # =============================================================================
 # Test 3: smoke test for resolve_build_context_static()
 # =============================================================================
 
-def test_resolve_build_context_static_real_project_config() -> bool:
+def test_resolve_build_context_static_real_project_config() -> None:
     """Smoke test for resolve_build_context_static() against a real ProjectConfig.
 
     Skipped with an explicit message if the `platformio` Python package
@@ -536,7 +532,7 @@ def test_resolve_build_context_static_real_project_config() -> bool:
         print("  SKIP platformio Python package not installed; "
               "cannot exercise resolve_build_context_static() against "
               "a real ProjectConfig. Install with: pip install platformio")
-        return True  # skip is success
+        return  # skip is success
 
     print(f"  OK   platformio module found")
 
@@ -550,8 +546,7 @@ def test_resolve_build_context_static_real_project_config() -> bool:
                 project_root, "volvo_A60H_bruder_mainboard",
             )
         except Exception as e:
-            print(f"  FAIL resolve_build_context_static raised: {e}")
-            return False
+            raise AssertionError(f"resolve_build_context_static raised: {e}")
 
         # --- Verify the resolved defines ---
         # After extends= + ${...} interpolation, the mainboard sub-env
@@ -587,8 +582,7 @@ def test_resolve_build_context_static_real_project_config() -> bool:
                 project_root, "volvo_A60H_bruder",
             )
         except Exception as e:
-            print(f"  FAIL resolve_build_context_static(mother) raised: {e}")
-            return False
+            raise AssertionError(f"resolve_build_context_static(mother) raised: {e}")
 
         expected_mother_defines = {
             "COMMON_FLAG",
@@ -607,43 +601,12 @@ def test_resolve_build_context_static_real_project_config() -> bool:
         )
         print(f"  OK   mother defines: {sorted(mother_ctx.defines)}")
 
-    return True
 
 
 # =============================================================================
 # Main
 # =============================================================================
 
-def main() -> int:
-    results = []
-    results.append((
-        "generate_per_board_mother_uses_static_resolution",
-        test_generate_per_board_mother_uses_static_resolution(),
-    ))
-    results.append((
-        "generate_per_board_mother_uses_live_ctx",
-        test_generate_per_board_mother_uses_live_ctx(),
-    ))
-    results.append((
-        "resolve_build_context_static_real_project_config",
-        test_resolve_build_context_static_real_project_config(),
-    ))
-
-    print("\n=== Summary ===")
-    all_ok = True
-    for name, ok in results:
-        status = "OK  " if ok else "FAIL"
-        print(f"  [{status}] {name}")
-        if not ok:
-            all_ok = False
-
-    if all_ok:
-        print("\nAll ND1 integration tests passed.")
-        return 0
-    else:
-        print("\nSome ND1 integration tests FAILED.")
-        return 1
-
-
 if __name__ == "__main__":
-    sys.exit(main())
+    import pytest
+    sys.exit(pytest.main([__file__, "-q"]))
