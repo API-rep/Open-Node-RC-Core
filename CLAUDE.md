@@ -5,9 +5,14 @@
 - Propriétaire amateur, francophone : répondre en français.
 - ComBus Builder (scripts/combus_builder/) : génère depuis des YAML .cb les en-têtes/sources ComBus par carte.
 - Il tourne via un hook SCons : scripts/combus_scons_hook.py (`extra_scripts = pre:scripts/combus_scons_hook.py`, section [env] de platformio.ini).
-- Architecture et historique : doc/combus_builder_handoff.md.
+- Architecture : scripts/combus_builder/README.md. Points ouverts : doc/combus_builder_handoff.md. Historique : git log.
 - Convention : un fichier dont le nom commence par ~ est en cours de rédaction (ex. doc/~combus_v2.md).
 - src/sound_module et les envs sound_node_* ont été retirés. Ne pas les réintroduire.
+
+## Point d'entrée
+- Lire d'abord doc/ia-guidelines.md : point d'entrée commun à toutes les IA (règles de comportement, conventions de code, règles de session). Il renvoie vers doc/README.md, qui indexe la documentation par sujet.
+- Ce fichier ne contient que les consignes propres à Claude Code. Ne pas y dupliquer ce qui est dans doc/ia-guidelines.md.
+- Sujet ComBus Builder : scripts/combus_builder/README.md.
 
 ## Règles absolues
 - Aucun fichier hors du dossier du projet. Temporaires uniquement dans .pio\, supprimés après usage.

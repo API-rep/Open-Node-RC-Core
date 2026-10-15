@@ -111,6 +111,49 @@ See also:
 
 ---
 
+### By Subject
+
+Quick index to the documents that sit next to the code. Start from the subject, then follow the links of the document you land on.
+
+**ComBus (communication bus)**
+
+* [ComBus overview](../src/core/system/combus/README.md) — what the bus is and how modules use it
+* [ComBus v2 migration document](~combus_v2.md) — layering, directions, builder section (work in progress)
+* [Protocol layer](../src/core/system/combus/protocol/~README.md) — transport-independent services
+* [Frame and handshake format](../src/core/system/combus/protocol/frame/combus_frame_protocol.md) — wire format, handshake, MD5 contract
+* [UART workflow](../src/core/system/combus/protocol/uart_workflow.md) — how the UART link is set up
+* [ComBus Builder](../scripts/combus_builder/README.md) — developer README of the generator (pipeline, node mode, tests)
+* [Builder open points](combus_builder_handoff.md) — what remains to check or decide
+* [`.cb` syntax](configuration/cb_syntax.md) — writing channel definitions
+
+**ComBus processors**
+
+* [Processors inventory](../src/core/system/combus/processors/~README.md) and [future intentions](../src/core/system/combus/processors/COMBUS_PROCESSORS_ROADMAP.md)
+* [Processor modules convention](../src/core/system/combus/processors/modules/README.md)
+* [Ramp runtime calculation guide](archives/ramp_runtime_explanation.md) (archive)
+
+**Safety and link health**
+
+* [Failsafe module](../src/core/system/failsafe/failsafe_module.md)
+* [REMOTE_LINK_LOST chain](../src/core/system/inputs/remote_link_lost.md)
+
+**Machines and configuration**
+
+* [Machine configuration system](../src/machines/config/~README.md)
+* [Machine family configuration](../src/core/config/machines/README.md)
+* [Shared data definitions (`include/`)](../include/README.md)
+
+**Debug tools**
+
+* [Debug architecture](../src/core/system/debug/~README.md), [logging](../src/core/system/debug/logging/~README.md) and [dashboard](../src/core/system/debug/dashboard/~README.md)
+
+**Tests**
+
+* [PlatformIO test setup](../test/README_pio_test_setup.md)
+* Builder tests: see the "Lancer les tests" section of the [ComBus Builder README](../scripts/combus_builder/README.md)
+
+---
+
 ### Project Roadmap & Evolution
 
 Track the project's evolution and upcoming features.
