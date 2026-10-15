@@ -252,13 +252,14 @@ ne sont plus émises (`generator.py:588-595`).
   constantes sont `static constexpr` : la chaîne d'outils `xtensa-esp32-elf-g++`
   rejette `inline constexpr` à la portée d'espace de noms dans certaines
   configurations (commentaire `md5.py:38-39`).
-- Version du projet : le builder écrit des valeurs **codées en dur**, majeur 0
-  et mineur 1 (`md5.py:264-265`, commentaire `md5.py:296`). Le fichier
-  `project_version.h` (racine du dépôt, mêmes valeurs 0 et 1) n'est lu par
-  aucun script ni aucun code C++ (recherche `project_version` dans `scripts/`
-  et dans le dépôt) ; son commentaire cite encore `scripts/combus_md5.py`, qui
-  n'existe plus. Modifier `project_version.h` ne change donc pas la version
-  transmise dans le handshake.
+- Version du projet : le builder lit `project_version.h` (racine du dépôt) et
+  écrit les deux nombres dans `combus_wire_common.h`
+  (`md5.read_project_version()`). Le fichier doit définir
+  `PROJECT_VERSION_MAJOR` et `PROJECT_VERSION_MINOR` sous la forme
+  `= <n>u;`, chacun entre 0 et 255 ; sinon le build s'arrête (`FATAL`, pas de
+  valeur par défaut silencieuse). Le hook déclare le fichier comme source :
+  le modifier régénère les fichiers. Sans version fournie (appel direct de
+  `generate()` dans les tests), `md5.py` garde 0 et 1.
 
 ## 8. Sorties générées
 
@@ -343,7 +344,6 @@ racine sont des restes de ces sorties.
   Le code C++ inclut les identifiants générés par
   `src/core/config/machines/combus_types.h`, qui fait `#include <combus_ids.h>`
   (le hook ajoute le dossier généré au chemin d'inclusion).
-- **`project_version.h` non relié au builder** (voir §7).
 
 **Mode nœud : noms de fichiers (corrigé et vérifié le 2026-10-15).** La carte
 dont l'env est compilé reçoit les noms **non préfixés** (`combus.h`,

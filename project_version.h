@@ -5,17 +5,17 @@
  * @details
  * Hand-maintained single source of truth for the project contract version.
  *
- * Read at build time by scripts/combus_md5.py (extra_script), which scans
- * src/core/ for any folder containing both combus_ids_remote_analog.inc
- * and combus_ids_remote_digital.inc and emits a `combus_ids_remote_md5.h`
- * next to each pair.  Each generated header carries PROJECT_VERSION_MAJOR
- * and PROJECT_VERSION_MINOR embedded under combus::wire::kProjectVersion*.
- * The firmware never re-reads this file at runtime.
+ * Read at build time by the ComBus Builder (scripts/combus_builder/md5.py,
+ * read_project_version()), which writes the two numbers in the generated
+ * combus_wire_common.h under combus::wire::kProjectVersionMajor / Minor.
+ * The firmware never includes or re-reads this file.
  *
- * Wire mapping (combus_ids_remote_md5.h):
+ * Wire mapping (combus_wire_common.h):
  *   - combus::wire::kProjectVersionMajor = PROJECT_VERSION_MAJOR
  *   - combus::wire::kProjectVersionMinor = PROJECT_VERSION_MINOR
-
+ *
+ * The builder parses the two constants below with a regular expression
+ * (`PROJECT_VERSION_MAJOR = <n>u;`, each in 0..255): keep that form.
  *
  * This version defines the compatibility contract between communicating
  * nodes. It is intentionally broader than the wire format alone and covers
@@ -34,8 +34,8 @@
  * by the Git repository (tags and commits) rather than by this version.
  *
  * This file is kept at the repository root (not under include/) because it
- * is read directly by scripts/combus_md5.py via
- * Path("PROJECT_DIR") / "project_version.h", making its location stable
+ * is read directly by the ComBus Builder via
+ * Path(PROJECT_DIR) / "project_version.h", making its location stable
  * across future header-tree refactors.
  */
 

@@ -372,6 +372,7 @@ def _generate_per_board(
     staging_dir: Path,
     board_ctx: Any = None,
     unprefixed: bool = False,
+    project_version: tuple[int, int] | None = None,
 ) -> _BoardResult:
     """Generate the artefacts for one board (mother or sister sub-env).
 
@@ -403,6 +404,8 @@ def _generate_per_board(
       unprefixed:           Force an empty filename prefix (node mode:
                             the board being compiled owns the
                             unprefixed names the firmware includes).
+      project_version:      (major, minor) read from project_version.h,
+                            written in combus_wire_common.h.
 
     Returns:
       _BoardResult wrapping the Selection and the BuildContext used.
@@ -484,6 +487,7 @@ def _generate_per_board(
             board_ctx,
             staging_dir,
             filename_prefix=prefix,
+            project_version=project_version,
         )
     except GeneratorError as e:
         raise _BoardGenerationError(
@@ -723,6 +727,14 @@ def _generate_combus_action(target, source, env):
             sys.stderr.write(f"[combus_scons_action] FATAL: {e}\n")
             return 1
 
+    # --- 6c. Project version (project_version.h) --------------------------
+    from scripts.combus_builder.md5 import ProjectVersionError, read_project_version
+    try:
+        project_version = read_project_version(project_dir) if project_dir else None
+    except ProjectVersionError as e:
+        sys.stderr.write(f"[combus_scons_action] FATAL: {e}\n")
+        return 1
+
     # --- 7. Generate (atomic) -------------------------------------------
     staging_dir = out_dir.with_suffix(out_dir.suffix + ".new")
     if staging_dir.exists():
@@ -731,7 +743,8 @@ def _generate_combus_action(target, source, env):
     if not node.is_node:
         # --- 7a. Legacy single-board mode (ND1: strictly unchanged) -----
         try:
-            sel = generate(canon.canonical_definitions, ctx, staging_dir)
+            sel = generate(canon.canonical_definitions, ctx, staging_dir,
+                           project_version=project_version)
         except GeneratorError as e:
             if staging_dir.exists():
                 shutil.rmtree(staging_dir)
@@ -887,6 +900,7 @@ def _generate_combus_action(target, source, env):
                     board_ctx=node_boards_ctx[board_id],
                     # The board being compiled gets the unprefixed names.
                     unprefixed=(board_env_name == pio_env),
+                    project_version=project_version,
                 )
             except _BoardGenerationError as e:
                 if staging_dir.exists():
@@ -1057,6 +1071,9 @@ def _register_deferred_task(env) -> None:
     sources: list[str] = []
     if project_dir:
         sources = _discover_cb_sources(Path(project_dir))
+        version_header = Path(project_dir) / "project_version.h"
+        if version_header.is_file():
+            sources.append(str(version_header))
     if not sources:
         # Use a non-existent sentinel so SCons still knows the action's
         # inputs are a list of strings (it accepts [] silently).

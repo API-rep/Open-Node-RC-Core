@@ -286,7 +286,7 @@ MAIN_FLAGS = ROOT_FLAGS | {
 EXT_FLAGS = ROOT_FLAGS | {"IS_EXT_BOARD", "BOARD_ESP32_8M_6S"}
 
 
-def _node_staging(hook, tmp_path, current_env="test_node_mainboard"):
+def _node_staging(hook, tmp_path, current_env="test_node_mainboard", project_version=None):
     """Run the node-mode generation loop of the hook on the real .cb files,
     for a root env with two boards, as if `current_env` were being compiled.
     Returns (staging_dir, boards)."""
@@ -319,6 +319,7 @@ def _node_staging(hook, tmp_path, current_env="test_node_mainboard"):
             canonical_definitions=canonize(diffused[board_id]).canonical_definitions,
             staging_dir=staging, board_ctx=node.boards[board_id],
             unprefixed=(env_name == current_env),
+            project_version=project_version,
         )
     return staging, boards
 
@@ -352,3 +353,11 @@ def test_node_mode_unprefixed_files_belong_to_the_current_board(hook, tmp_path):
     main, _ = _node_staging(hook, tmp_path / "m", "test_node_mainboard")
     ext, _ = _node_staging(hook, tmp_path / "e", "test_node_extboard")
     assert (main / "combus_ids.h").read_text(encoding="utf-8") !=         (ext / "combus_ids.h").read_text(encoding="utf-8")
+
+
+def test_node_mode_writes_the_project_version(hook, tmp_path):
+    """The version read from project_version.h reaches combus_wire_common.h."""
+    staging, _ = _node_staging(hook, tmp_path, project_version=(8, 9))
+    text = (staging / "combus_wire_common.h").read_text(encoding="utf-8")
+    assert "kProjectVersionMajor = 8u;" in text
+    assert "kProjectVersionMinor = 9u;" in text

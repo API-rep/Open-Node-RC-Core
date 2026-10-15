@@ -34,20 +34,14 @@ Aujourd'hui, le câblage des chaînes de ComBus Processors (qui est branché sur
 
 ### Rework du module de communication ComBus ###
 
+**Objectif de fin d'hiver (2027) :** un design de communication au point, que le lien soit « remote » ou local (le même mécanisme dans les deux cas).
+
 Aujourd'hui, seul l'UART est implémenté, de façon assez statique (flags `COMBUS_UART*`, `src/machines/init/com/combus_uart_init.cpp`). Objectif : un module de communication plus modulaire, ouvert à d'autres transports. L'interface de transport `NodeCom` existe déjà.
 
 **Early stage — filtrage selon `direction`.** Le champ `direction` est généré dans chaque canal mais n'est lu nulle part dans le runtime : l'émission envoie tous les canaux de la vue du lien. À traiter avec le rework de fond du mécanisme de communication, pas avant.
 - Volet « timeout » de ce chantier : relance côté télécommande pour un lien sans retour (uplink seul) ; accusé de réception et délai d'attente pour un lien avec retour (downlink). Aucune trace dans le code aujourd'hui.
 
 **Secondaire — qualité de service à deux niveaux (basse / haute priorité).** À envisager seulement si le besoin apparaît (encombrement du réseau, etc.). Aucune trace dans le code.
-
-
-### Version du projet dans le handshake ###
-
-`project_version.h` (racine) porte la version du contrat entre nœuds (majeur / mineur), mais aucun script ni code ne le lit. Le ComBus Builder écrit 0 et 1 en dur dans `combus_wire_common.h` (`scripts/combus_builder/md5.py`). Modifier `project_version.h` ne change donc pas la version envoyée dans le handshake.
-
-**À faire :** faire lire `project_version.h` par le builder, puis corriger son commentaire (il cite encore `scripts/combus_md5.py`, qui n'existe plus).
-
 
 ### Autres chantiers ###
 

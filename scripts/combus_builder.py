@@ -76,6 +76,7 @@ def main(argv: list[str] | None = None) -> int:
         acquire_build_context,
     )
     from scripts.combus_builder.generator import GeneratorError, generate
+    from scripts.combus_builder.md5 import ProjectVersionError, read_project_version
     from scripts.combus_builder.parser import ParseError, discover_and_parse
 
     # 1. BuildContext from override.
@@ -113,8 +114,9 @@ def main(argv: list[str] | None = None) -> int:
 
     # 4. Generate.
     try:
-        sel = generate(canon.canonical_definitions, ctx, out_dir)
-    except GeneratorError as e:
+        sel = generate(canon.canonical_definitions, ctx, out_dir,
+                       project_version=read_project_version(project_root))
+    except (GeneratorError, ProjectVersionError) as e:
         print(f"combus_builder: FATAL: generation failed: {e}", file=sys.stderr)
         return 1
 

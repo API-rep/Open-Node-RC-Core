@@ -109,7 +109,6 @@ Ne PAS formuler comme faits. Les points résolus ont été déplacés en A.
 - Nettoyage de code (décision du 2026-10-15 : consigné ici seulement) : deux en-têtes de redirection identiques vers `<combus_remote_ids.h>`, `src/core/config/machines/dumper_truck/combus_ids_remote.h` (inclus par aucun fichier) et `.../dumper_truck/combus/combus_ids_remote.h` (inclus par `dumper_truck_config.h:59`). Leur commentaire affirme que `DigitalComBusRemoteID` n'est pas généré, alors que `combus_tx.cpp:123` et `combus_uart_init.cpp:32` l'utilisent.
 - Commentaires qui pointaient vers des docs supprimés (`md5.py:239`, `platformio.ini:9` et `:36`, et les « WIP combus_v2 § » / « WIP - Failsafe module design.md §12.13 » de `protocol/frame/`) : réécrits le 2026-10-15, commentaires seulement.
 - Les deux fichiers « hook mechanism » (identiques) ont été supprimés du disque le 2026-10-15 sur décision du propriétaire (récupérables dans git, commit `7d8aed8`).
-- `project_version.h` (racine) n'est lu par aucun script ni code ; le builder écrit 0.1 en dur (`md5.py:264-265`). Décision du 2026-10-15 : à relier au builder (tâche dans `doc/roadmap.md`).
 - Idées jetées le 2026-10-15 (`schema_version`, mode `--check`, manifest du SKIP) : retirées des docs. Filtrage par direction, timeout / relance / accusé de réception et QoS : déplacés dans `doc/roadmap.md` (2026-10-15) ; cache de handshake multi-entrées abandonné. Les chaînes `.cbch` ont été retirées des docs du builder et déplacées dans `doc/roadmap.md` (décision du 2026-10-15).
 
 ## E. Docs à produire

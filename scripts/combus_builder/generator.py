@@ -865,7 +865,12 @@ def _safe_write_collect(path: Path, content: str) -> Path:
     return path
 
 
-def _emit_md5_files(sel: ViewSelection, out_dir: Path, filename_prefix: str) -> None:
+def _emit_md5_files(
+    sel: ViewSelection,
+    out_dir: Path,
+    filename_prefix: str,
+    project_version: tuple[int, int] | None = None,
+) -> None:
     """
     Write the MD5 headers, with the ND1 prefix inserted in the three
     view-specific names.
@@ -880,11 +885,17 @@ def _emit_md5_files(sel: ViewSelection, out_dir: Path, filename_prefix: str) -> 
     combus_wire_common.h is NOT renamed (it is a shared header).
     """
     from .md5 import generate_md5_artifacts
+    version = {}
+    if project_version is not None:
+        version = {
+            "project_version_major": project_version[0],
+            "project_version_minor": project_version[1],
+        }
     if not filename_prefix:
-        generate_md5_artifacts(sel, out_dir)
+        generate_md5_artifacts(sel, out_dir, **version)
         return
     scratch = out_dir / "_md5_scratch"
-    generate_md5_artifacts(sel, scratch)
+    generate_md5_artifacts(sel, scratch, **version)
     for src in scratch.iterdir():
         name = src.name
         for view_name in ("combus", "combus_local", "combus_remote"):
@@ -901,6 +912,7 @@ def generate(
     out_dir: Path,
     *,
     filename_prefix: str = "",
+    project_version: tuple[int, int] | None = None,
 ) -> ViewSelection:
     """
     Full A7 + A12 generation pipeline.
@@ -917,6 +929,9 @@ def generate(
     4. Emit MD5 artifacts (combus_md5.h, combus_local_md5.h,
        combus_remote_md5.h, combus_wire_common.h).
 
+    `project_version`: optional (major, minor) written in
+    combus_wire_common.h (see md5.read_project_version()).
+
     `filename_prefix` (ND1): when non-empty, every emitted file is
     renamed with the prefix inserted between the view name and the
     suffix (e.g. `combus_mainboard_ids.h`). The C++ enum identifiers
@@ -931,10 +946,9 @@ def generate(
     emit_view(sel.full, out_dir, ctx, filename_prefix=filename_prefix)
     emit_view(sel.local, out_dir, ctx, filename_prefix=filename_prefix)
     emit_view(sel.remote, out_dir, ctx, filename_prefix=filename_prefix)
-    # A7.1: MD5 artifact for combus_remote only.
-    # projectVersion is a placeholder until project_version.h is introduced
-    # (out of A7 scope — see md5.py docstring).
-    _emit_md5_files(sel, out_dir, filename_prefix)
+    # projectVersion: (major, minor) read from project_version.h by the
+    # caller; None keeps the md5.py placeholder (tests, ad-hoc calls).
+    _emit_md5_files(sel, out_dir, filename_prefix, project_version)
     return sel
 
 

@@ -21,7 +21,8 @@ Independence:
     presence/absence in the view after A6.1 resolution)
 
 projectVersion is NOT hashed — emitted as a SHARED constant
-(kProjectVersionMajor, kProjectVersionMinor, kCombusHandshakeWirePayloadLen)
+(kProjectVersionMajor, kProjectVersionMinor, kCombusHandshakeWirePayloadLen;
+values read from project_version.h by read_project_version())
 so a mismatch produces a precise diagnostic (option B).
 
 Architecture (A7.2):
@@ -51,7 +52,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
+from pathlib import Path
 
 from .generator import View, ViewChannel
 
@@ -262,8 +265,43 @@ _CPP_COMMON_PROLOGUE = """\
  ******************************************************************************/
 """
 
+# Defaults used when the caller gives no version (tests, ad-hoc calls).
+# The hook and the CLI read the real values from project_version.h.
 _PROJECT_VERSION_MAJOR_PLACEHOLDER = 0
 _PROJECT_VERSION_MINOR_PLACEHOLDER = 1
+
+
+class ProjectVersionError(Exception):
+    """project_version.h is missing or does not define a valid version."""
+
+
+def read_project_version(project_root) -> tuple[int, int]:
+    """Read (major, minor) from <project_root>/project_version.h.
+
+    Parses `PROJECT_VERSION_MAJOR` / `PROJECT_VERSION_MINOR` constants
+    (`= 0u;`). Each must be an integer in 0..255 (uint8 on the wire).
+    Raises ProjectVersionError when the file or a constant is missing
+    or out of range: a silent fallback would put a wrong version in the
+    handshake.
+    """
+    path = Path(project_root) / "project_version.h"
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as e:
+        raise ProjectVersionError(f"cannot read {path}: {e}") from e
+    # Drop comments so a commented-out definition is not picked up.
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+    text = re.sub(r"//[^\n]*", "", text)
+    values = []
+    for name in ("PROJECT_VERSION_MAJOR", "PROJECT_VERSION_MINOR"):
+        m = re.search(rf"\b{name}\s*=\s*(\d+)\s*u?\s*;", text)
+        if m is None:
+            raise ProjectVersionError(f"{path}: {name} not found")
+        value = int(m.group(1))
+        if not 0 <= value <= 255:
+            raise ProjectVersionError(f"{path}: {name}={value} is outside 0..255")
+        values.append(value)
+    return values[0], values[1]
 
 
 # Mapping view_name -> (md5 symbol name, hex symbol name).
@@ -294,7 +332,7 @@ def _render_common_header(
     body.append("namespace combus {")
     body.append("namespace wire {")
     body.append("")
-    body.append("/// Project version (placeholder 0.1 until project_version.h is introduced).")
+    body.append("/// Project version (read from project_version.h by the hook and the CLI).")
     body.append(f"static constexpr uint8_t kProjectVersionMajor = {project_version_major}u;")
     body.append(f"static constexpr uint8_t kProjectVersionMinor = {project_version_minor}u;")
     body.append("")
