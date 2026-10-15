@@ -224,7 +224,7 @@ def parse_yaml_file(path: Path) -> tuple[Path, str, Any]:
 
     try:
         text = path.read_text(encoding="utf-8")
-    except OSError as e:
+    except (OSError, UnicodeDecodeError) as e:
         raise ParseError(path, f"cannot read file: {e}") from e
 
     try:

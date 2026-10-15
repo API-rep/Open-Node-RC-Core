@@ -571,7 +571,7 @@ def validate_channel(
         raise ChannelValidationError(
             path, cid, "missing required field `type`",
         )
-    if ctype not in VALID_TYPES:
+    if not isinstance(ctype, str) or ctype not in VALID_TYPES:
         raise ChannelValidationError(
             path, cid,
             f"`type` must be one of {sorted(VALID_TYPES)}, got {ctype!r}",
@@ -583,7 +583,7 @@ def validate_channel(
         raise ChannelValidationError(
             path, cid, "missing required field `scope`",
         )
-    if cscope not in VALID_SCOPES:
+    if not isinstance(cscope, str) or cscope not in VALID_SCOPES:
         raise ChannelValidationError(
             path, cid,
             f"`scope` must be one of {sorted(VALID_SCOPES)}, got {cscope!r}",
@@ -629,7 +629,7 @@ def validate_channel(
             path, cid,
             f"`theme` must be a non-empty string, got {ctheme!r}",
         )
-    if ctheme not in VALID_THEMES:
+    if not isinstance(ctheme, str) or ctheme not in VALID_THEMES:
         raise ChannelValidationError(
             path, cid,
             f"`theme` must be one of {sorted(VALID_THEMES)}, got {ctheme!r}; "
