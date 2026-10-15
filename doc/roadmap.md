@@ -1,3 +1,11 @@
+### Objectifs de fin d'hiver 2027 ###
+
+1. **Un design de communication au point**, que le lien soit « remote » ou local (le même mécanisme dans les deux cas). Chantier : « Rework du module de communication ComBus » ci-dessous, avec la levée de l'ambiguïté REMOTE (portée) / « remote » (télécommande) dans « Autres chantiers ».
+2. **Une télécommande fonctionnelle sur plusieurs machines** et, idéalement, **un réseau multi-nœuds** (plusieurs cartes et machines ensemble) lui aussi fonctionnel. S'appuie sur le point 1, sur le mode nœud du ComBus Builder (déjà compilé et vérifié) et sur la convergence Machine / Sound.
+3. **Côté matériel (propriétaire)** : concevoir les cartes des machines. Camions : fait. Pelleteuse et chargeuse : à faire. Bulldozer : en construction. Ces cartes alimenteront les configurations de machines (script de génération du `platformio.ini`, « Autres chantiers »).
+4. **Si le temps le permet** : continuer le reste de cette roadmap.
+
+
 ### Convergence des environnements Machine / Sound ###
 
 Le projet audio actuel trouve son origine dans un projet autonome « son et lumière ». Cette séparation était pertinente tant que les deux environnements évoluaient indépendamment.
@@ -34,7 +42,7 @@ Aujourd'hui, le câblage des chaînes de ComBus Processors (qui est branché sur
 
 ### Rework du module de communication ComBus ###
 
-**Objectif de fin d'hiver (2027) :** un design de communication au point, que le lien soit « remote » ou local (le même mécanisme dans les deux cas).
+**Objectif de fin d'hiver :** voir la section « Objectifs de fin d'hiver 2027 » en tête de ce document.
 
 Aujourd'hui, seul l'UART est implémenté, de façon assez statique (flags `COMBUS_UART*`, `src/machines/init/com/combus_uart_init.cpp`). Objectif : un module de communication plus modulaire, ouvert à d'autres transports. L'interface de transport `NodeCom` existe déjà.
 
