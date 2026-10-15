@@ -71,7 +71,7 @@ Chaque canal se doté des métadonnées inhérente à sa transission.
 
 Les informations actuellement retenues sont :
 
-- Direction (RX / TX / ALL) -> difusion ou non des valeurs en cas de module d'entrés/sortie (comùplémentaire au layering)
+- Direction (`uplink` / `downlink` / `both` / `none`, avec variantes `*_or`) -> diffusion ou non des valeurs en cas de module d'entrées/sortie (complémentaire au layering). Aujourd'hui la direction est un champ de donnée du canal : elle n'est lue ni à l'émission ni à la réception (voir `src/core/system/combus/protocol/frame/combus_frame_protocol.md` §6).
 - Priorité (QOS réseau) -> service minal en fonction de la charge réseau
 
 ---
@@ -83,6 +83,28 @@ Les ComBus Processors suivent la même logique de composition que l'organisation
 Chaque couche peut ajouter, remplacer ou désactiver des traitements.
 
 Le comportement final résulte de l'assemblage de l'ensemble des processeurs actifs.
+
+---
+
+## ComBus Builder
+
+Les canaux ne sont plus déclarés à la main : le ComBus Builder les lit dans des
+fichiers YAML `.cb` et génère les identifiants, les tableaux de canaux, le bus
+et les empreintes MD5. Il s'exécute au build, par un hook SCons
+(`scripts/combus_scons_hook.py`).
+
+- Fichier `.cb` (syntaxe, champs, diffusion entre cartes, validation MD5) :
+  `doc/configuration/cb_syntax.md`.
+- Fonctionnement interne du builder (pipeline, modules, diffusion, MD5, sorties,
+  limites) : `scripts/combus_builder/README.md`.
+- Trame binaire et ordre des canaux sur le fil :
+  `src/core/system/combus/protocol/frame/combus_frame_protocol.md`.
+
+État : le mode mono-carte est celui utilisé par `platformio.ini`. Le mode
+multi-cartes (nœud avec plusieurs cartes) est implémenté dans le builder mais
+n'a pas encore été exercé en build réel. Les alias d'en-têtes par carte et
+l'inversion automatique de `direction` côté télécommande ne sont pas
+implémentés.
 
 ---
 
@@ -115,10 +137,9 @@ Les 3 layers définis :
    - System à créer
 
 3. **Fichiers et sections à modifier** :
-   - `src/core/system/combus/combus_struct.h` → Structure `ComBus` avec champ `layer`
+   - `src/core/system/combus/combus_defs.h` → Structure `ComBus` et définition de l'enum `ChanLayer` (le champ `layer` est porté par chaque canal)
    - `src/core/system/combus/combus_access.cpp` → Règles d'accès `_layer_ok()`
-   - `src/core/config/machines/*/combus/combus.cpp` → Configuration des layers par canal
-   - `include/core/system/combus/combus_defs.h` → Définition `ChanLayer` enum
+   - `combus.cpp` généré par le ComBus Builder (dossier `combus_generated`) → Configuration des layers par canal (l'ancien `combus.cpp` écrit à la main par machine n'existe plus)
 
 ### Point d'attention
 1. **Conflits entre layers** :
@@ -198,7 +219,7 @@ Implémenter l'architecture à 3 pointeurs pour la superposition de layers :
 - `include/struct/combus_v2_layers.h` → Énumérations par layer
 
 **Modifications existantes** :
-- `include/core/system/combus/combus_defs.h` → Ajout types v2, adaptation `ChanLayer`
+- `src/core/system/combus/combus_defs.h` → Ajout types v2, adaptation `ChanLayer`
 - `src/core/system/combus/combus_access.cpp` → Adaptation règles d'accès pour v2
 - `src/core/config/machines/*/combus/` → Réorganisation configs par layer
 
@@ -210,8 +231,8 @@ Implémenter l'architecture à 3 pointeurs pour la superposition de layers :
 - [ ] Tests intégration configs existantes
 
 ### Documentation associée
-- `combus_v2_layering_code.md` → Code d'implémentation détaillé
-- `doc/combus_V2.md` → Cette section
+- `combus_v2_layering_code.md` → Code d'implémentation détaillé *(fichier absent du dépôt)*
+- `doc/combus_V2.md` → Cette section *(ce document s'appelle aujourd'hui `doc/~combus_v2.md`)*
 - Référence : Architecture 3 pointeurs + fusion runtime
 
 ### Questions résolues
@@ -270,6 +291,6 @@ Une définition peut éventuellement être bidirectionnelle si elle porte les de
 
 ### Notes d'implémentation
 
-- La propagation intra-node est gérée par le runtime ComBus (cf. `include/struct/combus_struct.h` — la présence d'un channel dans la vue `LOCAL` découle de sa présence dans la vue `REMOTE`).
+- La présence d'un channel REMOTE dans la vue `LOCAL` est produite par le générateur : la vue `combus_local` contient les channels REMOTE et LOCAL (`scripts/combus_builder/generator.py:401-419`), avec les mêmes identifiants que la vue complète.
 - Aucun champ additionnel n'est nécessaire dans le `.cb` pour exprimer cette propagation.
 

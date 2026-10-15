@@ -86,6 +86,8 @@ Topics include:
 * Operating modes
 * Configuration examples and reference
 
+See [Configuration files](configuration/README.md) — syntax reference for each configuration file format (ComBus channels `.cb`).
+
 ---
 
 ### Want to Contribute?
