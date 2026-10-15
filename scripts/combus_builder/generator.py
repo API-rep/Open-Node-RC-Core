@@ -5,7 +5,7 @@ combus_builder/generator.py - A6.1: C++ artifact generation.
 A6.1 corrections vs A6:
   - REMOVED ChannelDescriptor abstraction.
   - Generator now emits REAL runtime structures (AnalogComBus / DigitalComBus)
-    that match the runtime in include/struct/combus_struct.h.
+    that match the runtime in src/core/system/combus/combus_defs.h.
   - `direction` is added as a fourth field on those structs (alongside
     `infoName`, `value`, `layer`). `ChanLayer` is preserved unchanged
     (audit A6 confirmed `_layer_ok()` requires it).
@@ -32,7 +32,7 @@ Direction representation (C++):
   - `enum class Direction : uint8_t { None=0, Uplink=1, Downlink=2, Both=3 }`
   - Bit layout: bit 0 = uplink, bit 1 = downlink.
   - Both = static_cast<Direction>(Uplink|Downlink) = 3.
-  - Operators `|`, `&`, `~` are defined in combus_struct.h.
+  - No bitwise operators are defined on Direction in the C++ code.
 
 View contract:
   - combus (REMOTE+LOCAL+SYSTEM):
@@ -52,11 +52,13 @@ View contract:
 
 ID allocation policy:
   - Within a view, IDs are allocated in stable order:
-      * Sort key: (scope priority [REMOTE<LOCAL<SYSTEM], type=analog|then digital, theme, id)
+      * analog and digital are numbered independently (one counter per type);
+        within a type the sort key is (scope priority [REMOTE<LOCAL<SYSTEM], theme, id)
   - Between views, the SAME channel always gets the SAME numeric ID.
 
 Generation directory:
-  - Default: .pio/build/<env>/combus_generated/
+  - Hook default: <PROJECT_BUILD_DIR>/combus_generated/ ; CLI default:
+    <project-root>/out/combus_generated/
   - Configurable via CLI flag --out-dir
   - Files are written atomically (write to .tmp, then rename).
 
@@ -115,7 +117,7 @@ class RequiresResolutionError(GeneratorError):
 
 
 # =============================================================================
-# C++ DIRECTION REPRESENTATION (matches combus_struct.h Direction enum)
+# C++ DIRECTION REPRESENTATION (matches combus_defs.h Direction enum)
 # =============================================================================
 
 class Direction:
@@ -123,7 +125,7 @@ class Direction:
     C++ representation of `direction` (frozenset -> uint8_t).
 
     Bit layout: bit 0 = uplink, bit 1 = downlink.
-    Values match the C++ `enum class Direction : uint8_t` in combus_struct.h:
+    Values match the C++ `enum class Direction : uint8_t` in combus_defs.h:
       None=0, Uplink=1, Downlink=2, Both=3.
 
     This class is the single source of truth for the Python-side mapping.
@@ -592,7 +594,6 @@ def _render_ids_header(view: View, ctx: BuildContext) -> str:
     #   - src/machines/init/com/combus_uart_init.cpp
     #   - src/machines/main.cpp
     #   - src/machines/system/debug/dashboard_machine.cpp
-    #   - src/sound_module/config/config.h
 
     body.append("// EOF")
     return "\n".join(body) + "\n"
@@ -864,23 +865,34 @@ def _safe_write_collect(path: Path, content: str) -> Path:
     return path
 
 
-def _rename_md5_files(out_dir: Path, filename_prefix: str) -> None:
+def _emit_md5_files(sel: ViewSelection, out_dir: Path, filename_prefix: str) -> None:
     """
-    Rename the three view-specific _md5.h files with the ND1 prefix.
+    Write the MD5 headers, with the ND1 prefix inserted in the three
+    view-specific names.
 
-    ND1 deliberately avoids touching md5.py: the prefix is applied here,
-    after generate_md5_artifacts() has written the un-prefixed files.
+    ND1 deliberately avoids touching md5.py, which always writes the
+    un-prefixed names. With a prefix, md5.py therefore writes into a
+    scratch subdirectory and the files are moved into out_dir under
+    their prefixed names. Writing the un-prefixed names directly in
+    out_dir and renaming them would delete the un-prefixed MD5 headers
+    of another board generated earlier into the same out_dir (node
+    mode: the board being compiled owns the un-prefixed names).
     combus_wire_common.h is NOT renamed (it is a shared header).
-
-    No-op when filename_prefix is empty (legacy mode).
     """
+    from .md5 import generate_md5_artifacts
     if not filename_prefix:
+        generate_md5_artifacts(sel, out_dir)
         return
-    for view_name in ("combus", "combus_local", "combus_remote"):
-        src = out_dir / f"{view_name}_md5.h"
-        if src.is_file():
-            dst = out_dir / f"{view_name}_{filename_prefix}_md5.h"
-            src.replace(dst)
+    scratch = out_dir / "_md5_scratch"
+    generate_md5_artifacts(sel, scratch)
+    for src in scratch.iterdir():
+        name = src.name
+        for view_name in ("combus", "combus_local", "combus_remote"):
+            if name == f"{view_name}_md5.h":
+                name = f"{view_name}_{filename_prefix}_md5.h"
+                break
+        src.replace(out_dir / name)
+    scratch.rmdir()
 
 
 def generate(
@@ -922,10 +934,7 @@ def generate(
     # A7.1: MD5 artifact for combus_remote only.
     # projectVersion is a placeholder until project_version.h is introduced
     # (out of A7 scope — see md5.py docstring).
-    from .md5 import generate_md5_artifacts
-    generate_md5_artifacts(sel, out_dir)
-    # ND1: rename the _md5.h files with the prefix (avoids touching md5.py).
-    _rename_md5_files(out_dir, filename_prefix)
+    _emit_md5_files(sel, out_dir, filename_prefix)
     return sel
 
 

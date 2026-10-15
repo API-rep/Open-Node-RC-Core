@@ -198,22 +198,25 @@ def _collect_node_boards(
 def _expected_artifacts_for_node(
     boards: list[tuple[str | None, str]],
     is_node: bool,
+    current_env: str | None = None,
 ) -> list[str]:
     """Return the list of expected artefacts for the current build.
 
     Legacy mode (is_node=False): returns EXPECTED_ARTIFACTS unchanged.
 
-    Node mode (is_node=True): returns the legacy artefacts (the mother
-    env's own artefacts, if any) PLUS the per-board prefixed artefacts
-    for every sister sub-env. combus_wire_common.h is shared and is
-    NOT duplicated per board.
+    Node mode (is_node=True): returns the unprefixed artefacts
+    (EXPECTED_ARTIFACTS, generated for the board whose env is
+    `current_env`, the one being compiled) PLUS the prefixed artefacts
+    of every OTHER board of the node. combus_wire_common.h is shared
+    and is NOT duplicated per board.
     """
     artifacts: list[str] = list(EXPECTED_ARTIFACTS)
     if not is_node:
         return artifacts
-    for board_id, _env_name in boards:
-        if board_id is None:
-            # Mother env: no prefix, artefacts already in EXPECTED_ARTIFACTS.
+    for board_id, env_name in boards:
+        if board_id is None or env_name == current_env:
+            # Root env (not a board), or the current board: its
+            # artefacts are the unprefixed ones, already listed.
             continue
         prefix = board_id
         artifacts.extend([
@@ -368,6 +371,7 @@ def _generate_per_board(
     canonical_definitions: Any,
     staging_dir: Path,
     board_ctx: Any = None,
+    unprefixed: bool = False,
 ) -> _BoardResult:
     """Generate the artefacts for one board (mother or sister sub-env).
 
@@ -396,6 +400,9 @@ def _generate_per_board(
                             (used by ND2 to avoid resolving the same
                             board twice — once for diffusion, once
                             for generation).
+      unprefixed:           Force an empty filename prefix (node mode:
+                            the board being compiled owns the
+                            unprefixed names the firmware includes).
 
     Returns:
       _BoardResult wrapping the Selection and the BuildContext used.
@@ -466,6 +473,9 @@ def _generate_per_board(
                 f"{board_env_name!r}: {e}"
             ) from e
         prefix = board_id
+
+    if unprefixed:
+        prefix = ""
 
     # --- Generate ------------------------------------------------------
     try:
@@ -762,6 +772,17 @@ def _generate_combus_action(target, source, env):
         )
         from scripts.combus_builder.node_context import NodeContext
 
+        # The root env is not a board: it has no combus artefacts of its
+        # own, so compiling it cannot work. Fail with a clear message.
+        if pio_env == node.mother_env:
+            sys.stderr.write(
+                f"[combus_scons_action] FATAL: {pio_env!r} is the root "
+                f"env of a node (shared build_flags, not a board). Build "
+                f"one of its boards instead: "
+                f"{[e for b, e in boards if b is not None]}.\n"
+            )
+            return 1
+
         # --- 7b.1. Resolve all boards' BuildContexts (needed for diffusion) ---
         node_boards_ctx: dict[str | None, Any] = {}
         for board_id, board_env_name in boards:
@@ -864,6 +885,8 @@ def _generate_combus_action(target, source, env):
                     canonical_definitions=board_canon.canonical_definitions,
                     staging_dir=staging_dir,
                     board_ctx=node_boards_ctx[board_id],
+                    # The board being compiled gets the unprefixed names.
+                    unprefixed=(board_env_name == pio_env),
                 )
             except _BoardGenerationError as e:
                 if staging_dir.exists():
@@ -885,7 +908,7 @@ def _generate_combus_action(target, source, env):
             )
 
     # --- 8. Pre-publish completeness check ------------------------------
-    expected = _expected_artifacts_for_node(boards, node.is_node)
+    expected = _expected_artifacts_for_node(boards, node.is_node, pio_env)
     try:
         _check_staging_complete(staging_dir, expected)
     except RuntimeError as e:
@@ -1008,7 +1031,7 @@ def _register_deferred_task(env) -> None:
         if node.is_node:
             boards = _collect_node_boards(node.mother_env, all_env_names)
             for board_id, _env_name in boards:
-                if board_id is None:
+                if board_id is None or _env_name == pio_env:
                     continue
                 prefix = board_id
                 targets.extend([
