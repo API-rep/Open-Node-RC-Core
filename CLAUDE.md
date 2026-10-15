@@ -15,7 +15,6 @@
 - Jamais `git add -A` ni `git commit -a` : ajouter les fichiers un par un. Pas de --force.
 - Ne pas toucher aux 6 stashes existants.
 - Modifications chirurgicales : une intention par changement, pas de refactor non demandé.
-- doc/configuration/cb_syntax.md reste non suivi tant que le propriétaire ne dit pas de le committer.
 
 ## Git
 - Branche de travail par défaut : main (synchronisée avec origin).

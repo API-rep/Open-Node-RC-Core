@@ -117,7 +117,7 @@ Ne PAS formuler comme faits. Les points résolus ont été déplacés en A.
 - README développeur : scripts/combus_builder/README.md (écrit le 2026-10-14).
 - Doc de protocole : src/core/system/combus/protocol/frame/combus_frame_protocol.md (écrit le 2026-10-14 dans protocol/, déplacé dans frame/ par le propriétaire ; `~README.md` non touché).
 - Section ComBus Builder dans doc/~combus_v2.md (insérée avant « Phases d'implémentation »).
-- Doc utilisateur .cb : doc/configuration/cb_syntax.md (déplacée et renommée le 2026-10-15 ; non suivie, appartient au propriétaire). À compléter : ligne extension/recherche, section MD5 réduite, « l'env racine n'est pas une carte », alias une fois implémentés.
+- Doc utilisateur .cb : doc/configuration/cb_syntax.md (déplacée et renommée le 2026-10-15, versionnée sur demande du propriétaire ; extension/recherche et validation MD5 présentes).
 - Docs existantes à considérer : doc/combus_v2 - YAML implementation*.md, src/core/system/combus/protocol/uart_workflow.md (`doc/ND2_investigation_report.md` a été supprimé par le propriétaire).
 - Consigne : ne jamais présenter l'env racine (« mère ») comme une carte. Ne documenter comme acquis que ce qui est dans A et B.
 
