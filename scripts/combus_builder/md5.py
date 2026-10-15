@@ -9,8 +9,9 @@ Generates a deterministic 16-byte MD5 hash for each of the three views:
 
 Inputs (identical for all three, per A7.1):
   - id, type, scope, theme, direction (sorted list), infoName
-  - Channels in canonical order (scope priority, type, theme, id)
-    - same key as _select_view() in generator.py.
+  - Channels in canonical order: canon `sort_key()` (scope LOCAL<REMOTE<SYSTEM,
+    type, theme, id). NOT the key of _select_view() in generator.py, which
+    numbers the IDs with REMOTE<LOCAL<SYSTEM.
 
 Independence:
   - file discovery order (A3 stable output -> A5 stable order)
@@ -236,8 +237,8 @@ _CPP_HEADER_PROLOGUE = """\
  *
  * MD5 does NOT include projectVersion — emitted as a shared constant
  * in combus_wire_common.h (option B: separate hash + version for
- * precise mismatch diagnostics). See doc/combus_v2 - YAML
- * implementation.md §13.
+ * precise mismatch diagnostics).
+ * See scripts/combus_builder/README.md §7.
  *
  * Regenerate on every PlatformIO build via the combus_builder extra_script.
  * Do not commit this file to the source tree.

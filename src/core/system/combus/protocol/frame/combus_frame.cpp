@@ -104,8 +104,7 @@ uint8_t combus_frame_crc8(const uint8_t* data, uint8_t len) {
  *
  * @note FS2 — the legacy `failSafe` parameter has been removed.  The
  *   failsafe state is now carried by the `DigitalComBusID::FAILSAFE`
- *   channel (LOCAL, both_or) — no out-of-band bit needed.  See
- *   doc/WIP - Failsafe module design.md §12.13.
+ *   channel (LOCAL, both_or) — no out-of-band bit needed.
  */
 
 uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
@@ -149,7 +148,7 @@ uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
 
 	// FS2 — COMBUS_FLAG_FAILSAFE removed.  Failsafe state is now carried
 	// by the DigitalComBusID::FAILSAFE channel (LOCAL, both_or) — no
-	// out-of-band bit needed.  See doc/WIP - Failsafe module design.md §12.13.
+	// out-of-band bit needed.
 	//if (...)     { flags |= COMBUS_FLAG_... ; }       // next flag — bit 1
 	//if (...)     { flags |= COMBUS_FLAG_... ; }       // next flag — bit 2
 
@@ -161,8 +160,8 @@ uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
 	outputBuffer[pos++] = nDigital;
 	outputBuffer[pos++] = seq;
 		// RL2: runLevel removed from header — travels as standard combus
-		// channel RUNLEVEL (scope LOCAL, see runlevel.cb). The header is
-		// now 5 bytes (was 6 before RL2).
+		// channel RUNLEVEL (scope LOCAL, see runlevel.cb). The prefix is
+		// now 5 bytes: SOF + 4-byte header (was 6 before RL2).
 	outputBuffer[pos++] = flags;
 
 		// 4. Pack digital bits values into bytes (bitbool lsb mode)
@@ -313,7 +312,7 @@ bool combus_frame_decode( const ComBusFrameCfg& cfg,
  * @details Write the incoming combus frame into the live combus instance.
  * Application sequence:
  *   1. Null pointer guard (returns on failure).
- *   2. Write runLevel from frame header; stamp combus->lastFrameMs = millis()
+ *   2. Stamp combus->lastFrameMs = millis()
  *      (Chantier 12.6: link-loss detection is no longer the codec's
  *      responsibility — it now lives at transport level, in the
  *      `UART_LINK_LOST` contributor channel.)
@@ -353,7 +352,7 @@ void combus_frame_apply( const ComBusFrameCfg& cfg,
 		// RL3: runLevel propagation moved out of combus_frame_apply() and into
 		// the generic analog channel RUNLEVEL (see cb_runlevel.cpp). The codec
 		// stays 100% channel-agnostic — no special-cased runLevel here.
-	combus->lastFrameMs = millis();   // used by sound node liveness check
+	combus->lastFrameMs = millis();   // used by link liveness checks
 
 		// 3. Flags (transport status only)
 

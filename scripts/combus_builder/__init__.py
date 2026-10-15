@@ -2,14 +2,17 @@
 #
 # ComBus v2 builder package.
 #
-# A3 scope (current): discovery + parsing YAML minimal.
-# A4+ (future): flags resolution, canonisation, generation, MD5.
+# Pipeline: parser -> canon -> (diffusion) -> generator -> md5.
+# See scripts/combus_builder/README.md for the module map.
 #
-# Architecture:
+# Modules:
 #   scripts/combus_builder/
-#       __init__.py
-#       parser.py    — A3: discovery + parsing
-#       flags.py     — A4 (future)
-#       canon.py     — A5 (future)
-#       generator.py — A6 (future)
-#       md5.py       — A7 (future)
+#       parser.py        — discovery + parsing of .cb / .cbch
+#       flags.py         — BuildContext (defines)
+#       canon/           — validation, merge, canonical sort
+#       machine_type.py  — machine type filter
+#       node_context.py  — node / board detection
+#       diffusion.py     — LOCAL diffusion across boards
+#       generator.py     — views, IDs, C++ emission
+#       md5.py           — contract hashes
+#       coherence.py     — consistency checks with platformio.ini

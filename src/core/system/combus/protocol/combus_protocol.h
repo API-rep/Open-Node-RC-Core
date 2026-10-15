@@ -166,11 +166,13 @@ void combus_protocol_init_all( ComBusLink* links, uint8_t count );
  *   they must have static storage duration because the RX module holds a
  *   live pointer to them.
  *
- *   Silent failure modes (logged via sys_log_err, no crash):
+ *   Failure modes:
  *     - link == nullptr or link->com == nullptr  → return immediately
- *     - link->layer == ChanLayer::UNDEFINED      → return (uninitialised)
- *     - link->layer == ChanLayer::SYSTEM         → return (loopback, never
- *                                                   transported physically)
+ *     - link->layer == ChanLayer::UNDEFINED      → FATAL: logged via
+ *                                                  sys_log_err, system halted
+ *     - link->layer == ChanLayer::SYSTEM         → accepted: the handshake
+ *                                                  uses the FULL view MD5
+ *                                                  (reserved for a loopback)
  *
  * @param linkIdx  Index of this link in the per-link state array
  *                 (allocated by combus_protocol_init_all()).

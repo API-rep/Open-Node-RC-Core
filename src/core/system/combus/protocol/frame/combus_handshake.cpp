@@ -50,7 +50,7 @@ static_assert(kCombusHandshakePayloadLen ==
                "combus::wire::kCombusHandshakeWirePayloadLen.");
 
 // COMBUS_MD5_CHECK_DISABLE is defined in combus_handshake.h (umbrella) as
-// the single source of truth — see R1.4 in WIP combus_v2 §6.
+// the single source of truth.
 
 
 

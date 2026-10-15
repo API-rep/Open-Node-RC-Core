@@ -61,8 +61,8 @@ Generalised rule (ND2, per `id`):
 
 Out of scope (deferred):
   - REMOTE diffusion (ND5).
-  - MD5 ONE_WAY canonisation (ND7).
-  - Runtime BOTH_OR aggregation wiring (ND6).
+  - Runtime BOTH_OR merge in the C++ codec (ND6, runtime part): the
+    bothOr flag is emitted but not read by combus_frame_apply.
   - merge_channels() in canon/channels.py is NOT touched: the
     per-board lists produced here contain at most one declaration
     per id (by construction), so merge_channels() never sees a

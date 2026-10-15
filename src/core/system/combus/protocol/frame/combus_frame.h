@@ -77,7 +77,7 @@ static constexpr uint8_t CombusFrameMinLen = CombusFrameHeaderLen + sizeof(uint8
 /**
  * @brief Encode a ComBus state into a binary frame stored in the buffer.
  *
- * @details Serializes runLevel, flags, all analog and digital channels into
+ * @details Serializes flags, all analog and digital channels into
  * the compact frame format with an automatic CRC8 check.
  *
  * Returns 0 if buf/bus are null or if the computed frame length would
@@ -105,8 +105,7 @@ static constexpr uint8_t CombusFrameMinLen = CombusFrameHeaderLen + sizeof(uint8
  *
  * @note FS2 — the legacy `failSafe` parameter has been removed.  The
  *   failsafe state is now carried by the `DigitalComBusID::FAILSAFE`
- *   channel (LOCAL, both_or) — no out-of-band bit needed.  See
- *   doc/WIP - Failsafe module design.md §12.13.
+ *   channel (LOCAL, both_or) — no out-of-band bit needed.
  */
 
 uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
@@ -147,7 +146,7 @@ bool combus_frame_decode( const ComBusFrameCfg& cfg,
 /**
  * @brief Apply a decoded frame onto a live ComBus.
  *
- * @details Writes runLevel, flags, analog and digital values into the
+ * @details Writes analog and digital values into the
  *  provided ComBus arrays. Caller must ensure array sizes match nAnalog
  *  and nDigital in the frame.
  *

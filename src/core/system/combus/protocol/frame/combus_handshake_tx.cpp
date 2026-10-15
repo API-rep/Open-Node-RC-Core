@@ -149,7 +149,7 @@ uint8_t combus_handshake_tx_update( CombusHandshakeContext* ctx,
     // --- 3. Early termination — contract already validated on this link.
     //    P3 constraint #3: a full-duplex link stops emitting as soon as
     //    the peer has confirmed the contract.  We assume full-duplex
-    //    (mechanism B — see WIP combus_v2 §5.3) because every caller
+    //    (mechanism B) because every caller
     //    today shares the same NodeCom* for TX and RX via
     //    combus_protocol_init.  When N2 (asymmetric transports) lands,
     //    this becomes a per-link flag passed to combus_tx_init().

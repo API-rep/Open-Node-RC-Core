@@ -47,7 +47,7 @@ uint8_t combus_handshake_sendOnce( NodeCom* nodeCom );
 /**
  * @brief Drive the boot-time handshake burst on the given ComBus link.
  *
- * @details P3 (WIP combus_v2 §3) — called from `combus_tx_update()` on
+ * @details P3 — called from `combus_tx_update()` on
  *   every poll.  Emits a handshake frame when:
  *     - the burst is active (`ctx->burstActive == true`), AND
  *     - the contract is NOT yet validated (early termination — see

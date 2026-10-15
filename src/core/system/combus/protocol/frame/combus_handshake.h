@@ -1,27 +1,20 @@
 /******************************************************************************
  * @file  combus_handshake.h
- * @brief ComBus handshake frame handling — RESERVED wire slot, NOT YET
- *        implemented on the wire.
+ * @brief ComBus handshake frame handling (wire slot `seq == 0`).
  *
  * @details The ComBus rolling sequence counter (`seq` field in
  *   `CombusFrameHeader`) is reserved to the range **1..255** for normal
- *   control frames.  The value **`seq == 0` is RESERVED** for a future
- *   handshake / versioning frame that will:
- *     - detect accidental version / layout mismatches between any two
- *       ComBus participants (machine <-> remote over RF, or mainboard
- *       <-> extension board over serial);
- *     - live on the high-priority QoS channel once that layer exists.
+ *   control frames.  The value **`seq == 0` is RESERVED** for the
+ *   handshake / versioning frame, which detects accidental version / layout
+ *   mismatches between two ComBus participants (machine <-> remote over RF,
+ *   or mainboard <-> extension board over serial).  The frame carries the
+ *   contract MD5 of the link's view plus the project version; the receiver
+ *   compares them with its locally generated copy (see
+ *   `combus_handshake_rx.h`, and `combus_frame_protocol.md` for the layout).
  *
  *   This header declares the dedicated dispatcher entry point used by the
  *   RX decoder.  It is **structurally separate** from the regular control-
- *   frame decode path so that the future handshake implementation can be
- *   added here without any refactor of `combus_frame.{h,cpp}`.
- *
- *   @note The handshake itself is NOT implemented in this revision.  The
- *     stub below only validates the structural shape of the frame (CRC,
- *     fixed payload length) and consumes the bytes from the RX ring buffer
- *     so the link stays re-synchronised.  No payload interpretation, no
- *     friend-cache update, no MD5 check — out of scope.
+ *   frame decode path.
  *
  *   Generic to every ComBus participant (RF node or serial board), NOT
  *   limited to the machine <-> remote link.
@@ -132,7 +125,7 @@ static constexpr uint8_t CombusFrameHandshakeMinLen =
 /**
  * @brief Number of handshake frames emitted in the boot-time burst.
  *
- * @details P3 (WIP combus_v2 §3) — the TX side emits a short burst of
+ * @details P3 — the TX side emits a short burst of
  *   handshake frames at boot so the peer can validate the contract even
  *   if the very first frame is lost on a noisy link.  3 is the minimum
  *   viable count per the WIP ("rafale courte 3–5 répétitions").
@@ -148,7 +141,7 @@ static constexpr uint8_t kCombusHandshakeBurstCount = 3u;
  *
  * @details P3 — 100 ms gives the peer ~10 chances per second to receive
  *   and validate the contract during the burst window.  Adjustable after
- *   peer review (see WIP combus_v2 §5.2 P3 row).
+ *   peer review.
  */
 static constexpr uint32_t kCombusHandshakeBurstPeriodMs = 100u;
 
@@ -166,7 +159,6 @@ static constexpr uint32_t kCombusHandshakeBurstPeriodMs = 100u;
  * @details Defined HERE (umbrella) as the single source of truth.  Side
  *   headers (combus_handshake_rx.h, combus_handshake_tx.h) MUST NOT
  *   redefine this — they include the umbrella and pick up the value.
- *   See R1.4 in the WIP combus_v2 §6 backlog.
  */
 #ifndef COMBUS_MD5_CHECK_DISABLE
   #define COMBUS_MD5_CHECK_DISABLE  0
