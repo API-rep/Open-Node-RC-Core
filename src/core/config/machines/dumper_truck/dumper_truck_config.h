@@ -4,14 +4,15 @@
  *
  * @details Conditionally includes all config sub-modules for the dumper-truck /
  *          articulated hauler vehicle class.  Consumers include this file via
- *          machine_config.h — they never reference the vehicle-class path
+ *          machine_type.h — they never reference the vehicle-class path
  *          directly.
  *
  *          Sub-modules included:
- *            combus   — always (channel IDs, array externs, comBus extern)
+ *            combus   — always (generated BASE channel IDs, <combus_base_ids.h>)
  *            motion   — always (traction preset alias)
- *            inputs_map — INSTANCE-specific (see note below)
- *            sound    — if SOUND_NODE or SOUND_ENABLED is defined
+ *            inputs_map — not included here (see note below)
+ *            sound    — if SOUND_NODE or SOUND_ENABLED is defined (leftover,
+ *                       see the Machine / Sound convergence in doc/roadmap.md)
  *
  *          NOTE: `sound_dynamics.h` (standalone dispatcher) is no longer
  *          needed — sound profile inclusion is handled here.
@@ -45,8 +46,8 @@
   // =============================================================================
   // 3. INPUT MAPPING
   // =============================================================================
-  // NOTE: inputs_map is now INSTANCE-specific (volvo_A60H_bruder/inputs_map/).
-  // The instance's machine header includes it directly.
+  // NOTE: the input mapping lives in dumper_truck/inputs/inputs_map/ and is
+  // not included here: input_update.cpp includes inputs_map.h directly.
   
   
   // =============================================================================
