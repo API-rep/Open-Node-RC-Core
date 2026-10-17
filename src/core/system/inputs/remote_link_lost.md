@@ -61,7 +61,7 @@ src/core/system/inputs/
 
 **Propriétaire** : `src/machines/system/input/input_update.cpp` (backend PS4_BT)
 
-**Réarmement** : `combus_set_digital(bus, DigitalComBusID::PS4_DS4_BT_LINK_LOST, false, ChanLayer::LOCAL)` quand le contrôleur est actif.
+**Réarmement** : `combus_set_digital(bus, DigitalComBusID::PS4_DS4_BT_LINK_LOST, false, ChanLayer::SYSTEM)` quand le contrôleur est actif.
 
 **Gating** : `#if defined(INPUT_PS4_DS4_BT)`
 
@@ -85,7 +85,7 @@ src/core/system/inputs/
 
 **Gating global** : `#if defined(HAS_REMOTE_LINK_LOST_FALLBACK)` — si le flag n'est pas défini, la chaîne est un no-op complet (tableau placeholder de taille 1, count = 0).
 
-**Sortie** : `DigitalComBusID::REMOTE_LINK_LOST` (canal LOCAL, scope partagé par tous les boards du node local).
+**Sortie** : `DigitalComBusID::REMOTE_LINK_LOST` (canal SYSTEM, scope partagé par toutes les cartes du nœud).
 
 ---
 

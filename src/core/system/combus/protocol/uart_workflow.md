@@ -122,7 +122,7 @@ void machine_init() {
   output_init();     // 4. com_init() -> combus_uart_init() -> combus_protocol_init_all()
 
   // --- 5. Boot-safe runlevel ---
-  combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)DEF_RUNLEVEL, ChanLayer::LOCAL);
+  combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)DEF_RUNLEVEL, ChanLayer::SYSTEM);
   stopAllDcDrivers(machine);
   sleepAllDcDrivers(machine);
   disableAllDcDrivers(machine);
@@ -219,10 +219,10 @@ void com_init() {
 **Fichier** : `src/machines/init/com/combus_uart_init.cpp` (lignes 30-108, commentaires abrégés).
 
 ```cpp
-static constexpr uint8_t kRemoteAnalogCount =
-    static_cast<uint8_t>(AnalogComBusRemoteID::CH_COUNT);
-static constexpr uint8_t kRemoteDigitalCount =
-    static_cast<uint8_t>(DigitalComBusRemoteID::CH_COUNT);
+static constexpr uint8_t kBaseAnalogCount =
+    static_cast<uint8_t>(AnalogComBusBaseID::CH_COUNT);
+static constexpr uint8_t kBaseDigitalCount =
+    static_cast<uint8_t>(DigitalComBusBaseID::CH_COUNT);
 
 void combus_uart_init()
 {
@@ -232,14 +232,14 @@ void combus_uart_init()
     // P3 — caller-owned per-link handshake context.
     static CombusHandshakeContext s_linkHandshakeCtx = {};
 
-    constexpr ComBusFrameCfg txCfg = { kRemoteAnalogCount, kRemoteDigitalCount };
+    constexpr ComBusFrameCfg txCfg = { kBaseAnalogCount, kBaseDigitalCount };
 
     // ... résolution du canal UART et ouverture du port (voir §2) -> NodeCom* com
 
     // --- Build the ComBusLink descriptor (single source of truth) ---
     ComBusLink link{};
     link.com          = com;
-    link.layer        = ChanLayer::REMOTE;
+    link.layer        = ChanLayer::BASE;
     link.handshakeCtx = &s_linkHandshakeCtx;
     link.name         = "combus";
 
@@ -249,9 +249,9 @@ void combus_uart_init()
 
     // --- RX side: seulement en full-duplex COMBUS_UART ---
     #if defined(COMBUS_UART)
-      static uint16_t s_analog[kRemoteAnalogCount];
-      static bool     s_digital[kRemoteDigitalCount];
-      constexpr ComBusFrameCfg rxCfg = { kRemoteAnalogCount, kRemoteDigitalCount };
+      static uint16_t s_analog[kBaseAnalogCount];
+      static bool     s_digital[kBaseDigitalCount];
+      constexpr ComBusFrameCfg rxCfg = { kBaseAnalogCount, kBaseDigitalCount };
       link.rxCfg      = rxCfg;
       link.analogBuf  = s_analog;
       link.digitalBuf = s_digital;
@@ -270,8 +270,8 @@ void combus_uart_init()
 ```
 
 Points à retenir (lus dans ce fichier) :
-- le lien est en `ChanLayer::REMOTE` : la trame transporte les canaux de la vue
-  `combus_remote` (`kRemote*Count`) ;
+- le lien est en `ChanLayer::BASE` : la trame transporte les canaux de la vue
+  `combus_base` (`kBase*Count`) ;
 - `link.target` n'est pas renseigné : aucune application automatique des trames
   reçues dans le ComBus (`combus_frame_apply` n'est pas appelé par ce lien) ;
 - les pools d'états TX et RX sont des tableaux statiques dont la taille est le
@@ -292,7 +292,7 @@ void combus_protocol_init_all( ComBusLink* links, uint8_t count )
 void combus_protocol_init( uint8_t linkIdx, ComBusLink* link )
 {
     // 1. Garde : link et link->com non nuls ; handshakeCtx obligatoire (sinon erreur loguée, return)
-    // 2. LY4 : switch (link->layer) -> ctx->expectedMd5 = kCombus{Remote|Local|}ComBusMd5
+    // 2. LY4 : switch (link->layer) -> ctx->expectedMd5 = kCombus{Base|System|}ComBusMd5
     //          UNDEFINED -> log d'erreur FATAL + boucle infinie (arrêt du système)
 
     // 3. Contexte de handshake partagé TX/RX, câblé AVANT les init
@@ -370,8 +370,8 @@ struct UartPinCfg {
 ```cpp
 static constexpr uint8_t ComBusUartFrameSize =
     CombusFrameHeaderLen
-  + ((static_cast<uint8_t>(DigitalComBusRemoteID::CH_COUNT) + 7u) / 8u)
-  +  (static_cast<uint8_t>(AnalogComBusRemoteID::CH_COUNT)  * 2u)
+  + ((static_cast<uint8_t>(DigitalComBusBaseID::CH_COUNT) + 7u) / 8u)
+  +  (static_cast<uint8_t>(AnalogComBusBaseID::CH_COUNT)  * 2u)
   + 1u;
 
 static constexpr uint32_t ComBusUartBaud         = 115200u;
@@ -479,7 +479,7 @@ est dans [`frame/combus_frame_protocol.md`](frame/combus_frame_protocol.md).
 - `tryDecode` (`combus_rx.cpp:143-234`) : cherche le `SOF`, lit l'octet `seq`
   (décalage 3) pour distinguer le handshake (`seq == 0`, chemin séparé) d'une
   trame de contrôle, vérifie la longueur et le CRC, puis, si le lien a une
-  `target`, appelle `combus_frame_apply` avec le layer `REMOTE`.
+  `target`, appelle `combus_frame_apply` avec le layer `BASE`.
 - `combus_frame_decode` : `combus_frame.cpp:236-302` ; `combus_frame_apply` :
   `combus_frame.cpp:338-395`.
 

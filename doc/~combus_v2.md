@@ -23,21 +23,23 @@ Le ComBus distingue trois niveaux de visibilité/définition :
 
 | Layer | Utilisation | Définition |
 |--------|-------------|
-| **REMOTE** | Données synchronisées entre plusieurs nœuds | Fichier de définiton "core" d'un type de machine |
-| **LOCAL** | Données partagées au niveau de la machine | Fichier de définiton "machine" |
-| **SYSTEM** | Données privées au firmware d'une carte | Fichier de définiton "core" d'un module d'execution |
+| **BASE** | Données synchronisées entre plusieurs nœuds | Fichier de définiton "core" d'un type de machine |
+| **SYSTEM** | Données partagées au niveau de la machine | Fichier de définiton "machine" |
+| **BOARD** | Données privées au firmware d'une carte | Fichier de définiton "core" d'un module d'execution |
 
 
 Le layer d'un canal définit uniquement sa portée de diffusion et son emplacement de définition.
 
+Noms avant le 2026-10-18 : `BASE` s'appelait `REMOTE`, `SYSTEM` s'appelait `LOCAL` et `BOARD` s'appelait `SYSTEM`.
+
 Une configuration combus est obtenue par superposition des layers :
 
 ```text
-REMOTE
-  +
-LOCAL
+BASE
   +
 SYSTEM
+  +
+BOARD
   =
 ComBus final
 ```
@@ -116,13 +118,13 @@ implémentés.
 Ajouter une hiérarchie au niveau des canaux ComBus pour rendre plus flexible leur définition et gestion au runtime.
 
 Les 3 layers définis :
-- **REMOTE** : Données synchronisées entre plusieurs nœuds
+- **BASE** : Données synchronisées entre plusieurs nœuds
   - Définition : Fichier "core" d'un type de machine
   - Portée : Inter-node
-- **LOCAL** : Données partagées au niveau de la machine
+- **SYSTEM** : Données partagées au niveau de la machine
   - Définition : Fichier "machine" spécifique
   - Portée : Intra-node
-- **SYSTEM** : Données privées au firmware d'une carte
+- **BOARD** : Données privées au firmware d'une carte
   - Définition : Fichier "core" d'un module d'exécution
   - Portée : Intra-device
 
@@ -143,24 +145,24 @@ Les 3 layers définis :
 
 ### Point d'attention
 1. **Conflits entre layers** :
-   - Option A : Le layer de poids fort (REMOTE) est prioritaire
+   - Option A : Le layer de poids fort (BASE) est prioritaire
    - Option B : Erreur en cas de conflit (préférable car plus franc)
    - **À discuter** : Stratégie de résolution des conflits
 
 2. **Contrôle d'accès** :
    - Évaluer son utilité dans le nouveau modèle
    - Si toujours utile : utiliser l'ownership des canaux pour une identification automatique des layers
-   - **À discuter** : Règles d'accès `callerLayer >= channelLayer` (SYSTEM ≥ LOCAL ≥ REMOTE)
+   - **À discuter** : Règles d'accès `callerLayer >= channelLayer` (BOARD ≥ SYSTEM ≥ BASE)
 
 3. **État actuel** :
-   - ✅ `ChanLayer` déjà défini (SYSTEM, LOCAL, REMOTE, UNDEFINED)
+   - ✅ `ChanLayer` déjà défini (BOARD, SYSTEM, BASE, UNDEFINED)
    - ✅ Règles d'accès `_layer_ok()` implémentées dans `combus_access.cpp`
    - ✅ Configuration des layers par canal dans `combus.cpp`
    - ⚠️ Structure multisource à finaliser
    - ⚠️ Fusion des layers à implémenter
 
 ### Questions ouvertes
-1. **Ordre de superposition** : REMOTE → LOCAL → SYSTEM ou SYSTEM → LOCAL → REMOTE ?
+1. **Ordre de superposition** : BASE → SYSTEM → BOARD ou BOARD → SYSTEM → BASE ?
 2. **Résolution conflits** : Priorité hiérarchique ou validation stricte ?
 3. **Contrôle d'accès** : Conserver les règles actuelles ou simplifier ?
 4. **Fusion runtime** : Comment gérer la fusion des canaux de différents layers ?
@@ -178,9 +180,9 @@ Une fois cette phase validée, passer à la **Phase 2 — Groupes thématiques**
 
 ### Objectif
 Implémenter l'architecture à 3 pointeurs pour la superposition de layers :
-- **REMOTE** : Configuration générique type machine
-- **LOCAL** : Configuration spécifique machine  
-- **SYSTEM** : Configuration firmware carte
+- **BASE** : Configuration générique type machine
+- **SYSTEM** : Configuration spécifique machine  
+- **BOARD** : Configuration firmware carte
 
 ### Implémentation
 1. **Structures de données** :
@@ -189,7 +191,7 @@ Implémenter l'architecture à 3 pointeurs pour la superposition de layers :
    - Registre fusionné unique `merged_channels`
 
 2. **Algorithme de fusion** :
-   - Séquentiel : REMOTE → LOCAL → SYSTEM
+   - Séquentiel : BASE → SYSTEM → BOARD
    - Conflits VERBOTEN (erreur fatale à l'init)
    - Métadonnées de fusion pour debug/tracing
 
@@ -206,7 +208,7 @@ Implémenter l'architecture à 3 pointeurs pour la superposition de layers :
 ### Point d'attention
 1. **Conflits** : Stratégie VERBOTEN - erreur fatale si même ID dans plusieurs layers
 2. **Performance mémoire** : Pas de duplication - registre fusionné unique
-3. **Initialisation ordre** : Séquentiel strict REMOTE → LOCAL → SYSTEM
+3. **Initialisation ordre** : Séquentiel strict BASE → SYSTEM → BOARD
 4. **Hot-plug modules** : Vérification des canaux requis à l'init
 5. **ComBusPatch** : Rejeté pour MVP (trop complexe)
 
@@ -249,7 +251,7 @@ Une fois le layering implémenté et validé, passer à la **Phase 2 — Groupes
 
 ### Contrat de propagation
 
-Un channel déclaré `REMOTE` représente une donnée échangée entre nœuds.
+Un channel déclaré `BASE` représente une donnée échangée entre nœuds.
 
 Sa `direction` décrit **exclusivement** sa circulation sur le wire inter-node :
 
@@ -257,15 +259,15 @@ Sa `direction` décrit **exclusivement** sa circulation sur le wire inter-node :
 - `downlink` : le nœud local reçoit la valeur depuis le nœud distant ;
 - `both` : la valeur circule dans les deux directions.
 
-Un channel `REMOTE` est **également présent** dans la représentation ComBus locale (`LOCAL`) de chaque board appartenant au nœud.
+Un channel `BASE` est **également présent** dans la représentation ComBus locale (`SYSTEM`) de chaque board appartenant au nœud.
 
 Cette propagation intra-node est **indépendante de `direction`** :
 
 - elle ne constitue **pas** une transmission wire ;
-- elle ne modifie **pas** la direction REMOTE déclarée ;
+- elle ne modifie **pas** la direction BASE déclarée ;
 - elle doit rendre le channel disponible de manière cohérente sur les boards du même nœud.
 
-La représentation `LOCAL` issue d'un channel `REMOTE` est donc implicitement disponible pour les échanges entre boards du nœud, **sans que cette propagation soit exprimée comme une seconde `direction` dans le `.cb`**.
+La représentation `SYSTEM` issue d'un channel `BASE` est donc implicitement disponible pour les échanges entre boards du nœud, **sans que cette propagation soit exprimée comme une seconde `direction` dans le `.cb`**.
 
 La question d'un éventuel `owner` du channel ou d'une direction spécifique liée au module producteur est volontairement hors de ce contrat et reste à décider ultérieurement.
 
@@ -276,7 +278,7 @@ La question d'un éventuel `owner` du channel ou d'une direction spécifique li�
 ### Format
 
 ```yaml
-scope: REMOTE
+scope: BASE
 direction:
   - uplink
   - downlink
@@ -291,6 +293,6 @@ Une définition peut éventuellement être bidirectionnelle si elle porte les de
 
 ### Notes d'implémentation
 
-- La présence d'un channel REMOTE dans la vue `LOCAL` est produite par le générateur : la vue `combus_local` contient les channels REMOTE et LOCAL (`scripts/combus_builder/generator.py:401-419`), avec les mêmes identifiants que la vue complète.
+- La présence d'un channel BASE dans la vue `SYSTEM` est produite par le générateur : la vue `combus_system` contient les channels BASE et SYSTEM (`scripts/combus_builder/generator.py:401-419`), avec les mêmes identifiants que la vue complète.
 - Aucun champ additionnel n'est nécessaire dans le `.cb` pour exprimer cette propagation.
 

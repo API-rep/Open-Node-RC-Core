@@ -38,7 +38,7 @@ Sources : `frame/combus_frame.h:1-31`, `frame/combus_frame.cpp:111-195`,
 
 Le run level ne fait plus partie de l'en-tête (changement « RL2 »,
 `frame/combus_frame_defs.h:71-75`). Il voyage comme un canal ordinaire :
-`RUNLEVEL`, analogique, scope LOCAL, `direction: uplink`, activé par
+`RUNLEVEL`, analogique, scope SYSTEM, `direction: uplink`, activé par
 `HAS_RUNLEVEL_MANAGER` (`src/core/system/combus/runlevel.cb`).
 
 > À VÉRIFIER : plusieurs commentaires du code parlent encore de `runLevel`
@@ -49,29 +49,29 @@ Le run level ne fait plus partie de l'en-tête (changement « RL2 »,
 
 ## 3. Quels canaux sont transmis
 
-Chaque lien a un `ChanLayer` (REMOTE, LOCAL ou SYSTEM). À l'initialisation du
+Chaque lien a un `ChanLayer` (BASE, SYSTEM ou BOARD). À l'initialisation du
 TX, le nombre de canaux à émettre est la valeur `CH_COUNT` de la vue
 correspondante (`combus_tx.cpp:122-133`) :
 
 | Layer du lien | Analogiques | Numériques |
 |---|---|---|
-| REMOTE | `AnalogComBusRemoteID::CH_COUNT` | `DigitalComBusRemoteID::CH_COUNT` |
-| LOCAL | `AnalogComBusLocalID::CH_COUNT` | `DigitalComBusLocalID::CH_COUNT` |
-| SYSTEM | `AnalogComBusID::CH_COUNT` (vue complète, repli) | `DigitalComBusID::CH_COUNT` |
+| BASE | `AnalogComBusBaseID::CH_COUNT` | `DigitalComBusBaseID::CH_COUNT` |
+| SYSTEM | `AnalogComBusSystemID::CH_COUNT` | `DigitalComBusSystemID::CH_COUNT` |
+| BOARD | `AnalogComBusID::CH_COUNT` (vue complète, repli) | `DigitalComBusID::CH_COUNT` |
 | UNDEFINED | arrêt fatal | arrêt fatal |
 
 L'encodeur envoie les canaux d'indice `0 .. n-1`, avec
 `n = min(wireEnd, cfg.nAnalog / cfg.nDigital)` (`combus_frame.cpp:124-125`).
-Cela suppose que les vues REMOTE et LOCAL soient des **préfixes** de la vue
+Cela suppose que les vues BASE et SYSTEM soient des **préfixes** de la vue
 complète, avec les mêmes indices : c'est une propriété de l'attribution des IDs
 par le builder (`scripts/combus_builder/README.md`, §6).
 
 ### Deux ordres de scopes à ne pas confondre
 
-- Attribution des IDs (`generator.py:296`, `_VIEW_SCOPE_ORDER`) : REMOTE, puis
-  LOCAL, puis SYSTEM. C'est elle qui rend les vues préfixes l'une de l'autre,
+- Attribution des IDs (`generator.py:296`, `_VIEW_SCOPE_ORDER`) : BASE, puis
+  SYSTEM, puis BOARD. C'est elle qui rend les vues préfixes l'une de l'autre,
   donc qui fixe l'ordre des canaux sur le fil.
-- Tri canonique (`canon/channels.py:97`, `SCOPE_ORDER`) : LOCAL, REMOTE, SYSTEM.
+- Tri canonique (`canon/channels.py:97`, `SCOPE_ORDER`) : SYSTEM, BASE, BOARD.
   Il n'intervient pas dans les IDs.
 
 Les IDs sont comptés séparément pour les analogiques et les numériques ; chaque
@@ -83,12 +83,12 @@ compteur part de 0 (`generator.py:362-386`).
   (`generator.py:575`, `584`). Il dimensionne les tableaux de canaux
   (`generator.py:692-708`) et sert de `wireEnd` au TX (§3).
 - `WIRE_END` : notion du générateur Python (`View.wire_end`, nombre de canaux
-  REMOTE de la vue, `generator.py:186-199`). Les constantes C++ correspondantes
+  BASE de la vue, `generator.py:186-199`). Les constantes C++ correspondantes
   ne sont plus émises (`generator.py:588-595`). Aucun code de `src/` ne les lit,
   hors un commentaire (`src/machines/system/debug/dashboard_machine.cpp:137`).
-- Dans la vue REMOTE, `WIRE_END == CH_COUNT` (`generator.py:46`). Dans la vue
+- Dans la vue BASE, `WIRE_END == CH_COUNT` (`generator.py:46`). Dans la vue
   complète, `CH_COUNT` est supérieur ou égal à `WIRE_END`. Ils diffèrent dès
-  qu'il existe des canaux LOCAL ou SYSTEM.
+  qu'il existe des canaux SYSTEM ou BOARD.
 
 ## 5. Décodage et application
 
@@ -102,18 +102,18 @@ compteur part de 0 (`generator.py:362-386`).
   (`_layer_ok`, `combus_access.cpp:28-54`).
 - En production, `combus_frame_apply` n'a qu'un appelant : `combus_rx.cpp:223`,
   appelé automatiquement quand le lien a une cible (`st.target != nullptr`),
-  avec le layer `ChanLayer::REMOTE`. En pratique, cet appel n'est jamais
+  avec le layer `ChanLayer::BASE`. En pratique, cet appel n'est jamais
   atteint par la machine : `combus_rx_update` n'est appelé nulle part dans
   `src/` et le lien UART n'a pas de `target` (voir §9).
 - Le même indice sert d'ID des deux côtés : émetteur et récepteur doivent donc
   avoir généré les mêmes IDs. Le handshake compare l'empreinte MD5 de la vue du
-  lien (`combus_protocol.cpp:55-88`, `kCombusRemoteComBusMd5`,
-  `kCombusLocalComBusMd5` ou `kCombusComBusMd5` selon le layer).
+  lien (`combus_protocol.cpp:55-88`, `kCombusBaseComBusMd5`,
+  `kCombusSystemComBusMd5` ou `kCombusComBusMd5` selon le layer).
 
-> À VÉRIFIER : `combus_rx.cpp:209-221` commente que le layer `REMOTE` « accepte
-> les canaux REMOTE ou LOCAL » (« LOCAL inherits REMOTE »). Or `_layer_ok` n'autorise l'écriture d'un canal
-> LOCAL que pour un appelant LOCAL ou SYSTEM (`combus_access.cpp:42-45`). Avec
-> `ChanLayer::REMOTE` passé par `combus_rx.cpp:223`, les canaux LOCAL d'une
+> À VÉRIFIER : `combus_rx.cpp:209-221` commente que le layer `BASE` « accepte
+> les canaux BASE ou SYSTEM » (« SYSTEM inherits BASE »). Or `_layer_ok` n'autorise l'écriture d'un canal
+> SYSTEM que pour un appelant SYSTEM ou BOARD (`combus_access.cpp:42-45`). Avec
+> `ChanLayer::BASE` passé par `combus_rx.cpp:223`, les canaux SYSTEM d'une
 > trame reçue semblent refusés. Effet réel non vérifié par exécution.
 
 ## 6. Direction : pas de filtrage au transport
@@ -154,7 +154,7 @@ Source : `frame/combus_handshake_tx.cpp:32-115` (émission),
 | 2 | 1 | `nDigital` = 0 |
 | 3 | 1 | `seq` = 0 (réservé au handshake) |
 | 4 | 1 | `flags` = 0 |
-| 5 à 20 | 16 | MD5 de la vue du lien (REMOTE, LOCAL ou complète) |
+| 5 à 20 | 16 | MD5 de la vue du lien (BASE, SYSTEM ou complète) |
 | 21 | 1 | version de projet, majeur (`kProjectVersionMajor`) |
 | 22 | 1 | version de projet, mineur (`kProjectVersionMinor`) |
 | 23 | 1 | CRC-8/MAXIM sur les octets 0 à 22 |
@@ -171,9 +171,9 @@ la compare à la constante générée `kCombusHandshakeWirePayloadLen`.
 
 | Layer du lien | MD5 |
 |---|---|
-| REMOTE | `kCombusRemoteComBusMd5` |
-| LOCAL | `kCombusLocalComBusMd5` |
-| SYSTEM | `kCombusComBusMd5` (vue complète) |
+| BASE | `kCombusBaseComBusMd5` |
+| SYSTEM | `kCombusSystemComBusMd5` |
+| BOARD | `kCombusComBusMd5` (vue complète) |
 | UNDEFINED | arrêt fatal |
 
 TX et RX lisent le même pointeur dans le contexte du lien. Si `expectedMd5`
@@ -243,9 +243,9 @@ la vue complète si le pointeur est nul (`combus_handshake_tx.cpp:51-53`,
   production, la machine n'émet que (`output_update` → `combus_tx_update`).
 
 > À VÉRIFIER : l'en-tête `combus_protocol.h:169-173` annonce que
-> `combus_protocol_init` « return » pour un layer `UNDEFINED` ou `SYSTEM`. Le
+> `combus_protocol_init` « return » pour un layer `UNDEFINED` ou `BOARD`. Le
 > code arrête le système pour `UNDEFINED` (`combus_protocol.cpp:79-87`) et traite
-> `SYSTEM` comme la vue complète (`:74-78`, `combus_tx.cpp:129-134`).
+> `BOARD` comme la vue complète (`:74-78`, `combus_tx.cpp:129-134`).
 
 ## 10. Ordre d'un cycle de la machine
 

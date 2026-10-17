@@ -1,6 +1,6 @@
 ### Objectifs de fin d'hiver 2027 ###
 
-1. **Un design de communication au point**, que le lien soit « remote » ou local (le même mécanisme dans les deux cas). Chantier : « Rework du module de communication ComBus » ci-dessous, avec la levée de l'ambiguïté REMOTE (portée) / « remote » (télécommande) dans « Autres chantiers ».
+1. **Un design de communication au point**, que le lien soit « remote » ou local (le même mécanisme dans les deux cas). Chantier : « Rework du module de communication ComBus » ci-dessous.
 2. **Une télécommande fonctionnelle sur plusieurs machines** et, idéalement, **un réseau multi-nœuds** (plusieurs cartes et machines ensemble) lui aussi fonctionnel. S'appuie sur le point 1, sur le mode nœud du ComBus Builder (déjà compilé et vérifié) et sur la convergence Machine / Sound.
 3. **Côté matériel (propriétaire)** : concevoir les cartes des machines. Camions : fait. Pelleteuse et chargeuse : à faire. Bulldozer : en construction. Ces cartes alimenteront les configurations de machines (script de génération du `platformio.ini`, « Autres chantiers »).
 4. **Si le temps le permet** : continuer le reste de cette roadmap.
@@ -57,4 +57,3 @@ Aujourd'hui, seul l'UART est implémenté, de façon assez statique (flags `COMB
 - Vérifier la documentation actuelle (contenu, liens vers les fichiers) et sa segmentation, pour une prise de contexte optimale de l'agent IA lors de la (re)prise d'un job.
 - Écrire le script de parsing des configurations YAML de cartes et de machines (base du script de génération ci-dessous).
 - Créer le script de génération du `platformio.ini` d'une machine (env racine + sous-envs par carte) depuis un YAML (+ éventuellement une interface graphique de configuration).
-- Lever l'ambiguïté entre REMOTE (portée ComBus) et « remote » (télécommande) : trouver le terme qui remplace REMOTE pour la portée.

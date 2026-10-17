@@ -28,7 +28,7 @@ platformio.ini (flags)            fichiers .cb / .cbch
         │                                  │
    flags.py (BuildContext)            parser.py (découverte + YAML)
         │                                  │
-        │                       [mode nœud] diffusion.py (LOCAL entre cartes)
+        │                       [mode nœud] diffusion.py (SYSTEM entre cartes)
         │                                  │
         │                           canon/ (validation, fusion, tri)
         └──────────────┬───────────────────┘
@@ -94,7 +94,7 @@ Repris de l'ancien document de conception, vérifiés dans le code :
 | `machine_type.py` | Détecte le type de machine via un unique flag `MACHINE_TYPE_*` parmi `DUMPER_TRUCK`, `EXCAVATOR`, `LOADER` (`machine_type.py:78-82`). Deux flags : `AmbiguousMachineTypeError`. Filtre les `.cb` situés sous `core/config/machines/<autre_type>/`. |
 | `flags.py` | `BuildContext` : flags `-D` vus par le compilateur (`defines`, `defines_with_value`). Sert à résoudre `requires`. |
 | `node_context.py` | Détection du nœud par noms d'envs `<racine>_<board_id>` (`node_context.py:106-195`). Résolution statique du contexte de chaque carte, sans compiler. |
-| `diffusion.py` | Diffusion des canaux LOCAL entre les cartes d'un nœud (§5). |
+| `diffusion.py` | Diffusion des canaux SYSTEM entre les cartes d'un nœud (§5). |
 | `canon/channels.py` | Vocabulaire et validation des canaux, détection des doublons d'`id`, tri canonique. |
 | `canon/__init__.py` | `canonize()` : extraction de `channels:`, fusion, tri. |
 | `generator.py` | Résolution de `requires`, sélection des trois vues, attribution des IDs, rendu C++. |
@@ -133,9 +133,9 @@ Le `platformio.ini` actuel ne déclare aucun sous-env (envs : `machines`,
 `volvo_A60H_bruder`, `remotes`, `test_combus_loopback`). Le mode nœud n'y est
 donc pas exercé (voir §10).
 
-## 5. Diffusion LOCAL entre cartes
+## 5. Diffusion SYSTEM entre cartes
 
-Entrée : toutes les déclarations LOCAL actives par carte (une déclaration est
+Entrée : toutes les déclarations SYSTEM actives par carte (une déclaration est
 active si son `requires` est satisfait pour cette carte). Règles, par `id`
 (`diffusion.py:16-60`), avec `n_up`, `n_down`, `n_both`, `n_none` le nombre de
 cartes actives dans chaque sens :
@@ -151,20 +151,20 @@ cartes actives dans chaque sens :
 | seulement `none` | aucune diffusion, ni avertissement ni erreur |
 
 Un même `id` déclaré deux fois sur la même carte lève
-`DiffusionLocalConflictError` avant toute autre règle. Les variantes `*_or`
+`DiffusionSystemConflictError` avant toute autre règle. Les variantes `*_or`
 suivent la règle de leur famille (`uplink_or` compte comme `uplink`, etc.) ;
 `both` et `both_or` sur le même `id` : accepté avec un avertissement
 « divergence » (`diffusion.py:420-443`), `both_or` mélangé avec
 `uplink`/`downlink` : erreur fatale (`diffusion.py:445-448`).
 
-La diffusion REMOTE (inversion côté télécommande, « ND5 ») n'existe pas.
+La diffusion BASE (inversion côté télécommande, « ND5 ») n'existe pas.
 
-Pourquoi diffuser : le ComBus LOCAL doit être identique sur toutes les cartes
+Pourquoi diffuser : le ComBus SYSTEM doit être identique sur toutes les cartes
 d'un même nœud. Un module consommateur sur la carte B doit pouvoir lire un
 canal produit seulement par un module actif sur la carte A, sans activer ce
 module sur chaque carte. Un channel qui doit rester privé à une carte se
-déclare en `SYSTEM` : la diffusion ne traite que le scope LOCAL, et les
-déclarations SYSTEM ne sont reprises que sur les cartes où leur `requires` est
+déclare en `BOARD` : la diffusion ne traite que le scope SYSTEM, et les
+déclarations BOARD ne sont reprises que sur les cartes où leur `requires` est
 satisfait (`diffusion.py:826-868`).
 
 Note sur les fichiers : chaque carte reçoit ses propres fichiers préfixés (§8),
@@ -172,41 +172,53 @@ y compris les fichiers d'identifiants. Le code ne génère donc pas « un seul
 jeu d'IDs par nœud », contrairement à ce que supposait l'ancienne roadmap de
 diffusion (qui prévoyait un seul `combus_ids` par nœud).
 
-Pourquoi l'empreinte LOCAL est canonisée (« ND7 ») : la diffusion inverse
+Pourquoi l'empreinte SYSTEM est canonisée (« ND7 ») : la diffusion inverse
 `uplink` et `downlink` entre cartes par construction. Sans canonisation, deux
-cartes correctement configurées auraient des MD5 LOCAL différents dès qu'un
+cartes correctement configurées auraient des MD5 SYSTEM différents dès qu'un
 channel asymétrique existe (faux désaccord garanti).
 
-## 6. Attribution des IDs et vues
+## 6. Portées, attribution des IDs et vues
+
+Trois portées (champ `scope` d'un channel), de la plus large à la plus étroite :
+
+| Scope | Rôle | Remplace (avant le 2026-10-18) |
+|---|---|---|
+| `BASE` | Profil standard du type de machine : channels que tout nœud compatible partage, même sans liaison réseau. C'est le contrat que le handshake vérifie par MD5. | `REMOTE` |
+| `SYSTEM` | Channels propres à ce nœud (une machine ou une télécommande), partagés entre ses cartes. | `LOCAL` |
+| `BOARD` | Channels internes à une carte, jamais partagés. | `SYSTEM` |
+
+Attention à l'historique : avant le 2026-10-18, `SYSTEM` désignait ce qui est
+aujourd'hui `BOARD`. Les anciens messages de commit et les stashes utilisent
+les anciens noms.
 
 Trois vues, avec le même espace d'IDs (`generator.py:401-419`) :
 
 | Vue | Contenu | Fichiers émis |
 |---|---|---|
-| `combus` | REMOTE + LOCAL + SYSTEM | `combus.h`, `combus.cpp`, `combus_ids.h` |
-| `combus_local` | REMOTE + LOCAL | `combus_local_ids.h` seulement (`generator.py:812-819`) |
-| `combus_remote` | REMOTE | `combus_remote_ids.h` seulement |
+| `combus` | BASE + SYSTEM + BOARD | `combus.h`, `combus.cpp`, `combus_ids.h` |
+| `combus_system` | BASE + SYSTEM | `combus_system_ids.h` seulement (`generator.py:812-819`) |
+| `combus_base` | BASE | `combus_base_ids.h` seulement |
 
 Deux ordres distincts, à ne pas confondre :
 
-- `_VIEW_SCOPE_ORDER` (`generator.py:296`) : REMOTE 0, LOCAL 1, SYSTEM 2. Sert
+- `_VIEW_SCOPE_ORDER` (`generator.py:296`) : BASE 0, SYSTEM 1, BOARD 2. Sert
   à **numéroter les IDs**, dans `_select_view` uniquement (`generator.py:338`, `346`).
-- `SCOPE_ORDER` (`canon/channels.py:97`) : LOCAL 0, REMOTE 1, SYSTEM 2. Sert au
+- `SCOPE_ORDER` (`canon/channels.py:97`) : SYSTEM 0, BASE 1, BOARD 2. Sert au
   **tri canonique** `(scope, type, theme, id)` (`canon/channels.py:208-211`, `787-789`).
 
 Règle d'attribution (`generator.py:332-386`) : les canaux `analog` et `digital`
 sont triés séparément, par `(scope, theme, id)` avec l'ordre `_VIEW_SCOPE_ORDER`.
-Chaque type a son compteur, qui part de 0. Les REMOTE ont donc les plus petits
-IDs de leur type, puis LOCAL, puis SYSTEM. Un canal garde le même ID dans toutes
-les vues où il apparaît. Les vues `combus_local` et `combus_remote` sont ainsi
+Chaque type a son compteur, qui part de 0. Les BASE ont donc les plus petits
+IDs de leur type, puis SYSTEM, puis BOARD. Un canal garde le même ID dans toutes
+les vues où il apparaît. Les vues `combus_system` et `combus_base` sont ainsi
 des préfixes de `combus`.
 
 À quoi sert chaque vue (`md5.py:3-9`, `combus_protocol.cpp:55-88`) :
 
-- `combus_remote` : ce qui circule sur le fil entre nœuds ;
-- `combus_local` : base d'alignement entre cartes d'un même nœud. Deux cartes
-  peuvent porter des channels `SYSTEM` différents sans que leurs contrats
-  LOCAL divergent, car cette vue n'inclut pas SYSTEM ;
+- `combus_base` : le profil de base du type de machine (ce qui est validé entre nœuds par le handshake) ;
+- `combus_system` : base d'alignement entre cartes d'un même nœud. Deux cartes
+  peuvent porter des channels `BOARD` différents sans que leurs contrats
+  SYSTEM divergent, car cette vue n'inclut pas BOARD ;
 - `combus` : la vue complète de la carte (référence locale).
 
 L'ordre des IDs est un contrat : changer l'ordre change le protocole sans
@@ -215,12 +227,12 @@ changer les noms. Le MD5 porte sur la définition complète de chaque channel
 détecté.
 
 `CH_COUNT` termine chaque énumération. `View.wire_end` (nombre de canaux
-REMOTE) existe côté Python seulement ; les constantes C++ `ComBusWireEnd*`
+BASE) existe côté Python seulement ; les constantes C++ `ComBusWireEnd*`
 ne sont plus émises (`generator.py:588-595`).
 
-> À VÉRIFIER : les docstrings `generator.py:55` et `md5.py:12` décrivent le tri
-> comme `(scope, type, theme, id)`. Le code d'attribution des IDs trie par type
-> d'abord, puis `(scope, theme, id)` (`generator.py:332-350`). Le code fait foi.
+Le tri des IDs trie par type d'abord, puis `(scope, theme, id)`
+(`generator.py:332-350`), et non `(scope, type, theme, id)` comme le tri
+canonique.
 
 ## 7. MD5
 
@@ -229,11 +241,11 @@ ne sont plus émises (`generator.py:588-595`).
 - Entrées par canal : `id`, `type`, `scope`, `theme`, `direction`,
   `direction_or`, `infoName` (`md5.py:164-172`). `value` et `requires` n'y sont
   pas.
-- Vue `combus_local` seulement : canonisation `ONE_WAY`. `uplink`, `downlink`,
+- Vue `combus_system` seulement : canonisation `ONE_WAY`. `uplink`, `downlink`,
   `uplink_or` et `downlink_or` donnent le même état ; `both`, `both_or` et
   `none` restent distincts (`md5.py:62-109`, `137-157`, `183`). C'est ce qui
   permet à deux cartes d'un nœud d'avoir des rôles opposés sans désaccord.
-- Vues `combus_remote` et `combus` : directions brutes, `uplink` et `uplink_or`
+- Vues `combus_base` et `combus` : directions brutes, `uplink` et `uplink_or`
   donnent des empreintes différentes.
 - `_canonical_direction_for_hash` est réservée au hash, jamais à la génération
   (`md5.py:88-90`). `direction_or` est optionnel (rétro-compatibilité).
@@ -242,9 +254,9 @@ ne sont plus émises (`generator.py:588-595`).
 - Le hash change donc quand un de ces champs change, quand un canal entre ou
   sort d'une vue (via `requires`), ou quand l'ordre d'attribution des IDs change.
 - Propagation selon le scope du channel modifié (conséquence de la composition
-  des vues, §6) : un channel REMOTE change les trois empreintes ; un channel
-  LOCAL change `combus_local` et `combus`, pas `combus_remote` ; un channel
-  SYSTEM change seulement `combus`.
+  des vues, §6) : un channel BASE change les trois empreintes ; un channel
+  SYSTEM change `combus_system` et `combus`, pas `combus_base` ; un channel
+  BOARD change seulement `combus`.
 - En-têtes émis : `combus_wire_common.h` (constantes communes
   `kProjectVersionMajor`, `kProjectVersionMinor`,
   `kCombusHandshakeWirePayloadLen`) puis un en-tête par vue
@@ -264,14 +276,14 @@ ne sont plus émises (`generator.py:588-595`).
 ## 8. Sorties générées
 
 Mono-carte : les 9 fichiers de `EXPECTED_ARTIFACTS` (`combus_scons_hook.py:107-122`) :
-`combus.cpp`, `combus.h`, `combus_ids.h`, `combus_local_ids.h`,
-`combus_local_md5.h`, `combus_md5.h`, `combus_remote_ids.h`,
-`combus_remote_md5.h`, `combus_wire_common.h`.
+`combus.cpp`, `combus.h`, `combus_ids.h`, `combus_system_ids.h`,
+`combus_system_md5.h`, `combus_md5.h`, `combus_base_ids.h`,
+`combus_base_md5.h`, `combus_wire_common.h`.
 
 Mode nœud : en plus, huit fichiers par carte, préfixés par le `board_id`
 (`combus_<id>.h`, `combus_<id>.cpp`, `combus_<id>_ids.h`,
-`combus_local_<id>_ids.h`, `combus_remote_<id>_ids.h`, `combus_<id>_md5.h`,
-`combus_local_<id>_md5.h`, `combus_remote_<id>_md5.h`) ; `combus_wire_common.h`
+`combus_system_<id>_ids.h`, `combus_base_<id>_ids.h`, `combus_<id>_md5.h`,
+`combus_system_<id>_md5.h`, `combus_base_<id>_md5.h`) ; `combus_wire_common.h`
 n'est pas préfixé (`combus_scons_hook.py:198-229`). Les identifiants C++ ne sont
 pas préfixés (`generator.py:76-78`).
 
@@ -333,7 +345,7 @@ racine sont des restes de ces sorties.
 
 - **Dossier généré partagé** en mode nœud : compiler deux cartes de suite
   réécrit les fichiers non préfixés (dette acceptée, par sécurité).
-- **Inversion REMOTE** (« ND5 ») : non traitée.
+- **Inversion BASE** (« ND5 ») : non traitée.
 - **Fusion OR côté C++** : non faite. `DigitalComBus.bothOr` est émis mais
   `combus_frame_apply` ne le lit pas (`combus_defs.h:130-137`).
 - **Build réel à deux cartes** (« T4 ») : jamais testé.
@@ -395,7 +407,7 @@ Fichiers de `scripts/combus_builder/tests/` :
 | `test_machine_type_filter.py` | filtre par type de machine |
 | `test_signature_consistency.py` | signatures `env=` / `project_root=` de `discover_and_parse` |
 | `test_nd1_integration.py`, `test_nd1_multiboard.py` | nœud, cartes, génération par carte |
-| `test_nd2_diffusion.py`, `test_nd6_both_or.py` | diffusion LOCAL, `both_or` |
+| `test_nd2_diffusion.py`, `test_nd6_both_or.py` | diffusion SYSTEM, `both_or` |
 | `test_mother_not_a_board.py` | l'env racine (« mère ») n'est pas une carte |
 | `test_generator.py` | vues, IDs, rendu C++, compilation |
 | `test_md5.py` | empreintes, canonisation `ONE_WAY` |
@@ -412,16 +424,16 @@ Chaque test tire des déclarations `.cb` aléatoires mais valides, avec un germe
 
 - sortie identique entre deux exécutions et quel que soit l'ordre des fichiers
   et des channels ;
-- numérotation des IDs : par type, de 0 à n-1, REMOTE puis LOCAL puis SYSTEM ;
+- numérotation des IDs : par type, de 0 à n-1, BASE puis SYSTEM puis BOARD ;
   un channel garde son ID dans toutes les vues ; les vues sont des préfixes ;
-- matrice MD5 : renommer un channel REMOTE change les trois empreintes, LOCAL
-  deux, SYSTEM une seule ; `value` et un `requires` satisfait ne changent rien ;
-  `uplink` / `downlink` restent distincts sur la vue REMOTE ;
+- matrice MD5 : renommer un channel BASE change les trois empreintes, SYSTEM
+  deux, BOARD une seule ; `value` et un `requires` satisfait ne changent rien ;
+  `uplink` / `downlink` restent distincts sur la vue BASE ;
 - tout doublon d'`id` est refusé ;
 - valeurs absurdes dans chaque champ : seule l'exception de validation est
   permise ;
 - fichiers YAML aléatoires : seule `ParseError` est permise ;
-- diffusion LOCAL (2 à 5 cartes, env racine présent ou non) comparée à un oracle écrit
+- diffusion SYSTEM (2 à 5 cartes, env racine présent ou non) comparée à un oracle écrit
   indépendamment à partir des règles de `diffusion.py` : mêmes directions,
   mêmes erreurs, mêmes avertissements.
 

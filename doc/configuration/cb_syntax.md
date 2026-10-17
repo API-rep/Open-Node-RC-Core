@@ -16,7 +16,7 @@ de chaque board.
 channels:
   - id: BAT_LOW
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: uplink
     requires: [HAS_VBAT_FAILSAFE]
@@ -64,9 +64,9 @@ trie les channels de façon canonique (`scope`, `type`, `theme`, `id`).
 |---|---|---|---|
 | `id` | oui | chaîne non vide, ex. `BAT_LOW`, `STEERING` | Identifiant unique du channel (devient un nom d'énumération C++) |
 | `type` | oui | `digital` \| `analog` | Famille du channel |
-| `scope` | oui | `REMOTE` \| `LOCAL` \| `SYSTEM` | Portée de diffusion |
+| `scope` | oui | `BASE` \| `SYSTEM` \| `BOARD` | Portée de diffusion |
 | `theme` | oui | `core` \| `failsafe` \| `vbat` \| `light` \| `input` | Regroupement fonctionnel (liste fermée) |
-| `direction` | oui pour LOCAL et REMOTE | `uplink` \| `downlink` \| `both` \| `none` \| `uplink_or` \| `downlink_or` \| `both_or` | Sens de circulation, avec ou sans fusion OR |
+| `direction` | oui pour SYSTEM et BASE | `uplink` \| `downlink` \| `both` \| `none` \| `uplink_or` \| `downlink_or` \| `both_or` | Sens de circulation, avec ou sans fusion OR |
 | `requires` | non | liste de flags de compilation | Activation conditionnelle |
 | `value` | non | token statique ou entier | Valeur par défaut |
 | `infoName` | oui | chaîne non vide | Nom lisible pour le debug, inclus dans le hash MD5 |
@@ -88,21 +88,23 @@ builder. Le thème fait partie du tri canonique et du hash MD5.
 
 | Scope | Portée | Description |
 |---|---|---|
-| `REMOTE` | Inter-nœuds | Frame normalisée d'un **type de machine** |
-| `LOCAL` | Intra-nœud | Partagé entre toutes les boards d'un même nœud |
-| `SYSTEM` | Intra-board | Privé au firmware d'une board, jamais partagé |
+| `BASE` | Inter-nœuds | Frame normalisée d'un **type de machine** |
+| `SYSTEM` | Intra-nœud | Partagé entre toutes les boards d'un même nœud |
+| `BOARD` | Intra-board | Privé au firmware d'une board, jamais partagé |
 
-**REMOTE.** Les channels REMOTE définissent la frame d'un type de machine
+Anciens noms (avant le 2026-10-18) : `BASE` s'appelait `REMOTE`, `SYSTEM` s'appelait `LOCAL` et `BOARD` s'appelait `SYSTEM`. Les anciens noms `REMOTE` et `LOCAL` sont maintenant refusés ; `SYSTEM` reste valide mais désigne l'ancien `LOCAL`.
+
+**BASE.** Les channels BASE définissent la frame d'un type de machine
 (ex. `dumper_truck`). Ils sont déclarés une seule fois dans la définition du
 type et font automatiquement partie du ComBus de tout nœud de ce type
 (machine, télécommande...). C'est une frame fixe : `requires` y est interdit.
 L'inversion automatique de `direction` côté télécommande n'est pas encore
 implémentée.
 
-**LOCAL.** Un channel LOCAL déclaré sur une seule board est automatiquement
+**SYSTEM.** Un channel SYSTEM déclaré sur une seule board est automatiquement
 diffusé aux autres boards du nœud (voir `direction`).
 
-**SYSTEM.** Jamais diffusé. `direction` est facultatif et vaut `none` par
+**BOARD.** Jamais diffusé. `direction` est facultatif et vaut `none` par
 défaut.
 
 ### `direction`
@@ -127,7 +129,7 @@ sens, le résultat est le OR de leurs valeurs au lieu du dernier écrit.
 
 - Réservées aux channels de type `digital` (le OR n'a pas de sens sur une
   valeur analogique).
-- Acceptées sur `LOCAL` et `REMOTE`, refusées sur `SYSTEM` (un seul écrivain
+- Acceptées sur `SYSTEM` et `BASE`, refusées sur `BOARD` (un seul écrivain
   possible, la fusion n'a pas de sens).
 - Exemple d'usage pour `both_or` : deux boards qui se synchronisent sur un
   même channel peuvent faire osciller la valeur (A met `true`, B resynchronise
@@ -138,7 +140,7 @@ sens, le résultat est le OR de leurs valeurs au lieu du dernier écrit.
   (voir « Non implémenté »). Le générateur émet seulement `.bothOr = true`
   dans le struct `DigitalComBus` pour `both_or`, champ présent mais inerte.
 
-**Diffusion entre boards (LOCAL).** Il suffit de déclarer le channel sur une
+**Diffusion entre boards (SYSTEM).** Il suffit de déclarer le channel sur une
 board : les autres boards du nœud reçoivent automatiquement le channel avec
 la direction inverse. La politique OR est locale à la board qui la déclare :
 elle n'est pas recopiée, sauf pour `both_or`.
@@ -188,7 +190,7 @@ Sert à activer des fonctions
 Exemple : `RUNLEVEL` (`runlevel.cb`) n'existe que sur la board qui définit
 `HAS_RUNLEVEL_MANAGER`, par convention la `mainboard` (une seule par machine).
 Ce n'est pas l'env racine (voir plus bas : l'env racine n'est pas une board).
-Interdit sur `scope: REMOTE`. Un `requires` vide (`[]`) est accepté sur REMOTE.
+Interdit sur `scope: BASE`. Un `requires` vide (`[]`) est accepté sur BASE.
 
 ### `value` et `infoName`
 
@@ -197,7 +199,7 @@ Interdit sur `scope: REMOTE`. Un `requires` vide (`[]`) est accepté sur REMOTE.
 
 ## Validation MD5
 
-Chaque board génère un MD5 par vue (`combus_remote`, `combus_local`,
+Chaque board génère un MD5 par vue (`combus_base`, `combus_system`,
 `combus`), que le handshake compare à celui du pair. Le détail du calcul est
 dans `scripts/combus_builder/README.md`. Ce qu'il faut retenir en écrivant un
 `.cb` :
@@ -207,11 +209,11 @@ dans `scripts/combus_builder/README.md`. Ce qu'il faut retenir en écrivant un
   disparition d'un channel dans une vue (par `requires`).
 - **Ce qui ne le change pas** : `value`, `requires` en tant que tel, l'ordre
   des fichiers ou des channels, les commentaires YAML.
-- **Vue LOCAL** : `uplink`, `downlink`, `uplink_or` et `downlink_or` comptent
+- **Vue SYSTEM** : `uplink`, `downlink`, `uplink_or` et `downlink_or` comptent
   pour un même état. Deux boards d'un nœud peuvent donc avoir des rôles
   opposés sur un channel sans désaccord. `both`, `both_or` et `none` restent
   distincts.
-- **Vue REMOTE** : pas d'équivalence ; `uplink` et `uplink_or` donnent des
+- **Vue BASE** : pas d'équivalence ; `uplink` et `uplink_or` donnent des
   hash différents.
 - **En cas de désaccord entre deux boards (ou deux nœuds)** : comparer, pour
   chaque côté, les `.cb` réellement pris en compte (filtre de type de machine,
@@ -236,7 +238,7 @@ commune du nœud (flags partagés), il ne correspond à aucun circuit. La carte
 principale de la machine est un sous-env (par exemple `..._mainboard`), donc une
 vraie board. L'env racine n'est pas une board au sens ComBus :
 
-- il ne participe pas à la diffusion LOCAL entre boards (il ne compte ni
+- il ne participe pas à la diffusion SYSTEM entre boards (il ne compte ni
   comme producteur, ni comme récepteur) ;
 - il ne génère pas de fichiers par board en mode multi-boards (le hook le
   saute).
@@ -252,7 +254,7 @@ par le nom de la board pour les autres (`combus_<board>.h`, etc. ;
 
 ## Non implémenté à ce jour
 
-- Inversion/diffusion de `direction` pour le scope REMOTE côté télécommande.
+- Inversion/diffusion de `direction` pour le scope BASE côté télécommande.
 - Fusion OR côté C++ pour les variantes `*_or` (à l'écriture et à la
   réception dans `combus_frame_apply`). Aujourd'hui, une fusion comme
   `FAILSAFE_VBAT` → `FAILSAFE` reste câblée à la main dans une chaîne CbProc

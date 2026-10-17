@@ -86,13 +86,13 @@ The ComBus organizes channels into three distinct layers, each with a specific p
 
 | Layer | Scope | Description |
 |---|---|---|
-| **REMOTE** | Inter-node | Data exchanged between distinct nodes (remote↔machine, machine↔sound) |
-| **LOCAL** | Intra-node | Data shared between all boards of the same system |
-| **SYSTEM** | Intra-device | Private data within a single board's firmware |
+| **BASE** | Inter-node | Standard profile of the machine type, shared by every compatible node (remote↔machine, machine↔sound), even without a network link |
+| **SYSTEM** | Intra-node | Data shared between all boards of the same system |
+| **BOARD** | Intra-device | Private data within a single board's firmware |
 
 ## Layer Definitions
 
-### REMOTE (Inter-node)
+### BASE (Inter-node)
 - **Purpose**: Universal commands known to all nodes
 - **Example**: Steering, throttle, basic vehicle controls
 - **Characteristics**:
@@ -101,16 +101,16 @@ The ComBus organizes channels into three distinct layers, each with a specific p
   - Standardized across vehicle variants
   - Transmitted between nodes via communication bridges
 
-### LOCAL (Intra-node)  
+### SYSTEM (Intra-node)  
 - **Purpose**: Vehicle-specific features shared within a system
 - **Example**: Special lighting sequences, dump bed controls
 - **Characteristics**:
-  - Includes all REMOTE channels automatically
+  - Includes all BASE channels automatically
   - Specific to vehicle model (MAN vs VOLVO features)
   - Shared between main board and extension boards
   - Never transmitted to remote controllers
 
-### SYSTEM (Intra-device)
+### BOARD (Intra-device)
 - **Purpose**: Private data for internal board management
 - **Example**: Intermediate values between processors, internal states
 - **Characteristics**:
@@ -122,32 +122,32 @@ The ComBus organizes channels into three distinct layers, each with a specific p
 
 Each layer defines who may write to its channels:
 
-1. **SYSTEM** → Only the local firmware may write
-2. **LOCAL** → Local firmware + extension boards (same system)
-3. **REMOTE** → Any source (local + extensions + remote nodes)
+1. **BOARD** → Only the local firmware may write
+2. **SYSTEM** → Local firmware + extension boards (same system)
+3. **BASE** → Any source (local + extensions + remote nodes)
 
 ## Configuration Example
 
 ```cpp
-// REMOTE channels (inter-node)
-{ .infoName = "steering", .value = CbusNeutral, .layer = ChanLayer::REMOTE },
-{ .infoName = "throttle", .value = CbusNeutral, .layer = ChanLayer::REMOTE },
+// BASE channels (inter-node)
+{ .infoName = "steering", .value = CbusNeutral, .layer = ChanLayer::BASE },
+{ .infoName = "throttle", .value = CbusNeutral, .layer = ChanLayer::BASE },
 
-// LOCAL channels (intra-node)  
-{ .infoName = "man_light_sequence", .value = 0u, .layer = ChanLayer::LOCAL },
-{ .infoName = "dump_bed_control", .value = CbusNeutral, .layer = ChanLayer::LOCAL },
+// SYSTEM channels (intra-node)  
+{ .infoName = "man_light_sequence", .value = 0u, .layer = ChanLayer::SYSTEM },
+{ .infoName = "dump_bed_control", .value = CbusNeutral, .layer = ChanLayer::SYSTEM },
 
-// SYSTEM channels (intra-device)
-{ .infoName = "throttle_ramp_state", .value = 0u, .layer = ChanLayer::SYSTEM },
-{ .infoName = "gear_shift_timer", .value = 0u, .layer = ChanLayer::SYSTEM },
+// BOARD channels (intra-device)
+{ .infoName = "throttle_ramp_state", .value = 0u, .layer = ChanLayer::BOARD },
+{ .infoName = "gear_shift_timer", .value = 0u, .layer = ChanLayer::BOARD },
 ```
 
 ## Layer Inheritance
 
 The ComBus follows a natural hierarchy:
-- **SYSTEM** data can be promoted to **LOCAL** if needed
-- **LOCAL** data includes all **REMOTE** channels
-- **REMOTE** represents the minimal universal set
+- **BOARD** data can be promoted to **SYSTEM** if needed
+- **SYSTEM** data includes all **BASE** channels
+- **BASE** represents the minimal universal set
 
 This layered approach ensures clean separation of concerns while maintaining flexibility for future expansions.
 
