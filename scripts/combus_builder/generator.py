@@ -25,8 +25,7 @@ Out of scope (A6.1):
   - chains: (Phase C).
   - MD5 (A7).
   - .cbch.
-  - Full .inc migration (only the new .cb files are used by the generator;
-    the .inc files remain in the source tree until Phase D).
+  - Full .inc migration: done (the .inc files no longer exist).
 
 Direction representation (C++):
   - `enum class Direction : uint8_t { None=0, Uplink=1, Downlink=2, Both=3 }`
@@ -455,7 +454,7 @@ def _default_value_for_type(type_: str) -> str:
     """
     Return the C++ literal for the default `value` of a freshly-generated
     channel WHEN THE YAML CHANNEL DEFINES NO `value:` (matches the
-    runtime convention used in the legacy .inc files).
+    runtime convention of the former hand-written .inc files).
 
     Analog defaults to CbusNeutral (neutral 16-bit value). Digital defaults
     to false. The runtime may override these at boot via combus_set_*().

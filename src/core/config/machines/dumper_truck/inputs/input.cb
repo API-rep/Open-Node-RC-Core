@@ -19,16 +19,15 @@
 #   - Device raw sources from PS4_dualshock.cpp descriptors
 #     (sticks: [-127,+127], triggers: [0,255]).
 #
-# Migration note (A9.9):
-#   - These channels were previously declared in
-#     src/machines/config/machines/volvo_A60H_bruder/combus/combus_ids_local_*.inc
-#     as LOCAL/REMOTE (former names of SYSTEM/BASE) — both ill-named per ChanLayer spec (raw acquisition is
-#     intra-firmware, not on the wire).
+# History (A9.9):
+#   - These channels used to be declared in hand-written .inc files of the
+#     Volvo instance, as LOCAL/REMOTE (former names of SYSTEM/BASE) — both
+#     ill-named per ChanLayer spec (raw acquisition is intra-firmware, not on
+#     the wire).
 #   - They are now the canonical default for ANY dumper_truck instance
 #     (Cat 770, Bell B45, Komatsu HD785, ...).
-#   - The .cb file is the source of truth; the legacy .inc files below are
-#     the build-time hand-written mirror until the combus_builder is fully
-#     wired into platformio.ini.
+#   - This .cb file is the source of truth; the ComBus Builder generates the
+#     enums and arrays.
 #
 # Runtime source chain:
 #   PS4 hardware → input_manager::inputAnalogValue[] (int16_t, raw)

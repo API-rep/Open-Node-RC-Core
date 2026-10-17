@@ -8,9 +8,9 @@
 #   Read by main loop (RunLevel FSM, sleep timeout), dashboard.
 #
 # Theme: power / runlevel.
-# Migration note: these channels were previously declared in
-# src/machines/config/machines/volvo_A60H_bruder/combus/combus_ids_*.inc
-# as BASE — now declared here at the TYPE level (generic to all dumper-trucks).
+# History: these channels used to be declared in hand-written .inc files of the
+# Volvo instance (as REMOTE, the former name of BASE). They are now declared
+# here at the TYPE level (generic to all dumper-trucks).
 
 channels:
 

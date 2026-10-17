@@ -1,5 +1,18 @@
 # Machine Family Configuration
 
+> **Status note (2026-10-18).** This document predates the ComBus Builder
+> (2026-08-22) and is partly obsolete. The ComBus headers `combus.h`,
+> `combus_ids.h`, `combus_base_ids.h`, `combus_system_ids.h`... are no longer
+> hand-written per machine: the builder GENERATES them under
+> `<build_dir>/combus_generated/` and the code includes them directly
+> (`#include <combus.h>`, `#include <combus_ids.h>`). The per-machine
+> `combus.h` / `combus_ids.h` redirection headers and the `.inc` fragments no
+> longer exist, so the dispatcher steps about `combus_ids.h` below (sections
+> 4.3 and 5) no longer apply. See `scripts/combus_builder/README.md`.
+> `combus.h` is unique in the project: the former
+> `core/system/combus/combus.h` (the `combus_init()` API) is now
+> `combus_init.h`.
+
 ## Design Philosophy
 
 Machine family configurations are **definitions** of a vehicle category.

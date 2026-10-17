@@ -581,8 +581,8 @@ static void test_wire_end_clamped_to_cfg(void) {
 //   - kCombusBaseComBusMd5 (BASE view, RF link)
 //   - kCombusSystemComBusMd5  (SYSTEM view, extension board link)
 //
-// The 3 arrays MUST be distinct (different views hash different .inc
-// files).  This is the structural invariant that LY4 relies on — if
+// The 3 arrays MUST be distinct (different views hash different
+// channel sets).  This is the structural invariant that LY4 relies on — if
 // two views ever produced the same MD5, the per-layer resolution
 // would be a no-op and the test would catch it.
 // =============================================================================

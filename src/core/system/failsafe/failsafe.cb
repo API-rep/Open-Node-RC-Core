@@ -4,12 +4,8 @@
 # aggregator. It is set to 1 (fault) if at least one FAILSAFE_X
 # contributor reports a fault.
 #
-# Legacy equivalent: src/core/system/failsafe/combus_ids_digital_failsafe.inc
-# #ifdef HAS_FAILSAFE
-# FAILSAFE,           ///< Failsafe aggregator channel — set when any FAILSAFE_X contributor reports a fault
-# #ifdef HAS_VBAT_FAILSAFE
-# #include <core/config/vbat/combus_ids_digital_vbat_failsafe.inc>
-# #endif
+# This .cb is the source of truth: the ComBus Builder generates the FAILSAFE
+# enum entry (the legacy hand-written .inc files no longer exist).
 # FAILSAFE_END,       ///< Range marker — first index after Failsafe group.
 # #endif
 #
@@ -27,9 +23,8 @@
 # - Remote propagation, if required, is handled separately through a
 #   BASE ComBus definition(FAILSAFE_TELEMETRY ...).
 #
-# A6.1 — `direction: [both]` shorthand added (TEMPORARY, pending .inc migration).
-# During A6.1 the legacy .inc channels are not yet migrated, so the runtime
-# writes/reads both ways. To be re-evaluated once .inc migration is complete.
+# A6.1 — `direction: [both]` shorthand added (TEMPORARY): the runtime
+# writes/reads both ways. To be re-evaluated; the .inc migration is complete.
 
 
 channels:

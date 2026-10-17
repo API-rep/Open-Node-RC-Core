@@ -7,8 +7,8 @@
 # - Failsafe enforced by sys_manager failsafe_fn.
 # 
 # Theme: core (per machine sensor/generic signal, not module-attributed).
-# The .cb is documentation-only at this stage; the legacy .inc still holds
-# the BRAKE_BUS enum entry. Migration deferred to a later step.
+# This .cb is the source of truth for BRAKE_BUS (the ComBus Builder generates
+# the enum entry).
 
 channels:
 - id: BRAKE_BUS

@@ -353,9 +353,13 @@ racine sont des restes de ces sorties.
   env racine (configuration commune) et un sous-env par carte, mono-carte compris, avec
   `HAS_RUNLEVEL_MANAGER` sur une seule carte par machine.
 - **Ancienne composition par `.inc`** : les deux `.inc` résiduels ont été supprimés le 2026-10-15.
-  Le code C++ inclut les identifiants générés par
-  `src/core/config/machines/combus_types.h`, qui fait `#include <combus_ids.h>`
-  (le hook ajoute le dossier généré au chemin d'inclusion).
+  Le code C++ inclut les fichiers générés directement : `#include <combus.h>`,
+  `#include <combus_ids.h>`, `#include <combus_base_ids.h>`, ou
+  `src/core/config/machines/combus_types.h` qui fait `#include <combus_ids.h>`
+  (le hook ajoute le dossier généré au chemin d'inclusion). Depuis le
+  2026-10-18 il n'existe plus d'en-tête de redirection par machine. Attention :
+  `combus.h` est unique dans le projet : l'ancien `src/core/system/combus/combus.h`
+  (API `combus_init()`) s'appelle `combus_init.h` depuis le 2026-10-18.
 
 **Mode nœud : noms de fichiers (corrigé et vérifié le 2026-10-15).** La carte
 dont l'env est compilé reçoit les noms **non préfixés** (`combus.h`,
