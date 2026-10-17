@@ -14,7 +14,7 @@
  *            0 = standstill, 500 = maximum speed.
  *
  *          This file exposes `kVehicleSoundDynamics` — the canonical instance
- *          name included via the machine config umbrella (section 4 — SOUND_NODE
+ *          name included via the machine config umbrella (section 4 — SOUND_ENABLED
  *          guard) and consumed from main.cpp.
  *****************************************************************************/
 #pragma once

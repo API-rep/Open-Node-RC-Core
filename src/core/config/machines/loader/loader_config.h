@@ -10,7 +10,7 @@
  *            combus   — TODO winter 2026 (loader channel IDs not yet defined)
  *            motion   — TODO winter 2026
  *            inputs_map — TODO winter 2026
- *            sound    — if SOUND_NODE or SOUND_ENABLED is defined
+ *            sound    — if SOUND_ENABLED is defined (no env defines it yet)
  *******************************************************************************
  */
 #pragma once
@@ -38,10 +38,10 @@
 
 
 // =============================================================================
-// 4. SOUND DYNAMICS  (only in sound-module builds)
+// 4. SOUND DYNAMICS  (only when SOUND_ENABLED is defined — no env defines it yet)
 // =============================================================================
 
-#if defined(SOUND_NODE) || defined(SOUND_ENABLED)
+#if defined(SOUND_ENABLED)
   #include <core/config/machines/loader/sound/loader_sound.h>
 #endif
 

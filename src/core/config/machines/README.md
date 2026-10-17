@@ -216,10 +216,11 @@ Light channels and presets of the family.
 
 ### Sound
 
-Optional sound-related definitions. They are still guarded by `SOUND_NODE` /
-`SOUND_ENABLED`; the stand-alone sound environment no longer exists, and the
-fate of these resources belongs to the "Machine / Sound convergence" work in
-`doc/roadmap.md`.
+Optional sound-related definitions (engine sound profile of the family). They
+are included only when `SOUND_ENABLED` is defined, which no environment does
+yet. The former `SOUND_NODE` guard was removed on 2026-10-18 together with the
+stand-alone sound environment. The integration of these resources belongs to
+the "Machine / Sound convergence" work in `doc/roadmap.md`.
 
 ---
 

@@ -24,7 +24,7 @@
  *       └── dumper_truck/dumper_truck_config.h
  *             ├── <combus_base_ids.h> (generated)             ← BASE vocab (IDs)
  *             ├── dumper_truck/motion/dumper_truck_motion.h
- *             └── dumper_truck/sound/dumper_truck_sound.h    ← if SOUND_NODE / SOUND_ENABLED
+ *             └── dumper_truck/sound/dumper_truck_sound.h    ← if SOUND_ENABLED
  *
  *   BASE-only ComBus runtime is intentionally NOT instantiated at TYPE
  *   level — each environment (machine, future remote) gets its own combus

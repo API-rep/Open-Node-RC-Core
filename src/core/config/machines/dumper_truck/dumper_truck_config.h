@@ -11,7 +11,7 @@
  *            combus   — always (generated BASE channel IDs, <combus_base_ids.h>)
  *            motion   — always (traction preset alias)
  *            inputs_map — not included here (see note below)
- *            sound    — if SOUND_NODE or SOUND_ENABLED is defined (leftover,
+ *            sound    — if SOUND_ENABLED is defined (no env defines it yet;
  *                       see the Machine / Sound convergence in doc/roadmap.md)
  *
  *          NOTE: `sound_dynamics.h` (standalone dispatcher) is no longer
@@ -51,10 +51,10 @@
   
   
   // =============================================================================
-  // 4. SOUND DYNAMICS  (only in sound-module builds)
+  // 4. SOUND DYNAMICS  (only when SOUND_ENABLED is defined — no env defines it yet)
   // =============================================================================
   
-  #if defined(SOUND_NODE) || defined(SOUND_ENABLED)
+  #if defined(SOUND_ENABLED)
     #include <core/config/machines/dumper_truck/sound/dumper_truck_sound.h>
   #endif
   
