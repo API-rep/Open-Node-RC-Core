@@ -162,12 +162,12 @@ def test_no_channel_descriptor_in_full_generation(tmp_path):
 # A6.1 SPECIFIC: ChanLayer is PRESERVED
 # =============================================================================
 
-def test_chanlayer_enum_in_combus_struct():
-    """combus_struct.h still defines ChanLayer (audit A6 confirmed _layer_ok)."""
+def test_chanlayer_enum_in_combus_defs():
+    """combus_defs.h still defines ChanLayer (audit A6 confirmed _layer_ok)."""
     h = (REPO_ROOT / "src" / "core" / "system" / "combus" / "combus_defs.h").read_text(encoding="utf-8")
     assert "enum class ChanLayer" in h
     for v in ("BOARD", "SYSTEM", "BASE", "UNDEFINED"):
-        assert v in h, f"ChanLayer::{v} missing from combus_struct.h"
+        assert v in h, f"ChanLayer::{v} missing from combus_defs.h"
 
 
 def test_generated_initializers_use_chanlayer():
@@ -186,7 +186,7 @@ def test_generated_initializers_use_chanlayer():
     assert ".layer = ChanLayer::BOARD" in cpp
 
 
-def test_generated_header_includes_combus_struct():
+def test_generated_header_includes_combus_defs():
     """Generated .h must #include <core/system/combus/combus_defs.h> for ChanLayer / Direction."""
     chs = _canon_from_yamls({"channels": [_ch("FOO")]})
     view = _build_view_with_channels(chs)
@@ -198,7 +198,7 @@ def test_generated_header_includes_combus_struct():
 # A6.1 SPECIFIC: direction is added to runtime structs
 # =============================================================================
 
-def test_direction_field_in_combus_struct():
+def test_direction_field_in_combus_defs():
     """AnalogComBus and DigitalComBus both have a `direction` field."""
     h = (REPO_ROOT / "src" / "core" / "system" / "combus" / "combus_defs.h").read_text(encoding="utf-8")
     assert "Direction   direction" in h or "Direction direction" in h
@@ -820,7 +820,7 @@ def test_render_header_externs_real_runtime_structs():
 
 
 def test_render_header_no_direction_enum():
-    """A6.1: Direction enum is defined in combus_struct.h (runtime), NOT in
+    """A6.1: Direction enum is defined in combus_defs.h (runtime), NOT in
     the generated header. Generator only USES the enum."""
     chs = _canon_from_yamls({"channels": [_ch("FOO")]})
     view = _build_view_with_channels(chs)
@@ -1285,7 +1285,7 @@ def _parse_direction_enum(header_text: str) -> dict[str, int]:
 def test_python_direction_constants_match_cpp_enum():
     """
     The Python `Direction.X` constants must equal the C++ `enum class Direction`
-    values declared in combus_struct.h.
+    values declared in combus_defs.h.
 
     This test parses the enum rather than matching substrings, so it remains
     valid after clang-format or any whitespace re-alignment.

@@ -378,11 +378,12 @@ chemin du projet, le « è » de « Modèlisme » fait échouer l'édition de li
 (`platformio.ini:28` place déjà le build hors projet pour cette raison).
 Le contrôle de complétude est couvert par `test_hook.py`.
 
-> À VÉRIFIER : le filtre par type de machine lit un flag `MACHINE_TYPE_*` dans
-> le `BuildContext`. `platformio.ini:90-95` indique que `MACHINE_TYPE_*` est
-> défini dans un en-tête de configuration machine ; savoir si ce flag est alors
-> visible du builder n'est pas établi. Les types `excavator` et `loader` sont
-> déclarés dans `MACHINE_TYPE_FLAGS` mais aucun `.cb` n'existe sous leur dossier.
+> Le filtre par type de machine est **inactif aujourd'hui** (constaté le
+> 2026-10-18) : il lit un flag `MACHINE_TYPE_*` dans les defines de l'env, mais
+> `MACHINE_TYPE_DUMPER_TRUCK` est `#define` dans l'en-tête de la machine, pas
+> passé en `-D`. `detect_machine_type` renvoie `None` et tous les `.cb` de
+> `src/` sont chargés. Les types `excavator` et `loader` sont déclarés dans
+> `MACHINE_TYPE_FLAGS` mais n'ont aucun `.cb`. Voir la note de passation.
 
 > `scripts/combus_md5.py` n'existe pas : il n'est cité que dans des docs.
 

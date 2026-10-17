@@ -48,7 +48,7 @@ le sont.
   `MACHINE_TYPE_DUMPER_TRUCK`, `MACHINE_TYPE_EXCAVATOR` et
   `MACHINE_TYPE_LOADER` ; en ajouter un demande de modifier le builder
   (`machine_type.py`).
-- Un environnement sans flag `MACHINE_TYPE_*` n'est filtré sur aucun type.
+- Un environnement sans flag `MACHINE_TYPE_*` n'est filtré sur aucun type. C'est le cas de tous les environnements actuels : `MACHINE_TYPE_*` est défini dans un en-tête de machine et non passé en `-D`, donc le filtre est inactif pour l'instant.
 - Deux flags `MACHINE_TYPE_*` dans un même environnement, ou deux boards d'un
   même nœud qui résolvent des types différents, sont une erreur de build.
 
