@@ -16,8 +16,8 @@
 // can resolve analogWireEnd / digitalWireEnd from the link's
 // ChanLayer.  combus.h transitively includes combus_ids.h (FULL view).
 #include "combus.h"
-#include "combus_local_ids.h"
-#include "combus_remote_ids.h"
+#include "combus_system_ids.h"
+#include "combus_base_ids.h"
 
 
 
@@ -76,8 +76,8 @@ void combus_tx_set_handshake_ctx( uint8_t                linkIdx,
  *   2. Store the transport interface and frame layout descriptor.
  *   3. Derive the transmit period from txHz (integer division, ms).
  *   4. LY2 — resolve analogWireEnd / digitalWireEnd from the link's
- *      ChanLayer (REMOTE → CH_COUNT of the Remote view, LOCAL → CH_COUNT
- *      of the Local view, FULL → CH_COUNT of the Full view).  The codec
+ *      ChanLayer (BASE → CH_COUNT of the Base view, SYSTEM → CH_COUNT
+ *      of the System view, FULL → CH_COUNT of the Full view).  The codec
  *      iterates only over comBus.analogBus[0..analogWireEnd) and
  *      comBus.digitalBus[0..digitalWireEnd) — this is the ONLY
  *      behavioural change vs. the pre-LY2 codec.
@@ -112,22 +112,22 @@ void combus_tx_init(
 	//    prefix — so the wire-end counter is simply the CH_COUNT of the
 	//    matching view.  No table to build, just two counters.
 	//
-	//    Only REMOTE, LOCAL and SYSTEM are valid for a TX/RX link.
+	//    Only BASE, SYSTEM and BOARD are valid for a TX/RX link.
 	//    UNDEFINED is a config error (forgotten / missing layer) and
 	//    triggers a FATAL halt — a silent fallback to FULL would mask
 	//    the bug instead of revealing it (same pattern as the
 	//    "no pool registered" FATAL in uart_com.cpp).
 	switch (layer) {
-		case ChanLayer::REMOTE:
-			st.analogWireEnd  = static_cast<uint8_t>(AnalogComBusRemoteID::CH_COUNT);
-			st.digitalWireEnd = static_cast<uint8_t>(DigitalComBusRemoteID::CH_COUNT);
-			break;
-		case ChanLayer::LOCAL:
-			st.analogWireEnd  = static_cast<uint8_t>(AnalogComBusLocalID::CH_COUNT);
-			st.digitalWireEnd = static_cast<uint8_t>(DigitalComBusLocalID::CH_COUNT);
+		case ChanLayer::BASE:
+			st.analogWireEnd  = static_cast<uint8_t>(AnalogComBusBaseID::CH_COUNT);
+			st.digitalWireEnd = static_cast<uint8_t>(DigitalComBusBaseID::CH_COUNT);
 			break;
 		case ChanLayer::SYSTEM:
-			// SYSTEM — reserved for a future intra-device loopback.
+			st.analogWireEnd  = static_cast<uint8_t>(AnalogComBusSystemID::CH_COUNT);
+			st.digitalWireEnd = static_cast<uint8_t>(DigitalComBusSystemID::CH_COUNT);
+			break;
+		case ChanLayer::BOARD:
+			// BOARD — reserved for a future intra-device loopback.
 			// Falls back to the FULL view (machine node default).
 			st.analogWireEnd  = static_cast<uint8_t>(AnalogComBusID::CH_COUNT);
 			st.digitalWireEnd = static_cast<uint8_t>(DigitalComBusID::CH_COUNT);

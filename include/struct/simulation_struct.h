@@ -239,7 +239,7 @@ struct SimDev {
 
     // --- Behaviour -----------------------------------------------------------
     SimBehaviorFn  behaviorFn;                           ///< Processing function. nullptr = no-op.
-    ChanLayer      chainLayer = ChanLayer::LOCAL;        ///< Propagation layer passed to combus_set_* when writing output channels.
+    ChanLayer      chainLayer = ChanLayer::SYSTEM;        ///< Propagation layer passed to combus_set_* when writing output channels.
 };
 
 

@@ -22,15 +22,15 @@
  *
  *     machine_type.h             ← (this file, top-level)
  *       └── dumper_truck/dumper_truck_config.h
- *             ├── dumper_truck/combus/combus_ids_remote.h    ← REMOTE vocab (IDs)
+ *             ├── dumper_truck/combus/combus_ids_base.h      ← BASE vocab (IDs)
  *             ├── dumper_truck/motion/dumper_truck_motion.h
  *             └── dumper_truck/sound/dumper_truck_sound.h    ← if SOUND_NODE / SOUND_ENABLED
  *
- *   REMOTE-only ComBus runtime is intentionally NOT instantiated at TYPE
+ *   BASE-only ComBus runtime is intentionally NOT instantiated at TYPE
  *   level — each environment (machine, future remote) owns its own combus
  *   arrays and comBus instance via its instance-specific combus.cpp.
  *   TYPE-level only exposes the shared channel vocabulary
- *   (combus_ids_remote.h).  The root combus_ids_remote.h dispatcher is
+ *   (combus_ids_base.h).  The root combus_ids_base.h dispatcher is
  *   gone (see commit `13b4c5f` for the cleanup history).
 
  *

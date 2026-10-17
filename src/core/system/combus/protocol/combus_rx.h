@@ -31,7 +31,7 @@
  *   link.rxCfg      = cfg;
  *   link.analogBuf  = analog;
  *   link.digitalBuf = digital;
- *   link.layer      = ChanLayer::LOCAL;
+ *   link.layer      = ChanLayer::SYSTEM;
  *   combus_protocol_init(0, &link);
  *
  *   // In loop():

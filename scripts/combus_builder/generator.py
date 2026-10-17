@@ -10,8 +10,8 @@ A6.1 corrections vs A6:
     `infoName`, `value`, `layer`). `ChanLayer` is preserved unchanged
     (audit A6 confirmed `_layer_ok()` requires it).
   - Both views still produced:
-      * combus        = REMOTE + LOCAL + SYSTEM
-      * combus_remote = REMOTE only
+      * combus        = BASE + SYSTEM + BOARD
+      * combus_base = BASE only
 
 Scope (A6.1):
   - Take canonised ChannelDefinitions (A5.1) + BuildContext (A4).
@@ -35,25 +35,25 @@ Direction representation (C++):
   - No bitwise operators are defined on Direction in the C++ code.
 
 View contract:
-  - combus (REMOTE+LOCAL+SYSTEM):
-      * ID range [0, CH_COUNT) where REMOTE is [0, WIRE_END) and
-        LOCAL+SYSTEM is [WIRE_END, CH_COUNT).
+  - combus (BASE+SYSTEM+BOARD):
+      * ID range [0, CH_COUNT) where BASE is [0, WIRE_END) and
+        SYSTEM+BOARD is [WIRE_END, CH_COUNT).
       * Generated artifacts:
           - combus_ids.h        (enum class only)
           - combus.h            (extern arrays + bus instance)
           - combus.cpp          (array definitions + bus instance definition)
-  - combus_remote (REMOTE only):
+  - combus_base (BASE only):
       * ID range [0, CH_COUNT) where WIRE_END == CH_COUNT.
       * Generated artifacts:
-          - combus_remote_ids.h
-          - combus_remote.h
-          - combus_remote.cpp
+          - combus_base_ids.h
+          - combus_base.h
+          - combus_base.cpp
       * No sentinel beyond CH_COUNT.
 
 ID allocation policy:
   - Within a view, IDs are allocated in stable order:
       * analog and digital are numbered independently (one counter per type);
-        within a type the sort key is (scope priority [REMOTE<LOCAL<SYSTEM], theme, id)
+        within a type the sort key is (scope priority [BASE<SYSTEM<BOARD], theme, id)
   - Between views, the SAME channel always gets the SAME numeric ID.
 
 Generation directory:
@@ -69,11 +69,11 @@ ND1 (multiboard):
         combus_ids.h        -> combus_<prefix>_ids.h
         combus.h            -> combus_<prefix>.h
         combus.cpp          -> combus_<prefix>.cpp
-        combus_local_ids.h  -> combus_local_<prefix>_ids.h
-        combus_remote_ids.h -> combus_remote_<prefix>_ids.h
+        combus_system_ids.h  -> combus_system_<prefix>_ids.h
+        combus_base_ids.h -> combus_base_<prefix>_ids.h
         combus_md5.h        -> combus_<prefix>_md5.h
-        combus_local_md5.h  -> combus_local_<prefix>_md5.h
-        combus_remote_md5.h -> combus_remote_<prefix>_md5.h
+        combus_system_md5.h  -> combus_system_<prefix>_md5.h
+        combus_base_md5.h -> combus_base_<prefix>_md5.h
     combus_wire_common.h is NOT prefixed (it is a shared header).
   - The C++ enum identifiers (AnalogComBusID, etc.) are NOT prefixed —
     they remain stable across boards so application code does not need
@@ -181,16 +181,16 @@ class ViewChannel:
 @dataclass(frozen=True)
 class View:
     """
-    One resolved view (combus OR combus_remote).
+    One resolved view (combus OR combus_base).
 
-    name:             "combus" or "combus_remote".
+    name:             "combus" or "combus_base".
     channels:         list of ViewChannel in ID order.
-    wire_end:         index of the first non-REMOTE channel (== len if no LOCAL/SYSTEM).
-    wire_end_analog:  count of REMOTE analog channels (== number of REMOTE analog
+    wire_end:         index of the first non-BASE channel (== len if no SYSTEM/BOARD).
+    wire_end_analog:  count of BASE analog channels (== number of BASE analog
                       channels in canonical order).  Used by the C++ generator
                       to emit a per-bus wire-end constant (Phase 1 A.11 fix:
                       analog and digital wire-ends are NOT always equal).
-    wire_end_digital: count of REMOTE digital channels.  See wire_end_analog.
+    wire_end_digital: count of BASE digital channels.  See wire_end_analog.
     ch_count:         total channel count in this view.
     """
 
@@ -210,17 +210,17 @@ class ViewSelection:
     """
     All three views in one struct, sharing the same ID space.
 
-    full:   combus        (REMOTE + LOCAL + SYSTEM)
-    local:  combus_local  (REMOTE + LOCAL)        — A6.2
-    remote: combus_remote (REMOTE only)
+    full:   combus        (BASE + SYSTEM + BOARD)
+    system: combus_system (BASE + SYSTEM)         — A6.2
+    base:   combus_base   (BASE only)
 
     A channel that appears in multiple views has the SAME numeric_id in
     every view it appears in (no renumbering between views).
     """
 
     full: View
-    local: View
-    remote: View
+    system: View
+    base: View
 
 
 # =============================================================================
@@ -231,9 +231,9 @@ class ViewSelection:
 # Maps the YAML scope to the runtime ChanLayer value used in the
 # generated `AnalogComBus` / `DigitalComBus` initializers.
 _SCOPE_TO_CHANLAYER: dict[str, str] = {
-    "REMOTE": "ChanLayer::REMOTE",
-    "LOCAL":  "ChanLayer::LOCAL",
-    "SYSTEM": "ChanLayer::SYSTEM",
+    "BASE": "ChanLayer::BASE",
+    "SYSTEM":  "ChanLayer::SYSTEM",
+    "BOARD": "ChanLayer::BOARD",
 }
 
 
@@ -251,7 +251,7 @@ def _file_base(view_name: str, filename_prefix: str) -> str:
     Example:
         _file_base("combus", "")            -> "combus"
         _file_base("combus", "mainboard")   -> "combus_mainboard"
-        _file_base("combus_local", "mainboard") -> "combus_local_mainboard"
+        _file_base("combus_system", "mainboard") -> "combus_system_mainboard"
     """
     if filename_prefix:
         return f"{view_name}_{filename_prefix}"
@@ -292,13 +292,13 @@ def resolve_requires(
 # STEP 2: VIEW SELECTION + ID ALLOCATION
 # =============================================================================
 
-# Scope order for the COMBINED view (combus): REMOTE first, then LOCAL, then SYSTEM.
-# This preserves the legacy wire-end ordering (REMOTE channels occupy
+# Scope order for the COMBINED view (combus): BASE first, then SYSTEM, then BOARD.
+# This preserves the legacy wire-end ordering (BASE channels occupy
 # indices [0..WIRE_END) so the wire codec doesn't change).
 _VIEW_SCOPE_ORDER: dict[str, int] = {
-    "REMOTE": 0,
-    "LOCAL": 1,
-    "SYSTEM": 2,
+    "BASE": 0,
+    "SYSTEM": 1,
+    "BOARD": 2,
 }
 
 
@@ -319,17 +319,17 @@ def _select_view(
         accesses the correct slot — previously, IDs were allocated via a
         single global enumerate() which mixed analog and digital into one
         sequence, causing digital IDs to start at 9 (after the 9 analog
-        REMOTE channels) and a complete misalignment between the enum
+        BASE channels) and a complete misalignment between the enum
         values and the runtime array indices.
 
     allowed_scopes is the set of scopes that belong to this view.
-    For combus: {"REMOTE", "LOCAL", "SYSTEM"}.
-    For combus_remote: {"REMOTE"}.
+    For combus: {"BASE", "SYSTEM", "BOARD"}.
+    For combus_base: {"BASE"}.
 
     Sort key (stable, per-type):
         (scope priority, theme, id)
-    Scope priority: REMOTE < LOCAL < SYSTEM (preserves wire order:
-    REMOTE channels are at the lowest indices, LOCAL next, SYSTEM last).
+    Scope priority: BASE < SYSTEM < BOARD (preserves wire order:
+    BASE channels are at the lowest indices, SYSTEM next, BOARD last).
     """
     selected = [ch for ch in channels if ch.scope in allowed_scopes]
     # Per-type sort: analog and digital are sorted independently.
@@ -354,10 +354,10 @@ def _select_view(
     view_channels: list[ViewChannel] = []
     wire_end = 0
     # Phase 1 A.11 fix: per-bus wire-end counters (analog vs digital).
-    # Both counters track REMOTE channels only, separated by type.  The
-    # final values (after the loop) represent the count of REMOTE
+    # Both counters track BASE channels only, separated by type.  The
+    # final values (after the loop) represent the count of BASE
     # channels of each type in the view, which may differ from
-    # `wire_end` (= total REMOTE count across both types).
+    # `wire_end` (= total BASE count across both types).
     wire_end_analog = 0
     wire_end_digital = 0
     # Phase 5 A15: separate 0-based counters per type.
@@ -365,16 +365,16 @@ def _select_view(
     digital_idx = 0
     # The wire order is: all analog channels first (in scope/theme/id
     # order), then all digital channels (in scope/theme/id order). This
-    # preserves the legacy "REMOTE channels at the lowest indices"
-    # invariant: among the analog channels, REMOTE ones come first
-    # because they sort before LOCAL/SYSTEM.
+    # preserves the legacy "BASE channels at the lowest indices"
+    # invariant: among the analog channels, BASE ones come first
+    # because they sort before SYSTEM/BOARD.
     for ch in selected_analog:
         view_channels.append(ViewChannel(
             numeric_id=analog_idx,
             ch=ch,
             direction_bits=Direction.from_frozenset(ch.effective_direction),
         ))
-        if ch.scope == "REMOTE":
+        if ch.scope == "BASE":
             wire_end_analog += 1
         analog_idx += 1
     for ch in selected_digital:
@@ -383,11 +383,11 @@ def _select_view(
             ch=ch,
             direction_bits=Direction.from_frozenset(ch.effective_direction),
         ))
-        if ch.scope == "REMOTE":
+        if ch.scope == "BASE":
             wire_end_digital += 1
         digital_idx += 1
-    # Compute wire_end: index of the first non-REMOTE channel in the
-    # flattened wire order. REMOTE channels of both types come first
+    # Compute wire_end: index of the first non-BASE channel in the
+    # flattened wire order. BASE channels of both types come first
     # because they sort first within each type.
     wire_end = wire_end_analog + wire_end_digital
 
@@ -407,18 +407,18 @@ def select_views(channels: list[ChannelDefinition]) -> ViewSelection:
     All views share the same ID space (a channel has the same numeric
     ID in every view it appears in — no renumbering between views).
 
-    The combus_local view (A6.2) is a strict prefix of combus: it
-    contains exactly the REMOTE+LOCAL channels of combus, in the same
+    The combus_system view (A6.2) is a strict prefix of combus: it
+    contains exactly the BASE+SYSTEM channels of combus, in the same
     order, with the same numeric IDs. This is by construction because
     the sort key is identical and the prefix is contiguous.
     """
     full = _select_view(channels, "combus",
-                        {"REMOTE", "LOCAL", "SYSTEM"})
-    local = _select_view(channels, "combus_local",
-                         {"REMOTE", "LOCAL"})
-    remote = _select_view(channels, "combus_remote",
-                          {"REMOTE"})
-    return ViewSelection(full=full, local=local, remote=remote)
+                        {"BASE", "SYSTEM", "BOARD"})
+    system = _select_view(channels, "combus_system",
+                         {"BASE", "SYSTEM"})
+    base = _select_view(channels, "combus_base",
+                          {"BASE"})
+    return ViewSelection(full=full, system=system, base=base)
 
 
 # =============================================================================
@@ -537,8 +537,8 @@ def _render_value(ch: ChannelDefinition, type_: str) -> str:
 # "Combus" which is wrong. We hardcode the correct form here.
 _VIEW_ID_PREFIX: dict[str, str] = {
     "combus": "ComBus",
-    "combus_local": "ComBusLocal",
-    "combus_remote": "ComBusRemote",
+    "combus_system": "ComBusSystem",
+    "combus_base": "ComBusBase",
 }
 
 
@@ -589,8 +589,8 @@ def _render_ids_header(view: View, ctx: BuildContext) -> str:
 
     # Phase 4 (A14): ComBusWireEnd / ComBusWireEndAnalog / ComBusWireEndDigital
     # are no longer emitted. Wire dimensions are now derived directly from
-    # the Remote view's ID enums (AnalogComBusRemoteID::CH_COUNT and
-    # DigitalComBusRemoteID::CH_COUNT) at the call site. See:
+    # the Base view's ID enums (AnalogComBusBaseID::CH_COUNT and
+    # DigitalComBusBaseID::CH_COUNT) at the call site. See:
     #   - src/machines/init/com/combus_uart_init.cpp
     #   - src/machines/main.cpp
     #   - src/machines/system/debug/dashboard_machine.cpp
@@ -746,7 +746,7 @@ def _emit_channel_init(body: list[str], vc: ViewChannel, type_: str) -> None:
       - digital : false / true
     Falls back to the generator default when `value:` is absent.
 
-    The `.layer` field comes from the channel's scope (REMOTE/LOCAL/SYSTEM).
+    The `.layer` field comes from the channel's scope (BASE/SYSTEM/BOARD).
     The `.direction` field is the bitmask from Direction.from_frozenset.
 
     The `.bothOr` field (A2.1) is ONLY emitted for digital channels.
@@ -817,7 +817,7 @@ def _safe_write(path: Path, content: str) -> None:
 # ids header is rendered and written. The MD5 payload for these views
 # is built independently, directly from the in-memory View model
 # (see md5.canonical_bytes()), so no intermediate .cpp file is needed.
-_NO_EMIT_RUNTIME_VIEWS = frozenset({"combus_local", "combus_remote"})
+_NO_EMIT_RUNTIME_VIEWS = frozenset({"combus_system", "combus_base"})
 
 
 def emit_view(
@@ -830,7 +830,7 @@ def emit_view(
     """
     Emit the ids header for a view into out_dir.
 
-    Phase 2 / A12 hook: for combus_local and combus_remote, the .h/.cpp
+    Phase 2 / A12 hook: for combus_system and combus_base, the .h/.cpp
     runtime artifacts are NO LONGER written to disk. Only the
     <view>_ids.h header is emitted.
 
@@ -847,7 +847,7 @@ def emit_view(
     written: list[Path] = []
     base = _file_base(view.name, filename_prefix)
     # Always emit the ids header (this is the only artifact the rest
-    # of the codebase includes via `#include "combus_local_ids.h"` etc.).
+    # of the codebase includes via `#include "combus_system_ids.h"` etc.).
     _safe_write(out_dir / f"{base}_ids.h", _render_ids_header(view, ctx))
     written.append(out_dir / f"{base}_ids.h")
     # Skip the .h/.cpp emission for views that don't need them.
@@ -898,7 +898,7 @@ def _emit_md5_files(
     generate_md5_artifacts(sel, scratch, **version)
     for src in scratch.iterdir():
         name = src.name
-        for view_name in ("combus", "combus_local", "combus_remote"):
+        for view_name in ("combus", "combus_system", "combus_base"):
             if name == f"{view_name}_md5.h":
                 name = f"{view_name}_{filename_prefix}_md5.h"
                 break
@@ -918,16 +918,16 @@ def generate(
     Full A7 + A12 generation pipeline.
 
     1. Resolve `requires` against ctx.
-    2. Select views (combus, combus_local, combus_remote).
+    2. Select views (combus, combus_system, combus_base).
     3. Emit the view headers into out_dir.
        - combus: 3 files (ids.h, .h, .cpp)
-       - combus_local, combus_remote: 1 file each (ids.h only — Phase 2)
-       The .h/.cpp files for combus_local and combus_remote are NOT
+       - combus_system, combus_base: 1 file each (ids.h only — Phase 2)
+       The .h/.cpp files for combus_system and combus_base are NOT
        written to disk anymore (Phase 2): the MD5 payload is built
        from the in-memory View model, so no intermediate file is
        needed. See emit_view() and _NO_EMIT_RUNTIME_VIEWS.
-    4. Emit MD5 artifacts (combus_md5.h, combus_local_md5.h,
-       combus_remote_md5.h, combus_wire_common.h).
+    4. Emit MD5 artifacts (combus_md5.h, combus_system_md5.h,
+       combus_base_md5.h, combus_wire_common.h).
 
     `project_version`: optional (major, minor) written in
     combus_wire_common.h (see md5.read_project_version()).
@@ -944,8 +944,8 @@ def generate(
     active = resolve_requires(channels, ctx)
     sel = select_views(active)
     emit_view(sel.full, out_dir, ctx, filename_prefix=filename_prefix)
-    emit_view(sel.local, out_dir, ctx, filename_prefix=filename_prefix)
-    emit_view(sel.remote, out_dir, ctx, filename_prefix=filename_prefix)
+    emit_view(sel.system, out_dir, ctx, filename_prefix=filename_prefix)
+    emit_view(sel.base, out_dir, ctx, filename_prefix=filename_prefix)
     # projectVersion: (major, minor) read from project_version.h by the
     # caller; None keeps the md5.py placeholder (tests, ad-hoc calls).
     _emit_md5_files(sel, out_dir, filename_prefix, project_version)
@@ -971,15 +971,15 @@ def main(
         return 1
 
     base_full = _file_base("combus", filename_prefix)
-    base_local = _file_base("combus_local", filename_prefix)
-    base_remote = _file_base("combus_remote", filename_prefix)
+    file_system = _file_base("combus_system", filename_prefix)
+    file_base = _file_base("combus_base", filename_prefix)
     print(f"[combus_builder] generated view 'combus' "
           f"({sel.full.ch_count} channels, WIRE_END={sel.full.wire_end}) "
           f"-> {out_dir}/{base_full}.{{h,cpp,_ids.h}}")
-    print(f"[combus_builder] generated view 'combus_local' "
-          f"({sel.local.ch_count} channels, WIRE_END={sel.local.wire_end}) "
-          f"-> {out_dir}/{base_local}.{{h,cpp,_ids.h}}")
-    print(f"[combus_builder] generated view 'combus_remote' "
-          f"({sel.remote.ch_count} channels, WIRE_END={sel.remote.wire_end}) "
-          f"-> {out_dir}/{base_remote}.{{h,cpp,_ids.h}}")
+    print(f"[combus_builder] generated view 'combus_system' "
+          f"({sel.system.ch_count} channels, WIRE_END={sel.system.wire_end}) "
+          f"-> {out_dir}/{file_system}.{{h,cpp,_ids.h}}")
+    print(f"[combus_builder] generated view 'combus_base' "
+          f"({sel.base.ch_count} channels, WIRE_END={sel.base.wire_end}) "
+          f"-> {out_dir}/{file_base}.{{h,cpp,_ids.h}}")
     return 0

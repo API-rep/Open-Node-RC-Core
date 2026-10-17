@@ -4,7 +4,7 @@ test_mother_not_a_board.py — ND2 fix: "mere = board fantome".
 
 Scope:
   Verify that the mother env (board_id=None) is EXCLUDED from the
-  LOCAL diffusion pool when the node has at least one sub-env.
+  SYSTEM diffusion pool when the node has at least one sub-env.
 
   Three test cases (per the spec):
     1. Mere + 2 sous-envs (mainboard, soundboard): uplink declared on
@@ -43,7 +43,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from scripts.combus_builder.diffusion import (
     DiffusionConflictError,
-    diffuse_local_channels,
+    diffuse_system_channels,
 )
 from scripts.combus_builder.flags import BuildContext
 from scripts.combus_builder.node_context import NodeContext
@@ -144,7 +144,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: uplink
     requires:
@@ -155,7 +155,7 @@ channels:
   - id: SPK_VOL
     infoName: "Speaker volume"
     type: analog
-    scope: LOCAL
+    scope: SYSTEM
     theme: core
     direction: downlink
     requires:
@@ -178,7 +178,7 @@ channels:
 
         captured = io.StringIO()
         with contextlib.redirect_stderr(captured):
-            result = diffuse_local_channels(parsed, node)
+            result = diffuse_system_channels(parsed, node)
         stderr_output = captured.getvalue()
 
         # mainboard: BAT_LOW=own uplink. SPK_VOL: rule 6, absent -> none.
@@ -205,7 +205,7 @@ channels:
         # The mother is a meta env, not a runtime board. The fix
         # excludes it from the diffusion pool, so it should NOT
         # appear in the result dict at all (or, if it does, it must
-        # be empty / not contain synthetic LOCAL declarations).
+        # be empty / not contain synthetic SYSTEM declarations).
         if None in result:
             mother_decls = _extract_channel_ids_and_dirs(result[None])
             assert "BAT_LOW" not in mother_decls, (
@@ -215,7 +215,7 @@ channels:
             assert "SPK_VOL" not in mother_decls, (
                 f"mother must NOT receive synthetic SPK_VOL, got {mother_decls!r}"
             )
-            print(f"  OK   mother (None): {mother_decls} (no synthetic LOCAL)")
+            print(f"  OK   mother (None): {mother_decls} (no synthetic SYSTEM)")
         else:
             print("  OK   mother (None): not in result dict (excluded from pool)")
 
@@ -251,7 +251,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: uplink
     requires:
@@ -262,7 +262,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: uplink
     requires:
@@ -282,7 +282,7 @@ channels:
         raised = False
         err_msg = ""
         try:
-            diffuse_local_channels(parsed, node)
+            diffuse_system_channels(parsed, node)
         except DiffusionConflictError as e:
             raised = True
             err_msg = str(e)
@@ -320,7 +320,7 @@ def test_mono_board_unchanged() -> None:
     Expected:
       - node.is_node = False (legacy single-board mode).
       - The mother (None) stays in the diffusion pool.
-      - A LOCAL channel declared on the mother is preserved as-is.
+      - A SYSTEM channel declared on the mother is preserved as-is.
       - The output is byte-identical to what the pre-fix code would
         produce (verified by comparing the MD5 of the parsed list
         against a known-good reference).
@@ -338,7 +338,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: uplink
 """,
@@ -352,7 +352,7 @@ channels:
             mother_env="test_env",
         )
 
-        result = diffuse_local_channels(parsed, node)
+        result = diffuse_system_channels(parsed, node)
 
         # The mother (None) MUST be in the result dict (legacy mode).
         assert None in result, (

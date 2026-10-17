@@ -5,7 +5,7 @@
 # historical `comBus.runLevel` struct field — see RL0 audit).
 #
 # Notes:
-# - LOCAL scope: the run level is shared by all boards composing the
+# - SYSTEM scope: the run level is shared by all boards composing the
 #   local node. The system FSM (main.cpp) writes it; consumers (light
 #   interpreter, dashboards, processors) read it.
 # - Direction [uplink]: a single writer (the "owner" board, typically the
@@ -19,7 +19,7 @@
 # - value: 0 (IDLE default).
 # - requires: [HAS_RUNLEVEL_MANAGER] — the channel is only emitted on
 #   the board that owns the run level (mainboard by convention). Other
-#   boards do not see the channel (future work: invert via LOCAL+link
+#   boards do not see the channel (future work: invert via SYSTEM+link
 #   convention so non-owner boards can still consume it).
 
 
@@ -27,7 +27,7 @@ channels:
   - id: RUNLEVEL
     infoName: "Machine run level"
     type: analog
-    scope: LOCAL
+    scope: SYSTEM
     theme: core
     direction: uplink    # single writer (owner board, gated by HAS_RUNLEVEL_MANAGER)
     value: 0             # IDLE default (RunLevel::IDLE = 0)

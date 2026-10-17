@@ -215,13 +215,13 @@ static uint8_t tryDecode( CombusRxState& st )
         // combus_frame_apply() manually.
         //
         // combus_frame_apply() takes a ChanLayer caller identity (see
-        // combus_frame.h).  We pass ChanLayer::REMOTE because the RX
+        // combus_frame.h).  We pass ChanLayer::BASE because the RX
         // path is receiving frames from a remote source — the layer
         // check inside combus_set_*() will accept writes to channels
-        // whose declared layer is REMOTE or LOCAL (LOCAL inherits REMOTE).
+        // whose declared layer is BASE or SYSTEM (SYSTEM inherits BASE).
         if (st.target != nullptr) {
             combus_frame_apply(st.frameCfg, st.target, &st.snap,
-                               ChanLayer::REMOTE);
+                               ChanLayer::BASE);
         }
 
         rxBufConsume(st, expectedLen);

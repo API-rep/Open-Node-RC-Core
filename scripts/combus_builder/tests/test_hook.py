@@ -86,8 +86,8 @@ def test_skip_not_requested_when_unset(hook, monkeypatch):
 
 NINE = {
     "combus.cpp", "combus.h", "combus_ids.h",
-    "combus_local_ids.h", "combus_remote_ids.h",
-    "combus_local_md5.h", "combus_remote_md5.h", "combus_md5.h",
+    "combus_system_ids.h", "combus_base_ids.h",
+    "combus_system_md5.h", "combus_base_md5.h", "combus_md5.h",
     "combus_wire_common.h",
 }
 
@@ -113,9 +113,9 @@ def test_expected_artifacts_node_prefixes_only_the_other_boards(hook):
     prefix = "soundboard"
     assert {
         f"combus_{prefix}.h", f"combus_{prefix}.cpp", f"combus_{prefix}_ids.h",
-        f"combus_local_{prefix}_ids.h", f"combus_remote_{prefix}_ids.h",
-        f"combus_{prefix}_md5.h", f"combus_local_{prefix}_md5.h",
-        f"combus_remote_{prefix}_md5.h",
+        f"combus_system_{prefix}_ids.h", f"combus_base_{prefix}_ids.h",
+        f"combus_{prefix}_md5.h", f"combus_system_{prefix}_md5.h",
+        f"combus_base_{prefix}_md5.h",
     } <= set(got)
     # The current board is never prefixed; the wire header is never prefixed.
     assert not any("mainboard" in n for n in got)
@@ -291,7 +291,7 @@ def _node_staging(hook, tmp_path, current_env="test_node_mainboard", project_ver
     for a root env with two boards, as if `current_env` were being compiled.
     Returns (staging_dir, boards)."""
     from scripts.combus_builder.canon import canonize
-    from scripts.combus_builder.diffusion import diffuse_local_channels
+    from scripts.combus_builder.diffusion import diffuse_system_channels
     from scripts.combus_builder.flags import BuildContext
     from scripts.combus_builder.node_context import NodeContext
     from scripts.combus_builder.parser import discover_and_parse
@@ -306,7 +306,7 @@ def _node_staging(hook, tmp_path, current_env="test_node_mainboard", project_ver
         boards={None: ctx(ROOT_FLAGS), "mainboard": ctx(MAIN_FLAGS), "extboard": ctx(EXT_FLAGS)},
         is_node=True,
     )
-    diffused = diffuse_local_channels(parsed, node)
+    diffused = diffuse_system_channels(parsed, node)
     staging = tmp_path / "combus_generated.new"
     boards = hook._collect_node_boards(
         "test_node", ["test_node", "test_node_mainboard", "test_node_extboard"])

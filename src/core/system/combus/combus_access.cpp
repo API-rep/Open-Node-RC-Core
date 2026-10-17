@@ -21,9 +21,9 @@
  *
  * @details Rules (in priority order):
  *   1. UNDEFINED → write denied for all callers (safety)
- *   2. SYSTEM    → only local firmware caller may write
- *   3. LOCAL     → local firmware caller + extension boards caller of same node
- *   4. REMOTE    → any source (local + extensions + remote nodes caller)
+ *   2. BOARD     → only local firmware caller may write
+ *   3. SYSTEM    → local firmware caller + extension boards caller of same node
+ *   4. BASE      → any source (local + extensions + remote nodes caller)
  */
 static inline bool _layer_ok(ChanLayer slot_layer, ChanLayer caller_layer) {
     const uint8_t raw_slot = static_cast<uint8_t>(slot_layer);
@@ -34,19 +34,19 @@ static inline bool _layer_ok(ChanLayer slot_layer, ChanLayer caller_layer) {
         return false;
     }
     
-      // REMOTE → allow all writes
-    if (slot_layer == ChanLayer::REMOTE) {
+      // BASE → allow all writes
+    if (slot_layer == ChanLayer::BASE) {
         return true;
     }
     
-      // LOCAL → allow LOCAL and SYSTEM callers (local firmware + extensions)
-    if (slot_layer == ChanLayer::LOCAL) {
-        return (caller_layer == ChanLayer::LOCAL) || (caller_layer == ChanLayer::SYSTEM);
+      // SYSTEM → allow SYSTEM and BOARD callers (local firmware + extensions)
+    if (slot_layer == ChanLayer::SYSTEM) {
+        return (caller_layer == ChanLayer::SYSTEM) || (caller_layer == ChanLayer::BOARD);
     }
     
-      // SYSTEM → only SYSTEM callers (local firmware only)
-    if (slot_layer == ChanLayer::SYSTEM) {
-        return caller_layer == ChanLayer::SYSTEM;
+      // BOARD → only BOARD callers (local firmware only)
+    if (slot_layer == ChanLayer::BOARD) {
+        return caller_layer == ChanLayer::BOARD;
     }
     
       // Should never reach here

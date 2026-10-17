@@ -22,7 +22,7 @@
  *   link.com   = com;
  *   link.txCfg = cfg;
  *   link.txHz  = TX_HZ;
- *   link.layer = ChanLayer::REMOTE;   // LY2 — selects wireEnd from Remote view
+ *   link.layer = ChanLayer::BASE;   // LY2 — selects wireEnd from Base view
  *   combus_protocol_init(0, &link);
  *
  *   // In loop:
@@ -124,8 +124,8 @@ void combus_tx_register_pool( CombusTxState* buffer, uint8_t capacity );
  *   rejected.
  *
  * LY2 — the wire-end counters are resolved here from the link's
- * `ChanLayer` (REMOTE → CH_COUNT of the Remote view, LOCAL → CH_COUNT
- * of the Local view, FULL → CH_COUNT of the Full view).  The codec
+ * `ChanLayer` (BASE → CH_COUNT of the Base view, SYSTEM → CH_COUNT
+ * of the System view, FULL → CH_COUNT of the Full view).  The codec
  * iterates only over comBus.analogBus[0..analogWireEnd) and
  * comBus.digitalBus[0..digitalWireEnd) — this is the ONLY behavioural
  * change vs. the pre-LY2 codec.

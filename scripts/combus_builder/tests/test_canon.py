@@ -6,11 +6,11 @@ Coverage:
   - Section extraction (extension-agnostic).
   - Unknown keys rejected.
   - Per-field validation (id, infoName, type, scope, theme, direction, requires).
-  - Direction contract per scope (LOCAL/REMOTE/SYSTEM).
+  - Direction contract per scope (SYSTEM/BASE/BOARD).
   - Direction normalization (both → {uplink, downlink}, none → {}).
   - Direction duplicates rejected.
-  - Direction empty list rejected for LOCAL/REMOTE.
-  - Direction wire tokens rejected for SYSTEM.
+  - Direction empty list rejected for SYSTEM/BASE.
+  - Direction wire tokens rejected for BOARD.
   - requires duplicates rejected.
   - ID uniqueness (across types/scopes/themes).
   - Conflict detection (with file paths in the error).
@@ -65,14 +65,14 @@ def _parsed(path: Path, raw: dict, type_label: str = "channel_def"):
 
 
 def _ch(id_: str = "FOO", info_name: str = "Foo channel",
-        type_: str = "digital", scope: str = "LOCAL",
+        type_: str = "digital", scope: str = "SYSTEM",
         theme: str = "failsafe", direction: str | None = None,
         requires: list | None = None) -> dict:
-    """Build a minimal valid channel dict (LOCAL scope, failsafe theme).
+    """Build a minimal valid channel dict (SYSTEM scope, failsafe theme).
 
     `direction` is a STRING (decision mainteneur 2026-08-22), not a list.
     Accepted values: 'uplink', 'downlink', 'both', 'none'.
-    Pass `direction=None` to omit the field (SYSTEM scope only).
+    Pass `direction=None` to omit the field (BOARD scope only).
     """
     d: dict = {
         "id": id_,
@@ -83,7 +83,7 @@ def _ch(id_: str = "FOO", info_name: str = "Foo channel",
     }
     if direction is not None:
         d["direction"] = direction
-    elif scope in ("LOCAL", "REMOTE"):
+    elif scope in ("SYSTEM", "BASE"):
         d["direction"] = "uplink"
     if requires is not None:
         d["requires"] = requires
@@ -215,7 +215,7 @@ def test_unknown_field_rejected(tmp_path):
         "id": "FOO",
         "infoName": "Foo",
         "type": "digital",
-        "scope": "LOCAL",
+        "scope": "SYSTEM",
         "theme": "failsafe",
         "direction": "uplink",
         "typo": "something",
@@ -239,7 +239,7 @@ def test_legacy_module_field_rejected(tmp_path):
         "id": "FOO",
         "infoName": "Foo",
         "type": "digital",
-        "scope": "LOCAL",
+        "scope": "SYSTEM",
         "theme": "failsafe",
         "direction": "uplink",
         "module": "vbat",
@@ -259,7 +259,7 @@ def test_legacy_layer_field_rejected(tmp_path):
         "id": "FOO",
         "infoName": "Foo",
         "type": "digital",
-        "scope": "LOCAL",
+        "scope": "SYSTEM",
         "theme": "failsafe",
         "direction": "uplink",
         "layer": 1,
@@ -279,7 +279,7 @@ def test_legacy_default_field_rejected(tmp_path):
         "id": "FOO",
         "infoName": "Foo",
         "type": "digital",
-        "scope": "LOCAL",
+        "scope": "SYSTEM",
         "theme": "failsafe",
         "direction": "uplink",
         "default": 0,
@@ -302,7 +302,7 @@ def test_id_required(tmp_path):
     parsed = [_parsed(p, {"channels": [{
         "infoName": "Foo",
         "type": "digital",
-        "scope": "LOCAL",
+        "scope": "SYSTEM",
         "theme": "failsafe",
         "direction": "uplink",
     }]})]
@@ -320,7 +320,7 @@ def test_id_must_be_string(tmp_path):
         "id": 42,
         "infoName": "Foo",
         "type": "digital",
-        "scope": "LOCAL",
+        "scope": "SYSTEM",
         "theme": "failsafe",
         "direction": "uplink",
     }]})]
@@ -352,7 +352,7 @@ def test_info_name_required(tmp_path):
     parsed = [_parsed(p, {"channels": [{
         "id": "FOO",
         "type": "digital",
-        "scope": "LOCAL",
+        "scope": "SYSTEM",
         "theme": "failsafe",
         "direction": "uplink",
     }]})]
@@ -370,7 +370,7 @@ def test_info_name_must_be_string(tmp_path):
         "id": "FOO",
         "infoName": 42,
         "type": "digital",
-        "scope": "LOCAL",
+        "scope": "SYSTEM",
         "theme": "failsafe",
         "direction": "uplink",
     }]})]
@@ -388,7 +388,7 @@ def test_info_name_must_be_non_empty(tmp_path):
         "id": "FOO",
         "infoName": "",
         "type": "digital",
-        "scope": "LOCAL",
+        "scope": "SYSTEM",
         "theme": "failsafe",
         "direction": "uplink",
     }]})]
@@ -407,7 +407,7 @@ def test_info_name_alias_rejected(tmp_path):
         "id": "FOO",
         "info_name": "Foo",
         "type": "digital",
-        "scope": "LOCAL",
+        "scope": "SYSTEM",
         "theme": "failsafe",
         "direction": "uplink",
     }]})]
@@ -429,7 +429,7 @@ def test_type_required(tmp_path):
     parsed = [_parsed(p, {"channels": [{
         "id": "FOO",
         "infoName": "Foo",
-        "scope": "LOCAL",
+        "scope": "SYSTEM",
         "theme": "failsafe",
         "direction": "uplink",
     }]})]
@@ -496,7 +496,7 @@ def test_theme_required(tmp_path):
         "id": "FOO",
         "infoName": "Foo",
         "type": "digital",
-        "scope": "LOCAL",
+        "scope": "SYSTEM",
         "direction": "uplink",
     }]})]
     try:
@@ -549,36 +549,36 @@ def test_theme_failsafe_accepted(tmp_path):
 # Direction — full matrix per scope
 # =============================================================================
 
-# LOCAL
-def test_dir_local_uplink(tmp_path):
+# SYSTEM
+def test_dir_system_uplink(tmp_path):
     p = tmp_path / "a.cb"
     parsed = [_parsed(p, {"channels": [_ch(direction="uplink")]})]
     result = canonize(parsed)
     assert result.canonical_definitions[0].direction == frozenset({"uplink"})
 
 
-def test_dir_local_downlink(tmp_path):
+def test_dir_system_downlink(tmp_path):
     p = tmp_path / "a.cb"
     parsed = [_parsed(p, {"channels": [_ch(direction="downlink")]})]
     result = canonize(parsed)
     assert result.canonical_definitions[0].direction == frozenset({"downlink"})
 
 
-def test_dir_local_both_normalizes_to_uplink_downlink(tmp_path):
+def test_dir_system_both_normalizes_to_uplink_downlink(tmp_path):
     p = tmp_path / "a.cb"
     parsed = [_parsed(p, {"channels": [_ch(direction="both")]})]
     result = canonize(parsed)
     assert result.canonical_definitions[0].direction == frozenset({"uplink", "downlink"})
 
 
-def test_dir_local_none_normalizes_to_empty(tmp_path):
+def test_dir_system_none_normalizes_to_empty(tmp_path):
     p = tmp_path / "a.cb"
     parsed = [_parsed(p, {"channels": [_ch(direction="none")]})]
     result = canonize(parsed)
     assert result.canonical_definitions[0].direction == frozenset()
 
 
-def test_dir_local_uplink_downlink(tmp_path):
+def test_dir_system_uplink_downlink(tmp_path):
     """`direction: 'both'` is the string equivalent of the old
     `direction: ['uplink', 'downlink']` list form. Both normalize to
     frozenset({'uplink', 'downlink'}).
@@ -589,7 +589,7 @@ def test_dir_local_uplink_downlink(tmp_path):
     assert result.canonical_definitions[0].direction == frozenset({"uplink", "downlink"})
 
 
-def test_dir_local_empty_rejected(tmp_path):
+def test_dir_system_empty_rejected(tmp_path):
     """`direction: ''` (empty string) is rejected.
 
     In the old list format, `direction: []` was rejected as "empty".
@@ -606,7 +606,7 @@ def test_dir_local_empty_rejected(tmp_path):
         raise AssertionError("expected ChannelValidationError")
 
 
-def test_dir_local_duplicate_rejected(tmp_path):
+def test_dir_system_duplicate_rejected(tmp_path):
     """Duplicates are no longer possible with a string format.
 
     The old `direction: ['uplink', 'uplink']` test is obsolete: a
@@ -628,7 +628,7 @@ def test_dir_local_duplicate_rejected(tmp_path):
         raise AssertionError("expected ChannelValidationError")
 
 
-def test_dir_local_both_with_uplink_rejected(tmp_path):
+def test_dir_system_both_with_uplink_rejected(tmp_path):
     """`both` + `uplink` is incoherent — but in string format, this
     case is structurally impossible (one string = one token). This
     test is kept as a placeholder; the equivalent semantic in the
@@ -648,7 +648,7 @@ def test_dir_local_both_with_uplink_rejected(tmp_path):
         raise AssertionError("expected ChannelValidationError")
 
 
-def test_dir_local_none_with_uplink_rejected(tmp_path):
+def test_dir_system_none_with_uplink_rejected(tmp_path):
     """`none` + `uplink` is incoherent — but in string format, this
     case is structurally impossible. Kept as a placeholder; the
     equivalent semantic is covered by test_dir_invalid_token.
@@ -663,24 +663,24 @@ def test_dir_local_none_with_uplink_rejected(tmp_path):
         raise AssertionError("expected ChannelValidationError")
 
 
-# REMOTE
-def test_dir_remote_uplink(tmp_path):
+# BASE
+def test_dir_base_uplink(tmp_path):
     p = tmp_path / "a.cb"
-    parsed = [_parsed(p, {"channels": [_ch(scope="REMOTE", direction="uplink")]})]
+    parsed = [_parsed(p, {"channels": [_ch(scope="BASE", direction="uplink")]})]
     result = canonize(parsed)
     assert result.canonical_definitions[0].direction == frozenset({"uplink"})
 
 
-def test_dir_remote_downlink(tmp_path):
+def test_dir_base_downlink(tmp_path):
     p = tmp_path / "a.cb"
-    parsed = [_parsed(p, {"channels": [_ch(scope="REMOTE", direction="downlink")]})]
+    parsed = [_parsed(p, {"channels": [_ch(scope="BASE", direction="downlink")]})]
     result = canonize(parsed)
     assert result.canonical_definitions[0].direction == frozenset({"downlink"})
 
 
-def test_dir_remote_both(tmp_path):
+def test_dir_base_both(tmp_path):
     p = tmp_path / "a.cb"
-    parsed = [_parsed(p, {"channels": [_ch(scope="REMOTE", direction="both")]})]
+    parsed = [_parsed(p, {"channels": [_ch(scope="BASE", direction="both")]})]
     result = canonize(parsed)
     assert result.canonical_definitions[0].direction == frozenset({"uplink", "downlink"})
 
@@ -689,8 +689,8 @@ def test_dir_remote_both(tmp_path):
 # A2.1 — Variantes `*_OR` (uplink_or, downlink_or, both_or)
 # =============================================================================
 
-def test_dir_local_uplink_or_normalizes(tmp_path):
-    """`uplink_or` LOCAL digital → direction_or={uplink}, direction={}."""
+def test_dir_system_uplink_or_normalizes(tmp_path):
+    """`uplink_or` SYSTEM digital → direction_or={uplink}, direction={}."""
     p = tmp_path / "a.cb"
     parsed = [_parsed(p, {"channels": [_ch(type_="digital", direction="uplink_or")]})]
     result = canonize(parsed)
@@ -699,8 +699,8 @@ def test_dir_local_uplink_or_normalizes(tmp_path):
     assert ch.direction_or == frozenset({"uplink"})
 
 
-def test_dir_local_downlink_or_normalizes(tmp_path):
-    """`downlink_or` LOCAL digital → direction_or={downlink}, direction={}."""
+def test_dir_system_downlink_or_normalizes(tmp_path):
+    """`downlink_or` SYSTEM digital → direction_or={downlink}, direction={}."""
     p = tmp_path / "a.cb"
     parsed = [_parsed(p, {"channels": [_ch(type_="digital", direction="downlink_or")]})]
     result = canonize(parsed)
@@ -709,8 +709,8 @@ def test_dir_local_downlink_or_normalizes(tmp_path):
     assert ch.direction_or == frozenset({"downlink"})
 
 
-def test_dir_local_both_or_normalizes(tmp_path):
-    """`both_or` LOCAL digital → direction_or={uplink, downlink}, direction={}."""
+def test_dir_system_both_or_normalizes(tmp_path):
+    """`both_or` SYSTEM digital → direction_or={uplink, downlink}, direction={}."""
     p = tmp_path / "a.cb"
     parsed = [_parsed(p, {"channels": [_ch(type_="digital", direction="both_or")]})]
     result = canonize(parsed)
@@ -719,10 +719,10 @@ def test_dir_local_both_or_normalizes(tmp_path):
     assert ch.direction_or == frozenset({"uplink", "downlink"})
 
 
-def test_dir_remote_uplink_or_normalizes(tmp_path):
-    """`uplink_or` REMOTE digital → direction_or={uplink}, direction={}."""
+def test_dir_base_uplink_or_normalizes(tmp_path):
+    """`uplink_or` BASE digital → direction_or={uplink}, direction={}."""
     p = tmp_path / "a.cb"
-    parsed = [_parsed(p, {"channels": [_ch(type_="digital", scope="REMOTE", direction="uplink_or")]})]
+    parsed = [_parsed(p, {"channels": [_ch(type_="digital", scope="BASE", direction="uplink_or")]})]
     result = canonize(parsed)
     ch = result.canonical_definitions[0]
     assert ch.direction == frozenset()
@@ -742,40 +742,40 @@ def test_dir_or_rejected_on_analog(tmp_path):
         raise AssertionError("expected ChannelValidationError for *OR on analog")
 
 
-def test_dir_or_rejected_on_system(tmp_path):
-    """A2.1 : `*_OR` rejeté sur `scope: SYSTEM` (un seul écrivain possible)."""
+def test_dir_or_rejected_on_board(tmp_path):
+    """A2.1 : `*_OR` rejeté sur `scope: BOARD` (un seul écrivain possible)."""
     p = tmp_path / "a.cb"
-    parsed = [_parsed(p, {"channels": [_ch(type_="digital", scope="SYSTEM", direction="uplink_or")]})]
+    parsed = [_parsed(p, {"channels": [_ch(type_="digital", scope="BOARD", direction="uplink_or")]})]
     try:
         canonize(parsed)
     except ChannelValidationError as e:
-        assert "uplink_or" in str(e) or "SYSTEM" in str(e)
+        assert "uplink_or" in str(e) or "BOARD" in str(e)
     else:
-        raise AssertionError("expected ChannelValidationError for *OR on SYSTEM")
+        raise AssertionError("expected ChannelValidationError for *OR on BOARD")
 
 
-def test_dir_or_rejected_on_downlink_or_system(tmp_path):
-    """A2.1 : `downlink_or` rejeté sur SYSTEM."""
+def test_dir_or_rejected_on_downlink_or_board(tmp_path):
+    """A2.1 : `downlink_or` rejeté sur BOARD."""
     p = tmp_path / "a.cb"
-    parsed = [_parsed(p, {"channels": [_ch(type_="digital", scope="SYSTEM", direction="downlink_or")]})]
+    parsed = [_parsed(p, {"channels": [_ch(type_="digital", scope="BOARD", direction="downlink_or")]})]
     try:
         canonize(parsed)
     except ChannelValidationError as e:
-        assert "downlink_or" in str(e) or "SYSTEM" in str(e)
+        assert "downlink_or" in str(e) or "BOARD" in str(e)
     else:
-        raise AssertionError("expected ChannelValidationError for downlink_or on SYSTEM")
+        raise AssertionError("expected ChannelValidationError for downlink_or on BOARD")
 
 
-def test_dir_or_rejected_on_both_or_system(tmp_path):
-    """A2.1 : `both_or` rejeté sur SYSTEM."""
+def test_dir_or_rejected_on_both_or_board(tmp_path):
+    """A2.1 : `both_or` rejeté sur BOARD."""
     p = tmp_path / "a.cb"
-    parsed = [_parsed(p, {"channels": [_ch(type_="digital", scope="SYSTEM", direction="both_or")]})]
+    parsed = [_parsed(p, {"channels": [_ch(type_="digital", scope="BOARD", direction="both_or")]})]
     try:
         canonize(parsed)
     except ChannelValidationError as e:
-        assert "both_or" in str(e) or "SYSTEM" in str(e)
+        assert "both_or" in str(e) or "BOARD" in str(e)
     else:
-        raise AssertionError("expected ChannelValidationError for both_or on SYSTEM")
+        raise AssertionError("expected ChannelValidationError for both_or on BOARD")
 
 
 def test_dir_or_mixed_with_uplink_rejected(tmp_path):
@@ -790,30 +790,30 @@ def test_dir_or_mixed_with_uplink_rejected(tmp_path):
     assert ch.direction_or == frozenset({"uplink"})
 
 
-def test_dir_remote_uplink_downlink(tmp_path):
+def test_dir_base_uplink_downlink(tmp_path):
     """`direction: 'both'` is the string equivalent of the old
     `direction: ['uplink', 'downlink']` list form.
     """
     p = tmp_path / "a.cb"
-    parsed = [_parsed(p, {"channels": [_ch(scope="REMOTE", direction="both")]})]
+    parsed = [_parsed(p, {"channels": [_ch(scope="BASE", direction="both")]})]
     result = canonize(parsed)
     assert result.canonical_definitions[0].direction == frozenset({"uplink", "downlink"})
 
 
-def test_dir_remote_none_normalizes_to_empty(tmp_path):
-    # A9.5 — REMOTE now accepts `none` (per A9.3 contract extension).
-    # REMOTE = type-level declaration, no inter-node wire activity.
+def test_dir_base_none_normalizes_to_empty(tmp_path):
+    # A9.5 — BASE now accepts `none` (per A9.3 contract extension).
+    # BASE = type-level declaration, no inter-node wire activity.
     # Intra-node propagation remains implicit.
     p = tmp_path / "a.cb"
-    parsed = [_parsed(p, {"channels": [_ch(scope="REMOTE", direction="none")]})]
+    parsed = [_parsed(p, {"channels": [_ch(scope="BASE", direction="none")]})]
     result = canonize(parsed)
     assert result.canonical_definitions[0].direction == frozenset()
 
 
-def test_dir_remote_empty_rejected(tmp_path):
-    """`direction: ''` (empty string) is rejected for REMOTE scope."""
+def test_dir_base_empty_rejected(tmp_path):
+    """`direction: ''` (empty string) is rejected for BASE scope."""
     p = tmp_path / "a.cb"
-    parsed = [_parsed(p, {"channels": [_ch(scope="REMOTE", direction="")]})]
+    parsed = [_parsed(p, {"channels": [_ch(scope="BASE", direction="")]})]
     try:
         canonize(parsed)
     except ChannelValidationError as e:
@@ -822,13 +822,13 @@ def test_dir_remote_empty_rejected(tmp_path):
         raise AssertionError("expected ChannelValidationError")
 
 
-def test_dir_remote_duplicate_rejected(tmp_path):
+def test_dir_base_duplicate_rejected(tmp_path):
     """Duplicates are structurally impossible in string format.
     Kept as a placeholder; equivalent semantic covered by
     test_dir_invalid_token.
     """
     p = tmp_path / "a.cb"
-    parsed = [_parsed(p, {"channels": [_ch(scope="REMOTE", direction="bogus")]})]
+    parsed = [_parsed(p, {"channels": [_ch(scope="BASE", direction="bogus")]})]
     try:
         canonize(parsed)
     except ChannelValidationError as e:
@@ -837,74 +837,74 @@ def test_dir_remote_duplicate_rejected(tmp_path):
         raise AssertionError("expected ChannelValidationError")
 
 
-# SYSTEM
-def test_dir_system_absent_normalizes_to_empty(tmp_path):
+# BOARD
+def test_dir_board_absent_normalizes_to_empty(tmp_path):
     p = tmp_path / "a.cb"
-    parsed = [_parsed(p, {"channels": [_ch(scope="SYSTEM", direction=None)]})]
+    parsed = [_parsed(p, {"channels": [_ch(scope="BOARD", direction=None)]})]
     result = canonize(parsed)
     assert result.canonical_definitions[0].direction == frozenset()
 
 
-def test_dir_system_none_normalizes_to_empty(tmp_path):
+def test_dir_board_none_normalizes_to_empty(tmp_path):
     p = tmp_path / "a.cb"
-    parsed = [_parsed(p, {"channels": [_ch(scope="SYSTEM", direction="none")]})]
+    parsed = [_parsed(p, {"channels": [_ch(scope="BOARD", direction="none")]})]
     result = canonize(parsed)
     assert result.canonical_definitions[0].direction == frozenset()
 
 
-def test_dir_system_uplink_rejected(tmp_path):
+def test_dir_board_uplink_rejected(tmp_path):
     p = tmp_path / "a.cb"
-    parsed = [_parsed(p, {"channels": [_ch(scope="SYSTEM", direction="uplink")]})]
+    parsed = [_parsed(p, {"channels": [_ch(scope="BOARD", direction="uplink")]})]
     try:
         canonize(parsed)
     except ChannelValidationError as e:
-        assert "SYSTEM" in str(e)
+        assert "BOARD" in str(e)
         assert "wire direction" in str(e)
     else:
         raise AssertionError("expected ChannelValidationError")
 
 
-def test_dir_system_downlink_rejected(tmp_path):
+def test_dir_board_downlink_rejected(tmp_path):
     p = tmp_path / "a.cb"
-    parsed = [_parsed(p, {"channels": [_ch(scope="SYSTEM", direction="downlink")]})]
+    parsed = [_parsed(p, {"channels": [_ch(scope="BOARD", direction="downlink")]})]
     try:
         canonize(parsed)
     except ChannelValidationError as e:
-        assert "SYSTEM" in str(e)
+        assert "BOARD" in str(e)
     else:
         raise AssertionError("expected ChannelValidationError")
 
 
-def test_dir_system_both_rejected(tmp_path):
+def test_dir_board_both_rejected(tmp_path):
     p = tmp_path / "a.cb"
-    parsed = [_parsed(p, {"channels": [_ch(scope="SYSTEM", direction="both")]})]
+    parsed = [_parsed(p, {"channels": [_ch(scope="BOARD", direction="both")]})]
     try:
         canonize(parsed)
     except ChannelValidationError as e:
-        assert "SYSTEM" in str(e)
+        assert "BOARD" in str(e)
     else:
         raise AssertionError("expected ChannelValidationError")
 
 
-def test_dir_system_empty_rejected(tmp_path):
-    """`direction: ''` (empty string) is rejected for SYSTEM scope."""
+def test_dir_board_empty_rejected(tmp_path):
+    """`direction: ''` (empty string) is rejected for BOARD scope."""
     p = tmp_path / "a.cb"
-    parsed = [_parsed(p, {"channels": [_ch(scope="SYSTEM", direction="")]})]
+    parsed = [_parsed(p, {"channels": [_ch(scope="BOARD", direction="")]})]
     try:
         canonize(parsed)
     except ChannelValidationError as e:
-        assert "SYSTEM" in str(e)
+        assert "BOARD" in str(e)
     else:
         raise AssertionError("expected ChannelValidationError")
 
 
-def test_dir_system_duplicate_rejected(tmp_path):
+def test_dir_board_duplicate_rejected(tmp_path):
     """Duplicates are structurally impossible in string format.
     Kept as a placeholder; equivalent semantic covered by
     test_dir_invalid_token.
     """
     p = tmp_path / "a.cb"
-    parsed = [_parsed(p, {"channels": [_ch(scope="SYSTEM", direction="bogus")]})]
+    parsed = [_parsed(p, {"channels": [_ch(scope="BOARD", direction="bogus")]})]
     try:
         canonize(parsed)
     except ChannelValidationError as e:
@@ -927,7 +927,7 @@ def test_dir_must_be_list(tmp_path):
         "id": "FOO",
         "infoName": "Foo",
         "type": "digital",
-        "scope": "LOCAL",
+        "scope": "SYSTEM",
         "theme": "failsafe",
         "direction": "uplink",
     }]})]
@@ -962,7 +962,7 @@ def test_dir_entry_list_rejected(tmp_path):
         "id": "FOO",
         "infoName": "Foo",
         "type": "digital",
-        "scope": "LOCAL",
+        "scope": "SYSTEM",
         "theme": "failsafe",
         "direction": [["uplink"]],
     }]})]
@@ -990,7 +990,7 @@ def test_dir_entry_int_rejected(tmp_path):
         "id": "FOO",
         "infoName": "Foo",
         "type": "digital",
-        "scope": "LOCAL",
+        "scope": "SYSTEM",
         "theme": "failsafe",
         "direction": 123,
     }]})]
@@ -1018,7 +1018,7 @@ def test_dir_entry_dict_rejected(tmp_path):
         "id": "FOO",
         "infoName": "Foo",
         "type": "digital",
-        "scope": "LOCAL",
+        "scope": "SYSTEM",
         "theme": "failsafe",
         "direction": {"key": "val"},
     }]})]
@@ -1047,7 +1047,7 @@ def test_dir_entry_mixed_types_rejected(tmp_path):
         "id": "FOO",
         "infoName": "Foo",
         "type": "digital",
-        "scope": "LOCAL",
+        "scope": "SYSTEM",
         "theme": "failsafe",
         "direction": ["uplink", 123],
     }]})]
@@ -1124,31 +1124,31 @@ def test_requires_duplicate_rejected(tmp_path):
 
 
 # =============================================================================
-# ND4 bis: REMOTE n'accepte pas de requires
+# ND4 bis: BASE n'accepte pas de requires
 # =============================================================================
 
 def _ch_remote(id_: str = "STEER_CMD", requires=None) -> dict:
-    """Build a minimal valid REMOTE channel dict (direction as string).
+    """Build a minimal valid BASE channel dict (direction as string).
 
     The _ch() helper above uses `direction` as a list (legacy format),
     but the current canon code expects a string. This helper builds a
-    REMOTE channel with the correct string format for `direction`.
+    BASE channel with the correct string format for `direction`.
     """
     return {
         "id": id_,
         "infoName": f"{id_} channel",
         "type": "analog",
-        "scope": "REMOTE",
+        "scope": "BASE",
         "theme": "core",
         "direction": "downlink",
         **({"requires": requires} if requires is not None else {}),
     }
 
 
-def test_remote_without_requires_accepted(tmp_path):
-    """REMOTE channel without `requires` (or with empty list) -> OK.
+def test_base_without_requires_accepted(tmp_path):
+    """BASE channel without `requires` (or with empty list) -> OK.
 
-    Comportement actuel inchangé : un channel REMOTE sans requires
+    Comportement actuel inchangé : un channel BASE sans requires
     (champ absent ou liste vide) doit passer la validation sans
     erreur. C'est le cas normal pour une frame fixe de type de
     machine.
@@ -1158,29 +1158,29 @@ def test_remote_without_requires_accepted(tmp_path):
     parsed = [_parsed(p, {"channels": [_ch_remote()]})]
     result = canonize(parsed)
     assert len(result.canonical_definitions) == 1
-    assert result.canonical_definitions[0].scope == "REMOTE"
+    assert result.canonical_definitions[0].scope == "BASE"
     assert result.canonical_definitions[0].requires == frozenset()
 
     # Cas 2 : `requires: []` (liste vide explicite).
     parsed = [_parsed(p, {"channels": [_ch_remote(requires=[])]})]
     result = canonize(parsed)
     assert len(result.canonical_definitions) == 1
-    assert result.canonical_definitions[0].scope == "REMOTE"
+    assert result.canonical_definitions[0].scope == "BASE"
     assert result.canonical_definitions[0].requires == frozenset()
 
 
-def test_remote_with_requires_rejected(tmp_path):
-    """REMOTE channel with non-empty `requires` -> ChannelValidationError.
+def test_base_with_requires_rejected(tmp_path):
+    """BASE channel with non-empty `requires` -> ChannelValidationError.
 
-    Un channel REMOTE représente une frame fixe, héritée d'une
+    Un channel BASE représente une frame fixe, héritée d'une
     config générique de type de machine, partagée telle quelle
     entre le nœud machine et la télécommande. `requires` (activation
-    conditionnelle à la compilation) n'a pas de sens sur REMOTE :
+    conditionnelle à la compilation) n'a pas de sens sur BASE :
     ça introduirait des variantes de frame selon la config buildée,
     alors que la frame doit rester fixe par type de machine.
 
     Le message d'erreur doit nommer le channel et expliquer
-    pourquoi (move to LOCAL/SYSTEM scope, or remove the requires).
+    pourquoi (move to SYSTEM/BOARD scope, or remove the requires).
     """
     p = tmp_path / "a.cb"
     parsed = [_parsed(p, {"channels": [
@@ -1193,23 +1193,23 @@ def test_remote_with_requires_rejected(tmp_path):
         assert "STEER_CMD" in msg, (
             f"error message should name the channel id, got: {msg!r}"
         )
-        assert "REMOTE" in msg, (
-            f"error message should mention REMOTE scope, got: {msg!r}"
+        assert "BASE" in msg, (
+            f"error message should mention BASE scope, got: {msg!r}"
         )
         assert "requires" in msg, (
             f"error message should mention requires, got: {msg!r}"
         )
         # Le message doit orienter vers les alternatives.
-        assert "LOCAL" in msg or "SYSTEM" in msg, (
-            f"error message should suggest LOCAL/SYSTEM scope as "
+        assert "SYSTEM" in msg or "BOARD" in msg, (
+            f"error message should suggest SYSTEM/BOARD scope as "
             f"alternative, got: {msg!r}"
         )
     else:
         raise AssertionError("expected ChannelValidationError")
 
 
-def test_remote_with_multiple_requires_rejected(tmp_path):
-    """REMOTE channel with multiple requires -> ChannelValidationError.
+def test_base_with_multiple_requires_rejected(tmp_path):
+    """BASE channel with multiple requires -> ChannelValidationError.
 
     Variante du test précédent avec plusieurs flags dans requires,
     pour vérifier que le message d'erreur liste bien tous les flags.
@@ -1229,10 +1229,10 @@ def test_remote_with_multiple_requires_rejected(tmp_path):
         raise AssertionError("expected ChannelValidationError")
 
 
-def test_local_with_requires_still_accepted(tmp_path):
-    """LOCAL channel with requires -> OK (sanity check, comportement inchangé).
+def test_system_with_requires_still_accepted(tmp_path):
+    """SYSTEM channel with requires -> OK (sanity check, comportement inchangé).
 
-    Le garde-fou ND4 bis ne s'applique qu'à REMOTE. LOCAL continue
+    Le garde-fou ND4 bis ne s'applique qu'à BASE. SYSTEM continue
     d'accepter requires normalement.
     """
     p = tmp_path / "a.cb"
@@ -1240,36 +1240,36 @@ def test_local_with_requires_still_accepted(tmp_path):
         "id": "BAT_LOW",
         "infoName": "Battery low",
         "type": "digital",
-        "scope": "LOCAL",
+        "scope": "SYSTEM",
         "theme": "vbat",
         "direction": "uplink",
         "requires": ["IS_MAINBOARD"],
     }]})]
     result = canonize(parsed)
     assert len(result.canonical_definitions) == 1
-    assert result.canonical_definitions[0].scope == "LOCAL"
+    assert result.canonical_definitions[0].scope == "SYSTEM"
     assert result.canonical_definitions[0].requires == frozenset({"IS_MAINBOARD"})
 
 
-def test_system_with_requires_still_accepted(tmp_path):
-    """SYSTEM channel with requires -> OK (sanity check, comportement inchangé).
+def test_board_with_requires_still_accepted(tmp_path):
+    """BOARD channel with requires -> OK (sanity check, comportement inchangé).
 
-    Le garde-fou ND4 bis ne s'applique qu'à REMOTE. SYSTEM continue
+    Le garde-fou ND4 bis ne s'applique qu'à BASE. BOARD continue
     d'accepter requires normalement (filtrage par board géré par
-    diffuse_local_channels()).
+    diffuse_system_channels()).
     """
     p = tmp_path / "a.cb"
     parsed = [_parsed(p, {"channels": [{
         "id": "VBAT_PRIVATE",
         "infoName": "Private vbat",
         "type": "digital",
-        "scope": "SYSTEM",
+        "scope": "BOARD",
         "theme": "vbat",
         "requires": ["IS_MAINBOARD"],
     }]})]
     result = canonize(parsed)
     assert len(result.canonical_definitions) == 1
-    assert result.canonical_definitions[0].scope == "SYSTEM"
+    assert result.canonical_definitions[0].scope == "BOARD"
     assert result.canonical_definitions[0].requires == frozenset({"IS_MAINBOARD"})
 
 
@@ -1298,8 +1298,8 @@ def test_id_unique_across_scopes_raises(tmp_path):
     p1 = tmp_path / "a.cb"
     p2 = tmp_path / "b.cb"
     parsed = [
-        _parsed(p1, {"channels": [_ch("FOO", scope="LOCAL")]}),
-        _parsed(p2, {"channels": [_ch("FOO", scope="REMOTE")]}),
+        _parsed(p1, {"channels": [_ch("FOO", scope="SYSTEM")]}),
+        _parsed(p2, {"channels": [_ch("FOO", scope="BASE")]}),
     ]
     try:
         canonize(parsed)
@@ -1405,15 +1405,15 @@ def test_fusion_yaml_entry_order_independent(tmp_path):
 def test_canonical_sort_scope_type_theme_id(tmp_path):
     p = tmp_path / "a.cb"
     parsed = [_parsed(p, {"channels": [
-        _ch("Z_LOCAL_DIGITAL", scope="LOCAL", type_="digital", theme="failsafe"),
-        _ch("A_LOCAL_DIGITAL", scope="LOCAL", type_="digital", theme="failsafe"),
-        _ch("A_LOCAL_ANALOG", scope="LOCAL", type_="analog", theme="failsafe"),
-        _ch("A_SYSTEM_DIGITAL", scope="SYSTEM", type_="digital", theme="failsafe"),
-        _ch("A_REMOTE_DIGITAL", scope="REMOTE", type_="digital", theme="failsafe"),
+        _ch("Z_LOCAL_DIGITAL", scope="SYSTEM", type_="digital", theme="failsafe"),
+        _ch("A_LOCAL_DIGITAL", scope="SYSTEM", type_="digital", theme="failsafe"),
+        _ch("A_LOCAL_ANALOG", scope="SYSTEM", type_="analog", theme="failsafe"),
+        _ch("A_SYSTEM_DIGITAL", scope="BOARD", type_="digital", theme="failsafe"),
+        _ch("A_REMOTE_DIGITAL", scope="BASE", type_="digital", theme="failsafe"),
     ]})]
     result = canonize(parsed)
     ids = [ch.id for ch in result.canonical_definitions]
-    # Scope order: LOCAL < REMOTE < SYSTEM
+    # Scope order: SYSTEM < BASE < BOARD
     assert ids == [
         "A_LOCAL_ANALOG",
         "A_LOCAL_DIGITAL",
@@ -1426,9 +1426,9 @@ def test_canonical_sort_scope_type_theme_id(tmp_path):
 def test_canonical_sort_deterministic(tmp_path):
     p = tmp_path / "a.cb"
     parsed = [_parsed(p, {"channels": [
-        _ch("FOO", scope="LOCAL", type_="digital", theme="failsafe"),
-        _ch("BAR", scope="REMOTE", type_="analog", theme="failsafe"),
-        _ch("BAZ", scope="SYSTEM", type_="digital", theme="failsafe"),
+        _ch("FOO", scope="SYSTEM", type_="digital", theme="failsafe"),
+        _ch("BAR", scope="BASE", type_="analog", theme="failsafe"),
+        _ch("BAZ", scope="BOARD", type_="digital", theme="failsafe"),
     ]})]
     r1 = canonize(parsed)
     r2 = canonize(parsed)
@@ -1439,9 +1439,9 @@ def test_canonical_sort_deterministic(tmp_path):
 def test_canonical_sort_independent_of_input_order(tmp_path):
     p = tmp_path / "a.cb"
     base = [
-        _ch("FOO", scope="LOCAL", type_="digital", theme="failsafe"),
-        _ch("BAR", scope="REMOTE", type_="analog", theme="failsafe"),
-        _ch("BAZ", scope="SYSTEM", type_="digital", theme="failsafe"),
+        _ch("FOO", scope="SYSTEM", type_="digital", theme="failsafe"),
+        _ch("BAR", scope="BASE", type_="analog", theme="failsafe"),
+        _ch("BAZ", scope="BOARD", type_="digital", theme="failsafe"),
     ]
     parsed_a = [_parsed(p, {"channels": base})]
     parsed_b = [_parsed(p, {"channels": list(reversed(base))})]
@@ -1547,7 +1547,7 @@ def test_real_failsafe_cb_validates():
     assert ch.id == "FAILSAFE"
     assert ch.info_name == "Failsafe aggregator"
     assert ch.type == "digital"
-    assert ch.scope == "LOCAL"
+    assert ch.scope == "SYSTEM"
     assert ch.theme == "failsafe"
     # A2.1 : the .cb uses `direction: both_or`, so the wire
     # direction is carried by `direction_or` (not `direction`).
@@ -1572,7 +1572,7 @@ def test_real_vbat_failsafe_cb_validates():
     assert ch.id == "FAILSAFE_VBAT"
     assert ch.info_name == "VBAT failsafe contributor"
     assert ch.type == "digital"
-    assert ch.scope == "LOCAL"
+    assert ch.scope == "SYSTEM"
     assert ch.theme == "failsafe"
     # A2.1 : vbat_failsafe.cb uses `direction: uplink_or` (a
     # contributor that OR-merges into the FAILSAFE aggregator).
@@ -1598,7 +1598,7 @@ def test_real_both_cb_files_together():
     result = canonize(parsed)
     assert len(result.canonical_definitions) == 2
     ids = [ch.id for ch in result.canonical_definitions]
-    # Both are LOCAL, digital, failsafe → sorted by id.
+    # Both are SYSTEM, digital, failsafe → sorted by id.
     assert ids == ["FAILSAFE", "FAILSAFE_VBAT"]
 
 

@@ -59,7 +59,7 @@ uint8_t combus_handshake_tryDecode(
  * @details LY4 — the local MD5 pointer is now passed explicitly (was
  *   hardcoded to `combus::wire::kCombusComBusMd5` before).  This lets the
  *   RX path compare against the per-link MD5 resolved at init from
- *   `link->layer` (REMOTE / LOCAL / FULL), instead of always against
+ *   `link->layer` (BASE / SYSTEM / FULL), instead of always against
  *   the FULL view.
  *
  * @param[in] localMd5   Pointer to 16 bytes — the locally-generated MD5

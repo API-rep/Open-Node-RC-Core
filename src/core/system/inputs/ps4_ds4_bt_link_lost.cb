@@ -7,10 +7,10 @@
 # HAS_REMOTE_LINK_LOST_FALLBACK is defined.
 #
 # Notes:
-# - LOCAL scope: the channel is shared by all boards composing the local
+# - SYSTEM scope: the channel is shared by all boards composing the local
 #   node. The mainboard (or any board connected to a PS4 controller over
 #   Bluetooth) publishes the local "PS4 BT link alive" state each cycle.
-#   Other boards consume it through the same LOCAL bus.
+#   Other boards consume it through the same SYSTEM bus.
 # - Direction [both_or]: uplink + downlink + OR-merge on import.  Any
 #   board may write (re-arm each cycle to false = healthy) or read
 #   (react) the channel.  At import, any source reporting fault (true)
@@ -39,7 +39,7 @@ channels:
   - id: PS4_DS4_BT_LINK_LOST
     infoName: "PS4 DualShock Bluetooth link lost"
     type: digital
-    scope: SYSTEM        # private to the board owning the PS4 backend (NOT shared)
+    scope: BOARD        # private to the board owning the PS4 backend (NOT shared)
     theme: input          # generic "input subsystem" theme
-    direction: none       # SYSTEM scope: pure in-board state, no wire transport
+    direction: none       # BOARD scope: pure in-board state, no wire transport
     value: high         # default to "lost" (failsafe-by-default — see chain reset)

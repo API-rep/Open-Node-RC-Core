@@ -59,7 +59,7 @@ from scripts.combus_builder.flags import BuildContext
 def _make_analog(value=None):
     """Build a minimal analog ChannelDefinition for tests."""
     return ChannelDefinition(
-        id="X", info_name="x", type="analog", scope="REMOTE",
+        id="X", info_name="x", type="analog", scope="BASE",
         theme="core", direction=frozenset({"uplink"}),
         direction_or=frozenset(), requires=frozenset(), source_path=Path("/tmp/x.cb"),
         raw={}, value=value,
@@ -69,7 +69,7 @@ def _make_analog(value=None):
 def _make_digital(value=None):
     """Build a minimal digital ChannelDefinition for tests."""
     return ChannelDefinition(
-        id="Y", info_name="y", type="digital", scope="REMOTE",
+        id="Y", info_name="y", type="digital", scope="BASE",
         theme="core", direction=frozenset({"uplink"}),
         direction_or=frozenset(), requires=frozenset(), source_path=Path("/tmp/x.cb"),
         raw={}, value=value,
@@ -79,7 +79,7 @@ def _make_digital(value=None):
 def _raw_channel(
     type_: str = "analog",
     value=...,  # sentinel: use ... to mean "absent"
-    scope: str = "REMOTE",
+    scope: str = "BASE",
     theme: str = "core",
     cid: str = "X",
     info_name: str = "x",
@@ -427,7 +427,7 @@ def test_emit_channel_init_writes_runtime_value_analog_cbus_min_val():
     assert len(body) == 1
     line = body[0]
     assert ".value = CbusMinVal," in line
-    assert ".layer = ChanLayer::REMOTE," in line
+    assert ".layer = ChanLayer::BASE," in line
     # Last field has no trailing comma in the C++ initializer (closed by `, // X`).
     assert ".direction = Direction::Uplink }" in line or ".direction = Direction::Uplink" in line
 

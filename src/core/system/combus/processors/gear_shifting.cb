@@ -1,4 +1,4 @@
-# gear_shifting.cb — Gear shifting flag (REMOTE)
+# gear_shifting.cb — Gear shifting flag (BASE)
 #
 # - GEAR_SHIFTING: written by SIM_GEAR chain (upshift-damp proc).
 #   Set to 1 during the upshift damp window (upshiftDampMs) to signal
@@ -21,5 +21,5 @@ channels:
   infoName: "Gear shifting in progress (1=during upshift damp window)"
   type: digital
   theme: core
-  scope: REMOTE
+  scope: BASE
   direction: none

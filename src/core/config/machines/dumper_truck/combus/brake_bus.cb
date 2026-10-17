@@ -1,5 +1,5 @@
 # brake_bus.cb --- Brake pedal input (L2)
-# A9.8: REMOTE, analog, downlink.
+# A9.8: BASE, analog, downlink.
 # 
 # - Written by the input module (PS4 controller, L2 trigger).
 # - Read by sim_brake (throttle chain), sound_module (legacy), dashboard (debug).
@@ -14,6 +14,6 @@ channels:
 - id: BRAKE_BUS
   infoName: "Brake pedal"
   type: analog
-  scope: REMOTE
+  scope: BASE
   theme: core
   direction: downlink

@@ -13,9 +13,9 @@
  *
  *   Rules:
  *   - UNDEFINED → write denied for all callers (safety)
- *   - SYSTEM    → only local firmware caller may write
- *   - LOCAL     → local firmware caller + extension boards caller of same node)
- *   - REMOTE    → any source (local + extensions + remote nodes caller)
+ *   - BOARD     → only local firmware caller may write
+ *   - SYSTEM    → local firmware caller + extension boards caller of same node)
+ *   - BASE      → any source (local + extensions + remote nodes caller)
  *****************************************************************************/
 #pragma once
 
@@ -89,7 +89,7 @@ inline bool combus_set_digital(ComBus& bus, const std::optional<DigitalComBusID>
  */
 
 // RL3: combus_set_runlevel() removed — runLevel is now a plain analog channel (RUNLEVEL).
-//       Write it via combus_set_analog(bus, AnalogComBusID::RUNLEVEL, (uint16_t)rl, ChanLayer::LOCAL).
+//       Write it via combus_set_analog(bus, AnalogComBusID::RUNLEVEL, (uint16_t)rl, ChanLayer::SYSTEM).
 
 
 // =============================================================================
@@ -124,23 +124,23 @@ struct CbAnalog {
 };
 
 // =============================================================================
-// 4. INTERNAL USAGE OVERLOADS (SYSTEM-level access)
+// 4. INTERNAL USAGE OVERLOADS (BOARD-level access)
 // =============================================================================
 
 /**
- * @brief Internal overload for processors running with SYSTEM-level access.
+ * @brief Internal overload for processors running with BOARD-level access.
  * @details Used by CbProcFn implementations (local firmware).
  */
 inline bool combus_set_analog(ComBus& bus, AnalogComBusID ch, uint16_t val) {
-    return combus_set_analog(bus, ch, val, ChanLayer::SYSTEM);
+    return combus_set_analog(bus, ch, val, ChanLayer::BOARD);
 }
 
 /**
- * @brief Internal overload for processors running with SYSTEM-level access.
+ * @brief Internal overload for processors running with BOARD-level access.
  * @details Used by CbProcFn implementations (local firmware).
  */
 inline bool combus_set_digital(ComBus& bus, DigitalComBusID ch, bool val) {
-    return combus_set_digital(bus, ch, val, ChanLayer::SYSTEM);
+    return combus_set_digital(bus, ch, val, ChanLayer::BOARD);
 }
 
 // RL3: inline combus_set_runlevel() overload removed — runLevel is a plain analog channel.

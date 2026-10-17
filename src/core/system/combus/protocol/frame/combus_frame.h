@@ -14,7 +14,7 @@
  * @endcode
  *
  * RL2: header is now 4 bytes (was 5 before — runLevel removed from header,
- * travels as a standard combus channel RUNLEVEL, scope LOCAL).
+ * travels as a standard combus channel RUNLEVEL, scope SYSTEM).
  *
  * `seq` semantics:
  *   - control frames: rolling counter in 1..255 (wraps 255 -> 1, never 0)
@@ -86,8 +86,8 @@ static constexpr uint8_t CombusFrameMinLen = CombusFrameHeaderLen + sizeof(uint8
  *
  * LY2 — the codec iterates only over `comBus.analogBus[0..analogWireEnd)`
  * and `comBus.digitalBus[0..digitalWireEnd)`.  These two counters are
- * resolved at TX init time from the link's `ChanLayer` (REMOTE → CH_COUNT
- * of the Remote view, LOCAL → CH_COUNT of the Local view, FULL → CH_COUNT
+ * resolved at TX init time from the link's `ChanLayer` (BASE → CH_COUNT
+ * of the Base view, SYSTEM → CH_COUNT of the System view, FULL → CH_COUNT
  * of the Full view).  This is the ONLY behavioural change vs. the
  * pre-LY2 codec — the wire payload is now sized to the layer's prefix
  * length instead of the full enum set.
@@ -105,7 +105,7 @@ static constexpr uint8_t CombusFrameMinLen = CombusFrameHeaderLen + sizeof(uint8
  *
  * @note FS2 — the legacy `failSafe` parameter has been removed.  The
  *   failsafe state is now carried by the `DigitalComBusID::FAILSAFE`
- *   channel (LOCAL, both_or) — no out-of-band bit needed.
+ *   channel (SYSTEM, both_or) — no out-of-band bit needed.
  */
 
 uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
@@ -150,7 +150,7 @@ bool combus_frame_decode( const ComBusFrameCfg& cfg,
  *  provided ComBus arrays. Caller must ensure array sizes match nAnalog
  *  and nDigital in the frame.
  *
- * @note Caller param pass the ChanLayer identity (typically REMOTE for any
+ * @note Caller param pass the ChanLayer identity (typically BASE for any
  *  RX-only node) to enforce channel access security. If the caller layer
  *  does not match the channel's layer, the write will be silently rejected by
  *  combus_set_*() and the channel will not be updated.

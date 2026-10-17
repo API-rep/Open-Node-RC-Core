@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 ND6 tests — A2.1 representation: `direction` (frozenset) + `direction_or`
-(frozenset), mutually exclusive. No `ch.both_or` bool. No LOCAL-only
-restriction on `both_or` (it is accepted on LOCAL and REMOTE).
+(frozenset), mutually exclusive. No `ch.both_or` bool. No SYSTEM-only
+restriction on `both_or` (it is accepted on SYSTEM and BASE).
 
 This file replaces the previous test_nd6_both_or.py which tested the
 old `ch.both_or` bool field. The old tests are removed because they
@@ -11,15 +11,15 @@ field), and its semantics are carried by `direction_or`.
 
 Coverage:
   - canon/channels.py: `both_or` is a direction token, accepted on
-    LOCAL and REMOTE, rejected on SYSTEM and on analog.
+    SYSTEM and BASE, rejected on BOARD and on analog.
   - diffusion.py: family-based rule (uplink-ish, downlink-ish,
     both-ish). 2 uplink-ish = fatal, 1 uplink-ish → absentes
     `downlink`, both-ish only → absentes `both`/`both_or`,
     both-ish + uplink/downlink = fatal sémantique, both + both_or
     = warning non fatal.
-  - md5.py: payload includes `direction` + `direction_or`. LOCAL
+  - md5.py: payload includes `direction` + `direction_or`. SYSTEM
     view applies ONE_WAY canonisation (uplink/downlink/uplink_or/
-    downlink_or → same hash). REMOTE view: no canonisation.
+    downlink_or → same hash). BASE view: no canonisation.
   - generator.py: bitmask via `effective_direction`, `.bothOr = true`
     iff `direction_or == {uplink, downlink}`.
 """
@@ -53,7 +53,7 @@ from combus_builder.md5 import compute_view_hash
 def _make_channel(
     cid: str = "D1",
     *,
-    scope: str = "LOCAL",
+    scope: str = "SYSTEM",
     ctype: str = "digital",
     direction: str = "both_or",
     theme: str = "core",
@@ -82,7 +82,7 @@ def _canon_from_yamls(*raws: dict) -> list:
     return out
 
 
-def _view_with(channels: list, name: str = "combus_local") -> View:
+def _view_with(channels: list, name: str = "combus_system") -> View:
     """Build a View from a list of ChannelDefinitions."""
     vcs = [
         ViewChannel(numeric_id=i, ch=ch, direction_bits=0)
@@ -98,20 +98,20 @@ def _view_with(channels: list, name: str = "combus_local") -> View:
 
 
 # =============================================================================
-# CANON: both_or accepted on LOCAL and REMOTE, rejected on SYSTEM and analog
+# CANON: both_or accepted on SYSTEM and BASE, rejected on BOARD and analog
 # =============================================================================
 
-def test_canon_both_or_accepted_for_local_digital():
-    """direction=both_or with scope=LOCAL + type=digital → accepted."""
+def test_canon_both_or_accepted_for_system_digital():
+    """direction=both_or with scope=SYSTEM + type=digital → accepted."""
     raw = _make_channel(direction="both_or")
     chs = _canon_from_yamls(raw)
     assert chs[0].direction == frozenset()
     assert chs[0].direction_or == frozenset({"uplink", "downlink"})
 
 
-def test_canon_both_or_accepted_for_remote_digital():
-    """direction=both_or with scope=REMOTE + type=digital → accepted (A2.1)."""
-    raw = _make_channel(scope="REMOTE", direction="both_or")
+def test_canon_both_or_accepted_for_base_digital():
+    """direction=both_or with scope=BASE + type=digital → accepted (A2.1)."""
+    raw = _make_channel(scope="BASE", direction="both_or")
     chs = _canon_from_yamls(raw)
     assert chs[0].direction == frozenset()
     assert chs[0].direction_or == frozenset({"uplink", "downlink"})
@@ -133,12 +133,12 @@ def test_canon_both_or_default_false_when_token_is_uplink():
     assert chs[0].direction_or == frozenset()
 
 
-def test_canon_both_or_rejected_for_system_scope():
-    """direction=both_or with scope=SYSTEM → explicit rejection."""
-    raw = _make_channel(scope="SYSTEM", direction="both_or")
+def test_canon_both_or_rejected_for_board_scope():
+    """direction=both_or with scope=BOARD → explicit rejection."""
+    raw = _make_channel(scope="BOARD", direction="both_or")
     with pytest.raises(ChannelValidationError) as exc_info:
         validate_channel(Path("test.cb"), raw, 0)
-    assert "both_or" in str(exc_info.value) or "SYSTEM" in str(exc_info.value)
+    assert "both_or" in str(exc_info.value) or "BOARD" in str(exc_info.value)
 
 
 def test_canon_both_or_rejected_for_analog_type():
@@ -262,27 +262,27 @@ def test_diffusion_none_only_no_synthesis_no_warning():
 # MD5: groups of equality (A2.1)
 # =============================================================================
 
-def test_md5_remote_distinguishes_all_7_tokens():
-    """REMOTE view: 7 tokens → 7 hashs distincts (no ONE_WAY)."""
+def test_md5_base_distinguishes_all_7_tokens():
+    """BASE view: 7 tokens → 7 hashs distincts (no ONE_WAY)."""
     tokens = ["uplink", "downlink", "both", "none",
               "uplink_or", "downlink_or", "both_or"]
     hashes = set()
     for tok in tokens:
         chs = _canon_from_yamls(_make_channel(direction=tok))
-        v = _view_with(chs, name="combus_remote")
+        v = _view_with(chs, name="combus_base")
         hashes.add(compute_view_hash(v).md5_hex)
     assert len(hashes) == 7
 
 
-def test_md5_local_one_way_groups():
-    """LOCAL view: ONE_WAY canonisation.
+def test_md5_system_one_way_groups():
+    """SYSTEM view: ONE_WAY canonisation.
     Groups: {uplink, downlink, uplink_or, downlink_or} | {both} | {both_or} | {none}."""
     tokens = ["uplink", "downlink", "both", "none",
               "uplink_or", "downlink_or", "both_or"]
     hash_to_tokens: dict[str, list[str]] = {}
     for tok in tokens:
         chs = _canon_from_yamls(_make_channel(direction=tok))
-        v = _view_with(chs, name="combus_local")
+        v = _view_with(chs, name="combus_system")
         h = compute_view_hash(v).md5_hex
         hash_to_tokens.setdefault(h, []).append(tok)
     # Expect 4 groups.
@@ -305,30 +305,30 @@ def test_md5_both_and_both_or_produce_different_hash():
     """`both` et `both_or` produisent des hash différents (même vue)."""
     chs_both = _canon_from_yamls(_make_channel(direction="both"))
     chs_both_or = _canon_from_yamls(_make_channel(direction="both_or"))
-    v_both = _view_with(chs_both, name="combus_remote")
-    v_both_or = _view_with(chs_both_or, name="combus_remote")
+    v_both = _view_with(chs_both, name="combus_base")
+    v_both_or = _view_with(chs_both_or, name="combus_base")
     h_both = compute_view_hash(v_both).md5_hex
     h_both_or = compute_view_hash(v_both_or).md5_hex
     assert h_both != h_both_or
 
 
-def test_md5_uplink_and_uplink_or_produce_different_hash_remote():
-    """REMOTE: `uplink` et `uplink_or` produisent des hash différents."""
+def test_md5_uplink_and_uplink_or_produce_different_hash_base():
+    """BASE: `uplink` et `uplink_or` produisent des hash différents."""
     chs_uplink = _canon_from_yamls(_make_channel(direction="uplink"))
     chs_uplink_or = _canon_from_yamls(_make_channel(direction="uplink_or"))
-    v_uplink = _view_with(chs_uplink, name="combus_remote")
-    v_uplink_or = _view_with(chs_uplink_or, name="combus_remote")
+    v_uplink = _view_with(chs_uplink, name="combus_base")
+    v_uplink_or = _view_with(chs_uplink_or, name="combus_base")
     h_uplink = compute_view_hash(v_uplink).md5_hex
     h_uplink_or = compute_view_hash(v_uplink_or).md5_hex
     assert h_uplink != h_uplink_or
 
 
-def test_md5_uplink_and_uplink_or_produce_same_hash_local():
-    """LOCAL: `uplink` et `uplink_or` produisent le même hash (ONE_WAY)."""
+def test_md5_uplink_and_uplink_or_produce_same_hash_system():
+    """SYSTEM: `uplink` et `uplink_or` produisent le même hash (ONE_WAY)."""
     chs_uplink = _canon_from_yamls(_make_channel(direction="uplink"))
     chs_uplink_or = _canon_from_yamls(_make_channel(direction="uplink_or"))
-    v_uplink = _view_with(chs_uplink, name="combus_local")
-    v_uplink_or = _view_with(chs_uplink_or, name="combus_local")
+    v_uplink = _view_with(chs_uplink, name="combus_system")
+    v_uplink_or = _view_with(chs_uplink_or, name="combus_system")
     h_uplink = compute_view_hash(v_uplink).md5_hex
     h_uplink_or = compute_view_hash(v_uplink_or).md5_hex
     assert h_uplink == h_uplink_or

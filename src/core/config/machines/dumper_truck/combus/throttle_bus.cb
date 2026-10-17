@@ -9,6 +9,6 @@ channels:
   infoName: "Throttle"
   type: analog
   value: CbusNeutral
-  scope: REMOTE
+  scope: BASE
   theme: core
   direction: downlink

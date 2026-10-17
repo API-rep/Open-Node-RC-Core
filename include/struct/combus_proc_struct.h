@@ -12,7 +12,7 @@
  *     patterns; intermediate procs use `CbProc::inCh` / `outCh`.
  *   - Each proc declares exactly one secondary input (`inCh`) and at most
  *     one output (`outCh`) — both optional.  No channel IDs inside `cfg`.
- *   - Processors run with SYSTEM-level access (local firmware).
+ *   - Processors run with BOARD-level access (local firmware).
  *
  *   **Runner contract (cb_chain_update):**
  *   1. Seed `value` from `CbChain::inCh` (0 when inCh = nullopt).
@@ -132,7 +132,7 @@ struct CbProc {
  *   Remaining procs are skipped when `claimed = true`; the final commit to
  *   `outCh` still happens (value = claimed value).
  *
- *   Processors run with SYSTEM-level access (local firmware).
+ *   Processors run with BOARD-level access (local firmware).
  */
 struct CbChain {
     const char*  name;  ///< Human-readable chain name (debug / dashboard).

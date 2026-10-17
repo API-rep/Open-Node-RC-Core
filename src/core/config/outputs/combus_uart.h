@@ -17,7 +17,7 @@
 
 #include <stdint.h>
 #include <core/system/combus/protocol/frame/combus_frame.h>
-#include <core/config/machines/machine_type.h>        // AnalogComBusRemoteID, DigitalComBusRemoteID (transitive via combus_remote.h)
+#include <core/config/machines/machine_type.h>        // AnalogComBusBaseID, DigitalComBusBaseID (transitive via combus_base.h)
 
 /// UART transport physical cap — chosen as uint8_t safety ceiling (no hardware limit).
 static constexpr uint8_t CombusPhysUartMax = 255u;
@@ -37,14 +37,14 @@ static constexpr uint8_t CombusPhysUartMax = 255u;
  *
  *   Frame layout:
  *     6 bytes — fixed header (SOF + n_analog + n_dig_bytes + seq + run_level + flags)
- *     ceil(DigitalComBusRemoteID::CH_COUNT / 8) — digital channels packed LSB-first
- *     AnalogComBusRemoteID::CH_COUNT × 2          — analog channels as uint16_t LE
+ *     ceil(DigitalComBusBaseID::CH_COUNT / 8) — digital channels packed LSB-first
+ *     AnalogComBusBaseID::CH_COUNT × 2          — analog channels as uint16_t LE
  *     1 byte  — CRC-8
  */
 
 
 // NOTE (temporaire) : la taille de trame est actuellement calculée sur la
-// seule base du contrat REMOTE (CH_COUNT), en supposant que tout canal REMOTE
+// seule référence du contrat BASE (CH_COUNT), en supposant que tout canal BASE
 // est systématiquement transmis. C'est l'hypothèse la plus simple et sûre
 // pour l'instant. Cette hypothèse devra être revue lorsque des flags
 // d'émission conditionnels seront introduits (ex: retour télémétrique
@@ -54,8 +54,8 @@ static constexpr uint8_t CombusPhysUartMax = 255u;
 // large.
 static constexpr uint8_t ComBusUartFrameSize =
     CombusFrameHeaderLen
-  + ((static_cast<uint8_t>(DigitalComBusRemoteID::CH_COUNT) + 7u) / 8u)
-  +  (static_cast<uint8_t>(AnalogComBusRemoteID::CH_COUNT)  * 2u)
+  + ((static_cast<uint8_t>(DigitalComBusBaseID::CH_COUNT) + 7u) / 8u)
+  +  (static_cast<uint8_t>(AnalogComBusBaseID::CH_COUNT)  * 2u)
   + 1u;
 
 

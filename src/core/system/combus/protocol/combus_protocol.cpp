@@ -58,21 +58,21 @@ void combus_protocol_init( uint8_t linkIdx, ComBusLink* link )
         //    (to embed in the magic frame) and RX (to compare against
         //    the on-wire MD5).  No switch repeated at every frame.
         //
-        //    Only REMOTE, LOCAL and SYSTEM are valid for a handshake link.
+        //    Only BASE, SYSTEM and BOARD are valid for a handshake link.
         //    UNDEFINED is a config error (forgotten / missing layer) and
         //    triggers a FATAL halt — a silent rejection would mask the
         //    bug instead of revealing it (same pattern as the
         //    "no pool registered" FATAL in uart_com.cpp and the
         //    UNDEFINED FATAL in combus_tx_init()).
     switch (link->layer) {
-        case ChanLayer::REMOTE:
-            link->handshakeCtx->expectedMd5 = combus::wire::kCombusRemoteComBusMd5;
-            break;
-        case ChanLayer::LOCAL:
-            link->handshakeCtx->expectedMd5 = combus::wire::kCombusLocalComBusMd5;
+        case ChanLayer::BASE:
+            link->handshakeCtx->expectedMd5 = combus::wire::kCombusBaseComBusMd5;
             break;
         case ChanLayer::SYSTEM:
-            // SYSTEM — reserved for a future intra-device loopback.
+            link->handshakeCtx->expectedMd5 = combus::wire::kCombusSystemComBusMd5;
+            break;
+        case ChanLayer::BOARD:
+            // BOARD — reserved for a future intra-device loopback.
             // Falls back to the FULL view (machine node default).
             link->handshakeCtx->expectedMd5 = combus::wire::kCombusComBusMd5;
             break;

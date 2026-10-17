@@ -58,9 +58,9 @@ ND1 (multiboard) — 2026-09-13:
       3. Calls generate() once per board with a per-board
          filename_prefix, producing per-board artefacts
          (combus_<prefix>_ids.h, combus_<prefix>.h, combus_<prefix>.cpp,
-          combus_local_<prefix>_ids.h, combus_remote_<prefix>_ids.h,
-          combus_<prefix>_md5.h, combus_local_<prefix>_md5.h,
-          combus_remote_<prefix>_md5.h).
+          combus_system_<prefix>_ids.h, combus_base_<prefix>_ids.h,
+          combus_<prefix>_md5.h, combus_system_<prefix>_md5.h,
+          combus_base_<prefix>_md5.h).
          combus_wire_common.h is shared (not prefixed).
   - Legacy single-board mode (no sister sub-env detected) is
     STRICTLY UNCHANGED: same artefacts, same names, same behaviour.
@@ -110,12 +110,12 @@ EXPECTED_ARTIFACTS = (
     "combus.h",
     "combus.cpp",
     "combus_ids.h",
-    # combus_local / combus_remote: ids only (Phase 2).
-    "combus_local_ids.h",
-    "combus_remote_ids.h",
+    # combus_system / combus_base: ids only (Phase 2).
+    "combus_system_ids.h",
+    "combus_base_ids.h",
     # MD5 artefacts (A7). All 3 views are hashed.
-    "combus_local_md5.h",
-    "combus_remote_md5.h",
+    "combus_system_md5.h",
+    "combus_base_md5.h",
     "combus_md5.h",
     "combus_wire_common.h",
 )
@@ -223,11 +223,11 @@ def _expected_artifacts_for_node(
             f"combus_{prefix}_ids.h",
             f"combus_{prefix}.h",
             f"combus_{prefix}.cpp",
-            f"combus_local_{prefix}_ids.h",
-            f"combus_remote_{prefix}_ids.h",
+            f"combus_system_{prefix}_ids.h",
+            f"combus_base_{prefix}_ids.h",
             f"combus_{prefix}_md5.h",
-            f"combus_local_{prefix}_md5.h",
-            f"combus_remote_{prefix}_md5.h",
+            f"combus_system_{prefix}_md5.h",
+            f"combus_base_{prefix}_md5.h",
         ])
     return artifacts
 
@@ -762,26 +762,26 @@ def _generate_combus_action(target, source, env):
         print(
             f"[combus_scons_action] generated "
             f"combus ({sel.full.ch_count} ch, WIRE_END={sel.full.wire_end}), "
-            f"combus_local ({sel.local.ch_count} ch), "
-            f"combus_remote ({sel.remote.ch_count} ch) "
+            f"combus_system ({sel.system.ch_count} ch), "
+            f"combus_base ({sel.base.ch_count} ch) "
             f"-> {staging_dir}"
         )
     else:
         # --- 7b. ND1+ND2 node mode: one generate() call per board -------
-        # ND2: LOCAL channels are diffused across boards BEFORE
+        # ND2: SYSTEM channels are diffused across boards BEFORE
         # canonize(). This requires resolving every board's
         # BuildContext first (so diffusion knows which declarations
         # are active for which board), then calling
-        # diffuse_local_channels(), then calling canonize() PER
+        # diffuse_system_channels(), then calling canonize() PER
         # BOARD on the diffused data.
         #
         # The .cb pool is repo-wide and board-agnostic
         # (discover_and_parse ran once above), but the canonised
-        # channel list is now PER BOARD (it depends on which LOCAL
+        # channel list is now PER BOARD (it depends on which SYSTEM
         # channels are active for that board after diffusion).
         from scripts.combus_builder.diffusion import (
             DiffusionError,
-            diffuse_local_channels,
+            diffuse_system_channels,
         )
         from scripts.combus_builder.node_context import NodeContext
 
@@ -848,9 +848,9 @@ def _generate_combus_action(target, source, env):
             is_node=True,
         )
 
-        # --- 7b.2. Diffuse LOCAL channels across boards ---
+        # --- 7b.2. Diffuse SYSTEM channels across boards ---
         try:
-            diffused = diffuse_local_channels(parsed, node_resolved)
+            diffused = diffuse_system_channels(parsed, node_resolved)
         except DiffusionError as e:
             if staging_dir.exists():
                 shutil.rmtree(staging_dir)
@@ -916,8 +916,8 @@ def _generate_combus_action(target, source, env):
                 f"{len(board_ctx.defines)} defines, "
                 f"{len(board_ctx.defines_with_value)} valued): "
                 f"combus ({sel.full.ch_count} ch, WIRE_END={sel.full.wire_end}), "
-                f"combus_local ({sel.local.ch_count} ch), "
-                f"combus_remote ({sel.remote.ch_count} ch) "
+                f"combus_system ({sel.system.ch_count} ch), "
+                f"combus_base ({sel.base.ch_count} ch) "
                 f"-> {staging_dir}"
             )
 
@@ -1052,11 +1052,11 @@ def _register_deferred_task(env) -> None:
                     str(out_dir / f"combus_{prefix}_ids.h"),
                     str(out_dir / f"combus_{prefix}.h"),
                     str(out_dir / f"combus_{prefix}.cpp"),
-                    str(out_dir / f"combus_local_{prefix}_ids.h"),
-                    str(out_dir / f"combus_remote_{prefix}_ids.h"),
+                    str(out_dir / f"combus_system_{prefix}_ids.h"),
+                    str(out_dir / f"combus_base_{prefix}_ids.h"),
                     str(out_dir / f"combus_{prefix}_md5.h"),
-                    str(out_dir / f"combus_local_{prefix}_md5.h"),
-                    str(out_dir / f"combus_remote_{prefix}_md5.h"),
+                    str(out_dir / f"combus_system_{prefix}_md5.h"),
+                    str(out_dir / f"combus_base_{prefix}_md5.h"),
                 ])
     except Exception:
         # If node detection fails at registration time, fall back to

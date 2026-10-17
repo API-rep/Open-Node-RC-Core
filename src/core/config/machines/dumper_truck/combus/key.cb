@@ -1,4 +1,4 @@
-# key.cb — Engine key / runlevel channels (REMOTE)
+# key.cb — Engine key / runlevel channels (BASE)
 #
 # - KEY_BTN: physical key switch input (TRIANGLE on PS4 in dumper-truck layout).
 #   Written by input module (PS4 controller).
@@ -10,7 +10,7 @@
 # Theme: power / runlevel.
 # Migration note: these channels were previously declared in
 # src/machines/config/machines/volvo_A60H_bruder/combus/combus_ids_*.inc
-# as REMOTE — now declared here at the TYPE level (generic to all dumper-trucks).
+# as BASE — now declared here at the TYPE level (generic to all dumper-trucks).
 
 channels:
 
@@ -22,12 +22,12 @@ channels:
   infoName: "Engine key button (raw, TRIANGLE)"
   type: digital
   theme: core
-  scope: REMOTE
+  scope: BASE
   direction: downlink
 
 - id: KEY_ACTIVE
   infoName: "Engine active flag (0=off, 1=on)"
   type: digital
   theme: core
-  scope: REMOTE
+  scope: BASE
   direction: none

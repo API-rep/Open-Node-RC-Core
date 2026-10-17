@@ -3,15 +3,15 @@
 combus_builder/md5.py - A7.2: MD5 computation for the three combus views.
 
 Generates a deterministic 16-byte MD5 hash for each of the three views:
-  - combus_remote : REMOTE only (what crosses the wire)
-  - combus_local  : REMOTE + LOCAL (inter-node alignment)
-  - combus        : REMOTE + LOCAL + SYSTEM (full picture)
+  - combus_base : BASE only (what crosses the wire)
+  - combus_system  : BASE + SYSTEM (inter-node alignment)
+  - combus        : BASE + SYSTEM + BOARD (full picture)
 
 Inputs (identical for all three, per A7.1):
   - id, type, scope, theme, direction (sorted list), infoName
-  - Channels in canonical order: canon `sort_key()` (scope LOCAL<REMOTE<SYSTEM,
+  - Channels in canonical order: canon `sort_key()` (scope SYSTEM<BASE<BOARD,
     type, theme, id). NOT the key of _select_view() in generator.py, which
-    numbers the IDs with REMOTE<LOCAL<SYSTEM.
+    numbers the IDs with BASE<SYSTEM<BOARD.
 
 Independence:
   - file discovery order (A3 stable output -> A5 stable order)
@@ -27,8 +27,8 @@ so a mismatch produces a precise diagnostic (option B).
 
 Architecture (A7.2):
   - 3 view-specific headers:
-      combus_remote_md5.h  ->  kCombusRemoteComBusMd5[16] + Hex
-      combus_local_md5.h   ->  kCombusLocalComBusMd5[16]  + Hex
+      combus_base_md5.h  ->  kCombusBaseComBusMd5[16] + Hex
+      combus_system_md5.h   ->  kCombusSystemComBusMd5[16]  + Hex
       combus_md5.h         ->  kCombusComBusMd5[16]       + Hex
   - 1 shared header:
       combus_wire_common.h ->  kProjectVersionMajor/Minor,
@@ -41,11 +41,11 @@ Architecture (A7.2):
     constexpr at namespace scope in some configurations).
 
 A7.2 history:
-  - A7: 2 hashes (combus_local + combus_remote), with kMachineType.
-  - A7.1: simplification to combus_remote only + kMachineType removed.
-  - A7.2: restore the 3 views (combus + combus_local + combus_remote).
+  - A7: 2 hashes (combus_system + combus_base), with kMachineType.
+  - A7.1: simplification to combus_base only + kMachineType removed.
+  - A7.2: restore the 3 views (combus + combus_system + combus_base).
     kMachineType stays removed. The shared constants pattern replaces
-    the A7.1 'emit shared only in combus_local_md5.h' hack.
+    the A7.1 'emit shared only in combus_system_md5.h' hack.
 """
 
 from __future__ import annotations
@@ -70,7 +70,7 @@ def _canonical_direction_for_hash(
     """Canonise `direction` + `direction_or` for MD5 hashing (ND7 — ONE_WAY, A2.1).
 
     Rationale (ND7):
-      In a multi-board node, the same LOCAL channel can legitimately
+      In a multi-board node, the same SYSTEM channel can legitimately
       appear as `uplink` on one board and `downlink` on another — this
       is a role mirror, not a contract drift. The MD5 must NOT flag
       this as a divergence between boards.
@@ -118,15 +118,15 @@ def _view_channel_canonical(vc: ViewChannel, apply_one_way: bool = False) -> dic
 
     The dict keys are a fixed list (no per-channel metadata). The direction
     is canonised via `_canonical_direction_for_hash()` (ND7 ONE_WAY) ONLY
-    when `apply_one_way` is True — i.e. for the LOCAL view. For REMOTE and
+    when `apply_one_way` is True — i.e. for the SYSTEM view. For BASE and
     full views, the raw direction is kept (sorted) so that real contract
-    signals (uplink vs downlink on REMOTE channels) are preserved.
+    signals (uplink vs downlink on BASE channels) are preserved.
 
     `infoName` is included so that renaming a debug label changes the hash.
 
     A2.1 (2c-bis) : `direction_or` is emitted as a separate field so
     that two channels identical except on the anti-oscillation flag
-    produce different hashes. This matters for the LOCAL view: `both`
+    produce different hashes. This matters for the SYSTEM view: `both`
     and `both_or` share the same frozenset direction
     (`{uplink, downlink}`) but are treated as a real config
     divergence by diffusion.py (warning, not don't-care). The hash
@@ -140,7 +140,7 @@ def _view_channel_canonical(vc: ViewChannel, apply_one_way: bool = False) -> dic
     """
     if apply_one_way:
         direction = _canonical_direction_for_hash(vc.ch.direction, vc.ch.direction_or)
-        # A2.1 (2c-bis) : for LOCAL, direction_or must also be
+        # A2.1 (2c-bis) : for SYSTEM, direction_or must also be
         # canonised so that uplink/downlink/uplink_or/downlink_or
         # all collapse to the same hash. The ONE_WAY canonisation
         # neutralises the uplink/downlink distinction AND the
@@ -160,7 +160,7 @@ def _view_channel_canonical(vc: ViewChannel, apply_one_way: bool = False) -> dic
         else:
             direction_or = []
     else:
-        # Remote / full views: no ONE_WAY canonisation.
+        # Base / full views: no ONE_WAY canonisation.
         # direction is the raw frozenset (sorted), direction_or is
         # emitted separately so both/both_or remain distinguishable.
         direction = sorted(vc.ch.direction)
@@ -179,12 +179,12 @@ def _view_channel_canonical(vc: ViewChannel, apply_one_way: bool = False) -> dic
 def canonical_bytes(view: View) -> bytes:
     """Return the canonical byte representation of a view, suitable for hashing.
 
-    ND7 ONE_WAY canonisation is applied ONLY to the LOCAL view (the role
-    mirror between boards of the same node is a LOCAL concept). REMOTE and
+    ND7 ONE_WAY canonisation is applied ONLY to the SYSTEM view (the role
+    mirror between boards of the same node is a SYSTEM concept). BASE and
     full views keep the raw direction so that real contract signals
-    (uplink vs downlink on REMOTE channels) are preserved.
+    (uplink vs downlink on BASE channels) are preserved.
     """
-    apply_one_way = (view.name == "combus_local")
+    apply_one_way = (view.name == "combus_system")
     payload = {
         "view": view.name,
         "channels": [_view_channel_canonical(vc, apply_one_way) for vc in view.channels],
@@ -205,7 +205,7 @@ def canonical_bytes(view: View) -> bytes:
 class ViewHash:
     """The result of hashing a view.
 
-    view_name: which view was hashed (combus, combus_local, combus_remote).
+    view_name: which view was hashed (combus, combus_system, combus_base).
     md5_hex:   32-char lowercase hex string (128 bits).
     digest:    raw 16-byte MD5 digest.
     """
@@ -256,7 +256,7 @@ _CPP_COMMON_PROLOGUE = """\
  * Shared constants for all three view-specific MD5 headers.
  *
  * This header is included by each view-specific MD5 header (combus_md5.h,
- * combus_local_md5.h, combus_remote_md5.h). Do NOT include this header
+ * combus_system_md5.h, combus_base_md5.h). Do NOT include this header
  * from application code — go through the view-specific header that
  * matches your view.
  *
@@ -308,8 +308,8 @@ def read_project_version(project_root) -> tuple[int, int]:
 # The view_name is also used to capitalise the file name.
 _VIEW_SYMBOLS = {
     "combus":        ("kCombusComBusMd5",        "kCombusComBusMd5Hex"),
-    "combus_local":  ("kCombusLocalComBusMd5",   "kCombusLocalComBusMd5Hex"),
-    "combus_remote": ("kCombusRemoteComBusMd5",  "kCombusRemoteComBusMd5Hex"),
+    "combus_system":  ("kCombusSystemComBusMd5",   "kCombusSystemComBusMd5Hex"),
+    "combus_base": ("kCombusBaseComBusMd5",  "kCombusBaseComBusMd5Hex"),
 }
 
 
@@ -452,8 +452,8 @@ def generate_md5_artifacts(
     """Compute MD5 for the three combus views and write 4 headers into out_dir.
 
     Files emitted:
-      - combus_remote_md5.h   (kCombusRemoteComBusMd5[16] + Hex)
-      - combus_local_md5.h    (kCombusLocalComBusMd5[16]  + Hex)
+      - combus_base_md5.h   (kCombusBaseComBusMd5[16] + Hex)
+      - combus_system_md5.h    (kCombusSystemComBusMd5[16]  + Hex)
       - combus_md5.h          (kCombusComBusMd5[16]       + Hex)
       - combus_wire_common.h  (kProjectVersionMajor/Minor,
                                kCombusHandshakeWirePayloadLen)
@@ -461,8 +461,8 @@ def generate_md5_artifacts(
     Returns: dict[view_name -> ViewHash], list[Path]
     """
     hashes = {
-        "combus_remote": compute_view_hash(sel.remote),
-        "combus_local":  compute_view_hash(sel.local),
+        "combus_base": compute_view_hash(sel.base),
+        "combus_system":  compute_view_hash(sel.system),
         "combus":        compute_view_hash(sel.full),
     }
     written = []

@@ -49,7 +49,7 @@ except Exception:  # pragma: no cover
     projenv = None  # type: ignore[assignment]
 # PlatformIO test env is a separate SCons environment. Try to import it
 # so we can also add the generated directory to its CPPPATH (the test
-# source files need to find combus.h, combus_local_ids.h, etc.).
+# source files need to find combus.h, combus_system_ids.h, etc.).
 try:
     Import("testenv")  # noqa: F821 — SCons inject, may not exist
 except Exception:  # pragma: no cover
@@ -147,7 +147,7 @@ def main() -> int:
     _add_common_defs_cpppath(env)
     _add_common_defs_cpppath(projenv)
     # The test source files (test_combus_loopback.cpp) include
-    # "combus.h", "combus_local_ids.h", "combus_remote_ids.h" — they
+    # "combus.h", "combus_system_ids.h", "combus_base_ids.h" — they
     # need the generated directory in their CPPPATH. The test env is a
     # separate SCons environment from `env`/`projenv`, so we add it
     # explicitly here.

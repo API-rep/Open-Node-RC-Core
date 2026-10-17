@@ -104,7 +104,7 @@ static CbProc kRemoteLinkFallbackProcs[] = {
     // pipeline value to 1 and consumes it.
     //
     // Multi-instance: all UART owners write to the SAME channel with
-    // `direction: none` (SYSTEM scope) — any board's UART that is down
+    // `direction: none` (BOARD scope) — any board's UART that is down
     // contributes to the aggregated fault.
     {
         .name    = "remote_link_or_uart",

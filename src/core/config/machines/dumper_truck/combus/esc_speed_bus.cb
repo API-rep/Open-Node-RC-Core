@@ -9,6 +9,6 @@ channels:
   infoName: "ESC speed"
   type: analog
   value: CbusNeutral
-  scope: REMOTE
+  scope: BASE
   theme: core
   direction: none

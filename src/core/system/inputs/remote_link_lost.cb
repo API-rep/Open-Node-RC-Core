@@ -22,7 +22,7 @@
 # the consumer chain.  The model mirrors failsafe_chain.cpp exactly.
 #
 # Notes:
-# - LOCAL scope: the channel is shared by all boards composing the local
+# - SYSTEM scope: the channel is shared by all boards composing the local
 #   node. Any board may read REMOTE_LINK_LOST to react (FSM, dashboards).
 #   Only the consumer chain (remote_link_fallback_update) writes it.
 # - Direction [both_or]: uplink + downlink + OR-merge on import.  In
@@ -49,7 +49,7 @@ channels:
   - id: REMOTE_LINK_LOST
     infoName: "Remote input link lost (aggregated)"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: input          # generic "input subsystem" theme
     direction: both_or   # aggregator writes via the consumer chain; readers consume
     value: high         # default to "lost" (failsafe-by-default — see chain reset)

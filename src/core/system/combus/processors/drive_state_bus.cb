@@ -1,4 +1,4 @@
-# drive_state_bus.cb — Drive state (FWD/REV) side-effect channel (REMOTE)
+# drive_state_bus.cb — Drive state (FWD/REV) side-effect channel (BASE)
 #
 # - DRIVE_STATE_BUS: sole writer is the SIM_THROTTLE chain (dir proc).
 #   Encodes the drive direction (FWD/REV) as a signed value derived from
@@ -22,5 +22,5 @@ channels:
   type: analog
   value: CbusNeutral
   theme: core
-  scope: REMOTE
+  scope: BASE
   direction: none

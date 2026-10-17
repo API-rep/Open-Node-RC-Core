@@ -69,7 +69,7 @@ struct ComBusFrameCfg {
  *   handshake / versioning mechanism is implemented.
  *
  * @note RL2: `runLevel` is NOT a header field — it travels as a standard
- *   combus channel (RUNLEVEL, scope LOCAL, see runlevel.cb). The header
+ *   combus channel (RUNLEVEL, scope SYSTEM, see runlevel.cb). The header
  *   is now 4 bytes (was 5 before RL2). The wire contract is broken on
  *   purpose: any peer still sending the old 5-byte header will be
  *   rejected by the static_assert in combus_frame.h.

@@ -8,6 +8,6 @@ channels:
   infoName: "Active sub-gear"
   type: analog
   value: 0
-  scope: REMOTE
+  scope: BASE
   theme: core
   direction: downlink

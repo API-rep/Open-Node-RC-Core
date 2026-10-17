@@ -38,7 +38,7 @@ static uint8_t       s_digitalCh  = 0;
 static void renderDigitalCompact(const ComBus* bus, uint8_t n)
 {
 	// Chantier 12.6: '*' = healthy is now derived from REMOTE_LINK_LOST
-	// (LOCAL aggregator).  Fallback to lastFrameMs proxy on autonomous builds.
+	// (SYSTEM aggregator).  Fallback to lastFrameMs proxy on autonomous builds.
 #if defined(HAS_REMOTE_LINK_LOST_FALLBACK)
 	const bool busDriven = !bus->digitalBus[static_cast<uint8_t>(DigitalComBusID::REMOTE_LINK_LOST)].value;
 #else

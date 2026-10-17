@@ -37,7 +37,7 @@
  *   link.com   = com;
  *   link.txCfg = txCfg;
  *   link.txHz  = ComBusUartTxHz;
- *   link.layer = ChanLayer::REMOTE;   // LY2 — selects wireEnd from Remote view
+ *   link.layer = ChanLayer::BASE;   // LY2 — selects wireEnd from Base view
  *   combus_protocol_init(&link);
  * @endcode
  *
@@ -59,7 +59,7 @@
  *   link.rxCfg      = rxCfg;
  *   link.analogBuf  = analog;
  *   link.digitalBuf = digital;
- *   link.layer      = ChanLayer::REMOTE;
+ *   link.layer      = ChanLayer::BASE;
  *   combus_protocol_init(&link);
  * @endcode
  *****************************************************************************/
@@ -93,14 +93,14 @@
  *   still consumes its parameters positionally. A future revision will
  *   accept a ComBusLink (or an array of them) directly.
  *
- * @note Only ChanLayer::REMOTE and ChanLayer::LOCAL are valid here.
- *   ChanLayer::SYSTEM describes an intra-device loopback that is never
+ * @note Only ChanLayer::BASE and ChanLayer::SYSTEM are valid here.
+ *   ChanLayer::BOARD describes an intra-device loopback that is never
  *   transported over a physical link and must therefore never populate
  *   a ComBusLink.
  *
  * @note LY2 — `layer` selects the wire-end counters at TX init time
- *   (REMOTE → CH_COUNT of the Remote view, LOCAL → CH_COUNT of the
- *   Local view, FULL → CH_COUNT of the Full view).  The codec iterates
+ *   (BASE → CH_COUNT of the Base view, SYSTEM → CH_COUNT of the
+ *   System view, FULL → CH_COUNT of the Full view).  The codec iterates
  *   only over comBus.analogBus[0..analogWireEnd) and
  *   comBus.digitalBus[0..digitalWireEnd) — this is the ONLY behavioural
  *   change vs. the pre-LY2 codec.
@@ -113,7 +113,7 @@ struct ComBusLink {
     uint16_t*                      analogBuf    = nullptr;   ///< Caller-owned RX analog buffer — ignored when rxCfg is absent.
     bool*                          digitalBuf   = nullptr;   ///< Caller-owned RX digital buffer — ignored when rxCfg is absent.
     CombusHandshakeContext*        handshakeCtx = nullptr;   ///< Per-link handshake state (P3) — shared between TX and RX of this link.
-    ChanLayer                      layer        = ChanLayer::UNDEFINED; ///< Propagation layer of this link — REMOTE or LOCAL only (never SYSTEM). LY2 — also selects the wire-end counters at TX init.
+    ChanLayer                      layer        = ChanLayer::UNDEFINED; ///< Propagation layer of this link — BASE or SYSTEM only (never BOARD). LY2 — also selects the wire-end counters at TX init.
     const char*                    name         = "combus";  ///< Descriptive tag for logs and debug output.
     ComBus*                        target       = nullptr;   ///< RL5 — optional ComBus instance to auto-apply decoded RX frames onto.  When non-null, combus_rx_update() calls combus_frame_apply() after each successful decode.  When null (default), no auto-apply is performed — caller must call combus_frame_apply() manually.
 };
@@ -170,7 +170,7 @@ void combus_protocol_init_all( ComBusLink* links, uint8_t count );
  *     - link == nullptr or link->com == nullptr  → return immediately
  *     - link->layer == ChanLayer::UNDEFINED      → FATAL: logged via
  *                                                  sys_log_err, system halted
- *     - link->layer == ChanLayer::SYSTEM         → accepted: the handshake
+ *     - link->layer == ChanLayer::BOARD         → accepted: the handshake
  *                                                  uses the FULL view MD5
  *                                                  (reserved for a loopback)
  *

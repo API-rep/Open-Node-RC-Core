@@ -8,10 +8,10 @@
 # HAS_REMOTE_LINK_LOST_FALLBACK is defined.
 #
 # Notes:
-# - LOCAL scope: the channel is shared by all boards composing the local
+# - SYSTEM scope: the channel is shared by all boards composing the local
 #   node. Any board owning a UART link (TX side, RX side, or full-duplex)
 #   may publish the local "UART link alive" state each cycle.  Other
-#   boards consume it through the same LOCAL bus.
+#   boards consume it through the same SYSTEM bus.
 # - Multi-instance handling: a node may own several UART links (one per
 #   `COMBUS_UART_TX=N` / `COMBUS_UART_RX=N` / `COMBUS_UART=N` flag).  All
 #   owners write to the SAME `UART_LINK_LOST` channel using the `both_or`
@@ -48,7 +48,7 @@ channels:
   - id: UART_LINK_LOST
     infoName: "UART link lost (any UART-backed transport)"
     type: digital
-    scope: SYSTEM        # private to the board owning the UART transport (NOT shared)
+    scope: BOARD        # private to the board owning the UART transport (NOT shared)
     theme: input          # generic "input subsystem" theme
-    direction: none       # SYSTEM scope: pure in-board state, no wire transport
+    direction: none       # BOARD scope: pure in-board state, no wire transport
     value: high         # default to "lost" (failsafe-by-default — see chain reset)

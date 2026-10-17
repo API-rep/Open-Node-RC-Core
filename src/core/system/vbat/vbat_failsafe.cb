@@ -5,10 +5,10 @@
 # FAILSAFE aggregator (declared in src/core/system/failsafe/failsafe.cb).
 #
 # Notes:
-# - LOCAL scope: the contributor is shared by all boards composing the
+# - SYSTEM scope: the contributor is shared by all boards composing the
 #   local node. Any board performing battery sensing (sensing-board,
 #   mainboard, …) may publish the local "battery healthy" state. Other
-#   boards (sound node, dashboard) consume it through the same LOCAL bus.
+#   boards (sound node, dashboard) consume it through the same SYSTEM bus.
 # - Direction [both]: uplink + downlink — any board may write (re-arm
 #   each cycle) or read (react) the channel.
 # - value: high = fail-safe by default. The contributor reports fault
@@ -24,7 +24,7 @@ channels:
   - id: FAILSAFE_VBAT
     infoName: "VBAT failsafe contributor"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: failsafe
     direction: uplink_or
     value: high    # default to fault state: contributor reports fault until

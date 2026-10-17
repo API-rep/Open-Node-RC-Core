@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-combus_builder/diffusion.py — ND2: automatic diffusion of LOCAL channels
+combus_builder/diffusion.py — ND2: automatic diffusion of SYSTEM channels
 between boards of the same node.
 
 Scope (ND2):
   - Generalised to N >= 2 boards per node.
-  - For each channel id with scope LOCAL, look at the set of boards
+  - For each channel id with scope SYSTEM, look at the set of boards
     for which the declaration is ACTIVE (via the existing
     `_is_active_for_board()` / `requires` logic — that part is
     unchanged). Apply the generalised rule below to decide what
@@ -55,12 +55,12 @@ Generalised rule (ND2, per `id`):
           absent as not present).
 
   Intra-board conflict (same `id` declared twice on the SAME
-  board) is handled separately as DiffusionLocalConflictError — it
+  board) is handled separately as DiffusionSystemConflictError — it
   is detected BEFORE the inter-board rule, so it always wins over
   the rule above.
 
 Out of scope (deferred):
-  - REMOTE diffusion (ND5).
+  - BASE diffusion (ND5).
   - Runtime BOTH_OR merge in the C++ codec (ND6, runtime part): the
     bothOr flag is emitted but not read by combus_frame_apply.
   - merge_channels() in canon/channels.py is NOT touched: the
@@ -70,7 +70,7 @@ Out of scope (deferred):
 
 Pipeline position (ND2):
   - discover_and_parse() runs once (repo-wide, board-agnostic).
-  - diffuse_local_channels() runs ONCE, BEFORE canonize(), producing
+  - diffuse_system_channels() runs ONCE, BEFORE canonize(), producing
     a dict[board_id -> list[tuple[Path, str, Any]]] in the same
     format as the output of discover_and_parse().
   - canonize() runs PER BOARD on its own resolved list.
@@ -102,10 +102,10 @@ class DiffusionError(Exception):
 
 
 class DiffusionConflictError(DiffusionError):
-    """Inter-board conflict on a LOCAL channel direction.
+    """Inter-board conflict on a SYSTEM channel direction.
 
     Raised when N >= 2 boards of the same node declare the same
-    LOCAL channel id with INCOMPATIBLE directions (e.g. two
+    SYSTEM channel id with INCOMPATIBLE directions (e.g. two
     `uplink`, or `both` mixed with a simple direction).
 
     The message names ALL boards involved (not just 2).
@@ -126,7 +126,7 @@ class DiffusionConflictError(DiffusionError):
                 f"{b!r}({d})" for b, d, _p in involved
             )
             msg = (
-                f"conflit de semantique sur le channel LOCAL {channel_id!r}: "
+                f"conflit de semantique sur le channel SYSTEM {channel_id!r}: "
                 f"both (agregation OR) et une direction simple ne sont pas "
                 f"melangeables sur un meme canal.\n"
                 f"  boards impliquees: {preview}\n"
@@ -136,7 +136,7 @@ class DiffusionConflictError(DiffusionError):
                 f"{b!r}({d})" for b, d, _p in involved
             )
             msg = (
-                f"conflit sur le channel LOCAL {channel_id!r} entre les "
+                f"conflit sur le channel SYSTEM {channel_id!r} entre les "
                 f"boards suivantes:\n"
                 f"  {preview}\n"
             )
@@ -146,10 +146,10 @@ class DiffusionConflictError(DiffusionError):
         super().__init__(msg)
 
 
-class DiffusionLocalConflictError(DiffusionError):
+class DiffusionSystemConflictError(DiffusionError):
     """A single board has multiple declarations of the same channel id.
 
-    This is a LOCAL conflict (the board's own .cb files disagree with
+    This is a SYSTEM conflict (the board's own .cb files disagree with
     each other), distinct from DiffusionConflictError (inter-board).
     """
 
@@ -167,14 +167,14 @@ class DiffusionLocalConflictError(DiffusionError):
         super().__init__(
             f"channel {channel_id!r} declare plusieurs fois dans les .cb "
             f"de la board {board_id!r}, voir {path_a} et {path_b}. "
-            f"C'est un conflit LOCAL (intra-board), pas un conflit "
+            f"C'est un conflit SYSTEM (intra-board), pas un conflit "
             f"inter-board : corriger les .cb de cette board avant de "
             f"continuer."
         )
 
 
 class DiffusionDeadChannelWarning(DiffusionError):
-    """Non-fatal: a LOCAL channel has only `downlink` consumers
+    """Non-fatal: a SYSTEM channel has only `downlink` consumers
     and no `uplink` producer in the node (canal mort).
 
     NOTE: this is a WARNING, not a fatal error. It inherits from
@@ -309,7 +309,7 @@ def _extract_raw_declarations(
     and returns a flat list of _RawChannelDecl.
 
     NOTE: this function does NOT filter by scope. The caller decides
-    which declarations to keep (LOCAL for diffusion, REMOTE/SYSTEM
+    which declarations to keep (SYSTEM for diffusion, BASE/BOARD
     pass-through).
     """
     out: list[_RawChannelDecl] = []
@@ -340,7 +340,7 @@ def _extract_raw_declarations(
 
 @dataclass(frozen=True)
 class _ResolvedGroup:
-    """Result of resolving the directions of one LOCAL channel id
+    """Result of resolving the directions of one SYSTEM channel id
     across all boards of a node.
 
     `explicit`     = (board_id, direction, source_path) for every
@@ -371,14 +371,14 @@ def _resolve_group(
     explicit: list[tuple[str | None, str, Path]],
     all_board_ids: list[str | None],
 ) -> _ResolvedGroup:
-    """Apply the generalised ND2 rule to one LOCAL channel id.
+    """Apply the generalised ND2 rule to one SYSTEM channel id.
 
     Args:
       channel_id:  the channel id (only used for error/warning messages).
       explicit:    list of (board_id, direction, source_path) for every
                    board where the declaration is EXPLICITLY active.
                    By the time we get here, intra-board duplicates
-                   have already been raised as DiffusionLocalConflictError,
+                   have already been raised as DiffusionSystemConflictError,
                    so each board_id appears at most once.
       all_board_ids: the full list of board_ids in the node (in
                      declaration order, with None for the mother
@@ -424,7 +424,7 @@ def _resolve_group(
     # plain overwrite. NOT a fatal conflict (the inter-board rule
     # treats them as the same family), but a real config warning.
     # The warning is attached to the _ResolvedGroup.warning field so
-    # the caller (diffuse_local_channels) routes it to _warn().
+    # the caller (diffuse_system_channels) routes it to _warn().
     both_vs_both_or_warning: str | None = None
     if n_both >= 1 and n_both_or >= 1:
         both_boards = sorted(
@@ -542,12 +542,12 @@ def _resolve_group(
 # DIFFUSION (main entry point)
 # =============================================================================
 
-def diffuse_local_channels(
+def diffuse_system_channels(
     parsed: list[tuple[Path, str, Any]],
     node: NodeContext,
 ) -> dict[str | None, list[tuple[Path, str, Any]]]:
     """
-    Diffuse LOCAL channels across the boards of a node.
+    Diffuse SYSTEM channels across the boards of a node.
 
     Args:
       parsed: output of discover_and_parse() (repo-wide, board-agnostic).
@@ -558,16 +558,16 @@ def diffuse_local_channels(
       dict[board_id -> list[tuple[Path, str, Any]]] in the same format
       as the input `parsed`, but restricted to the channels resolved
       for THAT board after diffusion:
-        - LOCAL channels: explicit declarations + synthetic
+        - SYSTEM channels: explicit declarations + synthetic
           declarations (mirrored or `both` or `none` depending on
           the generalised rule) for boards that didn't declare them.
-        - REMOTE / SYSTEM channels: passed through unchanged,
+        - BASE / BOARD channels: passed through unchanged,
           duplicated into every board (no diffusion applied).
 
     Raises:
-      DiffusionLocalConflictError: a single board has multiple
-        declarations of the same LOCAL channel id in its own .cb files.
-      DiffusionConflictError: N >= 2 boards declare the same LOCAL
+      DiffusionSystemConflictError: a single board has multiple
+        declarations of the same SYSTEM channel id in its own .cb files.
+      DiffusionConflictError: N >= 2 boards declare the same SYSTEM
         channel id with INCOMPATIBLE directions (rule 2 or rule 4).
 
     Side effects:
@@ -585,7 +585,7 @@ def diffuse_local_channels(
     all_board_ids: list[str | None] = list(node.boards.keys())
 
     # Mere = meta env (build_flags partages), pas une board runtime : en node mode
-    # (au moins un sous-env) elle est EXCLUE de la diffusion LOCAL. Point unique
+    # (au moins un sous-env) elle est EXCLUE de la diffusion SYSTEM. Point unique
     # d'exclusion : `diffusion_boards`, utilise partout a la place de node.boards.
     # Mono-board (is_node False) : comportement inchange.
     if node.is_node and None in node.boards:
@@ -602,12 +602,12 @@ def diffuse_local_channels(
         decls_by_board[board_id] = _extract_raw_declarations(parsed, board_id)
 
     # Step 2: bucket declarations by (id, scope).
-    # We need to know, for each LOCAL id, which boards have an active
+    # We need to know, for each SYSTEM id, which boards have an active
     # declaration and what direction each one declares.
     # Key: (channel_id, scope) -> list of (board_id, direction, path)
     by_id_scope: dict[tuple[str, str], list[tuple[str | None, str, Path]]] = {}
 
-    # Also collect REMOTE/SYSTEM declarations for pass-through.
+    # Also collect BASE/BOARD declarations for pass-through.
     # Key: (channel_id, scope) -> list of (board_id, raw_decl, path)
     passthrough: dict[tuple[str, str], list[tuple[str | None, dict[str, Any], Path]]] = {}
 
@@ -618,10 +618,10 @@ def diffuse_local_channels(
             scope = decl.raw.get("scope")
             if not isinstance(cid, str) or not cid:
                 continue  # let canonisation reject it
-            if scope not in ("LOCAL", "REMOTE", "SYSTEM"):
+            if scope not in ("SYSTEM", "BASE", "BOARD"):
                 continue  # let canonisation reject it
 
-            if scope == "LOCAL":
+            if scope == "SYSTEM":
                 if not _is_active_for_board(decl.raw, ctx):
                     continue
                 direction = decl.raw.get("direction", "none")
@@ -631,34 +631,34 @@ def diffuse_local_channels(
                     (board_id, direction, decl.source_path)
                 )
             else:
-                # REMOTE / SYSTEM: pass through, no diffusion.
+                # BASE / BOARD: pass through, no diffusion.
                 passthrough.setdefault((cid, scope), []).append(
                     (board_id, decl.raw, decl.source_path)
                 )
 
-    # Step 3: detect LOCAL conflicts (intra-board) and resolve
+    # Step 3: detect SYSTEM conflicts (intra-board) and resolve
     # the inter-board rule via _resolve_group() for every (id, scope).
     #
-    # For each LOCAL id, we:
+    # For each SYSTEM id, we:
     #   1. Group the explicit declarations by board_id, raise
-    #      DiffusionLocalConflictError on intra-board duplicates.
+    #      DiffusionSystemConflictError on intra-board duplicates.
     #   2. Collect the (board_id, direction, path) list, at most
     #      one per board.
     #   3. Call _resolve_group() to apply the N-board rule.
     #   4. Record the resolved syntheses in
-    #      `resolved_by_id[(cid, LOCAL)]` so step 4 can use them.
+    #      `resolved_by_id[(cid, SYSTEM)]` so step 4 can use them.
     resolved_by_id: dict[tuple[str, str], _ResolvedGroup] = {}
 
     for (cid, scope), entries in by_id_scope.items():
-        if scope != "LOCAL":
-            continue  # REMOTE/SYSTEM pass-through is separate
+        if scope != "SYSTEM":
+            continue  # BASE/BOARD pass-through is separate
         # Group by board_id to detect intra-board duplicates.
         per_board: dict[str | None, tuple[str, Path]] = {}
         for board_id, direction, path in entries:
             if board_id in per_board:
                 # Intra-board conflict.
                 _dir_a, path_a = per_board[board_id]
-                raise DiffusionLocalConflictError(
+                raise DiffusionSystemConflictError(
                     channel_id=cid,
                     board_id=board_id,
                     path_a=path_a,
@@ -719,14 +719,14 @@ def diffuse_local_channels(
 
     # Step 4: build the per-board resolved lists.
     # For each board, we need:
-    #   - Its own LOCAL declarations (unchanged).
-    #   - Synthetic LOCAL declarations for ids declared by OTHER
+    #   - Its own SYSTEM declarations (unchanged).
+    #   - Synthetic SYSTEM declarations for ids declared by OTHER
     #     boards (with the direction dictated by _resolve_group()).
-    #   - All REMOTE/SYSTEM declarations (pass-through, one per id).
+    #   - All BASE/BOARD declarations (pass-through, one per id).
     result: dict[str | None, list[tuple[Path, str, Any]]] = {}
 
     for board_id in diffusion_boards:
-        # Collect this board's own LOCAL declarations (by id), so
+        # Collect this board's own SYSTEM declarations (by id), so
         # we know which ids to NOT synthesise on this board.
         own_local_ids: set[str] = set()
         for decl in decls_by_board.get(board_id, []):
@@ -734,33 +734,33 @@ def diffuse_local_channels(
             scope = decl.raw.get("scope")
             if not isinstance(cid, str) or not cid:
                 continue
-            if scope == "LOCAL" and _is_active_for_board(
+            if scope == "SYSTEM" and _is_active_for_board(
                 decl.raw, diffusion_boards[board_id]
             ):
                 own_local_ids.add(cid)
 
-        # Build the list of LOCAL declarations for this board.
-        local_decls_for_board: list[tuple[Path, str, Any]] = []
+        # Build the list of SYSTEM declarations for this board.
+        system_decls_for_board: list[tuple[Path, str, Any]] = []
 
-        # 4a. Own LOCAL declarations (unchanged).
+        # 4a. Own SYSTEM declarations (unchanged).
         for decl in decls_by_board.get(board_id, []):
             cid = decl.raw.get("id")
             scope = decl.raw.get("scope")
             if not isinstance(cid, str) or not cid:
                 continue
-            if scope != "LOCAL":
+            if scope != "SYSTEM":
                 continue
             if not _is_active_for_board(decl.raw, diffusion_boards[board_id]):
                 continue
-            local_decls_for_board.append((
+            system_decls_for_board.append((
                 decl.source_path,
                 "channel_def",
                 {"channels": [decl.raw]},
             ))
 
-        # 4b. Synthetic LOCAL declarations dictated by _resolve_group().
+        # 4b. Synthetic SYSTEM declarations dictated by _resolve_group().
         for (cid, scope), group in resolved_by_id.items():
-            if scope != "LOCAL":
+            if scope != "SYSTEM":
                 continue
             if cid in own_local_ids:
                 continue  # already declared by this board
@@ -784,7 +784,7 @@ def diffuse_local_channels(
                 for d in decls_by_board.get(source_board, []):
                     if (
                         d.raw.get("id") == cid
-                        and d.raw.get("scope") == "LOCAL"
+                        and d.raw.get("scope") == "SYSTEM"
                         and _is_active_for_board(
                             d.raw, diffusion_boards[source_board]
                         )
@@ -816,39 +816,39 @@ def diffuse_local_channels(
                 synthetic_raw["requires"] = []
                 # Use a virtual Path to mark the synthetic origin.
                 virtual_path = Path(f"<diffusion:{board_id}>")
-                local_decls_for_board.append((
+                system_decls_for_board.append((
                     virtual_path,
                     "channel_def",
                     {"channels": [synthetic_raw]},
                 ))
                 break  # at most one synthesis per board per id
 
-        # 4c. REMOTE / SYSTEM pass-through (one declaration per id).
+        # 4c. BASE / BOARD pass-through (one declaration per id).
         # We pick the first declaration seen for each (id, scope)
-        # pair. In practice, all boards see the same REMOTE/SYSTEM
+        # pair. In practice, all boards see the same BASE/BOARD
         # declarations (they come from the same repo-wide .cb files),
         # so picking the first is fine.
         #
-        # ND4 (2026-10-04): SYSTEM channels are strictly private to
-        # the firmware of a board. Unlike REMOTE (which is shared by
-        # definition and passed through to every board), a SYSTEM
+        # ND4 (2026-10-04): BOARD channels are strictly private to
+        # the firmware of a board. Unlike BASE (which is shared by
+        # definition and passed through to every board), a BOARD
         # channel with `requires=[IS_MAINBOARD]` must NOT be copied
         # to a sister board where it was not active. We therefore
-        # filter SYSTEM pass-through by `_is_active_for_board()` per
-        # board. REMOTE channels are still passed through to every
+        # filter BOARD pass-through by `_is_active_for_board()` per
+        # board. BASE channels are still passed through to every
         # board (no requires filter).
         seen_passthrough: set[tuple[str, str]] = set()
         for (cid, scope), entries in passthrough.items():
             if (cid, scope) in seen_passthrough:
                 continue
             seen_passthrough.add((cid, scope))
-            # ND4: SYSTEM requires-filter per board. Pick the first
+            # ND4: BOARD requires-filter per board. Pick the first
             # declaration that is active for the current board (not
             # just the first declaration overall), so that each board
             # sees its own declaration when multiple boards declare
-            # the same SYSTEM id with different `requires`. REMOTE
+            # the same BOARD id with different `requires`. BASE
             # is always passed through (shared by definition).
-            if scope == "SYSTEM":
+            if scope == "BOARD":
                 active_entry = None
                 for _bd, raw_decl, source_path in entries:
                     if _is_active_for_board(raw_decl, diffusion_boards[board_id]):
@@ -858,15 +858,15 @@ def diffuse_local_channels(
                     continue
                 raw_decl, source_path = active_entry
             else:
-                # REMOTE: pick the first entry (any board will do,
+                # BASE: pick the first entry (any board will do,
                 # content is identical).
                 _bd, raw_decl, source_path = entries[0]
-            local_decls_for_board.append((
+            system_decls_for_board.append((
                 source_path,
                 "channel_def",
                 {"channels": [raw_decl]},
             ))
 
-        result[board_id] = local_decls_for_board
+        result[board_id] = system_decls_for_board
 
     return result

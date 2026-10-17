@@ -12,7 +12,7 @@ A6.1 corrections vs A6:
 
 Coverage:
   - requires resolution (errors only — A6 raises, not filters).
-  - View selection (combus = REMOTE+LOCAL+SYSTEM; combus_remote = REMOTE).
+  - View selection (combus = BASE+SYSTEM+BOARD; combus_base = BASE).
   - Deterministic ID allocation.
   - WIRE_END computation.
   - Direction C++ representation (0/1/2/3, both normalization).
@@ -72,7 +72,7 @@ def _ch(
     id_: str = "FOO",
     info_name: str = "Foo channel",
     type_: str = "digital",
-    scope: str = "LOCAL",
+    scope: str = "SYSTEM",
     theme: str = "failsafe",
     direction: str | None = None,
     requires: list | None = None,
@@ -86,7 +86,7 @@ def _ch(
     }
     if direction is not None:
         d["direction"] = direction
-    elif scope in ("LOCAL", "REMOTE"):
+    elif scope in ("SYSTEM", "BASE"):
         d["direction"] = "uplink"
     if requires is not None:
         d["requires"] = requires
@@ -148,12 +148,12 @@ def test_no_channel_descriptor_in_rendered_source():
 def test_no_channel_descriptor_in_full_generation(tmp_path):
     """End-to-end: emitted files must not contain ChannelDescriptor."""
     chs = _canon_from_yamls({"channels": [
-        _ch("FOO", scope="REMOTE"),
-        _ch("BAR", type_="analog", scope="REMOTE"),
+        _ch("FOO", scope="BASE"),
+        _ch("BAR", type_="analog", scope="BASE"),
     ]})
     sel = generate(chs, _ctx([]), tmp_path)
     for fname in ("combus.h", "combus.cpp", "combus_ids.h",
-                  "combus_local_ids.h", "combus_remote_ids.h"):
+                  "combus_system_ids.h", "combus_base_ids.h"):
         content = (tmp_path / fname).read_text(encoding="utf-8")
         assert "ChannelDescriptor" not in content, f"ChannelDescriptor in {fname}"
 
@@ -166,24 +166,24 @@ def test_chanlayer_enum_in_combus_struct():
     """combus_struct.h still defines ChanLayer (audit A6 confirmed _layer_ok)."""
     h = (REPO_ROOT / "src" / "core" / "system" / "combus" / "combus_defs.h").read_text(encoding="utf-8")
     assert "enum class ChanLayer" in h
-    for v in ("SYSTEM", "LOCAL", "REMOTE", "UNDEFINED"):
+    for v in ("BOARD", "SYSTEM", "BASE", "UNDEFINED"):
         assert v in h, f"ChanLayer::{v} missing from combus_struct.h"
 
 
 def test_generated_initializers_use_chanlayer():
     """Generated .cpp must use ChanLayer::X in the .layer field of each entry."""
     chs = _canon_from_yamls({"channels": [
-        _ch("R1", scope="REMOTE", type_="digital"),
-        _ch("L1", scope="LOCAL", type_="digital"),
-        _ch("S1", scope="SYSTEM", type_="digital", direction="none"),
+        _ch("R1", scope="BASE", type_="digital"),
+        _ch("L1", scope="SYSTEM", type_="digital"),
+        _ch("S1", scope="BOARD", type_="digital", direction="none"),
     ]})
     with tempfile.TemporaryDirectory() as tmp_dir:
         generate(chs, _ctx([]), Path(tmp_dir))
         cpp = (Path(tmp_dir) / "combus.cpp").read_text(encoding="utf-8")
     # At least one of each layer value must appear in the initializers.
-    assert ".layer = ChanLayer::REMOTE" in cpp
-    assert ".layer = ChanLayer::LOCAL" in cpp
+    assert ".layer = ChanLayer::BASE" in cpp
     assert ".layer = ChanLayer::SYSTEM" in cpp
+    assert ".layer = ChanLayer::BOARD" in cpp
 
 
 def test_generated_header_includes_combus_struct():
@@ -337,46 +337,46 @@ def test_resolve_requires_partial_missing_raises():
 # =============================================================================
 
 def test_select_view_combus_full():
-    """combus view = REMOTE first, then LOCAL, then SYSTEM."""
+    """combus view = BASE first, then SYSTEM, then BOARD."""
     chs = _canon_from_yamls({
         "channels": [
-            _ch("R1", scope="REMOTE"),
-            _ch("L1", scope="LOCAL"),
-            _ch("S1", scope="SYSTEM", direction=None),
+            _ch("R1", scope="BASE"),
+            _ch("L1", scope="SYSTEM"),
+            _ch("S1", scope="BOARD", direction=None),
         ]
     })
-    full = _select_view(chs, "combus", {"REMOTE", "LOCAL", "SYSTEM"})
+    full = _select_view(chs, "combus", {"BASE", "SYSTEM", "BOARD"})
     assert full.ch_count == 3
-    # WIRE_END == 1: R1 is REMOTE, then L1/S1 follow.
+    # WIRE_END == 1: R1 is BASE, then L1/S1 follow.
     assert full.wire_end == 1
     ids = [vc.ch.id for vc in full.channels]
     assert ids == ["R1", "L1", "S1"]
 
 
-def test_select_view_combus_remote_only_remotes():
+def test_select_view_combus_base_only_remotes():
     chs = _canon_from_yamls({
         "channels": [
-            _ch("R1", scope="REMOTE"),
-            _ch("R2", scope="REMOTE"),
-            _ch("L1", scope="LOCAL"),
-            _ch("S1", scope="SYSTEM", direction=None),
+            _ch("R1", scope="BASE"),
+            _ch("R2", scope="BASE"),
+            _ch("L1", scope="SYSTEM"),
+            _ch("S1", scope="BOARD", direction=None),
         ]
     })
-    remote = _select_view(chs, "combus_remote", {"REMOTE"})
-    assert remote.ch_count == 2
-    assert remote.wire_end == 2  # == CH_COUNT
-    ids = [vc.ch.id for vc in remote.channels]
+    base = _select_view(chs, "combus_base", {"BASE"})
+    assert base.ch_count == 2
+    assert base.wire_end == 2  # == CH_COUNT
+    ids = [vc.ch.id for vc in base.channels]
     assert set(ids) == {"R1", "R2"}
 
 
-def test_select_view_remote_only_wire_end_equals_count():
+def test_select_view_base_only_wire_end_equals_count():
     chs = _canon_from_yamls({
         "channels": [
-            _ch("R1", scope="REMOTE"),
-            _ch("R2", scope="REMOTE"),
+            _ch("R1", scope="BASE"),
+            _ch("R2", scope="BASE"),
         ]
     })
-    full = _select_view(chs, "combus", {"REMOTE", "LOCAL", "SYSTEM"})
+    full = _select_view(chs, "combus", {"BASE", "SYSTEM", "BOARD"})
     assert full.wire_end == 2
     assert full.ch_count == 2
 
@@ -384,11 +384,11 @@ def test_select_view_remote_only_wire_end_equals_count():
 def test_select_view_analog_before_digital_within_scope():
     chs = _canon_from_yamls({
         "channels": [
-            _ch("D1", scope="REMOTE", type_="digital"),
-            _ch("A1", scope="REMOTE", type_="analog"),
+            _ch("D1", scope="BASE", type_="digital"),
+            _ch("A1", scope="BASE", type_="analog"),
         ]
     })
-    full = _select_view(chs, "combus", {"REMOTE", "LOCAL", "SYSTEM"})
+    full = _select_view(chs, "combus", {"BASE", "SYSTEM", "BOARD"})
     assert full.channels[0].ch.id == "A1"
     assert full.channels[1].ch.id == "D1"
 
@@ -396,195 +396,195 @@ def test_select_view_analog_before_digital_within_scope():
 def test_select_views_both_views():
     chs = _canon_from_yamls({
         "channels": [
-            _ch("R1", scope="REMOTE"),
-            _ch("L1", scope="LOCAL"),
-            _ch("S1", scope="SYSTEM", direction=None),
+            _ch("R1", scope="BASE"),
+            _ch("L1", scope="SYSTEM"),
+            _ch("S1", scope="BOARD", direction=None),
         ]
     })
     sel = select_views(chs)
     assert isinstance(sel, ViewSelection)
     assert sel.full.ch_count == 3
-    assert sel.local.ch_count == 2
-    assert sel.remote.ch_count == 1
-    assert sel.remote.channels[0].ch.id == "R1"
+    assert sel.system.ch_count == 2
+    assert sel.base.ch_count == 1
+    assert sel.base.channels[0].ch.id == "R1"
 
 
 # =============================================================================
-# A6.2 — combus_local view (REMOTE + LOCAL, no SYSTEM)
+# A6.2 — combus_system view (BASE + SYSTEM, no BOARD)
 # =============================================================================
 
-def test_select_views_local_excludes_system():
-    """A6.2: combus_local contains exactly REMOTE+LOCAL channels, no SYSTEM."""
+def test_select_views_system_excludes_board():
+    """A6.2: combus_system contains exactly BASE+SYSTEM channels, no BOARD."""
     chs = _canon_from_yamls({
         "channels": [
-            _ch("R1", scope="REMOTE"),
-            _ch("R2", scope="REMOTE"),
-            _ch("L1", scope="LOCAL"),
-            _ch("L2", scope="LOCAL"),
-            _ch("S1", scope="SYSTEM", direction=None),
-            _ch("S2", scope="SYSTEM", direction=None),
+            _ch("R1", scope="BASE"),
+            _ch("R2", scope="BASE"),
+            _ch("L1", scope="SYSTEM"),
+            _ch("L2", scope="SYSTEM"),
+            _ch("S1", scope="BOARD", direction=None),
+            _ch("S2", scope="BOARD", direction=None),
         ]
     })
     sel = select_views(chs)
-    assert sel.local.ch_count == 4
-    scopes = {vc.ch.scope for vc in sel.local.channels}
-    assert scopes == {"REMOTE", "LOCAL"}
-    assert "SYSTEM" not in scopes
+    assert sel.system.ch_count == 4
+    scopes = {vc.ch.scope for vc in sel.system.channels}
+    assert scopes == {"BASE", "SYSTEM"}
+    assert "BOARD" not in scopes
 
 
-def test_select_views_local_is_prefix_of_full():
-    """A6.2: combus_local is a strict prefix of combus (REMOTE+LOCAL channels
+def test_select_views_system_is_prefix_of_full():
+    """A6.2: combus_system is a strict prefix of combus (BASE+SYSTEM channels
     appear in the same order, with the same numeric IDs)."""
     chs = _canon_from_yamls({
         "channels": [
-            _ch("R1", scope="REMOTE"),
-            _ch("R2", scope="REMOTE"),
-            _ch("L1", scope="LOCAL"),
-            _ch("L2", scope="LOCAL"),
-            _ch("S1", scope="SYSTEM", direction=None),
-            _ch("S2", scope="SYSTEM", direction=None),
+            _ch("R1", scope="BASE"),
+            _ch("R2", scope="BASE"),
+            _ch("L1", scope="SYSTEM"),
+            _ch("L2", scope="SYSTEM"),
+            _ch("S1", scope="BOARD", direction=None),
+            _ch("S2", scope="BOARD", direction=None),
         ]
     })
     sel = select_views(chs)
-    # combus_local must be a prefix of combus (same channels, same order, same IDs).
-    assert sel.local.ch_count == 4
+    # combus_system must be a prefix of combus (same channels, same order, same IDs).
+    assert sel.system.ch_count == 4
     assert sel.full.ch_count == 6
-    for i in range(sel.local.ch_count):
-        assert sel.local.channels[i].ch.id == sel.full.channels[i].ch.id, (
-            f"order mismatch at index {i}: local={sel.local.channels[i].ch.id} "
+    for i in range(sel.system.ch_count):
+        assert sel.system.channels[i].ch.id == sel.full.channels[i].ch.id, (
+            f"order mismatch at index {i}: system={sel.system.channels[i].ch.id} "
             f"vs full={sel.full.channels[i].ch.id}"
         )
-        assert sel.local.channels[i].numeric_id == sel.full.channels[i].numeric_id, (
-            f"id mismatch at index {i}: local={sel.local.channels[i].numeric_id} "
+        assert sel.system.channels[i].numeric_id == sel.full.channels[i].numeric_id, (
+            f"id mismatch at index {i}: system={sel.system.channels[i].numeric_id} "
             f"vs full={sel.full.channels[i].numeric_id}"
         )
 
 
-def test_select_views_local_no_renumbering():
-    """A6.2: a channel that appears in both combus and combus_local has the
+def test_select_views_system_no_renumbering():
+    """A6.2: a channel that appears in both combus and combus_system has the
     SAME numeric_id in both views (no renumbering)."""
     chs = _canon_from_yamls({
         "channels": [
-            _ch("R1", scope="REMOTE"),
-            _ch("R2", scope="REMOTE"),
-            _ch("L1", scope="LOCAL"),
-            _ch("L2", scope="LOCAL"),
-            _ch("S1", scope="SYSTEM", direction=None),
+            _ch("R1", scope="BASE"),
+            _ch("R2", scope="BASE"),
+            _ch("L1", scope="SYSTEM"),
+            _ch("L2", scope="SYSTEM"),
+            _ch("S1", scope="BOARD", direction=None),
         ]
     })
     sel = select_views(chs)
     # Build a map id -> numeric_id in each view.
     full_ids = {vc.ch.id: vc.numeric_id for vc in sel.full.channels}
-    local_ids = {vc.ch.id: vc.numeric_id for vc in sel.local.channels}
-    # Every channel in combus_local must have the same numeric_id in combus.
+    local_ids = {vc.ch.id: vc.numeric_id for vc in sel.system.channels}
+    # Every channel in combus_system must have the same numeric_id in combus.
     for cid, nid in local_ids.items():
         assert cid in full_ids, f"{cid} missing from combus"
         assert full_ids[cid] == nid, (
-            f"renumbering detected: {cid} has id {nid} in combus_local "
+            f"renumbering detected: {cid} has id {nid} in combus_system "
             f"but {full_ids[cid]} in combus"
         )
 
 
-def test_select_views_local_wire_end_equals_full_wire_end():
-    """A6.2: combus_local.wire_end == combus.wire_end (same REMOTE/LOCAL
+def test_select_views_system_wire_end_equals_full_wire_end():
+    """A6.2: combus_system.wire_end == combus.wire_end (same BASE/SYSTEM
     boundary by construction)."""
     chs = _canon_from_yamls({
         "channels": [
-            _ch("R1", scope="REMOTE"),
-            _ch("R2", scope="REMOTE"),
-            _ch("L1", scope="LOCAL"),
-            _ch("S1", scope="SYSTEM", direction=None),
+            _ch("R1", scope="BASE"),
+            _ch("R2", scope="BASE"),
+            _ch("L1", scope="SYSTEM"),
+            _ch("S1", scope="BOARD", direction=None),
         ]
     })
     sel = select_views(chs)
-    assert sel.local.wire_end == sel.full.wire_end
+    assert sel.system.wire_end == sel.full.wire_end
 
 
-def test_select_views_local_deterministic():
-    """A6.2: combus_local is deterministic (parity with combus/combus_remote)."""
+def test_select_views_system_deterministic():
+    """A6.2: combus_system is deterministic (parity with combus/combus_base)."""
     chs_a = _canon_from_yamls({"channels": [
-        _ch("R1", scope="REMOTE"),
-        _ch("L1", scope="LOCAL"),
-        _ch("S1", scope="SYSTEM", direction=None),
+        _ch("R1", scope="BASE"),
+        _ch("L1", scope="SYSTEM"),
+        _ch("S1", scope="BOARD", direction=None),
     ]})
     sel_a = select_views(chs_a)
     chs_b = _canon_from_yamls({"channels": [
-        _ch("S1", scope="SYSTEM", direction=None),
-        _ch("L1", scope="LOCAL"),
-        _ch("R1", scope="REMOTE"),
+        _ch("S1", scope="BOARD", direction=None),
+        _ch("L1", scope="SYSTEM"),
+        _ch("R1", scope="BASE"),
     ]})
     sel_b = select_views(chs_b)
-    assert [vc.ch.id for vc in sel_a.local.channels] == [vc.ch.id for vc in sel_b.local.channels]
-    assert [vc.numeric_id for vc in sel_a.local.channels] == [vc.numeric_id for vc in sel_b.local.channels]
+    assert [vc.ch.id for vc in sel_a.system.channels] == [vc.ch.id for vc in sel_b.system.channels]
+    assert [vc.numeric_id for vc in sel_a.system.channels] == [vc.numeric_id for vc in sel_b.system.channels]
 
 
-def test_select_views_local_empty_when_no_remote_or_local():
-    """A6.2: combus_local is empty when only SYSTEM channels exist."""
+def test_select_views_system_empty_when_no_base_or_system():
+    """A6.2: combus_system is empty when only BOARD channels exist."""
     chs = _canon_from_yamls({"channels": [
-        _ch("S1", scope="SYSTEM", direction=None),
-        _ch("S2", scope="SYSTEM", direction=None),
+        _ch("S1", scope="BOARD", direction=None),
+        _ch("S2", scope="BOARD", direction=None),
     ]})
     sel = select_views(chs)
-    assert sel.local.ch_count == 0
-    assert sel.local.wire_end == 0
+    assert sel.system.ch_count == 0
+    assert sel.system.wire_end == 0
 
 
-def test_generate_emits_combus_local_files(tmp_path):
-    """A6.2 / Phase 2: generate() emits combus_local_ids.h only (no local .h/.cpp)."""
+def test_generate_emits_combus_board_files(tmp_path):
+    """A6.2 / Phase 2: generate() emits combus_system_ids.h only (no system .h/.cpp)."""
     chs = _canon_from_yamls({"channels": [
-        _ch("R1", scope="REMOTE"),
-        _ch("L1", scope="LOCAL"),
-        _ch("S1", scope="SYSTEM", direction=None),
+        _ch("R1", scope="BASE"),
+        _ch("L1", scope="SYSTEM"),
+        _ch("S1", scope="BOARD", direction=None),
     ]})
     sel = generate(chs, _ctx([]), tmp_path)
-    assert (tmp_path / "combus_local_ids.h").exists()
-    # Phase 2: the runtime .h/.cpp are NOT emitted for the local/remote views.
-    assert not (tmp_path / "combus_local.h").exists()
-    assert not (tmp_path / "combus_local.cpp").exists()
+    assert (tmp_path / "combus_system_ids.h").exists()
+    # Phase 2: the runtime .h/.cpp are NOT emitted for the system/base views.
+    assert not (tmp_path / "combus_system.h").exists()
+    assert not (tmp_path / "combus_system.cpp").exists()
     # The full view still emits its three files.
     assert (tmp_path / "combus_ids.h").exists()
     assert (tmp_path / "combus.h").exists()
     assert (tmp_path / "combus.cpp").exists()
-    assert (tmp_path / "combus_remote_ids.h").exists()
-    assert not (tmp_path / "combus_remote.h").exists()
-    assert not (tmp_path / "combus_remote.cpp").exists()
+    assert (tmp_path / "combus_base_ids.h").exists()
+    assert not (tmp_path / "combus_base.h").exists()
+    assert not (tmp_path / "combus_base.cpp").exists()
 
 
-def test_combus_local_ids_header_excludes_system():
-    """A6.2: combus_local_ids.h must NOT contain any SYSTEM channel."""
+def test_combus_board_ids_header_excludes_board():
+    """A6.2: combus_system_ids.h must NOT contain any BOARD channel."""
     chs = _canon_from_yamls({"channels": [
-        _ch("R1", scope="REMOTE"),
-        _ch("L1", scope="LOCAL"),
-        _ch("S1", scope="SYSTEM", direction=None),
+        _ch("R1", scope="BASE"),
+        _ch("L1", scope="SYSTEM"),
+        _ch("S1", scope="BOARD", direction=None),
     ]})
     with tempfile.TemporaryDirectory() as tmp_dir:
         generate(chs, _ctx([]), Path(tmp_dir))
-        ids = (Path(tmp_dir) / "combus_local_ids.h").read_text(encoding="utf-8")
+        ids = (Path(tmp_dir) / "combus_system_ids.h").read_text(encoding="utf-8")
     assert "R1" in ids
     assert "L1" in ids
     assert "S1" not in ids
 
 
-def test_combus_local_no_wire_end_sentinel():
-    """A6.2: combus_local_ids.h does NOT declare a WireEnd sentinel
-    (combus.WireEnd is the canonical boundary; combus_local reuses it)."""
+def test_combus_board_no_wire_end_sentinel():
+    """A6.2: combus_system_ids.h does NOT declare a WireEnd sentinel
+    (combus.WireEnd is the canonical boundary; combus_system reuses it)."""
     chs = _canon_from_yamls({"channels": [
-        _ch("R1", scope="REMOTE"),
-        _ch("L1", scope="LOCAL"),
+        _ch("R1", scope="BASE"),
+        _ch("L1", scope="SYSTEM"),
     ]})
     with tempfile.TemporaryDirectory() as tmp_dir:
         generate(chs, _ctx([]), Path(tmp_dir))
-        ids = (Path(tmp_dir) / "combus_local_ids.h").read_text(encoding="utf-8")
-    assert "Combus_localWireEnd" not in ids
+        ids = (Path(tmp_dir) / "combus_system_ids.h").read_text(encoding="utf-8")
+    assert "Combus_systemWireEnd" not in ids
     assert "WireEnd" not in ids
 
 
 def test_select_views_deterministic():
-    chs_a = _canon_from_yamls({"channels": [_ch("R1", scope="REMOTE"),
-                                              _ch("L1", scope="LOCAL")]})
+    chs_a = _canon_from_yamls({"channels": [_ch("R1", scope="BASE"),
+                                              _ch("L1", scope="SYSTEM")]})
     sel_a = select_views(chs_a)
-    chs_b = _canon_from_yamls({"channels": [_ch("L1", scope="LOCAL"),
-                                              _ch("R1", scope="REMOTE")]})
+    chs_b = _canon_from_yamls({"channels": [_ch("L1", scope="SYSTEM"),
+                                              _ch("R1", scope="BASE")]})
     sel_b = select_views(chs_b)
     assert [vc.ch.id for vc in sel_a.full.channels] == [vc.ch.id for vc in sel_b.full.channels]
     assert [vc.numeric_id for vc in sel_a.full.channels] == [vc.numeric_id for vc in sel_b.full.channels]
@@ -593,21 +593,21 @@ def test_select_views_deterministic():
 def test_select_views_empty_channel_set():
     sel = select_views([])
     assert sel.full.ch_count == 0
-    assert sel.remote.ch_count == 0
+    assert sel.base.ch_count == 0
     assert sel.full.wire_end == 0
 
 
 def test_select_views_same_id_in_both_views():
-    """A REMOTE channel has the same numeric_id in both views."""
+    """A BASE channel has the same numeric_id in both views."""
     chs = _canon_from_yamls({
         "channels": [
-            _ch("R1", scope="REMOTE"),
-            _ch("L1", scope="LOCAL"),
+            _ch("R1", scope="BASE"),
+            _ch("L1", scope="SYSTEM"),
         ]
     })
     sel = select_views(chs)
     r1_full = [vc for vc in sel.full.channels if vc.ch.id == "R1"][0]
-    r1_remote = [vc for vc in sel.remote.channels if vc.ch.id == "R1"][0]
+    r1_remote = [vc for vc in sel.base.channels if vc.ch.id == "R1"][0]
     assert r1_full.numeric_id == r1_remote.numeric_id == 0
 
 
@@ -624,7 +624,7 @@ def test_view_channel_direction_bits():
             _ch("NONE", direction="none"),
         ]
     })
-    full = _select_view(chs, "combus", {"REMOTE", "LOCAL", "SYSTEM"})
+    full = _select_view(chs, "combus", {"BASE", "SYSTEM", "BOARD"})
     by_id = {vc.ch.id: vc for vc in full.channels}
     assert by_id["UP"].direction_bits == 1
     assert by_id["DOWN"].direction_bits == 2
@@ -641,7 +641,7 @@ def _build_view_with_channels(channels: list[ChannelDefinition]) -> View:
     `_select_view` from generator.py). Phase 5 (A15): each type has
     its own 0-based counter.
     """
-    _VIEW_SCOPE_ORDER = {"REMOTE": 0, "LOCAL": 1, "SYSTEM": 2}
+    _VIEW_SCOPE_ORDER = {"BASE": 0, "SYSTEM": 1, "BOARD": 2}
     selected_analog = sorted(
         [ch for ch in channels if ch.type == "analog"],
         key=lambda ch: (_VIEW_SCOPE_ORDER[ch.scope], ch.theme, ch.id),
@@ -659,7 +659,7 @@ def _build_view_with_channels(channels: list[ChannelDefinition]) -> View:
             ch=ch,
             direction_bits=Direction.from_frozenset(ch.direction),
         ))
-        if ch.scope == "REMOTE":
+        if ch.scope == "BASE":
             wire_end_analog += 1
     for idx, ch in enumerate(selected_digital):
         view_channels.append(ViewChannel(
@@ -667,7 +667,7 @@ def _build_view_with_channels(channels: list[ChannelDefinition]) -> View:
             ch=ch,
             direction_bits=Direction.from_frozenset(ch.direction),
         ))
-        if ch.scope == "REMOTE":
+        if ch.scope == "BASE":
             wire_end_digital += 1
     wire_end = wire_end_analog + wire_end_digital
     return View(
@@ -680,7 +680,7 @@ def _build_view_with_channels(channels: list[ChannelDefinition]) -> View:
 
 
 def test_render_ids_header_basic():
-    chs = _canon_from_yamls({"channels": [_ch("FOO", type_="digital", scope="REMOTE")]})
+    chs = _canon_from_yamls({"channels": [_ch("FOO", type_="digital", scope="BASE")]})
     view = _build_view_with_channels(chs)
     out = _render_ids_header(view, _ctx([]))
     assert "GENERATED FILE" in out
@@ -696,26 +696,26 @@ def test_render_ids_header_basic():
 # =============================================================================
 
 def test_wire_end_analog_and_digital_can_diverge():
-    """Phase 1 A.11 regression guard: a config with 5 REMOTE analog and
-    3 REMOTE digital channels must yield wire_end_analog=5 and
+    """Phase 1 A.11 regression guard: a config with 5 BASE analog and
+    3 BASE digital channels must yield wire_end_analog=5 and
     wire_end_digital=3, with the two values explicitly distinct.
 
     This is the exact bug that caf2353 silently introduced: collapsing
-    both per-bus counts into a single ComBusWireEnd (= total REMOTE).
+    both per-bus counts into a single ComBusWireEnd (= total BASE).
     Without this test, a future refactor that refuses the two counters
     would not be caught.
     """
     chs = _canon_from_yamls({
         "channels": [
-            _ch("A1", type_="analog", scope="REMOTE", direction="uplink"),
-            _ch("A2", type_="analog", scope="REMOTE", direction="uplink"),
-            _ch("A3", type_="analog", scope="REMOTE", direction="uplink"),
-            _ch("A4", type_="analog", scope="REMOTE", direction="uplink"),
-            _ch("A5", type_="analog", scope="REMOTE", direction="uplink"),
-            _ch("D1", type_="digital", scope="REMOTE", direction="uplink"),
-            _ch("D2", type_="digital", scope="REMOTE", direction="uplink"),
-            _ch("D3", type_="digital", scope="REMOTE", direction="uplink"),
-            _ch("L1", type_="analog", scope="LOCAL", direction="uplink"),  # not REMOTE — must not be counted
+            _ch("A1", type_="analog", scope="BASE", direction="uplink"),
+            _ch("A2", type_="analog", scope="BASE", direction="uplink"),
+            _ch("A3", type_="analog", scope="BASE", direction="uplink"),
+            _ch("A4", type_="analog", scope="BASE", direction="uplink"),
+            _ch("A5", type_="analog", scope="BASE", direction="uplink"),
+            _ch("D1", type_="digital", scope="BASE", direction="uplink"),
+            _ch("D2", type_="digital", scope="BASE", direction="uplink"),
+            _ch("D3", type_="digital", scope="BASE", direction="uplink"),
+            _ch("L1", type_="analog", scope="SYSTEM", direction="uplink"),  # not BASE — must not be counted
         ]
     })
     view = _build_view_with_channels(chs)
@@ -728,14 +728,14 @@ def test_wire_end_analog_and_digital_can_diverge():
 
 
 def test_wire_end_analog_and_digital_equal_when_counts_match():
-    """Sanity check: when REMOTE analog and REMOTE digital counts are
+    """Sanity check: when BASE analog and BASE digital counts are
     equal, the per-bus constants are equal too (and equal to wire_end/2).
     This is the volvo_A60H_bruder case (9 + 9 = 18)."""
     chs = _canon_from_yamls({
         "channels": [
-            _ch(f"A{i}", type_="analog", scope="REMOTE", direction="uplink") for i in range(1, 4)
+            _ch(f"A{i}", type_="analog", scope="BASE", direction="uplink") for i in range(1, 4)
         ] + [
-            _ch(f"D{i}", type_="digital", scope="REMOTE", direction="uplink") for i in range(1, 4)
+            _ch(f"D{i}", type_="digital", scope="BASE", direction="uplink") for i in range(1, 4)
         ]
     })
     view = _build_view_with_channels(chs)
@@ -748,9 +748,9 @@ def test_wire_end_analog_and_digital_equal_when_counts_match():
 def test_render_ids_header_does_not_emit_wire_end():
     """Phase 4 (A14) regression guard: the generated combus_ids.h must
     NOT contain ComBusWireEnd / ComBusWireEndAnalog / ComBusWireEndDigital
-    anymore. Wire dimensions are now derived directly from the Remote
-    view's ID enums (AnalogComBusRemoteID::CH_COUNT and
-    DigitalComBusRemoteID::CH_COUNT) at the call site.
+    anymore. Wire dimensions are now derived directly from the Base
+    view's ID enums (AnalogComBusBaseID::CH_COUNT and
+    DigitalComBusBaseID::CH_COUNT) at the call site.
 
     The per-bus counters (wire_end_analog, wire_end_digital) are still
     computed by the generator (see test_wire_end_analog_and_digital_*),
@@ -758,14 +758,14 @@ def test_render_ids_header_does_not_emit_wire_end():
     """
     chs = _canon_from_yamls({
         "channels": [
-            _ch("A1", type_="analog", scope="REMOTE", direction="uplink"),
-            _ch("A2", type_="analog", scope="REMOTE", direction="uplink"),
-            _ch("A3", type_="analog", scope="REMOTE", direction="uplink"),
-            _ch("A4", type_="analog", scope="REMOTE", direction="uplink"),
-            _ch("A5", type_="analog", scope="REMOTE", direction="uplink"),
-            _ch("D1", type_="digital", scope="REMOTE", direction="uplink"),
-            _ch("D2", type_="digital", scope="REMOTE", direction="uplink"),
-            _ch("D3", type_="digital", scope="REMOTE", direction="uplink"),
+            _ch("A1", type_="analog", scope="BASE", direction="uplink"),
+            _ch("A2", type_="analog", scope="BASE", direction="uplink"),
+            _ch("A3", type_="analog", scope="BASE", direction="uplink"),
+            _ch("A4", type_="analog", scope="BASE", direction="uplink"),
+            _ch("A5", type_="analog", scope="BASE", direction="uplink"),
+            _ch("D1", type_="digital", scope="BASE", direction="uplink"),
+            _ch("D2", type_="digital", scope="BASE", direction="uplink"),
+            _ch("D3", type_="digital", scope="BASE", direction="uplink"),
         ]
     })
     view = _build_view_with_channels(chs)
@@ -787,8 +787,8 @@ def test_render_ids_header_does_not_emit_wire_end():
 def test_render_ids_header_analog_digital():
     chs = _canon_from_yamls({
         "channels": [
-            _ch("A1", type_="analog", scope="REMOTE"),
-            _ch("D1", type_="digital", scope="REMOTE"),
+            _ch("A1", type_="analog", scope="BASE"),
+            _ch("D1", type_="digital", scope="BASE"),
         ]
     })
     view = _build_view_with_channels(chs)
@@ -800,18 +800,18 @@ def test_render_ids_header_analog_digital():
     assert re.search(r"D1\s*=\s*0", out)
 
 
-def test_render_ids_header_no_wire_end_for_remote_view():
-    chs = _canon_from_yamls({"channels": [_ch("R1", scope="REMOTE")]})
+def test_render_ids_header_no_wire_end_for_base_view():
+    chs = _canon_from_yamls({"channels": [_ch("R1", scope="BASE")]})
     sel = select_views(chs)
-    out = _render_ids_header(sel.remote, _ctx([]))
-    assert "Combus_remoteWireEnd" not in out
+    out = _render_ids_header(sel.base, _ctx([]))
+    assert "Combus_baseWireEnd" not in out
 
 
 def test_render_header_externs_real_runtime_structs():
     """A6.1: header declares extern AnalogComBusArray[] / DigitalComBusArray[]."""
     chs = _canon_from_yamls({"channels": [
-        _ch("FOO", type_="digital", scope="REMOTE"),
-        _ch("BAR", type_="analog", scope="REMOTE"),
+        _ch("FOO", type_="digital", scope="BASE"),
+        _ch("BAR", type_="analog", scope="BASE"),
     ]})
     view = _build_view_with_channels(chs)
     out = _render_header(view, _ctx([]))
@@ -836,11 +836,11 @@ def test_render_header_combus_view_has_bus_instance():
     assert "extern ComBus comBus" in out
 
 
-def test_render_header_remote_view_no_bus_instance():
-    """combus_remote view header does NOT declare comBus (it's a wire view)."""
-    chs = _canon_from_yamls({"channels": [_ch("R1", scope="REMOTE")]})
+def test_render_header_base_view_no_bus_instance():
+    """combus_base view header does NOT declare comBus (it's a wire view)."""
+    chs = _canon_from_yamls({"channels": [_ch("R1", scope="BASE")]})
     sel = select_views(chs)
-    out = _render_header(sel.remote, _ctx([]))
+    out = _render_header(sel.base, _ctx([]))
     assert "extern ComBus comBus" not in out
 
 
@@ -902,7 +902,7 @@ def test_render_source_digital_default_is_false():
 # =============================================================================
 
 def test_emit_view_writes_three_files(tmp_path):
-    chs = _canon_from_yamls({"channels": [_ch("FOO", scope="REMOTE")]})
+    chs = _canon_from_yamls({"channels": [_ch("FOO", scope="BASE")]})
     sel = select_views(chs)
     files = emit_view(sel.full, tmp_path, _ctx([]))
     assert len(files) == 3
@@ -951,9 +951,9 @@ def test_safe_write_cleans_tmp_on_failure(tmp_path):
 def test_generate_full_pipeline(tmp_path):
     chs = _canon_from_yamls({
         "channels": [
-            _ch("R1", scope="REMOTE", type_="digital"),
-            _ch("L1", scope="LOCAL", type_="digital"),
-            _ch("S1", scope="SYSTEM", type_="digital", direction=None),
+            _ch("R1", scope="BASE", type_="digital"),
+            _ch("L1", scope="SYSTEM", type_="digital"),
+            _ch("S1", scope="BOARD", type_="digital", direction=None),
         ]
     })
     ctx = _ctx([])
@@ -962,8 +962,8 @@ def test_generate_full_pipeline(tmp_path):
     assert (tmp_path / "combus.h").exists()
     assert (tmp_path / "combus.cpp").exists()
     assert (tmp_path / "combus_ids.h").exists()
-    assert (tmp_path / "combus_remote_ids.h").exists()
-    assert (tmp_path / "combus_local_ids.h").exists()
+    assert (tmp_path / "combus_base_ids.h").exists()
+    assert (tmp_path / "combus_system_ids.h").exists()
 
 
 def test_generate_with_requires_satisfied(tmp_path):
@@ -992,17 +992,17 @@ def test_generate_requires_missing_raises(tmp_path):
 def test_generate_empty_yields_empty_views(tmp_path):
     sel = generate([], _ctx([]), tmp_path)
     assert sel.full.ch_count == 0
-    assert sel.remote.ch_count == 0
+    assert sel.base.ch_count == 0
     assert (tmp_path / "combus_ids.h").exists()
-    assert (tmp_path / "combus_remote_ids.h").exists()
+    assert (tmp_path / "combus_base_ids.h").exists()
 
 
 # =============================================================================
-# Phase 2 / A12 — combus_local and combus_remote .h/.cpp are NOT emitted
+# Phase 2 / A12 — combus_system and combus_base .h/.cpp are NOT emitted
 # =============================================================================
 
-def test_generate_does_not_emit_local_remote_h_cpp(tmp_path):
-    """Phase 2 / A12: combus_local.h/.cpp and combus_remote.h/.cpp
+def test_generate_does_not_emit_system_base_h_cpp(tmp_path):
+    """Phase 2 / A12: combus_system.h/.cpp and combus_base.h/.cpp
     are NO LONGER written to disk. Only the _ids.h + _md5.h headers
     are emitted for these views. The MD5 payload is built directly
     from the in-memory View model (see md5.canonical_bytes), so no
@@ -1013,9 +1013,9 @@ def test_generate_does_not_emit_local_remote_h_cpp(tmp_path):
     """
     chs = _canon_from_yamls({
         "channels": [
-            _ch("R1", scope="REMOTE", type_="digital", direction="uplink"),
-            _ch("R2", scope="REMOTE", type_="analog", direction="uplink"),
-            _ch("L1", scope="LOCAL", type_="digital", direction="uplink"),
+            _ch("R1", scope="BASE", type_="digital", direction="uplink"),
+            _ch("R2", scope="BASE", type_="analog", direction="uplink"),
+            _ch("L1", scope="SYSTEM", type_="digital", direction="uplink"),
         ]
     })
     sel = generate(chs, _ctx([]), tmp_path)
@@ -1023,21 +1023,21 @@ def test_generate_does_not_emit_local_remote_h_cpp(tmp_path):
     assert (tmp_path / "combus.h").is_file()
     assert (tmp_path / "combus.cpp").is_file()
     assert (tmp_path / "combus_ids.h").is_file()
-    # combus_local / combus_remote: ids only (no .h/.cpp)
-    assert (tmp_path / "combus_local_ids.h").is_file()
-    assert (tmp_path / "combus_remote_ids.h").is_file()
+    # combus_system / combus_base: ids only (no .h/.cpp)
+    assert (tmp_path / "combus_system_ids.h").is_file()
+    assert (tmp_path / "combus_base_ids.h").is_file()
     # Phase 2: the .h/.cpp counterparts MUST NOT exist
-    assert not (tmp_path / "combus_local.h").exists(), \
-        "combus_local.h should NOT be emitted (Phase 2)"
-    assert not (tmp_path / "combus_local.cpp").exists(), \
-        "combus_local.cpp should NOT be emitted (Phase 2)"
-    assert not (tmp_path / "combus_remote.h").exists(), \
-        "combus_remote.h should NOT be emitted (Phase 2)"
-    assert not (tmp_path / "combus_remote.cpp").exists(), \
-        "combus_remote.cpp should NOT be emitted (Phase 2)"
+    assert not (tmp_path / "combus_system.h").exists(), \
+        "combus_system.h should NOT be emitted (Phase 2)"
+    assert not (tmp_path / "combus_system.cpp").exists(), \
+        "combus_system.cpp should NOT be emitted (Phase 2)"
+    assert not (tmp_path / "combus_base.h").exists(), \
+        "combus_base.h should NOT be emitted (Phase 2)"
+    assert not (tmp_path / "combus_base.cpp").exists(), \
+        "combus_base.cpp should NOT be emitted (Phase 2)"
     # MD5 artifacts (3 views + shared)
-    assert (tmp_path / "combus_local_md5.h").is_file()
-    assert (tmp_path / "combus_remote_md5.h").is_file()
+    assert (tmp_path / "combus_system_md5.h").is_file()
+    assert (tmp_path / "combus_base_md5.h").is_file()
     assert (tmp_path / "combus_md5.h").is_file()
     assert (tmp_path / "combus_wire_common.h").is_file()
     # Total: 9 files
@@ -1047,7 +1047,7 @@ def test_generate_does_not_emit_local_remote_h_cpp(tmp_path):
 
 def test_md5_payload_built_from_view_model_not_files(tmp_path):
     """Phase 2: the MD5 payload must be built from the in-memory View
-    model, NOT from reading combus_local.cpp / combus_remote.cpp
+    model, NOT from reading combus_system.cpp / combus_base.cpp
     (which are no longer on disk).
 
     We verify this by:
@@ -1058,26 +1058,26 @@ def test_md5_payload_built_from_view_model_not_files(tmp_path):
     """
     chs = _canon_from_yamls({
         "channels": [
-            _ch("R1", scope="REMOTE", type_="digital", direction="uplink"),
-            _ch("R2", scope="REMOTE", type_="analog", direction="uplink"),
+            _ch("R1", scope="BASE", type_="digital", direction="uplink"),
+            _ch("R2", scope="BASE", type_="analog", direction="uplink"),
         ]
     })
     # First run
     sel1 = generate(chs, _ctx([]), tmp_path / "run1")
-    md5_run1 = (tmp_path / "run1" / "combus_remote_md5.h").read_text()
+    md5_run1 = (tmp_path / "run1" / "combus_base_md5.h").read_text()
     # Second run on a different directory
     sel2 = generate(chs, _ctx([]), tmp_path / "run2")
-    md5_run2 = (tmp_path / "run2" / "combus_remote_md5.h").read_text()
+    md5_run2 = (tmp_path / "run2" / "combus_base_md5.h").read_text()
     # MD5 must be identical (deterministic, no path/host coupling)
     assert md5_run1 == md5_run2, (
         "MD5 hash differs between runs — this means the hash is NOT "
         "computed purely from the in-memory View model."
     )
     # Verify the .cpp files do NOT exist on disk for the second run
-    assert not (tmp_path / "run2" / "combus_remote.cpp").exists()
-    assert not (tmp_path / "run2" / "combus_remote.h").exists()
+    assert not (tmp_path / "run2" / "combus_base.cpp").exists()
+    assert not (tmp_path / "run2" / "combus_base.h").exists()
     # But the MD5 header DOES exist
-    assert (tmp_path / "run2" / "combus_remote_md5.h").is_file()
+    assert (tmp_path / "run2" / "combus_base_md5.h").is_file()
 
 
 # =============================================================================
@@ -1086,8 +1086,8 @@ def test_md5_payload_built_from_view_model_not_files(tmp_path):
 
 def test_generated_ids_header_parses():
     chs = _canon_from_yamls({"channels": [
-        _ch("A1", type_="analog", scope="REMOTE"),
-        _ch("D1", type_="digital", scope="REMOTE"),
+        _ch("A1", type_="analog", scope="BASE"),
+        _ch("D1", type_="digital", scope="BASE"),
     ]})
     with tempfile.TemporaryDirectory() as tmp_dir:
         sel = generate(chs, _ctx([]), Path(tmp_dir))
@@ -1127,9 +1127,9 @@ def test_generated_cpp_compiles_cleanly_with_cpp_check():
     argv0, label = found
 
     chs = _canon_from_yamls({"channels": [
-        _ch("A1", type_="analog", scope="REMOTE"),
-        _ch("D1", type_="digital", scope="REMOTE"),
-        _ch("L1", type_="analog", scope="LOCAL"),
+        _ch("A1", type_="analog", scope="BASE"),
+        _ch("D1", type_="digital", scope="BASE"),
+        _ch("L1", type_="analog", scope="SYSTEM"),
     ]})
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
@@ -1229,10 +1229,10 @@ def test_generator_against_real_repo_files():
     with tempfile.TemporaryDirectory() as tmp_dir:
         sel = generate(chs, ctx, Path(tmp_dir))
         assert sel.full.ch_count > 0
-        assert sel.full.ch_count >= sel.remote.ch_count
+        assert sel.full.ch_count >= sel.base.ch_count
         # Phase 2: combus (3 files) + the two *_ids.h of the other views.
         emitted = ("combus.h", "combus.cpp", "combus_ids.h",
-                   "combus_local_ids.h", "combus_remote_ids.h")
+                   "combus_system_ids.h", "combus_base_ids.h")
         for fname in emitted:
             assert (Path(tmp_dir) / fname).exists(), f"missing {fname}"
         # And no ChannelDescriptor anywhere.
@@ -1392,7 +1392,7 @@ def test_generated_cpp_direction_for_both():
 
 def test_generated_cpp_direction_for_none():
     chs = _canon_from_yamls({"channels": [
-        _ch("FOO", scope="SYSTEM", direction="none"),
+        _ch("FOO", scope="BOARD", direction="none"),
     ]})
     view = _build_view_with_channels(chs)
     out = _render_source(view, _ctx([]))
@@ -1424,7 +1424,7 @@ def test_generated_cpp_direction_for_downlink():
 # generator previously allocated IDs via a single global enumerate()
 # over a (scope, type, theme, id)-sorted channel list, which mixed
 # analog and digital channels into one sequence. The result: digital
-# IDs started at 9 (after the 9 analog REMOTE channels), and the
+# IDs started at 9 (after the 9 analog BASE channels), and the
 # generated DigitalComBusArray[] was indexed by the position-in-list
 # (0..19), not by the channel's own ID (9..17). Reading
 # DigitalComBusArray[CRUISE_ACTIVE=9] therefore read CRUISE_TOGGLE_BTN
@@ -1438,23 +1438,23 @@ def test_a15_analog_ids_are_0_based_per_type():
     numeric_id within their own type, NOT in a global sequence that
     mixes with digital channels.
 
-    Setup: 2 analog REMOTE + 2 digital REMOTE. Before the fix, the
+    Setup: 2 analog BASE + 2 digital BASE. Before the fix, the
     analog IDs would be {0, 1} and the digital IDs would be {2, 3}
     (global enumerate). After the fix: analog {0, 1}, digital {0, 1}
     (per-type 0-based).
     """
     chs = _canon_from_yamls({"channels": [
-        _ch("A1", type_="analog", scope="REMOTE", theme="core", direction="uplink"),
-        _ch("D1", type_="digital", scope="REMOTE", theme="core", direction="uplink"),
-        _ch("A2", type_="analog", scope="REMOTE", theme="core", direction="uplink"),
-        _ch("D2", type_="digital", scope="REMOTE", theme="core", direction="uplink"),
+        _ch("A1", type_="analog", scope="BASE", theme="core", direction="uplink"),
+        _ch("D1", type_="digital", scope="BASE", theme="core", direction="uplink"),
+        _ch("A2", type_="analog", scope="BASE", theme="core", direction="uplink"),
+        _ch("D2", type_="digital", scope="BASE", theme="core", direction="uplink"),
     ]})
     sel = select_views(chs)
     analog = {vc.ch.id: vc.numeric_id
-              for vc in sel.remote.channels
+              for vc in sel.base.channels
               if vc.ch.type == "analog"}
     digital = {vc.ch.id: vc.numeric_id
-               for vc in sel.remote.channels
+               for vc in sel.base.channels
                if vc.ch.type == "digital"}
     # Each type starts at 0 and is contiguous.
     assert set(analog.values()) == {0, 1}, f"analog IDs not 0-based: {analog}"
@@ -1474,10 +1474,10 @@ def test_a15_generated_array_data_matches_enum_ids():
     """
     import re
     chs = _canon_from_yamls({"channels": [
-        _ch("A1", type_="analog", scope="REMOTE", info_name="A1 data"),
-        _ch("D1", type_="digital", scope="REMOTE", info_name="D1 data"),
-        _ch("A2", type_="analog", scope="REMOTE", info_name="A2 data"),
-        _ch("D2", type_="digital", scope="REMOTE", info_name="D2 data"),
+        _ch("A1", type_="analog", scope="BASE", info_name="A1 data"),
+        _ch("D1", type_="digital", scope="BASE", info_name="D1 data"),
+        _ch("A2", type_="analog", scope="BASE", info_name="A2 data"),
+        _ch("D2", type_="digital", scope="BASE", info_name="D2 data"),
     ]})
     sel = select_views(chs)
     with tempfile.TemporaryDirectory() as td:
@@ -1519,42 +1519,42 @@ def test_a15_generated_array_data_matches_enum_ids():
             f"expected ID is {expected_id} (data/enum mismatch)")
 
 
-def test_a15_remote_view_only_contains_remote_channels():
-    """Phase 5 (A15): the combus_remote view must only contain channels
-    with scope=REMOTE, regardless of type.
+def test_a15_base_view_only_contains_base_channels():
+    """Phase 5 (A15): the combus_base view must only contain channels
+    with scope=BASE, regardless of type.
     """
     chs = _canon_from_yamls({"channels": [
-        _ch("R_A", type_="analog", scope="REMOTE"),
-        _ch("R_D", type_="digital", scope="REMOTE"),
-        _ch("L_A", type_="analog", scope="LOCAL"),
-        _ch("L_D", type_="digital", scope="LOCAL"),
+        _ch("R_A", type_="analog", scope="BASE"),
+        _ch("R_D", type_="digital", scope="BASE"),
+        _ch("L_A", type_="analog", scope="SYSTEM"),
+        _ch("L_D", type_="digital", scope="SYSTEM"),
     ]})
     sel = select_views(chs)
-    remote_ids = {vc.ch.id for vc in sel.remote.channels}
+    remote_ids = {vc.ch.id for vc in sel.base.channels}
     assert remote_ids == {"R_A", "R_D"}, (
-        f"combus_remote must only contain REMOTE channels, got {remote_ids}")
+        f"combus_base must only contain BASE channels, got {remote_ids}")
 
 
-def test_a15_wire_end_equals_count_of_remote_channels():
-    """Phase 5 (A15): view.wire_end must equal the count of REMOTE
+def test_a15_wire_end_equals_count_of_base_channels():
+    """Phase 5 (A15): view.wire_end must equal the count of BASE
     channels of ALL types (analog + digital).
     """
     chs = _canon_from_yamls({"channels": [
-        _ch("R1", type_="analog", scope="REMOTE"),
-        _ch("R2", type_="digital", scope="REMOTE"),
-        _ch("R3", type_="analog", scope="REMOTE"),
-        _ch("L1", type_="analog", scope="LOCAL"),
-        _ch("L2", type_="digital", scope="LOCAL"),
+        _ch("R1", type_="analog", scope="BASE"),
+        _ch("R2", type_="digital", scope="BASE"),
+        _ch("R3", type_="analog", scope="BASE"),
+        _ch("L1", type_="analog", scope="SYSTEM"),
+        _ch("L2", type_="digital", scope="SYSTEM"),
     ]})
     sel = select_views(chs)
-    # combus_full has 3 REMOTE channels (2 analog + 1 digital).
+    # combus_full has 3 BASE channels (2 analog + 1 digital).
     assert sel.full.wire_end == 3, (
-        f"combus.wire_end should be 3 (count of REMOTE), got {sel.full.wire_end}")
-    # combus_remote has all 3 REMOTE channels.
-    assert sel.remote.wire_end == 3, (
-        f"combus_remote.wire_end should be 3 (== CH_COUNT), got {sel.remote.wire_end}")
-    # combus_local has 3 REMOTE channels (same as combus).
-    assert sel.local.wire_end == 3
-    # Per-type counts: 2 analog REMOTE, 1 digital REMOTE.
+        f"combus.wire_end should be 3 (count of BASE), got {sel.full.wire_end}")
+    # combus_base has all 3 BASE channels.
+    assert sel.base.wire_end == 3, (
+        f"combus_base.wire_end should be 3 (== CH_COUNT), got {sel.base.wire_end}")
+    # combus_system has 3 BASE channels (same as combus).
+    assert sel.system.wire_end == 3
+    # Per-type counts: 2 analog BASE, 1 digital BASE.
     assert sel.full.wire_end_analog == 2
     assert sel.full.wire_end_digital == 1

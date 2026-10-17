@@ -16,13 +16,13 @@ Coverage:
       * projectVersion (separate constant)
       * requires (already captured by presence/absence after A6.1)
   - Scope influence per A7.2 task brief:
-      * REMOTE influences all three hashes
-      * LOCAL influences combus_local and combus, NOT combus_remote
-      * SYSTEM influences combus, NOT combus_local NOR combus_remote
-      * combus_remote hash value is UNCHANGED vs A7.1
+      * BASE influences all three hashes
+      * SYSTEM influences combus_system and combus, NOT combus_base
+      * BOARD influences combus, NOT combus_system NOR combus_base
+      * combus_base hash value is UNCHANGED vs A7.1
   - generate_md5_artifacts() emits 4 files:
-      * combus_remote_md5.h
-      * combus_local_md5.h
+      * combus_base_md5.h
+      * combus_system_md5.h
       * combus_md5.h
       * combus_wire_common.h
   - C++ header format:
@@ -75,7 +75,7 @@ def _ch(
     id_="FOO",
     info_name="Foo channel",
     type_="digital",
-    scope="LOCAL",
+    scope="SYSTEM",
     theme="failsafe",
     direction=None,
     requires=None,
@@ -115,29 +115,29 @@ def _ctx(flags):
 # =============================================================================
 
 def test_canonical_bytes_is_valid_json():
-    chs = _canon_from_yamls(_ch(scope="REMOTE"))
+    chs = _canon_from_yamls(_ch(scope="BASE"))
     sel = select_views(chs)
-    payload = json.loads(canonical_bytes(sel.remote))
+    payload = json.loads(canonical_bytes(sel.base))
     assert "view" in payload
     assert "channels" in payload
 
 
 def test_canonical_bytes_includes_required_fields():
-    chs = _canon_from_yamls(_ch(scope="REMOTE"))
+    chs = _canon_from_yamls(_ch(scope="BASE"))
     sel = select_views(chs)
-    payload = json.loads(canonical_bytes(sel.remote))
+    payload = json.loads(canonical_bytes(sel.base))
     ch = payload["channels"][0]
     for f in ("id", "type", "scope", "theme", "direction", "infoName"):
         assert f in ch, f"missing field {f}"
 
 
 def test_canonical_bytes_view_name_included():
-    # One REMOTE + one LOCAL so all three views are non-empty.
-    chs = _canon_from_yamls(_ch(scope="REMOTE"),
-                             _ch(id_="LOC", info_name="Loc", scope="LOCAL"))
+    # One BASE + one SYSTEM so all three views are non-empty.
+    chs = _canon_from_yamls(_ch(scope="BASE"),
+                             _ch(id_="LOC", info_name="Loc", scope="SYSTEM"))
     sel = select_views(chs)
-    for v, name in [(sel.remote, "combus_remote"),
-                    (sel.local,  "combus_local"),
+    for v, name in [(sel.base, "combus_base"),
+                    (sel.system,  "combus_system"),
                     (sel.full,   "combus")]:
         payload = json.loads(canonical_bytes(v))
         assert payload["view"] == name
@@ -145,20 +145,20 @@ def test_canonical_bytes_view_name_included():
 
 def test_canonical_bytes_direction_is_sorted():
     """`direction: 'both'` normalises to ['downlink','uplink'] (sorted)."""
-    chs = _canon_from_yamls(_ch(scope="REMOTE", direction="both"))
+    chs = _canon_from_yamls(_ch(scope="BASE", direction="both"))
     sel = select_views(chs)
-    payload = json.loads(canonical_bytes(sel.remote))
+    payload = json.loads(canonical_bytes(sel.base))
     assert payload["channels"][0]["direction"] == ["downlink", "uplink"]
 
 
 def test_canonical_bytes_independent_of_yaml_key_order():
-    ch1 = {"id": "FOO", "infoName": "Foo", "type": "digital", "scope": "LOCAL", "theme": "failsafe", "direction": "uplink", "requires": []}
-    ch2 = {"theme": "failsafe", "scope": "LOCAL", "type": "digital", "infoName": "Foo", "id": "FOO", "direction": "uplink", "requires": []}
+    ch1 = {"id": "FOO", "infoName": "Foo", "type": "digital", "scope": "SYSTEM", "theme": "failsafe", "direction": "uplink", "requires": []}
+    ch2 = {"theme": "failsafe", "scope": "SYSTEM", "type": "digital", "infoName": "Foo", "id": "FOO", "direction": "uplink", "requires": []}
     chs1 = _canon_from_yamls(ch1)
     chs2 = _canon_from_yamls(ch2)
     sel1 = select_views(chs1)
     sel2 = select_views(chs2)
-    assert canonical_bytes(sel1.remote) == canonical_bytes(sel2.remote)
+    assert canonical_bytes(sel1.base) == canonical_bytes(sel2.base)
 
 
 # =============================================================================
@@ -168,7 +168,7 @@ def test_canonical_bytes_independent_of_yaml_key_order():
 def test_compute_view_hash_returns_16_bytes():
     chs = _canon_from_yamls(_ch())
     sel = select_views(chs)
-    for v in (sel.remote, sel.local, sel.full):
+    for v in (sel.base, sel.system, sel.full):
         h = compute_view_hash(v)
         assert len(h.digest) == 16
 
@@ -176,7 +176,7 @@ def test_compute_view_hash_returns_16_bytes():
 def test_compute_view_hash_hex_is_lowercase():
     chs = _canon_from_yamls(_ch())
     sel = select_views(chs)
-    for v in (sel.remote, sel.local, sel.full):
+    for v in (sel.base, sel.system, sel.full):
         h = compute_view_hash(v)
         assert h.md5_hex == h.md5_hex.lower()
         assert len(h.md5_hex) == 32
@@ -185,101 +185,101 @@ def test_compute_view_hash_hex_is_lowercase():
 def test_compute_view_hash_matches_manual_md5():
     chs = _canon_from_yamls(_ch())
     sel = select_views(chs)
-    for v in (sel.remote, sel.local, sel.full):
+    for v in (sel.base, sel.system, sel.full):
         h = compute_view_hash(v)
         expected = hashlib.md5(canonical_bytes(v)).hexdigest()
         assert h.md5_hex == expected
 
 
 def test_compute_view_hash_view_name_recorded():
-    chs = _canon_from_yamls(_ch(scope="REMOTE"))
+    chs = _canon_from_yamls(_ch(scope="BASE"))
     sel = select_views(chs)
-    assert compute_view_hash(sel.remote).view_name == "combus_remote"
-    assert compute_view_hash(sel.local).view_name  == "combus_local"
+    assert compute_view_hash(sel.base).view_name == "combus_base"
+    assert compute_view_hash(sel.system).view_name  == "combus_system"
     assert compute_view_hash(sel.full).view_name   == "combus"
 
 
 def test_compute_view_hash_independent_of_file_order():
-    raw = _ch(scope="REMOTE")
-    chs1 = _canon_from_yamls(raw, _ch(id_="BAR", info_name="Bar", scope="REMOTE"))
+    raw = _ch(scope="BASE")
+    chs1 = _canon_from_yamls(raw, _ch(id_="BAR", info_name="Bar", scope="BASE"))
     chs2 = list(reversed(chs1))
     sel1 = select_views(chs1)
     sel2 = select_views(chs2)
-    for name in ("remote", "local", "full"):
+    for name in ("base", "system", "full"):
         v1 = getattr(sel1, name)
         v2 = getattr(sel2, name)
         assert compute_view_hash(v1).md5_hex == compute_view_hash(v2).md5_hex
 
 
 def test_compute_view_hash_changes_when_direction_changes():
-    """A direction change on a REMOTE channel must change the hash on
-    REMOTE and full views (real contract signal).
+    """A direction change on a BASE channel must change the hash on
+    BASE and full views (real contract signal).
 
-    On the LOCAL view, uplink and downlink collapse to ONE_WAY (ND7),
+    On the SYSTEM view, uplink and downlink collapse to ONE_WAY (ND7),
     so the hash is the SAME — this is the documented ND7 invariant.
     """
-    chs1 = _canon_from_yamls(_ch(scope="REMOTE", direction="uplink"))
-    chs2 = _canon_from_yamls(_ch(scope="REMOTE", direction="downlink"))
+    chs1 = _canon_from_yamls(_ch(scope="BASE", direction="uplink"))
+    chs2 = _canon_from_yamls(_ch(scope="BASE", direction="downlink"))
     sel1 = select_views(chs1)
     sel2 = select_views(chs2)
-    # REMOTE and full views: hash MUST differ (real contract signal).
-    for name in ("remote", "full"):
+    # BASE and full views: hash MUST differ (real contract signal).
+    for name in ("base", "full"):
         v1 = getattr(sel1, name)
         v2 = getattr(sel2, name)
         assert compute_view_hash(v1).md5_hex != compute_view_hash(v2).md5_hex, (
             f"FAIL: {name} hash does not diverge between uplink and downlink"
         )
-    # LOCAL view: hash MUST be the SAME (ND7 ONE_WAY canonisation).
-    h_local_u = compute_view_hash(sel1.local)
-    h_local_d = compute_view_hash(sel2.local)
+    # SYSTEM view: hash MUST be the SAME (ND7 ONE_WAY canonisation).
+    h_local_u = compute_view_hash(sel1.system)
+    h_local_d = compute_view_hash(sel2.system)
     assert h_local_u.md5_hex == h_local_d.md5_hex, (
-        f"ND7 FAIL: local hash diverges between uplink and downlink "
+        f"ND7 FAIL: system hash diverges between uplink and downlink "
         f"(uplink={h_local_u.md5_hex}, downlink={h_local_d.md5_hex})"
     )
 
 
 def test_compute_view_hash_changes_when_infoName_changes():
-    chs1 = _canon_from_yamls(_ch(scope="REMOTE", info_name="Foo"))
-    chs2 = _canon_from_yamls(_ch(scope="REMOTE", info_name="Bar"))
+    chs1 = _canon_from_yamls(_ch(scope="BASE", info_name="Foo"))
+    chs2 = _canon_from_yamls(_ch(scope="BASE", info_name="Bar"))
     sel1 = select_views(chs1)
     sel2 = select_views(chs2)
-    for name in ("remote", "local", "full"):
+    for name in ("base", "system", "full"):
         v1 = getattr(sel1, name)
         v2 = getattr(sel2, name)
         assert compute_view_hash(v1).md5_hex != compute_view_hash(v2).md5_hex
 
 
 def test_compute_view_hash_changes_when_id_added():
-    chs1 = _canon_from_yamls(_ch(scope="REMOTE"))
-    chs2 = _canon_from_yamls(_ch(scope="REMOTE"),
-                              _ch(id_="BAR", info_name="Bar", scope="REMOTE"))
+    chs1 = _canon_from_yamls(_ch(scope="BASE"))
+    chs2 = _canon_from_yamls(_ch(scope="BASE"),
+                              _ch(id_="BAR", info_name="Bar", scope="BASE"))
     sel1 = select_views(chs1)
     sel2 = select_views(chs2)
-    for name in ("remote", "local", "full"):
+    for name in ("base", "system", "full"):
         v1 = getattr(sel1, name)
         v2 = getattr(sel2, name)
         assert compute_view_hash(v1).md5_hex != compute_view_hash(v2).md5_hex
 
 
 def test_compute_view_hash_changes_when_type_changes():
-    chs1 = _canon_from_yamls(_ch(scope="REMOTE", type_="digital"))
-    chs2 = _canon_from_yamls(_ch(scope="REMOTE", type_="analog"))
+    chs1 = _canon_from_yamls(_ch(scope="BASE", type_="digital"))
+    chs2 = _canon_from_yamls(_ch(scope="BASE", type_="analog"))
     sel1 = select_views(chs1)
     sel2 = select_views(chs2)
-    for name in ("remote", "local", "full"):
+    for name in ("base", "system", "full"):
         v1 = getattr(sel1, name)
         v2 = getattr(sel2, name)
         assert compute_view_hash(v1).md5_hex != compute_view_hash(v2).md5_hex
 
 
 def test_compute_view_hash_changes_when_scope_moves():
-    """LOCAL -> REMOTE must change the hash for all 3 views (the channel
+    """SYSTEM -> BASE must change the hash for all 3 views (the channel
     is no longer in the view at all)."""
-    chs1 = _canon_from_yamls(_ch(scope="LOCAL"))
-    chs2 = _canon_from_yamls(_ch(scope="REMOTE", direction="uplink"))
+    chs1 = _canon_from_yamls(_ch(scope="SYSTEM"))
+    chs2 = _canon_from_yamls(_ch(scope="BASE", direction="uplink"))
     sel1 = select_views(chs1)
     sel2 = select_views(chs2)
-    for name in ("remote", "local", "full"):
+    for name in ("base", "system", "full"):
         v1 = getattr(sel1, name)
         v2 = getattr(sel2, name)
         assert compute_view_hash(v1).md5_hex != compute_view_hash(v2).md5_hex
@@ -289,82 +289,82 @@ def test_compute_view_hash_changes_when_scope_moves():
 # A7.2 scope influence matrix
 # =============================================================================
 
-def test_remote_influences_all_three_hashes():
-    """REMOTE-only change -> all 3 hashes change."""
-    base   = _canon_from_yamls(_ch(id_="OTHER", info_name="X", scope="LOCAL"))
-    with_r = _canon_from_yamls(_ch(id_="OTHER", info_name="X", scope="LOCAL"),
-                               _ch(id_="REM", info_name="R", scope="REMOTE", direction="uplink"))
+def test_base_influences_all_three_hashes():
+    """BASE-only change -> all 3 hashes change."""
+    base   = _canon_from_yamls(_ch(id_="OTHER", info_name="X", scope="SYSTEM"))
+    with_r = _canon_from_yamls(_ch(id_="OTHER", info_name="X", scope="SYSTEM"),
+                               _ch(id_="REM", info_name="R", scope="BASE", direction="uplink"))
     sel_base = select_views(base)
     sel_with = select_views(with_r)
-    for name in ("remote", "local", "full"):
+    for name in ("base", "system", "full"):
         assert compute_view_hash(getattr(sel_base, name)).md5_hex !=                compute_view_hash(getattr(sel_with, name)).md5_hex
 
 
-def test_local_influences_local_and_full_not_remote():
-    """LOCAL-only change -> combus_local and combus change; combus_remote
-    does NOT change (REMOTE view is scope-isolated)."""
-    base = _canon_from_yamls(_ch(id_="REM1", info_name="R1", scope="REMOTE", direction="uplink"))
-    with_loc = _canon_from_yamls(_ch(id_="REM1", info_name="R1", scope="REMOTE", direction="uplink"),
-                                 _ch(id_="LOC1", info_name="L1", scope="LOCAL", direction="uplink"))
+def test_system_influences_system_and_full_not_base():
+    """SYSTEM-only change -> combus_system and combus change; combus_base
+    does NOT change (BASE view is scope-isolated)."""
+    base = _canon_from_yamls(_ch(id_="REM1", info_name="R1", scope="BASE", direction="uplink"))
+    with_loc = _canon_from_yamls(_ch(id_="REM1", info_name="R1", scope="BASE", direction="uplink"),
+                                 _ch(id_="LOC1", info_name="L1", scope="SYSTEM", direction="uplink"))
     sel_base   = select_views(base)
     sel_with_l = select_views(with_loc)
 
-    # combus_remote must be identical
-    assert compute_view_hash(sel_base.remote).md5_hex == \
-           compute_view_hash(sel_with_l.remote).md5_hex
-    # combus_local and combus must differ
-    assert compute_view_hash(sel_base.local).md5_hex != \
-           compute_view_hash(sel_with_l.local).md5_hex
+    # combus_base must be identical
+    assert compute_view_hash(sel_base.base).md5_hex == \
+           compute_view_hash(sel_with_l.base).md5_hex
+    # combus_system and combus must differ
+    assert compute_view_hash(sel_base.system).md5_hex != \
+           compute_view_hash(sel_with_l.system).md5_hex
     assert compute_view_hash(sel_base.full).md5_hex != \
            compute_view_hash(sel_with_l.full).md5_hex
 
 
-def test_system_influences_only_full():
-    """SYSTEM-only change -> combus changes; combus_local and combus_remote
+def test_board_influences_only_full():
+    """BOARD-only change -> combus changes; combus_system and combus_base
     are unchanged."""
-    base = _canon_from_yamls(_ch(id_="REM1", info_name="R1", scope="REMOTE", direction="uplink"))
-    with_sys = _canon_from_yamls(_ch(id_="REM1", info_name="R1", scope="REMOTE", direction="uplink"),
-                                 _ch(id_="SYS1", info_name="S1", scope="SYSTEM", direction="none"))
+    base = _canon_from_yamls(_ch(id_="REM1", info_name="R1", scope="BASE", direction="uplink"))
+    with_sys = _canon_from_yamls(_ch(id_="REM1", info_name="R1", scope="BASE", direction="uplink"),
+                                 _ch(id_="SYS1", info_name="S1", scope="BOARD", direction="none"))
     sel_base   = select_views(base)
     sel_with_s = select_views(with_sys)
 
-    # combus_remote and combus_local are unchanged
-    assert compute_view_hash(sel_base.remote).md5_hex == \
-           compute_view_hash(sel_with_s.remote).md5_hex
-    assert compute_view_hash(sel_base.local).md5_hex == \
-           compute_view_hash(sel_with_s.local).md5_hex
+    # combus_base and combus_system are unchanged
+    assert compute_view_hash(sel_base.base).md5_hex == \
+           compute_view_hash(sel_with_s.base).md5_hex
+    assert compute_view_hash(sel_base.system).md5_hex == \
+           compute_view_hash(sel_with_s.system).md5_hex
     # combus (full) differs
     assert compute_view_hash(sel_base.full).md5_hex != \
            compute_view_hash(sel_with_s.full).md5_hex
 
 
-def test_combus_remote_hash_matches_a71_value():
-    """A7.2 task brief: combus_remote hash MUST NOT change vs A7.1.
+def test_combus_base_hash_matches_a71_value():
+    """A7.2 task brief: combus_base hash MUST NOT change vs A7.1.
 
     The MD5 computation is strictly the same function on the same view
     of the same channels. We verify by running both the legacy (A7.1)
     single-view path and the A7.2 three-view path and comparing.
     """
-    raw = _ch(scope="REMOTE", direction="uplink")
+    raw = _ch(scope="BASE", direction="uplink")
     chs = _canon_from_yamls(raw)
     sel = select_views(chs)
 
-    # A7.2 hash on sel.remote
-    h_a72 = compute_view_hash(sel.remote)
+    # A7.2 hash on sel.base
+    h_a72 = compute_view_hash(sel.base)
 
     # Reproduce the A7.1 bytes path: canonical_bytes + manual md5
-    expected = hashlib.md5(canonical_bytes(sel.remote)).hexdigest()
+    expected = hashlib.md5(canonical_bytes(sel.base)).hexdigest()
     assert h_a72.md5_hex == expected
 
 
 def test_same_inputs_produce_same_hashes():
     """Determinism: same canonical channels -> same MD5 across re-runs
     and across the three views independently."""
-    raw = _ch(scope="REMOTE", direction="uplink")
+    raw = _ch(scope="BASE", direction="uplink")
     chs = _canon_from_yamls(raw)
     sel1 = select_views(chs)
     sel2 = select_views(chs)
-    for name in ("remote", "local", "full"):
+    for name in ("base", "system", "full"):
         h1 = compute_view_hash(getattr(sel1, name))
         h2 = compute_view_hash(getattr(sel2, name))
         assert h1.md5_hex == h2.md5_hex
@@ -375,25 +375,25 @@ def test_same_inputs_produce_same_hashes():
 # =============================================================================
 
 def test_generate_md5_artifacts_emits_four_files():
-    chs = _canon_from_yamls(_ch(scope="REMOTE", direction="uplink"))
+    chs = _canon_from_yamls(_ch(scope="BASE", direction="uplink"))
     sel = select_views(chs)
     with tempfile.TemporaryDirectory() as tmp_dir:
         hashes, written = generate_md5_artifacts(sel, Path(tmp_dir))
         names = sorted(p.name for p in written)
         assert names == sorted([
-            "combus_remote_md5.h",
-            "combus_local_md5.h",
+            "combus_base_md5.h",
+            "combus_system_md5.h",
             "combus_md5.h",
             "combus_wire_common.h",
         ])
-        assert set(hashes.keys()) == {"combus_remote", "combus_local", "combus"}
+        assert set(hashes.keys()) == {"combus_base", "combus_system", "combus"}
 
 
-def test_generate_md5_artifacts_emits_remote_first():
+def test_generate_md5_artifacts_emits_base_first():
     """Order matters: the shared header must be written FIRST so a
     consumer that includes a view-specific header after the shared
     header sees a stable on-disk order."""
-    chs = _canon_from_yamls(_ch(scope="REMOTE", direction="uplink"))
+    chs = _canon_from_yamls(_ch(scope="BASE", direction="uplink"))
     sel = select_views(chs)
     with tempfile.TemporaryDirectory() as tmp_dir:
         _, written = generate_md5_artifacts(sel, Path(tmp_dir))
@@ -401,14 +401,14 @@ def test_generate_md5_artifacts_emits_remote_first():
 
 
 def test_generate_md5_artifacts_hash_matches_written_bytes():
-    chs = _canon_from_yamls(_ch(scope="REMOTE", direction="uplink"))
+    chs = _canon_from_yamls(_ch(scope="BASE", direction="uplink"))
     sel = select_views(chs)
     with tempfile.TemporaryDirectory() as tmp_dir:
         hashes, written = generate_md5_artifacts(sel, Path(tmp_dir))
         # Per-view: the hash hex must appear in the matching header file.
         for view_name, fname in [
-            ("combus_remote", "combus_remote_md5.h"),
-            ("combus_local",  "combus_local_md5.h"),
+            ("combus_base", "combus_base_md5.h"),
+            ("combus_system",  "combus_system_md5.h"),
             ("combus",        "combus_md5.h"),
         ]:
             text = (Path(tmp_dir) / fname).read_text(encoding="utf-8")
@@ -419,7 +419,7 @@ def test_generate_md5_artifacts_hash_matches_written_bytes():
 # View header format (per-view content)
 # =============================================================================
 
-def _make_hash(view_name="combus_remote"):
+def _make_hash(view_name="combus_base"):
     return ViewHash(
         view_name=view_name,
         md5_hex="0123456789abcdef0123456789abcdef",
@@ -427,22 +427,22 @@ def _make_hash(view_name="combus_remote"):
     )
 
 
-def test_remote_view_header_has_remote_constants():
+def test_base_view_header_has_base_constants():
     from scripts.combus_builder.md5 import _render_view_header
-    out = _render_view_header(_make_hash("combus_remote"))
-    assert "kCombusRemoteComBusMd5[16]" in out
-    assert "kCombusRemoteComBusMd5Hex" in out
-    # No LOCAL or FULL constants here
-    assert "kCombusLocalComBusMd5" not in out
+    out = _render_view_header(_make_hash("combus_base"))
+    assert "kCombusBaseComBusMd5[16]" in out
+    assert "kCombusBaseComBusMd5Hex" in out
+    # No SYSTEM or FULL constants here
+    assert "kCombusSystemComBusMd5" not in out
     assert "kCombusComBusMd5" not in out
 
 
-def test_local_view_header_has_local_constants():
+def test_system_view_header_has_system_constants():
     from scripts.combus_builder.md5 import _render_view_header
-    out = _render_view_header(_make_hash("combus_local"))
-    assert "kCombusLocalComBusMd5[16]" in out
-    assert "kCombusLocalComBusMd5Hex" in out
-    assert "kCombusRemoteComBusMd5" not in out
+    out = _render_view_header(_make_hash("combus_system"))
+    assert "kCombusSystemComBusMd5[16]" in out
+    assert "kCombusSystemComBusMd5Hex" in out
+    assert "kCombusBaseComBusMd5" not in out
     assert "kCombusComBusMd5" not in out
 
 
@@ -451,14 +451,14 @@ def test_full_view_header_has_full_constants():
     out = _render_view_header(_make_hash("combus"))
     assert "kCombusComBusMd5[16]" in out
     assert "kCombusComBusMd5Hex" in out
-    assert "kCombusRemoteComBusMd5" not in out
-    assert "kCombusLocalComBusMd5" not in out
+    assert "kCombusBaseComBusMd5" not in out
+    assert "kCombusSystemComBusMd5" not in out
 
 
 def test_view_header_includes_shared_header():
     """Each view header must #include combus_wire_common.h."""
     from scripts.combus_builder.md5 import _render_view_header
-    for view in ("combus_remote", "combus_local", "combus"):
+    for view in ("combus_base", "combus_system", "combus"):
         out = _render_view_header(_make_hash(view))
         assert '#include "combus_wire_common.h"' in out, view
 
@@ -484,7 +484,7 @@ def test_common_header_no_machine_type():
 def test_view_header_has_md5_array_uppercase():
     """The formatter emits 0xEFu (uppercase)."""
     from scripts.combus_builder.md5 import _render_view_header
-    out = _render_view_header(_make_hash("combus_remote"))
+    out = _render_view_header(_make_hash("combus_base"))
     assert "0xEFu" in out
 
 
@@ -493,25 +493,25 @@ def test_view_header_has_md5_array_uppercase():
 # =============================================================================
 
 def test_md5_deterministic_across_re_runs():
-    chs = _canon_from_yamls(_ch(scope="REMOTE", direction="uplink"))
+    chs = _canon_from_yamls(_ch(scope="BASE", direction="uplink"))
     sel = select_views(chs)
     with tempfile.TemporaryDirectory() as tmp1, tempfile.TemporaryDirectory() as tmp2:
         h1, _ = generate_md5_artifacts(sel, Path(tmp1))
         h2, _ = generate_md5_artifacts(sel, Path(tmp2))
-        for name in ("combus_remote", "combus_local", "combus"):
+        for name in ("combus_base", "combus_system", "combus"):
             assert h1[name].md5_hex == h2[name].md5_hex
 
 
 def test_md5_deterministic_across_file_discovery_order():
-    raw = _ch(scope="REMOTE", direction="uplink")
-    chs1 = _canon_from_yamls(raw, _ch(id_="BAR", info_name="Bar", scope="REMOTE", direction="uplink"))
+    raw = _ch(scope="BASE", direction="uplink")
+    chs1 = _canon_from_yamls(raw, _ch(id_="BAR", info_name="Bar", scope="BASE", direction="uplink"))
     chs2 = list(reversed(chs1))
     sel1 = select_views(chs1)
     sel2 = select_views(chs2)
     with tempfile.TemporaryDirectory() as tmp1, tempfile.TemporaryDirectory() as tmp2:
         h1, _ = generate_md5_artifacts(sel1, Path(tmp1))
         h2, _ = generate_md5_artifacts(sel2, Path(tmp2))
-        for name in ("combus_remote", "combus_local", "combus"):
+        for name in ("combus_base", "combus_system", "combus"):
             assert h1[name].md5_hex == h2[name].md5_hex
 
 
@@ -521,20 +521,20 @@ def test_md5_deterministic_across_file_discovery_order():
 
 def test_four_headers_compile_together(tmp_path):
     """All four headers must include cleanly in a single TU."""
-    chs = _canon_from_yamls(_ch(scope="REMOTE", direction="uplink"))
+    chs = _canon_from_yamls(_ch(scope="BASE", direction="uplink"))
     generate(chs, _ctx([]), tmp_path)
     tu = tmp_path / "compile_check.cpp"
     tu.write_text(
         "#include <stdint.h>\n"
         '#include "combus_wire_common.h"\n'
-        '#include "combus_remote_md5.h"\n'
-        '#include "combus_local_md5.h"\n'
+        '#include "combus_base_md5.h"\n'
+        '#include "combus_system_md5.h"\n'
         '#include "combus_md5.h"\n'
         "int main() {\n"
-        "  (void)combus::wire::kCombusRemoteComBusMd5[0];\n"
-        "  (void)combus::wire::kCombusRemoteComBusMd5Hex;\n"
-        "  (void)combus::wire::kCombusLocalComBusMd5[0];\n"
-        "  (void)combus::wire::kCombusLocalComBusMd5Hex;\n"
+        "  (void)combus::wire::kCombusBaseComBusMd5[0];\n"
+        "  (void)combus::wire::kCombusBaseComBusMd5Hex;\n"
+        "  (void)combus::wire::kCombusSystemComBusMd5[0];\n"
+        "  (void)combus::wire::kCombusSystemComBusMd5Hex;\n"
         "  (void)combus::wire::kCombusComBusMd5[0];\n"
         "  (void)combus::wire::kCombusComBusMd5Hex;\n"
         "  (void)combus::wire::kProjectVersionMajor;\n"
@@ -565,11 +565,11 @@ def test_four_headers_compile_together(tmp_path):
 # This test runs the FULL pipeline (parser -> canon -> select_views ->
 # generate -> generate_md5_artifacts) twice on the real .cb files in src/,
 # then asserts that:
-#   1. The 3 view hashes (combus_remote, combus_local, combus) are identical.
-#   2. The 4 emitted header files (combus_wire_common.h, combus_remote_md5.h,
-#      combus_local_md5.h, combus_md5.h) are BIT-IDENTICAL between the two
+#   1. The 3 view hashes (combus_base, combus_system, combus) are identical.
+#   2. The 4 emitted header files (combus_wire_common.h, combus_base_md5.h,
+#      combus_system_md5.h, combus_md5.h) are BIT-IDENTICAL between the two
 #      runs (same bytes, not just same hash).
-#   3. The 3 view-specific C++ headers (combus_remote.h, combus_local.h,
+#   3. The 3 view-specific C++ headers (combus_base.h, combus_system.h,
 #      combus.h) are also bit-identical.
 #
 # This is the strongest possible determinism guarantee: not just "same hash"
@@ -616,8 +616,8 @@ def test_a10_full_pipeline_deterministic_bit_identical(tmp_path: Path):
     sel2 = _run_full_pipeline(out2)
 
     # 1. Hashes must match.
-    # ViewSelection has attributes .remote, .local, .full (not combus_*).
-    for attr in ("remote", "local", "full"):
+    # ViewSelection has attributes .base, .system, .full (not combus_*).
+    for attr in ("base", "system", "full"):
         h1 = compute_view_hash(getattr(sel1, attr))
         h2 = compute_view_hash(getattr(sel2, attr))
         assert h1.md5_hex == h2.md5_hex, (
@@ -628,11 +628,11 @@ def test_a10_full_pipeline_deterministic_bit_identical(tmp_path: Path):
     # 2. Emitted header files must be bit-identical.
     expected_files = [
         "combus_wire_common.h",
-        "combus_remote_md5.h",
-        "combus_local_md5.h",
+        "combus_base_md5.h",
+        "combus_system_md5.h",
         "combus_md5.h",
-        "combus_remote_ids.h",
-        "combus_local_ids.h",
+        "combus_base_ids.h",
+        "combus_system_ids.h",
         "combus_ids.h",
         "combus.h",
         "combus.cpp",
@@ -684,11 +684,11 @@ def test_a10_md5_deterministic_across_file_discovery_order(tmp_path: Path):
     # All 7 emitted files must be bit-identical.
     for fname in (
         "combus_wire_common.h",
-        "combus_remote_md5.h",
-        "combus_local_md5.h",
+        "combus_base_md5.h",
+        "combus_system_md5.h",
         "combus_md5.h",
-        "combus_remote_ids.h",
-        "combus_local_ids.h",
+        "combus_base_ids.h",
+        "combus_system_ids.h",
         "combus_ids.h",
         "combus.h",
         "combus.cpp",
@@ -702,7 +702,7 @@ def test_a10_md5_deterministic_across_file_discovery_order(tmp_path: Path):
 # ND7 — ONE_WAY canonisation for MD5 hashing
 # =============================================================================
 #
-# Rationale: in a multi-board node, the same LOCAL channel can legitimately
+# Rationale: in a multi-board node, the same SYSTEM channel can legitimately
 # appear as `uplink` on one board and `downlink` on another — this is a
 # role mirror, not a contract drift. The MD5 must NOT flag this as a
 # divergence between boards.
@@ -777,43 +777,43 @@ def test_canonical_direction_both_distinct_from_none():
 # -----------------------------------------------------------------------------
 
 
-def test_nd7_uplink_vs_downlink_same_hash_on_local_view():
+def test_nd7_uplink_vs_downlink_same_hash_on_system_view():
     """Two channels identical except uplink vs downlink must produce
-    the SAME MD5 on the LOCAL view (ND7 ONE_WAY canonisation).
+    the SAME MD5 on the SYSTEM view (ND7 ONE_WAY canonisation).
 
     This is the end-to-end ND7 invariant: the role mirror between
-    boards must not produce a hash divergence on the LOCAL view.
+    boards must not produce a hash divergence on the SYSTEM view.
 
-    REMOTE and full views are NOT affected by ONE_WAY (uplink/downlink
-    are real contract signals on REMOTE channels).
+    BASE and full views are NOT affected by ONE_WAY (uplink/downlink
+    are real contract signals on BASE channels).
     """
-    chs_uplink = _canon_from_yamls(_ch(scope="LOCAL", direction="uplink"))
-    chs_downlink = _canon_from_yamls(_ch(scope="LOCAL", direction="downlink"))
+    chs_uplink = _canon_from_yamls(_ch(scope="SYSTEM", direction="uplink"))
+    chs_downlink = _canon_from_yamls(_ch(scope="SYSTEM", direction="downlink"))
     sel_u = select_views(chs_uplink)
     sel_d = select_views(chs_downlink)
-    h_u = compute_view_hash(sel_u.local)
-    h_d = compute_view_hash(sel_d.local)
+    h_u = compute_view_hash(sel_u.system)
+    h_d = compute_view_hash(sel_d.system)
     assert h_u.md5_hex == h_d.md5_hex, (
-        f"ND7 FAIL: local hash diverges between uplink and downlink "
+        f"ND7 FAIL: system hash diverges between uplink and downlink "
         f"(uplink={h_u.md5_hex}, downlink={h_d.md5_hex})"
     )
 
 
-def test_nd7_uplink_vs_downlink_different_hash_on_remote_view():
-    """On the REMOTE view, uplink and downlink MUST produce different
-    hashes (they are real contract signals on REMOTE channels).
+def test_nd7_uplink_vs_downlink_different_hash_on_base_view():
+    """On the BASE view, uplink and downlink MUST produce different
+    hashes (they are real contract signals on BASE channels).
 
     This guards against an over-aggressive canonisation that would
-    collapse REMOTE uplink/downlink into ONE_WAY.
+    collapse BASE uplink/downlink into ONE_WAY.
     """
-    chs_uplink = _canon_from_yamls(_ch(scope="REMOTE", direction="uplink"))
-    chs_downlink = _canon_from_yamls(_ch(scope="REMOTE", direction="downlink"))
+    chs_uplink = _canon_from_yamls(_ch(scope="BASE", direction="uplink"))
+    chs_downlink = _canon_from_yamls(_ch(scope="BASE", direction="downlink"))
     sel_u = select_views(chs_uplink)
     sel_d = select_views(chs_downlink)
-    h_u = compute_view_hash(sel_u.remote)
-    h_d = compute_view_hash(sel_d.remote)
+    h_u = compute_view_hash(sel_u.base)
+    h_d = compute_view_hash(sel_d.base)
     assert h_u.md5_hex != h_d.md5_hex, (
-        f"ND7 FAIL: remote hash does not diverge between uplink and downlink "
+        f"ND7 FAIL: base hash does not diverge between uplink and downlink "
         f"(uplink={h_u.md5_hex}, downlink={h_d.md5_hex})"
     )
 
@@ -826,11 +826,11 @@ def test_nd7_both_vs_uplink_different_hash():
     This guards against an over-aggressive canonisation that would
     collapse both into ONE_WAY.
     """
-    chs_both = _canon_from_yamls(_ch(scope="REMOTE", direction="both"))
-    chs_uplink = _canon_from_yamls(_ch(scope="REMOTE", direction="uplink"))
+    chs_both = _canon_from_yamls(_ch(scope="BASE", direction="both"))
+    chs_uplink = _canon_from_yamls(_ch(scope="BASE", direction="uplink"))
     sel_b = select_views(chs_both)
     sel_u = select_views(chs_uplink)
-    for attr in ("remote", "local", "full"):
+    for attr in ("base", "system", "full"):
         h_b = compute_view_hash(getattr(sel_b, attr))
         h_u = compute_view_hash(getattr(sel_u, attr))
         assert h_b.md5_hex != h_u.md5_hex, (
@@ -847,11 +847,11 @@ def test_nd7_none_vs_downlink_different_hash():
     This guards against an over-aggressive canonisation that would
     collapse none into ONE_WAY.
     """
-    chs_none = _canon_from_yamls(_ch(scope="REMOTE", direction="none"))
-    chs_downlink = _canon_from_yamls(_ch(scope="REMOTE", direction="downlink"))
+    chs_none = _canon_from_yamls(_ch(scope="BASE", direction="none"))
+    chs_downlink = _canon_from_yamls(_ch(scope="BASE", direction="downlink"))
     sel_n = select_views(chs_none)
     sel_d = select_views(chs_downlink)
-    for attr in ("remote", "local", "full"):
+    for attr in ("base", "system", "full"):
         h_n = compute_view_hash(getattr(sel_n, attr))
         h_d = compute_view_hash(getattr(sel_d, attr))
         assert h_n.md5_hex != h_d.md5_hex, (
@@ -865,11 +865,11 @@ def test_nd7_both_vs_none_different_hash():
     different hash on all 3 views — regression of real contract
     drift detection.
     """
-    chs_both = _canon_from_yamls(_ch(scope="REMOTE", direction="both"))
-    chs_none = _canon_from_yamls(_ch(scope="REMOTE", direction="none"))
+    chs_both = _canon_from_yamls(_ch(scope="BASE", direction="both"))
+    chs_none = _canon_from_yamls(_ch(scope="BASE", direction="none"))
     sel_b = select_views(chs_both)
     sel_n = select_views(chs_none)
-    for attr in ("remote", "local", "full"):
+    for attr in ("base", "system", "full"):
         h_b = compute_view_hash(getattr(sel_b, attr))
         h_n = compute_view_hash(getattr(sel_n, attr))
         assert h_b.md5_hex != h_n.md5_hex, (
@@ -878,23 +878,23 @@ def test_nd7_both_vs_none_different_hash():
         )
 
 
-def test_nd7_canonical_bytes_local_view_applies_one_way():
-    """The `direction` field in canonical_bytes() for the LOCAL view
+def test_nd7_canonical_bytes_system_view_applies_one_way():
+    """The `direction` field in canonical_bytes() for the SYSTEM view
     must reflect the ONE_WAY canonisation, not the raw frozenset.
     """
-    chs = _canon_from_yamls(_ch(scope="LOCAL", direction="uplink"))
+    chs = _canon_from_yamls(_ch(scope="SYSTEM", direction="uplink"))
     sel = select_views(chs)
-    payload = json.loads(canonical_bytes(sel.local))
+    payload = json.loads(canonical_bytes(sel.system))
     assert payload["channels"][0]["direction"] == ["ONE_WAY"]
 
 
-def test_nd7_canonical_bytes_remote_view_keeps_raw_direction():
-    """The `direction` field in canonical_bytes() for the REMOTE view
+def test_nd7_canonical_bytes_base_view_keeps_raw_direction():
+    """The `direction` field in canonical_bytes() for the BASE view
     must keep the raw direction (no ONE_WAY canonisation).
     """
-    chs = _canon_from_yamls(_ch(scope="REMOTE", direction="uplink"))
+    chs = _canon_from_yamls(_ch(scope="BASE", direction="uplink"))
     sel = select_views(chs)
-    payload = json.loads(canonical_bytes(sel.remote))
+    payload = json.loads(canonical_bytes(sel.base))
     assert payload["channels"][0]["direction"] == ["uplink"]
 
 
@@ -902,26 +902,26 @@ def test_nd7_canonical_bytes_full_view_keeps_raw_direction():
     """The `direction` field in canonical_bytes() for the full view
     must keep the raw direction (no ONE_WAY canonisation).
     """
-    chs = _canon_from_yamls(_ch(scope="REMOTE", direction="uplink"))
+    chs = _canon_from_yamls(_ch(scope="BASE", direction="uplink"))
     sel = select_views(chs)
     payload = json.loads(canonical_bytes(sel.full))
     assert payload["channels"][0]["direction"] == ["uplink"]
 
 
-def test_nd7_canonical_bytes_both_unchanged_on_local():
+def test_nd7_canonical_bytes_both_unchanged_on_system():
     """The `direction` field for `both` must remain ['downlink','uplink']
-    on the LOCAL view (both is a real contract signal)."""
-    chs = _canon_from_yamls(_ch(scope="LOCAL", direction="both"))
+    on the SYSTEM view (both is a real contract signal)."""
+    chs = _canon_from_yamls(_ch(scope="SYSTEM", direction="both"))
     sel = select_views(chs)
-    payload = json.loads(canonical_bytes(sel.local))
+    payload = json.loads(canonical_bytes(sel.system))
     assert payload["channels"][0]["direction"] == ["downlink", "uplink"]
 
 
-def test_nd7_canonical_bytes_none_unchanged_on_local():
-    """The `direction` field for `none` must remain [] on the LOCAL view."""
-    chs = _canon_from_yamls(_ch(scope="LOCAL", direction="none"))
+def test_nd7_canonical_bytes_none_unchanged_on_system():
+    """The `direction` field for `none` must remain [] on the SYSTEM view."""
+    chs = _canon_from_yamls(_ch(scope="SYSTEM", direction="none"))
     sel = select_views(chs)
-    payload = json.loads(canonical_bytes(sel.local))
+    payload = json.loads(canonical_bytes(sel.system))
     assert payload["channels"][0]["direction"] == []
 
 

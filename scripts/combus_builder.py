@@ -123,8 +123,8 @@ def main(argv: list[str] | None = None) -> int:
     print(
         f"[combus_builder] generated "
         f"combus ({sel.full.ch_count} ch, WIRE_END={sel.full.wire_end}), "
-        f"combus_local ({sel.local.ch_count} ch), "
-        f"combus_remote ({sel.remote.ch_count} ch) "
+        f"combus_system ({sel.system.ch_count} ch), "
+        f"combus_base ({sel.base.ch_count} ch) "
         f"-> {out_dir}"
     )
     print(

@@ -21,7 +21,7 @@ Coverage:
       * Existing call sites that do NOT pass machine_type still work
         (backward compat with test_nd1_*, test_md5, etc.)
   - End-to-end pipeline test:
-      * A LOCAL channel declared under machines/dumper_truck/ with
+      * A SYSTEM channel declared under machines/dumper_truck/ with
         requires=[IS_MAINBOARD] on mainboard only diffuses to the sister
         board as downlink after the filter is applied (the filter
         removes any excavator/ .cb, leaving dumper_truck/ .cb intact).
@@ -44,7 +44,7 @@ if str(REPO_ROOT) not in sys.path:
 
 import pytest
 
-from scripts.combus_builder.diffusion import diffuse_local_channels
+from scripts.combus_builder.diffusion import diffuse_system_channels
 from scripts.combus_builder.machine_type import (
     AmbiguousMachineTypeError,
     MACHINE_TYPE_FLAGS,
@@ -376,7 +376,7 @@ def test_filter_does_not_change_nd2_diffusion_behaviour():
     scenario (dumper_truck, the only active type today).
 
     Scenario:
-      - A LOCAL channel 'BAT_LOW' declared in dumper_truck/combus/ with
+      - A SYSTEM channel 'BAT_LOW' declared in dumper_truck/combus/ with
         requires=[IS_MAINBOARD] on mainboard only.
       - soundboard sees the synthetic downlink (ND2 rule 5).
 
@@ -401,7 +401,7 @@ def test_filter_does_not_change_nd2_diffusion_behaviour():
               - id: BAT_LOW
                 infoName: "Battery low"
                 type: digital
-                scope: LOCAL
+                scope: SYSTEM
                 theme: vbat
                 direction: uplink
                 requires:
@@ -425,7 +425,7 @@ def test_filter_does_not_change_nd2_diffusion_behaviour():
             _br, _files, parsed = discover_and_parse(
                 project_root=project_root, machine_type=mt_value,
             )
-            results[mt_label] = diffuse_local_channels(parsed, node)
+            results[mt_label] = diffuse_system_channels(parsed, node)
 
         # Both runs must produce the same per-board picture:
         for board_id in ("mainboard", "soundboard"):

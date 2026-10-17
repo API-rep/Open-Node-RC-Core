@@ -81,7 +81,7 @@ ANALOG_VALUE_MAX: int = 65535
 VALID_TYPES: frozenset[str] = frozenset({"analog", "digital"})
 
 # Scopes autorisés.
-VALID_SCOPES: frozenset[str] = frozenset({"LOCAL", "REMOTE", "SYSTEM"})
+VALID_SCOPES: frozenset[str] = frozenset({"SYSTEM", "BASE", "BOARD"})
 
 # Thèmes autorisés. À étendre ici quand un nouveau thème apparaît.
 VALID_THEMES: frozenset[str] = frozenset({
@@ -95,9 +95,9 @@ VALID_THEMES: frozenset[str] = frozenset({
 
 # Ordre canonique des scopes (utilisé par le tri).
 SCOPE_ORDER: dict[str, int] = {
-    "LOCAL": 0,
-    "REMOTE": 1,
-    "SYSTEM": 2,
+    "SYSTEM": 0,
+    "BASE": 1,
+    "BOARD": 2,
 }
 
 # Tokens de surface autorisés dans `direction`.
@@ -109,15 +109,15 @@ DIRECTION_TOKENS: frozenset[str] = frozenset({
 })
 
 # Tokens autorisés par scope (en surface).
-# A2.1 : les variantes `*_OR` ne sont acceptées que sur LOCAL/REMOTE
-# (un channel SYSTEM n'a qu'un seul écrivain possible — la fusion OR
+# A2.1 : les variantes `*_OR` ne sont acceptées que sur SYSTEM/BASE
+# (un channel BOARD n'a qu'un seul écrivain possible — la fusion OR
 # n'a pas de sens, on est toujours en last-write-wins effectif).
 DIRECTION_BY_SCOPE: dict[str, frozenset[str]] = {
-    "LOCAL": frozenset({"uplink", "downlink", "both", "none",
+    "SYSTEM": frozenset({"uplink", "downlink", "both", "none",
                         "uplink_or", "downlink_or", "both_or"}),
-    "REMOTE": frozenset({"uplink", "downlink", "both", "none",
+    "BASE": frozenset({"uplink", "downlink", "both", "none",
                          "uplink_or", "downlink_or", "both_or"}),
-    "SYSTEM": frozenset({"none"}),  # seule valeur de surface acceptée
+    "BOARD": frozenset({"none"}),  # seule valeur de surface acceptée
 }
 
 # Tokens `*_OR` (A2.1) — sous-ensemble de DIRECTION_TOKENS.
@@ -172,7 +172,7 @@ class ChannelDefinition:
     Définition de channel validée et normalisée.
 
     `direction` est TOUJOURS un frozenset de `{"uplink", "downlink"}`
-    (ou vide pour `none`/SYSTEM). Les tokens de surface `both` et
+    (ou vide pour `none`/BOARD). Les tokens de surface `both` et
     `none` sont normalisés à la validation et n'apparaissent jamais
     dans cette représentation.
 
@@ -215,7 +215,7 @@ class ChannelDefinition:
         """Direction filaire effective = direction | direction_or.
 
         C'est la SEULE direction à utiliser pour le bitmask C++ et
-        l'appartenance aux vues remote/local. Les tokens `*_OR`
+        l'appartenance aux vues base/system. Les tokens `*_OR`
         (uplink_or, downlink_or, both_or) ne remplissent que
         `direction_or` ; leur sémantique filaire (bitmask, transport)
         est identique à leur équivalent non-OR. Cette propriété
@@ -244,18 +244,18 @@ def _normalize_direction(
     Valide et normalise `direction` selon le scope et le type.
 
     Règles (decision mainteneur 2026-08-22 : direction = string, pas liste) :
-      - Champ absent pour SYSTEM → (frozenset(), frozenset()) (= none implicite).
+      - Champ absent pour BOARD → (frozenset(), frozenset()) (= none implicite).
       - Doit être une STRING unique ∈ {uplink, downlink, both, none,
                                        uplink_or, downlink_or, both_or}.
-      - SYSTEM : seule 'none' (ou champ absent) est acceptée.
-      - LOCAL/REMOTE : 'uplink', 'downlink', 'both', 'none' tous OK
+      - BOARD : seule 'none' (ou champ absent) est acceptée.
+      - SYSTEM/BASE : 'uplink', 'downlink', 'both', 'none' tous OK
                        selon la politique par scope.
       - `both` est un raccourci pour {uplink, downlink}.
       - `none` est un raccourci pour {}.
 
     Règles A2.1 (variantes `*_OR`) :
       - `*_OR` uniquement sur `type: digital` (rejet sur analog).
-      - `*_OR` uniquement sur `scope: LOCAL/REMOTE` (rejet sur SYSTEM).
+      - `*_OR` uniquement sur `scope: SYSTEM/BASE` (rejet sur BOARD).
       - `*_OR` est mutuellement exclusif avec `direction` non-vide :
         un channel ne peut pas avoir à la fois une direction wire
         classique ET une sémantique de fusion OR.
@@ -271,14 +271,14 @@ def _normalize_direction(
     Retourne un tuple (direction, direction_or) de frozensets normalisés
     (uniquement uplink/downlink). Un seul des deux est non-vide à la fois.
     """
-    # Cas SYSTEM : champ absent → (frozenset(), frozenset())
+    # Cas BOARD : champ absent → (frozenset(), frozenset())
     if raw_dir is None:
-        if scope == "SYSTEM":
+        if scope == "BOARD":
             return (frozenset(), frozenset())
         raise ChannelValidationError(
             path, channel_id,
             f"`direction` is required for scope={scope!r} "
-            "(SYSTEM may omit it and defaults to 'none')",
+            "(BOARD may omit it and defaults to 'none')",
         )
 
     # Doit être une string.
@@ -290,18 +290,18 @@ def _normalize_direction(
             f"'none', 'uplink_or', 'downlink_or', 'both_or'",
         )
 
-    # SYSTEM : seule 'none' est acceptée (les `*_OR` sont rejetés ici).
-    if scope == "SYSTEM":
+    # BOARD : seule 'none' est acceptée (les `*_OR` sont rejetés ici).
+    if scope == "BOARD":
         if raw_dir == "none":
             return (frozenset(), frozenset())
         raise ChannelValidationError(
             path, channel_id,
-            f"scope=SYSTEM does not have a wire direction; "
+            f"scope=BOARD does not have a wire direction; "
             f"only `direction: none` (or absent) is accepted, "
             f"got {raw_dir!r}",
         )
 
-    # LOCAL/REMOTE : la valeur doit être un token autorisé globalement.
+    # SYSTEM/BASE : la valeur doit être un token autorisé globalement.
     if raw_dir not in DIRECTION_TOKENS:
         raise ChannelValidationError(
             path, channel_id,
@@ -589,18 +589,18 @@ def validate_channel(
             f"`scope` must be one of {sorted(VALID_SCOPES)}, got {cscope!r}",
         )
 
-    # --- ND4 bis (2026-10-04): REMOTE n'accepte pas de requires ---
-    # Un channel scope REMOTE représente une frame fixe, héritée
+    # --- ND4 bis (2026-10-04): BASE n'accepte pas de requires ---
+    # Un channel scope BASE représente une frame fixe, héritée
     # d'une config générique de type de machine, partagée telle
     # quelle entre le nœud machine et la télécommande. `requires`
     # (activation conditionnelle à la compilation) n'a pas de sens
-    # sur REMOTE : ça introduirait des variantes de frame selon la
+    # sur BASE : ça introduirait des variantes de frame selon la
     # config buildée, alors que la frame doit rester fixe par type
     # de machine. On rejette donc explicitement tout `requires`
-    # non vide sur un channel REMOTE, avec un message qui pointe
-    # vers les alternatives (LOCAL/SYSTEM scope, ou suppression du
+    # non vide sur un channel BASE, avec un message qui pointe
+    # vers les alternatives (SYSTEM/BOARD scope, ou suppression du
     # requires).
-    if cscope == "REMOTE":
+    if cscope == "BASE":
         raw_req = raw.get("requires")
         if raw_req is not None:
             # Normalise pour le message : on accepte une liste vide
@@ -611,10 +611,10 @@ def validate_channel(
             else:
                 raise ChannelValidationError(
                     path, cid,
-                    f"channel REMOTE {cid!r} declares requires={raw_req!r} "
-                    f"— REMOTE channels represent a fixed machine-type "
+                    f"channel BASE {cid!r} declares requires={raw_req!r} "
+                    f"— BASE channels represent a fixed machine-type "
                     f"frame and cannot be conditionally compiled; move "
-                    f"this channel to LOCAL/SYSTEM scope, or remove the "
+                    f"this channel to SYSTEM/BOARD scope, or remove the "
                     f"requires",
                 )
 

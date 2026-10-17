@@ -26,11 +26,11 @@ void input_update(ComBus &bus) {
                          ? (int16_t)dev.minVal
                          : (int16_t)((dev.minVal + dev.maxVal) / 2);
       uint16_t neutral = (uint16_t)map(restRaw, dev.minVal, dev.maxVal, 0, bus.analogBusMaxVal);
-      combus_set_analog(bus, m.busChannel, neutral, ChanLayer::LOCAL);
+      combus_set_analog(bus, m.busChannel, neutral, ChanLayer::SYSTEM);
     }
 
     for (uint8_t i = 0; i < InputDigitalMapCount; i++) {
-      combus_set_digital(bus, InputDigitalMapArray[i].busChannel, false, ChanLayer::LOCAL);
+      combus_set_digital(bus, InputDigitalMapArray[i].busChannel, false, ChanLayer::SYSTEM);
     }
     return;   // source inactive — PS4_DS4_BT_LINK_LOST stays at its failsafe default (true = lost)
   }
@@ -47,7 +47,7 @@ void input_update(ComBus &bus) {
     uint16_t val    = map(inputAnalogValue[devID], dev.minVal, dev.maxVal, 0, bus.analogBusMaxVal);
     uint16_t busVal = m.isInverted ? (bus.analogBusMaxVal - val) : val;
 
-    combus_set_analog(bus, m.busChannel, busVal, ChanLayer::LOCAL);
+    combus_set_analog(bus, m.busChannel, busVal, ChanLayer::SYSTEM);
   }
 
 // ==========================================================
@@ -62,7 +62,7 @@ void input_update(ComBus &bus) {
     bool raw        = inputDigitalValue[devID];
     bool finalState = (raw != (m.isInverted || dev.isInverted));
 
-    combus_set_digital(bus, m.busChannel, finalState, ChanLayer::LOCAL);
+    combus_set_digital(bus, m.busChannel, finalState, ChanLayer::SYSTEM);
   }
 
     // Chantier 12.6 (cleanup): the legacy `bus.isNotDrived = false;` line
@@ -76,7 +76,7 @@ void input_update(ComBus &bus) {
     // lost), and the aggregator chain picks it up next cycle.
   bus.lastFrameMs = millis();
 #if defined(INPUT_PS4_DS4_BT)
-  combus_set_digital(bus, DigitalComBusID::PS4_DS4_BT_LINK_LOST, false, ChanLayer::LOCAL);
+  combus_set_digital(bus, DigitalComBusID::PS4_DS4_BT_LINK_LOST, false, ChanLayer::SYSTEM);
 #endif
 }
 

@@ -15,7 +15,7 @@
 #include <core/system/vbat/vbat_sense.h>
 
 #include <machines/system/sys_manager.h>
-#include <combus_remote_ids.h>   // AnalogComBusRemoteID / DigitalComBusRemoteID (Phase 4)
+#include <combus_base_ids.h>   // AnalogComBusBaseID / DigitalComBusBaseID (Phase 4)
 
 
 /**
@@ -91,7 +91,7 @@ void loop() {
       if (!keyActive && (millis() - stateTM >= kSleepTimeoutMs)) {
           sys_log_info("[SYSTEM][EVENT] reason=sleep_timeout action=enter_SLEEPING\n");
           // RL3: generic analog write via RUNLEVEL channel.
-          combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::SLEEPING, ChanLayer::LOCAL);
+          combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::SLEEPING, ChanLayer::SYSTEM);
       }
       break;
     }
@@ -109,7 +109,7 @@ void loop() {
 
         // --- 1. Auto-transition to RUNNING ---
         // RL3: generic analog write via RUNLEVEL channel.
-        combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::RUNNING, ChanLayer::LOCAL);
+        combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::RUNNING, ChanLayer::SYSTEM);
       break;
     }
 
@@ -137,23 +137,23 @@ void loop() {
         // Phase 4 (A14) + Phase 5 (A15): each TYPE has its own 0-based
         // counter, so CH_COUNT is the exact count per type — no
         // subtraction needed.
-        constexpr uint8_t kRemoteAnalogCount =
-            static_cast<uint8_t>(AnalogComBusRemoteID::CH_COUNT);
-        constexpr uint8_t kRemoteDigitalCount =
-            static_cast<uint8_t>(DigitalComBusRemoteID::CH_COUNT);
+        constexpr uint8_t kBaseAnalogCount =
+            static_cast<uint8_t>(AnalogComBusBaseID::CH_COUNT);
+        constexpr uint8_t kBaseDigitalCount =
+            static_cast<uint8_t>(DigitalComBusBaseID::CH_COUNT);
         bool active = false;
-        for (uint8_t i = 0; i < kRemoteAnalogCount && !active; i++) {
+        for (uint8_t i = 0; i < kBaseAnalogCount && !active; i++) {
             const int32_t off = static_cast<int32_t>(comBus.analogBus[i].value) - static_cast<int32_t>(CbusNeutral);
             if (off > kIdleBand || off < -kIdleBand) active = true;
         }
-        for (uint8_t i = 0; i < kRemoteDigitalCount && !active; i++) {
+        for (uint8_t i = 0; i < kBaseDigitalCount && !active; i++) {
             if (comBus.digitalBus[i].value) active = true;
         }
         if (active) s_lastActivityMs = millis();
         if (millis() - s_lastActivityMs >= kEngineOffTimeoutMs) {
             sys_log_info("[SYSTEM][EVENT] reason=idle_timeout action=enter_IDLE\n");
             // RL3: generic analog write via RUNLEVEL channel.
-            combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::IDLE, ChanLayer::LOCAL);
+            combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::IDLE, ChanLayer::SYSTEM);
             break;
         }
       }
@@ -187,7 +187,7 @@ void loop() {
       }
         // Auto-transition to IDLE — no shutdown sequence implemented yet (winter 2026).
         // RL3: generic analog write via RUNLEVEL channel.
-        combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::IDLE, ChanLayer::LOCAL);
+        combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::IDLE, ChanLayer::SYSTEM);
       break;
     }
 

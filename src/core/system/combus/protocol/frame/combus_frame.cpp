@@ -8,8 +8,8 @@
  *
  * LY2 — the codec now takes two counters `analogWireEnd` /
  * `digitalWireEnd` on encode.  These are resolved at TX init time
- * from the link's `ChanLayer` (REMOTE → CH_COUNT of the Remote view,
- * LOCAL → CH_COUNT of the Local view, FULL → CH_COUNT of the Full
+ * from the link's `ChanLayer` (BASE → CH_COUNT of the Base view,
+ * SYSTEM → CH_COUNT of the System view, FULL → CH_COUNT of the Full
  * view).  The codec iterates only over `comBus.analogBus[0..analogWireEnd)`
  * and `comBus.digitalBus[0..digitalWireEnd)` — this is the ONLY
  * behavioural change vs. the pre-LY2 codec.  Decode and apply are
@@ -72,7 +72,7 @@ uint8_t combus_frame_crc8(const uint8_t* data, uint8_t len) {
  *   2. Build flags byte from transport-level inputs (failSafe, ...).
  *   3. Write fixed 5-byte header: SOF, nAnalog, nDigital, seq, flags.
  *      RL2: runLevel is no longer a header field — it travels as a
- *      standard combus channel (RUNLEVEL, scope LOCAL, see runlevel.cb).
+ *      standard combus channel (RUNLEVEL, scope SYSTEM, see runlevel.cb).
  *      The header is now 5 bytes (was 6 before RL2).
  *   4. Pack digital channel values as bits, LSB-first, ceil(nDigital/8) bytes.
  *   5. Write analog channel values as uint16_t little-endian, nAnalog entries.
@@ -83,8 +83,8 @@ uint8_t combus_frame_crc8(const uint8_t* data, uint8_t len) {
  *
  * LY2 — the codec iterates only over `comBus.analogBus[0..analogWireEnd)`
  * and `comBus.digitalBus[0..digitalWireEnd)`.  These two counters are
- * resolved at TX init time from the link's `ChanLayer` (REMOTE → CH_COUNT
- * of the Remote view, LOCAL → CH_COUNT of the Local view, FULL → CH_COUNT
+ * resolved at TX init time from the link's `ChanLayer` (BASE → CH_COUNT
+ * of the Base view, SYSTEM → CH_COUNT of the System view, FULL → CH_COUNT
  * of the Full view).  The wire payload is now sized to the layer's
  * prefix length instead of the full enum set.
  *
@@ -104,7 +104,7 @@ uint8_t combus_frame_crc8(const uint8_t* data, uint8_t len) {
  *
  * @note FS2 — the legacy `failSafe` parameter has been removed.  The
  *   failsafe state is now carried by the `DigitalComBusID::FAILSAFE`
- *   channel (LOCAL, both_or) — no out-of-band bit needed.
+ *   channel (SYSTEM, both_or) — no out-of-band bit needed.
  */
 
 uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
@@ -116,8 +116,8 @@ uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
 
 		// LY2 — the wire payload is sized to the layer's prefix length.
 		// analogWireEnd / digitalWireEnd are resolved at TX init time
-		// from the link's ChanLayer (REMOTE → CH_COUNT of the Remote
-		// view, LOCAL → CH_COUNT of the Local view, FULL → CH_COUNT of
+		// from the link's ChanLayer (BASE → CH_COUNT of the Base
+		// view, SYSTEM → CH_COUNT of the System view, FULL → CH_COUNT of
 		// the Full view).  Clamp to cfg.nAnalog / cfg.nDigital as a
 		// safety net (the caller-provided buffers cannot be exceeded).
 	const uint8_t nAnalog  = (analogWireEnd  < cfg.nAnalog)  ? analogWireEnd  : cfg.nAnalog;
@@ -147,7 +147,7 @@ uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
 	uint8_t flags = 0;   // transport-level status bits (COMBUS_FLAG_*)
 
 	// FS2 — COMBUS_FLAG_FAILSAFE removed.  Failsafe state is now carried
-	// by the DigitalComBusID::FAILSAFE channel (LOCAL, both_or) — no
+	// by the DigitalComBusID::FAILSAFE channel (SYSTEM, both_or) — no
 	// out-of-band bit needed.
 	//if (...)     { flags |= COMBUS_FLAG_... ; }       // next flag — bit 1
 	//if (...)     { flags |= COMBUS_FLAG_... ; }       // next flag — bit 2
@@ -160,7 +160,7 @@ uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
 	outputBuffer[pos++] = nDigital;
 	outputBuffer[pos++] = seq;
 		// RL2: runLevel removed from header — travels as standard combus
-		// channel RUNLEVEL (scope LOCAL, see runlevel.cb). The prefix is
+		// channel RUNLEVEL (scope SYSTEM, see runlevel.cb). The prefix is
 		// now 5 bytes: SOF + 4-byte header (was 6 before RL2).
 	outputBuffer[pos++] = flags;
 

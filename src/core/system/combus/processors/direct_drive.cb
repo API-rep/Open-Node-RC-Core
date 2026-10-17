@@ -1,4 +1,4 @@
-# direct_drive.cb — Direct-drive mode flag (REMOTE)
+# direct_drive.cb — Direct-drive mode flag (BASE)
 #
 # - DIRECT_DRIVE: written by INPUT_DIRECT_DRIVE chain (toggle proc).
 #   Set to 1 when direct-drive mode is active (OPTIONS button toggled on).
@@ -22,5 +22,5 @@ channels:
   infoName: "Direct-drive mode (1=raw passthrough, 0=normal sim)"
   type: digital
   theme: core
-  scope: REMOTE
+  scope: BASE
   direction: none

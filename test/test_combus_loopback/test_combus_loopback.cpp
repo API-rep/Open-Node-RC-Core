@@ -18,7 +18,7 @@
  *
  *   Group C — view identity (Phase 3 / A13):
  *     Validates that the 3 view-specific enums (AnalogComBusID,
- *     AnalogComBusLocalID, AnalogComBusRemoteID and their digital
+ *     AnalogComBusSystemID, AnalogComBusBaseID and their digital
  *     counterparts) reference the SAME runtime object in
  *     AnalogComBusArray[] / DigitalComBusArray[].
  *
@@ -31,7 +31,7 @@
  *
  *   Group E — MD5 pointer resolution by layer (LY4):
  *     Verifies that combus_protocol_init() resolves the per-link
- *     expectedMd5 pointer from link->layer (REMOTE / LOCAL / SYSTEM),
+ *     expectedMd5 pointer from link->layer (BASE / SYSTEM / BOARD),
  *     and that combus_handshake_compareAndLog() matches correctly when
  *     given the right local MD5 pointer.  Same pattern as Group D —
  *     verify the resolution at init, not the per-frame behaviour.
@@ -66,15 +66,15 @@
 
 // Phase 3 / A13: include combus.h (declares AnalogComBusArray /
 // DigitalComBusArray) AND the 3 view-specific ids headers so the
-// runtime identity test can reference AnalogComBusID, AnalogComBusLocalID
-// and AnalogComBusRemoteID in the same translation unit.
+// runtime identity test can reference AnalogComBusID, AnalogComBusSystemID
+// and AnalogComBusBaseID in the same translation unit.
 //
 // combus.h transitively includes combus_ids.h, so we do NOT include
 // it directly here (avoids the double-definition error: combus_ids.h
 // does not yet have a #pragma once guard).
 #include "combus.h"
-#include "combus_local_ids.h"
-#include "combus_remote_ids.h"
+#include "combus_system_ids.h"
+#include "combus_base_ids.h"
 
 
 // =============================================================================
@@ -130,7 +130,7 @@ static constexpr uint8_t kLinkIdx = 0u;
 static void fillRandom(uint32_t seed) {
     srand(seed);
     // RL3: runLevel is no longer a struct field — write RUNLEVEL via the generic analog accessor.
-    combus_set_analog(txComBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::RUNNING, ChanLayer::LOCAL);
+    combus_set_analog(txComBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::RUNNING, ChanLayer::SYSTEM);
     for (uint8_t i = 0u; i < kTestNAnalog; ++i) {
         txAnalogBus[i].value    = (uint16_t)(rand() % 1001u);
     }
@@ -145,7 +145,7 @@ static void fillRandom(uint32_t seed) {
 static void assertFrameMatchesBus(const ComBusFrame* frame, const ComBus* bus) {
     TEST_ASSERT_NOT_NULL(frame);
     // RL2: runLevel is no longer a header field — it travels as a
-    // standard combus channel (RUNLEVEL, scope LOCAL). The header
+    // standard combus channel (RUNLEVEL, scope SYSTEM). The header
     // assertion is removed; the channel-level assertion will be added
     // in RL3 when combus_frame_apply() is wired to the RUNLEVEL channel.
     for (uint8_t i = 0u; i < kTestNAnalog; ++i) {
@@ -240,8 +240,8 @@ static void test_loopback_init(void) {
     combus_rx_register_pool(s_rxStates, 1);
 
     // LY2 — combus_tx_init() now takes a ChanLayer parameter.  Use
-    // REMOTE for the loopback test (matches the machine env default).
-    combus_tx_init(kLinkIdx, com, kCfg, 50u, ChanLayer::REMOTE);   // 50 Hz TX
+    // BASE for the loopback test (matches the machine env default).
+    combus_tx_init(kLinkIdx, com, kCfg, 50u, ChanLayer::BASE);   // 50 Hz TX
     combus_rx_init(kLinkIdx, com, kCfg, rxAnalogBuf, rxDigitalBuf);
 
     // No assertion beyond not crashing — both modules share the same NodeCom*.
@@ -301,7 +301,7 @@ static void test_loopback_monkey(void) {
 // GROUP C — VIEW IDENTITY (Phase 3 / A13)
 //
 // Validates the central invariant of Solution A: the 3 view-specific
-// enums (AnalogComBusID, AnalogComBusLocalID, AnalogComBusRemoteID and
+// enums (AnalogComBusID, AnalogComBusSystemID, AnalogComBusBaseID and
 // their digital counterparts) must reference the SAME runtime object
 // in AnalogComBusArray[] / DigitalComBusArray[]. Comparing only the
 // numeric values would NOT prove this — two independent arrays
@@ -315,12 +315,12 @@ static void test_loopback_monkey(void) {
 // that re-mapped the enums independently).
 //
 // Channel choices (volvo_A60H_bruder / dumper_truck):
-//   - BRAKE_BUS (REMOTE analog, id=0): present in all 3 views.
-//   - DUMP_STICK (LOCAL analog, id=18): present in combus + combus_local,
-//     absent from combus_remote (REMOTE-only view).
-//   - CRUISE_ACTIVE (REMOTE digital, id=9): present in all 3 views.
-//   - CRUISE_TOGGLE_BTN (LOCAL digital, id=21): present in combus +
-//     combus_local, absent from combus_remote.
+//   - BRAKE_BUS (BASE analog, id=0): present in all 3 views.
+//   - DUMP_STICK (SYSTEM analog, id=18): present in combus + combus_system,
+//     absent from combus_base (BASE-only view).
+//   - CRUISE_ACTIVE (BASE digital, id=9): present in all 3 views.
+//   - CRUISE_TOGGLE_BTN (SYSTEM digital, id=21): present in combus +
+//     combus_system, absent from combus_base.
 //
 // The generated combus_generated/combus.cpp is added to the test env's
 // source list via scripts/combus_test_add_generated_source.py (registered
@@ -329,104 +329,104 @@ static void test_loopback_monkey(void) {
 // time, enabling the pointer-equality tests below.
 // =============================================================================
 
-/** Analog: a REMOTE channel must be the same object in all 3 views. */
-static void test_same_memory_object_analog_remote(void) {
+/** Analog: a BASE channel must be the same object in all 3 views. */
+static void test_same_memory_object_analog_base(void) {
     AnalogComBus& via_full   = AnalogComBusArray[static_cast<uint8_t>(AnalogComBusID::BRAKE_BUS)];
-    AnalogComBus& via_remote = AnalogComBusArray[static_cast<uint8_t>(AnalogComBusRemoteID::BRAKE_BUS)];
-    AnalogComBus& via_local  = AnalogComBusArray[static_cast<uint8_t>(AnalogComBusLocalID::BRAKE_BUS)];
+    AnalogComBus& via_base = AnalogComBusArray[static_cast<uint8_t>(AnalogComBusBaseID::BRAKE_BUS)];
+    AnalogComBus& via_system  = AnalogComBusArray[static_cast<uint8_t>(AnalogComBusSystemID::BRAKE_BUS)];
 
     // Pointer identity: the 3 views must reference the same object.
-    TEST_ASSERT_EQUAL_PTR(&via_full, &via_remote);
-    TEST_ASSERT_EQUAL_PTR(&via_full, &via_local);
+    TEST_ASSERT_EQUAL_PTR(&via_full, &via_base);
+    TEST_ASSERT_EQUAL_PTR(&via_full, &via_system);
 
     // Write via one view, read via the others.
     via_full.value = 12345u;
-    TEST_ASSERT_EQUAL_UINT16(12345u, via_remote.value);
-    TEST_ASSERT_EQUAL_UINT16(12345u, via_local.value);
+    TEST_ASSERT_EQUAL_UINT16(12345u, via_base.value);
+    TEST_ASSERT_EQUAL_UINT16(12345u, via_system.value);
 
-    via_remote.value = 6789u;
+    via_base.value = 6789u;
     TEST_ASSERT_EQUAL_UINT16(6789u, via_full.value);
-    TEST_ASSERT_EQUAL_UINT16(6789u, via_local.value);
+    TEST_ASSERT_EQUAL_UINT16(6789u, via_system.value);
 }
 
-/** Analog: a LOCAL-only channel must be the same object in combus + combus_local. */
-static void test_same_memory_object_analog_local_only(void) {
+/** Analog: a SYSTEM-only channel must be the same object in combus + combus_system. */
+static void test_same_memory_object_analog_system_only(void) {
     AnalogComBus& via_full  = AnalogComBusArray[static_cast<uint8_t>(AnalogComBusID::DUMP_STICK)];
-    AnalogComBus& via_local = AnalogComBusArray[static_cast<uint8_t>(AnalogComBusLocalID::DUMP_STICK)];
+    AnalogComBus& via_system = AnalogComBusArray[static_cast<uint8_t>(AnalogComBusSystemID::DUMP_STICK)];
 
-    // Pointer identity: combus and combus_local must share the object.
-    TEST_ASSERT_EQUAL_PTR(&via_full, &via_local);
+    // Pointer identity: combus and combus_system must share the object.
+    TEST_ASSERT_EQUAL_PTR(&via_full, &via_system);
 
     // Write via one view, read via the other.
-    via_local.value = 999u;
+    via_system.value = 999u;
     TEST_ASSERT_EQUAL_UINT16(999u, via_full.value);
 }
 
-/** Digital: a REMOTE channel must be the same object in all 3 views. */
-static void test_same_memory_object_digital_remote(void) {
+/** Digital: a BASE channel must be the same object in all 3 views. */
+static void test_same_memory_object_digital_base(void) {
     DigitalComBus& via_full   = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::CRUISE_ACTIVE)];
-    DigitalComBus& via_remote = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusRemoteID::CRUISE_ACTIVE)];
-    DigitalComBus& via_local  = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusLocalID::CRUISE_ACTIVE)];
+    DigitalComBus& via_base = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusBaseID::CRUISE_ACTIVE)];
+    DigitalComBus& via_system  = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusSystemID::CRUISE_ACTIVE)];
 
-    TEST_ASSERT_EQUAL_PTR(&via_full, &via_remote);
-    TEST_ASSERT_EQUAL_PTR(&via_full, &via_local);
+    TEST_ASSERT_EQUAL_PTR(&via_full, &via_base);
+    TEST_ASSERT_EQUAL_PTR(&via_full, &via_system);
 
     via_full.value = true;
-    TEST_ASSERT_TRUE(via_remote.value);
-    TEST_ASSERT_TRUE(via_local.value);
+    TEST_ASSERT_TRUE(via_base.value);
+    TEST_ASSERT_TRUE(via_system.value);
 
-    via_remote.value = false;
+    via_base.value = false;
     TEST_ASSERT_FALSE(via_full.value);
-    TEST_ASSERT_FALSE(via_local.value);
+    TEST_ASSERT_FALSE(via_system.value);
 }
 
-/** Digital: a LOCAL-only channel must be the same object in combus + combus_local. */
-static void test_same_memory_object_digital_local_only(void) {
+/** Digital: a SYSTEM-only channel must be the same object in combus + combus_system. */
+static void test_same_memory_object_digital_system_only(void) {
     DigitalComBus& via_full  = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::CRUISE_TOGGLE_BTN)];
-    DigitalComBus& via_local = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusLocalID::CRUISE_TOGGLE_BTN)];
+    DigitalComBus& via_system = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusSystemID::CRUISE_TOGGLE_BTN)];
 
-    TEST_ASSERT_EQUAL_PTR(&via_full, &via_local);
+    TEST_ASSERT_EQUAL_PTR(&via_full, &via_system);
 
-    via_local.value = true;
+    via_system.value = true;
     TEST_ASSERT_TRUE(via_full.value);
 }
 
 /** Prefix alignment: the 3 enums must agree on numeric values for shared channels. */
 static void test_id_prefix_alignment_analog(void) {
-    // REMOTE channels: present in all 3 views, must have the same numeric id.
+    // BASE channels: present in all 3 views, must have the same numeric id.
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(AnalogComBusID::BRAKE_BUS),
-                            static_cast<uint8_t>(AnalogComBusRemoteID::BRAKE_BUS));
+                            static_cast<uint8_t>(AnalogComBusBaseID::BRAKE_BUS));
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(AnalogComBusID::BRAKE_BUS),
-                            static_cast<uint8_t>(AnalogComBusLocalID::BRAKE_BUS));
+                            static_cast<uint8_t>(AnalogComBusSystemID::BRAKE_BUS));
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(AnalogComBusID::THROTTLE_BUS),
-                            static_cast<uint8_t>(AnalogComBusRemoteID::THROTTLE_BUS));
+                            static_cast<uint8_t>(AnalogComBusBaseID::THROTTLE_BUS));
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(AnalogComBusID::THROTTLE_BUS),
-                            static_cast<uint8_t>(AnalogComBusLocalID::THROTTLE_BUS));
+                            static_cast<uint8_t>(AnalogComBusSystemID::THROTTLE_BUS));
 
-    // LOCAL-only channels: present in combus + combus_local, must agree.
+    // SYSTEM-only channels: present in combus + combus_system, must agree.
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(AnalogComBusID::DUMP_STICK),
-                            static_cast<uint8_t>(AnalogComBusLocalID::DUMP_STICK));
+                            static_cast<uint8_t>(AnalogComBusSystemID::DUMP_STICK));
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(AnalogComBusID::STEERING_STICK),
-                            static_cast<uint8_t>(AnalogComBusLocalID::STEERING_STICK));
+                            static_cast<uint8_t>(AnalogComBusSystemID::STEERING_STICK));
 }
 
 /** Prefix alignment: digital counterpart. */
 static void test_id_prefix_alignment_digital(void) {
-    // REMOTE channels.
+    // BASE channels.
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DigitalComBusID::CRUISE_ACTIVE),
-                            static_cast<uint8_t>(DigitalComBusRemoteID::CRUISE_ACTIVE));
+                            static_cast<uint8_t>(DigitalComBusBaseID::CRUISE_ACTIVE));
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DigitalComBusID::CRUISE_ACTIVE),
-                            static_cast<uint8_t>(DigitalComBusLocalID::CRUISE_ACTIVE));
+                            static_cast<uint8_t>(DigitalComBusSystemID::CRUISE_ACTIVE));
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DigitalComBusID::LIGHTS),
-                            static_cast<uint8_t>(DigitalComBusRemoteID::LIGHTS));
+                            static_cast<uint8_t>(DigitalComBusBaseID::LIGHTS));
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DigitalComBusID::LIGHTS),
-                            static_cast<uint8_t>(DigitalComBusLocalID::LIGHTS));
+                            static_cast<uint8_t>(DigitalComBusSystemID::LIGHTS));
 
-    // LOCAL-only channels.
+    // SYSTEM-only channels.
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DigitalComBusID::CRUISE_TOGGLE_BTN),
-                            static_cast<uint8_t>(DigitalComBusLocalID::CRUISE_TOGGLE_BTN));
+                            static_cast<uint8_t>(DigitalComBusSystemID::CRUISE_TOGGLE_BTN));
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DigitalComBusID::HORN_BTN),
-                            static_cast<uint8_t>(DigitalComBusLocalID::HORN_BTN));
+                            static_cast<uint8_t>(DigitalComBusSystemID::HORN_BTN));
 }
 
 
@@ -440,30 +440,30 @@ static void test_id_prefix_alignment_digital(void) {
 // enum set.
 //
 // Channel counts (volvo_A60H_bruder / dumper_truck):
-//   - REMOTE: 10 analog (0..9), 9 digital (0..8)   [RL1: +1 analog = RUNLEVEL]
-//   - LOCAL:  13 analog (0..12), 19 digital (0..18) [RL1: +1 analog = RUNLEVEL]
+//   - BASE: 10 analog (0..9), 9 digital (0..8)   [RL1: +1 analog = RUNLEVEL]
+//   - SYSTEM:  13 analog (0..12), 19 digital (0..18) [RL1: +1 analog = RUNLEVEL]
 //   - FULL:   13 analog (0..12), 19 digital (0..18) [RL1: +1 analog = RUNLEVEL]
 //
 // Expected frame sizes (header=5, CRC=1) — RL2: header shrunk from 6 to 5 bytes
 // (runLevel removed from header, travels as standard combus channel RUNLEVEL):
-//   - REMOTE: 5 + ceil(9/8) + 10*2 + 1 = 5 + 2 + 20 + 1 = 28 bytes
-//   - LOCAL:  5 + ceil(19/8) + 13*2 + 1 = 5 + 3 + 26 + 1 = 35 bytes
+//   - BASE: 5 + ceil(9/8) + 10*2 + 1 = 5 + 2 + 20 + 1 = 28 bytes
+//   - SYSTEM:  5 + ceil(19/8) + 13*2 + 1 = 5 + 3 + 26 + 1 = 35 bytes
 //   - FULL:   5 + ceil(19/8) + 13*2 + 1 = 5 + 3 + 26 + 1 = 35 bytes
 //
-// The REMOTE buffer must be SHORTER than the FULL buffer (28 < 35).
+// The BASE buffer must be SHORTER than the FULL buffer (28 < 35).
 // =============================================================================
 
-/** Encode with REMOTE wire-end — buffer must be shorter than FULL. */
-static void test_wire_end_remote_shorter_than_full(void) {
+/** Encode with BASE wire-end — buffer must be shorter than FULL. */
+static void test_wire_end_base_shorter_than_full(void) {
     fillRandom(0xD1D2D3D4ul);
 
-    // Encode with REMOTE wire-end (9 analog, 9 digital).
-    uint8_t lenRemote = combus_frame_encode(
+    // Encode with BASE wire-end (9 analog, 9 digital).
+    uint8_t lenBase = combus_frame_encode(
         kCfg, encodeBuf, &txComBus, 1u, false,
-        static_cast<uint8_t>(AnalogComBusRemoteID::CH_COUNT),
-        static_cast<uint8_t>(DigitalComBusRemoteID::CH_COUNT)
+        static_cast<uint8_t>(AnalogComBusBaseID::CH_COUNT),
+        static_cast<uint8_t>(DigitalComBusBaseID::CH_COUNT)
     );
-    TEST_ASSERT_GREATER_THAN_UINT8(0u, lenRemote);
+    TEST_ASSERT_GREATER_THAN_UINT8(0u, lenBase);
 
     // Encode with FULL wire-end (12 analog, 19 digital).
     uint8_t lenFull = combus_frame_encode(
@@ -473,27 +473,27 @@ static void test_wire_end_remote_shorter_than_full(void) {
     );
     TEST_ASSERT_GREATER_THAN_UINT8(0u, lenFull);
 
-    // The REMOTE buffer must be SHORTER than the FULL buffer.
-    TEST_ASSERT_LESS_THAN_UINT8(lenFull, lenRemote);
+    // The BASE buffer must be SHORTER than the FULL buffer.
+    TEST_ASSERT_LESS_THAN_UINT8(lenFull, lenBase);
 
     // Verify the exact expected sizes (see header comment).
-    // RL1: +1 analog (RUNLEVEL) → REMOTE 10 analog, FULL 13 analog.
+    // RL1: +1 analog (RUNLEVEL) → BASE 10 analog, FULL 13 analog.
     // RL2: header shrunk from 6 to 5 bytes (runLevel removed from header).
-    TEST_ASSERT_EQUAL_UINT8(28u, lenRemote);  // 5 + 2 + 20 + 1
+    TEST_ASSERT_EQUAL_UINT8(28u, lenBase);  // 5 + 2 + 20 + 1
     TEST_ASSERT_EQUAL_UINT8(35u, lenFull);    // 5 + 3 + 26 + 1
 }
 
-/** Encode with LOCAL wire-end — buffer must equal FULL (same CH_COUNT). */
-static void test_wire_end_local_equals_full(void) {
+/** Encode with SYSTEM wire-end — buffer must equal FULL (same CH_COUNT). */
+static void test_wire_end_system_equals_full(void) {
     fillRandom(0xE1E2E3E4ul);
 
-    // Encode with LOCAL wire-end (12 analog, 19 digital).
-    uint8_t lenLocal = combus_frame_encode(
+    // Encode with SYSTEM wire-end (12 analog, 19 digital).
+    uint8_t lenSystem = combus_frame_encode(
         kCfg, encodeBuf, &txComBus, 3u, false,
-        static_cast<uint8_t>(AnalogComBusLocalID::CH_COUNT),
-        static_cast<uint8_t>(DigitalComBusLocalID::CH_COUNT)
+        static_cast<uint8_t>(AnalogComBusSystemID::CH_COUNT),
+        static_cast<uint8_t>(DigitalComBusSystemID::CH_COUNT)
     );
-    TEST_ASSERT_GREATER_THAN_UINT8(0u, lenLocal);
+    TEST_ASSERT_GREATER_THAN_UINT8(0u, lenSystem);
 
     // Encode with FULL wire-end (12 analog, 19 digital).
     uint8_t lenFull = combus_frame_encode(
@@ -503,8 +503,8 @@ static void test_wire_end_local_equals_full(void) {
     );
     TEST_ASSERT_GREATER_THAN_UINT8(0u, lenFull);
 
-    // LOCAL and FULL have the same CH_COUNT — buffers must be equal.
-    TEST_ASSERT_EQUAL_UINT8(lenFull, lenLocal);
+    // SYSTEM and FULL have the same CH_COUNT — buffers must be equal.
+    TEST_ASSERT_EQUAL_UINT8(lenFull, lenSystem);
 }
 
 /** Encode with wire-end = 0 — buffer must be the minimum (header + CRC). */
@@ -535,7 +535,7 @@ static void test_wire_end_zero_is_minimum(void) {
 static void test_runlevel_roundtrip_via_channel(void) {
     // Write RUNLEVEL via the generic analog accessor (mainboard pattern).
     combus_set_analog(txComBus, AnalogComBusID::RUNLEVEL,
-                      (uint16_t)RunLevel::STARTING, ChanLayer::LOCAL);
+                      (uint16_t)RunLevel::STARTING, ChanLayer::SYSTEM);
 
     uint8_t len = combus_frame_encode(kCfg, encodeBuf, &txComBus, 7u, false,
                                       static_cast<uint8_t>(AnalogComBusID::CH_COUNT),
@@ -570,7 +570,7 @@ static void test_wire_end_clamped_to_cfg(void) {
 // GROUP E — MD5 POINTER RESOLUTION BY LAYER (LY4)
 //
 // Verifies that combus_protocol_init() resolves the per-link
-// expectedMd5 pointer from link->layer (REMOTE / LOCAL / SYSTEM), and
+// expectedMd5 pointer from link->layer (BASE / SYSTEM / BOARD), and
 // that combus_handshake_compareAndLog() matches correctly when given
 // the right local MD5 pointer.  Same pattern as Group D — verify the
 // resolution at init, not the per-frame behaviour.
@@ -578,8 +578,8 @@ static void test_wire_end_clamped_to_cfg(void) {
 // The 3 MD5 arrays are generated by scripts/combus_builder/md5.py
 // under out/combus_generated/ and exposed via combus::wire:
 //   - kCombusComBusMd5       (FULL view, machine node default)
-//   - kCombusRemoteComBusMd5 (REMOTE view, RF link)
-//   - kCombusLocalComBusMd5  (LOCAL view, extension board link)
+//   - kCombusBaseComBusMd5 (BASE view, RF link)
+//   - kCombusSystemComBusMd5  (SYSTEM view, extension board link)
 //
 // The 3 arrays MUST be distinct (different views hash different .inc
 // files).  This is the structural invariant that LY4 relies on — if
@@ -592,30 +592,30 @@ static void test_md5_arrays_are_distinct(void) {
     // Pointer identity: the 3 arrays live at different addresses.
     TEST_ASSERT_NOT_EQUAL(
         (const void*)combus::wire::kCombusComBusMd5,
-        (const void*)combus::wire::kCombusRemoteComBusMd5);
+        (const void*)combus::wire::kCombusBaseComBusMd5);
     TEST_ASSERT_NOT_EQUAL(
         (const void*)combus::wire::kCombusComBusMd5,
-        (const void*)combus::wire::kCombusLocalComBusMd5);
+        (const void*)combus::wire::kCombusSystemComBusMd5);
     TEST_ASSERT_NOT_EQUAL(
-        (const void*)combus::wire::kCombusRemoteComBusMd5,
-        (const void*)combus::wire::kCombusLocalComBusMd5);
+        (const void*)combus::wire::kCombusBaseComBusMd5,
+        (const void*)combus::wire::kCombusSystemComBusMd5);
 
     // Content identity: at least one byte must differ between any pair.
-    bool remoteDiffersFromFull = false;
-    bool localDiffersFromFull  = false;
-    bool localDiffersFromRemote = false;
+    bool baseDiffersFromFull = false;
+    bool systemDiffersFromFull  = false;
+    bool systemDiffersFromBase = false;
     for (uint8_t i = 0u; i < 16u; ++i) {
-        if (combus::wire::kCombusComBusMd5[i]       != combus::wire::kCombusRemoteComBusMd5[i]) { remoteDiffersFromFull = true; }
-        if (combus::wire::kCombusComBusMd5[i]       != combus::wire::kCombusLocalComBusMd5[i])  { localDiffersFromFull  = true; }
-        if (combus::wire::kCombusRemoteComBusMd5[i] != combus::wire::kCombusLocalComBusMd5[i])  { localDiffersFromRemote = true; }
+        if (combus::wire::kCombusComBusMd5[i]       != combus::wire::kCombusBaseComBusMd5[i]) { baseDiffersFromFull = true; }
+        if (combus::wire::kCombusComBusMd5[i]       != combus::wire::kCombusSystemComBusMd5[i])  { systemDiffersFromFull  = true; }
+        if (combus::wire::kCombusBaseComBusMd5[i] != combus::wire::kCombusSystemComBusMd5[i])  { systemDiffersFromBase = true; }
     }
-    TEST_ASSERT_TRUE_MESSAGE(remoteDiffersFromFull,  "REMOTE MD5 must differ from FULL MD5");
-    TEST_ASSERT_TRUE_MESSAGE(localDiffersFromFull,   "LOCAL MD5 must differ from FULL MD5");
-    TEST_ASSERT_TRUE_MESSAGE(localDiffersFromRemote, "LOCAL MD5 must differ from REMOTE MD5");
+    TEST_ASSERT_TRUE_MESSAGE(baseDiffersFromFull,  "BASE MD5 must differ from FULL MD5");
+    TEST_ASSERT_TRUE_MESSAGE(systemDiffersFromFull,   "SYSTEM MD5 must differ from FULL MD5");
+    TEST_ASSERT_TRUE_MESSAGE(systemDiffersFromBase, "SYSTEM MD5 must differ from BASE MD5");
 }
 
-/** combus_protocol_init() with REMOTE layer must resolve to kCombusRemoteComBusMd5. */
-static void test_md5_resolution_remote(void) {
+/** combus_protocol_init() with BASE layer must resolve to kCombusBaseComBusMd5. */
+static void test_md5_resolution_base(void) {
     static CombusHandshakeContext ctx = {};
     static ComBusLink link = {};
     static ComBusFrameCfg cfg = { kTestNAnalog, kTestNDigital };
@@ -625,19 +625,19 @@ static void test_md5_resolution_remote(void) {
     link.txCfg       = std::nullopt;  // skip TX init
     link.rxCfg       = std::nullopt;  // skip RX init
     link.handshakeCtx = &ctx;
-    link.layer       = ChanLayer::REMOTE;
+    link.layer       = ChanLayer::BASE;
 
     // The MD5 resolution happens BEFORE the TX/RX init, so a null com
     // is safe — the switch on link->layer runs first.
     combus_protocol_init(kLinkIdx, &link);
 
     TEST_ASSERT_EQUAL_PTR(
-        (const void*)combus::wire::kCombusRemoteComBusMd5,
+        (const void*)combus::wire::kCombusBaseComBusMd5,
         (const void*)ctx.expectedMd5);
 }
 
-/** combus_protocol_init() with LOCAL layer must resolve to kCombusLocalComBusMd5. */
-static void test_md5_resolution_local(void) {
+/** combus_protocol_init() with SYSTEM layer must resolve to kCombusSystemComBusMd5. */
+static void test_md5_resolution_system(void) {
     static CombusHandshakeContext ctx = {};
     static ComBusLink link = {};
 
@@ -646,17 +646,17 @@ static void test_md5_resolution_local(void) {
     link.txCfg       = std::nullopt;
     link.rxCfg       = std::nullopt;
     link.handshakeCtx = &ctx;
-    link.layer       = ChanLayer::LOCAL;
+    link.layer       = ChanLayer::SYSTEM;
 
     combus_protocol_init(kLinkIdx, &link);
 
     TEST_ASSERT_EQUAL_PTR(
-        (const void*)combus::wire::kCombusLocalComBusMd5,
+        (const void*)combus::wire::kCombusSystemComBusMd5,
         (const void*)ctx.expectedMd5);
 }
 
-/** combus_protocol_init() with SYSTEM layer must resolve to kCombusComBusMd5 (FULL). */
-static void test_md5_resolution_system(void) {
+/** combus_protocol_init() with BOARD layer must resolve to kCombusComBusMd5 (FULL). */
+static void test_md5_resolution_board(void) {
     static CombusHandshakeContext ctx = {};
     static ComBusLink link = {};
 
@@ -665,7 +665,7 @@ static void test_md5_resolution_system(void) {
     link.txCfg       = std::nullopt;
     link.rxCfg       = std::nullopt;
     link.handshakeCtx = &ctx;
-    link.layer       = ChanLayer::SYSTEM;
+    link.layer       = ChanLayer::BOARD;
 
     combus_protocol_init(kLinkIdx, &link);
 
@@ -685,16 +685,16 @@ static void test_md5_resolution_system(void) {
 
 /** combus_handshake_compareAndLog() must match when given the right local MD5. */
 static void test_md5_compare_match_with_correct_local(void) {
-    // Wire MD5 = REMOTE view (simulating a peer that speaks REMOTE).
-    const uint8_t* wireMd5 = combus::wire::kCombusRemoteComBusMd5;
+    // Wire MD5 = BASE view (simulating a peer that speaks BASE).
+    const uint8_t* wireMd5 = combus::wire::kCombusBaseComBusMd5;
 
-    // Compare against the REMOTE local MD5 — must match.
+    // Compare against the BASE local MD5 — must match.
     bool match = combus_handshake_compareAndLog(
-        combus::wire::kCombusRemoteComBusMd5,
+        combus::wire::kCombusBaseComBusMd5,
         wireMd5,
         combus::wire::kProjectVersionMajor,
         combus::wire::kProjectVersionMinor);
-    TEST_ASSERT_TRUE_MESSAGE(match, "REMOTE local MD5 must match REMOTE wire MD5");
+    TEST_ASSERT_TRUE_MESSAGE(match, "BASE local MD5 must match BASE wire MD5");
 
     // Compare against the FULL local MD5 — must NOT match (different views).
     match = combus_handshake_compareAndLog(
@@ -702,15 +702,15 @@ static void test_md5_compare_match_with_correct_local(void) {
         wireMd5,
         combus::wire::kProjectVersionMajor,
         combus::wire::kProjectVersionMinor);
-    TEST_ASSERT_FALSE_MESSAGE(match, "FULL local MD5 must NOT match REMOTE wire MD5");
+    TEST_ASSERT_FALSE_MESSAGE(match, "FULL local MD5 must NOT match BASE wire MD5");
 
-    // Compare against the LOCAL local MD5 — must NOT match (different views).
+    // Compare against the SYSTEM local MD5 — must NOT match (different views).
     match = combus_handshake_compareAndLog(
-        combus::wire::kCombusLocalComBusMd5,
+        combus::wire::kCombusSystemComBusMd5,
         wireMd5,
         combus::wire::kProjectVersionMajor,
         combus::wire::kProjectVersionMinor);
-    TEST_ASSERT_FALSE_MESSAGE(match, "LOCAL local MD5 must NOT match REMOTE wire MD5");
+    TEST_ASSERT_FALSE_MESSAGE(match, "SYSTEM local MD5 must NOT match BASE wire MD5");
 }
 
 
@@ -738,16 +738,16 @@ void setup() {
     // Memory identity (pointer equality) + prefix alignment (numeric).
     // The generated combus_generated/combus.cpp is added to the test
     // env's source list via scripts/combus_test_add_generated_source.py.
-    RUN_TEST(test_same_memory_object_analog_remote);
-    RUN_TEST(test_same_memory_object_analog_local_only);
-    RUN_TEST(test_same_memory_object_digital_remote);
-    RUN_TEST(test_same_memory_object_digital_local_only);
+    RUN_TEST(test_same_memory_object_analog_base);
+    RUN_TEST(test_same_memory_object_analog_system_only);
+    RUN_TEST(test_same_memory_object_digital_base);
+    RUN_TEST(test_same_memory_object_digital_system_only);
     RUN_TEST(test_id_prefix_alignment_analog);
     RUN_TEST(test_id_prefix_alignment_digital);
 
     // --- Group D: wire-end sizing (LY2) ---
-    RUN_TEST(test_wire_end_remote_shorter_than_full);
-    RUN_TEST(test_wire_end_local_equals_full);
+    RUN_TEST(test_wire_end_base_shorter_than_full);
+    RUN_TEST(test_wire_end_system_equals_full);
     RUN_TEST(test_wire_end_zero_is_minimum);
     RUN_TEST(test_wire_end_clamped_to_cfg);
 
@@ -758,9 +758,9 @@ void setup() {
 
     // --- Group E: MD5 pointer resolution by layer (LY4) ---
     RUN_TEST(test_md5_arrays_are_distinct);
-    RUN_TEST(test_md5_resolution_remote);
-    RUN_TEST(test_md5_resolution_local);
+    RUN_TEST(test_md5_resolution_base);
     RUN_TEST(test_md5_resolution_system);
+    RUN_TEST(test_md5_resolution_board);
     RUN_TEST(test_md5_compare_match_with_correct_local);
 
     // Chantier 12.6: Group F (FS1 failsafe re-arm) removed — see

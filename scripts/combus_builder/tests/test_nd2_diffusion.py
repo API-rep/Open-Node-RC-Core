@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ND2 diffusion tests — exercise diffuse_local_channels() against
+ND2 diffusion tests — exercise diffuse_system_channels() against
 fictitious 2-board nodes.
 
 These tests cover the ND2 spec:
@@ -13,9 +13,9 @@ These tests cover the ND2 spec:
   - both/both on 2 boards -> OK.
   - none/X on 2 boards -> OK.
   - Semantic conflict both/uplink -> FATAL.
-  - Local conflict: 2 declarations of same id in ONE board's .cb ->
+  - SYSTEM-scope conflict: 2 declarations of same id in ONE board's .cb ->
     FATAL (distinct error class).
-  - REMOTE channel present on one board only -> passed through to
+  - BASE channel present on one board only -> passed through to
     both boards WITHOUT mirroring.
   - Legacy mode: diffusion.py is never called (verified by the fact
     that the orchestrator only calls it in node mode).
@@ -54,8 +54,8 @@ if str(REPO_ROOT) not in sys.path:
 
 from scripts.combus_builder.diffusion import (
     DiffusionConflictError,
-    DiffusionLocalConflictError,
-    diffuse_local_channels,
+    DiffusionSystemConflictError,
+    diffuse_system_channels,
 )
 from scripts.combus_builder.flags import BuildContext
 from scripts.combus_builder.node_context import NodeContext
@@ -150,7 +150,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: uplink
     requires:
@@ -161,7 +161,7 @@ channels:
   - id: SPK_VOL
     infoName: "Speaker volume"
     type: analog
-    scope: LOCAL
+    scope: SYSTEM
     theme: core
     direction: downlink
     requires:
@@ -177,7 +177,7 @@ channels:
         # Capture stderr: SPK_VOL should emit a rule-6 warning.
         captured = io.StringIO()
         with contextlib.redirect_stderr(captured):
-            result = diffuse_local_channels(parsed, node)
+            result = diffuse_system_channels(parsed, node)
         stderr_output = captured.getvalue()
         assert "SPK_VOL" in stderr_output and "canal mort" in stderr_output, (
             f"expected a rule-6 warning for SPK_VOL, got: {stderr_output!r}"
@@ -224,7 +224,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: uplink
     requires:
@@ -235,7 +235,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: downlink
     requires:
@@ -249,7 +249,7 @@ channels:
         })
 
         # Should NOT raise.
-        result = diffuse_local_channels(parsed, node)
+        result = diffuse_system_channels(parsed, node)
 
         mainboard_decls = _extract_channel_ids_and_dirs(result["mainboard"])
         soundboard_decls = _extract_channel_ids_and_dirs(result["soundboard"])
@@ -278,7 +278,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: uplink
     requires:
@@ -289,7 +289,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: uplink
     requires:
@@ -303,7 +303,7 @@ channels:
         })
 
         try:
-            diffuse_local_channels(parsed, node)
+            diffuse_system_channels(parsed, node)
             raise AssertionError("expected DiffusionConflictError, got none")
         except DiffusionConflictError as e:
             assert e.channel_id == "BAT_LOW"
@@ -349,7 +349,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: downlink
     requires:
@@ -360,7 +360,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: downlink
     requires:
@@ -376,7 +376,7 @@ channels:
         # Should NOT raise. Capture stderr to verify the warning.
         captured = io.StringIO()
         with contextlib.redirect_stderr(captured):
-            result = diffuse_local_channels(parsed, node)
+            result = diffuse_system_channels(parsed, node)
 
         stderr_output = captured.getvalue()
         assert "WARNING" in stderr_output, (
@@ -418,7 +418,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: both
     requires:
@@ -429,7 +429,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: both
     requires:
@@ -443,7 +443,7 @@ channels:
         })
 
         # Should NOT raise.
-        result = diffuse_local_channels(parsed, node)
+        result = diffuse_system_channels(parsed, node)
         mainboard_decls = _extract_channel_ids_and_dirs(result["mainboard"])
         soundboard_decls = _extract_channel_ids_and_dirs(result["soundboard"])
         assert mainboard_decls["BAT_LOW"] == "both"
@@ -471,7 +471,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: none
     requires:
@@ -482,7 +482,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: uplink
     requires:
@@ -496,7 +496,7 @@ channels:
         })
 
         # Should NOT raise.
-        result = diffuse_local_channels(parsed, node)
+        result = diffuse_system_channels(parsed, node)
         mainboard_decls = _extract_channel_ids_and_dirs(result["mainboard"])
         soundboard_decls = _extract_channel_ids_and_dirs(result["soundboard"])
         assert mainboard_decls["BAT_LOW"] == "none"
@@ -524,7 +524,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: both
     requires:
@@ -535,7 +535,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: uplink
     requires:
@@ -549,7 +549,7 @@ channels:
         })
 
         try:
-            diffuse_local_channels(parsed, node)
+            diffuse_system_channels(parsed, node)
             raise AssertionError("expected DiffusionConflictError, got none")
         except DiffusionConflictError as e:
             assert e.channel_id == "BAT_LOW"
@@ -559,16 +559,16 @@ channels:
 
 
 # =============================================================================
-# Test 8: Local conflict (intra-board)
+# Test 8: SYSTEM-scope conflict (intra-board)
 # =============================================================================
 
-def test_local_conflict() -> None:
-    """Two declarations of same id active for the SAME board -> FATAL (local).
+def test_system_conflict() -> None:
+    """Two declarations of same id active for the SAME board -> FATAL (SYSTEM scope).
 
     Both declarations have requires=[IS_MAINBOARD], so both are active
     for mainboard -> intra-board conflict.
     """
-    print("\n=== Test 8: Local conflict (intra-board) ===")
+    print("\n=== Test 8: SYSTEM-scope conflict (intra-board) ===")
     with tempfile.TemporaryDirectory() as td:
         tmp_path = Path(td)
         project_root = tmp_path / "proj"
@@ -581,7 +581,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: uplink
     requires:
@@ -592,7 +592,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low (dup)"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: downlink
     requires:
@@ -603,7 +603,7 @@ channels:
   - id: SPK_VOL
     infoName: "Speaker volume"
     type: analog
-    scope: LOCAL
+    scope: SYSTEM
     theme: core
     direction: downlink
     requires:
@@ -617,33 +617,33 @@ channels:
         })
 
         try:
-            diffuse_local_channels(parsed, node)
-            raise AssertionError("expected DiffusionLocalConflictError, got none")
-        except DiffusionLocalConflictError as e:
+            diffuse_system_channels(parsed, node)
+            raise AssertionError("expected DiffusionSystemConflictError, got none")
+        except DiffusionSystemConflictError as e:
             assert e.channel_id == "BAT_LOW"
             assert e.board_id == "mainboard"
-            print(f"  OK   raised DiffusionLocalConflictError: {e}")
+            print(f"  OK   raised DiffusionSystemConflictError: {e}")
             return
 
 
 # =============================================================================
-# Test 9: REMOTE channel pass-through (no mirroring)
+# Test 9: BASE channel pass-through (no mirroring)
 # =============================================================================
 
-def test_remote_passthrough() -> None:
-    """REMOTE channel present on one board only -> passed through to both, no mirroring.
+def test_base_passthrough() -> None:
+    """BASE channel present on one board only -> passed through to both, no mirroring.
 
-    REMOTE channels are NOT subject to diffusion (ND5 is out of scope).
+    BASE channels are NOT subject to diffusion (ND5 is out of scope).
     They are passed through to every board unchanged.
     """
-    print("\n=== Test 9: REMOTE pass-through ===")
+    print("\n=== Test 9: BASE pass-through ===")
     with tempfile.TemporaryDirectory() as td:
         tmp_path = Path(td)
         project_root = tmp_path / "proj"
         src_dir = project_root / "src"
         src_dir.mkdir(parents=True)
 
-        # STEER_CMD is REMOTE, declared only in mainboard.cb.
+        # STEER_CMD is BASE, declared only in mainboard.cb.
         # It should appear in BOTH boards with the SAME direction (no mirroring).
         parsed = _make_parsed({
             "mainboard.cb": """\
@@ -651,7 +651,7 @@ channels:
   - id: STEER_CMD
     infoName: "Steering command"
     type: analog
-    scope: REMOTE
+    scope: BASE
     theme: core
     direction: downlink
 """,
@@ -660,7 +660,7 @@ channels:
   - id: SPK_VOL
     infoName: "Speaker volume"
     type: analog
-    scope: LOCAL
+    scope: SYSTEM
     theme: core
     direction: downlink
     requires:
@@ -673,7 +673,7 @@ channels:
             "soundboard": {"IS_EXT_BOARD"},
         })
 
-        result = diffuse_local_channels(parsed, node)
+        result = diffuse_system_channels(parsed, node)
 
         # Both boards should have STEER_CMD with direction=downlink (unchanged).
         mainboard_decls = _extract_channel_ids_and_dirs(result["mainboard"])
@@ -699,15 +699,15 @@ def test_legacy_mode_not_called() -> None:
     """Verify that diffusion.py is NOT called in legacy mode.
 
     This is a documentation test: the orchestrator (combus_scons_hook.py)
-    only calls diffuse_local_channels() in node mode. We verify this by
+    only calls diffuse_system_channels() in node mode. We verify this by
     checking that the function exists and is importable, and by
     documenting the contract.
     """
     print("\n=== Test 10: Legacy mode (diffusion.py not called) ===")
     hook_path = Path(REPO_ROOT) / "scripts" / "combus_scons_hook.py"
     hook_source = hook_path.read_text(encoding="utf-8")
-    assert "diffuse_local_channels" in hook_source, (
-        "diffuse_local_channels should be referenced in combus_scons_hook.py"
+    assert "diffuse_system_channels" in hook_source, (
+        "diffuse_system_channels should be referenced in combus_scons_hook.py"
     )
     lines = hook_source.split("\n")
     in_node_branch = False
@@ -715,13 +715,13 @@ def test_legacy_mode_not_called() -> None:
     for line in lines:
         if "if node.is_node" in line or "if node.is_node:" in line:
             in_node_branch = True
-        if "diffuse_local_channels" in line and "def " not in line:
+        if "diffuse_system_channels" in line and "def " not in line:
             found_call = True
             assert in_node_branch, (
-                f"diffuse_local_channels() called outside node.is_node branch: {line!r}"
+                f"diffuse_system_channels() called outside node.is_node branch: {line!r}"
             )
-    assert found_call, "diffuse_local_channels() not found in combus_scons_hook.py"
-    print(f"  OK   diffuse_local_channels() is only called inside node.is_node branch")
+    assert found_call, "diffuse_system_channels() not found in combus_scons_hook.py"
+    print(f"  OK   diffuse_system_channels() is only called inside node.is_node branch")
 
 
 # =============================================================================
@@ -771,7 +771,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: uplink
     requires:
@@ -782,7 +782,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: downlink
     requires:
@@ -793,7 +793,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: downlink
     requires:
@@ -810,7 +810,7 @@ channels:
         # Should NOT raise.
         captured = io.StringIO()
         with contextlib.redirect_stderr(captured):
-            result = diffuse_local_channels(parsed, node)
+            result = diffuse_system_channels(parsed, node)
         assert "WARNING" not in captured.getvalue(), (
             f"no warning expected (1 uplink + 2 downlink is compatible), "
             f"got: {captured.getvalue()!r}"
@@ -841,7 +841,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: uplink
     requires:
@@ -852,7 +852,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: downlink
     requires:
@@ -869,7 +869,7 @@ channels:
 
         captured = io.StringIO()
         with contextlib.redirect_stderr(captured):
-            result = diffuse_local_channels(parsed, node)
+            result = diffuse_system_channels(parsed, node)
         assert "WARNING" not in captured.getvalue(), (
             f"no warning expected, got: {captured.getvalue()!r}"
         )
@@ -901,7 +901,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: uplink
     requires:
@@ -912,7 +912,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: uplink
     requires:
@@ -928,7 +928,7 @@ channels:
         })
 
         try:
-            diffuse_local_channels(parsed, node)
+            diffuse_system_channels(parsed, node)
             raise AssertionError("expected DiffusionConflictError, got none")
         except DiffusionConflictError as e:
             assert e.channel_id == "BAT_LOW"
@@ -961,7 +961,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: downlink
     requires:
@@ -972,7 +972,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: downlink
     requires:
@@ -983,7 +983,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: downlink
     requires:
@@ -1000,7 +1000,7 @@ channels:
         # Should NOT raise. Capture stderr to verify the warning.
         captured = io.StringIO()
         with contextlib.redirect_stderr(captured):
-            result = diffuse_local_channels(parsed, node)
+            result = diffuse_system_channels(parsed, node)
 
         stderr_output = captured.getvalue()
         assert "WARNING" in stderr_output, (
@@ -1038,7 +1038,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: both
     requires:
@@ -1055,7 +1055,7 @@ channels:
 
         captured = io.StringIO()
         with contextlib.redirect_stderr(captured):
-            result = diffuse_local_channels(parsed, node)
+            result = diffuse_system_channels(parsed, node)
         assert "WARNING" not in captured.getvalue(), (
             f"no warning expected, got: {captured.getvalue()!r}"
         )
@@ -1089,7 +1089,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: both
     requires:
@@ -1100,7 +1100,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: uplink
     requires:
@@ -1116,7 +1116,7 @@ channels:
         })
 
         try:
-            diffuse_local_channels(parsed, node)
+            diffuse_system_channels(parsed, node)
             raise AssertionError("expected DiffusionConflictError (semantic), got none")
         except DiffusionConflictError as e:
             assert e.channel_id == "BAT_LOW"
@@ -1140,7 +1140,7 @@ def test_pipeline_full_requires_stale_fix() -> None:
     (which does NOT have IS_MAINBOARD).
 
     This test exercises the FULL pipeline (not just
-    diffuse_local_channels() in isolation) and would FAIL on the
+    diffuse_system_channels() in isolation) and would FAIL on the
     pre-fix code with RequiresResolutionError.
     """
     print("\n=== Test 17: pipeline complet — requires stale fix ===")
@@ -1156,7 +1156,7 @@ channels:
   - id: BAT_LOW
     infoName: "Battery low"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: vbat
     direction: uplink
     requires:
@@ -1173,7 +1173,7 @@ channels:
         # Step 1: diffuse.
         captured = io.StringIO()
         with contextlib.redirect_stderr(captured):
-            diffused = diffuse_local_channels(parsed, node)
+            diffused = diffuse_system_channels(parsed, node)
 
         # Step 2: canonize the soundboard list.
         from scripts.combus_builder.canon import canonize
@@ -1200,7 +1200,7 @@ channels:
             raise AssertionError(f"RequiresResolutionError raised: {e}")
 
         # Verify BAT_LOW is present, active, in downlink.
-        # The full view contains all LOCAL channels.
+        # The full view contains all SYSTEM channels.
         all_ids = [vc.ch.id for vc in sel.full.channels]
         assert "BAT_LOW" in all_ids, (
             f"BAT_LOW should be in soundboard's full view, got {all_ids}"
@@ -1216,25 +1216,25 @@ channels:
 
 
 # =============================================================================
-# Test 18: SYSTEM scope — not diffused, requires-filtered per board (ND4)
+# Test 18: BOARD scope — not diffused, requires-filtered per board (ND4)
 # =============================================================================
 
-def test_system_not_diffused_requires_filtered() -> None:
-    """SYSTEM channel with requires=[IS_MAINBOARD] on mainboard only.
+def test_board_not_diffused_requires_filtered() -> None:
+    """BOARD channel with requires=[IS_MAINBOARD] on mainboard only.
 
     After diffusion:
-      - mainboard: SYSTEM channel PRESENT (requires satisfied).
-      - soundboard: SYSTEM channel ABSENT (requires NOT satisfied).
+      - mainboard: BOARD channel PRESENT (requires satisfied).
+      - soundboard: BOARD channel ABSENT (requires NOT satisfied).
 
-    This is the opposite of a LOCAL channel with the same requires,
+    This is the opposite of a SYSTEM channel with the same requires,
     which WOULD be diffused/mirrored to soundboard (rule 5).
 
-    SYSTEM channels are strictly private to the firmware of a board
+    BOARD channels are strictly private to the firmware of a board
     and must NEVER be copied to a sister board where they were not
     active. The pass-through in step 4c must filter by
     _is_active_for_board() per board.
     """
-    print("\n=== Test 18: SYSTEM not diffused, requires-filtered per board ===")
+    print("\n=== Test 18: BOARD not diffused, requires-filtered per board ===")
     with tempfile.TemporaryDirectory() as td:
         tmp_path = Path(td)
         project_root = tmp_path / "proj"
@@ -1247,7 +1247,7 @@ channels:
   - id: VBAT_PRIVATE
     infoName: "Private vbat sensor"
     type: digital
-    scope: SYSTEM
+    scope: BOARD
     theme: vbat
     requires:
       - IS_MAINBOARD
@@ -1260,7 +1260,7 @@ channels:
             "soundboard": {"IS_EXT_BOARD"},  # does NOT have IS_MAINBOARD
         })
 
-        result = diffuse_local_channels(parsed, node)
+        result = diffuse_system_channels(parsed, node)
 
         # mainboard: VBAT_PRIVATE should be PRESENT (requires satisfied).
         mainboard_decls = _extract_channel_ids_and_dirs(result["mainboard"])
@@ -1281,23 +1281,23 @@ channels:
 
 
 # =============================================================================
-# Test 19: SYSTEM scope — apparent conflict is ignored (ND4)
+# Test 19: BOARD scope — apparent conflict is ignored (ND4)
 # =============================================================================
 
-def test_system_apparent_conflict_ignored() -> None:
-    """Two SYSTEM declarations of the same id on 2 boards -> NO error.
+def test_board_apparent_conflict_ignored() -> None:
+    """Two BOARD declarations of the same id on 2 boards -> NO error.
 
-    SYSTEM channels are NEVER examined by the inter-board rule
-    (_resolve_group is only called for LOCAL). So even if two
-    boards declare the same SYSTEM id with different directions
+    BOARD channels are NEVER examined by the inter-board rule
+    (_resolve_group is only called for SYSTEM). So even if two
+    boards declare the same BOARD id with different directions
     (or the same direction), no DiffusionConflictError is raised.
 
-    This is the key difference from LOCAL: a LOCAL conflict on the
-    same id would be FATAL (rule 4: n_up >= 2), but a SYSTEM
-    conflict is simply ignored because SYSTEM is out of scope for
+    This is the key difference from SYSTEM: a SYSTEM conflict on the
+    same id would be FATAL (rule 4: n_up >= 2), but a BOARD
+    conflict is simply ignored because BOARD is out of scope for
     diffusion.
     """
-    print("\n=== Test 19: SYSTEM apparent conflict ignored ===")
+    print("\n=== Test 19: BOARD apparent conflict ignored ===")
     with tempfile.TemporaryDirectory() as td:
         tmp_path = Path(td)
         project_root = tmp_path / "proj"
@@ -1310,7 +1310,7 @@ channels:
   - id: VBAT_PRIVATE
     infoName: "Private vbat sensor (mainboard)"
     type: digital
-    scope: SYSTEM
+    scope: BOARD
     theme: vbat
     requires:
       - IS_MAINBOARD
@@ -1320,7 +1320,7 @@ channels:
   - id: VBAT_PRIVATE
     infoName: "Private vbat sensor (soundboard)"
     type: digital
-    scope: SYSTEM
+    scope: BOARD
     theme: vbat
     requires:
       - IS_EXT_BOARD
@@ -1334,9 +1334,9 @@ channels:
 
         # Should NOT raise DiffusionConflictError.
         # (If it did, the test would fail with an unhandled exception.)
-        result = diffuse_local_channels(parsed, node)
+        result = diffuse_system_channels(parsed, node)
 
-        # Each board should have its own SYSTEM declaration (requires-filtered).
+        # Each board should have its own BOARD declaration (requires-filtered).
         mainboard_decls = _extract_channel_ids_and_dirs(result["mainboard"])
         soundboard_decls = _extract_channel_ids_and_dirs(result["soundboard"])
         assert "VBAT_PRIVATE" in mainboard_decls, (
@@ -1345,7 +1345,7 @@ channels:
         assert "VBAT_PRIVATE" in soundboard_decls, (
             f"soundboard should have VBAT_PRIVATE, got {soundboard_decls}"
         )
-        print(f"  OK   no DiffusionConflictError raised (SYSTEM is out of scope for diffusion)")
+        print(f"  OK   no DiffusionConflictError raised (BOARD is out of scope for diffusion)")
         print(f"  OK   mainboard has VBAT_PRIVATE, soundboard has VBAT_PRIVATE (each own)")
 
 

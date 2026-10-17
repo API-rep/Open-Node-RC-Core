@@ -80,7 +80,7 @@ channels:
   - id: TEST_CHANNEL
     infoName: "Test channel"
     type: analog
-    scope: REMOTE
+    scope: BASE
     theme: core
     direction: uplink
 """

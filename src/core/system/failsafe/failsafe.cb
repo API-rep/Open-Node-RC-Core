@@ -19,13 +19,13 @@
 #   files (e.g. src/core/system/vbat/vbat_failsafe.cb).
 # - FAILSAFE_END is a legacy range marker. The generator deduces it
 #   automatically from the list of channels in the group.
-# - LOCAL scope is required because FAILSAFE is shared by all boards
+# - SYSTEM scope is required because FAILSAFE is shared by all boards
 #   composing the local node. It allows the Failsafe state to be
 #   propagated to, and collected from, the different boards of that node.
 # - Direction is both uplink and downlink: any board may publish or
 #   consume the local Failsafe state as required by its role.
 # - Remote propagation, if required, is handled separately through a
-#   REMOTE ComBus definition(FAILSAFE_TELEMETRY ...).
+#   BASE ComBus definition(FAILSAFE_TELEMETRY ...).
 #
 # A6.1 — `direction: [both]` shorthand added (TEMPORARY, pending .inc migration).
 # During A6.1 the legacy .inc channels are not yet migrated, so the runtime
@@ -36,7 +36,7 @@ channels:
   - id: FAILSAFE
     infoName: "Failsafe aggregator"
     type: digital
-    scope: LOCAL
+    scope: SYSTEM
     theme: failsafe
     direction: both_or
     value: high         # default to fault state: aggregator is HIGH (= true) until

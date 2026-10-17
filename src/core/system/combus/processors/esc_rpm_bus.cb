@@ -1,4 +1,4 @@
-# esc_rpm_bus.cb — ESC RPM (engine RPM after gear ratio) (REMOTE)
+# esc_rpm_bus.cb — ESC RPM (engine RPM after gear ratio) (BASE)
 #
 # - ESC_RPM_BUS: written by SIM_GEAR chain (gear-inv-ratio + rpm-fade).
 #   Carries engine RPM (after gear ratio conversion from wheel_speed).
@@ -22,5 +22,5 @@ channels:
   type: analog
   value: 0
   theme: core
-  scope: REMOTE
+  scope: BASE
   direction: none

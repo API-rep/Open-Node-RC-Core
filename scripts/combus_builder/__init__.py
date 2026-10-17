@@ -12,7 +12,7 @@
 #       canon/           — validation, merge, canonical sort
 #       machine_type.py  — machine type filter
 #       node_context.py  — node / board detection
-#       diffusion.py     — LOCAL diffusion across boards
+#       diffusion.py     — SYSTEM diffusion across boards
 #       generator.py     — views, IDs, C++ emission
 #       md5.py           — contract hashes
 #       coherence.py     — consistency checks with platformio.ini

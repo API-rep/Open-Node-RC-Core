@@ -17,7 +17,7 @@
  *   flags have been REMOVED. Link health is now monitored at transport
  *   level by per-link contributors (PS4_DS4_BT_LINK_LOST, UART_LINK_LOST,
  *   ...) declared in the `.cb` channel files, and aggregated by
- *   `remote_link_fallback_chain.cpp` into the LOCAL `REMOTE_LINK_LOST`
+ *   `remote_link_fallback_chain.cpp` into the SYSTEM `REMOTE_LINK_LOST`
  *   channel. See failsafe_module.md §12.5 for the new design.
  *******************************************************************************/// 
 #pragma once
@@ -56,25 +56,25 @@ enum class DigitalComBusID : uint8_t;
  *
  * @details Defines the visibility scope of each channel:
  *   - UNDEFINED : Layer not yet assigned (default for uninitialized channels)
- *   - SYSTEM    : Private to a single board's firmware (intra-device)
- *   - LOCAL     : Shared between all boards of the same system (intra-node)
- *   - REMOTE    : Exchanged between distinct nodes (inter-node)
+ *   - BOARD     : Private to a single board's firmware (intra-device)
+ *   - SYSTEM    : Shared between all boards of the same system (intra-node)
+ *   - BASE      : Exchanged between distinct nodes (inter-node)
  *
  * Access rules:
- *   1. SYSTEM  → Only the local firmware may write
- *   2. LOCAL   → Local firmware + extension boards (same system)
- *   3. REMOTE  → Any source (local + extensions + remote nodes)
+ *   1. BOARD   → Only the local firmware may write
+ *   2. SYSTEM  → Local firmware + extension boards (same system)
+ *   3. BASE    → Any source (local + extensions + remote nodes)
  *
  * Layer inheritance:
- *   - LOCAL channels automatically include all REMOTE channels
- *   - SYSTEM data can be promoted to LOCAL if needed
- *   - REMOTE represents the minimal universal service set
+ *   - SYSTEM channels automatically include all BASE channels
+ *   - BOARD data can be promoted to SYSTEM if needed
+ *   - BASE represents the minimal universal service set
  */
 enum class ChanLayer : uint8_t {
     UNDEFINED = 0x00,   ///< Layer not yet assigned (uninitialized)
-    SYSTEM    = 0x01,   ///< Intra-device: private to a single board's firmware
-    LOCAL     = 0x02,   ///< Intra-node: shared between all boards of the same system
-    REMOTE    = 0x03    ///< Inter-node: exchanged between distinct nodes
+    BOARD     = 0x01,   ///< Intra-device: private to a single board's firmware
+    SYSTEM    = 0x02,   ///< Intra-node: shared between all boards of the same system
+    BASE      = 0x03    ///< Inter-node: exchanged between distinct nodes
 };
 
 
@@ -115,7 +115,7 @@ enum class Direction : uint8_t {
 typedef struct {
   const char* infoName;                            ///< Short description for debugging and dashboards
   uint16_t    value;                               ///< Current channel value (0‑65535)
-  ChanLayer   layer       = ChanLayer::SYSTEM;     ///< Propagation layer — see ChanLayer
+  ChanLayer   layer       = ChanLayer::BOARD;     ///< Propagation layer — see ChanLayer
   Direction   direction   = Direction::None;       ///< Wire direction — added by A6.1
 } AnalogComBus;
 
@@ -125,9 +125,9 @@ typedef struct {
 typedef struct {
   const char* infoName;                            ///< Short description for debugging and dashboards
   bool        value;                               ///< Current channel state (true/false)
-  ChanLayer   layer       = ChanLayer::SYSTEM;     ///< Propagation layer — see ChanLayer
+  ChanLayer   layer       = ChanLayer::BOARD;     ///< Propagation layer — see ChanLayer
   Direction   direction   = Direction::None;       ///< Wire direction — added by A6.1
-  // ND6: anti-oscillation flag for LOCAL channels in direction `both`.
+  // ND6: anti-oscillation flag for SYSTEM channels in direction `both`.
   // When true, the runtime must apply `local OR received` instead of
   // `overwrite` on combus_frame_apply(). The C++ wiring of this flag
   // is deferred to a separate chantier (after the merge of the
@@ -147,9 +147,9 @@ typedef struct {
 typedef struct {
     // --- Core state ---
   // RL3: runLevel + runLevelLayer removed — runLevel is now a plain analog channel
-  //       (RUNLEVEL, scope LOCAL, see runlevel.cb). Read/write it directly via the
+  //       (RUNLEVEL, scope SYSTEM, see runlevel.cb). Read/write it directly via the
   //       generic analog accessor (combus_set_analog / analogBus[RUNLEVEL].value).
-  //       This is the same pattern as any other LOCAL analog channel (e.g. THROTTLE_STICK).
+  //       This is the same pattern as any other SYSTEM analog channel (e.g. THROTTLE_STICK).
 
     // Chantier 12.6: `isNotDrived` (FS1 open-drain flag) REMOVED. Link
     // health is now monitored by per-link contributors aggregated into

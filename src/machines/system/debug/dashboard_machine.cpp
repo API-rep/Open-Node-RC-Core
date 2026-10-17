@@ -18,7 +18,7 @@
 #include <core/system/vbat/vbat_sense.h>
 #include <struct/simulation_struct.h>   // DriveStateBus
 #include <machines/config/config.h>  // Combus definitions
-#include <combus_remote_ids.h>   // AnalogComBusRemoteID (Phase 4)
+#include <combus_base_ids.h>   // AnalogComBusBaseID (Phase 4)
 
 #include <Arduino.h>
 #include <stdio.h>
@@ -111,7 +111,7 @@ static void render_overview() {
 	}
 
 	// Chantier 12.6: ctrlConn now derived from REMOTE_LINK_LOST contributor
-	// (LOCAL aggregator published by the remote_link_fallback_chain).  For
+	// (SYSTEM aggregator published by the remote_link_fallback_chain).  For
 	// backward compatibility, fallback to the historical `lastFrameMs` proxy
 	// when the channel is not active (autonomous builds without HAS_REMOTE_LINK_LOST_FALLBACK).
 	bool ctrlConn;
@@ -136,8 +136,8 @@ static void render_overview() {
 
 		// --- 3. Channel summary (wire channels only: 0..WIRE_END-1) ---
 	dMid();
-	// Phase 4 (A14): wire dimension derived from Remote view enum directly.
-	const uint8_t wireEnd = static_cast<uint8_t>(AnalogComBusRemoteID::CH_COUNT);
+	// Phase 4 (A14): wire dimension derived from Base view enum directly.
+	const uint8_t wireEnd = static_cast<uint8_t>(AnalogComBusBaseID::CH_COUNT);
 	for (uint8_t i = 0; i < wireEnd && i < s_analogCh; i++) {
 		uint16_t    raw  = s_bus->analogBus[i].value;
 		int16_t     pct  = dashPctBipolar(raw, s_bus->analogBusMaxVal);

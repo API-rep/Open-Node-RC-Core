@@ -6,13 +6,13 @@ declarations (seeded, so every failure is reproducible) and check invariants
 that must hold for ANY input:
 
   1. Determinism and order independence of the whole pipeline.
-  2. ID numbering contract (per type, REMOTE < LOCAL < SYSTEM, view prefixes).
+  2. ID numbering contract (per type, BASE < SYSTEM < BOARD, view prefixes).
   3. MD5 sensitivity matrix (which scope change moves which view hash).
   4. MD5 insensitivity (`value`, satisfied `requires` do not move the hash).
   5. Duplicate ids are always rejected.
   6. Fuzzing: junk field values and junk YAML never raise anything but the
      documented validation / parse errors.
-  7. LOCAL diffusion against an independent oracle of the documented rules.
+  7. SYSTEM diffusion against an independent oracle of the documented rules.
 
 Knobs (environment):
   COMBUS_STRESS_SEEDS   number of random seeds per test (default 25).
@@ -46,7 +46,7 @@ from scripts.combus_builder.canon.channels import (
 )
 from scripts.combus_builder.diffusion import (
     DiffusionConflictError,
-    diffuse_local_channels,
+    diffuse_system_channels,
 )
 from scripts.combus_builder.flags import BuildContext
 from scripts.combus_builder.generator import generate, select_views
@@ -77,7 +77,7 @@ def _ctx(defines) -> BuildContext:
 
 def _random_channel(rng: random.Random, idx: int) -> dict:
     type_ = rng.choice(["analog", "digital"])
-    scope = rng.choice(["REMOTE", "LOCAL", "SYSTEM"])
+    scope = rng.choice(["BASE", "SYSTEM", "BOARD"])
     ch = {
         "id": f"CH_{idx}",
         "infoName": f"channel {idx}",
@@ -85,7 +85,7 @@ def _random_channel(rng: random.Random, idx: int) -> dict:
         "scope": scope,
         "theme": rng.choice(THEMES),
     }
-    if scope == "SYSTEM":
+    if scope == "BOARD":
         if rng.random() < 0.5:
             ch["direction"] = "none"
     else:
@@ -93,7 +93,7 @@ def _random_channel(rng: random.Random, idx: int) -> dict:
         if type_ == "digital":
             tokens += ["uplink_or", "downlink_or", "both_or"]
         ch["direction"] = rng.choice(tokens)
-        if scope == "LOCAL" and rng.random() < 0.4:
+        if scope == "SYSTEM" and rng.random() < 0.4:
             ch["requires"] = rng.sample(FLAG_POOL, rng.randint(1, 2))
     if rng.random() < 0.4:
         if type_ == "analog":
@@ -136,8 +136,8 @@ def _view_hashes(channels) -> dict[str, str]:
     active = resolve_requires(result.canonical_definitions, _ctx(FLAG_POOL))
     sel = select_views(active)
     return {
-        "remote": compute_view_hash(sel.remote).md5_hex,
-        "local": compute_view_hash(sel.local).md5_hex,
+        "base": compute_view_hash(sel.base).md5_hex,
+        "system": compute_view_hash(sel.system).md5_hex,
         "full": compute_view_hash(sel.full).md5_hex,
     }
 
@@ -168,9 +168,9 @@ def test_id_numbering_contract(seed):
     result = canonize(_to_parsed(channels))
     sel = select_views(resolve_requires(result.canonical_definitions, _ctx(FLAG_POOL)))
 
-    order = {"REMOTE": 0, "LOCAL": 1, "SYSTEM": 2}
+    order = {"BASE": 0, "SYSTEM": 1, "BOARD": 2}
     ids_by_view = {}
-    for name, view in (("remote", sel.remote), ("local", sel.local), ("full", sel.full)):
+    for name, view in (("base", sel.base), ("system", sel.system), ("full", sel.full)):
         by_type: dict[str, list] = {"analog": [], "digital": []}
         for vc in view.channels:
             by_type[vc.ch.type].append(vc)
@@ -180,15 +180,15 @@ def test_id_numbering_contract(seed):
             scopes = [order[vc.ch.scope] for vc in vcs]
             assert scopes == sorted(scopes), f"{name}/{type_}: scope order broken"
         ids_by_view[name] = {vc.ch.id: vc.numeric_id for vc in view.channels}
-        assert view.wire_end == sum(1 for vc in view.channels if vc.ch.scope == "REMOTE")
+        assert view.wire_end == sum(1 for vc in view.channels if vc.ch.scope == "BASE")
 
     # A channel keeps the same id in every view that contains it.
-    for small, big in (("remote", "local"), ("local", "full")):
+    for small, big in (("base", "system"), ("system", "full")):
         for cid, nid in ids_by_view[small].items():
             assert ids_by_view[big][cid] == nid, f"{cid}: id differs {small} -> {big}"
-    assert sel.remote.ch_count <= sel.local.ch_count <= sel.full.ch_count
-    assert not any(vc.ch.scope == "SYSTEM" for vc in sel.local.channels)
-    assert all(vc.ch.scope == "REMOTE" for vc in sel.remote.channels)
+    assert sel.base.ch_count <= sel.system.ch_count <= sel.full.ch_count
+    assert not any(vc.ch.scope == "BOARD" for vc in sel.system.channels)
+    assert all(vc.ch.scope == "BASE" for vc in sel.base.channels)
 
 
 # =============================================================================
@@ -197,9 +197,9 @@ def test_id_numbering_contract(seed):
 
 # scope of the modified channel -> views whose hash must change
 EXPECTED_CHANGED = {
-    "REMOTE": {"remote", "local", "full"},
-    "LOCAL": {"local", "full"},
-    "SYSTEM": {"full"},
+    "BASE": {"base", "system", "full"},
+    "SYSTEM": {"system", "full"},
+    "BOARD": {"full"},
 }
 
 
@@ -232,20 +232,20 @@ def test_hash_ignores_value_and_satisfied_requires(seed):
             ch["value"] = rng.choice(["CbusMinVal", "CbusNeutral", "CbusMaxVal", 7])
         else:
             ch["value"] = rng.choice(["low", "high"])
-        if ch["scope"] == "LOCAL":
+        if ch["scope"] == "SYSTEM":
             ch["requires"] = ["HAS_A"]          # satisfied by the context
     assert _view_hashes(mutated) == before
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-def test_hash_changes_when_direction_changes_on_remote(seed):
-    """On the REMOTE view uplink and downlink are NOT equivalent."""
+def test_hash_changes_when_direction_changes_on_base(seed):
+    """On the BASE view uplink and downlink are NOT equivalent."""
     rng = random.Random(seed)
     channels = [c for c in _random_channels(rng)]
-    remotes = [c for c in channels if c["scope"] == "REMOTE"
+    remotes = [c for c in channels if c["scope"] == "BASE"
                and c["direction"] in ("uplink", "downlink")]
     if not remotes:
-        extra = {"id": "CH_DIR", "infoName": "dir", "type": "digital", "scope": "REMOTE",
+        extra = {"id": "CH_DIR", "infoName": "dir", "type": "digital", "scope": "BASE",
                  "theme": "core", "direction": "uplink"}
         channels.append(extra)
         remotes = [extra]
@@ -253,7 +253,7 @@ def test_hash_changes_when_direction_changes_on_remote(seed):
     target = rng.choice(remotes)
     target["direction"] = "downlink" if target["direction"] == "uplink" else "uplink"
     after = _view_hashes(channels)
-    assert after["remote"] != before["remote"]
+    assert after["base"] != before["base"]
 
 
 # =============================================================================
@@ -355,7 +355,7 @@ def test_non_utf8_file_is_a_parse_error(tmp_path):
 
 
 # =============================================================================
-# 7. LOCAL diffusion against an independent oracle
+# 7. SYSTEM diffusion against an independent oracle
 # =============================================================================
 
 DECLARABLE = [None, None, "uplink", "downlink", "both", "none",
@@ -425,7 +425,7 @@ def test_diffusion_matches_documented_rules(seed, capsys):
         if d is None:
             continue
         parsed.append((Path(f"{b}.cb"), "channel_def", {"channels": [{
-            "id": "X", "infoName": "x", "type": "digital", "scope": "LOCAL",
+            "id": "X", "infoName": "x", "type": "digital", "scope": "SYSTEM",
             "theme": "core", "direction": d, "requires": [f"IS_{b.upper()}"],
         }]}))
     contexts = {b: _ctx({f"IS_{b.upper()}"}) for b in boards}
@@ -437,10 +437,10 @@ def test_diffusion_matches_documented_rules(seed, capsys):
     capsys.readouterr()                           # drop earlier output
     if verdict == "error":
         with pytest.raises(DiffusionConflictError):
-            diffuse_local_channels(parsed, node)
+            diffuse_system_channels(parsed, node)
         return
 
-    result = diffuse_local_channels(parsed, node)
+    result = diffuse_system_channels(parsed, node)
     err = capsys.readouterr().err
 
     assert None not in result, "the mother must never get a board result"

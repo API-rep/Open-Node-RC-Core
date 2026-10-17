@@ -56,7 +56,7 @@ channels:
   - id: TEST_CHANNEL
     infoName: "Test channel"
     type: analog
-    scope: REMOTE
+    scope: BASE
     theme: core
     direction: uplink
 """
@@ -182,8 +182,8 @@ def test_legacy_mode() -> None:
         # --- 3. Verify legacy file names ---
         expected_files = [
             "combus.h", "combus.cpp", "combus_ids.h",
-            "combus_local_ids.h", "combus_remote_ids.h",
-            "combus_md5.h", "combus_local_md5.h", "combus_remote_md5.h",
+            "combus_system_ids.h", "combus_base_ids.h",
+            "combus_md5.h", "combus_system_md5.h", "combus_base_md5.h",
             "combus_wire_common.h",
         ]
         for name in expected_files:
@@ -312,21 +312,21 @@ def test_node_mode_2_boards() -> None:
                 "combus_mainboard_ids.h",
                 "combus_mainboard.h",
                 "combus_mainboard.cpp",
-                "combus_local_mainboard_ids.h",
-                "combus_remote_mainboard_ids.h",
+                "combus_system_mainboard_ids.h",
+                "combus_base_mainboard_ids.h",
                 "combus_mainboard_md5.h",
-                "combus_local_mainboard_md5.h",
-                "combus_remote_mainboard_md5.h",
+                "combus_system_mainboard_md5.h",
+                "combus_base_mainboard_md5.h",
             ],
             "soundboard": [
                 "combus_soundboard_ids.h",
                 "combus_soundboard.h",
                 "combus_soundboard.cpp",
-                "combus_local_soundboard_ids.h",
-                "combus_remote_soundboard_ids.h",
+                "combus_system_soundboard_ids.h",
+                "combus_base_soundboard_ids.h",
                 "combus_soundboard_md5.h",
-                "combus_local_soundboard_md5.h",
-                "combus_remote_soundboard_md5.h",
+                "combus_system_soundboard_md5.h",
+                "combus_base_soundboard_md5.h",
             ],
         }
         for board_id, files in expected_per_board.items():
