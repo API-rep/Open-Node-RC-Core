@@ -1,6 +1,11 @@
 /******************************************************************************
- * @file combus.h
+ * @file combus_init.h
  * @brief ComBus core initialisation — channel count log and sanity check.
+ *
+ * @note Not to be confused with the generated <combus.h> (channel arrays and
+ *   `comBus` instance), which the ComBus Builder writes under
+ *   <build_dir>/combus_generated/. This file was named combus.h until
+ *   2026-10-18; it was renamed so that `combus.h` is unique in the project.
  *
  * @details Called from sys_init() (machine env only) after the ComBus config
  *   headers are resolved, before any hardware or transport init.
@@ -25,4 +30,4 @@
  */
 void combus_init(uint8_t nAnalog, uint8_t nDigital);
 
-// EOF combus.h
+// EOF combus_init.h
