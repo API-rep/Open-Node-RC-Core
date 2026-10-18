@@ -6,7 +6,7 @@
 - ComBus Builder (scripts/combus_builder/) : génère depuis des YAML .cb les en-têtes/sources ComBus par carte.
 - Il tourne via un hook SCons : scripts/combus_scons_hook.py (`extra_scripts = pre:scripts/combus_scons_hook.py`, section [env] de platformio.ini).
 - Architecture : scripts/combus_builder/README.md. Points ouverts : doc/combus_builder_handoff.md. Historique : git log.
-- Convention : un fichier dont le nom commence par ~ est en cours de rédaction (ex. doc/~combus_v2.md).
+- Convention : un fichier dont le nom commence par ~, ou par « WIP - » à la racine de doc/, est en cours de rédaction (ex. doc/~combus_v2.md).
 - src/sound_module et les envs sound_node_* ont été retirés. Ne pas les réintroduire.
 - Scopes ComBus : BASE (profil du type de machine), SYSTEM (nœud), BOARD (carte). Avant le 2026-10-18 ils s'appelaient REMOTE, LOCAL et SYSTEM : les anciens commits, stashes et docs utilisent les anciens noms.
 

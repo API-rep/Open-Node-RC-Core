@@ -122,6 +122,7 @@ Quick index to the documents that sit next to the code. Start from the subject, 
 * [Protocol layer](../src/core/system/combus/protocol/~README.md) — transport-independent services
 * [Frame and handshake format](../src/core/system/combus/protocol/frame/combus_frame_protocol.md) — wire format, handshake, MD5 contract
 * [UART workflow](../src/core/system/combus/protocol/uart_workflow.md) — how the UART link is set up
+* [ComBus link rework](<WIP - ComBus link rework.md>) — preliminary study for the communication rework: multi-link, multi-protocol, versioning (work in progress)
 * [ComBus Builder](../scripts/combus_builder/README.md) — developer README of the generator (pipeline, node mode, tests)
 * [Builder open points](combus_builder_handoff.md) — what remains to check or decide
 * [`.cb` syntax](configuration/cb_syntax.md) — writing channel definitions
