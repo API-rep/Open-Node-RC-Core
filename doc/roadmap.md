@@ -44,7 +44,7 @@ Aujourd'hui, le câblage des chaînes de ComBus Processors (qui est branché sur
 
 **Objectif de fin d'hiver :** voir la section « Objectifs de fin d'hiver 2027 » en tête de ce document.
 
-Étude préliminaire (liens multi-instances, multi-protocoles) : `doc/WIP - ComBus link rework.md`. Modèle retenu au §3, points à trancher avant de coder au §8.
+Étude préliminaire (liens multi-instances, multi-protocoles) : `doc/WIP - ComBus link rework.md`. Intentions au §2, roadmap (chantiers et étapes) au §3.
 
 Aujourd'hui, seul l'UART est implémenté, de façon assez statique (flags `COMBUS_UART*`, `src/machines/init/com/combus_uart_init.cpp`). Objectif : un module de communication plus modulaire, ouvert à d'autres transports. L'interface de transport `NodeCom` existe déjà.
 
