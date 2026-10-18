@@ -5,10 +5,11 @@
  * @details Five independent test groups:
  *
  *   Group A — codec round-trip (no hardware required):
- *     Instantiates two ComBus structs with random analog/digital data,
- *     encodes each into a binary frame via combus_frame_encode(), then
+ *     Fills the generated machine ComBus with random analog/digital data,
+ *     encodes it into a binary frame via combus_frame_encode(), then
  *     decodes the result via combus_frame_decode() and asserts field-by-field
- *     equality between the original ComBus and the decoded ComBusFrame.
+ *     equality between the ComBus and the decoded ComBusFrame.  Also checks
+ *     that seq == 0 (handshake) is refused and that the flags byte is 0.
  *
  *   Group B — UART loopback (requires TX↔RX wire on Serial2):
  *     Uses combus_tx_update() and combus_rx_update() end-to-end.
@@ -23,11 +24,11 @@
  *     AnalogComBusArray[] / DigitalComBusArray[].
  *
  *   Group D — wire-end sizing (LY2):
- *     Verifies that combus_frame_encode() with a smaller analogWireEnd /
- *     digitalWireEnd produces a SHORTER buffer than with the full enum
- *     set.  This is the ONLY behavioural change vs. the pre-LY2 codec —
- *     the wire payload is now sized to the layer's prefix length instead
- *     of the full enum set.
+ *     Verifies that combus_frame_encode() sizes the wire payload to the
+ *     layer's prefix length (BASE shorter than FULL), with expected sizes
+ *     computed from the generated CH_COUNT constants.
+ *
+ *   Group G — RUNLEVEL round-trip (RL3).
  *
  *   Group E — MD5 pointer resolution by layer (LY4):
  *     Verifies that combus_protocol_init() resolves the per-link
@@ -46,8 +47,8 @@
  *     which feeds the top-level FAILSAFE aggregator.
  *     See failsafe_module.md §12.5 (new design) and §12.6 (cleanup).
  *
- * @note Group B requires a physical TX↔RX jumper on the Serial2 pins of
- *   the target board. Run via: pio test -e volvo_A60H_bruder
+ * @note Runs on the ESP32 board. Group B requires a physical TX↔RX jumper
+ *   on the Serial2 pins (GPIO 17 ↔ 16). Run via: pio test -e test_combus_loopback
  *****************************************************************************/
 
 #include <Arduino.h>
@@ -81,8 +82,6 @@
 // TEST CONFIGURATION
 // =============================================================================
 
-static constexpr uint8_t  kTestNAnalog  = 4u;
-static constexpr uint8_t  kTestNDigital = 6u;
 static constexpr uint32_t kLoopbackBaud = 115200u;
 
 static constexpr int      kTxPin        = 17;     ///< Serial2 TX — connect to kRxPin
@@ -95,28 +94,29 @@ static constexpr uint8_t  kMonkeyPasses = 8u;     ///< number of random frames t
 // SHARED TEST FIXTURES
 // =============================================================================
 
-static constexpr ComBusFrameCfg kCfg = { kTestNAnalog, kTestNDigital };
+// The fixtures use the generated machine ComBus (AnalogComBusArray,
+// DigitalComBusArray and comBus, from combus_generated/combus.cpp): their
+// sizes and channel layers match the real profile, so channel IDs such as
+// AnalogComBusID::RUNLEVEL always index inside the arrays.
+static constexpr uint8_t kNAnalog  = static_cast<uint8_t>(AnalogComBusID::CH_COUNT);
+static constexpr uint8_t kNDigital = static_cast<uint8_t>(DigitalComBusID::CH_COUNT);
 
+static constexpr ComBusFrameCfg kCfg      = { kNAnalog, kNDigital };
+static constexpr ComBusFrameCfg kSmallCfg = { 4u, 6u };   ///< clamp test only
 
 // --- ComBus A (source / TX side) ---
-static AnalogComBus  txAnalogBus[kTestNAnalog];
-static DigitalComBus txDigitalBus[kTestNDigital];
-static ComBus        txComBus = {
-    // RL3: runLevel field removed — initialise via combus_set_analog() at runtime.
-    .analogBus      = txAnalogBus,
-    .digitalBus     = txDigitalBus,
-    .analogBusMaxVal = 1000u
-};
+static ComBus& txComBus = comBus;
 
 // --- ComBusFrame B (decode / RX side) ---
-static uint16_t rxAnalogBuf[kTestNAnalog]   = {};
-static bool     rxDigitalBuf[kTestNDigital] = {};
+static uint16_t rxAnalogBuf[kNAnalog]   = {};
+static bool     rxDigitalBuf[kNDigital] = {};
 static ComBusFrame rxFrame = { .analog = rxAnalogBuf, .digital = rxDigitalBuf };
 
 // --- Encode output buffer ---
 static uint8_t encodeBuf[255u];
 
 // --- Per-link state pools (caller-owned, registered once at boot) ---
+static UartCtx       s_uartPool[1];
 static CombusTxState s_txStates[1];
 static CombusRxState s_rxStates[1];
 static constexpr uint8_t kLinkIdx = 0u;
@@ -126,32 +126,35 @@ static constexpr uint8_t kLinkIdx = 0u;
 // HELPERS
 // =============================================================================
 
+/** Expected wire length of a control frame: SOF + header, digital bytes, analog values, CRC. */
+static constexpr uint8_t frameLen(uint8_t nAnalog, uint8_t nDigital) {
+    return (uint8_t)(CombusFrameHeaderLen + (nDigital + 7u) / 8u + nAnalog * 2u + 1u);
+}
+
 /** Fill txComBus with deterministic pseudo-random values seeded by `seed`. */
 static void fillRandom(uint32_t seed) {
     srand(seed);
-    // RL3: runLevel is no longer a struct field — write RUNLEVEL via the generic analog accessor.
+    for (uint8_t i = 0u; i < kNAnalog; ++i) {
+        txComBus.analogBus[i].value = (uint16_t)(rand() % 1001u);
+    }
+    for (uint8_t i = 0u; i < kNDigital; ++i) {
+        txComBus.digitalBus[i].value = (rand() % 2) == 1;
+    }
+    // RL3: runLevel is no longer a struct field — write RUNLEVEL via the generic
+    // analog accessor (RUNLEVEL is a SYSTEM channel, so a SYSTEM caller may write it).
     combus_set_analog(txComBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::RUNNING, ChanLayer::SYSTEM);
-    for (uint8_t i = 0u; i < kTestNAnalog; ++i) {
-        txAnalogBus[i].value    = (uint16_t)(rand() % 1001u);
-    }
-    for (uint8_t i = 0u; i < kTestNDigital; ++i) {
-        txDigitalBus[i].value    = (rand() % 2) == 1;
-    }
-    // Chantier 12.6: `bus.isNotDrived` (FS1 open-drain flag) has been removed.
-    // The codec test no longer needs to drive the flag — it only cares about `value`.
 }
 
-/** Assert that rxFrame fields match txComBus content. */
+/** Assert that the decoded frame matches txComBus, over the channels the frame carries. */
 static void assertFrameMatchesBus(const ComBusFrame* frame, const ComBus* bus) {
     TEST_ASSERT_NOT_NULL(frame);
-    // RL2: runLevel is no longer a header field — it travels as a
-    // standard combus channel (RUNLEVEL, scope SYSTEM). The header
-    // assertion is removed; the channel-level assertion will be added
-    // in RL3 when combus_frame_apply() is wired to the RUNLEVEL channel.
-    for (uint8_t i = 0u; i < kTestNAnalog; ++i) {
+    // RL2: runLevel is no longer a header field — it travels as a standard
+    // combus channel (RUNLEVEL, scope SYSTEM), checked by the channel loop below.
+    // A frame carries a prefix of the bus (its wire-end), not always the full bus.
+    for (uint8_t i = 0u; i < frame->header.cfg.nAnalog; ++i) {
         TEST_ASSERT_EQUAL_UINT16(bus->analogBus[i].value, frame->analog[i]);
     }
-    for (uint8_t i = 0u; i < kTestNDigital; ++i) {
+    for (uint8_t i = 0u; i < frame->header.cfg.nDigital; ++i) {
         TEST_ASSERT_EQUAL(bus->digitalBus[i].value, frame->digital[i]);
     }
 }
@@ -165,13 +168,11 @@ static void assertFrameMatchesBus(const ComBusFrame* frame, const ComBus* bus) {
 static void test_codec_single_roundtrip(void) {
     fillRandom(0xDEADBEEFul);
 
-    // LY2 — encode takes analogWireEnd / digitalWireEnd.  Use the
-    // full enum set (CH_COUNT of the FULL view) for the round-trip
-    // test so the codec iterates over every channel.
-    uint8_t len = combus_frame_encode(kCfg, encodeBuf, &txComBus, 0u, false,
-                                      static_cast<uint8_t>(AnalogComBusID::CH_COUNT),
-                                      static_cast<uint8_t>(DigitalComBusID::CH_COUNT));
-    TEST_ASSERT_GREATER_THAN_UINT8(0u, len);
+    // LY2 — encode takes analogWireEnd / digitalWireEnd.  Use the full
+    // enum set so the codec iterates over every channel.  seq starts at 1:
+    // 0 is reserved for the handshake and refused by the encoder.
+    uint8_t len = combus_frame_encode(kCfg, encodeBuf, &txComBus, 1u, kNAnalog, kNDigital);
+    TEST_ASSERT_EQUAL_UINT8(frameLen(kNAnalog, kNDigital), len);
 
     bool ok = combus_frame_decode(kCfg, &rxFrame, encodeBuf, len);
     TEST_ASSERT_TRUE(ok);
@@ -179,27 +180,31 @@ static void test_codec_single_roundtrip(void) {
     assertFrameMatchesBus(&rxFrame, &txComBus);
 }
 
-/** Encode→decode with failsafe flag set — header flags byte must reflect it. */
-static void test_codec_failsafe_flag(void) {
+/** seq == 0 is reserved for the handshake — the encoder must refuse it. */
+static void test_codec_seq_zero_refused(void) {
+    fillRandom(0x0BADF00Dul);
+
+    uint8_t len = combus_frame_encode(kCfg, encodeBuf, &txComBus, 0u, kNAnalog, kNDigital);
+    TEST_ASSERT_EQUAL_UINT8(0u, len);
+}
+
+/** The header flags byte is reserved (FS2: no failsafe bit any more) — it must decode as 0. */
+static void test_codec_flags_reserved(void) {
     fillRandom(0x12345678ul);
 
-    uint8_t len = combus_frame_encode(kCfg, encodeBuf, &txComBus, 1u, true,
-                                      static_cast<uint8_t>(AnalogComBusID::CH_COUNT),
-                                      static_cast<uint8_t>(DigitalComBusID::CH_COUNT));
+    uint8_t len = combus_frame_encode(kCfg, encodeBuf, &txComBus, 1u, kNAnalog, kNDigital);
     TEST_ASSERT_GREATER_THAN_UINT8(0u, len);
 
     bool ok = combus_frame_decode(kCfg, &rxFrame, encodeBuf, len);
     TEST_ASSERT_TRUE(ok);
-    TEST_ASSERT_BITS(COMBUS_FLAG_FAILSAFE, COMBUS_FLAG_FAILSAFE, rxFrame.header.flags);
+    TEST_ASSERT_EQUAL_UINT8(0u, rxFrame.header.flags);
 }
 
 /** Corrupt one payload byte — CRC must reject the frame. */
 static void test_codec_crc_reject(void) {
     fillRandom(0xCAFEBABEul);
 
-    uint8_t len = combus_frame_encode(kCfg, encodeBuf, &txComBus, 2u, false,
-                                      static_cast<uint8_t>(AnalogComBusID::CH_COUNT),
-                                      static_cast<uint8_t>(DigitalComBusID::CH_COUNT));
+    uint8_t len = combus_frame_encode(kCfg, encodeBuf, &txComBus, 2u, kNAnalog, kNDigital);
     TEST_ASSERT_GREATER_THAN_UINT8(0u, len);
 
     encodeBuf[len / 2u] ^= 0xFFu;  // flip bits in the middle of the frame
@@ -213,9 +218,8 @@ static void test_codec_monkey_roundtrip(void) {
     for (uint8_t pass = 0u; pass < kMonkeyPasses; ++pass) {
         fillRandom((uint32_t)pass * 0x9E3779B9ul);
 
-        uint8_t len = combus_frame_encode(kCfg, encodeBuf, &txComBus, pass, false,
-                                          static_cast<uint8_t>(AnalogComBusID::CH_COUNT),
-                                          static_cast<uint8_t>(DigitalComBusID::CH_COUNT));
+        uint8_t len = combus_frame_encode(kCfg, encodeBuf, &txComBus, (uint8_t)(pass + 1u),
+                                          kNAnalog, kNDigital);
         TEST_ASSERT_GREATER_THAN_UINT8(0u, len);
 
         bool ok = combus_frame_decode(kCfg, &rxFrame, encodeBuf, len);
@@ -232,6 +236,9 @@ static void test_codec_monkey_roundtrip(void) {
 
 /** Init combus_tx and combus_rx on the same Serial2 port (loopback). */
 static void test_loopback_init(void) {
+    // The UART port registry must be registered before any uart_com_init().
+    uart_com_register_pool(s_uartPool, 1);
+
     NodeCom* com = uart_com_init(&Serial2, kLoopbackBaud, kTxPin, kRxPin, "test_loopback");
     TEST_ASSERT_NOT_NULL(com);
 
@@ -239,12 +246,11 @@ static void test_loopback_init(void) {
     combus_tx_register_pool(s_txStates, 1);
     combus_rx_register_pool(s_rxStates, 1);
 
-    // LY2 — combus_tx_init() now takes a ChanLayer parameter.  Use
-    // BASE for the loopback test (matches the machine env default).
+    // LY2 — combus_tx_init() takes a ChanLayer parameter.  Use BASE for
+    // the loopback test (matches the machine env default): the frames
+    // carry the BASE prefix of the bus.
     combus_tx_init(kLinkIdx, com, kCfg, 50u, ChanLayer::BASE);   // 50 Hz TX
     combus_rx_init(kLinkIdx, com, kCfg, rxAnalogBuf, rxDigitalBuf);
-
-    // No assertion beyond not crashing — both modules share the same NodeCom*.
 }
 
 /** Send one frame, poll RX, assert snapshot matches what was sent. */
@@ -254,7 +260,7 @@ static void test_loopback_single_frame(void) {
         // Force TX to fire on next call by resetting via a fresh init would be
         // heavier — instead we just wait one full period (20ms at 50Hz) + margin.
     delay(30u);
-    combus_tx_update(&txComBus, false);
+    combus_tx_update(&txComBus);
     delay(kRxPollMs);
     combus_rx_update();
 
@@ -271,7 +277,8 @@ static void test_loopback_resync_after_garbage(void) {
     delay(5u);
 
     fillRandom(0xFEFEFEFEul);
-    combus_tx_update(&txComBus, false);
+    delay(30u);
+    combus_tx_update(&txComBus);
     delay(kRxPollMs);
     combus_rx_update();
 
@@ -286,7 +293,7 @@ static void test_loopback_monkey(void) {
         fillRandom((uint32_t)pass * 0x1234ABCDul);
 
         delay(30u);
-        combus_tx_update(&txComBus, false);
+        combus_tx_update(&txComBus);
         delay(kRxPollMs);
         combus_rx_update();
 
@@ -434,93 +441,65 @@ static void test_id_prefix_alignment_digital(void) {
 // GROUP D — WIRE-END SIZING (LY2)
 //
 // Verifies that combus_frame_encode() with a smaller analogWireEnd /
-// digitalWireEnd produces a SHORTER buffer than with the full enum set.
-// This is the ONLY behavioural change vs. the pre-LY2 codec — the wire
-// payload is now sized to the layer's prefix length instead of the full
-// enum set.
+// digitalWireEnd produces a SHORTER buffer than with the full enum set:
+// the wire payload is sized to the layer's prefix length instead of the
+// full enum set.
 //
-// Channel counts (volvo_A60H_bruder / dumper_truck):
-//   - BASE: 10 analog (0..9), 9 digital (0..8)   [RL1: +1 analog = RUNLEVEL]
-//   - SYSTEM:  13 analog (0..12), 19 digital (0..18) [RL1: +1 analog = RUNLEVEL]
-//   - FULL:   13 analog (0..12), 19 digital (0..18) [RL1: +1 analog = RUNLEVEL]
-//
-// Expected frame sizes (header=5, CRC=1) — RL2: header shrunk from 6 to 5 bytes
-// (runLevel removed from header, travels as standard combus channel RUNLEVEL):
-//   - BASE: 5 + ceil(9/8) + 10*2 + 1 = 5 + 2 + 20 + 1 = 28 bytes
-//   - SYSTEM:  5 + ceil(19/8) + 13*2 + 1 = 5 + 3 + 26 + 1 = 35 bytes
-//   - FULL:   5 + ceil(19/8) + 13*2 + 1 = 5 + 3 + 26 + 1 = 35 bytes
-//
-// The BASE buffer must be SHORTER than the FULL buffer (28 < 35).
+// Expected sizes are computed from the generated CH_COUNT constants of
+// each view (frameLen() helper), never hard-coded: they follow the
+// profile when channels are added or removed.
 // =============================================================================
+
+static constexpr uint8_t kBaseAnalog    = static_cast<uint8_t>(AnalogComBusBaseID::CH_COUNT);
+static constexpr uint8_t kBaseDigital   = static_cast<uint8_t>(DigitalComBusBaseID::CH_COUNT);
+static constexpr uint8_t kSystemAnalog  = static_cast<uint8_t>(AnalogComBusSystemID::CH_COUNT);
+static constexpr uint8_t kSystemDigital = static_cast<uint8_t>(DigitalComBusSystemID::CH_COUNT);
 
 /** Encode with BASE wire-end — buffer must be shorter than FULL. */
 static void test_wire_end_base_shorter_than_full(void) {
     fillRandom(0xD1D2D3D4ul);
 
-    // Encode with BASE wire-end (9 analog, 9 digital).
-    uint8_t lenBase = combus_frame_encode(
-        kCfg, encodeBuf, &txComBus, 1u, false,
-        static_cast<uint8_t>(AnalogComBusBaseID::CH_COUNT),
-        static_cast<uint8_t>(DigitalComBusBaseID::CH_COUNT)
-    );
-    TEST_ASSERT_GREATER_THAN_UINT8(0u, lenBase);
+    uint8_t lenBase = combus_frame_encode(kCfg, encodeBuf, &txComBus, 1u, kBaseAnalog, kBaseDigital);
+    TEST_ASSERT_EQUAL_UINT8(frameLen(kBaseAnalog, kBaseDigital), lenBase);
 
-    // Encode with FULL wire-end (12 analog, 19 digital).
-    uint8_t lenFull = combus_frame_encode(
-        kCfg, encodeBuf, &txComBus, 2u, false,
-        static_cast<uint8_t>(AnalogComBusID::CH_COUNT),
-        static_cast<uint8_t>(DigitalComBusID::CH_COUNT)
-    );
-    TEST_ASSERT_GREATER_THAN_UINT8(0u, lenFull);
+    uint8_t lenFull = combus_frame_encode(kCfg, encodeBuf, &txComBus, 2u, kNAnalog, kNDigital);
+    TEST_ASSERT_EQUAL_UINT8(frameLen(kNAnalog, kNDigital), lenFull);
 
     // The BASE buffer must be SHORTER than the FULL buffer.
     TEST_ASSERT_LESS_THAN_UINT8(lenFull, lenBase);
-
-    // Verify the exact expected sizes (see header comment).
-    // RL1: +1 analog (RUNLEVEL) → BASE 10 analog, FULL 13 analog.
-    // RL2: header shrunk from 6 to 5 bytes (runLevel removed from header).
-    TEST_ASSERT_EQUAL_UINT8(28u, lenBase);  // 5 + 2 + 20 + 1
-    TEST_ASSERT_EQUAL_UINT8(35u, lenFull);    // 5 + 3 + 26 + 1
 }
 
-/** Encode with SYSTEM wire-end — buffer must equal FULL (same CH_COUNT). */
-static void test_wire_end_system_equals_full(void) {
+/** Encode with SYSTEM wire-end — buffer sized by the SYSTEM view, never longer than FULL. */
+static void test_wire_end_system_sized_by_view(void) {
     fillRandom(0xE1E2E3E4ul);
 
-    // Encode with SYSTEM wire-end (12 analog, 19 digital).
-    uint8_t lenSystem = combus_frame_encode(
-        kCfg, encodeBuf, &txComBus, 3u, false,
-        static_cast<uint8_t>(AnalogComBusSystemID::CH_COUNT),
-        static_cast<uint8_t>(DigitalComBusSystemID::CH_COUNT)
-    );
-    TEST_ASSERT_GREATER_THAN_UINT8(0u, lenSystem);
+    uint8_t lenSystem = combus_frame_encode(kCfg, encodeBuf, &txComBus, 3u, kSystemAnalog, kSystemDigital);
+    TEST_ASSERT_EQUAL_UINT8(frameLen(kSystemAnalog, kSystemDigital), lenSystem);
 
-    // Encode with FULL wire-end (12 analog, 19 digital).
-    uint8_t lenFull = combus_frame_encode(
-        kCfg, encodeBuf, &txComBus, 4u, false,
-        static_cast<uint8_t>(AnalogComBusID::CH_COUNT),
-        static_cast<uint8_t>(DigitalComBusID::CH_COUNT)
-    );
-    TEST_ASSERT_GREATER_THAN_UINT8(0u, lenFull);
-
-    // SYSTEM and FULL have the same CH_COUNT — buffers must be equal.
-    TEST_ASSERT_EQUAL_UINT8(lenFull, lenSystem);
+    uint8_t lenFull = combus_frame_encode(kCfg, encodeBuf, &txComBus, 4u, kNAnalog, kNDigital);
+    TEST_ASSERT_LESS_OR_EQUAL_UINT8(lenFull, lenSystem);
 }
 
 /** Encode with wire-end = 0 — buffer must be the minimum (header + CRC). */
 static void test_wire_end_zero_is_minimum(void) {
     fillRandom(0xF1F2F3F4ul);
 
-    // Encode with wire-end = 0 (no analog, no digital).
-    uint8_t lenZero = combus_frame_encode(
-        kCfg, encodeBuf, &txComBus, 5u, false, 0u, 0u
-    );
-    TEST_ASSERT_GREATER_THAN_UINT8(0u, lenZero);
+    uint8_t lenZero = combus_frame_encode(kCfg, encodeBuf, &txComBus, 5u, 0u, 0u);
 
-    // Minimum frame: header (5) + 0 digital bytes + 0 analog bytes + CRC (1) = 6.
-    // RL2: header shrunk from 6 to 5 bytes (runLevel removed from header).
-    TEST_ASSERT_EQUAL_UINT8(6u, lenZero);
+    // Minimum frame: SOF + header, no digital byte, no analog value, CRC.
+    TEST_ASSERT_EQUAL_UINT8(frameLen(0u, 0u), lenZero);
 }
+
+/** Encode with wire-end > cfg — must clamp to the cfg counts (no overflow). */
+static void test_wire_end_clamped_to_cfg(void) {
+    fillRandom(0xA1A2A3A4ul);
+
+    uint8_t lenClamped = combus_frame_encode(kSmallCfg, encodeBuf, &txComBus, 6u, 200u, 200u);
+
+    // Clamped to kSmallCfg (4 analog, 6 digital).
+    TEST_ASSERT_EQUAL_UINT8(frameLen(kSmallCfg.nAnalog, kSmallCfg.nDigital), lenClamped);
+}
+
 
 // =============================================================================
 // GROUP G — RUNLEVEL ROUND-TRIP (RL3)
@@ -534,12 +513,11 @@ static void test_wire_end_zero_is_minimum(void) {
 /** RUNLEVEL round-trip — encode→decode preserves the RUNLEVEL analog value. */
 static void test_runlevel_roundtrip_via_channel(void) {
     // Write RUNLEVEL via the generic analog accessor (mainboard pattern).
-    combus_set_analog(txComBus, AnalogComBusID::RUNLEVEL,
-                      (uint16_t)RunLevel::STARTING, ChanLayer::SYSTEM);
+    bool written = combus_set_analog(txComBus, AnalogComBusID::RUNLEVEL,
+                                     (uint16_t)RunLevel::STARTING, ChanLayer::SYSTEM);
+    TEST_ASSERT_TRUE_MESSAGE(written, "RUNLEVEL write denied (layer check)");
 
-    uint8_t len = combus_frame_encode(kCfg, encodeBuf, &txComBus, 7u, false,
-                                      static_cast<uint8_t>(AnalogComBusID::CH_COUNT),
-                                      static_cast<uint8_t>(DigitalComBusID::CH_COUNT));
+    uint8_t len = combus_frame_encode(kCfg, encodeBuf, &txComBus, 7u, kNAnalog, kNDigital);
     TEST_ASSERT_GREATER_THAN_UINT8(0u, len);
 
     bool ok = combus_frame_decode(kCfg, &rxFrame, encodeBuf, len);
@@ -548,21 +526,6 @@ static void test_runlevel_roundtrip_via_channel(void) {
     // The decoded analog[RUNLEVEL] must equal the encoded value.
     TEST_ASSERT_EQUAL_UINT16((uint16_t)RunLevel::STARTING,
                              rxFrame.analog[static_cast<uint8_t>(AnalogComBusID::RUNLEVEL)]);
-}
-
-/** Encode with wire-end > CH_COUNT — must clamp to CH_COUNT (no overflow). */
-static void test_wire_end_clamped_to_cfg(void) {
-    fillRandom(0xA1A2A3A4ul);
-
-    // Encode with wire-end > cfg.nAnalog / cfg.nDigital — must clamp.
-    uint8_t lenClamped = combus_frame_encode(
-        kCfg, encodeBuf, &txComBus, 6u, false, 200u, 200u
-    );
-    TEST_ASSERT_GREATER_THAN_UINT8(0u, lenClamped);
-
-    // Clamped to kTestNAnalog=4, kTestNDigital=6: 5 + ceil(6/8) + 4*2 + 1 = 5 + 1 + 8 + 1 = 15.
-    // RL2: header shrunk from 6 to 5 bytes (runLevel removed from header).
-    TEST_ASSERT_EQUAL_UINT8(15u, lenClamped);
 }
 
 
@@ -576,7 +539,7 @@ static void test_wire_end_clamped_to_cfg(void) {
 // resolution at init, not the per-frame behaviour.
 //
 // The 3 MD5 arrays are generated by scripts/combus_builder/md5.py
-// under out/combus_generated/ and exposed via combus::wire:
+// under <build_dir>/combus_generated/ and exposed via combus::wire:
 //   - kCombusComBusMd5       (FULL view, machine node default)
 //   - kCombusBaseComBusMd5 (BASE view, RF link)
 //   - kCombusSystemComBusMd5  (SYSTEM view, extension board link)
@@ -618,7 +581,6 @@ static void test_md5_arrays_are_distinct(void) {
 static void test_md5_resolution_base(void) {
     static CombusHandshakeContext ctx = {};
     static ComBusLink link = {};
-    static ComBusFrameCfg cfg = { kTestNAnalog, kTestNDigital };
 
     link.name        = "test_remote";
     link.com         = nullptr;  // not used by the MD5 resolution path
@@ -724,7 +686,8 @@ void setup() {
 
     // --- Group A: codec round-trip (no hardware needed) ---
     RUN_TEST(test_codec_single_roundtrip);
-    RUN_TEST(test_codec_failsafe_flag);
+    RUN_TEST(test_codec_seq_zero_refused);
+    RUN_TEST(test_codec_flags_reserved);
     RUN_TEST(test_codec_crc_reject);
     RUN_TEST(test_codec_monkey_roundtrip);
 
@@ -747,7 +710,7 @@ void setup() {
 
     // --- Group D: wire-end sizing (LY2) ---
     RUN_TEST(test_wire_end_base_shorter_than_full);
-    RUN_TEST(test_wire_end_system_equals_full);
+    RUN_TEST(test_wire_end_system_sized_by_view);
     RUN_TEST(test_wire_end_zero_is_minimum);
     RUN_TEST(test_wire_end_clamped_to_cfg);
 

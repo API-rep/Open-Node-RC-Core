@@ -115,14 +115,14 @@ Chaque étape se vérifie avec le test de boucle (loopback) puis un build comple
 
 **Constats** :
 - 0.1 : le RX applique les trames avec une identité d'écriture constante (`BASE`), ce qui refuserait les channels `SYSTEM` d'un lien carte à carte ; le cœur accède au `comBus` global à deux endroits (`combus_rx.cpp`, invalidation du handshake sur failsafe ; `vbat.cpp`).
-- 0.2 : `test_combus_loopback` ne compile plus (14 erreurs « too many arguments » sur `combus_frame_encode` et `combus_tx_update`, dont les signatures ont changé).
+- 0.2 : `test_combus_loopback` ne compilait plus (14 erreurs « too many arguments » sur `combus_frame_encode` et `combus_tx_update`). En le reprenant, d'autres défauts sont apparus : bus de test trop petit pour le profil réel (l'écriture de `RUNLEVEL` débordait du tableau), `seq = 0` utilisé alors que l'encodeur le refuse, tailles de trame codées en dur et périmées, pool UART non enregistré avant `uart_com_init`, test d'un bit failsafe d'en-tête retiré (FS2).
 - 0.3 : le filtre par type est inactif : `MACHINE_TYPE_*` est un `#define` dans l'en-tête de la machine, pas un `-D` visible du builder (détail et options dans `doc/combus_builder_handoff.md`).
 - 0.4 : l'initialisation est statique : `combus_uart_init.cpp` construit un seul lien UART à partir des flags `COMBUS_UART*`.
 
 | Étape | Livrable | Preuve |
 |---|---|---|
 | 0.1 | RX : identité d'écriture = `layer` du lien ; suppression des deux accès du cœur au `comBus` global | test lien `SYSTEM` : les channels `SYSTEM` sont appliqués |
-| 0.2 | Test Unity `test_combus_loopback` aux signatures actuelles | le test compile et passe |
+| 0.2 | Test Unity `test_combus_loopback` aux signatures actuelles, bus de test = ComBus généré, tailles calculées depuis les `CH_COUNT` | **compile (2026-10-18)** ; exécution sur la carte à faire (pont TX↔RX sur Serial2 pour le groupe B) |
 | 0.3 | Filtre par type de machine réparé (préalable aux profils compatibles) | un env ne charge que les `.cb` de son type |
 | 0.4 | `ComPort` / `ComDev` pour l'UART seul, à la place de `combus_uart_init.cpp` | comportement identique, build de la Volvo inchangé |
 
