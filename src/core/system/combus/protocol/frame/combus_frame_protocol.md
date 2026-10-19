@@ -100,9 +100,10 @@ compteur part de 0 (`generator.py:362-386`).
   indice via `combus_set_analog` / `combus_set_digital`, et met à jour
   `combus->lastFrameMs`. Le contrôle de layer est fait par ces fonctions
   (`_layer_ok`, `combus_access.cpp:28-54`).
-- En production, `combus_frame_apply` n'a qu'un appelant : `combus_rx.cpp:223`,
-  appelé automatiquement quand le lien a une cible (`st.target != nullptr`),
-  avec le layer `ChanLayer::BASE`. En pratique, cet appel n'est jamais
+- En production, `combus_frame_apply` n'a qu'un appelant : `tryDecode` dans
+  `combus_rx.cpp`, appelé automatiquement quand le lien a une cible
+  (`st.target != nullptr`), avec l'identité d'écriture du lien (`st.writeLayer`,
+  voir ci-dessous). En pratique, cet appel n'est jamais
   atteint par la machine : `combus_rx_update` n'est appelé nulle part dans
   `src/` et le lien UART n'a pas de `target` (voir §9).
 - Le même indice sert d'ID des deux côtés : émetteur et récepteur doivent donc
@@ -110,11 +111,15 @@ compteur part de 0 (`generator.py:362-386`).
   lien (`combus_protocol.cpp:55-88`, `kCombusBaseComBusMd5`,
   `kCombusSystemComBusMd5` ou `kCombusComBusMd5` selon le layer).
 
-> À VÉRIFIER : `combus_rx.cpp:209-221` commente que le layer `BASE` « accepte
-> les canaux BASE ou SYSTEM » (« SYSTEM inherits BASE »). Or `_layer_ok` n'autorise l'écriture d'un canal
-> SYSTEM que pour un appelant SYSTEM ou BOARD (`combus_access.cpp:42-45`). Avec
-> `ChanLayer::BASE` passé par `combus_rx.cpp:223`, les canaux SYSTEM d'une
-> trame reçue semblent refusés. Effet réel non vérifié par exécution.
+Identité d'écriture du RX : `combus_rx_init` reçoit le `layer` du lien et en
+dérive `st.writeLayer`. `_layer_ok` n'autorise l'écriture d'un canal SYSTEM que
+pour un appelant SYSTEM ou BOARD (`combus_access.cpp:42-45`) : un lien BASE
+écrit donc les canaux BASE seulement, un lien SYSTEM les canaux BASE et SYSTEM.
+Un lien BOARD reçoit l'identité SYSTEM (une trame n'écrit jamais un canal
+BOARD). Avec une cible et un layer `UNDEFINED`, l'init s'arrête en FATAL. Avant
+le chantier 0.1, l'identité était la constante `ChanLayer::BASE`, qui refusait
+les canaux SYSTEM d'un lien carte à carte. Preuve : groupe H de
+`test/test_combus_loopback` (compilé ; exécution sur la carte à faire).
 
 ## 6. Direction : pas de filtrage au transport
 
@@ -206,7 +211,7 @@ la vue complète si le pointeur est nul (`combus_handshake_tx.cpp:51-53`,
   contrôlés (`combus_handshake_rx.cpp:194-197`).
 - Le contrat est invalidé : à chaque `combus_rx_init` ; et, si `HAS_FAILSAFE`
   est défini, à chaque `combus_rx_update` tant que le canal `FAILSAFE` est
-  actif, pour le lien concerné seulement (`combus_rx.cpp:318-329`).
+  actif, pour le lien concerné seulement (`combus_rx.cpp:342-353`).
 - La désynchronisation n'arrête pas les trames de contrôle : le handshake
   journalise `MATCH` ou `MISMATCH` ; aucun code lu ne bloque l'application des
   trames sur un `MISMATCH`.
@@ -233,7 +238,7 @@ la vue complète si le pointeur est nul (`combus_handshake_tx.cpp:51-53`,
 - Les états TX et RX sont des tableaux fournis par l'appelant et enregistrés
   une seule fois (`combus_tx_register_pool`, `combus_rx_register_pool`) ; un
   second enregistrement est ignoré avec un message d'erreur
-  (`combus_rx.cpp:46-58`). Le nombre de liens n'est pas limité par le module.
+  (`combus_rx.cpp:45-57`). Le nombre de liens n'est pas limité par le module.
 - Un contexte de handshake appartient à un seul lien ; TX et RX du même lien le
   partagent.
 - Une trame reçue n'est appliquée au ComBus que si `link.target` est non nul
@@ -279,9 +284,9 @@ dans le code actuel.
 | Include codé en dur de `dumper_truck/combus_ids_remote_md5.h` | résolu (MD5 par layer, indépendant du type de machine) | `combus_handshake.h:51-53` |
 | `isDrived` | supprimé | plus de champ dans `combus_defs.h` |
 | Tampon `linear[]` surdimensionné dans le décodeur de handshake | **toujours vrai** : 1 + 4 + 255 + 1 octets de pile pour une trame de 24 | `combus_handshake_rx.cpp:155-158` |
-| Offset de `seq` calculé par `offsetof` imbriqués | **toujours vrai** | `combus_rx.cpp:156-157` |
+| Offset de `seq` calculé par `offsetof` imbriqués | **toujours vrai** | `combus_rx.cpp:155-156` |
 | Tampon TX `static uint8_t frame[255]` | partagé entre liens, utilisé de façon synchrone dans la boucle | `combus_tx.cpp:194` |
-| Pas de contrôle de taille des tampons RX fournis | **toujours vrai** (seuls les pointeurs nuls sont refusés) | `combus_rx.cpp:262-263` |
+| Pas de contrôle de taille des tampons RX fournis | **toujours vrai** (seuls les pointeurs nuls sont refusés) | `combus_rx.cpp:264-265` |
 | Écriture directe de `.value` dans `protocol/` | aucune trouvée (recherche `(digital|analog)Bus[..].value =`) | `src/core/system/combus/protocol/` |
 
 ## 12. Non implémenté dans le transport
