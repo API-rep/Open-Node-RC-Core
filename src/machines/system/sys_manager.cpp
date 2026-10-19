@@ -23,7 +23,7 @@ void sys_manager_update(ComBus& bus) {
     input_update(bus);   // machine: mapping -> ComBus
 
       // --- 2. vbat update (senses + re-arms FAILSAFE_VBAT) ---
-    vbat_update();       // vbat_sense_tick() then FAILSAFE_VBAT = vbat_is_low(0)
+    vbat_update(bus);    // vbat_sense_tick() then FAILSAFE_VBAT = vbat_is_low(0)
 
       // --- 3. Failsafe chain (publishes DigitalComBusID::FAILSAFE) ---
       // Runs after inputs (so sub-combus reads are fresh) and after vbat_update

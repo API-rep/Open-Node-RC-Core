@@ -103,7 +103,7 @@ void combus_protocol_init( uint8_t linkIdx, ComBusLink* link )
 
         // --- 5. RX protocol layer — only if rxCfg is present ---
     if (link->rxCfg) {
-        combus_rx_init(linkIdx, link->com, *link->rxCfg, link->analogBuf, link->digitalBuf, link->target);
+        combus_rx_init(linkIdx, link->com, *link->rxCfg, link->analogBuf, link->digitalBuf, link->target, link->layer);
     }
 }
 

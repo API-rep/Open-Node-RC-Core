@@ -25,7 +25,6 @@
 #if defined(HAS_VBAT_SENSING) || defined(HAS_VBAT_FAILSAFE)
 #include <core/config/machines/combus_types.h>     // DigitalComBusID::FAILSAFE_VBAT (machine family dispatch)
 #include <core/system/combus/combus_access.h>      // combus_set_digital()
-extern ComBus comBus;
 #endif
 
 #if defined(HAS_VBAT_SENSING) || defined(VBAT_ALERT)
@@ -71,9 +70,11 @@ void vbat_init(VBatSense* sense)
  *   1. vbat_sense_tick() : battery sensing
  *   2.  (future)            — ComBus runlevel sleeping / re-arm.
  *   3. vbat_alert_tick() : alert reactions
+ *
+ * @param bus  Node ComBus receiving the FAILSAFE_VBAT contributor (HAS_VBAT_FAILSAFE).
  */
 
-void vbat_update()
+void vbat_update(ComBus& bus)
 {
 		// --- 1. Sensing (if available) ---
 #ifdef HAS_VBAT_SENSING
@@ -85,7 +86,9 @@ void vbat_update()
 	// low voltage => FAILSAFE_VBAT = true (HIGH = fault per failsafe-by-default).
 	// healthy    => FAILSAFE_VBAT = false (LOW = healthy).
 	// The aggregator consumes this each cycle (see failsafe.cb + WIP §5).
-	combus_set_digital(comBus, DigitalComBusID::FAILSAFE_VBAT, vbat_is_low(0));
+	combus_set_digital(bus, DigitalComBusID::FAILSAFE_VBAT, vbat_is_low(0));
+#else
+	(void)bus;
 #endif
 
 		// --- 3. (future: ComBus runlevel) ---

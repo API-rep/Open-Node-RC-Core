@@ -21,12 +21,11 @@
 
 #if defined(HAS_FAILSAFE)
 // P4 — failsafe reaction needs to read the aggregated FAILSAFE channel.
-// combus_rx.cpp is a core module and does not own the global comBus
-// instance; we declare it extern here, gated by HAS_FAILSAFE so the
-// dependency is only pulled in when the feature is compiled in.
-// Same pattern as src/core/system/vbat/vbat.cpp:28.
+// combus_rx.cpp is a core module and does not own any ComBus instance:
+// the node ComBus is passed to combus_rx_update(), like combus_tx_update().
+// Gated by HAS_FAILSAFE so the dependency is only pulled in when the
+// feature is compiled in.
 #include <core/config/machines/combus_types.h>  // DigitalComBusID::FAILSAFE (machine family dispatch)
-extern ComBus comBus;
 #endif
 
 
@@ -215,13 +214,14 @@ static uint8_t tryDecode( CombusRxState& st )
         // combus_frame_apply() manually.
         //
         // combus_frame_apply() takes a ChanLayer caller identity (see
-        // combus_frame.h).  We pass ChanLayer::BASE because the RX
-        // path is receiving frames from a remote source — the layer
-        // check inside combus_set_*() will accept writes to channels
-        // whose declared layer is BASE or SYSTEM (SYSTEM inherits BASE).
+        // combus_frame.h).  The identity is the layer of the link that
+        // received the frame (st.writeLayer): the layer check inside
+        // combus_set_*() lets a BASE link write BASE channels only, and a
+        // SYSTEM link write BASE and SYSTEM channels.  A frame can never
+        // write a BOARD channel (see combus_rx_init()).
         if (st.target != nullptr) {
             combus_frame_apply(st.frameCfg, st.target, &st.snap,
-                               ChanLayer::BASE);
+                               st.writeLayer);
         }
 
         rxBufConsume(st, expectedLen);
@@ -247,8 +247,9 @@ static uint8_t tryDecode( CombusRxState& st )
  *   1. Guard check — null transport or buffer pointer, or out-of-range
  *      linkIdx; returns immediately.
  *   2. Store transport interface and frame layout descriptor.
- *   3. Wire caller-provided buffers into the snapshot struct.
- *   4. Reset ring buffer and link state.
+ *   3. Resolve the write identity used to apply frames from the link layer.
+ *   4. Wire caller-provided buffers into the snapshot struct.
+ *   5. Reset ring buffer and link state.
  */
 void combus_rx_init(
     uint8_t        linkIdx,    // index of this link in the per-link state array
@@ -256,7 +257,8 @@ void combus_rx_init(
     ComBusFrameCfg frameCfg,   // static frame layout descriptor (nAnalog, nDigital)
     uint16_t*      analogBuf,  // caller-allocated array of frameCfg.nAnalog entries
     bool*          digitalBuf,// caller-allocated array of frameCfg.nDigital entries
-    ComBus*        target )    // RL5 — optional apply target (nullptr = no auto-apply)
+    ComBus*        target,     // RL5 — optional apply target (nullptr = no auto-apply)
+    ChanLayer      layer )     // layer of the link — write identity of the applied frames
 {
     // --- 1. Guard check ---
     if (!s_rxStates || linkIdx >= s_capacity) { return; }
@@ -269,11 +271,28 @@ void combus_rx_init(
     st.frameCfg = frameCfg;
     st.target   = target;   // RL5 — may be nullptr (legacy / test behaviour)
 
-    // --- 3. Wire caller-provided buffers into the snapshot struct ---
+    // --- 3. Resolve the write identity from the link layer.
+    //    A frame received on a link may only write the channels that link
+    //    is allowed to carry: BASE link -> BASE channels, SYSTEM link ->
+    //    BASE and SYSTEM channels.  A BOARD channel is private to one
+    //    board and must never be written from the wire, so a BOARD link
+    //    (reserved loopback) is given the SYSTEM identity.
+    //    The layer only matters when frames are applied (target != nullptr).
+    //    UNDEFINED is then a config error (forgotten / missing layer) and
+    //    triggers a FATAL halt — a silent fallback would mask the bug
+    //    (same pattern as combus_tx_init()).
+    st.layer      = layer;
+    st.writeLayer = (layer == ChanLayer::BOARD) ? ChanLayer::SYSTEM : layer;
+    if (target != nullptr && layer == ChanLayer::UNDEFINED) {
+        sys_log_err("[COMBUS_RX] FATAL: ChanLayer::UNDEFINED is not a valid layer for a link applying frames — system halted\n");
+        while (1) { /* halt */ }
+    }
+
+    // --- 4. Wire caller-provided buffers into the snapshot struct ---
     st.snap.analog  = analogBuf;
     st.snap.digital = digitalBuf;
 
-    // --- 4. Reset ring buffer and link state ---
+    // --- 5. Reset ring buffer and link state ---
     st.rxHead       = 0u;
     st.rxCount      = 0u;
     st.snapValid    = false;
@@ -284,10 +303,11 @@ void combus_rx_init(
     // of subsequent handshake frames kicks in.
     combus_handshake_internal::clearContractValidated(st.handshakeCtx);
 
-    sys_log_info("[COMBUS_RX] init — link=%u  transport='%s'  A%u+D%u\n",
+    sys_log_info("[COMBUS_RX] init — link=%u  transport='%s'  A%u+D%u  layer=%u\n",
                  (unsigned)linkIdx,
                  nodeCom->name,
-                 (unsigned)frameCfg.nAnalog, (unsigned)frameCfg.nDigital);
+                 (unsigned)frameCfg.nAnalog, (unsigned)frameCfg.nDigital,
+                 (unsigned)layer);
 }
 
 
@@ -302,11 +322,15 @@ void combus_rx_init(
  *   2. Drain available bytes from the transport into the ring buffer.
  *   3. Try to decode frames until the buffer holds fewer than `CombusFrameMinLen`
  *      bytes or `tryDecode()` finds nothing to consume.
+ *
+ *   @p bus is the node ComBus, read only for the FAILSAFE reaction (HAS_FAILSAFE);
+ *   it may be nullptr, the reaction is then skipped.
  */
-void combus_rx_update()
+void combus_rx_update(const ComBus* bus)
 {
     // --- 1. Guard check ---
     if (!s_rxStates) { return; }
+    (void)bus;   // read only under HAS_FAILSAFE
 
     // --- Iterate over every registered link ---
     for (uint8_t i = 0u; i < s_capacity; ++i) {
@@ -323,7 +347,7 @@ void combus_rx_update()
         //     combus_handshake_rx.cpp skips re-validation on reconnect.
         //     Per-link: each link has its own handshakeCtx, so we only
         //     invalidate THIS link's cache — other links are unaffected.
-        if (comBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::FAILSAFE)].value) {
+        if (bus && bus->digitalBus[static_cast<uint8_t>(DigitalComBusID::FAILSAFE)].value) {
             combus_handshake_internal::clearContractValidated(st.handshakeCtx);
         }
 #endif

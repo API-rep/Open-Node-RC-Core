@@ -35,7 +35,7 @@
  *   combus_protocol_init(0, &link);
  *
  *   // In loop():
- *   combus_rx_update();
+ *   combus_rx_update(&comBus);
  *   const ComBusFrame* snap = combus_rx_snapshot(0);
  * @endcode
  *****************************************************************************/
@@ -123,6 +123,14 @@ struct CombusRxState {
     // When null (default), the caller is responsible for calling
     // combus_frame_apply() manually (legacy behaviour, used by tests).
     ComBus*                target            = nullptr;
+
+    // Layer of the link, as given to combus_rx_init(), and the write
+    // identity derived from it: the caller layer passed to
+    // combus_frame_apply() for every applied frame.  They differ only for
+    // a BOARD link, whose frames get the SYSTEM identity (a frame never
+    // writes a BOARD channel).
+    ChanLayer              layer             = ChanLayer::UNDEFINED;
+    ChanLayer              writeLayer        = ChanLayer::UNDEFINED;
 };
 
 
@@ -177,13 +185,21 @@ void combus_rx_register_pool( CombusRxState* buffer, uint8_t capacity );
  *                    When null (default), no auto-apply is performed —
  *                    the caller must call combus_frame_apply() manually
  *                    (legacy behaviour, used by tests).
+ * @param layer       Layer of the link (BASE or SYSTEM).  It is the write
+ *                    identity of the applied frames: a BASE link writes BASE
+ *                    channels only, a SYSTEM link writes BASE and SYSTEM
+ *                    channels.  A BOARD link gets the SYSTEM identity, since
+ *                    a frame never writes a BOARD channel.  Only used when
+ *                    @p target is non-null, in which case UNDEFINED is a
+ *                    fatal configuration error.
  */
 void combus_rx_init( uint8_t            linkIdx,
                      NodeCom*           nodeCom,
                      ComBusFrameCfg     frameCfg,
                      uint16_t*          analogBuf,
                      bool*              digitalBuf,
-                     ComBus*            target   = nullptr );
+                     ComBus*            target   = nullptr,
+                     ChanLayer          layer    = ChanLayer::UNDEFINED );
 
 
 
@@ -198,8 +214,13 @@ void combus_rx_init( uint8_t            linkIdx,
  *   into the per-link ring buffer, then attempts to decode one frame.
  *   Updates the internal snapshot on each valid frame.  Iterates over
  *   every link registered by combus_rx_register_pool().
+ *
+ * @param bus  Node ComBus, read only for the FAILSAFE reaction (the cached
+ *             handshake contract of every link is invalidated while FAILSAFE
+ *             is set, HAS_FAILSAFE only).  May be nullptr: the reaction is
+ *             then skipped.  Same convention as combus_tx_update().
  */
-void combus_rx_update();
+void combus_rx_update( const ComBus* bus );
 
 
 

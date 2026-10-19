@@ -17,6 +17,13 @@
  *     and asserts field equality. Also verifies SOF-scan re-sync by injecting
  *     garbage bytes before a valid frame.
  *
+ *   Group H — RX write identity by link layer (chantier 0.1):
+ *     Re-initialises the loopback link with a target ComBus and a layer, then
+ *     checks which channels the received frame is allowed to write: a BASE
+ *     link writes BASE channels only, a SYSTEM link writes BASE and SYSTEM
+ *     channels, a BOARD link gets the SYSTEM identity.  Same TX↔RX jumper as
+ *     Group B (runs after test_loopback_init).
+ *
  *   Group C — view identity (Phase 3 / A13):
  *     Validates that the 3 view-specific enums (AnalogComBusID,
  *     AnalogComBusSystemID, AnalogComBusBaseID and their digital
@@ -120,6 +127,7 @@ static UartCtx       s_uartPool[1];
 static CombusTxState s_txStates[1];
 static CombusRxState s_rxStates[1];
 static constexpr uint8_t kLinkIdx = 0u;
+static NodeCom*          s_com    = nullptr;   ///< loopback transport, shared by Groups B and H
 
 
 // =============================================================================
@@ -241,6 +249,7 @@ static void test_loopback_init(void) {
 
     NodeCom* com = uart_com_init(&Serial2, kLoopbackBaud, kTxPin, kRxPin, "test_loopback");
     TEST_ASSERT_NOT_NULL(com);
+    s_com = com;
 
     // Register the per-link state pools (caller-owned, registered once at boot).
     combus_tx_register_pool(s_txStates, 1);
@@ -262,7 +271,7 @@ static void test_loopback_single_frame(void) {
     delay(30u);
     combus_tx_update(&txComBus);
     delay(kRxPollMs);
-    combus_rx_update();
+    combus_rx_update(&txComBus);
 
     const ComBusFrame* snap = combus_rx_snapshot(kLinkIdx);
     TEST_ASSERT_NOT_NULL_MESSAGE(snap, "No snapshot after loopback — check TX↔RX jumper");
@@ -280,7 +289,7 @@ static void test_loopback_resync_after_garbage(void) {
     delay(30u);
     combus_tx_update(&txComBus);
     delay(kRxPollMs);
-    combus_rx_update();
+    combus_rx_update(&txComBus);
 
     const ComBusFrame* snap = combus_rx_snapshot(kLinkIdx);
     TEST_ASSERT_NOT_NULL_MESSAGE(snap, "No snapshot after re-sync — SOF scan may be broken");
@@ -295,12 +304,99 @@ static void test_loopback_monkey(void) {
         delay(30u);
         combus_tx_update(&txComBus);
         delay(kRxPollMs);
-        combus_rx_update();
+        combus_rx_update(&txComBus);
 
         const ComBusFrame* snap = combus_rx_snapshot(kLinkIdx);
         TEST_ASSERT_NOT_NULL_MESSAGE(snap, "Monkey loopback: no snapshot");
         assertFrameMatchesBus(snap, &txComBus);
     }
+}
+
+
+// =============================================================================
+// GROUP H — RX WRITE IDENTITY BY LINK LAYER (chantier 0.1)
+//
+// A frame received on a link is applied onto the target ComBus with the layer
+// of that link as write identity (combus_rx_init() `layer` parameter):
+//   - BASE link   -> writes BASE channels only;
+//   - SYSTEM link -> writes BASE and SYSTEM channels;
+//   - BOARD link  -> gets the SYSTEM identity (a frame never writes a BOARD
+//                    channel).
+//
+// The target is a copy of the generated channel layout (layers, directions)
+// with every value cleared. The TX side always sends the SYSTEM prefix, so the
+// frame carries both a BASE channel (THROTTLE_BUS) and a SYSTEM channel
+// (RUNLEVEL). Requires the TX↔RX jumper, like Group B.
+// =============================================================================
+
+static AnalogComBus  rxTargetAnalog[kNAnalog];
+static DigitalComBus rxTargetDigital[kNDigital];
+static ComBus        rxTargetBus = {
+    .analogBus  = rxTargetAnalog,
+    .digitalBus = rxTargetDigital
+};
+
+static constexpr uint8_t  kThrottleIdx  = static_cast<uint8_t>(AnalogComBusID::THROTTLE_BUS);   ///< BASE channel
+static constexpr uint8_t  kRunLevelIdx  = static_cast<uint8_t>(AnalogComBusID::RUNLEVEL);       ///< SYSTEM channel
+static constexpr uint16_t kThrottleVal  = 321u;
+
+/** Clear rxTargetBus: same layout as the generated bus, every value at zero. */
+static void resetRxTarget(void) {
+    for (uint8_t i = 0u; i < kNAnalog; ++i) {
+        rxTargetAnalog[i]       = AnalogComBusArray[i];
+        rxTargetAnalog[i].value = 0u;
+    }
+    for (uint8_t i = 0u; i < kNDigital; ++i) {
+        rxTargetDigital[i]       = DigitalComBusArray[i];
+        rxTargetDigital[i].value = false;
+    }
+    rxTargetBus.analogBusMaxVal = txComBus.analogBusMaxVal;
+}
+
+/** Send one SYSTEM-prefix frame and let an RX link of layer `rxLayer` apply it onto rxTargetBus. */
+static void sendAndApply(ChanLayer rxLayer) {
+    TEST_ASSERT_NOT_NULL_MESSAGE(s_com, "Run test_loopback_init first");
+    resetRxTarget();
+
+    combus_tx_init(kLinkIdx, s_com, kCfg, 50u, ChanLayer::SYSTEM);
+    combus_rx_init(kLinkIdx, s_com, kCfg, rxAnalogBuf, rxDigitalBuf, &rxTargetBus, rxLayer);
+
+    fillRandom(0x5EEDC0DEul);
+    txComBus.analogBus[kThrottleIdx].value = kThrottleVal;
+    combus_set_analog(txComBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::RUNNING, ChanLayer::SYSTEM);
+
+    delay(30u);
+    combus_tx_update(&txComBus);
+    delay(kRxPollMs);
+    combus_rx_update(&txComBus);
+
+    TEST_ASSERT_NOT_NULL_MESSAGE(combus_rx_snapshot(kLinkIdx), "No snapshot — check TX↔RX jumper");
+    TEST_ASSERT_TRUE_MESSAGE(combus_rx_snapshot(kLinkIdx)->analog[kThrottleIdx] == kThrottleVal,
+                             "Frame not received intact — check TX↔RX jumper");
+}
+
+/** SYSTEM link: the SYSTEM channel and the BASE channel are both applied. */
+static void test_rx_system_link_applies_system_channels(void) {
+    sendAndApply(ChanLayer::SYSTEM);
+
+    TEST_ASSERT_EQUAL_UINT16(kThrottleVal, rxTargetBus.analogBus[kThrottleIdx].value);
+    TEST_ASSERT_EQUAL_UINT16((uint16_t)RunLevel::RUNNING, rxTargetBus.analogBus[kRunLevelIdx].value);
+}
+
+/** BASE link: the BASE channel is applied, the SYSTEM channel is refused. */
+static void test_rx_base_link_refuses_system_channels(void) {
+    sendAndApply(ChanLayer::BASE);
+
+    TEST_ASSERT_EQUAL_UINT16(kThrottleVal, rxTargetBus.analogBus[kThrottleIdx].value);
+    TEST_ASSERT_EQUAL_UINT16(0u, rxTargetBus.analogBus[kRunLevelIdx].value);
+}
+
+/** BOARD link: gets the SYSTEM identity, so both channels are applied. */
+static void test_rx_board_link_gets_system_identity(void) {
+    sendAndApply(ChanLayer::BOARD);
+
+    TEST_ASSERT_EQUAL_UINT16(kThrottleVal, rxTargetBus.analogBus[kThrottleIdx].value);
+    TEST_ASSERT_EQUAL_UINT16((uint16_t)RunLevel::RUNNING, rxTargetBus.analogBus[kRunLevelIdx].value);
 }
 
 
@@ -696,6 +792,11 @@ void setup() {
     RUN_TEST(test_loopback_single_frame);
     RUN_TEST(test_loopback_resync_after_garbage);
     RUN_TEST(test_loopback_monkey);
+
+    // --- Group H: RX write identity by link layer (chantier 0.1) ---
+    RUN_TEST(test_rx_system_link_applies_system_channels);
+    RUN_TEST(test_rx_base_link_refuses_system_channels);
+    RUN_TEST(test_rx_board_link_gets_system_identity);
 
     // --- Group C: view identity (Phase 3 / A13) ---
     // Memory identity (pointer equality) + prefix alignment (numeric).

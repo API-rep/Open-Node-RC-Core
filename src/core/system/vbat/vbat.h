@@ -26,6 +26,7 @@
 #pragma once
 
 #include <core/system/vbat/vbat_alert.h>
+#include <core/system/combus/combus_defs.h>   // ComBus
 
 
 #if defined(HAS_VBAT_SENSING) || defined(VBAT_ALERT)
@@ -63,9 +64,11 @@ void vbat_init(VBatSense* sense = nullptr);
  *
  *   In ComBus-only mode, the input bridge must populate
  *   `DigitalComBusID::FAILSAFE_VBAT` before this function is called.
+ *
+ * @param bus  Node ComBus receiving the `FAILSAFE_VBAT` contributor.
  */
 
-void vbat_update();
+void vbat_update(ComBus& bus);
 
 
 // =============================================================================
@@ -75,7 +78,7 @@ void vbat_update();
 #else // neither HAS_VBAT_SENSING nor VBAT_ALERT
 
 inline void vbat_init(VBatSense* = nullptr) {}
-inline void vbat_update() {}
+inline void vbat_update(ComBus&) {}
 
 #endif // HAS_VBAT_SENSING || VBAT_ALERT
 
