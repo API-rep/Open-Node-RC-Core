@@ -1114,10 +1114,11 @@ def test_generated_cpp_compiles_cleanly_with_cpp_check():
     already used throughout the repo's legacy .inc files, so no
     fallback (positional init, constructor, etc.) is needed.
 
-    For native compilers (g++/clang++) we link a real `main` to fully
-    exercise the runtime. For the PlatformIO Xtensa cross-compiler we
-    use -fsyntax-only (no linking) since the runtime expects ESP32
-    headers that are only meaningful on-target.
+    Whatever the compiler (native g++/clang++ or the PlatformIO Xtensa
+    cross-compiler) we use -fsyntax-only (no linking): the generated
+    combus.cpp pulls in headers that only make sense on the ESP32
+    (const.h refuses an unknown CPU), so it cannot be compiled, nor the
+    `comBus` it defines linked, on a PC.
     """
     import subprocess
     found = _find_cpp_compiler()
@@ -1171,7 +1172,6 @@ int main() {
 }
 """
         )
-        is_native = ("xtensa" not in label.lower())
         cmd = list(argv0)
         cmd += ["-std=gnu++17",
                 "-I", str(tmp),
@@ -1184,11 +1184,8 @@ int main() {
         for p in (REPO_ROOT / ".pio" / "libdeps").glob("*/common_defs*/include"):
             if (p / "pin_defs.h").exists():
                 cmd += ["-I", str(p)]
-        if is_native:
-            cmd += [str(test_src), "-o", str(tmp / "test")]
-        else:
-            # Cross-compiler: syntax-only check, no linking.
-            cmd += ["-fsyntax-only", str(test_src)]
+        # Syntax-only check, no linking (see the docstring).
+        cmd += ["-fsyntax-only", str(test_src)]
         r = subprocess.run(cmd, capture_output=True, text=True)
         assert r.returncode == 0, (
             f"compilation failed with {label} "
