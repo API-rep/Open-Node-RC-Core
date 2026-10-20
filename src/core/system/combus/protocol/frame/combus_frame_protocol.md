@@ -119,7 +119,7 @@ Un lien BOARD reçoit l'identité SYSTEM (une trame n'écrit jamais un canal
 BOARD). Avec une cible et un layer `UNDEFINED`, l'init s'arrête en FATAL. Avant
 le chantier 0.1, l'identité était la constante `ChanLayer::BASE`, qui refusait
 les canaux SYSTEM d'un lien carte à carte. Preuve : groupe H de
-`test/test_combus_loopback` (compilé ; exécution sur la carte à faire).
+`test/test_combus_loopback` (validé sur la carte le 2026-10-20).
 
 ## 6. Direction : pas de filtrage au transport
 
