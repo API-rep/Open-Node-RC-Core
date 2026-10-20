@@ -62,14 +62,17 @@ Selection happens in two stages:
 
 ```text
 -D MACHINE_VOLVO_A60_H_BRUDER            (platformio.ini)
+-D MACHINE_TYPE_DUMPER_TRUCK             (platformio.ini, same block)
   └─► machines.h                          (src/machines/config/machines/)
-        └─► volvo_A60H_bruder.h           defines MACHINE_TYPE_DUMPER_TRUCK
+        └─► volvo_A60H_bruder.h           vehicle instance configuration
               └─► machine_type.h          (this directory)
                     └─► dumper_truck/dumper_truck_config.h
 ```
 
 - `-D MACHINE_*` picks the vehicle instance.
-- The instance header defines the class it belongs to, `MACHINE_TYPE_*`.
+- `-D MACHINE_TYPE_*` gives the class it belongs to. Both flags are set together in
+  `platformio.ini` (`[volvo_A60H_id]`), because the ComBus builder reads
+  `MACHINE_TYPE_*` from the build flags to filter the `.cb` files.
 - `machine_type.h` dispatches on `MACHINE_TYPE_*` and pulls the matching
   `<family>_config.h`. Consumers include `machine_type.h` only, never a
   per-family path.

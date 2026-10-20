@@ -26,9 +26,9 @@
 
 #if defined (MACHINE_VOLVO_A60_H_BRUDER)
 
-  /// Machine class selector — activates the MACHINE_TYPE_* dispatch branch used
-  /// by the type-level ComBus configuration (see machine_type.h).
-  #define MACHINE_TYPE_DUMPER_TRUCK
+  // The machine class (MACHINE_TYPE_DUMPER_TRUCK) is no longer defined here: it is a
+  // build flag set with the machine identity in platformio.ini ([volvo_A60H_id]), so
+  // the ComBus builder can read it (see machine_type.h).
 
 
   // =============================================================================

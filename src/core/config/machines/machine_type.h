@@ -8,10 +8,9 @@
  *   src/machines/config/machines/machines.h):
  *
  *     -D MACHINE_VOLVO_A60_H_BRUDER    (CPP -D from platformio.ini [env])
+ *     -D MACHINE_TYPE_DUMPER_TRUCK     (CPP -D from platformio.ini, same block)
  *       │
- *       └─►  #define MACHINE_TYPE_DUMPER_TRUCK   (volvo_A60H_bruder.h)
- *             │
- *             └─►  THIS FILE dispatches by MACHINE_TYPE_*
+ *       └─►  THIS FILE dispatches by MACHINE_TYPE_*
  *                   and pulls in dumper_truck/dumper_truck_config.h
  *
  *   Consumers should include ONLY this header — never the per-machine-type

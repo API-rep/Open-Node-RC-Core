@@ -378,12 +378,14 @@ chemin du projet, le « è » de « Modèlisme » fait échouer l'édition de li
 (`platformio.ini:28` place déjà le build hors projet pour cette raison).
 Le contrôle de complétude est couvert par `test_hook.py`.
 
-> Le filtre par type de machine est **inactif aujourd'hui** (constaté le
-> 2026-10-18) : il lit un flag `MACHINE_TYPE_*` dans les defines de l'env, mais
-> `MACHINE_TYPE_DUMPER_TRUCK` est `#define` dans l'en-tête de la machine, pas
-> passé en `-D`. `detect_machine_type` renvoie `None` et tous les `.cb` de
-> `src/` sont chargés. Les types `excavator` et `loader` sont déclarés dans
-> `MACHINE_TYPE_FLAGS` mais n'ont aucun `.cb`. Voir la note de passation.
+> Le filtre par type de machine est **actif** depuis le 2026-10-20 : le flag
+> `MACHINE_TYPE_DUMPER_TRUCK` est passé en `-D` dans `platformio.ini`
+> (`[volvo_A60H_id]` et `test_combus_loopback`), et non plus `#define` dans
+> l'en-tête de la machine. Le hook journalise `ND8 machine-type filter active`.
+> Constaté sur la Volvo et `test_node_mainboard` : fichiers générés identiques
+> à l'état précédent (seul le commentaire `defines=27` devient `28`). Les types
+> `excavator` et `loader` sont déclarés dans `MACHINE_TYPE_FLAGS` mais n'ont
+> aucun `.cb`. Tout nouvel env d'une machine doit porter son `-D MACHINE_TYPE_*`.
 
 > `scripts/combus_md5.py` n'existe pas : il n'est cité que dans des docs.
 
