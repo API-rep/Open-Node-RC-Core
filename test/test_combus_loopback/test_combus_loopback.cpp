@@ -673,25 +673,35 @@ static void test_md5_arrays_are_distinct(void) {
     TEST_ASSERT_TRUE_MESSAGE(systemDiffersFromBase, "SYSTEM MD5 must differ from BASE MD5");
 }
 
+/**
+ * Placeholder transport for the MD5 resolution tests.
+ *
+ * combus_protocol_init() returns at once on a null `com`, before it resolves
+ * the MD5 pointer, so the link needs a non-null transport. It is never called:
+ * these links have neither TX nor RX configuration.
+ */
+static NodeCom s_unusedCom = { nullptr, nullptr, nullptr, nullptr, "test_unused" };
+
 /** combus_protocol_init() with BASE layer must resolve to kCombusBaseComBusMd5. */
 static void test_md5_resolution_base(void) {
     static CombusHandshakeContext ctx = {};
     static ComBusLink link = {};
 
     link.name        = "test_remote";
-    link.com         = nullptr;  // not used by the MD5 resolution path
+    link.com         = &s_unusedCom;  // non-null: combus_protocol_init() rejects a null transport
     link.txCfg       = std::nullopt;  // skip TX init
     link.rxCfg       = std::nullopt;  // skip RX init
     link.handshakeCtx = &ctx;
     link.layer       = ChanLayer::BASE;
 
-    // The MD5 resolution happens BEFORE the TX/RX init, so a null com
-    // is safe — the switch on link->layer runs first.
+    // The MD5 resolution happens BEFORE the TX/RX init, so the transport
+    // is never used — the switch on link->layer runs first.
     combus_protocol_init(kLinkIdx, &link);
 
-    TEST_ASSERT_EQUAL_PTR(
-        (const void*)combus::wire::kCombusBaseComBusMd5,
-        (const void*)ctx.expectedMd5);
+    // Content, not address: the generated MD5 arrays are `static constexpr`, so each
+    // translation unit has its own copy at a different address.
+    TEST_ASSERT_NOT_NULL(ctx.expectedMd5);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(combus::wire::kCombusBaseComBusMd5, ctx.expectedMd5, 16u);
 }
 
 /** combus_protocol_init() with SYSTEM layer must resolve to kCombusSystemComBusMd5. */
@@ -700,7 +710,7 @@ static void test_md5_resolution_system(void) {
     static ComBusLink link = {};
 
     link.name        = "test_local";
-    link.com         = nullptr;
+    link.com         = &s_unusedCom;
     link.txCfg       = std::nullopt;
     link.rxCfg       = std::nullopt;
     link.handshakeCtx = &ctx;
@@ -708,9 +718,8 @@ static void test_md5_resolution_system(void) {
 
     combus_protocol_init(kLinkIdx, &link);
 
-    TEST_ASSERT_EQUAL_PTR(
-        (const void*)combus::wire::kCombusSystemComBusMd5,
-        (const void*)ctx.expectedMd5);
+    TEST_ASSERT_NOT_NULL(ctx.expectedMd5);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(combus::wire::kCombusSystemComBusMd5, ctx.expectedMd5, 16u);
 }
 
 /** combus_protocol_init() with BOARD layer must resolve to kCombusComBusMd5 (FULL). */
@@ -719,7 +728,7 @@ static void test_md5_resolution_board(void) {
     static ComBusLink link = {};
 
     link.name        = "test_system";
-    link.com         = nullptr;
+    link.com         = &s_unusedCom;
     link.txCfg       = std::nullopt;
     link.rxCfg       = std::nullopt;
     link.handshakeCtx = &ctx;
@@ -727,9 +736,8 @@ static void test_md5_resolution_board(void) {
 
     combus_protocol_init(kLinkIdx, &link);
 
-    TEST_ASSERT_EQUAL_PTR(
-        (const void*)combus::wire::kCombusComBusMd5,
-        (const void*)ctx.expectedMd5);
+    TEST_ASSERT_NOT_NULL(ctx.expectedMd5);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(combus::wire::kCombusComBusMd5, ctx.expectedMd5, 16u);
 }
 
 // Chantier 12.6 (cleanup): Group F (FS1 failsafe re-arm) REMOVED — link
