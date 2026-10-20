@@ -9,8 +9,8 @@
  *   Architecture:
  *   @code
  *   machines.h
- *     └── volvo_A60H_bruder/mainboard/mainboard.h   ← this file
- *           ├── ../volvo_A60H_bruder.h               (Level 0 — shared identity)
+ *     └── volvo_A60H_bruder/board/mainboard/mainboard.h   ← this file
+ *           ├── ../../volvo_A60H_bruder.h            (Level 0 — shared identity)
  *           └── ESP32_8M_6S/envCfg.h                 (board-specific config)
  *   @endcode
  *
@@ -20,7 +20,7 @@
  */
 #pragma once
 
-#include "../volvo_A60H_bruder.h"   // kVehicleName
+#include "../../volvo_A60H_bruder.h"   // kVehicleName
 
 
 // =============================================================================

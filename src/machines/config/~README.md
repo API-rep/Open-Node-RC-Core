@@ -13,10 +13,11 @@ A machine configuration is organized into three levels:
 ```text
 machines.h
   └─ <vehicle>/
-       ├─ mainboard/
-       │    └─ <board>/
-       │         └─ envCfg.h/.cpp
-       └─ ext_board/
+       └─ board/
+            ├─ mainboard/
+            │    └─ <board>/
+            │         └─ envCfg.h/.cpp
+            └─ extboard/
 ```
 
 ### Level 0 — Vehicle Definition

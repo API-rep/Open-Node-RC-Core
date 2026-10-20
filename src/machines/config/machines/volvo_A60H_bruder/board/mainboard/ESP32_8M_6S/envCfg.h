@@ -20,7 +20,7 @@
   
   // Machine identity and board flag — must come first so that BOARD is visible
   // to boards.h (included indirectly via struct/struct.h).
-  #include <machines/config/machines/volvo_A60H_bruder/mainboard/mainboard.h>
+  #include <machines/config/machines/volvo_A60H_bruder/board/mainboard/mainboard.h>
   
   #include <const.h>
   #include <struct/struct.h>

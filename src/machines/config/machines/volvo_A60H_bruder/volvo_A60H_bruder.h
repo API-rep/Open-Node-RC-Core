@@ -17,7 +17,7 @@
  *     └── volvo_A60H_bruder/volvo_A60H_bruder.h   ← this file
  *           ├── [kVehicleName]                       (shared)
  *           ├── [SigDev enum, sigDevArray]           (IS_MAINBOARD only)
- *           ├── mainboard/mainboard.h                (IS_MAINBOARD → BOARD dispatch)
+ *           ├── board/mainboard/mainboard.h          (IS_MAINBOARD → BOARD dispatch)
  *           └── ext_board/ext_board.h                (IS_EXT_BOARD → BOARD dispatch)
  *   @endcode
  *******************************************************************************
@@ -73,7 +73,7 @@
     #include <machines/config/machines/volvo_A60H_bruder/combus/processors/sim/proc_config.h>    ///< kSimChannels[], SimCh enum
 
     // --- Board dispatch ---
-      #include "mainboard/mainboard.h"
+      #include "board/mainboard/mainboard.h"
 
 
   #elif defined(IS_EXT_BOARD)
