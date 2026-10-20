@@ -1,6 +1,6 @@
 # ComBus link rework
 
-Statut : **en cours de rédaction** (document `WIP`), étude du 2026-10-18. Rien n'est implémenté.
+Statut : **en cours de rédaction** (document `WIP`), étude du 2026-10-18. Chantier 0 : 0.1 à 0.3 faits, 0.4 en conception (§2.1) ; le reste n'est pas implémenté.
 Public : le propriétaire et les futures sessions de travail sur le rework de la communication.
 Plan : §1 objectif, §2 **intentions** (le modèle retenu), §3 **roadmap** (chantiers et étapes, chacun avec le constat du code qui le motive), §4 questions ouvertes.
 
@@ -10,25 +10,51 @@ Un seul mécanisme de communication pour tous les cas : plusieurs liens en paral
 
 ## 2. Intentions (le modèle retenu)
 
-### 2.1 Décrire les liens : `NodeCom`, `ComPort`, `ComDev`
+### 2.1 Décrire les liens : `NodeCom`, `ComPort`, `ComDev`, `ComBinding`
 
 Base conservée : le protocole est déjà multi-liens et indépendant du transport (pool d'états par lien en TX et en RX, contexte de handshake par lien, échanges uniquement par `NodeCom`). Le codec n'est pas refondu ; le rework porte sur la configuration, les contrats et le branchement.
 
 | | Rôle | Où |
 |---|---|---|
 | **NodeCom** | envoyer et lire des octets (existe) | `core/system/hw/node_com.h` |
-| **ComPort** | le matériel : UART et broches, canal ESP-NOW, adresse I2C. La liste d'une carte peut être exhaustive ; seuls les ports utilisés sont initialisés (et leurs broches réservées) | structure dans `include/struct/`, tableau dans la config de la carte |
-| **ComDev** | un lien logique : ID, nom, port, portée (`BASE` ou `SYSTEM`), ensemble de channels (par défaut ou réduit), tx / rx, pair ; pour un lien à diffusion seule, le mode (stable ou next) | idem |
+| **ComPort** | le matériel, port physique sur PCB ou logique interne : une union balisée par `ComPortType` (UART, I2C, CAN ; ESP-NOW pour un port logique interne sans broches ; chaque type a ses broches (si port physique) et son plafond : débit, fréquence d'horloge). La liste d'une carte peut être exhaustive ; seuls les ports utilisés sont initialisés (et leurs broches réservées) | structure dans `core/system/hw/node_com.h` ; tableau dans la config de la carte |
+| **ComDev** | une liaison logique de ComPort : nom, **portée** (`INTER_NODE` ↔ `ChanLayer::BASE`, `INTRA_NODE` ↔ `SYSTEM`), `LinkType` (unidirectionnel ou bidirectionnel, **sans sens à ce niveau**), protocole (pointeur vers une config : débit, fréquence d'émission), activation (`ALWAYS` ou `ON_COUPLING`) et couplage. Pas de liste de channels : l'ensemble suit la portée | structure dans `core/system/combus/protocol/combus_protocol.h` ; instances : voir « Où vivent les `ComDev` » |
+| **ComBinding** | le branchement d'un `ComPort` carte sur un `ComDev`, et le rôle du bout (`LinkEnd` : `TX`, `RX`, `TX_RX`). Le sens d'un lien unidirectionnel est donc propre à chaque carte ; un bidirectionnel impose `TX_RX` | config de la carte |
 
+- Les structures vivent en tête des **fichiers maîtres de leur thème** (`include/struct/` est déprécié). `ChanLayer` reste le nom partout ailleurs (générateur, `.cb`, docs) ; la conversion portée vers `ChanLayer` est unique, dans le `ComDev`.
 - Le cœur lit ces tables, ouvre les adaptateurs et construit les liens. Les limites matérielles de l'ESP32 (nombre d'UART, taille des pools, pairs ESP-NOW) restent des constantes de la carte, vérifiées au démarrage.
+- L'ensemble réduit (§2.2) et le mode des liens à diffusion seule (§2.4) s'ajouteront au `ComDev` ou à son protocole quand leurs chantiers arriveront.
 - Le rôle machine / télécommande vient de `IS_MACHINE` / `IS_REMOTE`.
 - Plusieurs `NodeCom` peuvent partager un port : l'écriture est séquentielle. En ESP-NOW, un tampon de réception par pair (l'émetteur est connu) ; en UART, un port = un pair (la trame n'a pas d'adresse).
+
+**Où vivent les `ComDev`**
+
+- **Liens intra-nœud** : définis par le nœud, à la racine des cartes (`machines/config/machines/<machine>/board/com_dev.h`). `board/` contient `mainboard/` et `extboard/` ; chaque carte déclare ses `ComPort` et ses `ComBinding` vers ces `ComDev`. Le `ComDev` est le « bus » commun entre cartes : deux variantes de carte mère peuvent pointer vers le même, et le choix de l'une ou de l'autre à la compilation est transparent pour le reste.
+- **Liens inter-nœuds** : des `ComDev` **globaux, fournis par le cœur** (modèles ESP-NOW, WiFi, radio, UART…), paramétrés par des flags `-D`. Les deux nœuds partagent ainsi la même définition, et des véhicules compilés avec les mêmes flags forment un parc homogène. Les `ComPort` correspondants sont soit avec broches (module radio), soit sans (contrôleur ESP-NOW interne) ; ils sont rattachés à ces `ComDev` par des `ComBinding`, et s'initialisent comme en intra-nœud, vers l'extérieur.
+
+**Couplage**
+
+Pour un lien qui ne doit exister que lorsque deux éléments sont réunis (camion et remorque de même type, accessoire), un `ComDev` s'active **au couplage** (`ON_COUPLING`). Le déclencheur est un **channel ComBus** défini par un `.cb` conditionnel du dispositif déclencheur (un lecteur RFID, par exemple), et sa valeur identifie le pair attendu. Le module de communication réagit à ce channel ; `ComCoupling` décrit le déclencheur, la valeur attendue et l'identifiant du pair. Un lien inactif est un **état d'exécution** : il est déclaré et ses ressources sont réservées au démarrage, seuls l'émission, la réception et le handshake sont suspendus. Étape 0.4 : seul `ALWAYS` est accepté (contrôle au démarrage) ; la logique de couplage est au chantier 3.
+
+**Démarrage**
+
+```
+com_init()
+  └─ combus_links_init(comBindings, count)
+       1. contrôles : port non nul, portée valide, débit <= plafond du port,
+          type de lien et rôle du bout cohérents, activation == ALWAYS (0.4)
+       2. par branchement : ouvrir le port (NodeCom), puis construire le ComBusLink
+          (portée -> layer, tailles de trame de la vue, TX/RX selon le rôle)
+       3. pools TX et RX, puis combus_protocol_init_all()
+```
+
+La construction du `ComBusLink` est séparée de l'ouverture du port : c'est une fonction pure, testable sans carte. Tant que les flags `COMBUS_UART_TX` et `COMBUS_UART` existent, ils choisissent quels branchements de la carte sont actifs (une dizaine de lignes dans `com_init.cpp`) ; ils disparaissent au chantier 1.
 
 **Où vit la configuration**
 
 | Niveau | Contenu | Où |
 |---|---|---|
-| Machine (figé) | ports, devices, liens essentiels | `envCfg.cpp` de la carte |
+| Machine (figé) | ports et branchements de la carte ; liens du nœud (`ComDev`) | `envCfg.cpp` de la carte ; `board/com_dev.h` |
 | Modules optionnels | son, lumière : leurs ports, devices, `.cb`, mappages de commandes | un fichier par module, inclus par un flag `HAS_*` |
 | Amovibles | un emplacement par remorque ou accessoire pris en charge | liste de profils compatibles (`-D`) |
 
@@ -37,7 +63,7 @@ La table de correspondance entrée vers channel (`inputs_map`) devient elle auss
 **Types de dispositifs**
 
 - **Remorque** : un nœud à part entière (sa carte, son ComBus) ; lien bidirectionnel d'égal à égal, avec handshake et un ensemble réduit.
-- **Accessoire** (godet, outil) : simple, non décisionnel ; **diffusion seule**, pas de handshake, retour éventuel limité à un identifiant. C'est un module à activer sur la machine. Sans communication : un `ComDev` sans port (protocole `NONE`) sert seulement à activer un `.cb` et à lier une commande à un channel.
+- **Accessoire** (godet, outil) : simple, non décisionnel ; **diffusion seule**, pas de handshake, retour éventuel limité à un identifiant. C'est un module à activer sur la machine. Sans communication : un `ComDev` de protocole `NONE`, sans `ComBinding` vers un port, sert seulement à activer un `.cb` et à lier une commande à un channel.
 - **Modules son et lumière** : des modules logiciels activés par `-D`, sur toute carte désignée (une carte son et lumière peut devenir la carte mère d'une petite machine). C'était l'idée des thèmes des `.cb` ; le thème `sound` est à ajouter.
 - Chaque type de machine déclare, par flags `-D`, la **liste des profils compatibles** (une pelleteuse ne charge pas une remorque de semi-remorque).
 
@@ -117,14 +143,14 @@ Chaque étape se vérifie avec le test de boucle (loopback) puis un build comple
 - 0.1 : le RX appliquait les trames avec une identité d'écriture constante (`BASE`), ce qui refusait les channels `SYSTEM` d'un lien carte à carte ; le cœur accédait au `comBus` global à deux endroits (`combus_rx.cpp`, invalidation du handshake sur failsafe ; `vbat.cpp`). Fait (2026-10-19) : `combus_rx_init` prend le `layer` du lien (un lien BOARD reçoit l'identité SYSTEM ; `UNDEFINED` avec une cible = FATAL), `combus_rx_update(const ComBus*)` et `vbat_update(ComBus&)` reçoivent le ComBus du nœud en paramètre.
 - 0.2 : `test_combus_loopback` ne compilait plus (14 erreurs « too many arguments » sur `combus_frame_encode` et `combus_tx_update`). En le reprenant, d'autres défauts sont apparus : bus de test trop petit pour le profil réel (l'écriture de `RUNLEVEL` débordait du tableau), `seq = 0` utilisé alors que l'encodeur le refuse, tailles de trame codées en dur et périmées, pool UART non enregistré avant `uart_com_init`, test d'un bit failsafe d'en-tête retiré (FS2). Au premier passage sur la carte, les trois `test_md5_resolution_*` échouaient : le lien de test avait un transport nul, que `combus_protocol_init` refuse avant de résoudre le MD5, puis le test comparait des adresses alors que les tableaux MD5 générés sont `static constexpr` (une copie par fichier compilé). Corrigé : transport factice non nul et comparaison du contenu.
 - 0.3 : le filtre par type était inactif : `MACHINE_TYPE_*` était un `#define` dans l'en-tête de la machine, pas un `-D` visible du builder. Fait (2026-10-20) : le flag est passé en `-D` dans `platformio.ini` (`[volvo_A60H_id]`, `test_combus_loopback`) et le `#define` est retiré de l'en-tête.
-- 0.4 : l'initialisation est statique : `combus_uart_init.cpp` construit un seul lien UART à partir des flags `COMBUS_UART*`.
+- 0.4 : l'initialisation est statique : `combus_uart_init.cpp` construit un seul lien UART à partir des flags `COMBUS_UART*` ; `uartPins[]` (dans l'`envCfg.cpp` de la carte) n'a pas d'autre utilisateur. Préalable fait (2026-10-20) : `mainboard/` est rangé sous `volvo_A60H_bruder/board/` (déplacement seul, builds inchangés).
 
 | Étape | Livrable | Preuve |
 |---|---|---|
 | 0.1 | RX : identité d'écriture = `layer` du lien ; suppression des deux accès du cœur au `comBus` global | **validé sur la carte (2026-10-20)** : groupe H du test Unity (lien `SYSTEM` applique les channels `SYSTEM`, lien `BASE` les refuse, lien `BOARD` = identité `SYSTEM`) ; builds Volvo et `test_node_mainboard` OK |
 | 0.2 | Test Unity `test_combus_loopback` aux signatures actuelles, bus de test = ComBus généré, tailles calculées depuis les `CH_COUNT` | **validé sur la carte (2026-10-20)** : 28 tests sur 28 (pont TX↔RX sur Serial2 pour les groupes B et H) |
 | 0.3 | Filtre par type de machine réparé (préalable aux profils compatibles) | **fait (2026-10-20)** : le hook journalise `machine_type='dumper_truck'` sur la Volvo et `test_node_mainboard` ; fichiers générés identiques à l'état précédent ; `test_combus_loopback` compile |
-| 0.4 | `ComPort` / `ComDev` pour l'UART seul, à la place de `combus_uart_init.cpp` | comportement identique, build de la Volvo inchangé |
+| 0.4 | `ComPort` (UART seul), `ComDev` intra-nœud (`board/com_dev.h`) et `ComBinding`, à la place de `combus_uart_init.cpp` ; `uartPins[]` retiré ; champs d'activation et de couplage réservés (`ALWAYS` seul accepté) | comportement identique (journal d'init, trame sur le fil), fichiers générés de la Volvo inchangés ; test Unity de la construction du lien sans carte, puis passage sur la carte |
 
 ### Chantier 1 : lien vivant
 
@@ -161,6 +187,7 @@ Chaque étape se vérifie avec le test de boucle (loopback) puis un build comple
 |---|---|---|
 | 3.1 | Seconde lecture des profils compatibles ; ensembles réduits ; étiquette d'égal à égal | tables générées pour un couple tracteur / remorque d'essai |
 | 3.2 | `passthrough` et ses contrôles ; fusion `both_or` sans retour vers l'origine | frein relayé ; failsafe partagé qui retombe |
+| 3.3 | Couplage : `ComCoupling`, activation `ON_COUPLING` d'après un channel déclencheur (`.cb` conditionnel du dispositif, par exemple un lecteur RFID) | un lien s'active au couplage et se suspend au découplage |
 
 ### Chantier 4 : télécommande
 
@@ -180,8 +207,9 @@ Chaque étape se vérifie avec le test de boucle (loopback) puis un build comple
 
 | Étape | Livrable | Preuve |
 |---|---|---|
-| 5.1 | Adaptateur ESP-NOW (un tampon par pair) | télécommande vers machine en ESP-NOW |
+| 5.1 | Adaptateur ESP-NOW (un tampon par pair) ; `ComDev` globaux du cœur, paramétrés par `-D`, et `ComPort` sans broches (contrôleur interne) ou avec broches (module radio) | télécommande vers machine en ESP-NOW |
 | 5.2 | Remorque (nœud), accessoires (diffusion seule, I2C ou `NONE`) | attelage et accessoire d'essai |
+| 5.3 | Ports I2C et CAN (autres variantes de `ComPort`) | un port I2C ou CAN s'ouvre depuis la table de la carte |
 
 ### Chantier 6 : portée `SYSTEM`
 
@@ -197,6 +225,9 @@ Chaque étape se vérifie avec le test de boucle (loopback) puis un build comple
 
 - Format de la déclaration d'un ensemble réduit et de l'étiquette d'égal à égal (champ des `.cb` ou fichier dédié) ; format exact du paramètre `passthrough`.
 - Nom du suffixe de candidat.
+- Nom du jeu de `ComDev` fournis par le cœur (« catalogue » est provisoire), et forme de leur paramétrage par `-D` (flags par modèle, ou une table).
+- Contenu exact de `ComCoupling` (channel déclencheur, valeur attendue, identifiant du pair) ; comportement d'un lien inactif (état d'exécution, ressources réservées).
+- Où définir un `ComDev` inter-nœuds partagé par deux types de nœuds (machine et télécommande) sans le dupliquer.
 - Cadence et seuil de l'ACK périodique ; renégociation quand un ACK périodique annonce un MD5 différent.
 - Channels critiques et unicité des types (propositions du §2.5).
 - ESP-NOW : nombre maximal de pairs de l'ESP32, charge utile exacte (documentation ESP-IDF).
