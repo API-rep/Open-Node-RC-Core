@@ -28,11 +28,34 @@ The layout of a file shall prioritise:
 
 Blank lines shall be used consistently:
 
-* One blank line separates a Doxygen block from the code it documents.
+* One blank line separates a Doxygen block (`/** ... */`) from the code it documents.
 * Two blank lines separate major logical blocks (e.g. functions, declarations, Doxygen+code groups).
+* Three blank lines are used instead when the block that has just been closed (Doxygen block and code together) is taller than a page, about 40 lines.
 * At least one blank line shall appear before and after a section separator.
 * One blank line shall precede a code comment introducing a logical step.
 * No blank line separates such comments from the code they describe.
+
+Example (documented declarations, each shorter than a page):
+
+```cpp
+/**
+ * @brief Kind of communication port.
+ */
+
+enum class PortType : uint8_t {
+	NONE,
+	UART
+};
+
+
+/**
+ * @brief UART port parameters.
+ */
+
+struct UartCfg {
+	uint8_t index;
+};
+```
 
 Refer to the example files for representative spacing patterns.
 
@@ -105,7 +128,7 @@ Refer to the example files for typical usage patterns.
 
 ### 6.1 Descriptive Comments
 
-Any standalone `//` comment that describes the code immediately following it shall be indented exactly one tab deeper than that code.
+Any standalone `//` or `///` comment that describes the code immediately following it shall be indented exactly one tab deeper than that code.
 
 This convention visually associates the comment with the statement or block it introduces and makes comment ownership immediately obvious.
 
@@ -117,14 +140,15 @@ This rule applies to:
 * Sub-step comments (`// 1.1 Description`)
 * Phase comments (`// Resolve effective configuration`)
 * Block descriptions (`// Internal bookkeeping`)
+* Compact Doxygen descriptions on their own line above a declaration (`/// Description`)
 * Multi-line descriptive comment groups
 
 This rule does **not** apply to:
 
-* End-of-line comments (`code;  // explanation`)
+* End-of-line comments (`code;  // explanation`, `member;  ///< explanation`)
 * Section separators (`// === SECTION ===`)
 * Configuration entry labels (`// LX_STICK`)
-* File banners and Doxygen blocks
+* File banners and Doxygen blocks (`/** ... */`), which stay at the level of the code they document
 
 ### Example
 
@@ -147,6 +171,13 @@ void function()
 		// 3.2 Update accumulator
 	accumulator += dt;
 }
+```
+
+A compact Doxygen description follows the same rule, including at file scope, where the code is at column 0:
+
+```cpp
+	/// Protocol parameters of the ComBus UART link.
+static constexpr ComProtocolCfg kComBusUartProtocol = { ComBusUartBaud, ComBusUartTxHz };
 ```
 
 ### Rationale

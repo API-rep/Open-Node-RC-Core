@@ -19,7 +19,7 @@
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
 │  ENV (machine)                                                           │
-│    com_init()  ──►  combus_uart_init()  ──►  combus_protocol_init_all()  │
+│    com_init()  ──►  combus_uart_init()  ──►  combus_links_init()         │
 └──────────────────────────────────────────────────────────────────────────┘
                                   │
                                   ▼
@@ -41,7 +41,7 @@
 ┌──────────────────────────────────────────────────────────────────────────┐
 │  COUCHE PHYSIQUE                                                         │
 │    HardwareSerial (Serial / Serial1 / Serial2)                           │
-│    GPIO TX / RX pins (uartPins[])                                        │
+│    GPIO TX / RX pins (ComPort)                                           │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -50,7 +50,7 @@
 ## 2. Build flags — point d'entrée
 
 **Fichiers qui les détectent** : `src/machines/init/com/combus_uart_init.cpp`
-(résolution du canal et des pins), `src/machines/init/hw/hw_init_com.cpp`
+(choix du `ComDev` et du port de la carte d'après le flag), `src/machines/init/hw/hw_init_com.cpp`
 (pool de ports) et `src/machines/init/output/` (appel TX).
 
 | Flag                  | Effet                                              |
@@ -61,28 +61,34 @@
 | (aucun)               | Aucun ComBus UART                                  |
 
 `combus_uart_init.cpp` est entièrement conditionné par
-`#if defined(COMBUS_UART_TX) || defined(COMBUS_UART)` (ligne 6).
+`#if defined(COMBUS_UART_TX) || defined(COMBUS_UART)`.
 
 **N** = index du canal UART (0 = Serial/USB, 1 = Serial1, 2 = Serial2 sur ESP32).
 
-### Extrait — `src/machines/init/com/combus_uart_init.cpp` (lignes 52-65)
+### Extrait — `src/machines/init/com/combus_uart_init.cpp` (choix du lien)
 
 ```cpp
-    // --- Resolve UART channel and GPIO pins from build flag (was in uart_init()) ---
+    // --- Resolve the ComDev, the UART number and the role of this end from the build flag ---
     #if defined(COMBUS_UART)
-        constexpr int uartCh    = COMBUS_UART;
-        const     int uartTxPin = uartPins[uartCh].tx;
-        const     int uartRxPin = uartPins[uartCh].rx;
-    #elif defined(COMBUS_UART_TX)
-        constexpr int uartCh    = COMBUS_UART_TX;
-        const     int uartTxPin = uartPins[uartCh].tx;
-        constexpr int uartRxPin = -1;
+        constexpr uint8_t uartCh = COMBUS_UART;
+        const ComDev*     dev    = &kComDevUartBi;        // full-duplex
+        constexpr LinkEnd end    = LinkEnd::TX_RX;
+    #else
+        constexpr uint8_t uartCh = COMBUS_UART_TX;
+        const ComDev*     dev    = &kComDevUartUni;       // TX only
+        constexpr LinkEnd end    = LinkEnd::TX;
     #endif
 
-    // --- Open the ComBus UART port directly (no single-link helper in uart_com.h) ---
-    NodeCom* com = uart_com_init(uart_serial_for(uartCh), ComBusUartBaud,
-                                 uartTxPin, uartRxPin, "combus", &pinReg);
+    const ComPort* port = findUartPort(uartCh);            // the board port that is UART N
+    const ComDevMap maps[] = { { dev, port, end } };
 ```
+
+Le port est ensuite ouvert par `combus_links_init()` (`combus_links.cpp`,
+`openPort`) : `uart_com_init(uart_serial_for(index), débit, txPin, rxPin, nom du
+ComDev, &pinReg)`. La broche d'un bout qui n'émet pas (ou ne reçoit pas) est
+passée à `-1` et n'est donc pas réservée. Le plafond de débit du port est
+contrôlé à la compilation (`static_assert` de `combus_uart_init()`) et à
+l'exécution (`combus_link_check`).
 
 L'ancienne fonction `uart_init()` de `uart_com.cpp` n'existe plus.
 
@@ -216,66 +222,39 @@ void com_init() {
 }
 ```
 
-**Fichier** : `src/machines/init/com/combus_uart_init.cpp` (lignes 30-108, commentaires abrégés).
+**Fichier** : `src/machines/init/com/combus_uart_init.cpp` (fin de `combus_uart_init()`).
 
 ```cpp
-static constexpr uint8_t kBaseAnalogCount =
-    static_cast<uint8_t>(AnalogComBusBaseID::CH_COUNT);
-static constexpr uint8_t kBaseDigitalCount =
-    static_cast<uint8_t>(DigitalComBusBaseID::CH_COUNT);
+    // --- Wiring of the link, and the caller-owned storage for it (its size IS the link count) ---
+    const ComDevMap maps[] = { { dev, port, end } };
+    constexpr uint8_t kLinkCount = 1u;
 
-void combus_uart_init()
-{
-    static_assert(ComBusUartBaud <= UartMaxBaud,
-                  "ComBusUartBaud exceeds board hardware ceiling UartMaxBaud");
+    static CombusTxState  txStates[kLinkCount];
+    static CombusRxState  rxStates[kLinkCount];
+    static ComLinkRuntime runtime[kLinkCount];
+    static ComBusLink     links[kLinkCount];
+    const ComLinksStorage storage = { txStates, rxStates, runtime, links };
 
-    // P3 — caller-owned per-link handshake context.
-    static CombusHandshakeContext s_linkHandshakeCtx = {};
-
-    constexpr ComBusFrameCfg txCfg = { kBaseAnalogCount, kBaseDigitalCount };
-
-    // ... résolution du canal UART et ouverture du port (voir §2) -> NodeCom* com
-
-    // --- Build the ComBusLink descriptor (single source of truth) ---
-    ComBusLink link{};
-    link.com          = com;
-    link.layer        = ChanLayer::BASE;
-    link.handshakeCtx = &s_linkHandshakeCtx;
-    link.name         = "combus";
-
-    // --- TX side: COMBUS_UART_TX ou COMBUS_UART ---
-    link.txCfg = txCfg;
-    link.txHz  = ComBusUartTxHz;
-
-    // --- RX side: seulement en full-duplex COMBUS_UART ---
-    #if defined(COMBUS_UART)
-      static uint16_t s_analog[kBaseAnalogCount];
-      static bool     s_digital[kBaseDigitalCount];
-      constexpr ComBusFrameCfg rxCfg = { kBaseAnalogCount, kBaseDigitalCount };
-      link.rxCfg      = rxCfg;
-      link.analogBuf  = s_analog;
-      link.digitalBuf = s_digital;
-    #endif
-
-    ComBusLink links[] = { link };
-
-    static CombusTxState txStates[sizeof(links) / sizeof(links[0])];
-    combus_tx_register_pool(txStates, sizeof(links) / sizeof(links[0]));
-
-    static CombusRxState rxStates[sizeof(links) / sizeof(links[0])];
-    combus_rx_register_pool(rxStates, sizeof(links) / sizeof(links[0]));
-
-    combus_protocol_init_all(links, sizeof(links) / sizeof(links[0]));
-}
+    combus_links_init(maps, kLinkCount, storage, &pinReg);
 ```
 
-Points à retenir (lus dans ce fichier) :
-- le lien est en `ChanLayer::BASE` : la trame transporte les canaux de la vue
-  `combus_base` (`kBase*Count`) ;
+**Fichier** : `src/core/system/combus/protocol/combus_links.cpp` (`combus_links_init`).
+Pour chaque `ComDevMap` : `combus_link_check` (câblage valide), ouverture du port
+(`openPort`), puis `combus_link_build`, qui remplit le `ComBusLink` : couche et
+taille de trame d'après la portée, TX et/ou RX d'après le rôle du bout, contexte
+de handshake et tampons RX pris dans `ComLinkRuntime`. Les pools TX et RX sont
+ensuite enregistrés et `combus_protocol_init_all()` démarre les liens. Un câblage
+refusé est journalisé et laissé inactif.
+
+Points à retenir (lus dans ces fichiers) :
+- le lien est de portée `INTER_NODE`, soit `ChanLayer::BASE` : la trame transporte
+  les canaux de la vue `combus_base` ;
 - `link.target` n'est pas renseigné : aucune application automatique des trames
   reçues dans le ComBus (`combus_frame_apply` n'est pas appelé par ce lien) ;
 - les pools d'états TX et RX sont des tableaux statiques dont la taille est le
-  nombre de liens.
+  nombre de liens ;
+- les tampons RX de `ComLinkRuntime` sont dimensionnés pour la vue complète (la
+  plus grande), quelle que soit la portée du lien.
 
 ### 3.7. `combus_protocol_init_all()` / `combus_protocol_init()` — wire TX/RX au transport
 
@@ -305,12 +284,12 @@ void combus_protocol_init( uint8_t linkIdx, ComBusLink* link )
     }
     // 5. RX seulement si rxCfg est présent
     if (link->rxCfg) {
-        combus_rx_init(linkIdx, link->com, *link->rxCfg, link->analogBuf, link->digitalBuf, link->target);
+        combus_rx_init(linkIdx, link->com, *link->rxCfg, link->analogBuf, link->digitalBuf, link->target, link->layer);
     }
 }
 ```
 
-Structure `ComBusLink` : `src/core/system/combus/protocol/combus_protocol.h:108-119`
+Structure `ComBusLink` : `src/core/system/combus/protocol/combus_protocol.h` (section 2)
 (champs `com`, `txCfg`, `txHz`, `rxCfg`, `analogBuf`, `digitalBuf`,
 `handshakeCtx`, `layer`, `name`, `target`). `txCfg` et `rxCfg` sont des
 `std::optional` : leur absence désactive le sens correspondant.
@@ -341,27 +320,32 @@ static constexpr uint32_t UartMaxBaud = 115200u;
 static constexpr uint8_t  UartComMaxPorts = 3u;
 ```
 
-**Fichier** : `src/machines/config/machines/volvo_A60H_bruder/mainboard/ESP32_8M_6S/envCfg.cpp` (lignes 151-157).
+**Fichier** : `src/machines/config/machines/volvo_A60H_bruder/board/mainboard/ESP32_8M_6S/envCfg.cpp` (table `comPorts`).
 
 ```cpp
 // Values from ESP32_8M_6S.h, included via envCfg.h → boards.h.
-const UartPinCfg uartPins[] = {
-    { Txd0Pin,   Rxd0Pin   },  // [0] UART0 — USB / debug serial
-    { -1,        -1        },  // [1] UART1 — unassigned on this board
-    { TxdExtPin, RxdExtPin },  // [2] UART2 — extension port / ComBus TX link
+const ComPort comPorts[] = {
+    ComPort::makeUart("USB",      { 0, Txd0Pin,   Rxd0Pin,   UartMaxBaud }),  // UART0 — USB / debug serial
+    ComPort::makeUart("COM/GPIO", { 2, TxdExtPin, RxdExtPin, UartMaxBaud }),  // UART2 — extension port / ComBus link
 };
 
-const uint8_t uartPinsCount = static_cast<uint8_t>(sizeof(uartPins) / sizeof(uartPins[0]));
+const uint8_t comPortsCount = static_cast<uint8_t>(sizeof(comPorts) / sizeof(comPorts[0]));
 ```
 
-**Struct** : `include/struct/uart_struct.h` (lignes 22-25).
+**Struct** : `src/core/system/hw/node_com.h` (section 2).
 
 ```cpp
-struct UartPinCfg {
-    int8_t tx;  ///< TX GPIO pin number (-1 = Arduino default / not used).
-    int8_t rx;  ///< RX GPIO pin number (-1 = Arduino default / not used).
+struct UartPortCfg {
+    uint8_t  index;     ///< UART peripheral number (0 = Serial, 1 = Serial1, 2 = Serial2)
+    int8_t   txPin;     ///< GPIO TX pin (-1 = not wired)
+    int8_t   rxPin;     ///< GPIO RX pin (-1 = not wired)
+    uint32_t maxBaud;   ///< hardware baud-rate ceiling of this port
 };
 ```
+
+`ComPort` regroupe le nom de la prise (celui de la sérigraphie de la carte), son
+type (`ComPortType`) et la configuration propre à ce type. Seul l'UART existe.
+Un port est retrouvé par son `uart.index`, l'ordre de la table est libre.
 
 ### 4.2. Configuration ComBus (protocole)
 
@@ -378,6 +362,10 @@ static constexpr uint32_t ComBusUartBaud         = 115200u;
 static constexpr uint32_t ComBusUartTxHz         = 50u;
 static constexpr uint32_t ComBusUartMaxTxHz      = 200u;
 ```
+
+Le même fichier décrit le lien comme un `ComDev` (portée `INTER_NODE`, protocole =
+débit et fréquence ci-dessus), en deux variantes : `kComDevUartUni` (COMBUS_UART_TX)
+et `kComDevUartBi` (COMBUS_UART).
 
 ### 4.3. Configuration frame layout
 
@@ -469,17 +457,19 @@ est dans [`frame/combus_frame_protocol.md`](frame/combus_frame_protocol.md).
 
 ## 8. RX — résumé
 
-- `combus_rx_init(linkIdx, nodeCom, frameCfg, analogBuf, digitalBuf, target)`
-  (`combus_rx.cpp:253-291`) : mémorise transport et layout, branche les tampons
-  de l'appelant, remet à zéro l'état du lien et invalide le contrat de handshake.
-- `combus_rx_update()` (`combus_rx.cpp:306-344`) : pour chaque lien, vide le
-  transport dans un tampon circulaire puis décode tant que possible. Si
-  `HAS_FAILSAFE` est défini et que le canal `FAILSAFE` est actif, invalide le
-  contrat de handshake du lien.
-- `tryDecode` (`combus_rx.cpp:143-234`) : cherche le `SOF`, lit l'octet `seq`
+- `combus_rx_init(linkIdx, nodeCom, frameCfg, analogBuf, digitalBuf, target, layer)` :
+  mémorise transport et layout, branche les tampons de l'appelant, déduit du
+  `layer` du lien l'identité d'écriture des trames appliquées (un lien BOARD
+  reçoit l'identité SYSTEM), remet à zéro l'état du lien et invalide le contrat
+  de handshake.
+- `combus_rx_update(bus)` : pour chaque lien, vide le transport dans un tampon
+  circulaire puis décode tant que possible. Si `HAS_FAILSAFE` est défini et que le
+  canal `FAILSAFE` de `bus` est actif, invalide le contrat de handshake du lien
+  (`bus` peut être `nullptr` : la réaction est alors ignorée).
+- `tryDecode` : cherche le `SOF`, lit l'octet `seq`
   (décalage 3) pour distinguer le handshake (`seq == 0`, chemin séparé) d'une
   trame de contrôle, vérifie la longueur et le CRC, puis, si le lien a une
-  `target`, appelle `combus_frame_apply` avec le layer `BASE`.
+  `target`, appelle `combus_frame_apply` avec l'identité d'écriture du lien.
 - `combus_frame_decode` : `combus_frame.cpp:236-302` ; `combus_frame_apply` :
   `combus_frame.cpp:338-395`.
 
@@ -495,11 +485,17 @@ est dans [`frame/combus_frame_protocol.md`](frame/combus_frame_protocol.md).
 
 Chaque lien ComBus indépendant possède son propre `CombusHandshakeContext` :
 
-**Fichier** : `src/machines/init/com/combus_uart_init.cpp` (ligne 44).
+**Fichier** : `src/core/system/combus/protocol/combus_links.h` (`ComLinkRuntime`).
 
 ```cpp
-static CombusHandshakeContext s_linkHandshakeCtx = {};
+struct ComLinkRuntime {
+    CombusHandshakeContext handshake = {};
+    // ... tampons de réception du lien
+};
 ```
+
+Un `ComLinkRuntime` est fourni par lien (tableau statique de l'appelant) ;
+`combus_link_build` y prend le contexte de handshake.
 
 Le contexte est partagé entre TX et RX du même lien. `combus_protocol_init()`
 le câble avant les init (`combus_tx_set_handshake_ctx(linkIdx, ctx)`,
@@ -564,6 +560,7 @@ récepteur historique, le nœud son, a été retiré).
 | **Output init**              | `src/machines/init/output/output_init.cpp`                           |
 | **Com orchestrateur**        | `src/machines/init/com/com_init.cpp`                                 |
 | **Wrapper env machine**      | `src/machines/init/com/combus_uart_init.cpp`                         |
+| **Liens depuis ComDev**      | `src/core/system/combus/protocol/combus_links.cpp`                   |
 | **Protocole orchestrateur**  | `src/core/system/combus/protocol/combus_protocol.cpp` (`combus_protocol_init_all`) |
 | **TX protocole**             | `src/core/system/combus/protocol/combus_tx.cpp`                      |
 | **RX protocole**             | `src/core/system/combus/protocol/combus_rx.cpp`                      |
@@ -572,10 +569,10 @@ récepteur historique, le nœud son, a été retiré).
 | **Handshake**                | `src/core/system/combus/protocol/frame/combus_handshake.cpp`         |
 | **Interface transport**      | `src/core/system/hw/node_com.h`                                      |
 | **Adapter UART**             | `src/core/system/hw/transport/uart_com.cpp`                          |
-| **Pin struct**               | `include/struct/uart_struct.h`                                       |
+| **Port struct**              | `src/core/system/hw/node_com.h` (`ComPort`)                          |
 | **Config ComBus**            | `src/core/config/outputs/combus_uart.h`                             |
 | **Board pins (header)**      | `src/machines/config/boards/ESP32_8M_6S.h`                           |
-| **Board pins (data)**        | `src/machines/config/machines/.../envCfg.cpp`                        |
+| **Board ports (data)**       | `src/machines/config/machines/.../envCfg.cpp`                        |
 | **Dispatch output**          | `src/core/system/output/output_manager.cpp`                          |
 
 ---
