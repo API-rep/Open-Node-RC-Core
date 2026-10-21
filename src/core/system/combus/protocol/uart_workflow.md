@@ -57,7 +57,7 @@
 |-----------------------|----------------------------------------------------|
 | `-D COMBUS_UART=N`    | Full-duplex (TX + RX) sur UARTn                    |
 | `-D COMBUS_UART_TX=N` | TX uniquement sur UARTn                           |
-| `-D COMBUS_UART_RX=N` | Réserve le pool de ports (`hw_init_com.cpp`) mais `combus_uart_init()` n'est pas compilé : pas de RX seul dans l'env machine |
+| `-D COMBUS_UART_RX=N` | `combus_uart_init()` n'est pas compilé : pas de RX seul dans l'env machine |
 | (aucun)               | Aucun ComBus UART                                  |
 
 `combus_uart_init.cpp` est entièrement conditionné par
@@ -71,11 +71,11 @@
     // --- Resolve the ComDev, the UART number and the role of this end from the build flag ---
     #if defined(COMBUS_UART)
         constexpr uint8_t uartCh = COMBUS_UART;
-        const ComDev*     dev    = &kComDevUartBi;        // full-duplex
+        const ComDev*     dev    = &kComDevExtBi;         // full-duplex
         constexpr LinkEnd end    = LinkEnd::TX_RX;
     #else
         constexpr uint8_t uartCh = COMBUS_UART_TX;
-        const ComDev*     dev    = &kComDevUartUni;       // TX only
+        const ComDev*     dev    = &kComDevExtUni;        // TX only
         constexpr LinkEnd end    = LinkEnd::TX;
     #endif
 
@@ -122,8 +122,8 @@ void loop() {
 
 ```cpp
 void machine_init() {
-  sys_init();        // 1. pinReg + Serial0 claim + combus_init()
-  hw_init();         // 2. hw_init_com() en premier, puis drivers/servos/sig/battery
+  sys_init();        // 1. pinReg + pool de ports UART + Serial0 claim + combus_init()
+  hw_init();         // 2. drivers/servos/sig/battery
   input_init();      // 3. sources d'entrée physiques
   output_init();     // 4. com_init() -> combus_uart_init() -> combus_protocol_init_all()
 
@@ -142,7 +142,7 @@ void machine_init() {
 }
 ```
 
-### 3.3. `sys_init()` — registre de pins + Serial0 + combus_init
+### 3.3. `sys_init()` — registre de pins + pool UART + Serial0 + combus_init
 
 **Fichier** : `src/machines/init/sys/sys_init.cpp` (lignes 30-59).
 
@@ -151,27 +151,27 @@ void sys_init() {
     // --- 1. Pin registry (no deps: pure RAM init, first in sequence) ---
     pin_reg_init(pinReg, PinRegMaxEntry);
 
-    // --- 2. Claim Serial0 in the UART pool if any debug or dashboard flag is set.
+    // --- 2. Register the shared UART port pool (before any uart_com_init() claim) ---
+    hw_init_com();
+
+    // --- 3. Claim Serial0 in the UART pool if any debug or dashboard flag is set.
 #if defined(DEBUG_ALL)  || defined(DEBUG_SYSTEM) || defined(DEBUG_INPUT) || \
     defined(DEBUG_HW)   || defined(DEBUG_COMBUS) || defined(DEBUG_DASHBOARD)
     (void) uart_com_init(&Serial, DEBUG_MONITOR_BAUD, -1, -1, "debug", &pinReg);
 #endif
 
-    // --- 3. Internal environment data parsing ---
+    // --- 4. Internal environment data parsing ---
     combus_init(static_cast<uint8_t>(AnalogComBusID::CH_COUNT),
                 static_cast<uint8_t>(DigitalComBusID::CH_COUNT));
 }
 ```
 
-### 3.4. `hw_init()` — drivers + transport
+### 3.4. `hw_init()` — drivers
 
 **Fichier** : `src/machines/init/hw/hw_init.cpp` (lignes 44-78).
 
 ```cpp
 void hw_init() {
-    // --- 0. Communication transport init (pin claim — must be first) ---
-    hw_init_com();    // uart_com_register_pool() seulement (le port ComBus est ouvert plus tard par combus_uart_init())
-
     // --- 1. Driver init ---
     dcDriverInit(machine);
 
@@ -193,16 +193,17 @@ void hw_init() {
 ```cpp
 void hw_init_com()
 {
-#if defined(COMBUS_UART_TX) || defined(COMBUS_UART) || defined(COMBUS_UART_RX)
       // Static storage for the shared UART port pool — owned by the machine,
       // sized to this board's real capacity. Must outlive the program.
-      // combus_uart_init() (called later from com_init()) will claim a slot
-      // from this pool via uart_com_init().
+      // Every uart_com_init() claims a slot from this pool: the debug serial
+      // (sys_init()) and the ComBus port (combus_uart_init()).
     static UartCtx s_uartPool[UartComMaxPorts];
     uart_com_register_pool(s_uartPool, UartComMaxPorts);
-#endif
 }
 ```
+
+Appelée au début de `sys_init()`, avant la première réservation de port. Le pool est
+enregistré sans condition de flag : le port de debug en a besoin même sans ComBus.
 
 ### 3.6. `output_init()` → `com_init()` → `combus_uart_init()`
 
@@ -247,8 +248,9 @@ ensuite enregistrés et `combus_protocol_init_all()` démarre les liens. Un câb
 refusé est journalisé et laissé inactif.
 
 Points à retenir (lus dans ces fichiers) :
-- le lien est de portée `INTER_NODE`, soit `ChanLayer::BASE` : la trame transporte
-  les canaux de la vue `combus_base` ;
+- le lien est de portée `INTRA_NODE` (étape 0.4b), soit `ChanLayer::SYSTEM` : la
+  trame transporte les canaux de la vue `combus_system`, qui contient ceux de
+  `combus_base` ;
 - `link.target` n'est pas renseigné : aucune application automatique des trames
   reçues dans le ComBus (`combus_frame_apply` n'est pas appelé par ce lien) ;
 - les pools d'états TX et RX sont des tableaux statiques dont la taille est le
@@ -358,14 +360,31 @@ static constexpr uint8_t ComBusUartFrameSize =
   +  (static_cast<uint8_t>(AnalogComBusBaseID::CH_COUNT)  * 2u)
   + 1u;
 
-static constexpr uint32_t ComBusUartBaud         = 115200u;
-static constexpr uint32_t ComBusUartTxHz         = 50u;
 static constexpr uint32_t ComBusUartMaxTxHz      = 200u;
 ```
 
-Le même fichier décrit le lien comme un `ComDev` (portée `INTER_NODE`, protocole =
-débit et fréquence ci-dessus), en deux variantes : `kComDevUartUni` (COMBUS_UART_TX)
-et `kComDevUartBi` (COMBUS_UART).
+Le débit et la fréquence d'émission du lien ne sont plus ici : ce sont les paramètres
+(`ComProtocolCfg`) de son `ComDev`.
+
+**Fichier** : `src/machines/config/machines/volvo_A60H_bruder/board/com_dev.h`.
+
+```cpp
+inline constexpr ComProtocolCfg kComProtoExt = { 115200u, 50u };
+
+inline constexpr ComDev kComDevExtUni = {          // COMBUS_UART_TX
+	"combus", LinkScope::INTRA_NODE, LinkType::UNIDIRECTIONAL,
+	&kComProtoExt, LinkActivation::ALWAYS, nullptr
+};
+
+inline constexpr ComDev kComDevExtBi = {           // COMBUS_UART
+	"combus", LinkScope::INTRA_NODE, LinkType::BIDIRECTIONAL,
+	&kComProtoExt, LinkActivation::ALWAYS, nullptr
+};
+```
+
+Le lien d'extension est intra-nœud : il est défini une fois pour le nœud, à la racine
+de `board/`, et chaque carte le câble sur son port. `combus_uart_init()` vérifie à la
+compilation `kComProtoExt.rate <= UartMaxBaud` et `kComProtoExt.txHz <= ComBusUartMaxTxHz`.
 
 ### 4.3. Configuration frame layout
 

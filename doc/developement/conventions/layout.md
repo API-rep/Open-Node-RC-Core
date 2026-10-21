@@ -176,8 +176,8 @@ void function()
 A compact Doxygen description follows the same rule, including at file scope, where the code is at column 0:
 
 ```cpp
-	/// Protocol parameters of the ComBus UART link.
-static constexpr ComProtocolCfg kComBusUartProtocol = { ComBusUartBaud, ComBusUartTxHz };
+	/// Protocol of the extension link: 115200 baud, 50 frames per second.
+inline constexpr ComProtocolCfg kComProtoExt = { 115200u, 50u };
 ```
 
 ### Rationale
