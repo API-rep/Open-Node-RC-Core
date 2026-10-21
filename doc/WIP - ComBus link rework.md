@@ -25,6 +25,7 @@ Base conservée : le protocole est déjà multi-liens et indépendant du transpo
 - Le cœur lit ces tables, ouvre les adaptateurs et construit les liens. Les limites matérielles de l'ESP32 (nombre d'UART, taille des pools, pairs ESP-NOW) restent des constantes de la carte, vérifiées au démarrage.
 - L'ensemble réduit (§2.2) et le mode des liens à diffusion seule (§2.4) s'ajouteront au `ComDev` ou à son protocole quand leurs chantiers arriveront.
 - Le rôle machine / télécommande vient de `IS_MACHINE` / `IS_REMOTE`.
+- **Où se range le code de communication** (depuis le 2026-10-21) : `core/system/com/` (`com_update()` pour l'émission dans la boucle, appelée par `output_update()` qui reste l'umbrella des sorties ; `link_health/` pour la santé de lien et la chaîne `REMOTE_LINK_LOST`), `core/config/com/` (config des transports), `machines/init/com/` (init). Le protocole reste dans `core/system/combus/` et les adaptateurs de transport dans `core/system/hw/transport/`. `input` et `output` sont réservés aux dispositifs locaux, plus proches du matériel.
 - Plusieurs `NodeCom` peuvent partager un port : l'écriture est séquentielle. En ESP-NOW, un tampon de réception par pair (l'émetteur est connu) ; en UART, un port = un pair (la trame n'a pas d'adresse).
 
 **Où vivent les `ComDev`**
@@ -229,6 +230,7 @@ Chaque étape se vérifie avec le test de boucle (loopback) puis un build comple
 - Nom du jeu de `ComDev` fournis par le cœur (« catalogue » est provisoire), et forme de leur paramétrage par `-D` (flags par modèle, ou une table).
 - Contenu exact de `ComCoupling` (channel déclencheur, valeur attendue, identifiant du pair) ; comportement d'un lien inactif (état d'exécution, ressources réservées).
 - Où définir un `ComDev` inter-nœuds partagé par deux types de nœuds (machine et télécommande) sans le dupliquer.
+- Le backend PS4 Bluetooth reste dans `input` : c'est un dispositif d'entrée, dont les boutons logiques sont mappés vers le ComBus par `inputs_map` ; il n'expose pas de flux d'octets comme un `NodeCom`. Seule sa santé de lien est dans `com/link_health/`. À reconsidérer quand la télécommande deviendra un nœud (chantier 4).
 - Cadence et seuil de l'ACK périodique ; renégociation quand un ACK périodique annonce un MD5 différent.
 - Channels critiques et unicité des types (propositions du §2.5).
 - ESP-NOW : nombre maximal de pairs de l'ESP32, charge utile exacte (documentation ESP-IDF).

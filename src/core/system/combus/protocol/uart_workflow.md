@@ -495,7 +495,7 @@ est dans [`frame/combus_frame_protocol.md`](frame/combus_frame_protocol.md).
 > **Aucun appel à `combus_rx_update()` dans `src/`** (recherche
 > `combus_rx_update` : seuls les tests `test/test_combus_loopback/` l'appellent).
 > La boucle principale de la machine ne fait que de la TX
-> (`output_update` → `combus_tx_update`). Le lien UART de la machine n'a pas de
+> (`output_update` → `com_update` → `combus_tx_update`). Le lien UART de la machine n'a pas de
 > `target`.
 
 ---
@@ -535,11 +535,19 @@ validation MD5 + version, interrupteurs de compilation :
 
 ## 10. Loop — flux d'exécution
 
-**Fichier** : `src/core/system/output/output_manager.cpp` (lignes 20-27) ; appelé en
-fin de `loop()` (`src/machines/main.cpp:233`).
+**Fichiers** : `src/core/system/output/output_manager.cpp` (`output_update`, umbrella des
+sorties) puis `src/core/system/com/com_manager.cpp` (`com_update`, modules de
+communication) ; appelé en fin de `loop()` (`src/machines/main.cpp:233`).
 
 ```cpp
 void output_update(const ComBus& bus) {
+
+	// --- Communication modules (ComBus TX, ...) ---
+  com_update(bus);
+
+}
+
+void com_update(const ComBus& bus) {
 
 	// --- ComBus UART TX (50 Hz timer-gated, non-blocking) ---
 #if defined(COMBUS_UART_TX) || defined(COMBUS_UART)
@@ -557,7 +565,7 @@ Ordre d'un tour de `loop()` (`src/machines/main.cpp`, appels aux lignes 51, 57-5
    (`src/machines/system/sys_manager.cpp:19-43`) ;
 2. chaînes de processors d'entrée et de simulation (`proc_chain_update`) ;
 3. machine à états des runlevels ;
-4. `output_update(comBus)` : émission ComBus.
+4. `output_update(comBus)` → `com_update(comBus)` : émission ComBus.
 
 Aucun appel à `combus_rx_update()` dans ce tour (voir §8.2).
 
@@ -593,6 +601,7 @@ récepteur historique, le nœud son, a été retiré).
 | **Board pins (header)**      | `src/machines/config/boards/ESP32_8M_6S.h`                           |
 | **Board ports (data)**       | `src/machines/config/machines/.../envCfg.cpp`                        |
 | **Dispatch output**          | `src/core/system/output/output_manager.cpp`                          |
+| **Dispatch communication**   | `src/core/system/com/com_manager.cpp`                                |
 
 ---
 

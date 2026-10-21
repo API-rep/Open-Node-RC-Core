@@ -245,7 +245,7 @@ la vue complète si le pointeur est nul (`combus_handshake_tx.cpp:51-53`,
   (`combus_rx.cpp:222-225`). Le lien UART de la machine ne le renseigne pas
   (`src/machines/init/com/combus_uart_init.cpp`).
 - `combus_rx_update` n'a aucun appelant dans `src/` (seulement des tests) : en
-  production, la machine n'émet que (`output_update` → `combus_tx_update`).
+  production, la machine n'émet que (`output_update` → `com_update` → `combus_tx_update`).
 
 > À VÉRIFIER : l'en-tête `combus_protocol.h:169-173` annonce que
 > `combus_protocol_init` « return » pour un layer `UNDEFINED` ou `BOARD`. Le
@@ -262,7 +262,7 @@ Source : `src/machines/main.cpp` (appels lignes 51, 57-58, 233) et
    `HAS_REMOTE_LINK_LOST_FALLBACK` ;
 2. chaînes d'entrée et de simulation (`proc_chain_update`) ;
 3. machine à états des runlevels ;
-4. `output_update` : émission ComBus (TX).
+4. `output_update` → `com_update` : émission ComBus (TX).
 
 Le « reset » des canaux agrégés par OU est fait en tête de chaîne par le
 processor `cb_reset_fn` (`failsafe_chain.cpp:49`, `failsafe.h:9-10`), pas par
