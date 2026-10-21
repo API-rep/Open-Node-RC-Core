@@ -3,7 +3,7 @@
 # This file declares the PS4_DS4_BT_LINK_LOST ComBus channel. It is the
 # dedicated "PS4 BT link alive" signal for the PS4 DualShock Bluetooth input
 # backend, consumed by the REMOTE_LINK_LOST fallback chain (declared in
-# src/core/system/inputs/remote_link_fallback_chain.cpp) when
+# src/core/system/com/link_health/remote_link_fallback_chain.cpp) when
 # HAS_REMOTE_LINK_LOST_FALLBACK is defined.
 #
 # Notes:

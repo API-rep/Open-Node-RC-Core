@@ -1,6 +1,6 @@
 # Failsafe Module — Architecture
 
-> **Note** : ce document décrit l'architecture du module failsafe central.  La chaîne `REMOTE_LINK_LOST` (signal séparé) est documentée dans `src/core/system/inputs/remote_link_lost.md`.
+> **Note** : ce document décrit l'architecture du module failsafe central.  La chaîne `REMOTE_LINK_LOST` (signal séparé) est documentée dans `src/core/system/com/link_health/remote_link_lost.md`.
 
 ---
 
@@ -248,7 +248,7 @@ main.cpp              → réagit à RunLevel::FAILSAFE (sécurité hardware)
 
 `REMOTE_LINK_LOST` est un signal **distinct** du `FAILSAFE` global.  Il est géré par sa propre chaîne et déclenche une réaction différente (`RunLevel::IDLE` au lieu de `RunLevel::FAILSAFE`).
 
-**Voir** : `src/core/system/inputs/remote_link_lost.md` pour le détail de l'architecture, des contributeurs et de la réaction.
+**Voir** : `src/core/system/com/link_health/remote_link_lost.md` pour le détail de l'architecture, des contributeurs et de la réaction.
 
 **Résumé** :
 
@@ -282,7 +282,7 @@ src/core/system/vbat/
 **Chaîne REMOTE_LINK_LOST** (séparée) :
 
 ```text
-src/core/system/inputs/
+src/core/system/com/link_health/
 ├── remote_link_lost.cb           // Canal REMOTE_LINK_LOST (agrégat)
 ├── ps4_ds4_bt_link_lost.cb       // Canal PS4_DS4_BT_LINK_LOST (contributeur)
 ├── uart_link_lost.cb             // Canal UART_LINK_LOST (contributeur)

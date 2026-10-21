@@ -9,7 +9,7 @@
 #   - Input sources write their dedicated *_LINK_LOST channel each cycle
 #     (false = healthy, true = fault — failsafe-by-default).
 #   - The REMOTE_LINK_LOST → IDLE fallback chain (see
-#     src/core/system/inputs/remote_link_fallback_chain.cpp) reads each
+#     src/core/system/com/link_health/remote_link_fallback_chain.cpp) reads each
 #     contributor, OR-merges them, and writes the result to REMOTE_LINK_LOST
 #     via the same `both_or` direction semantics.
 #   - Downstream consumers (FSM, runlevel handler, dashboards) only read

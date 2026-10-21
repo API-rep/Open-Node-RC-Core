@@ -351,7 +351,7 @@ Un port est retrouvé par son `uart.index`, l'ordre de la table est libre.
 
 ### 4.2. Configuration ComBus (protocole)
 
-**Fichier** : `src/core/config/outputs/combus_uart.h` (lignes 55-77).
+**Fichier** : `src/core/config/com/combus_uart.h` (lignes 55-77).
 
 ```cpp
 static constexpr uint8_t ComBusUartFrameSize =
@@ -589,7 +589,7 @@ récepteur historique, le nœud son, a été retiré).
 | **Interface transport**      | `src/core/system/hw/node_com.h`                                      |
 | **Adapter UART**             | `src/core/system/hw/transport/uart_com.cpp`                          |
 | **Port struct**              | `src/core/system/hw/node_com.h` (`ComPort`)                          |
-| **Config ComBus**            | `src/core/config/outputs/combus_uart.h`                             |
+| **Config ComBus**            | `src/core/config/com/combus_uart.h`                             |
 | **Board pins (header)**      | `src/machines/config/boards/ESP32_8M_6S.h`                           |
 | **Board ports (data)**       | `src/machines/config/machines/.../envCfg.cpp`                        |
 | **Dispatch output**          | `src/core/system/output/output_manager.cpp`                          |

@@ -4,7 +4,7 @@
 # "UART link alive" signal for any UART-backed transport (ComBus UART TX/RX
 # to a paired board — sound node, extension board, remote receiver, …),
 # consumed by the REMOTE_LINK_LOST fallback chain (declared in
-# src/core/system/inputs/remote_link_fallback_chain.cpp) when
+# src/core/system/com/link_health/remote_link_fallback_chain.cpp) when
 # HAS_REMOTE_LINK_LOST_FALLBACK is defined.
 #
 # Notes:

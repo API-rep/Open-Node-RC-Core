@@ -13,7 +13,7 @@
 #include "combus_uart_init.h"
 
 #include <machines/config/config.h>   // comPorts[], UartMaxBaud (board envCfg), kComDevExtUni / kComDevExtBi (node links)
-#include <core/config/outputs/combus_uart.h>         // ComBusUartMaxTxHz
+#include <core/config/com/combus_uart.h>         // ComBusUartMaxTxHz
 #include <core/system/combus/protocol/combus_links.h>
 #include <core/system/debug/logging/debug.h>
 #include "../sys/sys_init.h"          // pinReg (machine env)

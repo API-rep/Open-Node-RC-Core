@@ -5,7 +5,7 @@
  * @details Pure type definitions — no feature flag dependency.
  *   Available regardless of active output modules.
  *   Specific constants and static_asserts are in the config sub-files:
- *   src/core/config/outputs/
+ *   src/core/config/com/
  *******************************************************************************///
 #pragma once
 

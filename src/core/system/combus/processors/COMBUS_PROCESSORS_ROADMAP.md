@@ -119,7 +119,7 @@ Probablement lié aux discussions déjà eues sur combus_v2.md, layering et fusi
 1. Découpage processors en "calcul pur" vs "binding ComBus" — reporté à une itération future
 2. Mécanisme input_map_provider (InputMapView + input_map_active()) — non implémenté dans cette session
 3. Enregistrement dynamique de canaux ComBus modulaires — architecture non définie
-4. Taille de trame UART variable : actuellement calculée sur le seul contrat BASE (hypothèse simplificatrice). À revoir lors de l'ajout de flags d'émission conditionnels (ex: télémétrie uniquement) — fichier concerné : core/config/outputs/combus_uart.h.
+4. Taille de trame UART variable : actuellement calculée sur le seul contrat BASE (hypothèse simplificatrice). À revoir lors de l'ajout de flags d'émission conditionnels (ex: télémétrie uniquement) — fichier concerné : core/config/com/combus_uart.h.
 
 ### Avertissement
 

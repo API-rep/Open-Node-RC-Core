@@ -9,7 +9,7 @@
 #include <machines/system/input/input_update.h> // input_update(bus) — machine mapping
 #include <core/system/vbat/vbat.h>              // vbat_update() — orchestrates vbat_sense + FAILSAFE_VBAT
 #include <core/system/failsafe/failsafe.h>      // failsafe_update() — publishes DigitalComBusID::FAILSAFE
-#include <core/system/inputs/remote_link_fallback_chain.h>  // chantier 12.5: REMOTE_LINK_LOST → IDLE fallback
+#include <core/system/com/link_health/remote_link_fallback_chain.h>  // chantier 12.5: REMOTE_LINK_LOST → IDLE fallback
 
 
 // =============================================================================

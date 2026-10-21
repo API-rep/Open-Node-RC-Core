@@ -43,7 +43,7 @@ UART_LINK_LOST ────────┼──► OR-guard (cb_or_fn) ──�
 ## 3. Fichiers
 
 ```text
-src/core/system/inputs/
+src/core/system/com/link_health/
 ├── remote_link_lost.cb           // Canal REMOTE_LINK_LOST (agrégat)
 ├── ps4_ds4_bt_link_lost.cb       // Canal PS4_DS4_BT_LINK_LOST (contributeur)
 ├── uart_link_lost.cb             // Canal UART_LINK_LOST (contributeur)
@@ -57,7 +57,7 @@ src/core/system/inputs/
 
 ### 4.1 — `PS4_DS4_BT_LINK_LOST`
 
-**Canal** : `src/core/system/inputs/ps4_ds4_bt_link_lost.cb`
+**Canal** : `src/core/system/com/link_health/ps4_ds4_bt_link_lost.cb`
 
 **Propriétaire** : `src/machines/system/input/input_update.cpp` (backend PS4_BT)
 
@@ -67,7 +67,7 @@ src/core/system/inputs/
 
 ### 4.2 — `UART_LINK_LOST`
 
-**Canal** : `src/core/system/inputs/uart_link_lost.cb`
+**Canal** : `src/core/system/com/link_health/uart_link_lost.cb`
 
 **Propriétaire** : `src/sound_module/system/combus_sound_interpreter.cpp` (côté sound node)
 
@@ -79,7 +79,7 @@ src/core/system/inputs/
 
 ## 5. Chaîne d'agrégation
 
-**Fichier** : `src/core/system/inputs/remote_link_fallback_chain.cpp`
+**Fichier** : `src/core/system/com/link_health/remote_link_fallback_chain.cpp`
 
 **Pattern** : miroir de `failsafe_chain.cpp` — reset en tête, puis OR-guard sur chaque contributeur.
 
@@ -153,8 +153,8 @@ void sys_manager_update(ComBus& bus) {
 
 | Concept | Implémentation |
 |---------|----------------|
-| Canal agrégat | `src/core/system/inputs/remote_link_lost.cb` |
-| Chaîne `kRemoteLinkFallbackChain[]` | `src/core/system/inputs/remote_link_fallback_chain.cpp` |
+| Canal agrégat | `src/core/system/com/link_health/remote_link_lost.cb` |
+| Chaîne `kRemoteLinkFallbackChain[]` | `src/core/system/com/link_health/remote_link_fallback_chain.cpp` |
 | Processor `cb_or_fn` | `src/core/system/combus/processors/logic/cb_or.h` |
 | Réaction runlevel | `src/machines/config/machines/volvo_A60H_bruder/combus/processors/runlevel/runlevel_procs.h` |
 | Orchestration | `src/machines/system/sys_manager.cpp` |
