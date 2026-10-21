@@ -243,6 +243,29 @@ void combus_rx_update( const ComBus* bus );
 const ComBusFrame* combus_rx_snapshot( uint8_t linkIdx );
 
 
+/**
+ * @brief Milliseconds elapsed since the last valid frame on one link.
+ *
+ * @param linkIdx  Index of this link in the per-link state array.
+ * @return         Age of the last valid frame, or UINT32_MAX if none was ever
+ *                 received or if linkIdx is out of range.
+ */
+
+uint32_t combus_rx_age_ms( uint8_t linkIdx );
+
+
+/**
+ * @brief Whether a valid frame was received recently on one link.
+ *
+ * @param linkIdx    Index of this link in the per-link state array.
+ * @param timeoutMs  Maximum age of the last valid frame (ms).
+ * @return           true if a frame arrived within @p timeoutMs, false if the
+ *                   link never received one, is silent, or linkIdx is out of range.
+ */
+
+bool combus_rx_is_alive( uint8_t linkIdx, uint32_t timeoutMs );
+
+
 
 // =============================================================================
 // 7. PER-LINK HANDSHAKE CONTEXT WIRING (P3)

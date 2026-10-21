@@ -22,9 +22,9 @@
  *   Contributors (optional, gated by build flags):
  *     - PS4_DS4_BT_LINK_LOST — PS4 DualShock Bluetooth link health
  *       (active when INPUT_PS4_DS4_BT is defined).
- *     - UART_LINK_LOST       — any UART-backed ComBus transport link
- *       health (active when COMBUS_UART_TX / COMBUS_UART_RX / COMBUS_UART
- *       is defined).
+ *     - UART_LINK_LOST       — health of the receiving ComBus UART links
+ *       (active when COMBUS_UART is defined: a TX-only link cannot know the
+ *       state of its peer, so it does not contribute).
  *
  *   The chain has primary `outCh` = DigitalComBusID::REMOTE_LINK_LOST so
  *   the runner commits the latched `value` to the top-level ComBus
@@ -94,17 +94,20 @@ static CbProc kRemoteLinkFallbackProcs[] = {
     },
 #endif
 
-#if defined(COMBUS_UART_TX) || defined(COMBUS_UART_RX) || defined(COMBUS_UART)
-    // --- 2. UART-backed ComBus transport link contributor (optional) ------
-    // Reads UART_LINK_LOST (proof-of-life from any UART ComBus transport
-    // polled by combus_rx_is_alive() at a higher level — sound node side
-    // for RX, machine TX-side via combus_tx watchdog if needed).  If no
-    // UART owner refreshed the bus within timeout, the channel stays at
-    // its failsafe default (true = lost); this OR-guard latches the
-    // pipeline value to 1 and consumes it.
+#if defined(COMBUS_UART)
+    // --- 2. Receiving ComBus UART link contributor (optional) -------------
+    // Reads UART_LINK_LOST, published each cycle by com_rx_update() from the
+    // silence of the receiving links (combus_links_rx_lost(), per-link
+    // linkTimeoutMs).  A link that has not received a frame within its timeout
+    // reports true (= lost); this OR-guard latches the pipeline value to 1
+    // and consumes the channel.
     //
-    // Multi-instance: all UART owners write to the SAME channel with
-    // `direction: none` (BOARD scope) — any board's UART that is down
+    // Only a link that receives can contribute: a TX-only link (COMBUS_UART_TX)
+    // knows nothing of its peer, and its stuck "lost" default would keep
+    // REMOTE_LINK_LOST at 1 forever.
+    //
+    // Multi-instance: com_rx_update() ORs all receiving links into the one
+    // UART_LINK_LOST channel (BOARD scope) — any link that is down
     // contributes to the aggregated fault.
     {
         .name    = "remote_link_or_uart",

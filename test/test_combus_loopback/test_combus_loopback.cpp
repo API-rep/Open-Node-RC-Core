@@ -30,6 +30,16 @@
  *     from the matching view, TX / RX from the role of the end, and the
  *     refusals. No wiring needed: the port is never opened.
  *
+ *   Group J — receiving link health (chantier 1.1):
+ *     A receiving link is lost until its first frame and again after
+ *     linkTimeoutMs of silence; com_rx_update() applies the received frames and
+ *     publishes UART_LINK_LOST accordingly; a TX-only link never counts as lost.
+ *     Same TX↔RX jumper as Group B.
+ *
+ *   Group K — denied writes are counted (chantier 1.1):
+ *     A write refused by the layer check (a SYSTEM caller on a BOARD channel)
+ *     increments combus_denied_writes(); an accepted write does not.
+ *
  *   Group C — view identity (Phase 3 / A13):
  *     Validates that the 3 view-specific enums (AnalogComBusID,
  *     AnalogComBusSystemID, AnalogComBusBaseID and their digital
@@ -76,6 +86,7 @@
 #include <core/system/combus/combus_access.h>          // combus_set_digital() — generic accessor
 #include <core/system/combus/protocol/combus_protocol.h> // ComBusLink, combus_protocol_init() — Group E
 #include <core/system/combus/protocol/combus_links.h>    // combus_link_check(), combus_link_build() — Group I
+#include <core/system/com/com_manager.h>                 // com_rx_update() — Group J
 #include <core/system/combus/protocol/frame/combus_handshake.h> // combus_handshake_compareAndLog() — Group E
 #include <core/system/combus/protocol/frame/combus_handshake_rx.h> // combus_handshake_compareAndLog() — Group E (RX-side declaration)
 
@@ -755,7 +766,7 @@ static void test_md5_resolution_board(void) {
 // transport that combus_links_init() would have opened.
 // =============================================================================
 
-static constexpr ComProtocolCfg kTestProtocol = { 115200u, 50u };
+static constexpr ComProtocolCfg kTestProtocol = { 115200u, 50u, 250u };
 
 static constexpr ComDev kTestDevUni = {
     "test_uni", LinkScope::INTER_NODE, LinkType::UNIDIRECTIONAL,
@@ -843,7 +854,7 @@ static void test_link_build_refuses_bad_wiring(void) {
     TEST_ASSERT_FALSE(combus_link_check(onCoupling));
 
     // Line rate above the port ceiling.
-    static constexpr ComProtocolCfg tooFast = { 921600u, 50u };
+    static constexpr ComProtocolCfg tooFast = { 921600u, 50u, 250u };
     static constexpr ComDev fast = {
         "test_fast", LinkScope::INTER_NODE, LinkType::UNIDIRECTIONAL,
         &tooFast, LinkActivation::ALWAYS, nullptr
@@ -852,7 +863,7 @@ static void test_link_build_refuses_bad_wiring(void) {
     TEST_ASSERT_FALSE(combus_link_check(overRate));
 
     // Transmitting end without a transmit rate.
-    static constexpr ComProtocolCfg noHz = { 115200u, 0u };
+    static constexpr ComProtocolCfg noHz = { 115200u, 0u, 250u };
     static constexpr ComDev silent = {
         "test_silent", LinkScope::INTER_NODE, LinkType::UNIDIRECTIONAL,
         &noHz, LinkActivation::ALWAYS, nullptr
@@ -860,10 +871,131 @@ static void test_link_build_refuses_bad_wiring(void) {
     const ComDevMap noTxHz = { &silent, &s_testPort, LinkEnd::TX };
     TEST_ASSERT_FALSE(combus_link_check(noTxHz));
 
+    // Receiving end without a link timeout.
+    static constexpr ComProtocolCfg noTimeout = { 115200u, 50u, 0u };
+    static constexpr ComDev deaf = {
+        "test_deaf", LinkScope::INTER_NODE, LinkType::UNIDIRECTIONAL,
+        &noTimeout, LinkActivation::ALWAYS, nullptr
+    };
+    const ComDevMap noLinkTimeout = { &deaf, &s_testPort, LinkEnd::RX };
+    TEST_ASSERT_FALSE(combus_link_check(noLinkTimeout));
+
     // Null transport: combus_link_build() refuses and does not write the descriptor.
     const ComDevMap fine = { &kTestDevUni, &s_testPort, LinkEnd::TX };
     TEST_ASSERT_FALSE(combus_link_build(fine, nullptr, s_testRuntime, link));
     TEST_ASSERT_EQUAL_STRING("untouched", link.name);
+}
+
+
+// =============================================================================
+// GROUP J — RECEIVING LINK HEALTH (chantier 1.1)
+//
+// A TX↔RX link is built from its description on the loopback port, with
+// rxTargetBus (Group H) as the node ComBus. The link is lost until its first
+// frame and after linkTimeoutMs of silence. Requires the TX↔RX jumper.
+// =============================================================================
+
+static constexpr ComProtocolCfg kHealthProtocol = { 115200u, 50u, 100u };   ///< lost after 100 ms of silence
+
+static constexpr ComDev kHealthDev = {
+    "test_health", LinkScope::INTRA_NODE, LinkType::BIDIRECTIONAL,
+    &kHealthProtocol, LinkActivation::ALWAYS, nullptr
+};
+
+static ComLinkRuntime s_healthRuntime;
+static ComBusLink     s_healthLink;
+
+/** Build the health link on the loopback port, apply its frames to rxTargetBus and put it under watch. */
+static void startHealthLink(LinkEnd end, const ComDev& dev) {
+    TEST_ASSERT_NOT_NULL_MESSAGE(s_com, "Run test_loopback_init first");
+    resetRxTarget();
+
+    const ComDevMap map = { &dev, &s_testPort, end };
+    TEST_ASSERT_TRUE(combus_link_build(map, s_com, s_healthRuntime, s_healthLink));
+    if (s_healthLink.rxCfg.has_value()) { s_healthLink.target = &rxTargetBus; }
+
+    combus_protocol_init(kLinkIdx, &s_healthLink);
+    combus_links_watch(&s_healthRuntime, 1u);
+}
+
+/** Send one frame from txComBus and let com_rx_update() receive it. */
+static void sendOneFrameAndReceive(void) {
+    fillRandom(0x4EA17Bul);
+    delay(30u);
+    combus_tx_update(&txComBus);
+    delay(kRxPollMs);
+    com_rx_update(rxTargetBus);
+}
+
+static bool uartLinkLostOnBus(void) {
+    return rxTargetBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::UART_LINK_LOST)].value;
+}
+
+/** Nothing received yet: the link is lost (failsafe by default). */
+static void test_link_health_lost_until_first_frame(void) {
+    startHealthLink(LinkEnd::TX_RX, kHealthDev);
+
+    com_rx_update(rxTargetBus);
+
+    TEST_ASSERT_TRUE(combus_links_rx_lost());
+    TEST_ASSERT_TRUE(uartLinkLostOnBus());
+}
+
+/** A frame arrives: the link is alive, its channels are applied and UART_LINK_LOST is released. */
+static void test_link_health_alive_after_frame(void) {
+    startHealthLink(LinkEnd::TX_RX, kHealthDev);
+
+    sendOneFrameAndReceive();
+
+    TEST_ASSERT_FALSE(combus_links_rx_lost());
+    TEST_ASSERT_FALSE(uartLinkLostOnBus());
+    TEST_ASSERT_EQUAL_UINT16(txComBus.analogBus[kThrottleIdx].value, rxTargetBus.analogBus[kThrottleIdx].value);
+}
+
+/** The peer goes silent for longer than linkTimeoutMs: the link is lost again. */
+static void test_link_health_lost_after_silence(void) {
+    startHealthLink(LinkEnd::TX_RX, kHealthDev);
+    sendOneFrameAndReceive();
+    TEST_ASSERT_FALSE(combus_links_rx_lost());
+
+    delay(kHealthProtocol.linkTimeoutMs + 60u);
+    com_rx_update(rxTargetBus);
+
+    TEST_ASSERT_TRUE(combus_links_rx_lost());
+    TEST_ASSERT_TRUE(uartLinkLostOnBus());
+}
+
+/** A TX-only link cannot know its peer: it never counts as lost. */
+static void test_link_health_ignores_tx_only_link(void) {
+    startHealthLink(LinkEnd::TX, kTestDevUni);
+
+    com_rx_update(rxTargetBus);
+
+    TEST_ASSERT_FALSE(combus_links_rx_lost());
+    TEST_ASSERT_FALSE(uartLinkLostOnBus());
+
+    combus_links_watch(nullptr, 0u);
+}
+
+
+// =============================================================================
+// GROUP K — DENIED WRITES ARE COUNTED (chantier 1.1)
+//
+// UART_LINK_LOST is a BOARD-scope channel: a SYSTEM caller is refused. This is
+// the mistake that kept REMOTE_LINK_LOST stuck on the Volvo; the count makes
+// it visible (it is also shown on the dashboard).
+// =============================================================================
+
+/** A refused write is counted each time, an accepted one is not. */
+static void test_denied_write_is_counted(void) {
+    const uint32_t before = combus_denied_writes();
+
+    TEST_ASSERT_FALSE(combus_set_digital(txComBus, DigitalComBusID::UART_LINK_LOST, true, ChanLayer::SYSTEM));
+    TEST_ASSERT_FALSE(combus_set_digital(txComBus, DigitalComBusID::UART_LINK_LOST, true, ChanLayer::SYSTEM));
+    TEST_ASSERT_EQUAL_UINT32(before + 2u, combus_denied_writes());
+
+    TEST_ASSERT_TRUE(combus_set_digital(txComBus, DigitalComBusID::UART_LINK_LOST, false, ChanLayer::BOARD));
+    TEST_ASSERT_EQUAL_UINT32(before + 2u, combus_denied_writes());
 }
 
 
@@ -968,6 +1100,15 @@ void setup() {
     RUN_TEST(test_link_build_intra_node_tx_rx);
     RUN_TEST(test_link_scope_layer);
     RUN_TEST(test_link_build_refuses_bad_wiring);
+
+    // --- Group J: receiving link health (chantier 1.1) ---
+    RUN_TEST(test_link_health_lost_until_first_frame);
+    RUN_TEST(test_link_health_alive_after_frame);
+    RUN_TEST(test_link_health_lost_after_silence);
+    RUN_TEST(test_link_health_ignores_tx_only_link);
+
+    // --- Group K: denied writes are counted (chantier 1.1) ---
+    RUN_TEST(test_denied_write_is_counted);
 
     // Chantier 12.6: Group F (FS1 failsafe re-arm) removed — see
     // header docstring above (5 independent test groups A/B/C/D/E).

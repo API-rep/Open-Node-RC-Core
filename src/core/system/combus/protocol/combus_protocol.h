@@ -145,8 +145,9 @@ enum class LinkActivation : uint8_t {
  */
 
 struct ComProtocolCfg {
-    uint32_t rate;      ///< line rate (baud for a UART), identical at both ends
-    uint32_t txHz;      ///< frame transmit rate (Hz) — used where the end transmits
+    uint32_t rate;           ///< line rate (baud for a UART), identical at both ends
+    uint32_t txHz;           ///< frame transmit rate (Hz) — used where the end transmits
+    uint32_t linkTimeoutMs;  ///< receiving end: silence after which the link is declared lost (ms)
 };
 
 

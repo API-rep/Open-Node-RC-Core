@@ -87,6 +87,10 @@ bool combus_link_check( const ComDevMap& map )
         sys_log_err("[COMBUS_LINKS] link '%s': a transmitting end needs a non-zero txHz\n", dev.name);
         return false;
     }
+    if (endReceives(map.end) && dev.protocol->linkTimeoutMs == 0u) {
+        sys_log_err("[COMBUS_LINKS] link '%s': a receiving end needs a non-zero linkTimeoutMs\n", dev.name);
+        return false;
+    }
     if (map.port->type == ComPortType::UART && dev.protocol->rate > map.port->uart.maxBaud) {
         sys_log_err("[COMBUS_LINKS] link '%s': rate %lu exceeds the ceiling of port '%s' (%lu)\n",
                     dev.name, (unsigned long)dev.protocol->rate,
@@ -128,6 +132,10 @@ bool combus_link_build( const ComDevMap& map,
         built.digitalBuf = runtime.digitalRx;
     }
 
+        // --- 4. What the link watch needs ---
+    runtime.receives      = endReceives(map.end);
+    runtime.linkTimeoutMs = map.dev->protocol->linkTimeoutMs;
+
     link = built;
     return true;
 }
@@ -140,7 +148,8 @@ bool combus_link_build( const ComDevMap& map,
 bool combus_links_init( const ComDevMap*       maps,
                         uint8_t                count,
                         const ComLinksStorage& storage,
-                        PinReg*                pinReg )
+                        PinReg*                pinReg,
+                        ComBus*                target )
 {
     if (!maps || count == 0u || !storage.tx || !storage.rx || !storage.runtime || !storage.links) {
         sys_log_err("[COMBUS_LINKS] init rejected — null table or storage\n");
@@ -157,7 +166,11 @@ bool combus_links_init( const ComDevMap*       maps,
         NodeCom* com = openPort(maps[i], pinReg);
         if (!combus_link_build(maps[i], com, storage.runtime[i], storage.links[i])) {
             allUp = false;
+            continue;
         }
+
+            // Received frames are applied to the target ComBus, on the receiving links only
+        if (storage.links[i].rxCfg.has_value()) { storage.links[i].target = target; }
     }
 
         // --- 2. Pools, then the protocol layers ---
@@ -165,7 +178,37 @@ bool combus_links_init( const ComDevMap*       maps,
     combus_rx_register_pool(storage.rx, count);
     combus_protocol_init_all(storage.links, count);
 
+        // --- 3. Watch the receiving links ---
+    combus_links_watch(storage.runtime, count);
+
     return allUp;
+}
+
+
+// =============================================================================
+// 4. LINK WATCH
+// =============================================================================
+
+    // Per-link storage under watch — caller-owned, static (see combus_links_watch()).
+static const ComLinkRuntime* s_watched      = nullptr;
+static uint8_t               s_watchedCount = 0u;
+
+
+void combus_links_watch( const ComLinkRuntime* runtime, uint8_t count )
+{
+    s_watched      = runtime;
+    s_watchedCount = count;
+}
+
+
+bool combus_links_rx_lost()
+{
+    for (uint8_t i = 0u; i < s_watchedCount; ++i) {
+        if (s_watched[i].receives && !combus_rx_is_alive(i, s_watched[i].linkTimeoutMs)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 // EOF combus_links.cpp

@@ -12,9 +12,10 @@
 #   node. Any board owning a UART link (TX side, RX side, or full-duplex)
 #   may publish the local "UART link alive" state each cycle.  Other
 #   boards consume it through the same SYSTEM bus.
-# - Multi-instance handling: a node may own several UART links (one per
-#   `COMBUS_UART_TX=N` / `COMBUS_UART_RX=N` / `COMBUS_UART=N` flag).  All
-#   owners write to the SAME `UART_LINK_LOST` channel using the `both_or`
+# - Multi-instance handling: a node may own several receiving UART links
+#   (`COMBUS_UART=N` flag; a TX-only link cannot know the state of its peer
+#   and does not contribute).  com_rx_update() writes the SAME `UART_LINK_LOST`
+#   channel for all of them using the `both_or`
 #   direction — any owner reporting fault (true) wins on import.  This
 #   matches the "failsafe-by-default" contract: if even one UART link
 #   is down, the aggregated signal is "lost".  Per-link detail (which
@@ -30,14 +31,11 @@
 #   this cycle.  The reset is performed by the first proc in the
 #   consumer chain (cb_reset_fn) — see remote_link_fallback_chain.cpp.
 # - type: digital (bool).
-# - ALWAYS emitted (no `requires`): the combus-builder's `requires`
-#   mechanism is a pure AND (every listed flag must be present), which
-#   does not fit the "at least one of {COMBUS_UART_TX, COMBUS_UART_RX,
-#   COMBUS_UART}" semantics.  Emitting the channel always keeps the
-#   channel set and ID space stable across configurations; projects
-#   without any UART transport simply never write to the channel, so
-#   it stays at its default `high` (= lost) value with no effect on
-#   the aggregated REMOTE_LINK_LOST.
+# - ALWAYS emitted (no `requires`): keeps the channel set and ID space
+#   stable across configurations, whatever the UART flags.  com_rx_update()
+#   writes it every cycle (false when no link receives) and the
+#   REMOTE_LINK_LOST chain only reads it when a receiving link
+#   (COMBUS_UART) exists.
 # - This channel is a CONTRIBUTOR to REMOTE_LINK_LOST (chantier 12.5
 #   new design).  The REMOTE_LINK_LOST channel is the OR-aggregated
 #   result of all *_LINK_LOST contributors.  See failsafe_module.md

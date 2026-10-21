@@ -5,6 +5,7 @@
 
 #include "sys_manager.h"
 
+#include <core/system/com/com_manager.h>        // com_rx_update() — reception and link health
 #include <core/system/input/input_manager.h>    // input_refresh() — core acquisition
 #include <machines/system/input/input_update.h> // input_update(bus) — machine mapping
 #include <core/system/vbat/vbat.h>              // vbat_update() — orchestrates vbat_sense + FAILSAFE_VBAT
@@ -17,6 +18,10 @@
 // =============================================================================
 
 void sys_manager_update(ComBus& bus) {
+
+      // --- 0. Communication reception (applies received frames, publishes UART_LINK_LOST) ---
+      // First: the link health must be fresh when the REMOTE_LINK_LOST chain (step 4) reads it.
+    com_rx_update(bus);
 
       // --- 1. Input acquisition (writes to ComBus channels) ---
     input_refresh();     // core: physical acquisition
