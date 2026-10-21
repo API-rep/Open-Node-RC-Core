@@ -2,9 +2,10 @@
  * @file output_manager.h
  * @brief Umbrella output update dispatcher.
  *
- * @details Single call point for all output-side transport updates in the
- * main loop. Each output module (sound UART, future RF TX, etc.) is
- * dispatched from here, conditioned on its build flag.
+ * @details Single call point for all output-side updates in the main loop.
+ * The communication modules are dispatched through com_update()
+ * (core/system/com/com_manager.h); future output modules (local devices) are
+ * added here, conditioned on their build flag.
  * Degrades gracefully to a no-op when no output module is enabled.
  *****************************************************************************/
 #pragma once

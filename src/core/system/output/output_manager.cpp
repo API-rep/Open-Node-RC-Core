@@ -5,9 +5,7 @@
 
 #include "output_manager.h"
 
-#if defined(COMBUS_UART_TX) || defined(COMBUS_UART)
-  #include <core/system/combus/protocol/combus_tx.h>
-#endif
+#include <core/system/com/com_manager.h>   // com_update() — communication modules
 
 
 // =============================================================================
@@ -19,10 +17,8 @@
  */
 void output_update(const ComBus& bus) {
 
-	// --- ComBus UART TX (50 Hz timer-gated, non-blocking) ---
-#if defined(COMBUS_UART_TX) || defined(COMBUS_UART)
-  combus_tx_update(&bus);
-#endif
+	// --- Communication modules (ComBus TX, ...) ---
+  com_update(bus);
 
 }
 
