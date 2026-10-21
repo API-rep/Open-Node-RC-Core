@@ -3,8 +3,9 @@
  * @brief Layer-checked write accessors for ComBus channels.
  *
  * @details Write is skipped when the caller's ChanLayer does not have sufficient
- *   privileges for the channel's declared layer. In DEBUG_COMBUS builds a warning
- *   line is printed on every denied write.
+ *   privileges for the channel's declared layer. Every denied write is counted
+ *   (combus_denied_writes()) and reported once per channel through sys_log_warn()
+ *   (DEBUG_SYSTEM builds), so a wrong caller layer cannot stay silent.
  *****************************************************************************/
 
 #include "combus_access.h"
@@ -53,21 +54,36 @@ static inline bool _layer_ok(ChanLayer slot_layer, ChanLayer caller_layer) {
     return false;
 }
 
-#ifdef DEBUG_COMBUS
+    // Denied writes since boot, and one "already reported" bit per channel index
+    // and per type (a channel index is a uint8_t).
+static uint32_t s_deniedCount = 0u;
+static uint8_t  s_reportedAnalog[32]  = {};
+static uint8_t  s_reportedDigital[32] = {};
 
-static void _warn_denied(const char* label, uint8_t ch,
-                          ChanLayer caller, ChanLayer slot_layer) {
-    sys_log_warn("[COMBUS] write denied: %s ch=%u caller=%u layer=%u\n",
+
+/**
+ * @brief Count a denied write and report it once per channel.
+ *
+ * @details The count is always kept. The log line is printed the first time a
+ *   given channel is denied, whatever the build flags allow sys_log_warn() to
+ *   print, so a wrong caller layer shows up without flooding the log.
+ */
+
+static void _note_denied(const char* label, bool isAnalog, uint8_t ch,
+                         ChanLayer caller, ChanLayer slot_layer) {
+    ++s_deniedCount;
+
+    uint8_t&      reported = (isAnalog ? s_reportedAnalog : s_reportedDigital)[ch >> 3];
+    const uint8_t bit      = static_cast<uint8_t>(1u << (ch & 7u));
+    if (reported & bit) { return; }
+    reported |= bit;
+
+    sys_log_warn("[COMBUS] write denied (reported once): %s ch=%u caller=%u layer=%u\n",
                  label,
                  static_cast<unsigned>(ch),
                  static_cast<unsigned>(caller),
                  static_cast<unsigned>(slot_layer));
 }
-
-#else
-  // No-op in release builds — layer check still runs, logs are suppressed.
-  #define _warn_denied(label, ch, caller, slot_layer)  ((void)0)
-#endif
 
 
 // =============================================================================
@@ -79,7 +95,7 @@ bool combus_set_analog(ComBus& bus, AnalogComBusID ch, uint16_t val, ChanLayer c
 
     if (!_layer_ok(slot.layer, caller)) {
           // --- Write denied ---
-        _warn_denied("analog", static_cast<uint8_t>(ch), caller, slot.layer);
+        _note_denied("analog", true, static_cast<uint8_t>(ch), caller, slot.layer);
         return false;
     }
 
@@ -93,12 +109,17 @@ bool combus_set_digital(ComBus& bus, DigitalComBusID ch, bool val, ChanLayer cal
 
     if (!_layer_ok(slot.layer, caller)) {
           // --- Write denied ---
-        _warn_denied("digital", static_cast<uint8_t>(ch), caller, slot.layer);
+        _note_denied("digital", false, static_cast<uint8_t>(ch), caller, slot.layer);
         return false;
     }
 
     slot.value = val;
     return true;
+}
+
+
+uint32_t combus_denied_writes() {
+    return s_deniedCount;
 }
 
 

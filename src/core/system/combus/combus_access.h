@@ -5,7 +5,8 @@
  * @details Each write function compares the caller's `ChanLayer` against the
  *   channel's declared `layer` before writing. If the caller's layer does not
  *   have sufficient privileges, the write is skipped and returns `false`.
- *   In DEBUG_COMBUS builds a warning is also printed.
+ *   Every denied write is counted (combus_denied_writes()) and reported once per
+ *   channel through sys_log_warn() (DEBUG_SYSTEM builds).
  *
  *   This layer is optional — existing direct field writes remain valid during
  *   the migration. New code should use these accessors so layer violations
@@ -71,6 +72,20 @@ inline bool combus_set_digital(ComBus& bus, const std::optional<DigitalComBusID>
 
     return combus_set_digital(bus, ch.value(), val, caller);
 }
+
+
+
+/**
+ * @brief Number of writes denied by the layer check since boot.
+ *
+ * @details A non-zero count means some caller writes a channel with the wrong
+ *   layer: the value never reaches the bus. The first denial of each channel
+ *   is also logged by sys_log_warn() (DEBUG_SYSTEM builds).
+ *
+ * @return  Denied writes since boot (all channels, analog and digital).
+ */
+
+uint32_t combus_denied_writes();
 
 
 
