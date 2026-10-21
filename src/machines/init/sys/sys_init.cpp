@@ -4,6 +4,7 @@
  *****************************************************************************/
 
 #include "sys_init.h"
+#include "../hw/hw_init_com.h"   // hw_init_com() — UART port pool
 #include <config/config.h>
 #include <core/system/debug/logging/debug.h>
 #include <core/system/hw/transport/uart_com.h>
@@ -32,7 +33,10 @@ void sys_init() {
 	// --- 1. Pin registry (no deps: pure RAM init, first in sequence) ---
 	pin_reg_init(pinReg, PinRegMaxEntry);
 
-	// --- 2. Claim Serial0 in the UART pool if any debug or dashboard flag is set.
+	// --- 2. Register the shared UART port pool (before any uart_com_init() claim) ---
+	hw_init_com();
+
+	// --- 3. Claim Serial0 in the UART pool if any debug or dashboard flag is set.
 	// The duplicate guard in uart_com_init() will catch any accidental Serial0
 	// claim attempt by another module.
 	//
@@ -49,7 +53,7 @@ void sys_init() {
 
   sys_log_info("[SYSTEM] System initialisation ...\n");
 
-	// --- 3. Internal environment data parsing ---
+	// --- 4. Internal environment data parsing ---
 	// Logic using comBus or bus limits goes here
 	
   combus_init(static_cast<uint8_t>(AnalogComBusID::CH_COUNT),

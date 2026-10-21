@@ -44,9 +44,6 @@ static void checkHwConfig() {
 void hw_init() {
   hw_log_info("[HW] Hardware init start\n");
 
-	// --- 0. Communication transport init (pin claim — must be first) ---
-  hw_init_com();
-
 	// --- 1. Driver init ---
   hw_log_info("  [HW] Driver init\n");
   dcDriverInit(machine);

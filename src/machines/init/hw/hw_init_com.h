@@ -2,11 +2,9 @@
  * @file hw_init_com.h
  * @brief Communication transport hardware initialisation.
  *
- * @details Opens the ComBus UART port and claims its GPIO pins before any
- *   other hardware peripheral is initialised — pin claim must be first to
- *   ensure no conflict with driver, servo, or signal pin allocations.
- *
- *   Called as the first step of hw_init().
+ * @details Registers the shared UART port pool that every uart_com_init() claims
+ *   a slot from (the debug serial, the ComBus port). Must run before the first
+ *   port is claimed: it is called at the start of sys_init().
  *****************************************************************************/
 #pragma once
 
@@ -15,7 +13,7 @@
 // 1. INIT ROUTINE
 // =============================================================================
 
-	/// Open the ComBus UART transport port (pin claim + serial.begin).
+	/// Register the shared UART port pool (must precede every uart_com_init()).
 void hw_init_com();
 
 // EOF hw_init_com.h
