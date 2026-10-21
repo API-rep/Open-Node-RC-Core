@@ -24,6 +24,12 @@
  *     channels, a BOARD link gets the SYSTEM identity.  Same TX↔RX jumper as
  *     Group B (runs after test_loopback_init).
  *
+ *   Group I — links from their description (chantier 0.4):
+ *     combus_link_check() and combus_link_build() turn a ComDevMap (a ComDev
+ *     wired on a ComPort) into a ComBusLink: layer from the scope, frame size
+ *     from the matching view, TX / RX from the role of the end, and the
+ *     refusals. No wiring needed: the port is never opened.
+ *
  *   Group C — view identity (Phase 3 / A13):
  *     Validates that the 3 view-specific enums (AnalogComBusID,
  *     AnalogComBusSystemID, AnalogComBusBaseID and their digital
@@ -69,6 +75,7 @@
 #include <core/system/combus/protocol/frame/combus_frame_defs.h>
 #include <core/system/combus/combus_access.h>          // combus_set_digital() — generic accessor
 #include <core/system/combus/protocol/combus_protocol.h> // ComBusLink, combus_protocol_init() — Group E
+#include <core/system/combus/protocol/combus_links.h>    // combus_link_check(), combus_link_build() — Group I
 #include <core/system/combus/protocol/frame/combus_handshake.h> // combus_handshake_compareAndLog() — Group E
 #include <core/system/combus/protocol/frame/combus_handshake_rx.h> // combus_handshake_compareAndLog() — Group E (RX-side declaration)
 
@@ -740,6 +747,126 @@ static void test_md5_resolution_board(void) {
     TEST_ASSERT_EQUAL_UINT8_ARRAY(combus::wire::kCombusComBusMd5, ctx.expectedMd5, 16u);
 }
 
+// =============================================================================
+// GROUP I — LINKS FROM THEIR DESCRIPTION (chantier 0.4)
+//
+// combus_link_build() fills a ComBusLink from a ComDevMap without opening any
+// port, so these tests need no wiring. s_unusedCom (Group E) stands for the
+// transport that combus_links_init() would have opened.
+// =============================================================================
+
+static constexpr ComProtocolCfg kTestProtocol = { 115200u, 50u };
+
+static constexpr ComDev kTestDevUni = {
+    "test_uni", LinkScope::INTER_NODE, LinkType::UNIDIRECTIONAL,
+    &kTestProtocol, LinkActivation::ALWAYS, nullptr
+};
+static constexpr ComDev kTestDevBi = {
+    "test_bi", LinkScope::INTRA_NODE, LinkType::BIDIRECTIONAL,
+    &kTestProtocol, LinkActivation::ALWAYS, nullptr
+};
+
+static const ComPort s_testPort = ComPort::makeUart("test", { 2, kTxPin, kRxPin, 115200u });
+
+static ComLinkRuntime s_testRuntime;
+
+/** One-way INTER_NODE link wired TX: BASE layer, BASE frame size, TX only. */
+static void test_link_build_inter_node_tx(void) {
+    const ComDevMap map = { &kTestDevUni, &s_testPort, LinkEnd::TX };
+    ComBusLink link{};
+
+    TEST_ASSERT_TRUE(combus_link_build(map, &s_unusedCom, s_testRuntime, link));
+
+    TEST_ASSERT_TRUE(link.layer == ChanLayer::BASE);
+    TEST_ASSERT_TRUE(link.com == &s_unusedCom);
+    TEST_ASSERT_TRUE(link.handshakeCtx == &s_testRuntime.handshake);
+    TEST_ASSERT_EQUAL_STRING("test_uni", link.name);
+    TEST_ASSERT_TRUE(link.txCfg.has_value());
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(AnalogComBusBaseID::CH_COUNT),  link.txCfg->nAnalog);
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DigitalComBusBaseID::CH_COUNT), link.txCfg->nDigital);
+    TEST_ASSERT_EQUAL_UINT32(50u, link.txHz);
+    TEST_ASSERT_FALSE(link.rxCfg.has_value());
+}
+
+/** One-way link wired RX: RX only, with the runtime buffers. */
+static void test_link_build_rx_only(void) {
+    const ComDevMap map = { &kTestDevUni, &s_testPort, LinkEnd::RX };
+    ComBusLink link{};
+
+    TEST_ASSERT_TRUE(combus_link_build(map, &s_unusedCom, s_testRuntime, link));
+
+    TEST_ASSERT_FALSE(link.txCfg.has_value());
+    TEST_ASSERT_TRUE(link.rxCfg.has_value());
+    TEST_ASSERT_TRUE(link.analogBuf  == s_testRuntime.analogRx);
+    TEST_ASSERT_TRUE(link.digitalBuf == s_testRuntime.digitalRx);
+}
+
+/** Two-way INTRA_NODE link wired TX_RX: SYSTEM layer, SYSTEM frame size, TX and RX. */
+static void test_link_build_intra_node_tx_rx(void) {
+    const ComDevMap map = { &kTestDevBi, &s_testPort, LinkEnd::TX_RX };
+    ComBusLink link{};
+
+    TEST_ASSERT_TRUE(combus_link_build(map, &s_unusedCom, s_testRuntime, link));
+
+    TEST_ASSERT_TRUE(link.layer == ChanLayer::SYSTEM);
+    TEST_ASSERT_TRUE(link.txCfg.has_value());
+    TEST_ASSERT_TRUE(link.rxCfg.has_value());
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(AnalogComBusSystemID::CH_COUNT),  link.txCfg->nAnalog);
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DigitalComBusSystemID::CH_COUNT), link.rxCfg->nDigital);
+}
+
+/** The scope-to-layer conversion is the single bridge to ChanLayer. */
+static void test_link_scope_layer(void) {
+    TEST_ASSERT_TRUE(linkScopeLayer(LinkScope::INTER_NODE) == ChanLayer::BASE);
+    TEST_ASSERT_TRUE(linkScopeLayer(LinkScope::INTRA_NODE) == ChanLayer::SYSTEM);
+}
+
+/** Wirings that must be refused, and a descriptor left untouched on refusal. */
+static void test_link_build_refuses_bad_wiring(void) {
+    ComBusLink link{};
+    link.name = "untouched";
+
+    // Bidirectional link not wired TX_RX.
+    const ComDevMap biOnTx = { &kTestDevBi, &s_testPort, LinkEnd::TX };
+    TEST_ASSERT_FALSE(combus_link_check(biOnTx));
+
+    // Unidirectional link wired TX_RX.
+    const ComDevMap uniOnTxRx = { &kTestDevUni, &s_testPort, LinkEnd::TX_RX };
+    TEST_ASSERT_FALSE(combus_link_check(uniOnTxRx));
+
+    // Activation other than ALWAYS (not supported yet).
+    static constexpr ComDev coupled = {
+        "test_coupled", LinkScope::INTER_NODE, LinkType::UNIDIRECTIONAL,
+        &kTestProtocol, LinkActivation::ON_COUPLING, nullptr
+    };
+    const ComDevMap onCoupling = { &coupled, &s_testPort, LinkEnd::TX };
+    TEST_ASSERT_FALSE(combus_link_check(onCoupling));
+
+    // Line rate above the port ceiling.
+    static constexpr ComProtocolCfg tooFast = { 921600u, 50u };
+    static constexpr ComDev fast = {
+        "test_fast", LinkScope::INTER_NODE, LinkType::UNIDIRECTIONAL,
+        &tooFast, LinkActivation::ALWAYS, nullptr
+    };
+    const ComDevMap overRate = { &fast, &s_testPort, LinkEnd::TX };
+    TEST_ASSERT_FALSE(combus_link_check(overRate));
+
+    // Transmitting end without a transmit rate.
+    static constexpr ComProtocolCfg noHz = { 115200u, 0u };
+    static constexpr ComDev silent = {
+        "test_silent", LinkScope::INTER_NODE, LinkType::UNIDIRECTIONAL,
+        &noHz, LinkActivation::ALWAYS, nullptr
+    };
+    const ComDevMap noTxHz = { &silent, &s_testPort, LinkEnd::TX };
+    TEST_ASSERT_FALSE(combus_link_check(noTxHz));
+
+    // Null transport: combus_link_build() refuses and does not write the descriptor.
+    const ComDevMap fine = { &kTestDevUni, &s_testPort, LinkEnd::TX };
+    TEST_ASSERT_FALSE(combus_link_build(fine, nullptr, s_testRuntime, link));
+    TEST_ASSERT_EQUAL_STRING("untouched", link.name);
+}
+
+
 // Chantier 12.6 (cleanup): Group F (FS1 failsafe re-arm) REMOVED — link
 // health is now monitored by the per-backend *_LINK_LOST contributors
 // (PS4_DS4_BT_LINK_LOST, UART_LINK_LOST, ...) aggregated into
@@ -834,6 +961,13 @@ void setup() {
     RUN_TEST(test_md5_resolution_system);
     RUN_TEST(test_md5_resolution_board);
     RUN_TEST(test_md5_compare_match_with_correct_local);
+
+    // --- Group I: links from their description (chantier 0.4) ---
+    RUN_TEST(test_link_build_inter_node_tx);
+    RUN_TEST(test_link_build_rx_only);
+    RUN_TEST(test_link_build_intra_node_tx_rx);
+    RUN_TEST(test_link_scope_layer);
+    RUN_TEST(test_link_build_refuses_bad_wiring);
 
     // Chantier 12.6: Group F (FS1 failsafe re-arm) removed — see
     // header docstring above (5 independent test groups A/B/C/D/E).

@@ -144,17 +144,17 @@
   
   
   // =============================================================================
-  // 3. UART PIN TABLE
+  // 3. COMMUNICATION PORTS
   // =============================================================================
-  
+
   // Values from ESP32_8M_6S.h, included via envCfg.h → boards.h.
-  const UartPinCfg uartPins[] = {
-  	{ Txd0Pin,   Rxd0Pin   },  // [0] UART0 — USB / debug serial
-  	{ -1,        -1        },  // [1] UART1 — unassigned on this board
-  	{ TxdExtPin, RxdExtPin },  // [2] UART2 — extension port / ComBus TX link
+  // Port names are the silkscreen texts of the board (UART1 is not wired on it).
+  const ComPort comPorts[] = {
+  	ComPort::makeUart("USB",      { 0, Txd0Pin,   Rxd0Pin,   UartMaxBaud }),  // UART0 — USB / debug serial
+  	ComPort::makeUart("COM/GPIO", { 2, TxdExtPin, RxdExtPin, UartMaxBaud }),  // UART2 — extension port / ComBus link
   };
-  
-  const uint8_t uartPinsCount = static_cast<uint8_t>(sizeof(uartPins) / sizeof(uartPins[0]));
+
+  const uint8_t comPortsCount = static_cast<uint8_t>(sizeof(comPorts) / sizeof(comPorts[0]));
   
 #endif  // BOARD_ESP32_8M_6S
 

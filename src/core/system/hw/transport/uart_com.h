@@ -83,7 +83,7 @@ void uart_com_register_pool(UartCtx* buffer, uint8_t capacity);
 /**
  * @brief ESP32 exposes 3 UART peripherals (Serial/Serial1/Serial2), matching
  *   uart_serial_for(). Fixed architectural fact, useful when sizing a
- *   board's own uartPins[] table.
+ *   board's own comPorts[] table.
  */
 static constexpr uint8_t UartHwChannelMax = 3u;
 

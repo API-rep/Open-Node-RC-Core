@@ -8,7 +8,7 @@
  * wrapper.
  *
  * The transport handle and its configuration are passed in as a single
- * ComBusLink descriptor (see section 1 below).  The function inspects
+ * ComBusLink descriptor (see section 2 below).  The function inspects
  * link->txCfg and link->rxCfg to decide which protocol layers to bring up:
  *   - txCfg present  → combus_tx_init() is called
  *   - rxCfg present  → combus_rx_init() is called
@@ -18,16 +18,18 @@
  * static storage duration because the RX module holds a live pointer to them.
  * Pass nullptr for the inactive direction's buffers.
  *
- * Env-level callers invoke the 0-param combus_uart_init() defined in
- * init/com/combus_uart_init.h, which fills env-specific config and buffers
- * then delegates here.
+ * Links are normally described with a ComDev (the logical link) and a
+ * ComDevMap (its wiring on a board's ComPort) and brought up by
+ * combus_links_init() (combus_links.h), which opens the ports, builds the
+ * ComBusLink descriptors and delegates here. Env-level callers invoke the
+ * 0-param combus_uart_init() defined in init/com/combus_uart_init.h.
  *
- * Typical TX-only caller (env wrapper):
+ * Typical TX-only caller (manual setup, without ComDev):
  * @code
- *   // Resolve UART channel + pins from the active COMBUS_UART* flag, then
+ *   // Resolve UART channel + pins from the board's ComPort, then
  *   // open the port directly via uart_com_init() (no single-link helper).
  *   constexpr int uartCh    = COMBUS_UART_TX;   // or COMBUS_UART
- *   const     int uartTxPin = uartPins[uartCh].tx;
+ *   const     int uartTxPin = port.uart.txPin;  // port : ComPort of UART uartCh
  *   constexpr int uartRxPin = -1;
  *   NodeCom* com = uart_com_init(uart_serial_for(uartCh), ComBusUartBaud,
  *                                uartTxPin, uartRxPin, "combus", &pinReg);
@@ -41,13 +43,13 @@
  *   combus_protocol_init(&link);
  * @endcode
  *
- * Typical RX-only caller (env wrapper):
+ * Typical RX-only caller (manual setup, without ComDev):
  * @code
- *   // Resolve UART channel + pins from the active COMBUS_UART* flag, then
+ *   // Resolve UART channel + pins from the board's ComPort, then
  *   // open the port directly via uart_com_init() (no single-link helper).
  *   constexpr int uartCh    = COMBUS_UART_RX;   // or COMBUS_UART
  *   constexpr int uartTxPin = -1;
- *   const     int uartRxPin = uartPins[uartCh].rx;
+ *   const     int uartRxPin = port.uart.rxPin;  // port : ComPort of UART uartCh
  *   NodeCom* com = uart_com_init(uart_serial_for(uartCh), SOUND_UART_BAUD,
  *                                uartTxPin, uartRxPin, "combus", &pinReg);
  *
@@ -76,7 +78,125 @@
 
 
 // =============================================================================
-// 1. COMBUS LINK DESCRIPTOR
+// 1. LINK DESCRIPTION  (ComDev / ComDevMap)
+// =============================================================================
+//
+//   ComPort    (node_com.h)  the hardware of a board.
+//   ComDev                   a logical link: what it carries and how.
+//   ComDevMap                the wiring of one board: a ComDev on a ComPort.
+//
+//   A ComDev is shared by the boards it links (and, for inter-node links, by
+//   the nodes), each side wiring it on its own port with its own ComDevMap.
+//   All three are purely descriptive and Flash-resident.  combus_links.h turns
+//   them into ComBusLink descriptors (section 2) at init.
+//
+
+/**
+ * @brief Where a link goes: between nodes or between the boards of one node.
+ *
+ * @details Selects the channel set carried by the link (see linkScopeLayer()).
+ */
+
+enum class LinkScope : uint8_t {
+    INTER_NODE,     ///< between nodes (remote, trailer, ...) — carries the BASE channels
+    INTRA_NODE      ///< between the boards of one node — carries the SYSTEM channels
+};
+
+
+/**
+ * @brief Whether a link carries data one way or both ways.
+ *
+ * @details No direction is given here: the direction of a unidirectional
+ *   link is the role of each end (LinkEnd), set by each board's ComDevMap.
+ */
+
+enum class LinkType : uint8_t {
+    UNIDIRECTIONAL,
+    BIDIRECTIONAL
+};
+
+
+/**
+ * @brief Role of one end of a link, as wired by one board.
+ */
+
+enum class LinkEnd : uint8_t {
+    TX,             ///< this end only transmits
+    RX,             ///< this end only receives
+    TX_RX           ///< this end transmits and receives (required by BIDIRECTIONAL)
+};
+
+
+/**
+ * @brief When a link is active.
+ *
+ * @details ON_COUPLING is reserved for the coupling of two elements (see
+ *   ComCoupling); it is refused for now.
+ */
+
+enum class LinkActivation : uint8_t {
+    ALWAYS,
+    ON_COUPLING
+};
+
+
+/**
+ * @brief Protocol parameters of a link, agreed by both ends.
+ */
+
+struct ComProtocolCfg {
+    uint32_t rate;      ///< line rate (baud for a UART), identical at both ends
+    uint32_t txHz;      ///< frame transmit rate (Hz) — used where the end transmits
+};
+
+
+struct ComCoupling;     // trigger channel and expected value — defined with the coupling logic
+
+
+/**
+ * @brief A logical link of a node (or between nodes).
+ *
+ * @details Does not name a port and does not list channels: the channel set
+ *   follows the scope.
+ */
+
+struct ComDev {
+    const char*            name;        ///< tag for logs and debug output
+    LinkScope              scope;
+    LinkType               type;
+    const ComProtocolCfg*  protocol;
+    LinkActivation         activation;  ///< only ALWAYS is accepted for now
+    const ComCoupling*     coupling;    ///< nullptr unless activation == ON_COUPLING
+};
+
+
+/**
+ * @brief The wiring of a ComDev on one board: which port, and which end.
+ */
+
+struct ComDevMap {
+    const ComDev*   dev;
+    const ComPort*  port;
+    LinkEnd         end;                ///< BIDIRECTIONAL requires TX_RX
+};
+
+
+/**
+ * @brief Channel set (ChanLayer) carried by a link of the given scope.
+ *
+ * @param scope  Scope of the link.
+ * @return       ChanLayer::BASE for INTER_NODE, ChanLayer::SYSTEM for INTRA_NODE.
+ */
+
+constexpr ChanLayer linkScopeLayer( LinkScope scope )
+{
+    return (scope == LinkScope::INTER_NODE) ? ChanLayer::BASE : ChanLayer::SYSTEM;
+}
+
+
+
+// =============================================================================
+// 2. COMBUS LINK DESCRIPTOR
 // =============================================================================
 
 /**
@@ -121,7 +241,7 @@ struct ComBusLink {
 
 
 // =============================================================================
-// 2. PUBLIC API
+// 3. PUBLIC API
 // =============================================================================
 
 /**
@@ -176,7 +296,7 @@ void combus_protocol_init_all( ComBusLink* links, uint8_t count );
  *
  * @param linkIdx  Index of this link in the per-link state array
  *                 (allocated by combus_protocol_init_all()).
- * @param link     Fully-populated ComBusLink descriptor (see section 1).
+ * @param link     Fully-populated ComBusLink descriptor (see section 2).
  *                 Must outlive the program — the protocol layers retain
  *                 pointers to its members.
  */

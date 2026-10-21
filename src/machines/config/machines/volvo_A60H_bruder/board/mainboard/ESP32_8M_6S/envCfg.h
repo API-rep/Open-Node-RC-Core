@@ -27,7 +27,8 @@
   #include <defs/defs.h>
   
   #include <core/system/combus/combus_defs.h>
-  
+  #include <core/system/hw/node_com.h>               // ComPort
+
   // Board-specific hardware definitions (pins, ports, constants)
   #include <machines/config/boards/ESP32_8M_6S.h>
   
@@ -121,22 +122,19 @@
   
   
   // =============================================================================
-  // UART pin table
+  // Communication ports
   // =============================================================================
-  
+
   /**
-   * @brief UART channel pin assignments for the Volvo A60H Bruder (ESP32_8M_6S board).
+   * @brief Communication ports of the ESP32_8M_6S board (Volvo A60H Bruder).
    *
-   * @details Indexed by UART channel number:
-   *   [0] UART0 — USB / debug serial  (Txd0Pin / Rxd0Pin)
-   *   [1] UART1 — unassigned on this board
-   *   [2] UART2 — extension port / ComBus TX link  (TxdExtPin / RxdExtPin)
-   *
-   *   Values come from the active board header (ESP32_8M_6S.h) included above.
-   *   Init modules select the correct port via COMBUS_UART_TX=N or COMBUS_UART=N.
+   * @details One entry per port, in no particular order; a UART is found by its
+   *   `uart.index`. Values come from the active board header (ESP32_8M_6S.h)
+   *   included above. The ports in use are chosen by the init modules, via
+   *   COMBUS_UART_TX=N or COMBUS_UART=N (N = UART index).
    */
-  extern const UartPinCfg uartPins[];
-  extern const uint8_t    uartPinsCount;
+  extern const ComPort comPorts[];
+  extern const uint8_t comPortsCount;
   
 #endif  // BOARD_ESP32_8M_6S
 

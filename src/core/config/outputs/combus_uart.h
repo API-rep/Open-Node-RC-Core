@@ -17,6 +17,7 @@
 
 #include <stdint.h>
 #include <core/system/combus/protocol/frame/combus_frame.h>
+#include <core/system/combus/protocol/combus_protocol.h>   // ComProtocolCfg, ComDev
 #include <core/config/machines/machine_type.h>        // AnalogComBusBaseID, DigitalComBusBaseID (transitive via combus_base.h)
 
 /// UART transport physical cap — chosen as uint8_t safety ceiling (no hardware limit).
@@ -91,5 +92,25 @@ static_assert(ComBusUartFrameSize <= CombusPhysUartMax,
   // --- Frame rate: must be in valid protocol range ---
 static_assert(ComBusUartTxHz > 0u && ComBusUartTxHz <= ComBusUartMaxTxHz,
               "ComBusUartTxHz out of range [1, ComBusUartMaxTxHz]");
+
+
+// =============================================================================
+// 5. COMDEV OF THE COMBUS UART LINK
+// =============================================================================
+
+	/// Protocol parameters of the ComBus UART link, from the constants above.
+static constexpr ComProtocolCfg kComBusUartProtocol = { ComBusUartBaud, ComBusUartTxHz };
+
+	/// One-way ComBus UART link (COMBUS_UART_TX=N): the board wires it as TX.
+static constexpr ComDev kComDevUartUni = {
+    "combus", LinkScope::INTER_NODE, LinkType::UNIDIRECTIONAL,
+    &kComBusUartProtocol, LinkActivation::ALWAYS, nullptr
+};
+
+	/// Two-way ComBus UART link (COMBUS_UART=N): the board wires it as TX_RX.
+static constexpr ComDev kComDevUartBi = {
+    "combus", LinkScope::INTER_NODE, LinkType::BIDIRECTIONAL,
+    &kComBusUartProtocol, LinkActivation::ALWAYS, nullptr
+};
 
 // EOF combus_uart.h

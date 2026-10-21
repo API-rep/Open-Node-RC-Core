@@ -1,110 +1,77 @@
 /******************************************************************************
  * @file combus_uart_init.cpp
  * @brief ComBus UART transport env init — machine env implementation.
+ *
+ * @details Chooses the ComDev and the board port from the COMBUS_UART* build
+ *   flag, then hands the wiring to combus_links_init(), which opens the port and
+ *   brings the link up. The flags are transitional: they select the wiring
+ *   until the board declares its own ComDevMap table.
  *****************************************************************************/
 
 #if defined(COMBUS_UART_TX) || defined(COMBUS_UART)
 
 #include "combus_uart_init.h"
 
-#include <machines/config/config.h>   // transitively includes <combus_base_ids.h> via dumper_truck/combus/combus_ids_base.h
-#include <core/config/outputs/combus_uart.h>         // ComBusUartBaud, ComBusUartTxHz, UartMaxBaud
-#include <core/system/combus/protocol/combus_protocol.h>
-#include <core/system/combus/protocol/combus_tx.h>    // CombusTxState, combus_tx_register_pool
-#include <core/system/combus/protocol/combus_rx.h>    // CombusRxState, combus_rx_register_pool
-#include <core/system/combus/protocol/frame/combus_handshake.h>  // CombusHandshakeContext (P3)
-#include <core/system/hw/transport/uart_com.h>
+#include <machines/config/config.h>   // comPorts[], UartMaxBaud (board envCfg)
+#include <core/config/outputs/combus_uart.h>         // ComBusUartBaud, kComDevUartUni, kComDevUartBi
+#include <core/system/combus/protocol/combus_links.h>
 #include <core/system/debug/logging/debug.h>
 #include "../sys/sys_init.h"          // pinReg (machine env)
 
 
 // =============================================================================
-// 1. COMBUS UART INIT
+// 1. BOARD PORT LOOKUP
 // =============================================================================
 
-// Phase 4 (A14) + Phase 5 (A15): wire dimensions are derived from the
-// Base view's ID enums directly. Since A15, each TYPE has its own
-// 0-based counter (analog and digital are independently numbered), so
-// CH_COUNT for each enum equals exactly the count of channels of that
-// type in the Base view — no subtraction needed.
-static constexpr uint8_t kBaseAnalogCount =
-    static_cast<uint8_t>(AnalogComBusBaseID::CH_COUNT);
-static constexpr uint8_t kBaseDigitalCount =
-    static_cast<uint8_t>(DigitalComBusBaseID::CH_COUNT);
+    // The board port that is UART number `uartIdx`, or nullptr if the board has none.
+static const ComPort* findUartPort( uint8_t uartIdx )
+{
+    for (uint8_t i = 0u; i < comPortsCount; ++i) {
+        if (comPorts[i].type == ComPortType::UART && comPorts[i].uart.index == uartIdx) {
+            return &comPorts[i];
+        }
+    }
+    return nullptr;
+}
+
+
+// =============================================================================
+// 2. COMBUS UART INIT
+// =============================================================================
 
 void combus_uart_init()
 {
     static_assert(ComBusUartBaud <= UartMaxBaud,
                   "ComBusUartBaud exceeds board hardware ceiling UartMaxBaud");
 
-        // P3 — caller-owned per-link handshake context.  Zero-initialised
-        //    at boot, shared between TX and RX of the same ComBus link
-        //    by combus_protocol_init().  Multiple independent ComBus
-        //    interfaces must each declare their own context.
-    static CombusHandshakeContext s_linkHandshakeCtx = {};
-
-    constexpr ComBusFrameCfg txCfg = {
-        kBaseAnalogCount,                                 ///< Analog wire channels only — not local sound-node channels.
-        kBaseDigitalCount,                                ///< Digital wire channels only — not local sound-node channels.
-    };
-
-
-    // --- Resolve UART channel and GPIO pins from build flag (was in uart_init()) ---
+        // --- Resolve the ComDev, the UART number and the role of this end from the build flag ---
     #if defined(COMBUS_UART)
-        constexpr int uartCh    = COMBUS_UART;
-        const     int uartTxPin = uartPins[uartCh].tx;
-        const     int uartRxPin = uartPins[uartCh].rx;
-    #elif defined(COMBUS_UART_TX)
-        constexpr int uartCh    = COMBUS_UART_TX;
-        const     int uartTxPin = uartPins[uartCh].tx;
-        constexpr int uartRxPin = -1;
+        constexpr uint8_t uartCh = COMBUS_UART;
+        const ComDev*     dev    = &kComDevUartBi;        // full-duplex
+        constexpr LinkEnd end    = LinkEnd::TX_RX;
+    #else
+        constexpr uint8_t uartCh = COMBUS_UART_TX;
+        const ComDev*     dev    = &kComDevUartUni;       // TX only
+        constexpr LinkEnd end    = LinkEnd::TX;
     #endif
 
-    // --- Open the ComBus UART port directly (no single-link helper in uart_com.h) ---
-    NodeCom* com = uart_com_init(uart_serial_for(uartCh), ComBusUartBaud,
-                                 uartTxPin, uartRxPin, "combus", &pinReg);
+    const ComPort* port = findUartPort(uartCh);
+    if (port == nullptr) {
+        sys_log_err("[COMBUS_UART] this board has no UART%u port — ComBus link not started\n", (unsigned)uartCh);
+        return;
+    }
 
-    // --- Build the ComBusLink descriptor (single source of truth) ---
-    ComBusLink link{};
-    link.com          = com;
-    link.layer        = ChanLayer::BASE;     ///< See audit note in commit message — BASE matches the
-                                             ///< "Base" suffix in AnalogComBusBaseID / kBaseAnalogCount.
-                                             ///< LY2 — also selects the wire-end counters at TX init
-                                             ///< (BASE → CH_COUNT of the Base view).
-    link.handshakeCtx = &s_linkHandshakeCtx;
-    link.name         = "combus";
+        // --- Wiring of the link, and the caller-owned storage for it (its size IS the link count) ---
+    const ComDevMap maps[] = { { dev, port, end } };
+    constexpr uint8_t kLinkCount = 1u;
 
-    // --- TX side: active when COMBUS_UART_TX or full-duplex COMBUS_UART ---
-    #if defined(COMBUS_UART_TX) || defined(COMBUS_UART)
-      link.txCfg = txCfg;
-      link.txHz  = ComBusUartTxHz;
-    #endif
+    static CombusTxState  txStates[kLinkCount];
+    static CombusRxState  rxStates[kLinkCount];
+    static ComLinkRuntime runtime[kLinkCount];
+    static ComBusLink     links[kLinkCount];
+    const ComLinksStorage storage = { txStates, rxStates, runtime, links };
 
-    // --- RX side: active only when full-duplex COMBUS_UART ---
-    #if defined(COMBUS_UART)
-      static uint16_t s_analog[kBaseAnalogCount];
-      static bool     s_digital[kBaseDigitalCount];
-      constexpr ComBusFrameCfg rxCfg = {
-          kBaseAnalogCount,                               ///< Analog wire channels only.
-          kBaseDigitalCount,                              ///< Digital wire channels only.
-      };
-      link.rxCfg      = rxCfg;
-      link.analogBuf  = s_analog;
-      link.digitalBuf = s_digital;
-    #endif
-
-    // --- Caller-owned link array — its size IS the link count ---
-    ComBusLink links[] = { link };
-
-    // --- Caller-owned TX state pool — its size IS the link count ---
-    static CombusTxState txStates[sizeof(links) / sizeof(links[0])];
-    combus_tx_register_pool(txStates, sizeof(links) / sizeof(links[0]));
-
-    // --- Caller-owned RX state pool — its size IS the link count ---
-    static CombusRxState rxStates[sizeof(links) / sizeof(links[0])];
-    combus_rx_register_pool(rxStates, sizeof(links) / sizeof(links[0]));
-
-    combus_protocol_init_all(links, sizeof(links) / sizeof(links[0]));
+    combus_links_init(maps, kLinkCount, storage, &pinReg);
 }
 
 #endif  // COMBUS_UART_TX / COMBUS_UART
