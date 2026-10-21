@@ -73,7 +73,7 @@ src/core/system/com/link_health/
 
 **Réarmement** : publié selon le RX-timeout (pas de frame dans la fenêtre → `true`).
 
-**Gating** : `#if defined(COMBUS_UART_TX) || defined(COMBUS_UART_RX) || defined(COMBUS_UART)`
+**Gating** : `#if defined(COMBUS_UART)` (lien qui reçoit ; un lien TX seul ne contribue pas)
 
 ---
 
@@ -99,14 +99,14 @@ src/core/system/com/link_health/
 ```cpp
 static constexpr CbRunlevelCfg kRemoteLinkRunlevelCfg {
     .high  = RunLevel::IDLE,        // REMOTE_LINK_LOST 0→1 → write IDLE
-    .low   = RunLevel::STARTING,    // REMOTE_LINK_LOST 1→0 → write STARTING (recovery)
+    .low   = std::nullopt,          // REMOTE_LINK_LOST 1→0 → no write (stays IDLE until KEY)
     .claim = true,                  // Block KEY_ACTIVE proc on link loss
 };
 ```
 
 **Comportement** :
 - Front montant (lien perdu) → `RunLevel::IDLE` + claim
-- Front descendant (lien retrouvé) → `RunLevel::STARTING` (pas de cold-start requis, reprise directe)
+- Front descendant (lien retrouvé) → aucune écriture : la machine reste en `IDLE` et c'est l'opérateur qui la redémarre avec la clé (Triangle). Même chose au premier branchement de la manette après le démarrage.
 
 ---
 

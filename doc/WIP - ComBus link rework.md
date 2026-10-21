@@ -18,7 +18,7 @@ Base conservée : le protocole est déjà multi-liens et indépendant du transpo
 |---|---|---|
 | **NodeCom** | envoyer et lire des octets (existe) | `core/system/hw/node_com.h` |
 | **ComPort** | le matériel, port physique sur PCB ou logique interne : une union balisée par `ComPortType` (UART, I2C, CAN ; ESP-NOW pour un port logique interne sans broches ; chaque type a ses broches (si port physique) et son plafond : débit, fréquence d'horloge). La liste d'une carte peut être exhaustive ; seuls les ports utilisés sont initialisés (et leurs broches réservées) | structure dans `core/system/hw/node_com.h` ; tableau dans la config de la carte |
-| **ComDev** | une liaison logique de ComPort : nom, **portée** (`INTER_NODE` ↔ `ChanLayer::BASE`, `INTRA_NODE` ↔ `SYSTEM`), `LinkType` (unidirectionnel ou bidirectionnel, **sans sens à ce niveau**), protocole (pointeur vers une config : débit, fréquence d'émission), activation (`ALWAYS` ou `ON_COUPLING`) et couplage. Pas de liste de channels : l'ensemble suit la portée | structure dans `core/system/combus/protocol/combus_protocol.h` ; instances : voir « Où vivent les `ComDev` » |
+| **ComDev** | une liaison logique de ComPort : nom, **portée** (`INTER_NODE` ↔ `ChanLayer::BASE`, `INTRA_NODE` ↔ `SYSTEM`), `LinkType` (unidirectionnel ou bidirectionnel, **sans sens à ce niveau**), protocole (pointeur vers une config : débit, fréquence d'émission, délai de perte du lien), activation (`ALWAYS` ou `ON_COUPLING`) et couplage. Pas de liste de channels : l'ensemble suit la portée | structure dans `core/system/combus/protocol/combus_protocol.h` ; instances : voir « Où vivent les `ComDev` » |
 | **ComDevMap** | le branchement d'un `ComPort` carte sur un `ComDev`, et le rôle du bout (`LinkEnd` : `TX`, `RX`, `TX_RX`). Le sens d'un lien unidirectionnel est donc propre à chaque carte ; un bidirectionnel impose `TX_RX` | config de la carte |
 
 - Les structures vivent en tête des **fichiers maîtres de leur thème** (`include/struct/` est déprécié). `ChanLayer` reste le nom partout ailleurs (générateur, `.cb`, docs) ; la conversion portée vers `ChanLayer` est unique, dans le `ComDev`.
@@ -99,6 +99,7 @@ La table de correspondance entrée vers channel (`inputs_map`) devient elle auss
 - **État de lien** (inconnu, stable, next) : les trames reçues ne sont pas appliquées tant que le mode n'est pas choisi ; sur un lien bidirectionnel, l'émission attend aussi.
 - **Le mode est fixé une fois** au handshake et vaut jusqu'à la perte de lien suivie d'une reconnexion. La perte de lien (délai, failsafe) remet l'état à « inconnu ».
 - **ACK périodique** (à cadence lente, par exemple 1 Hz) : il prouve que **le pair me reçoit** (les trames de données ne prouvent que l'inverse) et détecte un pair reflashé. « Hors contrôle » seulement après plusieurs ACK manqués. Côté machine, la sécurité reste fondée sur sa propre réception des commandes (`REMOTE_LINK_LOST`) ; l'ACK périodique sert surtout à la télécommande.
+- **Perte de lien** (étape 1.1) : un lien qui reçoit est perdu tant qu'il n'a rien reçu, puis après `linkTimeoutMs` de silence (paramètre du `ComProtocolCfg`). `UART_LINK_LOST` publie l'OU des liens perdus ; un lien qui n'émet que ne contribue pas. Tant que le filtrage par `direction` n'existe pas (2.4), un lien qui reçoit écrase les channels que son pair lui envoie.
 - **Lien à diffusion seule** (accessoire) : pas d'ACK ; salve périodique et espacée ; le mode est déclaré dans le `ComDev`.
 
 ### 2.5 Versions et channels candidats
@@ -157,14 +158,17 @@ Chaque étape se vérifie avec le test de boucle (loopback) puis un build comple
 ### Chantier 1 : lien vivant
 
 **Constats** :
-- `combus_rx_update(const ComBus*)` n'a aucun appelant dans `src/` (seul le test Unity l'appelle).
+- `combus_rx_update(const ComBus*)` n'avait aucun appelant dans `src/` (seul le test Unity l'appelait). Fait (2026-10-21) : `com_rx_update()` l'appelle en tête de `sys_manager_update`.
+- `UART_LINK_LOST` (défaut « perdu ») n'était écrit nulle part, malgré les commentaires qui parlent d'un code qui interroge `combus_rx_is_alive()` (jamais écrit, et jamais déclarée dans `combus_rx.h`). Avec `COMBUS_UART_TX` et `HAS_REMOTE_LINK_LOST_FALLBACK`, la Volvo avait donc le contributeur UART de la chaîne bloqué à « perdu » : d'après le code, `REMOTE_LINK_LOST` restait à 1 et la réaction (sur front) ne pouvait plus se déclencher après le démarrage. Fait (2026-10-21) : `com_rx_update()` publie `UART_LINK_LOST` d'après les liens qui reçoivent, et le contributeur n'existe plus que pour `COMBUS_UART` (un lien TX seul ne sait rien de son pair).
 - Le handshake compare MD5 et version (majeure et mineure) en égalité stricte, mais un désaccord est seulement journalisé : aucune trame n'est bloquée.
 - La salve n'est émise qu'à l'initialisation du TX (3 trames en 300 ms) et s'arrête dès que le nœud a validé le MD5 de son pair ; rien ne répond à un handshake reçu. Un nœud qui démarre après son pair ne reçoit jamais le MD5 de ce pair.
+- Constaté sur la Volvo (2026-10-21), manette PS4 connectée : `REMOTE_LINK_LOST` restait à 1. `input_update.cpp` écrivait `PS4_DS4_BT_LINK_LOST` avec l'identité `ChanLayer::SYSTEM`, alors que ce channel est de portée `BOARD` : `_layer_ok` refuse l'écriture, sans message hors `DEBUG_COMBUS` (défaut apparu avec le renommage des portées du 2026-10-18). Corrigé : identité `BOARD`. Les refus d'écriture sont désormais comptés (`combus_denied_writes()`, affiché sur la ligne « combus state » du tableau de bord) et signalés une fois par channel par `sys_log_warn` (builds `DEBUG_SYSTEM`) ; ils ne dépendent plus de `DEBUG_COMBUS`.
+- `kRemoteLinkRunlevelCfg` avait `.low = RunLevel::STARTING`, ce qui contredisait la doc (« front descendant = reprise manuelle à la clé ») : avec le défaut ci-dessus corrigé, la machine aurait démarré seule à la connexion de la manette. Corrigé : `.low = std::nullopt`, la machine reste en `IDLE` jusqu'à l'appui sur la clé, après une perte de lien comme au premier branchement.
 - L'ancien RX du projet son (dépôt externe `API-rep/sound_module_rc` @ `c28a471`, ancienne API) n'apporte que l'idée d'une détection de perte de lien par lien.
 
 | Étape | Livrable | Preuve |
 |---|---|---|
-| 1.1 | RX branché (appelant de `combus_rx_update()`), perte de lien par lien | trames reçues appliquées ; perte détectée |
+| 1.1 | RX branché (`com_rx_update()` en tête de boucle, `com_update()` reste l'émission en fin de boucle), perte de lien par lien (`linkTimeoutMs` dans le `ComProtocolCfg`, 250 ms pour le lien d'extension), `UART_LINK_LOST` publié, cible = ComBus du nœud pour les liens qui reçoivent | **validé sur la carte (2026-10-21)** : groupes J et K du test Unity (5 tests : perdu avant la première trame, vivant après une trame, perdu après le silence, lien TX seul jamais perdu, écriture refusée comptée), 38 tests sur 38. Sur la Volvo flashée : manette connectée, `REMOTE_LINK_LOST` passe à off et le runlevel reste `IDLE` ; sans manette il est à on ; `denied: 0` au tableau de bord. Builds Volvo et `test_node_mainboard` OK. Aucun env n'a de lien qui reçoit : pas d'effet sur la Volvo, sauf la chaîne `REMOTE_LINK_LOST` (voir constat) |
 | 1.2 | État de lien et blocage ; ACK de handshake ; ACK périodique | pair allumé plus tard : le lien s'établit ; perte puis reconnexion : renégociation |
 
 ### Chantier 2 : contrats `BASE`
@@ -227,6 +231,7 @@ Chaque étape se vérifie avec le test de boucle (loopback) puis un build comple
 
 - Format de la déclaration d'un ensemble réduit et de l'étiquette d'égal à égal (champ des `.cb` ou fichier dédié) ; format exact du paramètre `passthrough`.
 - Nom du suffixe de candidat.
+- **Identité d'écriture locale** (`ChanLayer caller` de `combus_set_analog` / `combus_set_digital`) : pour du code local, c'est toujours « ce firmware » (`BOARD`), et le paramètre est un piège (13 des 15 appels explicites de `src/` passent `SYSTEM`, ce qui est refusé sur un channel `BOARD`, comme ci-dessus). L'identité garde son sens à la frontière d'un lien (`combus_frame_apply`), et devrait y être remplacée par la table des channels et le sens du lien (2.3, 2.4). Fait : le refus est visible (compteur et message unique par channel). Reste : migrer les appels locaux vers la forme sans identité, puis retirer le paramètre de l'API publique quand l'application des trames passe par la table.
 - Nom du jeu de `ComDev` fournis par le cœur (« catalogue » est provisoire), et forme de leur paramétrage par `-D` (flags par modèle, ou une table).
 - Contenu exact de `ComCoupling` (channel déclencheur, valeur attendue, identifiant du pair) ; comportement d'un lien inactif (état d'exécution, ressources réservées).
 - Où définir un `ComDev` inter-nœuds partagé par deux types de nœuds (machine et télécommande) sans le dupliquer.

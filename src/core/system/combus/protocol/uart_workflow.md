@@ -369,7 +369,7 @@ Le débit et la fréquence d'émission du lien ne sont plus ici : ce sont les pa
 **Fichier** : `src/machines/config/machines/volvo_A60H_bruder/board/com_dev.h`.
 
 ```cpp
-inline constexpr ComProtocolCfg kComProtoExt = { 115200u, 50u };
+inline constexpr ComProtocolCfg kComProtoExt = { 115200u, 50u, 250u };   // rate, txHz, linkTimeoutMs
 
 inline constexpr ComDev kComDevExtUni = {          // COMBUS_UART_TX
 	"combus", LinkScope::INTRA_NODE, LinkType::UNIDIRECTIONAL,
@@ -492,11 +492,13 @@ est dans [`frame/combus_frame_protocol.md`](frame/combus_frame_protocol.md).
 - `combus_frame_decode` : `combus_frame.cpp:236-302` ; `combus_frame_apply` :
   `combus_frame.cpp:338-395`.
 
-> **Aucun appel à `combus_rx_update()` dans `src/`** (recherche
-> `combus_rx_update` : seuls les tests `test/test_combus_loopback/` l'appellent).
-> La boucle principale de la machine ne fait que de la TX
-> (`output_update` → `com_update` → `combus_tx_update`). Le lien UART de la machine n'a pas de
-> `target`.
+> `combus_rx_update()` est appelé à chaque tour par `com_rx_update()`
+> (`src/core/system/com/com_manager.cpp`), en tête de `sys_manager_update`. Le lien
+> d'extension de la Volvo est en TX seul (`COMBUS_UART_TX`) : il ne reçoit rien.
+> Pour un lien qui reçoit (`COMBUS_UART`), `combus_links_init` renseigne la `target`
+> avec le ComBus du nœud, et `com_rx_update()` publie `UART_LINK_LOST` d'après
+> `combus_links_rx_lost()` : un lien qui reçoit est perdu tant qu'il n'a rien reçu,
+> puis après `linkTimeoutMs` de silence (250 ms pour le lien d'extension).
 
 ---
 
@@ -559,19 +561,19 @@ void com_update(const ComBus& bus) {
 
 Ordre d'un tour de `loop()` (`src/machines/main.cpp`, appels aux lignes 51, 57-58 et 233) :
 
-1. `sys_manager_update(comBus)` : acquisition des entrées (`input_refresh`,
-   `input_update`), `vbat_update`, `failsafe_update` (chaîne FAILSAFE), puis
-   `remote_link_fallback_update` si `HAS_REMOTE_LINK_LOST_FALLBACK`
+1. `sys_manager_update(comBus)` : réception ComBus (`com_rx_update`), acquisition
+   des entrées (`input_refresh`, `input_update`), `vbat_update`, `failsafe_update`
+   (chaîne FAILSAFE), puis `remote_link_fallback_update` si
+   `HAS_REMOTE_LINK_LOST_FALLBACK`
    (`src/machines/system/sys_manager.cpp:19-43`) ;
 2. chaînes de processors d'entrée et de simulation (`proc_chain_update`) ;
 3. machine à états des runlevels ;
 4. `output_update(comBus)` → `com_update(comBus)` : émission ComBus.
 
-Aucun appel à `combus_rx_update()` dans ce tour (voir §8.2).
-
-Le RX doit être appelé séparément par un consommateur via `combus_rx_update()` ;
-aucun consommateur de ce type n'existe dans `src/` à ce jour (le côté
-récepteur historique, le nœud son, a été retiré).
+La réception est faite en tête de tour (étape 1), avant les entrées et les chaînes,
+et l'émission en fin de tour (étape 4) : les trames reçues sont donc appliquées
+avant la logique de la machine, et ce que la machine produit est émis dans le même
+tour.
 
 ---
 

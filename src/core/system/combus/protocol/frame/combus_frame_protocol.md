@@ -103,9 +103,10 @@ compteur part de 0 (`generator.py:362-386`).
 - En production, `combus_frame_apply` n'a qu'un appelant : `tryDecode` dans
   `combus_rx.cpp`, appelé automatiquement quand le lien a une cible
   (`st.target != nullptr`), avec l'identité d'écriture du lien (`st.writeLayer`,
-  voir ci-dessous). En pratique, cet appel n'est jamais
-  atteint par la machine : `combus_rx_update` n'est appelé nulle part dans
-  `src/` et le lien UART n'a pas de `target` (voir §9).
+  voir ci-dessous). `combus_rx_update` est appelé à chaque tour par
+  `com_rx_update` (voir §10) ; la `target` est le ComBus du nœud, renseignée par
+  `combus_links_init` pour les liens qui reçoivent seulement. Le lien d'extension
+  de la Volvo est en TX seul : aucune trame n'y est appliquée aujourd'hui.
 - Le même indice sert d'ID des deux côtés : émetteur et récepteur doivent donc
   avoir généré les mêmes IDs. Le handshake compare l'empreinte MD5 de la vue du
   lien (`combus_protocol.cpp:55-88`, `kCombusBaseComBusMd5`,
@@ -242,10 +243,13 @@ la vue complète si le pointeur est nul (`combus_handshake_tx.cpp:51-53`,
 - Un contexte de handshake appartient à un seul lien ; TX et RX du même lien le
   partagent.
 - Une trame reçue n'est appliquée au ComBus que si `link.target` est non nul
-  (`combus_rx.cpp:222-225`). Le lien UART de la machine ne le renseigne pas
-  (`src/machines/init/com/combus_uart_init.cpp`).
-- `combus_rx_update` n'a aucun appelant dans `src/` (seulement des tests) : en
-  production, la machine n'émet que (`output_update` → `com_update` → `combus_tx_update`).
+  (`combus_rx.cpp:222-225`). `combus_links_init` la renseigne pour les liens qui
+  reçoivent (`src/machines/init/com/combus_uart_init.cpp` lui passe le ComBus du
+  nœud) ; un lien TX seul n'en a pas.
+- `combus_rx_update` est appelé par `com_rx_update` en tête de chaque tour de la
+  machine. Sans filtrage par `direction` (chantier 2.4), un lien qui reçoit écrase
+  les channels que son pair lui envoie, y compris `RUNLEVEL` et `FAILSAFE` pour une
+  vue `SYSTEM`.
 
 > À VÉRIFIER : l'en-tête `combus_protocol.h:169-173` annonce que
 > `combus_protocol_init` « return » pour un layer `UNDEFINED` ou `BOARD`. Le
@@ -257,9 +261,9 @@ la vue complète si le pointeur est nul (`combus_handshake_tx.cpp:51-53`,
 Source : `src/machines/main.cpp` (appels lignes 51, 57-58, 233) et
 `src/machines/system/sys_manager.cpp:19-43`.
 
-1. `sys_manager_update` : acquisition des entrées, `vbat_update`,
-   `failsafe_update`, puis `remote_link_fallback_update` si
-   `HAS_REMOTE_LINK_LOST_FALLBACK` ;
+1. `sys_manager_update` : réception ComBus (`com_rx_update`, qui publie aussi
+   `UART_LINK_LOST`), acquisition des entrées, `vbat_update`, `failsafe_update`,
+   puis `remote_link_fallback_update` si `HAS_REMOTE_LINK_LOST_FALLBACK` ;
 2. chaînes d'entrée et de simulation (`proc_chain_update`) ;
 3. machine à états des runlevels ;
 4. `output_update` → `com_update` : émission ComBus (TX).
