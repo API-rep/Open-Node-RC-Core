@@ -76,7 +76,7 @@ void input_update(ComBus &bus) {
     // lost), and the aggregator chain picks it up next cycle.
   bus.lastFrameMs = millis();
 #if defined(INPUT_PS4_DS4_BT)
-  combus_set_digital(bus, DigitalComBusID::PS4_DS4_BT_LINK_LOST, false, ChanLayer::SYSTEM);
+  combus_set_digital(bus, DigitalComBusID::PS4_DS4_BT_LINK_LOST, false, ChanLayer::BOARD);   // BOARD-scope channel: only a BOARD caller may write it
 #endif
 }
 
