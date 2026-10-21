@@ -12,8 +12,8 @@
 
 #include "combus_uart_init.h"
 
-#include <machines/config/config.h>   // comPorts[], UartMaxBaud (board envCfg)
-#include <core/config/outputs/combus_uart.h>         // ComBusUartBaud, kComDevUartUni, kComDevUartBi
+#include <machines/config/config.h>   // comPorts[], UartMaxBaud (board envCfg), kComDevExtUni / kComDevExtBi (node links)
+#include <core/config/outputs/combus_uart.h>         // ComBusUartMaxTxHz
 #include <core/system/combus/protocol/combus_links.h>
 #include <core/system/debug/logging/debug.h>
 #include "../sys/sys_init.h"          // pinReg (machine env)
@@ -41,17 +41,19 @@ static const ComPort* findUartPort( uint8_t uartIdx )
 
 void combus_uart_init()
 {
-    static_assert(ComBusUartBaud <= UartMaxBaud,
-                  "ComBusUartBaud exceeds board hardware ceiling UartMaxBaud");
+    static_assert(kComProtoExt.rate <= UartMaxBaud,
+                  "Extension link rate exceeds board hardware ceiling UartMaxBaud");
+    static_assert(kComProtoExt.txHz > 0u && kComProtoExt.txHz <= ComBusUartMaxTxHz,
+                  "Extension link txHz out of range [1, ComBusUartMaxTxHz]");
 
         // --- Resolve the ComDev, the UART number and the role of this end from the build flag ---
     #if defined(COMBUS_UART)
         constexpr uint8_t uartCh = COMBUS_UART;
-        const ComDev*     dev    = &kComDevUartBi;        // full-duplex
+        const ComDev*     dev    = &kComDevExtBi;         // full-duplex
         constexpr LinkEnd end    = LinkEnd::TX_RX;
     #else
         constexpr uint8_t uartCh = COMBUS_UART_TX;
-        const ComDev*     dev    = &kComDevUartUni;       // TX only
+        const ComDev*     dev    = &kComDevExtUni;        // TX only
         constexpr LinkEnd end    = LinkEnd::TX;
     #endif
 

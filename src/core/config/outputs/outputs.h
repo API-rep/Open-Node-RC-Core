@@ -12,7 +12,7 @@
 #include <const.h>
 #include <struct/struct.h>
 #include <defs/defs.h>
-// NOTE: board constants (SerialExt, TxdExtPin, ComBusUartBaud …) are available because
+// NOTE: board constants (SerialExt, TxdExtPin, UartMaxBaud …) are available because
 //       outputs/outputs.h is always included via output_init.h → init.h,
 //       by which point the board header is already in scope.
 

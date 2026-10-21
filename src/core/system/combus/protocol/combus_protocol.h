@@ -31,14 +31,14 @@
  *   constexpr int uartCh    = COMBUS_UART_TX;   // or COMBUS_UART
  *   const     int uartTxPin = port.uart.txPin;  // port : ComPort of UART uartCh
  *   constexpr int uartRxPin = -1;
- *   NodeCom* com = uart_com_init(uart_serial_for(uartCh), ComBusUartBaud,
+ *   NodeCom* com = uart_com_init(uart_serial_for(uartCh), kComProtoExt.rate,
  *                                uartTxPin, uartRxPin, "combus", &pinReg);
  *
  *   constexpr ComBusFrameCfg txCfg = { N_ANALOG, N_DIGITAL };
  *   ComBusLink link = {};
  *   link.com   = com;
  *   link.txCfg = txCfg;
- *   link.txHz  = ComBusUartTxHz;
+ *   link.txHz  = kComProtoExt.txHz;
  *   link.layer = ChanLayer::BASE;   // LY2 — selects wireEnd from Base view
  *   combus_protocol_init(&link);
  * @endcode

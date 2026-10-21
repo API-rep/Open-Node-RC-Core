@@ -21,7 +21,7 @@
  *   static ComBusLink     links[1];
  *   const ComLinksStorage storage = { txStates, rxStates, runtime, links };
  *
- *   const ComDevMap maps[] = { { &kComDevUartBi, &comPorts[0], LinkEnd::TX_RX } };
+ *   const ComDevMap maps[] = { { &kComDevExtBi, &comPorts[0], LinkEnd::TX_RX } };
  *   combus_links_init(maps, 1, storage, &pinReg);
  * @endcode
  *****************************************************************************/

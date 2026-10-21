@@ -9,15 +9,15 @@
  *
  *   Constants exported:
  *     ComBusUartFrameSize  — exact frame size for this layout (bytes)
- *     ComBusUartBaud       — negotiated UART baud rate (≤ board UartMaxBaud)
- *     ComBusUartTxHz       — frame transmit rate in Hz
  *     ComBusUartMaxTxHz    — controller-side frame-rate ceiling (Hz)
+ *
+ *   The line rate and the transmit rate of the link are the ComProtocolCfg of
+ *   its ComDev, defined with the node links (board/com_dev.h).
  ******************************************************************************/
 #pragma once
 
 #include <stdint.h>
 #include <core/system/combus/protocol/frame/combus_frame.h>
-#include <core/system/combus/protocol/combus_protocol.h>   // ComProtocolCfg, ComDev
 #include <core/config/machines/machine_type.h>        // AnalogComBusBaseID, DigitalComBusBaseID (transitive via combus_base.h)
 
 /// UART transport physical cap — chosen as uint8_t safety ceiling (no hardware limit).
@@ -62,15 +62,8 @@ static constexpr uint8_t ComBusUartFrameSize =
 
 
 // =============================================================================
-// 3. TRANSPORT PARAMETERS  (protocol — agreed between machine and sound node)
+// 3. TRANSPORT CEILING
 // =============================================================================
-
-	/// UART baud rate for the ComBus UART TX link.
-	/// Must match SOUND_UART_BAUD in the sound node's sound_config.h.
-static constexpr uint32_t ComBusUartBaud         = 115200u;
-
-	/// Frame transmit rate (Hz).
-static constexpr uint32_t ComBusUartTxHz         = 50u;
 
 	/// Controller-side frame-rate ceiling (Hz).
 	/// TODO: replace with SoundRxMaxHz from sound_config.h once sound node
@@ -86,31 +79,8 @@ static constexpr uint32_t ComBusUartMaxTxHz      = 200u;
 static_assert(ComBusUartFrameSize <= CombusPhysUartMax,
               "ComBusUartFrameSize exceeds UART practical cap (CombusPhysUartMax)");
 
-  // --- Baud rate: checked in output_init.cpp (UartMaxBaud requires board header ---
-  //     which is not yet in scope here — see static_assert in output_init.cpp)
-
-  // --- Frame rate: must be in valid protocol range ---
-static_assert(ComBusUartTxHz > 0u && ComBusUartTxHz <= ComBusUartMaxTxHz,
-              "ComBusUartTxHz out of range [1, ComBusUartMaxTxHz]");
-
-
-// =============================================================================
-// 5. COMDEV OF THE COMBUS UART LINK
-// =============================================================================
-
-	/// Protocol parameters of the ComBus UART link, from the constants above.
-static constexpr ComProtocolCfg kComBusUartProtocol = { ComBusUartBaud, ComBusUartTxHz };
-
-	/// One-way ComBus UART link (COMBUS_UART_TX=N): the board wires it as TX.
-static constexpr ComDev kComDevUartUni = {
-    "combus", LinkScope::INTER_NODE, LinkType::UNIDIRECTIONAL,
-    &kComBusUartProtocol, LinkActivation::ALWAYS, nullptr
-};
-
-	/// Two-way ComBus UART link (COMBUS_UART=N): the board wires it as TX_RX.
-static constexpr ComDev kComDevUartBi = {
-    "combus", LinkScope::INTER_NODE, LinkType::BIDIRECTIONAL,
-    &kComBusUartProtocol, LinkActivation::ALWAYS, nullptr
-};
+  // --- Baud rate and frame rate: the ComProtocolCfg of the link (board/com_dev.h) is checked ---
+  //     against UartMaxBaud and ComBusUartMaxTxHz in machines/init/com/combus_uart_init.cpp,
+  //     where the board header and the node links are both in scope.
 
 // EOF combus_uart.h
