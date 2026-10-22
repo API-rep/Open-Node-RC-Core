@@ -71,20 +71,23 @@ Repris de l'ancien document de conception, vérifiés dans le code :
 - **Le tri est global**, après lecture de tous les fichiers : l'ordre des
   fichiers n'a aucune valeur.
 
-### `requires` : actif ou erreur selon le mode
+### `requires` : le channel n'existe que si ses flags sont définis
 
 - **Mode nœud** (diffusion) : une déclaration dont le `requires` n'est pas
   satisfait pour une carte est **écartée** pour cette carte
-  (`_is_active_for_board`, `diffusion.py:267-298`).
+  (`_is_active_for_board`, `diffusion.py`).
 - **Mode mono-carte** : `generate()` appelle `resolve_requires`
-  (`generator.py:263-286`), qui **lève `RequiresResolutionError`** dès qu'un
-  channel exige un flag absent. Rien ne filtre en amont dans le hook
-  (`combus_scons_hook.py:721-745`). Tests : `test_generator.py:310-332`, `:993`.
-- Le docstring de `resolve_requires` (« Filter out channels… ») dit « filtrer » ;
-  le code lève une erreur.
-- Conséquence connue : l'env `remotes` échoue au build avec
-  `channel 'FAILSAFE' requires ['HAS_FAILSAFE']` (rapporté par l'ancienne
-  roadmap ; cohérent avec le code ci-dessus).
+  (`generator.py`), qui applique la même règle : un channel dont un flag est
+  absent n'est pas généré. Il est listé dans le journal du build
+  (`[combus_builder] requires: channel 'X' not generated (flag not defined: ...)`),
+  donc jamais écarté en silence. Tests : `test_generator.py`
+  (`test_resolve_requires_*`, `test_generate_requires_missing_skips_and_logs`).
+- Historique : de A6.1 au 2026-10-21, `resolve_requires` levait
+  `RequiresResolutionError` en mode mono-carte, ce qui obligeait tout env à
+  définir tous les flags de tous les `.cb`. L'exception existe toujours dans
+  `generator.py` mais n'est plus levée.
+- Conséquence : les envs `remotes` et `machines` passent maintenant la
+  génération et échouent plus loin (aucun `INPUT_xxx` défini).
 
 ## 3. Carte des modules
 

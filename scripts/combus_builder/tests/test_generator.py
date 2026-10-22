@@ -307,29 +307,29 @@ def test_resolve_requires_with_value():
     assert resolve_requires(chs, ctx) == chs
 
 
-def test_resolve_requires_missing_raises():
-    """A6.1 RAISES on missing requires (it does NOT silently filter)."""
-    chs = _canon_from_yamls({"channels": [_ch("FOO", requires=["MISSING_FLAG"])]})
+def test_resolve_requires_missing_filters_and_reports():
+    """A channel whose flag is missing is skipped, and reported (never silent)."""
+    chs = _canon_from_yamls({"channels": [_ch("FOO", requires=["MISSING_FLAG"]), _ch("BAR")]})
     ctx = _ctx([])
-    try:
-        resolve_requires(chs, ctx)
-    except RequiresResolutionError as e:
-        assert e.channel_id == "FOO"
-        assert "MISSING_FLAG" in e.missing
-    else:
-        raise AssertionError("expected RequiresResolutionError")
+    skipped = []
+    kept = resolve_requires(chs, ctx, skipped)
+    assert [c.id for c in kept] == ["BAR"]
+    assert skipped == [("FOO", ["MISSING_FLAG"])]
 
 
-def test_resolve_requires_partial_missing_raises():
+def test_resolve_requires_partial_missing_filters():
+    """With one of two flags missing the channel is skipped; only the missing one is reported."""
     chs = _canon_from_yamls({"channels": [_ch("FOO", requires=["HAS_X", "MISSING"])]})
     ctx = _ctx(["HAS_X"])
-    try:
-        resolve_requires(chs, ctx)
-    except RequiresResolutionError as e:
-        assert "MISSING" in e.missing
-        assert "HAS_X" not in e.missing
-    else:
-        raise AssertionError("expected RequiresResolutionError")
+    skipped = []
+    assert resolve_requires(chs, ctx, skipped) == []
+    assert skipped == [("FOO", ["MISSING"])]
+
+
+def test_resolve_requires_without_report_list_still_filters():
+    """The `skipped` list is optional."""
+    chs = _canon_from_yamls({"channels": [_ch("FOO", requires=["MISSING"])]})
+    assert resolve_requires(chs, _ctx([])) == []
 
 
 # =============================================================================
@@ -978,15 +978,13 @@ def test_generate_with_requires_satisfied(tmp_path):
     assert sel.full.ch_count == 2
 
 
-def test_generate_requires_missing_raises(tmp_path):
+def test_generate_requires_missing_skips_and_logs(tmp_path, capsys):
     chs = _canon_from_yamls({"channels": [_ch("FOO", requires=["MISSING"])]})
-    ctx = _ctx([])
-    try:
-        generate(chs, ctx, tmp_path)
-    except RequiresResolutionError:
-        pass
-    else:
-        raise AssertionError("expected RequiresResolutionError")
+    sel = generate(chs, _ctx([]), tmp_path)
+    assert sel.full.ch_count == 0
+    out = capsys.readouterr().out
+    assert "channel 'FOO' not generated" in out
+    assert "MISSING" in out
 
 
 def test_generate_empty_yields_empty_views(tmp_path):

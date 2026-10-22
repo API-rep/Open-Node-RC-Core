@@ -103,7 +103,11 @@ class GeneratorError(Exception):
 
 
 class RequiresResolutionError(GeneratorError):
-    """A channel requires a flag that is not present in BuildContext."""
+    """A channel requires a flag that is not present in BuildContext.
+
+    No longer raised by resolve_requires() (since 2026-10-22, a channel whose
+    flags are missing is skipped and reported). Kept for compatibility.
+    """
 
     def __init__(self, channel_id: str, missing: list[str], path: Path):
         self.channel_id = channel_id
@@ -264,15 +268,18 @@ def _file_base(view_name: str, filename_prefix: str) -> str:
 def resolve_requires(
     channels: list[ChannelDefinition],
     ctx: BuildContext,
+    skipped: list[tuple[str, list[str]]] | None = None,
 ) -> list[ChannelDefinition]:
     """
     Filter out channels whose `requires` is not satisfied by BuildContext.
 
     A channel is kept iff every flag in its `requires` set is present
-    in ctx (with or without value). Channel order is preserved.
+    in ctx (with or without value). Channel order is preserved. This is
+    the same rule as the node mode (diffusion._is_active_for_board).
 
-    Raises RequiresResolutionError on the first channel whose
-    `requires` references an undefined flag.
+    A channel whose flags are missing is not generated. It never
+    disappears silently: when `skipped` is given, each removed channel is
+    appended to it as (channel id, sorted missing flags).
     """
     resolved: list[ChannelDefinition] = []
     for ch in channels:
@@ -282,7 +289,9 @@ def resolve_requires(
         missing = sorted(req for req in ch.requires
                          if not (ctx.has(req) or ctx.value_of(req) is not None))
         if missing:
-            raise RequiresResolutionError(ch.id, missing, ch.source_path)
+            if skipped is not None:
+                skipped.append((ch.id, missing))
+            continue
         resolved.append(ch)
     return resolved
 
@@ -940,7 +949,11 @@ def generate(
     Returns the ViewSelection so callers (tests, diagnostics) can
     inspect what was generated.
     """
-    active = resolve_requires(channels, ctx)
+    skipped: list[tuple[str, list[str]]] = []
+    active = resolve_requires(channels, ctx, skipped)
+    for channel_id, missing in skipped:
+        print(f"[combus_builder] requires: channel '{channel_id}' not generated "
+              f"(flag not defined: {', '.join(missing)})")
     sel = select_views(active)
     emit_view(sel.full, out_dir, ctx, filename_prefix=filename_prefix)
     emit_view(sel.system, out_dir, ctx, filename_prefix=filename_prefix)

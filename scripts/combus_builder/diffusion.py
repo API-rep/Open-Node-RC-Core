@@ -805,9 +805,10 @@ def diffuse_system_channels(
                 # board's BuildContext — which typically does NOT
                 # satisfy it (that's often WHY the original
                 # declaration was inactive for the target board).
-                # This would raise RequiresResolutionError exactly
-                # on the scenario ND2 is supposed to solve
-                # (conditional channel diffused to a sister board).
+                # This would drop the diffused copy (before 2026-10-22:
+                # raise RequiresResolutionError) exactly on the
+                # scenario ND2 is supposed to solve (conditional
+                # channel diffused to a sister board).
                 #
                 # A synthetic declaration has, by construction,
                 # already been decided as active for the target
