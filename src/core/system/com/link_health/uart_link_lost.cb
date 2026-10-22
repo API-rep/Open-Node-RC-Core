@@ -47,6 +47,6 @@ channels:
     infoName: "UART link lost (any UART-backed transport)"
     type: digital
     scope: BOARD        # private to the board owning the UART transport (NOT shared)
-    theme: input          # generic "input subsystem" theme
+    theme: com            # link-health channels share the `com` theme
     direction: none       # BOARD scope: pure in-board state, no wire transport
     value: high         # default to "lost" (failsafe-by-default — see chain reset)

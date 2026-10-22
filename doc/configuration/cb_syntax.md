@@ -80,7 +80,7 @@ même déclaration en double est une erreur de build.
 
 `theme` regroupe les channels par fonction. Le générateur n'accepte que les
 valeurs de la liste fermée `VALID_THEMES` (`canon/channels.py`) :
-`core`, `failsafe`, `vbat`, `light`, `input`. Toute autre valeur est une erreur
+`core`, `failsafe`, `vbat`, `light`, `input`, `com`. Toute autre valeur est une erreur
 de build. Pour ajouter un thème, il faut l'ajouter à cette liste dans le
 builder. Le thème fait partie du tri canonique et du hash MD5.
 
@@ -180,15 +180,20 @@ NON). Elle décide si le channel existe pour une board :
   déclaration est ignorée pour une board dont l'env ne définit pas tous les
   flags ;
 - **environnement unique, sans sous-environnement** (cas actuel de
-  `platformio.ini`) : un flag manquant est une **erreur de build**
-  (`RequiresResolutionError`), pas une désactivation silencieuse. Tous les
-  `.cb` pris en compte doivent donc avoir leurs flags définis dans l'env
-  compilé.
+  `platformio.ini`) : même règle, le channel n'est pas généré quand un flag
+  manque. Il est signalé dans le journal du build
+  (`[combus_builder] requires: channel 'X' not generated (flag not defined: ...)`),
+  donc jamais écarté en silence. Avant le 2026-10-22, un flag manquant était
+  une erreur de build (`RequiresResolutionError`).
 
 Sert à activer des fonctions
 (`HAS_FAILSAFE`, `HAS_VBAT_FAILSAFE`...), pas à désigner un type de board.
 Exemple : `RUNLEVEL` (`runlevel.cb`) n'existe que sur la board qui définit
 `HAS_RUNLEVEL_MANAGER`, par convention la `mainboard` (une seule par machine).
+Ce channel est **obligatoire sur la carte principale** : `main.cpp` en dépend
+sans garde, donc en environnement unique `HAS_RUNLEVEL_MANAGER` doit être
+défini ; les autres cartes d'un nœud le reçoivent par diffusion. `FAILSAFE`
+(`HAS_FAILSAFE`) est dans le même cas en pratique (décision à confirmer).
 Ce n'est pas l'env racine (voir plus bas : l'env racine n'est pas une board).
 Interdit sur `scope: BASE`. Un `requires` vide (`[]`) est accepté sur BASE.
 

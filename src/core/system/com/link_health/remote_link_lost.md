@@ -45,11 +45,15 @@ UART_LINK_LOST ────────┼──► OR-guard (cb_or_fn) ──�
 ```text
 src/core/system/com/link_health/
 ├── remote_link_lost.cb           // Canal REMOTE_LINK_LOST (agrégat)
-├── ps4_ds4_bt_link_lost.cb       // Canal PS4_DS4_BT_LINK_LOST (contributeur)
 ├── uart_link_lost.cb             // Canal UART_LINK_LOST (contributeur)
 ├── remote_link_fallback_chain.h  // Déclarations kRemoteLinkFallbackChain[]
 └── remote_link_fallback_chain.cpp // Chaîne d'agrégation (reset + OR-guard)
+
+src/core/config/inputs/
+└── ps4_ds4_bt_link_lost.cb       // Canal PS4_DS4_BT_LINK_LOST (contributeur, requires INPUT_PS4_DS4_BT)
 ```
+
+Les trois canaux sont du thème `com`.
 
 ---
 
@@ -57,11 +61,11 @@ src/core/system/com/link_health/
 
 ### 4.1 — `PS4_DS4_BT_LINK_LOST`
 
-**Canal** : `src/core/system/com/link_health/ps4_ds4_bt_link_lost.cb`
+**Canal** : `src/core/config/inputs/ps4_ds4_bt_link_lost.cb` (à côté du backend PS4, `requires: INPUT_PS4_DS4_BT`)
 
 **Propriétaire** : `src/machines/system/input/input_update.cpp` (backend PS4_BT)
 
-**Réarmement** : `combus_set_digital(bus, DigitalComBusID::PS4_DS4_BT_LINK_LOST, false, ChanLayer::SYSTEM)` quand le contrôleur est actif.
+**Réarmement** : `combus_set_digital(bus, DigitalComBusID::PS4_DS4_BT_LINK_LOST, false, ChanLayer::BOARD)` quand le contrôleur est actif.
 
 **Gating** : `#if defined(INPUT_PS4_DS4_BT)`
 

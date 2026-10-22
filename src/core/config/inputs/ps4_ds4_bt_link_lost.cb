@@ -1,34 +1,28 @@
 # ps4_ds4_bt_link_lost.cb — PS4 DualShock Bluetooth link health signal
 #
 # This file declares the PS4_DS4_BT_LINK_LOST ComBus channel. It is the
-# dedicated "PS4 BT link alive" signal for the PS4 DualShock Bluetooth input
-# backend, consumed by the REMOTE_LINK_LOST fallback chain (declared in
-# src/core/system/com/link_health/remote_link_fallback_chain.cpp) when
-# HAS_REMOTE_LINK_LOST_FALLBACK is defined.
+# dedicated "PS4 BT link alive" signal of the PS4 DualShock Bluetooth input
+# backend (src/core/config/inputs/PS4_dualshock.*). The REMOTE_LINK_LOST
+# fallback chain (src/core/system/com/link_health/remote_link_fallback_chain.cpp)
+# consumes it when HAS_REMOTE_LINK_LOST_FALLBACK is defined.
 #
 # Notes:
-# - SYSTEM scope: the channel is shared by all boards composing the local
-#   node. The mainboard (or any board connected to a PS4 controller over
-#   Bluetooth) publishes the local "PS4 BT link alive" state each cycle.
-#   Other boards consume it through the same SYSTEM bus.
-# - Direction [both_or]: uplink + downlink + OR-merge on import.  Any
-#   board may write (re-arm each cycle to false = healthy) or read
-#   (react) the channel.  At import, any source reporting fault (true)
-#   wins — coherent with failsafe-by-default semantics.
-# - value: high = PS4 link lost (failsafe-by-default).  The channel stays
-#   "lost" until the PS4 backend re-arms it to false (= healthy) this
-#   cycle.  The reset is performed by the first proc in the consumer
-#   chain (cb_reset_fn) — see remote_link_fallback_chain.cpp.
+# - BOARD scope: private to the board owning the PS4 backend (not shared and
+#   not on the wire).  Only a BOARD caller may write it: the backend writes it
+#   from src/machines/system/input/input_update.cpp.
+# - value: high = PS4 link lost (failsafe-by-default).  The backend re-arms it
+#   to false (= healthy) each cycle while the controller is connected; the
+#   consumer chain puts it back to true after reading it (cb_or_fn: consume +
+#   guard), so its instantaneous value on the bus is not the link state: read
+#   REMOTE_LINK_LOST instead.
+# - requires: [INPUT_PS4_DS4_BT] — the channel exists only when the flag is
+#   defined (node mode: per board; single environment: for the environment;
+#   the builder logs a channel it does not generate).  An environment without
+#   the PS4 backend (autonomous machine) simply has no such channel.  Its
+#   writer (input_update.cpp) and its reader (the fallback chain) are under the
+#   same flag.
+# - theme: com — all link-health channels share the `com` theme.
 # - type: digital (bool).
-# - ALWAYS emitted (no `requires`): the combus-builder's `requires`
-#   mechanism is a pure AND (every listed flag must be present), and
-#   the PS4_BT_LINK_LOST activation is conditional in the C++ writer
-#   (`#if defined(INPUT_PS4_DS4_BT)`).  Emitting the channel always
-#   keeps the channel set and ID space stable across configurations;
-#   projects without INPUT_PS4_DS4_BT simply never write to the
-#   channel, so it stays at its default `high` (= lost) value with
-#   no effect on the aggregated REMOTE_LINK_LOST (the OR-guard picks
-#   it up, but no consumer reacts on a machine with no PS4 backend).
 # - This channel is a CONTRIBUTOR to REMOTE_LINK_LOST (chantier 12.5
 #   new design).  The REMOTE_LINK_LOST channel is the OR-aggregated
 #   result of all *_LINK_LOST contributors.  See failsafe_module.md
@@ -40,6 +34,8 @@ channels:
     infoName: "PS4 DualShock Bluetooth link lost"
     type: digital
     scope: BOARD        # private to the board owning the PS4 backend (NOT shared)
-    theme: input          # generic "input subsystem" theme
+    theme: com          # link-health channels share the `com` theme
     direction: none       # BOARD scope: pure in-board state, no wire transport
     value: high         # default to "lost" (failsafe-by-default — see chain reset)
+    requires:
+      - INPUT_PS4_DS4_BT

@@ -284,10 +284,12 @@ src/core/system/vbat/
 ```text
 src/core/system/com/link_health/
 ├── remote_link_lost.cb           // Canal REMOTE_LINK_LOST (agrégat)
-├── ps4_ds4_bt_link_lost.cb       // Canal PS4_DS4_BT_LINK_LOST (contributeur)
 ├── uart_link_lost.cb             // Canal UART_LINK_LOST (contributeur)
 ├── remote_link_fallback_chain.h  // Déclarations kRemoteLinkFallbackChain[]
 └── remote_link_fallback_chain.cpp // Chaîne d'agrégation (reset + OR-guard)
+
+src/core/config/inputs/
+└── ps4_ds4_bt_link_lost.cb       // Canal PS4_DS4_BT_LINK_LOST (contributeur)
 ```
 
 ---

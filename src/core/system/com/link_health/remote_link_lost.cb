@@ -33,8 +33,9 @@
 #   this cycle, which happens only if NO contributor reports fault.
 # - type: digital (bool).
 # - requires: none — the channel is always emitted (it's the public
-#   aggregator).  The contributors are optional (PS4_DS4_BT_LINK_LOST
-#   requires INPUT_PS4_DS4_BT, UART_LINK_LOST requires COMBUS_UART_*).
+#   aggregator).  The contributors are optional: PS4_DS4_BT_LINK_LOST requires
+#   INPUT_PS4_DS4_BT; UART_LINK_LOST is always emitted (written every cycle by
+#   com_rx_update()) but only read by the chain when COMBUS_UART is defined.
 # - NOT a contributor to the FAILSAFE aggregator (only "hard" faults
 #   like VBAT / temperature are).  REMOTE_LINK_LOST feeds its own,
 #   optional fallback chain (IDLE on loss).
@@ -50,6 +51,6 @@ channels:
     infoName: "Remote input link lost (aggregated)"
     type: digital
     scope: SYSTEM
-    theme: input          # generic "input subsystem" theme
+    theme: com            # link-health channels share the `com` theme
     direction: both_or   # aggregator writes via the consumer chain; readers consume
     value: high         # default to "lost" (failsafe-by-default — see chain reset)
