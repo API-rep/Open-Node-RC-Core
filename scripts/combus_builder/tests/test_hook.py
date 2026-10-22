@@ -209,7 +209,14 @@ def test_collect_node_boards_without_mother_env(hook):
 
 def test_default_out_dir_uses_project_build_dir(hook, tmp_path):
     env = FakeEnv(PROJECT_BUILD_DIR=str(tmp_path / "build"), PIOENV="x")
-    assert hook._default_out_dir(env) == tmp_path / "build" / "combus_generated"
+    assert hook._default_out_dir(env) == tmp_path / "build" / "x" / "combus_generated"
+
+
+def test_default_out_dir_is_not_shared_between_envs(hook, tmp_path):
+    """Two environments never write the same directory (their channel sets can differ)."""
+    a = hook._default_out_dir(FakeEnv(PROJECT_BUILD_DIR=str(tmp_path), PIOENV="volvo"))
+    b = hook._default_out_dir(FakeEnv(PROJECT_BUILD_DIR=str(tmp_path), PIOENV="test"))
+    assert a != b
 
 
 def test_default_out_dir_falls_back_to_pio_build_env(hook, tmp_path):
@@ -256,22 +263,22 @@ def test_discover_cb_sources_finds_cb_and_cbch_sorted(hook, tmp_path):
 # =============================================================================
 
 def test_skip_action_fails_when_artefacts_missing(hook, tmp_path, capsys):
-    env = FakeEnv(PROJECT_BUILD_DIR=str(tmp_path))
+    env = FakeEnv(PROJECT_BUILD_DIR=str(tmp_path), PIOENV="x")
     rc = hook._skip_action(None, None, env)
     assert rc == 1
     assert "COMBUS_BUILDER_SKIP" in capsys.readouterr().err
 
 
 def test_skip_action_fails_on_partial_artefacts(hook, tmp_path):
-    out = tmp_path / "combus_generated"
+    out = tmp_path / "x" / "combus_generated"
     _touch_all(out, list(hook.EXPECTED_ARTIFACTS)[:-1])
-    assert hook._skip_action(None, None, FakeEnv(PROJECT_BUILD_DIR=str(tmp_path))) == 1
+    assert hook._skip_action(None, None, FakeEnv(PROJECT_BUILD_DIR=str(tmp_path), PIOENV="x")) == 1
 
 
 def test_skip_action_succeeds_with_all_artefacts(hook, tmp_path):
-    out = tmp_path / "combus_generated"
+    out = tmp_path / "x" / "combus_generated"
     _touch_all(out, hook.EXPECTED_ARTIFACTS)
-    assert hook._skip_action(None, None, FakeEnv(PROJECT_BUILD_DIR=str(tmp_path))) == 0
+    assert hook._skip_action(None, None, FakeEnv(PROJECT_BUILD_DIR=str(tmp_path), PIOENV="x")) == 0
 
 
 # =============================================================================

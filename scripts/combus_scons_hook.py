@@ -267,17 +267,23 @@ def _skip_requested() -> bool:
 # =============================================================================
 
 def _default_out_dir(env) -> Path:
-    """Where to write the generated headers.
+    """Where to write the generated headers: one directory PER ENVIRONMENT.
 
-    Prefer `PROJECT_BUILD_DIR` (PlatformIO 6.x), fall back to
+    Prefer `PROJECT_BUILD_DIR/<PIOENV>` (PlatformIO 6.x), fall back to
     `.pio/build/<PIOENV>` derived from PROJECT_DIR + PIOENV.
+
+    The directory must not be shared between environments: SCons decides
+    per environment whether to regenerate, so a directory rewritten by another
+    environment would be used as is.  Since `requires` removes the channels
+    whose flags are missing, two environments can generate different channel
+    sets (2026-10-22).
     """
     build_dir = env.get("PROJECT_BUILD_DIR")
+    pio_env = env.get("PIOENV") or "default"
     if build_dir:
-        return Path(build_dir) / "combus_generated"
+        return Path(build_dir) / pio_env / "combus_generated"
 
     project_dir = env.get("PROJECT_DIR")
-    pio_env = env.get("PIOENV") or "default"
     if project_dir:
         return Path(project_dir) / ".pio" / "build" / pio_env / "combus_generated"
 

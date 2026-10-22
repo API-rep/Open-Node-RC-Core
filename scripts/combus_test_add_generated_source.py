@@ -59,13 +59,14 @@ except Exception:  # pragma: no cover
 def _generated_combus_cpp(env) -> Path | None:
     """Locate the generated combus.cpp produced by combus_scons_hook.py."""
     build_dir = env.get("PROJECT_BUILD_DIR")
+    pio_env = env.get("PIOENV") or "default"
     if build_dir:
-        candidate = Path(build_dir) / "combus_generated" / "combus.cpp"
+        # One directory per environment — same rule as combus_scons_hook._default_out_dir().
+        candidate = Path(build_dir) / pio_env / "combus_generated" / "combus.cpp"
         if candidate.is_file():
             return candidate
 
     project_dir = env.get("PROJECT_DIR")
-    pio_env = env.get("PIOENV") or "default"
     if project_dir:
         candidate = Path(project_dir) / ".pio" / "build" / pio_env / "combus_generated" / "combus.cpp"
         if candidate.is_file():

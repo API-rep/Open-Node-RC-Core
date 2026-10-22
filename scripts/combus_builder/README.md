@@ -292,14 +292,19 @@ pas préfixés (`generator.py:76-78`).
 
 Dossier de sortie (`combus_scons_hook.py:266-284`) :
 
-- `Path(PROJECT_BUILD_DIR)/"combus_generated"` si `PROJECT_BUILD_DIR` est défini ;
+- `Path(PROJECT_BUILD_DIR)/<env>/"combus_generated"` si `PROJECT_BUILD_DIR` est défini ;
 - sinon `.pio/build/<env>/combus_generated`.
 
-Avec le `build_dir` du propriétaire (`platformio.ini:28`, sous
-`%LOCALAPPDATA%\Temp\PlatformIO\build\Open_Node_RC_Core`), ce dossier est
-**partagé par tous les envs** et **n'est pas nettoyé par `-t clean`**. Pour
-forcer la régénération, supprimer `combus_generated`. Fragilité à traiter avant
-le multi-carte réel.
+**Un dossier par env** (depuis le 2026-10-22). Avant, le dossier était partagé
+par tous les envs. SCons décide de régénérer env par env, donc un env pouvait
+compiler avec les fichiers écrits par un autre. C'était sans effet tant que tous
+les envs généraient le même contenu ; depuis que `requires` écarte les channels
+dont un flag manque, deux envs peuvent avoir des jeux de channels différents
+(constaté : la Volvo compilée après l'env de test ne trouvait plus
+`REMOTE_LINK_LOST`). Le dossier n'est pas nettoyé par `-t clean` : pour forcer la
+régénération d'un env, supprimer `<build_dir>/<env>/combus_generated`.
+`scripts/combus_test_add_generated_source.py` suit la même règle. L'ancien dossier
+partagé `<build_dir>/combus_generated` n'est plus utilisé et peut être supprimé.
 
 Le CLI écrit par défaut dans `<racine>/out/combus_generated`
 (`combus_builder.py:56`, `69`). Les dossiers `out\` et `out_a12_rev4_skip\` à la
