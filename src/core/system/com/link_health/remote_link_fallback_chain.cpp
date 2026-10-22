@@ -169,10 +169,10 @@ void remote_link_fallback_update(ComBus& bus) {
 // Fallback disabled: expose a no-op façade + empty chain table.  Callers
 // (sys_manager.cpp) can still invoke remote_link_fallback_update() —
 // it just returns immediately without touching the bus.  The
-// REMOTE_LINK_LOST channel stays at its failsafe default (high = lost),
-// which is the correct behaviour for projects that opted out of the
-// fallback (autonomous machines, or projects that handle link-loss at
-// a different level).
+// REMOTE_LINK_LOST channel does not exist either (its .cb requires
+// HAS_REMOTE_LINK_LOST_FALLBACK), which is the correct behaviour for
+// projects that opted out of the fallback (autonomous machines, or
+// projects that handle link-loss at a different level).
 void remote_link_fallback_update(ComBus& /*bus*/) {
     // no-op
 }
