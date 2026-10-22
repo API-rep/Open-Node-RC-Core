@@ -85,7 +85,7 @@ La table de correspondance entrée vers channel (`inputs_map`) devient elle auss
 
 ### 2.3 Sens et relais
 
-- Chaque côté déclare le sens **de son point de vue** ; le builder vérifie que les sens sont complémentaires. `both` est interdit ; **`both_or` est autorisé** (par exemple le failsafe partagé : un tracteur et sa remorque ne forment qu'un niveau de sécurité), avec fusion OR au niveau du lien. Le profil d'un type (télécommande vers machine) est écrit du point de vue de la machine et inversé côté télécommande selon le rôle.
+- Chaque côté déclare le sens **de son point de vue** ; le builder vérifie que les sens sont complémentaires. `both` est interdit ; **`both_or` est autorisé** (par exemple le failsafe partagé : un tracteur et sa remorque ne forment qu'un niveau de sécurité), avec fusion OR au niveau du lien (câblée le 2026-10-22, étape 1.1b : voir `src/core/system/combus/protocol/both_or.md`). Le profil d'un type (télécommande vers machine) est écrit du point de vue de la machine et inversé côté télécommande selon le rôle.
 - À la réception, seuls les channels dont le sens le permet sont appliqués.
 - **`passthrough`** (paramètre du `.cb`) : un nœud relais consomme une valeur reçue et la relaie aux autres nœuds connectés qui la reçoivent. Exemple du frein : télécommande `uplink`, machine `downlink` et `passthrough`, remorque `downlink`. Règles :
   - le builder calcule le rôle de la machine sur chaque lien (pair émetteur : elle reçoit ; pair récepteur : elle émet) ;
@@ -173,6 +173,7 @@ Chaque étape se vérifie avec le test de boucle (loopback) puis un build comple
 | Étape | Livrable | Preuve |
 |---|---|---|
 | 1.1 | RX branché (`com_rx_update()` en tête de boucle, `com_update()` reste l'émission en fin de boucle), perte de lien par lien (`linkTimeoutMs` dans le `ComProtocolCfg`, 250 ms pour le lien d'extension), `UART_LINK_LOST` publié, cible = ComBus du nœud pour les liens qui reçoivent | **validé sur la carte (2026-10-21)** : groupes J et K du test Unity (5 tests : perdu avant la première trame, vivant après une trame, perdu après le silence, lien TX seul jamais perdu, écriture refusée comptée), 38 tests sur 38. Sur la Volvo flashée : manette connectée, `REMOTE_LINK_LOST` passe à off et le runlevel reste `IDLE` ; sans manette il est à on ; `denied: 0` au tableau de bord. Builds Volvo et `test_node_mainboard` OK. Aucun env n'a de lien qui reçoit : pas d'effet sur la Volvo, sauf la chaîne `REMOTE_LINK_LOST` (voir constat) |
+| 1.1b | Fusion `both_or` effective, anti ping-pong : valeur de la carte gardée à part (`localValue`), cache des valeurs reçues par lien, `valeur = carte OU liens vivants` réévaluée à chaque cycle, émission sans écho, une carte qui n'a jamais écrit le channel ne contribue pas ; doc `both_or.md`. Préalable : un dossier `combus_generated` par env (le dossier partagé faisait compiler un env avec les fichiers d'un autre depuis le nouveau `requires`) | **validé sur la carte (2026-10-22)** : groupe L du test Unity (5 tests : fusion, retour à `false`, pair silencieux, pas d'écho, carte qui n'écrit jamais), 43 tests sur 43 ; builds Volvo et `test_node_mainboard` OK |
 | 1.2 | État de lien et blocage ; ACK de handshake ; ACK périodique | pair allumé plus tard : le lien s'établit ; perte puis reconnexion : renégociation |
 
 ### Chantier 2 : contrats `BASE`
@@ -196,7 +197,7 @@ Chaque étape se vérifie avec le test de boucle (loopback) puis un build comple
 | Étape | Livrable | Preuve |
 |---|---|---|
 | 3.1 | Seconde lecture des profils compatibles ; ensembles réduits ; étiquette d'égal à égal | tables générées pour un couple tracteur / remorque d'essai |
-| 3.2 | `passthrough` et ses contrôles ; fusion `both_or` sans retour vers l'origine | frein relayé ; failsafe partagé qui retombe |
+| 3.2 | `passthrough` et ses contrôles (la fusion `both_or` sans retour vers l'origine est faite, 1.1b ; un relais devra suivre la même règle) | frein relayé ; failsafe partagé qui retombe |
 | 3.3 | Couplage : `ComCoupling`, activation `ON_COUPLING` d'après un channel déclencheur (`.cb` conditionnel du dispositif, par exemple un lecteur RFID) | un lien s'active au couplage et se suspend au découplage |
 
 ### Chantier 4 : télécommande
@@ -228,6 +229,12 @@ Chaque étape se vérifie avec le test de boucle (loopback) puis un build comple
 | 6.1 | Ensemble stable `SYSTEM` par nœud et son MD5 | contrôles du chantier 2 sur un nœud à deux cartes (`test_node_*`) |
 | 6.2 | Tables pour des cartes aux channels différents ; MD5 stable et next de la vue `SYSTEM` | deux cartes avec des `requires` différents restent liées |
 | 6.3 | Négociation du mode entre cartes (même code qu'en 1.2 et 2.2) | une carte reflashée seule retombe en stable, la sécurité continue |
+
+**Validation de fin de rework** (décidé le 2026-10-22) : les tests sont écrits par le même auteur que le code, donc exposés aux erreurs de mode commun (une mauvaise compréhension d'une règle passe dans le code et dans son test). En fin de rework :
+- relecture des tests par un **agent tiers** (sous Cline), à partir des règles et des exemples validés par le propriétaire, sans le code ;
+- **accès direct aux cartes** pour compiler, téléverser et lancer les tests sans intermédiaire ;
+- **monkey test** de longue durée sur les liens.
+D'ici là, chaque règle est validée par le propriétaire sur un exemple avant le code, et chaque test doit échouer sur l'ancien code et passer sur la carte.
 
 **Côté builder, en cours de route** : champs à ajouter à `ALLOWED_FIELDS` (statut candidat, étiquette d'égal à égal, `passthrough`, et `critical` si retenu) ; thème `sound` dans `VALID_THEMES`.
 

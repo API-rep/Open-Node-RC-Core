@@ -131,7 +131,14 @@ struct CombusRxState {
     // writes a BOARD channel).
     ChanLayer              layer             = ChanLayer::UNDEFINED;
     ChanLayer              writeLayer        = ChanLayer::UNDEFINED;
+
+    // Silence after which the link counts as lost (ms), set by
+    // combus_rx_set_link_timeout().  0 = never alive for combus_rx_peer_or().
+    uint32_t               linkTimeoutMs     = 0u;
 };
+
+/// "No link" value for the excluded link of combus_rx_peer_or().
+static constexpr uint8_t CombusRxNoLink = 0xFFu;
 
 
 
@@ -264,6 +271,35 @@ uint32_t combus_rx_age_ms( uint8_t linkIdx );
  */
 
 bool combus_rx_is_alive( uint8_t linkIdx, uint32_t timeoutMs );
+
+
+/**
+ * @brief Set the silence after which a receiving link counts as lost.
+ *
+ * @details Used by combus_rx_peer_or() to ignore the stale values of a silent
+ *   link.  Set by combus_links_watch() from the link's linkTimeoutMs.
+ *
+ * @param linkIdx    Index of this link in the per-link state array.
+ * @param timeoutMs  Silence (ms) after which the link is lost; 0 = never alive.
+ */
+
+void combus_rx_set_link_timeout( uint8_t linkIdx, uint32_t timeoutMs );
+
+
+/**
+ * @brief OR of one digital channel over the values received from the live links.
+ *
+ * @details both_or merge (anti ping-pong, see both_or.md).  Only links that are
+ *   alive (combus_rx_is_alive() with their own timeout) and whose last frame
+ *   carried the channel are counted.  @p excludeLink is left out: the value
+ *   sent on a link never includes what that link sent.
+ *
+ * @param ch           Digital channel index.
+ * @param excludeLink  Link to leave out, or CombusRxNoLink.
+ * @return             true if a live link (other than @p excludeLink) received true.
+ */
+
+bool combus_rx_peer_or( uint8_t ch, uint8_t excludeLink );
 
 
 

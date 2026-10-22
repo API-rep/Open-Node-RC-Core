@@ -128,14 +128,14 @@ typedef struct {
   bool        value;                               ///< Current channel state (true/false)
   ChanLayer   layer       = ChanLayer::BOARD;     ///< Propagation layer — see ChanLayer
   Direction   direction   = Direction::None;       ///< Wire direction — added by A6.1
-  // ND6: anti-oscillation flag for SYSTEM channels in direction `both`.
-  // When true, the runtime must apply `local OR received` instead of
-  // `overwrite` on combus_frame_apply(). The C++ wiring of this flag
-  // is deferred to a separate chantier (after the merge of the
-  // Python-only branch). Today, the field is emitted by the generator
-  // and initialised to its YAML value, but combus_frame_apply() does
-  // NOT read it yet — it remains inert.
-  bool        bothOr      = false;                 ///< Anti-oscillation OR-aggregation flag — added by ND6
+  // both_or (anti ping-pong, see protocol/both_or.md): `value` is the OR of
+  // this board's own value and of the values received from the live links.
+  // A received frame never overwrites the slot; com_rx_update() refreshes
+  // `remoteValue` each cycle and every local write recomputes `value`.
+  bool        bothOr       = false;                ///< Anti-oscillation OR-aggregation flag — added by ND6
+  bool        localValue   = false;                ///< both_or: last value written by this board's own code
+  bool        localWritten = false;                ///< both_or: true once this board wrote the channel (otherwise it does not contribute)
+  bool        remoteValue  = false;                ///< both_or: OR of the values received from the live links
 } DigitalComBus;
 
 /**

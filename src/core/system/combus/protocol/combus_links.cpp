@@ -198,6 +198,11 @@ void combus_links_watch( const ComLinkRuntime* runtime, uint8_t count )
 {
     s_watched      = runtime;
     s_watchedCount = count;
+
+        // The RX module needs the same timeouts to ignore silent links in the both_or merge
+    for (uint8_t i = 0u; i < count; ++i) {
+        if (runtime[i].receives) { combus_rx_set_link_timeout(i, runtime[i].linkTimeoutMs); }
+    }
 }
 
 

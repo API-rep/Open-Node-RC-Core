@@ -100,6 +100,10 @@ static constexpr uint8_t CombusFrameMinLen = CombusFrameHeaderLen + sizeof(uint8
  *                             (resolved at TX init from link->layer).
  * @param[in]  digitalWireEnd  LY2 — number of digital channels to encode
  *                             (resolved at TX init from link->layer).
+ * @param[in]  digitalValues   Optional digital values to send instead of the
+ *                             bus values (at least @p digitalWireEnd entries);
+ *                             the TX passes the values prepared for one link
+ *                             (both_or without echo).  nullptr = bus values.
  *
  * @return Number of bytes written into outputBuffer, 0 on error.
  *
@@ -113,7 +117,8 @@ uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
                              const ComBus*         combus,
                              uint8_t               seq,
                              uint8_t               analogWireEnd,
-                             uint8_t               digitalWireEnd );
+                             uint8_t               digitalWireEnd,
+                             const bool*           digitalValues = nullptr );
 
 
 /**

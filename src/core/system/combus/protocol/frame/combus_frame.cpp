@@ -112,7 +112,8 @@ uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
                              const ComBus*         combus,
                              uint8_t               seq,
                              uint8_t               analogWireEnd,
-                             uint8_t               digitalWireEnd ) {
+                             uint8_t               digitalWireEnd,
+                             const bool*           digitalValues ) {
 
 		// LY2 — the wire payload is sized to the layer's prefix length.
 		// analogWireEnd / digitalWireEnd are resolved at TX init time
@@ -171,7 +172,13 @@ uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
 		for (uint8_t bit = 0; bit < 8u; ++bit) {
 			uint8_t ch = (uint8_t)(b * 8u + bit);
 
-			if (ch < nDigital && combus->digitalBus && combus->digitalBus[ch].value) {
+			if (ch >= nDigital) { continue; }
+
+				// The values prepared for this link (both_or without echo) when given,
+				// the bus values otherwise.
+			const bool v = digitalValues ? digitalValues[ch]
+			                             : (combus->digitalBus && combus->digitalBus[ch].value);
+			if (v) {
 				packed |= (uint8_t)(1u << bit);
 			}
 		}
@@ -376,6 +383,11 @@ void combus_frame_apply( const ComBusFrameCfg& cfg,
 
 	if (combus->digitalBus) {
 		for (uint8_t i = 0; i < nDigitalEff; ++i) {
+				// both_or: never overwritten by a frame.  The received value stays in
+				// the link snapshot and com_rx_update() merges it with this board's
+				// own value each cycle (anti ping-pong, see protocol/both_or.md).
+			if (combus->digitalBus[i].bothOr) { continue; }
+
 				// LY2 — see analog loop above.
 			combus_set_digital(*combus, (DigitalComBusID)i, inputFrame->digital[i], caller);
 		}

@@ -135,10 +135,12 @@ sens, le résultat est le OR de leurs valeurs au lieu du dernier écrit.
   même channel peuvent faire osciller la valeur (A met `true`, B resynchronise
   avec `false`). Avec la fusion OR, une valeur à `true` n'est plus écrasée par
   une resynchronisation.
-- **Déclaratif à ce jour** : le canon valide et mémorise la variante, mais le
-  traitement OR à l'écriture et à la réception n'est pas encore câblé côté C++
-  (voir « Non implémenté »). Le générateur émet seulement `.bothOr = true`
-  dans le struct `DigitalComBus` pour `both_or`, champ présent mais inerte.
+- **`both_or` est câblé** (2026-10-22) : sur chaque carte, la valeur est le OU
+  de la valeur écrite par la carte et des valeurs reçues des liens vivants, et ce
+  qu'une carte envoie sur un lien n'inclut jamais ce que ce lien lui a envoyé
+  (anti ping-pong). Détail : `src/core/system/combus/protocol/both_or.md`.
+- **`uplink_or` et `downlink_or` restent déclaratifs** : le canon valide et
+  mémorise la variante, sans traitement OR côté C++ (voir « Non implémenté »).
 
 **Diffusion entre boards (SYSTEM).** Il suffit de déclarer le channel sur une
 board : les autres boards du nœud reçoivent automatiquement le channel avec
@@ -260,11 +262,11 @@ par le nom de la board pour les autres (`combus_<board>.h`, etc. ;
 ## Non implémenté à ce jour
 
 - Inversion/diffusion de `direction` pour le scope BASE côté télécommande.
-- Fusion OR côté C++ pour les variantes `*_or` (à l'écriture et à la
-  réception dans `combus_frame_apply`). Aujourd'hui, une fusion comme
-  `FAILSAFE_VBAT` → `FAILSAFE` reste câblée à la main dans une chaîne CbProc
-  (`cb_reset_fn` en tête puis `cb_or_fn` : `src/core/system/failsafe/failsafe_chain.cpp`).
-  `combus_set_digital` écrit la valeur sans fusion (`combus_access.cpp:91-102`).
+- Fusion OR côté C++ pour `uplink_or` et `downlink_or`. `both_or` est câblé
+  (voir `src/core/system/combus/protocol/both_or.md`). La fusion des contributeurs
+  locaux d'un agrégat (par exemple `FAILSAFE_VBAT` → `FAILSAFE`) reste faite par une
+  chaîne CbProc (`cb_reset_fn` en tête puis `cb_or_fn` :
+  `src/core/system/failsafe/failsafe_chain.cpp`).
 
 ### Contrat prévu pour la fusion OR (non implémenté)
 
@@ -282,3 +284,8 @@ Repris de la note de conception de 2026-08-29 (variantes `*_or`). C'est une
 
 L'emplacement de la remise à zéro est aujourd'hui dans la chaîne elle-même
 (processor `cb_reset_fn`), pas dans l'accesseur ni dans `sys_manager_update`.
+
+Pour `both_or`, ce contrat est mis en œuvre depuis le 2026-10-22 : la fusion est
+faite dans l'accesseur (`combus_set_digital`), comme prévu, avec en plus une
+valeur de la carte gardée à part et une émission sans écho. Voir
+`src/core/system/combus/protocol/both_or.md`.

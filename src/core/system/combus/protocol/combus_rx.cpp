@@ -400,4 +400,33 @@ bool combus_rx_is_alive( uint8_t linkIdx, uint32_t timeoutMs )
     return st.everReceived && (combus_rx_age_ms(linkIdx) < timeoutMs);
 }
 
+
+
+/** @brief Set the silence after which a receiving link counts as lost. */
+void combus_rx_set_link_timeout( uint8_t linkIdx, uint32_t timeoutMs )
+{
+    if (!s_rxStates || linkIdx >= s_capacity) { return; }
+    s_rxStates[linkIdx].linkTimeoutMs = timeoutMs;
+}
+
+
+
+/** @brief OR of one digital channel over the values received from the live links (both_or merge). */
+bool combus_rx_peer_or( uint8_t ch, uint8_t excludeLink )
+{
+    if (!s_rxStates) { return false; }
+
+    for (uint8_t i = 0u; i < s_capacity; ++i) {
+        const CombusRxState& st = s_rxStates[i];
+
+            // --- Only live links whose last frame carried the channel ---
+        if (i == excludeLink || !st.nodeCom || !st.snap.digital || st.linkTimeoutMs == 0u) { continue; }
+        if (!combus_rx_is_alive(i, st.linkTimeoutMs)) { continue; }
+        if (ch >= st.snap.header.cfg.nDigital) { continue; }
+
+        if (st.snap.digital[ch]) { return true; }
+    }
+    return false;
+}
+
 // EOF combus_rx.cpp

@@ -40,6 +40,13 @@
  *     A write refused by the layer check (a SYSTEM caller on a BOARD channel)
  *     increments combus_denied_writes(); an accepted write does not.
  *
+ *   Group L — both_or merge, anti ping-pong (chantier 1.1b):
+ *     A frame from a "peer" carrying FAILSAFE = true makes the merged FAILSAFE
+ *     true while this board's own value is false; it falls back when the peer
+ *     clears or goes silent; the frame this board sends back does not echo the
+ *     peer's value; a board that never wrote the channel does not contribute.
+ *     Same TX↔RX jumper as Group B.
+ *
  *   Group C — view identity (Phase 3 / A13):
  *     Validates that the 3 view-specific enums (AnalogComBusID,
  *     AnalogComBusSystemID, AnalogComBusBaseID and their digital
@@ -365,8 +372,11 @@ static void resetRxTarget(void) {
         rxTargetAnalog[i].value = 0u;
     }
     for (uint8_t i = 0u; i < kNDigital; ++i) {
-        rxTargetDigital[i]       = DigitalComBusArray[i];
-        rxTargetDigital[i].value = false;
+        rxTargetDigital[i]              = DigitalComBusArray[i];
+        rxTargetDigital[i].value        = false;
+        rxTargetDigital[i].localValue   = false;   // both_or state: not inherited from txComBus
+        rxTargetDigital[i].localWritten = false;
+        rxTargetDigital[i].remoteValue  = false;
     }
     rxTargetBus.analogBusMaxVal = txComBus.analogBusMaxVal;
 }
@@ -999,6 +1009,126 @@ static void test_denied_write_is_counted(void) {
 }
 
 
+// =============================================================================
+// GROUP L — BOTH_OR MERGE, ANTI PING-PONG (chantier 1.1b)
+//
+// The health link of Group J (TX↔RX on the loopback port, frames applied to
+// rxTargetBus) receives frames built from peerBus, as a remote board would send
+// them. FAILSAFE is a both_or channel: value = this board's value OR the live
+// links, a frame never overwrites it, and what is sent on a link never echoes
+// what that link sent (see src/core/system/combus/protocol/both_or.md).
+// =============================================================================
+
+static AnalogComBus  peerAnalog[kNAnalog];
+static DigitalComBus peerDigital[kNDigital];
+static ComBus        peerBus = {
+    .analogBus  = peerAnalog,
+    .digitalBus = peerDigital
+};
+
+static constexpr uint8_t kFailsafeIdx = static_cast<uint8_t>(DigitalComBusID::FAILSAFE);
+
+/** Write on the wire one frame as a remote peer would send it, with FAILSAFE as given. */
+static void sendPeerFrame(bool failsafe) {
+    for (uint8_t i = 0u; i < kNAnalog; ++i)  { peerAnalog[i]  = AnalogComBusArray[i]; }
+    for (uint8_t i = 0u; i < kNDigital; ++i) { peerDigital[i] = DigitalComBusArray[i]; peerDigital[i].value = false; }
+    peerBus.analogBusMaxVal         = txComBus.analogBusMaxVal;
+    peerDigital[kFailsafeIdx].value = failsafe;
+
+    const ComBusFrameCfg sysCfg = {
+        static_cast<uint8_t>(AnalogComBusSystemID::CH_COUNT),
+        static_cast<uint8_t>(DigitalComBusSystemID::CH_COUNT)
+    };
+    static uint8_t seq = 0u;
+    seq = (seq == 255u) ? 1u : (uint8_t)(seq + 1u);
+
+    uint8_t buf[CombusRxBufSize];
+    const uint8_t len = combus_frame_encode(sysCfg, buf, &peerBus, seq, sysCfg.nAnalog, sysCfg.nDigital);
+    TEST_ASSERT_TRUE_MESSAGE(len > 0u, "peer frame not encoded");
+
+    s_com->write(s_com->ctx, buf, len);
+    delay(kRxPollMs);
+}
+
+static bool failsafeOnBus(void) {
+    return rxTargetBus.digitalBus[kFailsafeIdx].value;
+}
+
+/** A peer in fault makes the merged value true while this board's own value is false. */
+static void test_both_or_merges_peer_value(void) {
+    startHealthLink(LinkEnd::TX_RX, kHealthDev);
+    combus_set_digital(rxTargetBus, DigitalComBusID::FAILSAFE, false);   // this board: no fault
+
+    sendPeerFrame(true);
+    com_rx_update(rxTargetBus);
+
+    TEST_ASSERT_TRUE(failsafeOnBus());
+    TEST_ASSERT_FALSE(rxTargetBus.digitalBus[kFailsafeIdx].localValue);   // the local value is kept apart
+}
+
+/** The peer clears its fault: the merged value falls back to false. */
+static void test_both_or_falls_back_when_peer_clears(void) {
+    startHealthLink(LinkEnd::TX_RX, kHealthDev);
+    combus_set_digital(rxTargetBus, DigitalComBusID::FAILSAFE, false);
+
+    sendPeerFrame(true);
+    com_rx_update(rxTargetBus);
+    TEST_ASSERT_TRUE(failsafeOnBus());
+
+    sendPeerFrame(false);
+    com_rx_update(rxTargetBus);
+    TEST_ASSERT_FALSE(failsafeOnBus());
+}
+
+/** The peer goes silent: its last value is stale and no longer counts. */
+static void test_both_or_ignores_silent_peer(void) {
+    startHealthLink(LinkEnd::TX_RX, kHealthDev);
+    combus_set_digital(rxTargetBus, DigitalComBusID::FAILSAFE, false);
+
+    sendPeerFrame(true);
+    com_rx_update(rxTargetBus);
+    TEST_ASSERT_TRUE(failsafeOnBus());
+
+    delay(kHealthProtocol.linkTimeoutMs + 60u);
+    com_rx_update(rxTargetBus);
+    TEST_ASSERT_FALSE(failsafeOnBus());
+}
+
+/** The frame sent back on the link does not echo the peer's value (anti ping-pong). */
+static void test_both_or_sends_no_echo(void) {
+    startHealthLink(LinkEnd::TX_RX, kHealthDev);
+    combus_set_digital(rxTargetBus, DigitalComBusID::FAILSAFE, false);
+
+    sendPeerFrame(true);
+    com_rx_update(rxTargetBus);
+    TEST_ASSERT_TRUE(failsafeOnBus());                  // merged: true
+
+    delay(30u);
+    combus_tx_update(&rxTargetBus);                     // loops back on the same link
+    delay(kRxPollMs);
+    combus_rx_update(&rxTargetBus);
+
+    const ComBusFrame* snap = combus_rx_snapshot(kLinkIdx);
+    TEST_ASSERT_NOT_NULL(snap);
+    TEST_ASSERT_FALSE_MESSAGE(snap->digital[kFailsafeIdx], "the peer's FAILSAFE was echoed back to it");
+}
+
+/** A board that never wrote the channel does not contribute its default value. */
+static void test_both_or_board_never_writing_does_not_contribute(void) {
+    startHealthLink(LinkEnd::TX_RX, kHealthDev);
+
+        // A diffused copy never written by this board: still at its default value, high (fault)
+    rxTargetBus.digitalBus[kFailsafeIdx].value = true;
+    TEST_ASSERT_FALSE(rxTargetBus.digitalBus[kFailsafeIdx].localWritten);
+
+    com_rx_update(rxTargetBus);                       // no peer frame, never written locally
+
+    TEST_ASSERT_FALSE(failsafeOnBus());
+
+    combus_links_watch(nullptr, 0u);
+}
+
+
 // Chantier 12.6 (cleanup): Group F (FS1 failsafe re-arm) REMOVED — link
 // health is now monitored by the per-backend *_LINK_LOST contributors
 // (PS4_DS4_BT_LINK_LOST, UART_LINK_LOST, ...) aggregated into
@@ -1109,6 +1239,13 @@ void setup() {
 
     // --- Group K: denied writes are counted (chantier 1.1) ---
     RUN_TEST(test_denied_write_is_counted);
+
+    // --- Group L: both_or merge, anti ping-pong (chantier 1.1b) ---
+    RUN_TEST(test_both_or_merges_peer_value);
+    RUN_TEST(test_both_or_falls_back_when_peer_clears);
+    RUN_TEST(test_both_or_ignores_silent_peer);
+    RUN_TEST(test_both_or_sends_no_echo);
+    RUN_TEST(test_both_or_board_never_writing_does_not_contribute);
 
     // Chantier 12.6: Group F (FS1 failsafe re-arm) removed — see
     // header docstring above (5 independent test groups A/B/C/D/E).

@@ -76,6 +76,37 @@ inline bool combus_set_digital(ComBus& bus, const std::optional<DigitalComBusID>
 
 
 /**
+ * @brief This board's own contribution to a both_or channel.
+ *
+ * @details false while this board has never written the channel itself: a
+ *   board that only receives a both_or channel (diffused copy, default value)
+ *   relays the values of the other boards but adds nothing of its own.
+ *
+ * @param slot  Digital channel slot.
+ * @return      The last locally written value, or false if never written.
+ */
+
+inline bool combus_both_or_local(const DigitalComBus& slot) {
+    return slot.localWritten && slot.localValue;
+}
+
+
+/**
+ * @brief Refresh the received term of a both_or channel and recompute its value.
+ *
+ * @details value = (this board's own value) OR @p remote. Called once per cycle
+ *   by com_rx_update() with the OR of the values received from the live links
+ *   (see protocol/both_or.md, anti ping-pong).
+ *
+ * @param bus     Node ComBus.
+ * @param ch      A both_or digital channel.
+ * @param remote  OR of the values received from the live links.
+ */
+
+void combus_both_or_set_remote(ComBus& bus, DigitalComBusID ch, bool remote);
+
+
+/**
  * @brief Number of writes denied by the layer check since boot.
  *
  * @details A non-zero count means some caller writes a channel with the wrong

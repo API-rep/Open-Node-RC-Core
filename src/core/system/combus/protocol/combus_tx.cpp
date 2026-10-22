@@ -10,6 +10,8 @@
 #include <core/system/combus/protocol/frame/combus_frame.h>
 #include <core/system/combus/protocol/frame/combus_handshake.h>
 #include <core/system/combus/protocol/frame/combus_handshake_tx.h>
+#include <core/system/combus/protocol/combus_rx.h>   // combus_rx_peer_or() — both_or without echo
+#include <core/system/combus/combus_access.h>        // combus_both_or_local()
 #include <core/system/debug/logging/debug.h>
 
 // LY2 — include the 3 view-specific ID headers so combus_tx_init()
@@ -193,6 +195,10 @@ void combus_tx_update(
 		// the loop body, so no overlap between iterations is possible.
 	static uint8_t frame[255u];
 
+		// Digital values prepared for one link (both_or without echo) — same
+		// lifetime rule as `frame`.
+	static bool txDigital[255u];
+
 		// --- Iterate over every registered link ---
 	for (uint8_t i = 0u; i < s_capacity; ++i) {
 		CombusTxState& st = s_txStates[i];
@@ -215,6 +221,21 @@ void combus_tx_update(
 		st.lastTxMs = now;
 
 
+			// --- 2b. both_or without echo (anti ping-pong, see both_or.md): send this
+			//     board's own value OR what the OTHER links received, never what
+			//     this link sent.  Other digital channels are sent as they are.
+		const bool* digitalValues = nullptr;
+		if (bus->digitalBus) {
+			bool anyBothOr = false;
+			for (uint8_t ch = 0u; ch < st.digitalWireEnd && ch < st.frameCfg.nDigital; ++ch) {
+				const DigitalComBus& slot = bus->digitalBus[ch];
+				txDigital[ch] = slot.bothOr ? (combus_both_or_local(slot) || combus_rx_peer_or(ch, i))
+				                            : slot.value;
+				anyBothOr = anyBothOr || slot.bothOr;
+			}
+			if (anyBothOr) { digitalValues = txDigital; }
+		}
+
 			// --- 3. Encode ---
 			// LY2 — pass st.analogWireEnd / st.digitalWireEnd (resolved
 			// at TX init from link->layer) so the codec iterates only
@@ -226,7 +247,8 @@ void combus_tx_update(
 		    bus,
 		    st.seq,
 		    st.analogWireEnd,
-		    st.digitalWireEnd
+		    st.digitalWireEnd,
+		    digitalValues
 		);
 
 		if (frameLen == 0u) { continue; }
