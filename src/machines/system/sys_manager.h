@@ -38,8 +38,9 @@
  *   in `loop()`.
  *
  *   Sound node: no equivalent needed — link health is monitored per-link
- *   by the UART RX path which publishes `UART_LINK_LOST` directly.  See
- *   `combus_sound_interpreter.cpp` for the wiring.
+ *   by com_rx_update(), which publishes `COM_LINK_LOST` and
+ *   `FAILSAFE_COM_LINK` from the loss policy of each link.  See
+ *   `com_manager.cpp` for the wiring.
  *
  *   The aggregated Failsafe state is published on
  *   `comBus.digitalBus[DigitalComBusID::FAILSAFE]` by the Failsafe chain

@@ -5,7 +5,7 @@
  * @details Chantier 12.6 (cleanup): the historical `bus.isDrived` flag
  *   has been REMOVED from the `ComBus` struct (see `combus_defs.h`).
  *   Link health is now monitored per-channel by independent contributors
- *   (PS4_DS4_BT_LINK_LOST, UART_LINK_LOST, ...) aggregated by
+ *   (PS4_DS4_BT_LINK_LOST, COM_LINK_LOST, ...) aggregated by
  *   `remote_link_fallback_chain.cpp` into `REMOTE_LINK_LOST`.  See
  *   `doc/failsafe_module.md` §12.5 (new design) and §12.6 (cleanup).
  *

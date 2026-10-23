@@ -25,8 +25,9 @@
 // 1. EXTENSION LINK
 // =============================================================================
 
-	/// Protocol of the extension link: 115200 baud, 50 frames per second, lost after 250 ms of silence.
-inline constexpr ComProtocolCfg kComProtoExt = { 115200u, 50u, 250u };
+	/// Protocol of the extension link: 115200 baud, 50 frames per second, lost after 250 ms of silence,
+	/// 3 s for a first frame before a FAILSAFE loss.  onLoss is left BY_SCOPE: intra-node -> FAILSAFE.
+inline constexpr ComProtocolCfg kComProtoExt = { 115200u, 50u, 250u, 3000u };
 
 
 	/// One-way extension link (COMBUS_UART_TX=N): the board wires it as TX.

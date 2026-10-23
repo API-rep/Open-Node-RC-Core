@@ -19,7 +19,7 @@
 
 void sys_manager_update(ComBus& bus) {
 
-      // --- 0. Communication reception (applies received frames, publishes UART_LINK_LOST) ---
+      // --- 0. Communication reception (applies received frames, publishes COM_LINK_LOST and FAILSAFE_COM_LINK) ---
       // First: the link health must be fresh when the REMOTE_LINK_LOST chain (step 4) reads it.
     com_rx_update(bus);
 
@@ -37,7 +37,7 @@ void sys_manager_update(ComBus& bus) {
       //
       // Chantier 12.6: the historical open-drain pre-clear of `bus.isNotDrived`
       // (FS1) is REMOVED — link health is now monitored at transport level by
-      // per-link contributors (PS4_DS4_BT_LINK_LOST, UART_LINK_LOST, ...) and
+      // per-link contributors (PS4_DS4_BT_LINK_LOST, COM_LINK_LOST, ...) and
       // aggregated by the remote_link_fallback_chain into REMOTE_LINK_LOST.
     failsafe_update(bus);
 

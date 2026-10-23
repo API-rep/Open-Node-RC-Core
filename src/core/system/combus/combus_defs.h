@@ -15,7 +15,7 @@
  *
  * @note Chantier 12.6: the historical `isDrived` / `isNotDrived` open-drain
  *   flags have been REMOVED. Link health is now monitored at transport
- *   level by per-link contributors (PS4_DS4_BT_LINK_LOST, UART_LINK_LOST,
+ *   level by per-link contributors (PS4_DS4_BT_LINK_LOST, COM_LINK_LOST,
  *   ...) declared in the `.cb` channel files, and aggregated by
  *   `remote_link_fallback_chain.cpp` into the SYSTEM `REMOTE_LINK_LOST`
  *   channel. See failsafe_module.md §12.5 for the new design.

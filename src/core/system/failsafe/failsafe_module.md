@@ -277,6 +277,9 @@ src/core/system/failsafe/
 ```text
 src/core/system/vbat/
 └── vbat_failsafe.cb     // Canal FAILSAFE_VBAT (réarmé par vbat_update)
+
+src/core/system/com/link_health/
+└── failsafe_com_link.cb // Canal FAILSAFE_COM_LINK (écrit par com_rx_update : lien onLoss FAILSAFE perdu)
 ```
 
 **Chaîne REMOTE_LINK_LOST** (séparée) :
@@ -284,7 +287,7 @@ src/core/system/vbat/
 ```text
 src/core/system/com/link_health/
 ├── remote_link_lost.cb           // Canal REMOTE_LINK_LOST (agrégat)
-├── uart_link_lost.cb             // Canal UART_LINK_LOST (contributeur)
+├── com_link_lost.cb              // Canal COM_LINK_LOST (contributeur : lien onLoss IDLE)
 ├── remote_link_fallback_chain.h  // Déclarations kRemoteLinkFallbackChain[]
 └── remote_link_fallback_chain.cpp // Chaîne d'agrégation (reset + OR-guard)
 

@@ -27,7 +27,7 @@
 
 #include <core/system/combus/processors/base/cb_reset.h>   // cb_reset_fn
 #include <core/system/combus/processors/logic/cb_or.h>      // cb_or_fn
-#include <core/config/machines/combus_types.h>              // DigitalComBusID::FAILSAFE / FAILSAFE_VBAT
+#include <core/config/machines/combus_types.h>              // DigitalComBusID::FAILSAFE / FAILSAFE_VBAT / FAILSAFE_COM_LINK
 
 
 // =============================================================================
@@ -64,6 +64,18 @@ CbProc kFailsafeProcs[] = {
         .fn      = cb_or_fn,
     },
 #endif
+
+    // --- 2. ComBus link contributor (always present) -----------------------
+    // Reads FAILSAFE_COM_LINK, written each cycle by com_rx_update() from the
+    // receiving links whose loss policy is FAILSAFE (combus_links_lost()):
+    // true while one of them is lost, or never seen after its startup grace.
+    // A board without such a link gets false each cycle.
+    {
+        .name    = "failsafe_or_com_link",
+        .inCh    = DigitalComBusID::FAILSAFE_COM_LINK,
+        .outCh   = DigitalComBusID::FAILSAFE_COM_LINK,
+        .fn      = cb_or_fn,
+    },
 
     // Add new contributors here with their own #if defined(HAS_XXX_FAILSAFE)
     // blocks.  Each must follow the same shape: inCh == outCh, fn = cb_or_fn,

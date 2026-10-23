@@ -22,9 +22,9 @@
  *   Contributors (optional, gated by build flags):
  *     - PS4_DS4_BT_LINK_LOST — PS4 DualShock Bluetooth link health
  *       (active when INPUT_PS4_DS4_BT is defined).
- *     - UART_LINK_LOST       — health of the receiving ComBus UART links
- *       (active when COMBUS_UART is defined: a TX-only link cannot know the
- *       state of its peer, so it does not contribute).
+ *     - COM_LINK_LOST        — loss of a receiving ComBus link whose loss
+ *       policy is IDLE (always present: false when there is no such link;
+ *       a TX-only link cannot know the state of its peer and never counts).
  *
  *   The chain has primary `outCh` = DigitalComBusID::REMOTE_LINK_LOST so
  *   the runner commits the latched `value` to the top-level ComBus
@@ -48,7 +48,7 @@
 
 #include <core/system/combus/processors/base/cb_reset.h>   // cb_reset_fn
 #include <core/system/combus/processors/logic/cb_or.h>      // cb_or_fn
-#include <core/config/machines/combus_types.h>              // DigitalComBusID::PS4_DS4_BT_LINK_LOST, UART_LINK_LOST, REMOTE_LINK_LOST
+#include <core/config/machines/combus_types.h>              // DigitalComBusID::PS4_DS4_BT_LINK_LOST, COM_LINK_LOST, REMOTE_LINK_LOST
 
 
 // =============================================================================
@@ -94,28 +94,20 @@ static CbProc kRemoteLinkFallbackProcs[] = {
     },
 #endif
 
-#if defined(COMBUS_UART)
-    // --- 2. Receiving ComBus UART link contributor (optional) -------------
-    // Reads UART_LINK_LOST, published each cycle by com_rx_update() from the
-    // silence of the receiving links (combus_links_rx_lost(), per-link
-    // linkTimeoutMs).  A link that has not received a frame within its timeout
-    // reports true (= lost); this OR-guard latches the pipeline value to 1
-    // and consumes the channel.
+    // --- 2. ComBus link contributor (always present) ----------------------
+    // Reads COM_LINK_LOST, written each cycle by com_rx_update() from the
+    // receiving links whose loss policy is IDLE (combus_links_lost(IDLE)):
+    // true while one of them is not alive, never seen included.  This
+    // OR-guard latches the pipeline value to 1 and consumes the channel.
     //
-    // Only a link that receives can contribute: a TX-only link (COMBUS_UART_TX)
-    // knows nothing of its peer, and its stuck "lost" default would keep
-    // REMOTE_LINK_LOST at 1 forever.
-    //
-    // Multi-instance: com_rx_update() ORs all receiving links into the one
-    // UART_LINK_LOST channel (BOARD scope) — any link that is down
-    // contributes to the aggregated fault.
+    // A board without such a link gets false each cycle; a TX-only link never
+    // counts (it knows nothing of its peer).
     {
-        .name    = "remote_link_or_uart",
-        .inCh    = DigitalComBusID::UART_LINK_LOST,
-        .outCh   = DigitalComBusID::UART_LINK_LOST,
+        .name    = "remote_link_or_com",
+        .inCh    = DigitalComBusID::COM_LINK_LOST,
+        .outCh   = DigitalComBusID::COM_LINK_LOST,
         .fn      = cb_or_fn,
     },
-#endif
 
     // Add new contributors here with their own #if defined(...) blocks.
     // Each must follow the same shape: inCh == outCh, fn = cb_or_fn,

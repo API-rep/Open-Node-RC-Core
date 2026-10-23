@@ -21,13 +21,15 @@
 // =============================================================================
 
 /**
- * @brief Receive on every receiving link and publish the link health.
+ * @brief Receive on every receiving link and apply the link loss policy.
  *
  * @details Non-blocking. Drains the receiving links, which apply the frames
- * they decode to @p bus, then writes `UART_LINK_LOST` (BOARD scope): true while
- * a receiving link is silent or has not received anything yet, false otherwise
- * (and false when no link receives). Call once per main loop iteration, BEFORE
- * the REMOTE_LINK_LOST chain and the application logic.
+ * they decode to @p bus, merges the both_or channels, logs the loss and the
+ * recovery of each link, then writes (BOARD scope) `COM_LINK_LOST` from the
+ * links whose onLoss is IDLE and `FAILSAFE_COM_LINK` from those whose onLoss is
+ * FAILSAFE (combus_links_lost(); false when there is no such link). Call once
+ * per main loop iteration, BEFORE the FAILSAFE and REMOTE_LINK_LOST chains and
+ * the application logic.
  *
  * @param bus           Node ComBus, written by the received frames.
  */

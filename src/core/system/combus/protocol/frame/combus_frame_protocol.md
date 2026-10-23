@@ -262,7 +262,7 @@ Source : `src/machines/main.cpp` (appels lignes 51, 57-58, 233) et
 `src/machines/system/sys_manager.cpp:19-43`.
 
 1. `sys_manager_update` : réception ComBus (`com_rx_update`, qui publie aussi
-   `UART_LINK_LOST`), acquisition des entrées, `vbat_update`, `failsafe_update`,
+   `COM_LINK_LOST` et `FAILSAFE_COM_LINK`), acquisition des entrées, `vbat_update`, `failsafe_update`,
    puis `remote_link_fallback_update` si `HAS_REMOTE_LINK_LOST_FALLBACK` ;
 2. chaînes d'entrée et de simulation (`proc_chain_update`) ;
 3. machine à états des runlevels ;

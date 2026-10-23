@@ -14,7 +14,8 @@
  *   be tested on the target without any wiring.
  *
  *   A receiving link is also watched: combus_links_rx_lost() tells whether one
- *   of them has gone silent for longer than its linkTimeoutMs.
+ *   of them has gone silent for longer than its linkTimeoutMs, and
+ *   combus_links_lost() applies the loss policy of each link (onLoss).
  *
  *   All storage is caller-owned and static (nothing is allocated here):
  * @code
@@ -59,10 +60,26 @@
 
 struct ComLinkRuntime {
     CombusHandshakeContext handshake = {};
-    bool     receives      = false;   ///< true when this link has an RX side
-    uint32_t linkTimeoutMs = 0u;      ///< silence after which a receiving link is lost (ms)
+    const char*    name           = nullptr;                   ///< ComDev name, for the logs
+    bool           receives       = false;                     ///< true when this link has an RX side
+    uint32_t       linkTimeoutMs  = 0u;                        ///< silence after which a receiving link is lost (ms)
+    uint32_t       startupGraceMs = 0u;                        ///< wait for a first frame before a FAILSAFE loss (ms)
+    LinkLossAction lossAction     = LinkLossAction::NONE;      ///< onLoss of the ComDev, BY_SCOPE resolved
+    uint32_t       watchStartMs   = 0u;                        ///< set by combus_links_watch(): start of the grace
+    bool           reportedLost   = false;                     ///< last loss state logged by combus_links_update()
     uint16_t analogRx[static_cast<uint8_t>(AnalogComBusID::CH_COUNT)]   = {};
     bool     digitalRx[static_cast<uint8_t>(DigitalComBusID::CH_COUNT)] = {};
+};
+
+
+/**
+ * @brief State of a receiving link.
+ */
+
+enum class ComLinkState : uint8_t {
+    NEVER_SEEN,     ///< no frame since the link was put under watch (or the link does not receive)
+    ALIVE,          ///< last frame younger than linkTimeoutMs
+    LOST            ///< seen, then silent for longer than linkTimeoutMs
 };
 
 
@@ -151,13 +168,54 @@ bool combus_links_init( const ComDevMap*       maps,
  * @brief Put the receiving links of a runtime array under watch.
  *
  * @details Called by combus_links_init(). Exposed so a test can watch links it
- *   built itself. The array must outlive the program (static storage).
+ *   built itself. The array must outlive the program (static storage). The
+ *   startup grace of each link starts here.
  *
  * @param runtime  Per-link storage, one entry per link, in link order.
  * @param count    Number of entries in @p runtime.
  */
 
-void combus_links_watch( const ComLinkRuntime* runtime, uint8_t count );
+void combus_links_watch( ComLinkRuntime* runtime, uint8_t count );
+
+
+
+/**
+ * @brief State of one watched link.
+ *
+ * @param linkIdx  Index of the link (order of the runtime array).
+ * @return         NEVER_SEEN, ALIVE or LOST; NEVER_SEEN for a link that does not
+ *                 receive or an index out of range.
+ */
+
+ComLinkState combus_link_state( uint8_t linkIdx );
+
+
+
+/**
+ * @brief Whether a receiving link with the given reaction counts as lost.
+ *
+ * @details Per link, with its onLoss resolved (linkLossAction()):
+ *   - IDLE: the link is not alive (never seen or lost), no grace;
+ *   - FAILSAFE: the link is lost, or never seen once startupGraceMs has elapsed;
+ *   - NONE: never.
+ *   A link that only transmits never counts: it cannot know its peer.
+ *
+ * @param action  IDLE or FAILSAFE (NONE and BY_SCOPE always return false).
+ * @return        true if at least one link with this reaction counts as lost.
+ */
+
+bool combus_links_lost( LinkLossAction action );
+
+
+
+/**
+ * @brief Log the loss and the recovery of each receiving link, once per change.
+ *
+ * @details Lost here means lost, or never seen once startupGraceMs has elapsed,
+ *   whatever the onLoss of the link. Called each cycle by com_rx_update().
+ */
+
+void combus_links_update();
 
 
 

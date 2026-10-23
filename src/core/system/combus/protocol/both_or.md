@@ -45,7 +45,8 @@ Quatre règles :
    règle, elle l'enverrait à tout le monde, et la machine resterait en failsafe
    dès le démarrage. Elle ne fait que relayer.
 4. **Un lien perdu ne compte plus** : sa dernière valeur reçue est périmée. La
-   sécurité est alors assurée par la politique de perte du lien (`onLoss`).
+   sécurité est alors assurée par la politique de perte du lien (`onLoss`, voir
+   `src/core/system/com/link_health/remote_link_lost.md` §4.3).
 
 En formules, pour une carte B reliée aux liens L1…Ln :
 

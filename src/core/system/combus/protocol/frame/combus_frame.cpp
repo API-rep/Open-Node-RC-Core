@@ -322,7 +322,7 @@ bool combus_frame_decode( const ComBusFrameCfg& cfg,
  *   2. Stamp combus->lastFrameMs = millis()
  *      (Chantier 12.6: link-loss detection is no longer the codec's
  *      responsibility — it now lives at transport level, in the
- *      `UART_LINK_LOST` contributor channel.)
+ *      `COM_LINK_LOST` / `FAILSAFE_COM_LINK` contributor channels.)
  *   3. Reserved — transport flags (unused for now).
  *   4. Write analog channels [0 .. min(cfg.nAnalog, header.cfg.nAnalog)-1].
  *   5. Write digital channels [0 .. min(cfg.nDigital, header.cfg.nDigital)-1].
@@ -396,9 +396,9 @@ void combus_frame_apply( const ComBusFrameCfg& cfg,
 		// 6. Mark bus as actively driven by this frame.
 		// chantier 12.5 (new design): the codec stays PURE — it does NOT
 		// touch any *_LINK_LOST channel.  The UART link health is monitored
-		// at a HIGHER level (combus_sound_interpreter::update on the sound
-		// node side), which polls combus_rx_is_alive() each cycle and writes
-		// UART_LINK_LOST accordingly.  REMOTE_LINK_LOST is then the
+		// at a HIGHER level (com_rx_update(), which applies the loss policy
+		// of each link each cycle and writes COM_LINK_LOST and
+		// FAILSAFE_COM_LINK accordingly).  REMOTE_LINK_LOST is then the
 		// OR-aggregated result computed by the remote_link_fallback_chain
 		// (reset + OR-guard).
 		//
@@ -406,9 +406,9 @@ void combus_frame_apply( const ComBusFrameCfg& cfg,
 		// single-responsibility (decode + apply only — no link-state).
 	// Chantier 12.6: the `combus->isNotDrived = false;` line is REMOVED.
 	// The codec stays 100% pure (decode + apply).  Link-loss detection is
-	// now the transport layer's job — see combus_sound_interpreter (côté
-	// sound node) which publishes UART_LINK_LOST when no frame arrives
-	// within the timeout window.
+	// now the link layer's job — see com_rx_update(), which publishes
+	// COM_LINK_LOST and FAILSAFE_COM_LINK when no frame arrives within the
+	// timeout window.
 }
 
 // EOF combus_frame.cpp

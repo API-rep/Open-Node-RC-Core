@@ -90,7 +90,7 @@ VALID_THEMES: frozenset[str] = frozenset({
     "vbat",
     "light",
     "input",
-    "com",         # communication: PS4_DS4_BT_LINK_LOST, UART_LINK_LOST, REMOTE_LINK_LOST (link health)
+    "com",         # communication: PS4_DS4_BT_LINK_LOST, COM_LINK_LOST, FAILSAFE_COM_LINK, REMOTE_LINK_LOST (link health)
     # Ajouter ici les nouveaux thèmes légitimes.
 })
 

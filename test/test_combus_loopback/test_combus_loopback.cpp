@@ -32,8 +32,8 @@
  *
  *   Group J — receiving link health (chantier 1.1):
  *     A receiving link is lost until its first frame and again after
- *     linkTimeoutMs of silence; com_rx_update() applies the received frames and
- *     publishes UART_LINK_LOST accordingly; a TX-only link never counts as lost.
+ *     linkTimeoutMs of silence; com_rx_update() applies the received frames; a
+ *     TX-only link never counts as lost.
  *     Same TX↔RX jumper as Group B.
  *
  *   Group K — denied writes are counted (chantier 1.1):
@@ -46,6 +46,13 @@
  *     clears or goes silent; the frame this board sends back does not echo the
  *     peer's value; a board that never wrote the channel does not contribute.
  *     Same TX↔RX jumper as Group B.
+ *
+ *   Group M — link loss policy (chantier 1.1c):
+ *     Rows 1 to 11 of the table validated by the owner: per link, its onLoss
+ *     (default by scope: intra-node -> FAILSAFE, inter-node -> IDLE), its state
+ *     (never seen, alive, lost), the 3 s startup grace for FAILSAFE (shortened
+ *     here), and what com_rx_update() publishes on COM_LINK_LOST (IDLE) and
+ *     FAILSAFE_COM_LINK (FAILSAFE).  Same TX↔RX jumper as Group B.
  *
  *   Group C — view identity (Phase 3 / A13):
  *     Validates that the 3 view-specific enums (AnalogComBusID,
@@ -72,7 +79,7 @@
  *     the FS1 open-drain `isNotDrived` flag and a dedicated FS1 contributor
  *     channel.  Both have been removed in chantier 12.5/12.6: link health
  *     is now monitored at transport level by per-backend *_LINK_LOST
- *     contributors (PS4_DS4_BT_LINK_LOST, UART_LINK_LOST, ...) and
+ *     contributors (PS4_DS4_BT_LINK_LOST, COM_LINK_LOST, ...) and
  *     aggregated by `remote_link_fallback_chain.cpp` into REMOTE_LINK_LOST,
  *     which feeds the top-level FAILSAFE aggregator.
  *     See failsafe_module.md §12.5 (new design) and §12.6 (cleanup).
@@ -905,7 +912,7 @@ static void test_link_build_refuses_bad_wiring(void) {
 // frame and after linkTimeoutMs of silence. Requires the TX↔RX jumper.
 // =============================================================================
 
-static constexpr ComProtocolCfg kHealthProtocol = { 115200u, 50u, 100u };   ///< lost after 100 ms of silence
+static constexpr ComProtocolCfg kHealthProtocol = { 115200u, 50u, 100u, 200u };   ///< lost after 100 ms of silence, 200 ms startup grace
 
 static constexpr ComDev kHealthDev = {
     "test_health", LinkScope::INTRA_NODE, LinkType::BIDIRECTIONAL,
@@ -937,10 +944,6 @@ static void sendOneFrameAndReceive(void) {
     com_rx_update(rxTargetBus);
 }
 
-static bool uartLinkLostOnBus(void) {
-    return rxTargetBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::UART_LINK_LOST)].value;
-}
-
 /** Nothing received yet: the link is lost (failsafe by default). */
 static void test_link_health_lost_until_first_frame(void) {
     startHealthLink(LinkEnd::TX_RX, kHealthDev);
@@ -948,17 +951,15 @@ static void test_link_health_lost_until_first_frame(void) {
     com_rx_update(rxTargetBus);
 
     TEST_ASSERT_TRUE(combus_links_rx_lost());
-    TEST_ASSERT_TRUE(uartLinkLostOnBus());
 }
 
-/** A frame arrives: the link is alive, its channels are applied and UART_LINK_LOST is released. */
+/** A frame arrives: the link is alive and its channels are applied. */
 static void test_link_health_alive_after_frame(void) {
     startHealthLink(LinkEnd::TX_RX, kHealthDev);
 
     sendOneFrameAndReceive();
 
     TEST_ASSERT_FALSE(combus_links_rx_lost());
-    TEST_ASSERT_FALSE(uartLinkLostOnBus());
     TEST_ASSERT_EQUAL_UINT16(txComBus.analogBus[kThrottleIdx].value, rxTargetBus.analogBus[kThrottleIdx].value);
 }
 
@@ -972,7 +973,6 @@ static void test_link_health_lost_after_silence(void) {
     com_rx_update(rxTargetBus);
 
     TEST_ASSERT_TRUE(combus_links_rx_lost());
-    TEST_ASSERT_TRUE(uartLinkLostOnBus());
 }
 
 /** A TX-only link cannot know its peer: it never counts as lost. */
@@ -982,7 +982,6 @@ static void test_link_health_ignores_tx_only_link(void) {
     com_rx_update(rxTargetBus);
 
     TEST_ASSERT_FALSE(combus_links_rx_lost());
-    TEST_ASSERT_FALSE(uartLinkLostOnBus());
 
     combus_links_watch(nullptr, 0u);
 }
@@ -991,7 +990,7 @@ static void test_link_health_ignores_tx_only_link(void) {
 // =============================================================================
 // GROUP K — DENIED WRITES ARE COUNTED (chantier 1.1)
 //
-// UART_LINK_LOST is a BOARD-scope channel: a SYSTEM caller is refused. This is
+// COM_LINK_LOST is a BOARD-scope channel: a SYSTEM caller is refused. This is
 // the mistake that kept REMOTE_LINK_LOST stuck on the Volvo; the count makes
 // it visible (it is also shown on the dashboard).
 // =============================================================================
@@ -1000,11 +999,11 @@ static void test_link_health_ignores_tx_only_link(void) {
 static void test_denied_write_is_counted(void) {
     const uint32_t before = combus_denied_writes();
 
-    TEST_ASSERT_FALSE(combus_set_digital(txComBus, DigitalComBusID::UART_LINK_LOST, true, ChanLayer::SYSTEM));
-    TEST_ASSERT_FALSE(combus_set_digital(txComBus, DigitalComBusID::UART_LINK_LOST, true, ChanLayer::SYSTEM));
+    TEST_ASSERT_FALSE(combus_set_digital(txComBus, DigitalComBusID::COM_LINK_LOST, true, ChanLayer::SYSTEM));
+    TEST_ASSERT_FALSE(combus_set_digital(txComBus, DigitalComBusID::COM_LINK_LOST, true, ChanLayer::SYSTEM));
     TEST_ASSERT_EQUAL_UINT32(before + 2u, combus_denied_writes());
 
-    TEST_ASSERT_TRUE(combus_set_digital(txComBus, DigitalComBusID::UART_LINK_LOST, false, ChanLayer::BOARD));
+    TEST_ASSERT_TRUE(combus_set_digital(txComBus, DigitalComBusID::COM_LINK_LOST, false, ChanLayer::BOARD));
     TEST_ASSERT_EQUAL_UINT32(before + 2u, combus_denied_writes());
 }
 
@@ -1129,9 +1128,156 @@ static void test_both_or_board_never_writing_does_not_contribute(void) {
 }
 
 
+// =============================================================================
+// GROUP M — LINK LOSS POLICY (chantier 1.1c)
+//
+// One test per row of the table validated by the owner (rows 1 to 11; rows 12
+// to 14 need several links or two boards and rely on the failsafe priority of
+// the runlevel chain and on the both_or merge, tested in Group L).  The link is
+// built on the loopback port (Group J helpers); its startup grace is 200 ms and
+// its timeout 100 ms (kHealthProtocol) instead of 3 s and 250 ms.
+// =============================================================================
+
+static constexpr ComDev kInterDev = {             ///< inter-node, default onLoss -> IDLE
+    "test_inter", LinkScope::INTER_NODE, LinkType::BIDIRECTIONAL,
+    &kHealthProtocol, LinkActivation::ALWAYS, nullptr
+};
+static constexpr ComDev kNoneDev = {              ///< intra-node, onLoss NONE (a sound board)
+    "test_none", LinkScope::INTRA_NODE, LinkType::BIDIRECTIONAL,
+    &kHealthProtocol, LinkActivation::ALWAYS, nullptr, LinkLossAction::NONE
+};
+static constexpr ComDev kInterFailsafeDev = {     ///< inter-node, onLoss FAILSAFE imposed
+    "test_inter_fs", LinkScope::INTER_NODE, LinkType::BIDIRECTIONAL,
+    &kHealthProtocol, LinkActivation::ALWAYS, nullptr, LinkLossAction::FAILSAFE
+};
+
+static bool comLinkLostOnBus(void) {
+    return rxTargetBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::COM_LINK_LOST)].value;
+}
+
+static bool failsafeComLinkOnBus(void) {
+    return rxTargetBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::FAILSAFE_COM_LINK)].value;
+}
+
+/** Default onLoss by scope: intra-node -> FAILSAFE, inter-node -> IDLE; an explicit value is kept. */
+static void test_loss_action_by_scope(void) {
+    TEST_ASSERT_TRUE(linkLossAction(kHealthDev)        == LinkLossAction::FAILSAFE);
+    TEST_ASSERT_TRUE(linkLossAction(kInterDev)         == LinkLossAction::IDLE);
+    TEST_ASSERT_TRUE(linkLossAction(kNoneDev)          == LinkLossAction::NONE);
+    TEST_ASSERT_TRUE(linkLossAction(kInterFailsafeDev) == LinkLossAction::FAILSAFE);
+}
+
+/** Row 1: intra-node link, no frame yet, within the grace: no effect. */
+static void test_loss_row1_failsafe_link_in_grace(void) {
+    startHealthLink(LinkEnd::TX_RX, kHealthDev);
+    com_rx_update(rxTargetBus);
+
+    TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::NEVER_SEEN);
+    TEST_ASSERT_FALSE(combus_links_lost(LinkLossAction::FAILSAFE));
+    TEST_ASSERT_FALSE(failsafeComLinkOnBus());
+}
+
+/** Row 2: intra-node link, still no frame after the grace: FAILSAFE. */
+static void test_loss_row2_failsafe_link_never_seen_after_grace(void) {
+    startHealthLink(LinkEnd::TX_RX, kHealthDev);
+    delay(kHealthProtocol.startupGraceMs + 60u);
+    com_rx_update(rxTargetBus);
+
+    TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::NEVER_SEEN);
+    TEST_ASSERT_TRUE(combus_links_lost(LinkLossAction::FAILSAFE));
+    TEST_ASSERT_TRUE(failsafeComLinkOnBus());
+    TEST_ASSERT_FALSE(comLinkLostOnBus());
+}
+
+/** Rows 3, 4, 5: intra-node link alive, then lost (FAILSAFE), then back (contribution drops). */
+static void test_loss_rows3to5_failsafe_link_alive_lost_back(void) {
+    startHealthLink(LinkEnd::TX_RX, kHealthDev);
+
+    sendOneFrameAndReceive();                                      // row 3
+    TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::ALIVE);
+    TEST_ASSERT_FALSE(combus_links_lost(LinkLossAction::FAILSAFE));
+    TEST_ASSERT_FALSE(failsafeComLinkOnBus());
+
+    delay(kHealthProtocol.linkTimeoutMs + 60u);                    // row 4
+    com_rx_update(rxTargetBus);
+    TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::LOST);
+    TEST_ASSERT_TRUE(combus_links_lost(LinkLossAction::FAILSAFE));
+    TEST_ASSERT_TRUE(failsafeComLinkOnBus());
+
+    sendOneFrameAndReceive();                                      // row 5
+    TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::ALIVE);
+    TEST_ASSERT_FALSE(combus_links_lost(LinkLossAction::FAILSAFE));
+    TEST_ASSERT_FALSE(failsafeComLinkOnBus());
+}
+
+/** Row 6: inter-node link, no frame yet: IDLE at once (no grace), never FAILSAFE. */
+static void test_loss_row6_idle_link_never_seen(void) {
+    startHealthLink(LinkEnd::TX_RX, kInterDev);
+    com_rx_update(rxTargetBus);
+
+    TEST_ASSERT_TRUE(combus_links_lost(LinkLossAction::IDLE));
+    TEST_ASSERT_FALSE(combus_links_lost(LinkLossAction::FAILSAFE));
+    TEST_ASSERT_TRUE(comLinkLostOnBus());
+    TEST_ASSERT_FALSE(failsafeComLinkOnBus());
+}
+
+/** Rows 7, 8: inter-node link alive, then lost (IDLE), then back (contribution drops). */
+static void test_loss_rows7to8_idle_link_lost_back(void) {
+    startHealthLink(LinkEnd::TX_RX, kInterDev);
+
+    sendOneFrameAndReceive();
+    TEST_ASSERT_FALSE(combus_links_lost(LinkLossAction::IDLE));
+    TEST_ASSERT_FALSE(comLinkLostOnBus());
+
+    delay(kHealthProtocol.linkTimeoutMs + 60u);                    // row 7
+    com_rx_update(rxTargetBus);
+    TEST_ASSERT_TRUE(combus_links_lost(LinkLossAction::IDLE));
+    TEST_ASSERT_TRUE(comLinkLostOnBus());
+
+    sendOneFrameAndReceive();                                      // row 8
+    TEST_ASSERT_FALSE(combus_links_lost(LinkLossAction::IDLE));
+    TEST_ASSERT_FALSE(comLinkLostOnBus());
+}
+
+/** Row 9: onLoss NONE: never contributes, even never seen after the grace. */
+static void test_loss_row9_none_link_never_contributes(void) {
+    startHealthLink(LinkEnd::TX_RX, kNoneDev);
+    delay(kHealthProtocol.startupGraceMs + 60u);
+    com_rx_update(rxTargetBus);
+
+    TEST_ASSERT_FALSE(combus_links_lost(LinkLossAction::IDLE));
+    TEST_ASSERT_FALSE(combus_links_lost(LinkLossAction::FAILSAFE));
+    TEST_ASSERT_FALSE(comLinkLostOnBus());
+    TEST_ASSERT_FALSE(failsafeComLinkOnBus());
+}
+
+/** Row 10: inter-node link with onLoss FAILSAFE imposed: a loss is a FAILSAFE, not an IDLE. */
+static void test_loss_row10_inter_link_failsafe_imposed(void) {
+    startHealthLink(LinkEnd::TX_RX, kInterFailsafeDev);
+    sendOneFrameAndReceive();
+
+    delay(kHealthProtocol.linkTimeoutMs + 60u);
+    com_rx_update(rxTargetBus);
+    TEST_ASSERT_TRUE(combus_links_lost(LinkLossAction::FAILSAFE));
+    TEST_ASSERT_FALSE(combus_links_lost(LinkLossAction::IDLE));
+}
+
+/** Row 11: a TX-only link is not watched: it never contributes. */
+static void test_loss_row11_tx_only_link_never_contributes(void) {
+    startHealthLink(LinkEnd::TX, kTestDevUni);
+    delay(kHealthProtocol.startupGraceMs + 60u);
+    com_rx_update(rxTargetBus);
+
+    TEST_ASSERT_FALSE(combus_links_lost(LinkLossAction::IDLE));
+    TEST_ASSERT_FALSE(combus_links_lost(LinkLossAction::FAILSAFE));
+
+    combus_links_watch(nullptr, 0u);
+}
+
+
 // Chantier 12.6 (cleanup): Group F (FS1 failsafe re-arm) REMOVED — link
 // health is now monitored by the per-backend *_LINK_LOST contributors
-// (PS4_DS4_BT_LINK_LOST, UART_LINK_LOST, ...) aggregated into
+// (PS4_DS4_BT_LINK_LOST, COM_LINK_LOST, ...) aggregated into
 // REMOTE_LINK_LOST, which feeds the top-level FAILSAFE aggregator
 // (see failsafe_module.md §12.5 new design).
 //
@@ -1246,6 +1392,17 @@ void setup() {
     RUN_TEST(test_both_or_ignores_silent_peer);
     RUN_TEST(test_both_or_sends_no_echo);
     RUN_TEST(test_both_or_board_never_writing_does_not_contribute);
+
+    // --- Group M: link loss policy (chantier 1.1c) ---
+    RUN_TEST(test_loss_action_by_scope);
+    RUN_TEST(test_loss_row1_failsafe_link_in_grace);
+    RUN_TEST(test_loss_row2_failsafe_link_never_seen_after_grace);
+    RUN_TEST(test_loss_rows3to5_failsafe_link_alive_lost_back);
+    RUN_TEST(test_loss_row6_idle_link_never_seen);
+    RUN_TEST(test_loss_rows7to8_idle_link_lost_back);
+    RUN_TEST(test_loss_row9_none_link_never_contributes);
+    RUN_TEST(test_loss_row10_inter_link_failsafe_imposed);
+    RUN_TEST(test_loss_row11_tx_only_link_never_contributes);
 
     // Chantier 12.6: Group F (FS1 failsafe re-arm) removed — see
     // header docstring above (5 independent test groups A/B/C/D/E).

@@ -5,6 +5,8 @@
 
 #include "combus_links.h"
 
+#include <Arduino.h>  // millis()
+
 #include <core/system/hw/transport/uart_com.h>
 #include <core/system/debug/logging/debug.h>
 
@@ -133,8 +135,11 @@ bool combus_link_build( const ComDevMap& map,
     }
 
         // --- 4. What the link watch needs ---
-    runtime.receives      = endReceives(map.end);
-    runtime.linkTimeoutMs = map.dev->protocol->linkTimeoutMs;
+    runtime.name           = map.dev->name;
+    runtime.receives       = endReceives(map.end);
+    runtime.linkTimeoutMs  = map.dev->protocol->linkTimeoutMs;
+    runtime.startupGraceMs = map.dev->protocol->startupGraceMs;
+    runtime.lossAction     = linkLossAction(*map.dev);
 
     link = built;
     return true;
@@ -190,18 +195,81 @@ bool combus_links_init( const ComDevMap*       maps,
 // =============================================================================
 
     // Per-link storage under watch — caller-owned, static (see combus_links_watch()).
-static const ComLinkRuntime* s_watched      = nullptr;
-static uint8_t               s_watchedCount = 0u;
+static ComLinkRuntime* s_watched      = nullptr;
+static uint8_t         s_watchedCount = 0u;
 
 
-void combus_links_watch( const ComLinkRuntime* runtime, uint8_t count )
+void combus_links_watch( ComLinkRuntime* runtime, uint8_t count )
 {
     s_watched      = runtime;
     s_watchedCount = count;
 
-        // The RX module needs the same timeouts to ignore silent links in the both_or merge
+    const uint32_t now = millis();
     for (uint8_t i = 0u; i < count; ++i) {
+            // The startup grace starts now, nothing is reported lost yet
+        runtime[i].watchStartMs = now;
+        runtime[i].reportedLost = false;
+
+            // The RX module needs the same timeouts to ignore silent links in the both_or merge
         if (runtime[i].receives) { combus_rx_set_link_timeout(i, runtime[i].linkTimeoutMs); }
+    }
+}
+
+
+ComLinkState combus_link_state( uint8_t linkIdx )
+{
+    if (linkIdx >= s_watchedCount || !s_watched[linkIdx].receives) { return ComLinkState::NEVER_SEEN; }
+
+    if (combus_rx_age_ms(linkIdx) == UINT32_MAX)                       { return ComLinkState::NEVER_SEEN; }
+    if (combus_rx_is_alive(linkIdx, s_watched[linkIdx].linkTimeoutMs)) { return ComLinkState::ALIVE; }
+    return ComLinkState::LOST;
+}
+
+
+    // Lost, or never seen once the startup grace has elapsed — the FAILSAFE reading.
+static bool lostAfterGrace( uint8_t linkIdx )
+{
+    switch (combus_link_state(linkIdx)) {
+        case ComLinkState::LOST:
+            return true;
+        case ComLinkState::NEVER_SEEN:
+            return (millis() - s_watched[linkIdx].watchStartMs) >= s_watched[linkIdx].startupGraceMs;
+        case ComLinkState::ALIVE:
+        default:
+            return false;
+    }
+}
+
+
+bool combus_links_lost( LinkLossAction action )
+{
+    for (uint8_t i = 0u; i < s_watchedCount; ++i) {
+        const ComLinkRuntime& rt = s_watched[i];
+        if (!rt.receives || rt.lossAction != action) { continue; }
+
+        if (action == LinkLossAction::IDLE     && combus_link_state(i) != ComLinkState::ALIVE) { return true; }
+        if (action == LinkLossAction::FAILSAFE && lostAfterGrace(i))                         { return true; }
+    }
+    return false;
+}
+
+
+void combus_links_update()
+{
+    for (uint8_t i = 0u; i < s_watchedCount; ++i) {
+        ComLinkRuntime& rt = s_watched[i];
+        if (!rt.receives) { continue; }
+
+        const bool lost = lostAfterGrace(i);
+        if (lost == rt.reportedLost) { continue; }
+        rt.reportedLost = lost;
+
+        if (lost) {
+            sys_log_warn("[COMBUS_LINKS] link '%s' lost (onLoss=%u)\n",
+                         rt.name ? rt.name : "?", (unsigned)rt.lossAction);
+        } else {
+            sys_log_info("[COMBUS_LINKS] link '%s' back\n", rt.name ? rt.name : "?");
+        }
     }
 }
 

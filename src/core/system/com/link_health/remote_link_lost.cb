@@ -3,7 +3,7 @@
 # This file declares the REMOTE_LINK_LOST ComBus channel. It is the
 # AGGREGATED "any remote input source is alive" signal — the OR-merge
 # result of all *_LINK_LOST contributors (PS4_DS4_BT_LINK_LOST,
-# UART_LINK_LOST, future ESP_NOW_LINK_LOST, …).
+# COM_LINK_LOST, future ESP_NOW_LINK_LOST, …).
 #
 # REMOTE_LINK_LOST is COMPUTED, not directly written by input sources:
 #   - Input sources write their dedicated *_LINK_LOST channel each cycle
@@ -38,8 +38,8 @@
 #   without the fallback (autonomous) simply has no such channel.  In node mode
 #   it is diffused (SYSTEM, both_or) to the boards without the flag.
 #   The contributors are optional: PS4_DS4_BT_LINK_LOST requires
-#   INPUT_PS4_DS4_BT; UART_LINK_LOST is always emitted (written every cycle by
-#   com_rx_update()) but only read by the chain when COMBUS_UART is defined.
+#   INPUT_PS4_DS4_BT; COM_LINK_LOST (written every cycle by com_rx_update())
+#   is always read by the chain.
 # - NOT a contributor to the FAILSAFE aggregator (only "hard" faults
 #   like VBAT / temperature are).  REMOTE_LINK_LOST feeds its own,
 #   optional fallback chain (IDLE on loss).

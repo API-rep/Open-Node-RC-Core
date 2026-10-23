@@ -24,7 +24,7 @@
 ```text
 PS4_DS4_BT_LINK_LOST ──┐
                        │
-UART_LINK_LOST ────────┼──► OR-guard (cb_or_fn) ──► REMOTE_LINK_LOST
+COM_LINK_LOST ─────────┼──► OR-guard (cb_or_fn) ──► REMOTE_LINK_LOST
                        │                              │
 (future contributeurs)──┘                              │
                                                       ▼
@@ -45,7 +45,8 @@ UART_LINK_LOST ────────┼──► OR-guard (cb_or_fn) ──�
 ```text
 src/core/system/com/link_health/
 ├── remote_link_lost.cb           // Canal REMOTE_LINK_LOST (agrégat)
-├── uart_link_lost.cb             // Canal UART_LINK_LOST (contributeur)
+├── com_link_lost.cb              // Canal COM_LINK_LOST (contributeur, requires HAS_REMOTE_LINK_LOST_FALLBACK)
+├── failsafe_com_link.cb          // Canal FAILSAFE_COM_LINK (contributeur de FAILSAFE, requires HAS_FAILSAFE)
 ├── remote_link_fallback_chain.h  // Déclarations kRemoteLinkFallbackChain[]
 └── remote_link_fallback_chain.cpp // Chaîne d'agrégation (reset + OR-guard)
 
@@ -53,7 +54,7 @@ src/core/config/inputs/
 └── ps4_ds4_bt_link_lost.cb       // Canal PS4_DS4_BT_LINK_LOST (contributeur, requires INPUT_PS4_DS4_BT)
 ```
 
-Les trois canaux sont du thème `com`.
+Les quatre canaux sont du thème `com`.
 
 ---
 
@@ -69,15 +70,28 @@ Les trois canaux sont du thème `com`.
 
 **Gating** : `#if defined(INPUT_PS4_DS4_BT)`
 
-### 4.2 — `UART_LINK_LOST`
+### 4.2 — `COM_LINK_LOST`
 
-**Canal** : `src/core/system/com/link_health/uart_link_lost.cb`
+**Canal** : `src/core/system/com/link_health/com_link_lost.cb` (BOARD, `requires: HAS_REMOTE_LINK_LOST_FALLBACK`)
 
-**Propriétaire** : `src/sound_module/system/combus_sound_interpreter.cpp` (côté sound node)
+**Propriétaire** : `com_rx_update()`, `src/core/system/com/com_manager.cpp`
 
-**Réarmement** : publié selon le RX-timeout (pas de frame dans la fenêtre → `true`).
+**Réarmement** : écrit à chaque cycle avec `combus_links_lost(LinkLossAction::IDLE)` : vrai tant qu'un lien qui reçoit, de politique de perte `IDLE` (`ComDev::onLoss`, par défaut un lien inter-nœud), n'est pas vivant, jamais vu compris. Un lien qui n'émet que ne compte jamais.
 
-**Gating** : `#if defined(COMBUS_UART)` (lien qui reçoit ; un lien TX seul ne contribue pas)
+**Gating** : aucun dans la chaîne (faux à chaque cycle sur une carte sans tel lien).
+
+### 4.3 — La politique de perte d'un lien (`onLoss`)
+
+Chaque `ComDev` porte sa réaction à la perte (`LinkLossAction`) :
+
+| `onLoss` | Réaction | Quand le lien compte comme perdu |
+|---|---|---|
+| `BY_SCOPE` (défaut) | `FAILSAFE` pour un lien intra-nœud, `IDLE` pour un lien inter-nœud | — |
+| `IDLE` | `COM_LINK_LOST` → `REMOTE_LINK_LOST` → runlevel `IDLE` | jamais vu, ou silence > `linkTimeoutMs` |
+| `FAILSAFE` | `FAILSAFE_COM_LINK` → `FAILSAFE` | silence > `linkTimeoutMs`, ou jamais vu après `startupGraceMs` (3 s sur la Volvo) |
+| `NONE` | journal seulement | — |
+
+Chaque perte et chaque retour d'un lien est journalisé une fois (`combus_links_update()`). Si plusieurs liens tombent, `FAILSAFE` l'emporte sur `IDLE` par la priorité du runlevel.
 
 ---
 

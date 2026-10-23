@@ -369,7 +369,7 @@ Le débit et la fréquence d'émission du lien ne sont plus ici : ce sont les pa
 **Fichier** : `src/machines/config/machines/volvo_A60H_bruder/board/com_dev.h`.
 
 ```cpp
-inline constexpr ComProtocolCfg kComProtoExt = { 115200u, 50u, 250u };   // rate, txHz, linkTimeoutMs
+inline constexpr ComProtocolCfg kComProtoExt = { 115200u, 50u, 250u, 3000u };   // rate, txHz, linkTimeoutMs, startupGraceMs
 
 inline constexpr ComDev kComDevExtUni = {          // COMBUS_UART_TX
 	"combus", LinkScope::INTRA_NODE, LinkType::UNIDIRECTIONAL,
@@ -385,6 +385,7 @@ inline constexpr ComDev kComDevExtBi = {           // COMBUS_UART
 Le lien d'extension est intra-nœud : il est défini une fois pour le nœud, à la racine
 de `board/`, et chaque carte le câble sur son port. `combus_uart_init()` vérifie à la
 compilation `kComProtoExt.rate <= UartMaxBaud` et `kComProtoExt.txHz <= ComBusUartMaxTxHz`.
+Son `onLoss` est laissé à `BY_SCOPE` : intra-nœud, sa perte est un `FAILSAFE` (voir §8).
 
 ### 4.3. Configuration frame layout
 
@@ -496,9 +497,13 @@ est dans [`frame/combus_frame_protocol.md`](frame/combus_frame_protocol.md).
 > (`src/core/system/com/com_manager.cpp`), en tête de `sys_manager_update`. Le lien
 > d'extension de la Volvo est en TX seul (`COMBUS_UART_TX`) : il ne reçoit rien.
 > Pour un lien qui reçoit (`COMBUS_UART`), `combus_links_init` renseigne la `target`
-> avec le ComBus du nœud, et `com_rx_update()` publie `UART_LINK_LOST` d'après
-> `combus_links_rx_lost()` : un lien qui reçoit est perdu tant qu'il n'a rien reçu,
-> puis après `linkTimeoutMs` de silence (250 ms pour le lien d'extension).
+> avec le ComBus du nœud, et `com_rx_update()` applique la politique de perte de
+> chaque lien (`ComDev::onLoss`, `combus_links_lost()`) : un lien qui reçoit est
+> jamais vu tant qu'il n'a rien reçu, puis perdu après `linkTimeoutMs` de silence
+> (250 ms pour le lien d'extension). Un lien `IDLE` (défaut inter-nœud) écrit
+> `COM_LINK_LOST` dès qu'il n'est pas vivant ; un lien `FAILSAFE` (défaut
+> intra-nœud) écrit `FAILSAFE_COM_LINK` quand il est perdu, ou jamais vu après
+> `startupGraceMs` (3 s). Voir `src/core/system/com/link_health/remote_link_lost.md` §4.3.
 
 ---
 
@@ -511,7 +516,7 @@ Chaque lien ComBus indépendant possède son propre `CombusHandshakeContext` :
 ```cpp
 struct ComLinkRuntime {
     CombusHandshakeContext handshake = {};
-    // ... tampons de réception du lien
+    // ... nom, délais et politique de perte du lien, tampons de réception
 };
 ```
 
