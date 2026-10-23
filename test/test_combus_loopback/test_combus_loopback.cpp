@@ -59,7 +59,7 @@
  *     a handshake with the same MD5 and major version (a bidirectional end needs
  *     the ACK of its request, a receive-only end the request itself); data
  *     frames are not applied while UNKNOWN; a bidirectional end sends no data
- *     while UNKNOWN; requests go on at 1 Hz; 3 missed ACKs or a silence drop the
+ *     while UNKNOWN; requests go on every 250 ms; 1 s without ACK or a silence drop the
  *     contract; a request is always answered, an ACK never; FAILSAFE no longer
  *     touches the contract (P4 removed).  Peer frames are forged on the wire.
  *     Same TX↔RX jumper as Group B.
@@ -1326,6 +1326,20 @@ static void drainWire(void) {
     while (s_com->available(s_com->ctx) > 0) { (void)s_com->readByte(s_com->ctx); }
 }
 
+/** Read everything waiting on the loopback RX: true if it is only whole handshake frames. */
+static bool wireHasOnlyHandshakes(void) {
+    uint8_t buf[CombusRxBufSize];
+    uint16_t n = 0u;
+    while (s_com->available(s_com->ctx) > 0 && n < sizeof(buf)) {
+        buf[n++] = (uint8_t)s_com->readByte(s_com->ctx);
+    }
+    if ((n % CombusFrameHandshakeMinLen) != 0u) { return false; }
+    for (uint16_t i = 0u; i < n; i += CombusFrameHandshakeMinLen) {
+        if (buf[i] != CombusFrameSof || buf[i + 3u] != 0u) { return false; }   // seq 0 = handshake
+    }
+    return true;
+}
+
 /** Write on the wire a handshake as a remote peer would send it. */
 static void sendForgedHandshake(bool ack, bool goodMd5, uint8_t major, uint8_t minor) {
     uint8_t frame[CombusFrameHandshakeMinLen];
@@ -1374,21 +1388,16 @@ static void test_contract_row1_request_ack_stable(void) {
     TEST_ASSERT_TRUE(isStable());
 }
 
-/** Row 2: no answer: no data is sent, the requests go on at 1 Hz, the peer that shows up answers. */
+/** Row 2: no answer: only requests go out, never data; the peer that shows up answers. */
 static void test_contract_row2_peer_late(void) {
     startHealthLink(LinkEnd::TX_RX, kHealthDev);
 
-    for (uint32_t t0 = millis(); (millis() - t0) < 400u; ) {        // the burst, nobody answers
+    for (uint32_t t0 = millis(); (millis() - t0) < 1000u; ) {       // burst then requests, nobody answers
         combus_tx_update(&txComBus);
         delay(20u);
-        drainWire();
+        TEST_ASSERT_TRUE_MESSAGE(wireHasOnlyHandshakes(), "data sent while the contract is UNKNOWN");
     }
     TEST_ASSERT_FALSE(isStable());
-
-    delay(30u);                                                     // a data frame is due, no request
-    combus_tx_update(&txComBus);
-    delay(kRxPollMs);
-    TEST_ASSERT_EQUAL_INT(0, s_com->available(s_com->ctx));
 
     ensureStable();                                                 // the next request is answered
 }
@@ -1488,20 +1497,20 @@ static void test_contract_row8_bad_handshake_while_stable(void) {
     TEST_ASSERT_FALSE(isStable());
 }
 
-/** Row 9: data still arrives but no ACK for 3 periods: the peer no longer receives me, the link is lost. */
+/** Row 9: data still arrives but no ACK for 1 s: the peer no longer receives me, the link is lost. */
 static void test_contract_row9_no_ack_means_lost(void) {
     startHealthLink(LinkEnd::TX_RX, kHealthDev);
     sendGoodAck();
     pumpRx();
 
-    bool stableAt2s = false;
-    for (uint32_t t0 = millis(); (millis() - t0) < 3300u; ) {
+    bool stableAt600ms = false;
+    for (uint32_t t0 = millis(); (millis() - t0) < 1300u; ) {
         sendPeerFrame(false);                                       // data, never an ACK
         pumpRx();
-        if ((millis() - t0) > 1900u && (millis() - t0) < 2200u) { stableAt2s = isStable(); }
+        if ((millis() - t0) > 500u && (millis() - t0) < 700u) { stableAt600ms = isStable(); }
     }
-    TEST_ASSERT_TRUE_MESSAGE(stableAt2s, "dropped before 3 missed ACKs");
-    TEST_ASSERT_FALSE(isStable());
+    TEST_ASSERT_TRUE_MESSAGE(stableAt600ms, "dropped too early");
+    TEST_ASSERT_FALSE_MESSAGE(isStable(), "still STABLE after more than 1 s without ACK");
     TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::LOST);
 }
 
@@ -1523,7 +1532,7 @@ static void test_contract_row10_rx_only_end(void) {
     TEST_ASSERT_NOT_NULL(combus_rx_snapshot(kLinkIdx));
 }
 
-/** Row 11: a transmit-only end sends its data at once and a handshake every second. */
+/** Row 11: a transmit-only end sends its data at once and a request every period. */
 static void test_contract_row11_tx_only_end(void) {
     startHealthLink(LinkEnd::TX, kTestDevUni);
     drainWire();
@@ -1546,16 +1555,18 @@ static void test_contract_row11_tx_only_end(void) {
     }
     drainWire();
 
-    delay(500u);                                                    // less than 1 s after the burst
-    combus_handshake_tx_update(linkCtx(), s_com);
-    delay(kRxPollMs);
-    TEST_ASSERT_EQUAL_INT(0, s_com->available(s_com->ctx));
-
-    delay(600u);                                                    // more than 1 s after the burst
-    combus_handshake_tx_update(linkCtx(), s_com);
+    for (uint32_t t0 = millis(); (millis() - t0) < kCombusHandshakePeriodMs + 50u; ) {   // the next request
+        combus_handshake_tx_update(linkCtx(), s_com);
+        delay(10u);
+        if (s_com->available(s_com->ctx) > 0) { break; }
+    }
     delay(kRxPollMs);
     TEST_ASSERT_EQUAL_INT(CombusFrameHandshakeMinLen, s_com->available(s_com->ctx));
     drainWire();
+
+    combus_handshake_tx_update(linkCtx(), s_com);                   // at once: not due yet
+    delay(kRxPollMs);
+    TEST_ASSERT_EQUAL_INT(0, s_com->available(s_com->ctx));
 
     combus_links_watch(nullptr, 0u);
 }

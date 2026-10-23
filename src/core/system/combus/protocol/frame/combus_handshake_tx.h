@@ -56,9 +56,9 @@ uint8_t combus_handshake_sendOnce( NodeCom* nodeCom );
  *        sent on the very first call after `startBurst()`.  Skipped when
  *        `COMBUS_HANDSHAKE_BURST_DISABLE` is non-zero;
  *     3. after the burst: one request every `kCombusHandshakePeriodMs`
- *        (1 s), whatever the state of the contract — it establishes the
+ *        (250 ms), whatever the state of the contract — it establishes the
  *        contract, it asks for the periodic ACK, and on a transmit-only end
- *        it lets a receiver started later establish within 1 s.
+ *        it lets a receiver started later establish within one period.
  *
  *   Per-link state — see CombusHandshakeContext.  Multiple independent
  *   ComBus interfaces may coexist in the same machine; this function

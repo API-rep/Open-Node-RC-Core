@@ -164,17 +164,19 @@ static constexpr uint8_t kCombusHandshakeFlagAck = 0x01u;
  *
  * @details Every transmitting end sends one request per period, whatever the
  *   state of the contract: while UNKNOWN to establish it, while STABLE as the
- *   periodic ACK request, and always on a transmit-only end.
+ *   periodic ACK request, and always on a transmit-only end.  Four requests
+ *   fit in kCombusHandshakeAckTimeoutMs, so one lost ACK is not a loss.
  */
-static constexpr uint32_t kCombusHandshakePeriodMs = 1000u;
+static constexpr uint32_t kCombusHandshakePeriodMs = 250u;
 
 /**
- * @brief Missed ACKs after which a bidirectional end drops its contract.
+ * @brief Time without ACK after which a bidirectional end drops its contract, in ms.
  *
  * @details The ACK proves that the peer receives this end; data frames only
- *   prove the reverse.  No ACK for this many periods: the link is lost.
+ *   prove the reverse.  No ACK for this long: the link is lost.  1 s: a
+ *   machine out of control must not run longer (owner, 2026-10-23).
  */
-static constexpr uint8_t kCombusHandshakeAckMissMax = 3u;
+static constexpr uint32_t kCombusHandshakeAckTimeoutMs = 1000u;
 
 
 

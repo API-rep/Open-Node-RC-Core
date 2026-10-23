@@ -5,7 +5,7 @@
  *
  * @details Two entry points: combus_handshake_sendOnce(), a manual one-shot
  *   for debug commands and test fixtures, and combus_handshake_tx_update(),
- *   called by combus_tx_update(): boot burst, one request per second, ACK
+ *   called by combus_tx_update(): boot burst, one request per period, ACK
  *   of the received requests (chantier 1.2).
  *
  *   Format-md5 helper (`combus_handshake_formatMd5Hex`) is owned by

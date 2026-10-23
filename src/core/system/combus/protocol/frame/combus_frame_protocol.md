@@ -199,10 +199,10 @@ appel. Dans l'ordre :
 - la rafale : `combus_tx_init` l'arme (`startBurst`) ; 3 demandes
   (`kCombusHandshakeBurstCount`), une toutes les 100 ms
   (`kCombusHandshakeBurstPeriodMs`), arrêtée dès que le contrat est `STABLE` ;
-- ensuite, une demande par seconde (`kCombusHandshakePeriodMs`), quel que soit
+- ensuite, une demande toutes les 250 ms (`kCombusHandshakePeriodMs`), quel que soit
   l'état du contrat : elle établit le contrat, elle demande l'ACK périodique, et
   sur un bout qui n'émet que, elle permet à un récepteur démarré plus tard de
-  s'établir en 1 s au plus.
+  s'établir en 250 ms au plus.
 
 Un bout bidirectionnel n'émet **aucune trame de données** tant que son contrat est
 `INCONNU`. Un bout qui n'émet que les émet toujours. `combus_handshake_sendOnce`
@@ -219,7 +219,7 @@ Un bout bidirectionnel n'émet **aucune trame de données** tant que son contrat
   le reçoit), la **demande** du pair pour un bout qui ne fait que recevoir.
 - Retour à `INCONNU` : un handshake refusé (MD5 ou majeure différents) ; un
   silence plus long que `linkTimeoutMs` après des données ; sur un bout
-  bidirectionnel, aucun ACK pendant 3 périodes (`kCombusHandshakeAckMissMax`) :
+  bidirectionnel, aucun ACK pendant 1 s (`kCombusHandshakeAckTimeoutMs`, 4 demandes) :
   le pair ne reçoit plus ; une réinitialisation (`combus_rx_init`). Un `FAILSAFE`
   actif ne touche plus au contrat (l'ancienne réaction P4 est retirée : avec le
   blocage, elle aurait bloqué le `FAILSAFE` des autres cartes).
@@ -240,7 +240,7 @@ Un bout bidirectionnel n'émet **aucune trame de données** tant que son contrat
 | Macro | Effet | Source |
 |---|---|---|
 | `COMBUS_MD5_CHECK_DISABLE` | Court-circuite la comparaison : tout handshake est accepté (bannière au démarrage). Défaut 0. | `combus_handshake.h`, `combus_handshake_rx.cpp` |
-| `COMBUS_HANDSHAKE_BURST_DISABLE` | Désactive la rafale ; la demande par seconde reste. Défaut 0. | `combus_handshake.h`, `combus_handshake_tx.cpp` |
+| `COMBUS_HANDSHAKE_BURST_DISABLE` | Désactive la rafale ; la demande périodique reste. Défaut 0. | `combus_handshake.h`, `combus_handshake_tx.cpp` |
 
 > À VÉRIFIER : l'en-tête `combus_handshake.h` (lignes 3-24) décrit encore le
 > handshake comme « NOT YET implemented on the wire » avec un simple stub, et

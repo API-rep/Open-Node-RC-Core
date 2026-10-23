@@ -329,7 +329,7 @@ void combus_rx_init(
  *
  *   4. Chantier 1.2 — drop a STABLE contract back to UNKNOWN after a silence
  *      longer than the link timeout (once data has flowed), or, on a
- *      bidirectional end, after kCombusHandshakeAckMissMax periods without ACK.
+ *      bidirectional end, after kCombusHandshakeAckTimeoutMs without ACK.
  *
  *   @p bus is no longer read: the FAILSAFE reaction (P4), which dropped the
  *   contract while FAILSAFE was active, is removed (chantier 1.2) — with the
@@ -368,8 +368,7 @@ void combus_rx_update(const ComBus* bus)
         const uint32_t now = millis();
         if (ctx->dataSinceStable && st.linkTimeoutMs != 0u && (now - st.lastRxMs) > st.linkTimeoutMs) {
             combus_handshake_internal::dropContract(ctx, "silence");
-        } else if (ctx->bidirectional
-                   && (now - ctx->lastAckMs) > kCombusHandshakePeriodMs * kCombusHandshakeAckMissMax) {
+        } else if (ctx->bidirectional && (now - ctx->lastAckMs) > kCombusHandshakeAckTimeoutMs) {
             combus_handshake_internal::dropContract(ctx, "no ACK, the peer does not receive this end");
         }
     }

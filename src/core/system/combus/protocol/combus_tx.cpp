@@ -207,7 +207,7 @@ void combus_tx_update(
 		if (!st.nodeCom || st.periodMs == 0u) { continue; }
 
 			// --- 1b. P3, chantier 1.2 — drive the handshake on the linked
-		//    context: pending ACK, boot burst, one request per second.
+		//    context: pending ACK, boot burst, one request per period.
 		//    Independent of the control-frame timer below — if both timers
 		//    expire on the same call, the write() calls happen back-to-back
 		//    (no priority / contention logic, per P3 constraint #2).
