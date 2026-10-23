@@ -132,6 +132,7 @@ La table de correspondance entrée vers channel (`inputs_map`) devient elle auss
 - **Channel candidat** : un `.cb` peut marquer un channel `BASE` comme `candidate` (« à tester »). Il est dans le ComBus du nœud mais hors de l'ensemble stable et du MD5 stable : l'ajouter ne casse aucun pair. Son nom porte un **suffixe** (par exemple `_NEXT`), vérifié par le builder ; retiré à la promotion. Le statut facilite la migration par script.
 - **Essai next** : chaque ensemble a un **MD5 stable** (sans candidats) et un **MD5 next** (stable suivi des candidats). Le nœud émet une salve avec le MD5 next puis une avec le MD5 stable ; le récepteur compare chacun aux siens : next identique, **mode next** ; sinon stable identique, **mode stable**. En mode next, les candidats sont transmis à la suite des stables ; en mode stable, ils gardent leur valeur par défaut sûre. C'est l'émetteur qui décide de diffuser un candidat. Les deux nœuds doivent avoir la même release (bêta ou nightly pour les essais).
 - **Promotion** : à la majeure suivante, les candidats retenus entrent dans l'ensemble stable (à la suite).
+- **Trois niveaux de version** (décidé le 2026-10-23, mis en place en 2.2 avec les candidats) : `project_version.h` reste la référence du versionnage, avec un troisième champ. `MAJOR` = architecture (différent : refus) ; `MINOR` = génération de configuration (journalisée, c'est le MD5 stable qui décide) ; `DEV` = la « pool » des évolutions en essai, les candidats (c'est le MD5 next qui décide l'essai, repli sur le stable). Les trois voyagent dans le handshake. Le MD5 reste le filet automatique : un numéro oublié ne passe pas, il est par ensemble (`BASE` par type, `SYSTEM` par nœud) et il voit les variantes de build ; les numéros portent ce que le hash ne voit pas (protocole, architecture) et se lisent.
 - Proposition à valider : un channel **critique** (`FAILSAFE`, `RUNLEVEL`…) ne peut pas être candidat, pour qu'un retour en mode stable ne coupe jamais la sécurité ; un même nom de channel n'a qu'un seul type dans le dépôt.
 
 ### 2.6 Deux portées : `BASE` puis `SYSTEM`
@@ -140,7 +141,7 @@ La table de correspondance entrée vers channel (`inputs_map`) devient elle auss
 |---|---|---|
 | Lien | entre nœuds (télécommande, remorque) | entre cartes d'un même nœud |
 | Un ensemble stable par | type de machine | nœud (machine précise) |
-| Contenu haché | nom, type, sens, dans l'ordre | nom, type, dans l'ordre (le sens varie selon la carte et est déjà canonisé pour le MD5) |
+| Contenu haché (2.1) | nom, portée, type, sens, valeur par défaut, dans l'ordre du fil | idem, sens réduit (`uplink` et `downlink` équivalents, `both_or` distinct) |
 
 Le même mécanisme vaut pour les deux : en intra-nœud, une carte mise à jour seule (une carte son) peut exiger une fonction à partir d'une release donnée, qui reste dormante en mode stable. Le lien entre deux cartes porte la partie `BASE` suivie de la partie `SYSTEM`. Mise en œuvre en deux temps : `BASE` d'abord, `SYSTEM` ensuite.
 
@@ -202,10 +203,12 @@ Chaque étape se vérifie avec le test de boucle (loopback) puis un build comple
 - `direction` et `bothOr` sont générés mais ignorés à l'émission et à la réception.
 - Les tampons de réception sont passés par pointeur seul, à côté d'un nombre de channels déclaré à part : rien ne vérifie leur taille. Le décodeur refuse les analogiques en trop mais tronque les numériques en silence. Le tampon circulaire, lui, ne déborde pas (plein, il écrase l'octet le plus ancien).
 - Les champs (`ALLOWED_FIELDS`) et les thèmes (`VALID_THEMES`) du builder sont des listes fermées.
+- Le MD5 hachait `theme` et `infoName` (corriger un libellé cassait le contrat) mais pas la valeur par défaut, qui part pourtant sur le fil tant que l'écrivain n'a rien écrit. Fait en 2.1.
+- Le hook ne déclarait comme sources de la génération que les `.cb` et `project_version.h` : une modification du code du builder (par exemple la règle du MD5) n'atteignait pas les firmwares tant qu'aucun `.cb` ne changeait. Corrigé en 2.1 : le code du builder et le hook sont des sources.
 
 | Étape | Livrable | Preuve |
 |---|---|---|
-| 2.1 | MD5 par ensemble, affiché au build ; contrôles du builder (§2.5) | tests unitaires ; jeu de channels de la Volvo équivalent à celui d'avant |
+| 2.1 | MD5 par ensemble, affiché au build ; contenu haché = ce qui fait le contrat : nom, portée, type, sens, **valeur par défaut** (envoyée tant que l'écrivain n'a rien écrit), dans l'ordre du fil ; `theme` et `infoName` retirés (tableau de 12 exemples validé le 2026-10-23). Préalable : le code du builder devient une source de la génération | pytest 746 sur 746 (5 tests du MD5 et 50 cas de propriétés réécrits échouent sur l'ancien `md5.py`) ; Volvo et `test_node_mainboard` : fichiers d'ID, `combus.h` et `combus.cpp` identiques, seuls les en-têtes MD5 changent (`BASE` `f06e08dd…`, `SYSTEM` `fac3de41…`) ; **test Unity sur la carte (2026-10-23)** : 65 tests sur 65 |
 | 2.2 | Statut `candidate`, suffixe, ensemble et MD5 next ; essai next en deux salves | même release : next ; releases différentes : stable |
 | 2.3 | Tables de correspondance et tampons générés, utilisés par TX et RX (remplacent les tampons temporaires de `ComLinkRuntime`, 0.4) | test de boucle identique ; un tampon trop petit ne compile pas |
 | 2.4 | Filtrage par `direction` à la réception | un channel émis localement n'est pas écrasé par le pair |

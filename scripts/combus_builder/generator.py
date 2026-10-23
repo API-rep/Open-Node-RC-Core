@@ -878,8 +878,10 @@ def _emit_md5_files(
     out_dir: Path,
     filename_prefix: str,
     project_version: tuple[int, int] | None = None,
-) -> None:
+) -> dict:
     """
+    Return the hashes (view name -> ViewHash) of the views.
+
     Write the MD5 headers, with the ND1 prefix inserted in the three
     view-specific names.
 
@@ -900,10 +902,10 @@ def _emit_md5_files(
             "project_version_minor": project_version[1],
         }
     if not filename_prefix:
-        generate_md5_artifacts(sel, out_dir, **version)
-        return
+        hashes, _ = generate_md5_artifacts(sel, out_dir, **version)
+        return hashes
     scratch = out_dir / "_md5_scratch"
-    generate_md5_artifacts(sel, scratch, **version)
+    hashes, _ = generate_md5_artifacts(sel, scratch, **version)
     for src in scratch.iterdir():
         name = src.name
         for view_name in ("combus", "combus_system", "combus_base"):
@@ -912,6 +914,18 @@ def _emit_md5_files(
                 break
         src.replace(out_dir / name)
     scratch.rmdir()
+    return hashes
+
+
+def _print_set_hashes(sel: ViewSelection, hashes: dict, filename_prefix: str) -> None:
+    """Chantier 2.1 — one build-log line per channel set: its MD5 and its size."""
+    board = f"  [{filename_prefix}]" if filename_prefix else ""
+    for label, view_name, view in (("BASE", "combus_base", sel.base),
+                                   ("SYSTEM", "combus_system", sel.system)):
+        n_analog = sum(1 for vc in view.channels if vc.ch.type == "analog")
+        n_digital = sum(1 for vc in view.channels if vc.ch.type == "digital")
+        print(f"[combus_builder] set {label:<6}  md5={hashes[view_name].md5_hex}  "
+              f"A{n_analog}+D{n_digital}{board}")
 
 
 def generate(
@@ -960,7 +974,8 @@ def generate(
     emit_view(sel.base, out_dir, ctx, filename_prefix=filename_prefix)
     # projectVersion: (major, minor) read from project_version.h by the
     # caller; None keeps the md5.py placeholder (tests, ad-hoc calls).
-    _emit_md5_files(sel, out_dir, filename_prefix, project_version)
+    hashes = _emit_md5_files(sel, out_dir, filename_prefix, project_version)
+    _print_set_hashes(sel, hashes, filename_prefix)
     return sel
 
 

@@ -5,7 +5,8 @@ Tests for md5.py (A7.2) - MD5 computation for the THREE combus views.
 Coverage:
   - canonical_bytes() shape (JSON, sort_keys, includes required fields)
   - compute_view_hash() returns 16-byte digest
-  - Hash inputs are: id, type, scope, theme, direction, infoName
+  - Hash inputs are: id, type, scope, direction, value, in wire order
+    (chantier 2.1: theme and infoName no longer hashed)
   - Hash is independent of:
       * file order / discovery order
       * key ordering in the channel dict (cosmetic change)
@@ -79,12 +80,13 @@ def _ch(
     theme="failsafe",
     direction=None,
     requires=None,
+    value=None,
 ):
     if direction is None:
         direction = "uplink"
     if requires is None:
         requires = []
-    return {
+    raw = {
         "id": id_,
         "infoName": info_name,
         "type": type_,
@@ -93,6 +95,9 @@ def _ch(
         "direction": direction,
         "requires": requires,
     }
+    if value is not None:
+        raw["value"] = value
+    return raw
 
 
 def _canon_from_yamls(*yamls):
@@ -127,8 +132,10 @@ def test_canonical_bytes_includes_required_fields():
     sel = select_views(chs)
     payload = json.loads(canonical_bytes(sel.base))
     ch = payload["channels"][0]
-    for f in ("id", "type", "scope", "theme", "direction", "infoName"):
+    for f in ("id", "type", "scope", "direction", "value"):
         assert f in ch, f"missing field {f}"
+    for f in ("theme", "infoName"):
+        assert f not in ch, f"field {f} must not be hashed (chantier 2.1)"
 
 
 def test_canonical_bytes_view_name_included():
@@ -238,7 +245,8 @@ def test_compute_view_hash_changes_when_direction_changes():
     )
 
 
-def test_compute_view_hash_changes_when_infoName_changes():
+def test_compute_view_hash_unchanged_when_infoName_changes():
+    """Chantier 2.1, row 1: a debug label is not part of the contract."""
     chs1 = _canon_from_yamls(_ch(scope="BASE", info_name="Foo"))
     chs2 = _canon_from_yamls(_ch(scope="BASE", info_name="Bar"))
     sel1 = select_views(chs1)
@@ -246,7 +254,7 @@ def test_compute_view_hash_changes_when_infoName_changes():
     for name in ("base", "system", "full"):
         v1 = getattr(sel1, name)
         v2 = getattr(sel2, name)
-        assert compute_view_hash(v1).md5_hex != compute_view_hash(v2).md5_hex
+        assert compute_view_hash(v1).md5_hex == compute_view_hash(v2).md5_hex
 
 
 def test_compute_view_hash_changes_when_id_added():
@@ -947,3 +955,73 @@ import pytest  # noqa: E402
 )
 def test_canonical_direction_for_hash_full_mapping(direction, direction_or, expected):
     assert _canonical_direction_for_hash(direction, direction_or) == expected
+
+
+# =============================================================================
+# Chantier 2.1 — what the contract hash covers (table validated by the owner)
+# =============================================================================
+
+def _hashes(*yamls):
+    sel = select_views(_canon_from_yamls(*yamls))
+    return {name: compute_view_hash(getattr(sel, name)).md5_hex for name in ("base", "system", "full")}
+
+
+def test_contract_row2_theme_change_in_place_does_not_change_hash():
+    """Row 2: a theme change that keeps the channel at its place on the wire."""
+    h1 = _hashes(_ch(scope="BASE", theme="failsafe"))
+    h2 = _hashes(_ch(scope="BASE", theme="input"))
+    assert h1 == h2
+
+
+def test_contract_row3_theme_change_that_moves_the_channel_changes_hash():
+    """Row 3: the theme is part of the wire order; moving a channel changes the contract."""
+    h1 = _hashes(_ch(id_="AAA", scope="BASE", theme="input"),
+                 _ch(id_="BBB", scope="BASE", theme="failsafe"))       # wire: BBB, AAA
+    h2 = _hashes(_ch(id_="AAA", scope="BASE", theme="input"),
+                 _ch(id_="BBB", scope="BASE", theme="light"))          # wire: AAA, BBB
+    assert h1["base"] != h2["base"]
+    assert h1["system"] != h2["system"]
+
+
+def test_contract_row4_id_rename_changes_hash():
+    h1 = _hashes(_ch(id_="FOO", scope="BASE"))
+    h2 = _hashes(_ch(id_="FOO2", scope="BASE"))
+    assert h1["base"] != h2["base"]
+    assert h1["system"] != h2["system"]
+
+
+def test_contract_row7_both_to_both_or_changes_hash():
+    h1 = _hashes(_ch(scope="BASE", direction="both"))
+    h2 = _hashes(_ch(scope="BASE", direction="both_or"))
+    assert h1["base"] != h2["base"]
+    assert h1["system"] != h2["system"]
+
+
+def test_contract_row11_default_value_changes_hash():
+    """Row 11: the default value is sent while the writer has not written: part of the contract."""
+    h1 = _hashes(_ch(scope="BASE", value="low"))
+    h2 = _hashes(_ch(scope="BASE", value="high"))
+    assert h1["base"] != h2["base"]
+    assert h1["system"] != h2["system"]
+
+
+def test_contract_row11_analog_default_value_changes_hash():
+    h1 = _hashes(_ch(scope="BASE", type_="analog", value="CbusNeutral"))
+    h2 = _hashes(_ch(scope="BASE", type_="analog", value="CbusMinVal"))
+    assert h1["base"] != h2["base"]
+
+
+def test_generate_prints_one_md5_line_per_set(tmp_path, capsys):
+    """Chantier 2.1: the build log shows the MD5 of each set, with its channel counts."""
+    from scripts.combus_builder.generator import generate
+
+    chs = _canon_from_yamls(_ch(id_="B1", scope="BASE", type_="analog"),
+                            _ch(id_="B2", scope="BASE"),
+                            _ch(id_="S1", scope="SYSTEM"))
+    sel = generate(chs, _ctx([]), tmp_path)
+    out = capsys.readouterr().out
+
+    base_md5 = compute_view_hash(sel.base).md5_hex
+    system_md5 = compute_view_hash(sel.system).md5_hex
+    assert f"[combus_builder] set BASE    md5={base_md5}  A1+D1" in out
+    assert f"[combus_builder] set SYSTEM  md5={system_md5}  A1+D2" in out

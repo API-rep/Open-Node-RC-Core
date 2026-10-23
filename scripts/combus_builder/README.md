@@ -225,9 +225,9 @@ des préfixes de `combus`.
 - `combus` : la vue complète de la carte (référence locale).
 
 L'ordre des IDs est un contrat : changer l'ordre change le protocole sans
-changer les noms. Le MD5 porte sur la définition complète de chaque channel
-(pas seulement l'ID), donc un changement de `direction` à ID constant est
-détecté.
+changer les noms. Le MD5 porte sur ce qui fait le contrat de chaque channel
+(pas seulement l'ID), donc un changement de `direction` ou de valeur par
+défaut à ID constant est détecté.
 
 `CH_COUNT` termine chaque énumération. `View.wire_end` (nombre de canaux
 BASE) existe côté Python seulement ; les constantes C++ `ComBusWireEnd*`
@@ -241,9 +241,19 @@ canonique.
 
 - Une empreinte par vue : MD5 d'un JSON canonique (clés triées, séparateurs
   compacts) (`md5.py:175-193`, `213-221`).
-- Entrées par canal : `id`, `type`, `scope`, `theme`, `direction`,
-  `direction_or`, `infoName` (`md5.py:164-172`). `value` et `requires` n'y sont
-  pas.
+- Entrées par canal, dans l'ordre du fil (l'ordre des IDs) : `id`, `type`,
+  `scope`, `direction`, `direction_or`, et `value` sous la forme du littéral C++
+  émis (une valeur absente et sa valeur par défaut explicite donnent le même
+  hash) (`_view_channel_canonical`, `md5.py`). Depuis le chantier 2.1 du link
+  rework, `theme` et `infoName` n'y sont plus : un libellé de debug, ou un
+  thème qui ne déplace pas le channel sur le fil, ne casse pas le contrat.
+  `requires` n'y est pas (son effet est la présence du channel dans la vue).
+- Le journal du build affiche une ligne par ensemble :
+  `[combus_builder] set BASE    md5=<32 hex>  A9+D9` (et `SYSTEM`), suivie de
+  `[<carte>]` en mode nœud.
+- Le code du builder (`scripts/combus_builder/**/*.py` hors tests) et le hook
+  font partie des sources de la génération : les modifier régénère les
+  fichiers, comme un `.cb`.
 - Vue `combus_system` seulement : canonisation `ONE_WAY`. `uplink`, `downlink`,
   `uplink_or` et `downlink_or` donnent le même état ; `both`, `both_or` et
   `none` restent distincts (`md5.py:62-109`, `137-157`, `183`). C'est ce qui
@@ -441,8 +451,9 @@ Chaque test tire des déclarations `.cb` aléatoires mais valides, avec un germe
   et des channels ;
 - numérotation des IDs : par type, de 0 à n-1, BASE puis SYSTEM puis BOARD ;
   un channel garde son ID dans toutes les vues ; les vues sont des préfixes ;
-- matrice MD5 : renommer un channel BASE change les trois empreintes, SYSTEM
-  deux, BOARD une seule ; `value` et un `requires` satisfait ne changent rien ;
+- matrice MD5 : changer la valeur par défaut d'un channel BASE change les trois
+  empreintes, SYSTEM deux, BOARD une seule ; `infoName`, une valeur par défaut
+  écrite explicitement et un `requires` satisfait ne changent rien ;
   `uplink` / `downlink` restent distincts sur la vue BASE ;
 - tout doublon d'`id` est refusé ;
 - valeurs absurdes dans chaque champ : seule l'exception de validation est

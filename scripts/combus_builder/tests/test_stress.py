@@ -8,7 +8,8 @@ that must hold for ANY input:
   1. Determinism and order independence of the whole pipeline.
   2. ID numbering contract (per type, BASE < SYSTEM < BOARD, view prefixes).
   3. MD5 sensitivity matrix (which scope change moves which view hash).
-  4. MD5 insensitivity (`value`, satisfied `requires` do not move the hash).
+  4. MD5 insensitivity (`infoName`, an explicit default `value`, satisfied
+     `requires` do not move the hash; chantier 2.1).
   5. Duplicate ids are always rejected.
   6. Fuzzing: junk field values and junk YAML never raise anything but the
      documented validation / parse errors.
@@ -203,6 +204,14 @@ EXPECTED_CHANGED = {
 }
 
 
+def _change_default_value(ch: dict) -> None:
+    """Give the channel a default value that renders differently (chantier 2.1: value is hashed)."""
+    if ch["type"] == "analog":
+        ch["value"] = 54321 if ch.get("value") == 12345 else 12345
+    else:
+        ch["value"] = "low" if ch.get("value") == "high" else "high"
+
+
 @pytest.mark.parametrize("seed", SEEDS)
 def test_hash_changes_exactly_in_views_containing_the_channel(seed):
     rng = random.Random(seed)
@@ -215,23 +224,22 @@ def test_hash_changes_exactly_in_views_containing_the_channel(seed):
             continue
         mutated = copy.deepcopy(channels)
         target = rng.choice([c for c in mutated if c["scope"] == scope])
-        target["infoName"] += " (renamed)"
+        _change_default_value(target)
         after = _view_hashes(mutated)
         really = {v for v in before if before[v] != after[v]}
-        assert really == changed, f"renaming a {scope} channel moved {really}, expected {changed}"
+        assert really == changed, f"changing the default value of a {scope} channel moved {really}, expected {changed}"
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-def test_hash_ignores_value_and_satisfied_requires(seed):
+def test_hash_ignores_labels_explicit_defaults_and_satisfied_requires(seed):
     rng = random.Random(seed)
     channels = _random_channels(rng)
     before = _view_hashes(channels)
     mutated = copy.deepcopy(channels)
     for ch in mutated:
-        if ch["type"] == "analog":
-            ch["value"] = rng.choice(["CbusMinVal", "CbusNeutral", "CbusMaxVal", 7])
-        else:
-            ch["value"] = rng.choice(["low", "high"])
+        ch["infoName"] += " (renamed)"         # a debug label is not the contract
+        if "value" not in ch:                  # the generator default, now written explicitly
+            ch["value"] = "CbusNeutral" if ch["type"] == "analog" else "low"
         if ch["scope"] == "SYSTEM":
             ch["requires"] = ["HAS_A"]          # satisfied by the context
     assert _view_hashes(mutated) == before
