@@ -341,6 +341,21 @@ def _discover_cb_sources(buildroot: Path) -> list[str]:
     return sorted(sources)
 
 
+def _discover_builder_sources(project_dir: Path) -> list[str]:
+    """Return the Python files of the builder and of this hook (strings).
+
+    Added to the `source` list of the SCons Command: a change of the builder
+    code (a new MD5 rule, a new generated field) must regenerate the
+    artefacts, even when no `.cb` changed.  The builder tests are left out.
+    """
+    builder = project_dir / "scripts" / "combus_builder"
+    sources = [str(p) for p in builder.rglob("*.py") if "tests" not in p.relative_to(builder).parts]
+    hook_file = project_dir / "scripts" / "combus_scons_hook.py"
+    if hook_file.is_file():
+        sources.append(str(hook_file))
+    return sorted(sources)
+
+
 # =============================================================================
 # ND1: per-board generation (extracted for testability)
 # =============================================================================
@@ -1080,6 +1095,7 @@ def _register_deferred_task(env) -> None:
         version_header = Path(project_dir) / "project_version.h"
         if version_header.is_file():
             sources.append(str(version_header))
+        sources.extend(_discover_builder_sources(Path(project_dir)))
     if not sources:
         # Use a non-existent sentinel so SCons still knows the action's
         # inputs are a list of strings (it accepts [] silently).

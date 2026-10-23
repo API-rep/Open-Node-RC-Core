@@ -258,6 +258,22 @@ def test_discover_cb_sources_finds_cb_and_cbch_sorted(hook, tmp_path):
     assert [Path(p).name for p in got] == ["a.cbch", "z.cb"]
 
 
+def test_discover_builder_sources_lists_the_builder_code(hook, tmp_path):
+    """A change of the builder code must regenerate the artefacts (a new MD5 rule, for example)."""
+    builder = tmp_path / "scripts" / "combus_builder"
+    (builder / "canon").mkdir(parents=True)
+    (builder / "tests").mkdir()
+    (builder / "md5.py").write_text("", encoding="utf-8")
+    (builder / "canon" / "channels.py").write_text("", encoding="utf-8")
+    (builder / "tests" / "test_md5.py").write_text("", encoding="utf-8")
+    (tmp_path / "scripts" / "combus_scons_hook.py").write_text("", encoding="utf-8")
+    got = hook._discover_builder_sources(tmp_path)
+    rel = sorted(Path(p).relative_to(tmp_path).as_posix() for p in got)
+    assert rel == ["scripts/combus_builder/canon/channels.py",
+                   "scripts/combus_builder/md5.py",
+                   "scripts/combus_scons_hook.py"]
+
+
 # =============================================================================
 # SKIP action
 # =============================================================================
