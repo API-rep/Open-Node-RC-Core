@@ -206,13 +206,21 @@ void combus_tx_update(
 			// --- 1. Per-link guard check ---
 		if (!st.nodeCom || st.periodMs == 0u) { continue; }
 
-			// --- 1b. P3 — drive the boot-time handshake burst on the linked
-		//    context.  Independent of the control-frame timer below — if
-		//    both timers expire on the same call, two write() calls happen
-		//    back-to-back (no priority / contention logic, per P3 constraint
-		//    #2).  No-op when the burst is inactive or already validated.
+			// --- 1b. P3, chantier 1.2 — drive the handshake on the linked
+		//    context: pending ACK, boot burst, one request per second.
+		//    Independent of the control-frame timer below — if both timers
+		//    expire on the same call, the write() calls happen back-to-back
+		//    (no priority / contention logic, per P3 constraint #2).
 		if (st.handshakeCtx) {
 			combus_handshake_tx_update(st.handshakeCtx, st.nodeCom);
+		}
+
+			// --- 1c. Chantier 1.2 — a bidirectional end sends no data while its
+			//     contract is UNKNOWN: only the handshake above goes out.  A
+			//     transmit-only end always sends (its receivers wait for the
+			//     contract on their side).
+		if (st.handshakeCtx && st.handshakeCtx->bidirectional && !st.handshakeCtx->contractValidated) {
+			continue;
 		}
 
 			// --- 2. Timer gate ---

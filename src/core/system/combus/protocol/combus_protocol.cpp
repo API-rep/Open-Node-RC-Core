@@ -93,6 +93,13 @@ void combus_protocol_init( uint8_t linkIdx, ComBusLink* link )
     combus_tx_set_handshake_ctx(linkIdx, link->handshakeCtx);
     combus_rx_set_handshake_ctx(linkIdx, link->handshakeCtx);
 
+        // --- 3b. Chantier 1.2 — the contract rules depend on the ends of the
+        //    link: a bidirectional end answers requests, waits for an ACK and
+        //    sends no data while the contract is UNKNOWN.
+    link->handshakeCtx->name          = link->name;
+    link->handshakeCtx->bidirectional = link->txCfg.has_value() && link->rxCfg.has_value();
+    combus_handshake_internal::clearContractValidated(link->handshakeCtx);   // every end starts UNKNOWN
+
         // --- 4. TX protocol layer — only if txCfg is present ---
         //    LY2 — link->layer is passed so combus_tx_init() can
         //    resolve analogWireEnd / digitalWireEnd from the matching

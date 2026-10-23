@@ -41,35 +41,31 @@ uint8_t combus_handshake_sendOnce( NodeCom* nodeCom );
 
 
 // =============================================================================
-// TX BURST — P3
+// TX BURST, REQUESTS AND ACK — P3, chantier 1.2
 // =============================================================================
 
 /**
- * @brief Drive the boot-time handshake burst on the given ComBus link.
+ * @brief Drive the handshake emission of the given ComBus link.
  *
- * @details P3 — called from `combus_tx_update()` on
- *   every poll.  Emits a handshake frame when:
- *     - the burst is active (`ctx->burstActive == true`), AND
- *     - the contract is NOT yet validated (early termination — see
- *       P3 constraint #3), AND
- *     - at least `kCombusHandshakeBurstPeriodMs` (100 ms) have elapsed
- *       since the last emission, AND
- *     - `burstRemaining > 0`.
- *
- *   The first emission happens on the very first call after
- *   `startBurst()` because `lastBurstMs` is initialised to 0.
+ * @details Called from `combus_tx_update()` on every poll.  In this order:
+ *     1. a request received by the RX side (`ctx->ackPending`) is answered
+ *        with an ACK (flags = kCombusHandshakeFlagAck, local MD5);
+ *     2. while the boot burst is active: one request every
+ *        `kCombusHandshakeBurstPeriodMs` (100 ms), `kCombusHandshakeBurstCount`
+ *        times, stopped as soon as the contract is STABLE.  The first one is
+ *        sent on the very first call after `startBurst()`.  Skipped when
+ *        `COMBUS_HANDSHAKE_BURST_DISABLE` is non-zero;
+ *     3. after the burst: one request every `kCombusHandshakePeriodMs`
+ *        (1 s), whatever the state of the contract — it establishes the
+ *        contract, it asks for the periodic ACK, and on a transmit-only end
+ *        it lets a receiver started later establish within 1 s.
  *
  *   Per-link state — see CombusHandshakeContext.  Multiple independent
  *   ComBus interfaces may coexist in the same machine; this function
  *   MUST NEVER be called with a shared context across links.
  *
- *   No-op when:
- *     - `ctx` is null,
- *     - `nodeCom` is null or has no `write` callback,
- *     - `COMBUS_HANDSHAKE_BURST_DISABLE` is non-zero (compile-time),
- *     - the burst is not active,
- *     - the contract is already validated (early termination),
- *     - the interval has not elapsed yet.
+ *   No-op when `ctx` is null, or `nodeCom` is null or has no `write`
+ *   callback.
  *
  * @param[in] ctx      Per-link handshake context (must not be null).
  * @param[in] nodeCom  Transport interface to write through.

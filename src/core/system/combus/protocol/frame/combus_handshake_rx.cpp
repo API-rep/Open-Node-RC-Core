@@ -1,8 +1,8 @@
 /******************************************************************************
  * @file  combus_handshake_rx.cpp
  * @brief RX side — decode a handshake frame from the ring buffer, compare
- *        the MD5 + version against the locally-generated copy, log one
- *        compact line per event.
+ *        the MD5 + major version against the locally-generated copy, update
+ *        the contract of the link (chantier 1.2).
  *
  * @details Format-md5 helper (`combus_handshake_formatMd5Hex`) is owned by
  *   combus_handshake.cpp.  Boot banner is also owned by the umbrella and
@@ -10,7 +10,6 @@
  *
  *   Scope EXPLICITLY out of this revision (to be added later):
  *     - friend-cache update ("amies" / sender address);
- *     - automatic burst at boot;
  *     - high-priority QoS routing.
  *****************************************************************************/
 
@@ -18,6 +17,7 @@
 
 #include <string.h>
 #include <stddef.h>
+#include <Arduino.h>  // millis()
 
 #include <core/system/combus/protocol/frame/combus_frame.h>
 #include <core/system/debug/logging/debug.h>
@@ -47,40 +47,19 @@ static uint8_t ringByteAt(const uint8_t* ringBuf,
 // =============================================================================
 
 /**
- * @brief Compare an on-wire MD5 + version pair against the locally-generated
- *        copy, log the result, and short-circuit when COMBUS_MD5_CHECK_DISABLE
- *        is active.  Returns `true` iff the contract was effectively validated
- *        (real MD5+version match OR bypass mode).  See combus_handshake_rx.h.
+ * @brief Compare an on-wire MD5 + major version against the locally-generated
+ *        copy.  See combus_handshake_rx.h.
  */
-bool combus_handshake_compareAndLog(
+bool combus_handshake_compare(
     const uint8_t* localMd5,
     const uint8_t* wireMd5,
-    uint8_t        wireMajor,
-    uint8_t        wireMinor )
+    uint8_t        wireMajor )
 {
-    char wireMd5Hex[33];
-    combus_handshake_formatMd5Hex(wireMd5, wireMd5Hex);
+        // Bring-up bypass: every handshake is accepted (banner logged at boot).
+    if (COMBUS_MD5_CHECK_DISABLE) { return true; }
 
-    // Bypass path — log "match" regardless of actual bytes, but still log
-    // the on-wire payload so the bypass is auditable.
-    //
-    // Note: we deliberately return `false` here.  Bypass is a bring-up
-    // debug switch and is NOT considered a validated contract — it must
-    // not lift the compare-on-subsequent-frames optimisation.  Real
-    // validation requires a real MD5+version match.
-    if (COMBUS_MD5_CHECK_DISABLE) {
-        sys_log_info(
-            "[COMBUS_HANDSHAKE] MATCH(bypass)  wire md5=%s  ver=%u.%u\n",
-            wireMd5Hex, (unsigned)wireMajor, (unsigned)wireMinor);
-        return false;
-    }
-
-    // LY4 — compare against the per-link localMd5 pointer (resolved at
-    // init from link->layer), not the hardcoded FULL view MD5.  A null
-    // pointer means the link was not properly initialised via
-    // combus_protocol_init() — this is a config error and must NOT be
-    // silently substituted with a fallback MD5 (same pattern as the
-    // UNDEFINED FATAL in combus_protocol_init() and combus_tx_init()).
+        // LY4 — a null local MD5 means the link was not initialised through
+        // combus_protocol_init(): config error, never substituted silently.
     if (!localMd5) {
         sys_log_err(
             "[COMBUS_HANDSHAKE] FATAL: CombusHandshakeContext::expectedMd5 is null "
@@ -88,36 +67,31 @@ bool combus_handshake_compareAndLog(
             "— system halted\n");
         while (1) { /* halt */ }
     }
-    const uint8_t* md5ToCompare = localMd5;
 
-    const bool md5Match = (memcmp(wireMd5, md5ToCompare, 16) == 0);
-    const bool verMatch = (wireMajor == combus::wire::kProjectVersionMajor)
-                       && (wireMinor == combus::wire::kProjectVersionMinor);
-
-
-    if (md5Match && verMatch) {
-        sys_log_info(
-            "[COMBUS_HANDSHAKE] MATCH           wire md5=%s  ver=%u.%u\n",
-            wireMd5Hex, (unsigned)wireMajor, (unsigned)wireMinor);
-        return true;
-    }
+    return (memcmp(wireMd5, localMd5, 16) == 0)
+        && (wireMajor == combus::wire::kProjectVersionMajor);
+}
 
 
-    // Mismatch — single compact line with local + wire side by side.
+    // Log a refused handshake once, until the contract is STABLE again.
+static void logRefusal( CombusHandshakeContext* ctx, const uint8_t* wireMd5,
+                        uint8_t wireMajor, uint8_t wireMinor )
+{
+    if (ctx->refusalLogged) { return; }
+    ctx->refusalLogged = true;
+
     char localMd5Hex[33];
-    combus_handshake_formatMd5Hex(md5ToCompare, localMd5Hex);
+    char wireMd5Hex[33];
+    combus_handshake_formatMd5Hex(ctx->expectedMd5, localMd5Hex);
+    combus_handshake_formatMd5Hex(wireMd5, wireMd5Hex);
 
-    sys_log_info(
-        "[COMBUS_HANDSHAKE] MISMATCH  local md5=%s ver=%u.%u  "
-        "wire md5=%s ver=%u.%u\n",
+    sys_log_warn(
+        "[COMBUS_HANDSHAKE] link '%s' REFUSED  local md5=%s ver=%u.%u  wire md5=%s ver=%u.%u\n",
+        ctx->name ? ctx->name : "?",
         localMd5Hex,
         (unsigned)combus::wire::kProjectVersionMajor,
         (unsigned)combus::wire::kProjectVersionMinor,
-        wireMd5Hex,
-        (unsigned)wireMajor,
-        (unsigned)wireMinor);
-
-    return false;
+        wireMd5Hex, (unsigned)wireMajor, (unsigned)wireMinor);
 }
 
 
@@ -179,51 +153,49 @@ uint8_t combus_handshake_tryDecode(
 
     combus_handshake_internal::markEverReceived(ctx);
 
-    // --- 5. If the contract is already validated, skip the MD5+version
-    //    compare and consume the frame as a no-op handshake.
-    //
-    //    The CRC + length + format checks above are still enforced on
-    //    every handshake frame — only the expensive MD5+version compare
-    //    is short-circuited once we have established that the peer speaks
-    //    the same contract.  This is the optimisation promised by the
-    //    ctx->contractValidated flag's Doxygen contract.
-    //
-    //    The COMBUS_MD5_CHECK_DISABLE bypass path never sets the flag
-    //    (compareAndLog() returns false on the bypass branch), so the
-    //    compare runs on every frame in bypass mode — by design.
-    if (combus_handshake_is_contract_validated(ctx)) {
-        sys_log_info("[COMBUS_HANDSHAKE] skip compare (contract validated)\n");
-        return expectedLen;
-    }
-
-    // --- 6. Contract not yet validated — decode payload (MD5 + version)
-    //    and compare against the locally-generated copy.
+    // --- 5. Request or ACK; MD5 + major compared on EVERY handshake (chantier 1.2).
     //    Layout: [0..15] = MD5, [16] = major, [17] = minor.
-    const uint8_t payloadOffset = sizeof(CombusFrameSof)
-                               + sizeof(CombusFrameHeader);
+    const uint8_t  flags         = linear[sizeof(CombusFrameSof) + offsetof(CombusFrameHeader, flags)];
+    const bool     isAck         = (flags & kCombusHandshakeFlagAck) != 0u;
+    const uint8_t  payloadOffset = sizeof(CombusFrameSof)
+                                 + sizeof(CombusFrameHeader);
     const uint8_t* wireMd5   = &linear[payloadOffset];
     const uint8_t  wireMajor = linear[payloadOffset + 16u];
     const uint8_t  wireMinor = linear[payloadOffset + 17u];
 
-    if (combus_handshake_compareAndLog(ctx->expectedMd5, wireMd5, wireMajor, wireMinor)) {
-        // First successful contract match on this transport — flip the
-        // validated flag so subsequent handshake frames can skip the MD5
-        // compare (other frame-level checks stay active).  Idempotent:
-        // repeated matches leave the flag set.
-        combus_handshake_internal::markContractValidated(ctx);
+    const bool match = combus_handshake_compare(ctx->expectedMd5, wireMd5, wireMajor);
 
-        // P3 — stop the TX burst on the SAME link.  The contract is
-        // validated, no need to keep emitting handshake frames.  The
-        // shared CombusHandshakeContext (wired by combus_protocol_init)
-        // is the only thing that couples TX and RX of the same link —
-        // a different link's burst is untouched.
-        combus_handshake_internal::stopBurst(ctx);
+    // --- 6. A bidirectional end answers every request, matching or not (never an ACK).
+    if (!isAck && ctx->bidirectional) { ctx->ackPending = true; }
+
+    // --- 7. Refused: the contract is (back to) UNKNOWN, logged once.
+    if (!match) {
+        logRefusal(ctx, wireMd5, wireMajor, wireMinor);
+        combus_handshake_internal::dropContract(ctx, "handshake refused");
+        return expectedLen;
     }
 
+    // --- 8. Accepted.  A bidirectional end needs the ACK of its own request
+    //    (proof that the peer receives it); a receive-only end takes the request.
+    if (ctx->bidirectional && !isAck) { return expectedLen; }
+
+    if (isAck) { ctx->lastAckMs = millis(); }
+
+    if (!ctx->contractValidated) {
+        combus_handshake_internal::markContractValidated(ctx);
+        combus_handshake_internal::stopBurst(ctx);
+        ctx->lastAckMs       = millis();     // the ACK window starts now
+        ctx->dataSinceStable = false;
+        ctx->refusalLogged   = false;
+
+        sys_log_info("[COMBUS_HANDSHAKE] link '%s' contract STABLE  wire ver=%u.%u%s\n",
+                     ctx->name ? ctx->name : "?",
+                     (unsigned)wireMajor, (unsigned)wireMinor,
+                     (wireMinor != combus::wire::kProjectVersionMinor) ? "  (minor version differs)" : "");
+    }
 
     return expectedLen;
 }
-
 
 
 

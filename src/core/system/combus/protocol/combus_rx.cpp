@@ -19,15 +19,6 @@
 // combus_frame_apply().
 #include <core/system/combus/combus_defs.h>  // ChanLayer
 
-#if defined(HAS_FAILSAFE)
-// P4 — failsafe reaction needs to read the aggregated FAILSAFE channel.
-// combus_rx.cpp is a core module and does not own any ComBus instance:
-// the node ComBus is passed to combus_rx_update(), like combus_tx_update().
-// Gated by HAS_FAILSAFE so the dependency is only pulled in when the
-// feature is compiled in.
-#include <core/config/machines/combus_types.h>  // DigitalComBusID::FAILSAFE (machine family dispatch)
-#endif
-
 
 
 // =============================================================================
@@ -201,9 +192,22 @@ static uint8_t tryDecode( CombusRxState& st )
     // LY2 — decode is layer-agnostic.  It writes by index into the
     // caller-provided buffers without any notion of layer.
     if (combus_frame_decode(st.frameCfg, &st.snap, linear, expectedLen)) {
+
+            // --- 4b. Chantier 1.2 — contract UNKNOWN: a valid frame is dropped.
+            //    Not applied, snapshot invalidated, and it does not make the link
+            //    alive: a peer with another contract counts as never seen.  A link
+            //    without handshake context (codec tests, legacy callers) has no
+            //    contract.
+        if (st.handshakeCtx && !st.handshakeCtx->contractValidated) {
+            st.snapValid = false;
+            rxBufConsume(st, expectedLen);
+            return expectedLen;
+        }
+
         st.snapValid    = true;
         st.lastRxMs     = millis();
         st.everReceived = true;
+        if (st.handshakeCtx) { st.handshakeCtx->dataSinceStable = true; }
 
         // RL5 — auto-apply: if the caller wired a target ComBus at init
         // time, push the decoded channels into it now.  This makes
@@ -323,14 +327,19 @@ void combus_rx_init(
  *   3. Try to decode frames until the buffer holds fewer than `CombusFrameMinLen`
  *      bytes or `tryDecode()` finds nothing to consume.
  *
- *   @p bus is the node ComBus, read only for the FAILSAFE reaction (HAS_FAILSAFE);
- *   it may be nullptr, the reaction is then skipped.
+ *   4. Chantier 1.2 — drop a STABLE contract back to UNKNOWN after a silence
+ *      longer than the link timeout (once data has flowed), or, on a
+ *      bidirectional end, after kCombusHandshakeAckMissMax periods without ACK.
+ *
+ *   @p bus is no longer read: the FAILSAFE reaction (P4), which dropped the
+ *   contract while FAILSAFE was active, is removed (chantier 1.2) — with the
+ *   contract blocking the frames, it would block the FAILSAFE of the peers.
  */
 void combus_rx_update(const ComBus* bus)
 {
     // --- 1. Guard check ---
     if (!s_rxStates) { return; }
-    (void)bus;   // read only under HAS_FAILSAFE
+    (void)bus;
 
     // --- Iterate over every registered link ---
     for (uint8_t i = 0u; i < s_capacity; ++i) {
@@ -338,19 +347,6 @@ void combus_rx_update(const ComBus* bus)
 
         // --- 2. Per-link guard check ---
         if (!st.nodeCom) { continue; }
-
-#if defined(HAS_FAILSAFE)
-        // --- 2b. P4 — Failsafe reaction: invalidate the cached handshake
-        //     contract so the next handshake frame is re-validated against
-        //     MD5+version.  Without this, a transient link drop leaves the
-        //     contractValidated flag stuck at true and the optimisation in
-        //     combus_handshake_rx.cpp skips re-validation on reconnect.
-        //     Per-link: each link has its own handshakeCtx, so we only
-        //     invalidate THIS link's cache — other links are unaffected.
-        if (bus && bus->digitalBus[static_cast<uint8_t>(DigitalComBusID::FAILSAFE)].value) {
-            combus_handshake_internal::clearContractValidated(st.handshakeCtx);
-        }
-#endif
 
         // --- 3. Drain available bytes into ring buffer ---
         while (st.nodeCom->available(st.nodeCom->ctx) > 0) {
@@ -363,6 +359,18 @@ void combus_rx_update(const ComBus* bus)
             if (tryDecode(st) == 0u) {
                 break;
             }
+        }
+
+        // --- 5. Contract timers (chantier 1.2) ---
+        CombusHandshakeContext* ctx = st.handshakeCtx;
+        if (!ctx || !ctx->contractValidated) { continue; }
+
+        const uint32_t now = millis();
+        if (ctx->dataSinceStable && st.linkTimeoutMs != 0u && (now - st.lastRxMs) > st.linkTimeoutMs) {
+            combus_handshake_internal::dropContract(ctx, "silence");
+        } else if (ctx->bidirectional
+                   && (now - ctx->lastAckMs) > kCombusHandshakePeriodMs * kCombusHandshakeAckMissMax) {
+            combus_handshake_internal::dropContract(ctx, "no ACK, the peer does not receive this end");
         }
     }
 }
@@ -397,7 +405,8 @@ bool combus_rx_is_alive( uint8_t linkIdx, uint32_t timeoutMs )
 {
     if (!s_rxStates || linkIdx >= s_capacity) { return false; }
     const CombusRxState& st = s_rxStates[linkIdx];
-    return st.everReceived && (combus_rx_age_ms(linkIdx) < timeoutMs);
+    const bool contractOk = !st.handshakeCtx || st.handshakeCtx->contractValidated;   // chantier 1.2
+    return contractOk && st.everReceived && (combus_rx_age_ms(linkIdx) < timeoutMs);
 }
 
 

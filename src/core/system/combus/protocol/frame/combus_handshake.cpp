@@ -181,7 +181,18 @@ namespace combus_handshake_internal {
         if (ctx) { ctx->contractValidated = true; }
     }
     void clearContractValidated(CombusHandshakeContext* ctx) {
-        if (ctx) { ctx->contractValidated = false; }
+        if (!ctx) { return; }
+        ctx->contractValidated = false;
+        ctx->ackPending        = false;
+        ctx->dataSinceStable   = false;
+        ctx->refusalLogged     = false;
+    }
+    void dropContract(CombusHandshakeContext* ctx, const char* reason) {
+        if (!ctx || !ctx->contractValidated) { return; }
+        ctx->contractValidated = false;
+        ctx->dataSinceStable   = false;
+        sys_log_warn("[COMBUS_HANDSHAKE] link '%s' contract UNKNOWN (%s)\n",
+                     ctx->name ? ctx->name : "?", reason);
     }
 
     // P3 — burst lifecycle accessors.  Per-link state, see
@@ -191,6 +202,7 @@ namespace combus_handshake_internal {
         ctx->burstActive    = true;
         ctx->burstRemaining = kCombusHandshakeBurstCount;
         ctx->lastBurstMs    = 0u;  // 0 → first emission on next tx_update()
+        ctx->lastRequestMs  = 0u;  // the periodic requests count from the end of the burst
     }
     void stopBurst(CombusHandshakeContext* ctx) {
         if (!ctx) { return; }

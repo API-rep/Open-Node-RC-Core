@@ -148,7 +148,38 @@ static constexpr uint32_t kCombusHandshakeBurstPeriodMs = 100u;
 
 
 // =============================================================================
-// 1c. COMPILE-TIME SWITCHES — UNIQUE DEFINITIONS
+// 1c. CONTRACT CONSTANTS (chantier 1.2)
+// =============================================================================
+
+/**
+ * @brief Bit of the header `flags` byte that marks a handshake as an ACK.
+ *
+ * @details A handshake without it is a request.  A bidirectional end answers
+ *   every request with an ACK carrying its own MD5; nobody answers an ACK.
+ */
+static constexpr uint8_t kCombusHandshakeFlagAck = 0x01u;
+
+/**
+ * @brief Period of the handshake requests after the boot burst, in ms.
+ *
+ * @details Every transmitting end sends one request per period, whatever the
+ *   state of the contract: while UNKNOWN to establish it, while STABLE as the
+ *   periodic ACK request, and always on a transmit-only end.
+ */
+static constexpr uint32_t kCombusHandshakePeriodMs = 1000u;
+
+/**
+ * @brief Missed ACKs after which a bidirectional end drops its contract.
+ *
+ * @details The ACK proves that the peer receives this end; data frames only
+ *   prove the reverse.  No ACK for this many periods: the link is lost.
+ */
+static constexpr uint8_t kCombusHandshakeAckMissMax = 3u;
+
+
+
+// =============================================================================
+// 1d. COMPILE-TIME SWITCHES — UNIQUE DEFINITIONS
 // =============================================================================
 
 /**
@@ -238,7 +269,7 @@ void combus_handshake_formatMd5Hex(const uint8_t md5[16], char out[33]);
 
 struct CombusHandshakeContext {
     // --- RX-side state (P2, migrated from static globals) ---
-    bool     contractValidated = false;  ///< true after first MD5+version match
+    bool     contractValidated = false;  ///< contract STABLE (true) or UNKNOWN (false), chantier 1.2
     bool     everReceived      = false;  ///< true after first valid handshake frame observed
     bool     bootWarningLogged = false;  ///< one-shot guard for the boot banner
 
@@ -246,6 +277,15 @@ struct CombusHandshakeContext {
     bool     burstActive       = false;  ///< true while the boot-time burst is in progress
     uint8_t  burstRemaining    = 0u;     ///< frames left to emit in the current burst
     uint32_t lastBurstMs       = 0u;     ///< millis() at the last burst emission
+
+    // --- Contract state (chantier 1.2) ---
+    const char* name           = nullptr; ///< link name, for the logs (set by combus_protocol_init())
+    bool     bidirectional     = false;  ///< the end both transmits and receives (set by combus_protocol_init())
+    bool     ackPending        = false;  ///< a request was received, the TX answers it with an ACK
+    uint32_t lastRequestMs     = 0u;     ///< millis() at the last request sent after the burst
+    uint32_t lastAckMs         = 0u;     ///< millis() at the last matching ACK (bidirectional end)
+    bool     dataSinceStable   = false;  ///< a data frame was applied since the contract became STABLE
+    bool     refusalLogged     = false;  ///< one-shot guard for the refusal log, re-armed when STABLE
 
     // --- LY4 — expected MD5 pointer, resolved once at init from link->layer.
     //    Points to one of combus::wire::kCombusComBusMd5 (FULL),
@@ -275,25 +315,21 @@ struct CombusHandshakeContext {
 bool combus_handshake_ever_received(const CombusHandshakeContext* ctx);
 
 /**
- * @brief True if the local contract (MD5 + project version) has been
- *   validated against a peer on the given ComBus link since the last
- *   transport reset.
+ * @brief True if the contract of the given ComBus link is STABLE, false if
+ *   it is UNKNOWN (chantier 1.2).
  *
- * @details Per-link state — see CombusHandshakeContext.  Set to `true`
- *   by the RX path on the first handshake frame whose MD5 + version
- *   match the locally-generated copy.  Reset to `false` by
- *   `combus_handshake_internal::clearContractValidated()` — called from
- *   `combus_rx_init()` so the flag is automatically cleared whenever the
- *   transport is (re)initialised.
+ * @details Per-link state — see CombusHandshakeContext.  STABLE once a
+ *   handshake with the same MD5 and major version is received: the ACK of
+ *   its own request on a bidirectional end, the request of the peer on a
+ *   receive-only end.  Back to UNKNOWN on a refused handshake (MD5 and major
+ *   compared on every one), a silence longer than the link timeout, missed
+ *   ACKs (bidirectional end), or a transport (re)initialisation.
  *
- *   Intended use: skip the MD5+version compare on subsequent handshake
- *   frames once the contract is known to be valid, while still running
- *   every other frame-level check (CRC, length, format).  Does NOT
- *   short-circuit any control-frame validation.
+ *   While UNKNOWN, the data frames received are not applied and the link is
+ *   not alive; a bidirectional end sends no data.
  *
  *   Independent from `combus_handshake_ever_received()`: the latter is
- *   true as soon as ANY handshake frame is observed (match or not), the
- *   former only on a successful match.
+ *   true as soon as ANY handshake frame is observed (match or not).
  *
  * @param ctx  Per-link handshake context (must not be null).
  */
@@ -327,9 +363,8 @@ namespace combus_handshake_internal {
     void markEverReceived(CombusHandshakeContext* ctx);
 
     /**
-     * @brief Mark the local contract as validated against a peer on the
-     *        wire.  Called from `combus_handshake_rx.cpp` after a
-     *        successful MD5+version match.
+     * @brief Mark the contract of the link as STABLE.  Called from
+     *        `combus_handshake_rx.cpp` on an accepted handshake.
      */
     void markContractValidated(CombusHandshakeContext* ctx);
 
@@ -337,8 +372,23 @@ namespace combus_handshake_internal {
      * @brief Clear the contract-validated flag.  Called from
      *        `combus_rx_init()` so the flag is automatically reset
      *        whenever the transport is (re)initialised.
+     *
+     * @details Chantier 1.2 — also clears the pending ACK and the contract
+     *   timers: a fresh RX session starts UNKNOWN.
      */
     void clearContractValidated(CombusHandshakeContext* ctx);
+
+    /**
+     * @brief Drop a STABLE contract back to UNKNOWN and log why, once.
+     *
+     * @details Chantier 1.2 — called by the RX side on a refused handshake,
+     *   a silence longer than the link timeout, or missed ACKs.  No-op when
+     *   the contract is already UNKNOWN.
+     *
+     * @param ctx     Per-link handshake context.
+     * @param reason  Short text for the log line.
+     */
+    void dropContract(CombusHandshakeContext* ctx, const char* reason);
 
     /**
      * @brief Start (or restart) the boot-time handshake burst on the

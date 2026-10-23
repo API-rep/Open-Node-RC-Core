@@ -159,7 +159,7 @@ Source : `frame/combus_handshake_tx.cpp:32-115` (émission),
 | 1 | 1 | `nAnalog` = 0 |
 | 2 | 1 | `nDigital` = 0 |
 | 3 | 1 | `seq` = 0 (réservé au handshake) |
-| 4 | 1 | `flags` = 0 |
+| 4 | 1 | `flags` : bit 0 = ACK (`kCombusHandshakeFlagAck`), 0 = demande |
 | 5 à 20 | 16 | MD5 de la vue du lien (BASE, SYSTEM ou complète) |
 | 21 | 1 | version de projet, majeur (`kProjectVersionMajor`) |
 | 22 | 1 | version de projet, mineur (`kProjectVersionMinor`) |
@@ -183,46 +183,64 @@ la compare à la constante générée `kCombusHandshakeWirePayloadLen`.
 | UNDEFINED | arrêt fatal |
 
 TX et RX lisent le même pointeur dans le contexte du lien. Si `expectedMd5`
-est nul à la réception, `combus_handshake_compareAndLog` s'arrête en erreur
-fatale (`combus_handshake_rx.cpp:84-90`). L'émetteur, lui, replie sur le MD5 de
+est nul à la réception, `combus_handshake_compare` s'arrête en erreur
+fatale (`combus_handshake_rx.cpp`). L'émetteur, lui, replie sur le MD5 de
 la vue complète si le pointeur est nul (`combus_handshake_tx.cpp:51-53`,
 `:179-181`).
 
-### 8.3 Rafale au démarrage
+### 8.3 Émission : rafale, demandes, ACK (chantier 1.2)
 
-- `combus_tx_init` arme la rafale (`startBurst`, `combus_tx.cpp:151-153`).
-- Constantes : `kCombusHandshakeBurstCount = 3` trames, une toutes les
-  `kCombusHandshakeBurstPeriodMs = 100` ms (`combus_handshake.h:144`, `:153`).
-- `combus_tx_update` appelle `combus_handshake_tx_update` **avant** le timer des
-  trames de contrôle (`combus_tx.cpp:208-210`) : les deux peuvent écrire dans le
-  même appel.
-- La rafale s'arrête si le contrat du lien est déjà validé
-  (`combus_handshake_tx.cpp:156-160`) ou quand le RX valide le contrat
-  (`stopBurst`, `combus_handshake_rx.cpp:220`).
-- `combus_handshake_sendOnce` (émission unique) existe aussi
-  (`combus_handshake_tx.cpp:32`).
+`combus_tx_update` appelle `combus_handshake_tx_update` **avant** le timer des
+trames de contrôle (`combus_tx.cpp`) : les deux peuvent écrire dans le même
+appel. Dans l'ordre :
 
-### 8.4 Validation à la réception
+- une demande reçue (`ackPending`, posé par le RX d'un bout bidirectionnel)
+  reçoit un ACK qui porte notre MD5. On ne répond jamais à un ACK ;
+- la rafale : `combus_tx_init` l'arme (`startBurst`) ; 3 demandes
+  (`kCombusHandshakeBurstCount`), une toutes les 100 ms
+  (`kCombusHandshakeBurstPeriodMs`), arrêtée dès que le contrat est `STABLE` ;
+- ensuite, une demande par seconde (`kCombusHandshakePeriodMs`), quel que soit
+  l'état du contrat : elle établit le contrat, elle demande l'ACK périodique, et
+  sur un bout qui n'émet que, elle permet à un récepteur démarré plus tard de
+  s'établir en 1 s au plus.
+
+Un bout bidirectionnel n'émet **aucune trame de données** tant que son contrat est
+`INCONNU`. Un bout qui n'émet que les émet toujours. `combus_handshake_sendOnce`
+(émission unique, pour le debug et les tests) existe aussi.
+
+### 8.4 Contrat du lien à la réception (chantier 1.2)
 
 - Les octets d'un handshake sont consommés après contrôle du CRC ; un CRC faux
-  saute un octet et resynchronise (`combus_handshake_rx.cpp:164-174`).
-- Premier handshake reçu : comparaison MD5 + version (`compareAndLog`). En cas
-  de correspondance, `contractValidated` passe à vrai.
-- Contrat déjà validé : la comparaison est sautée, CRC et longueur restent
-  contrôlés (`combus_handshake_rx.cpp:194-197`).
-- Le contrat est invalidé : à chaque `combus_rx_init` ; et, si `HAS_FAILSAFE`
-  est défini, à chaque `combus_rx_update` tant que le canal `FAILSAFE` est
-  actif, pour le lien concerné seulement (`combus_rx.cpp:342-353`).
-- La désynchronisation n'arrête pas les trames de contrôle : le handshake
-  journalise `MATCH` ou `MISMATCH` ; aucun code lu ne bloque l'application des
-  trames sur un `MISMATCH`.
+  saute un octet et resynchronise.
+- **À chaque handshake** (demande ou ACK), le MD5 et la version **majeure** sont
+  comparés (`combus_handshake_compare`) ; la mineure est seulement journalisée.
+- Le contrat est `INCONNU` au départ, puis `STABLE` sur un handshake conforme :
+  l'**ACK** de sa propre demande pour un bout bidirectionnel (preuve que le pair
+  le reçoit), la **demande** du pair pour un bout qui ne fait que recevoir.
+- Retour à `INCONNU` : un handshake refusé (MD5 ou majeure différents) ; un
+  silence plus long que `linkTimeoutMs` après des données ; sur un bout
+  bidirectionnel, aucun ACK pendant 3 périodes (`kCombusHandshakeAckMissMax`) :
+  le pair ne reçoit plus ; une réinitialisation (`combus_rx_init`). Un `FAILSAFE`
+  actif ne touche plus au contrat (l'ancienne réaction P4 est retirée : avec le
+  blocage, elle aurait bloqué le `FAILSAFE` des autres cartes).
+- En `INCONNU`, une trame de données bien reçue est ignorée : elle n'est pas
+  appliquée, et la dernière trame gardée pour ce lien est effacée
+  (`combus_rx_snapshot()` renvoie `nullptr`) ; le lien n'est pas vivant
+  (`combus_rx_is_alive`). Le CRC est vérifié avant : un faux octet `0xAA` ne
+  fait sauter qu'un octet, sans avaler la trame suivante. Un pair
+  au contrat différent compte donc comme jamais vu, et la politique de perte du
+  lien (`onLoss`) s'applique.
+- Journal : une ligne quand le contrat devient `STABLE`, quand il redevient
+  `INCONNU` (avec la raison), et au premier refus d'un handshake.
+- Un lien sans contexte de handshake (tests du codec, appel direct de
+  `combus_rx_init`) n'a pas de contrat : ses trames sont appliquées.
 
 ### 8.5 Interrupteurs de compilation
 
 | Macro | Effet | Source |
 |---|---|---|
-| `COMBUS_MD5_CHECK_DISABLE` | Court-circuite la comparaison (journal « bypass »). Ne valide jamais le contrat. Défaut 0. | `combus_handshake.h:171-173`, `combus_handshake_rx.cpp:71-76` |
-| `COMBUS_HANDSHAKE_BURST_DISABLE` | Désactive l'émission de la rafale. Défaut 0. | `combus_handshake.h:183-185`, `combus_handshake_tx.cpp:141-144` |
+| `COMBUS_MD5_CHECK_DISABLE` | Court-circuite la comparaison : tout handshake est accepté (bannière au démarrage). Défaut 0. | `combus_handshake.h`, `combus_handshake_rx.cpp` |
+| `COMBUS_HANDSHAKE_BURST_DISABLE` | Désactive la rafale ; la demande par seconde reste. Défaut 0. | `combus_handshake.h`, `combus_handshake_tx.cpp` |
 
 > À VÉRIFIER : l'en-tête `combus_handshake.h` (lignes 3-24) décrit encore le
 > handshake comme « NOT YET implemented on the wire » avec un simple stub, et
@@ -302,5 +320,5 @@ dans le code actuel.
 - Fusion OU à la réception (voir §7).
 
 Le handshake reste en mode simple : un booléen `contractValidated` par lien
-(`combus_handshake.h:247-264`). Le cache à plusieurs entrées avec « slot
+(`STABLE` ou `INCONNU`, `combus_handshake.h`). Le cache à plusieurs entrées avec « slot
 unique » du document de conception d'origine est abandonné.

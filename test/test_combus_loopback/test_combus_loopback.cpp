@@ -54,6 +54,16 @@
  *     here), and what com_rx_update() publishes on COM_LINK_LOST (IDLE) and
  *     FAILSAFE_COM_LINK (FAILSAFE).  Same TX↔RX jumper as Group B.
  *
+ *   Group N — link contract, ACK and blocking (chantier 1.2):
+ *     Rows 1 to 12 of the table validated by the owner: a link is UNKNOWN until
+ *     a handshake with the same MD5 and major version (a bidirectional end needs
+ *     the ACK of its request, a receive-only end the request itself); data
+ *     frames are not applied while UNKNOWN; a bidirectional end sends no data
+ *     while UNKNOWN; requests go on at 1 Hz; 3 missed ACKs or a silence drop the
+ *     contract; a request is always answered, an ACK never; FAILSAFE no longer
+ *     touches the contract (P4 removed).  Peer frames are forged on the wire.
+ *     Same TX↔RX jumper as Group B.
+ *
  *   Group C — view identity (Phase 3 / A13):
  *     Validates that the 3 view-specific enums (AnalogComBusID,
  *     AnalogComBusSystemID, AnalogComBusBaseID and their digital
@@ -70,7 +80,7 @@
  *   Group E — MD5 pointer resolution by layer (LY4):
  *     Verifies that combus_protocol_init() resolves the per-link
  *     expectedMd5 pointer from link->layer (BASE / SYSTEM / BOARD),
- *     and that combus_handshake_compareAndLog() matches correctly when
+ *     and that combus_handshake_compare() matches correctly when
  *     given the right local MD5 pointer.  Same pattern as Group D —
  *     verify the resolution at init, not the per-frame behaviour.
  *
@@ -101,8 +111,9 @@
 #include <core/system/combus/protocol/combus_protocol.h> // ComBusLink, combus_protocol_init() — Group E
 #include <core/system/combus/protocol/combus_links.h>    // combus_link_check(), combus_link_build() — Group I
 #include <core/system/com/com_manager.h>                 // com_rx_update() — Group J
-#include <core/system/combus/protocol/frame/combus_handshake.h> // combus_handshake_compareAndLog() — Group E
-#include <core/system/combus/protocol/frame/combus_handshake_rx.h> // combus_handshake_compareAndLog() — Group E (RX-side declaration)
+#include <core/system/combus/protocol/frame/combus_handshake.h> // CombusHandshakeContext — Groups E, N
+#include <core/system/combus/protocol/frame/combus_handshake_rx.h> // combus_handshake_compare() — Group E
+#include <core/system/combus/protocol/frame/combus_handshake_tx.h> // combus_handshake_tx_update() — Groups J, N
 
 // Phase 3 / A13: include combus.h (declares AnalogComBusArray /
 // DigitalComBusArray) AND the 3 view-specific ids headers so the
@@ -935,8 +946,21 @@ static void startHealthLink(LinkEnd end, const ComDev& dev) {
     combus_links_watch(&s_healthRuntime, 1u);
 }
 
-/** Send one frame from txComBus and let com_rx_update() receive it. */
+/** Run the handshake on the loopback until the contract is STABLE (request, then its ACK). */
+static void ensureStable(void) {
+    CombusHandshakeContext* ctx = &s_healthRuntime.handshake;
+    const uint32_t t0 = millis();
+    while (!combus_handshake_is_contract_validated(ctx) && (millis() - t0) < 1500u) {
+        combus_handshake_tx_update(ctx, s_com);
+        delay(10u);
+        combus_rx_update(&rxTargetBus);
+    }
+    TEST_ASSERT_TRUE_MESSAGE(combus_handshake_is_contract_validated(ctx), "link not established — check TX↔RX jumper");
+}
+
+/** Establish the link if needed, send one frame from txComBus and let com_rx_update() receive it. */
 static void sendOneFrameAndReceive(void) {
+    ensureStable();
     fillRandom(0x4EA17Bul);
     delay(30u);
     combus_tx_update(&txComBus);
@@ -1056,6 +1080,7 @@ static bool failsafeOnBus(void) {
 /** A peer in fault makes the merged value true while this board's own value is false. */
 static void test_both_or_merges_peer_value(void) {
     startHealthLink(LinkEnd::TX_RX, kHealthDev);
+    ensureStable();
     combus_set_digital(rxTargetBus, DigitalComBusID::FAILSAFE, false);   // this board: no fault
 
     sendPeerFrame(true);
@@ -1068,6 +1093,7 @@ static void test_both_or_merges_peer_value(void) {
 /** The peer clears its fault: the merged value falls back to false. */
 static void test_both_or_falls_back_when_peer_clears(void) {
     startHealthLink(LinkEnd::TX_RX, kHealthDev);
+    ensureStable();
     combus_set_digital(rxTargetBus, DigitalComBusID::FAILSAFE, false);
 
     sendPeerFrame(true);
@@ -1082,6 +1108,7 @@ static void test_both_or_falls_back_when_peer_clears(void) {
 /** The peer goes silent: its last value is stale and no longer counts. */
 static void test_both_or_ignores_silent_peer(void) {
     startHealthLink(LinkEnd::TX_RX, kHealthDev);
+    ensureStable();
     combus_set_digital(rxTargetBus, DigitalComBusID::FAILSAFE, false);
 
     sendPeerFrame(true);
@@ -1096,6 +1123,7 @@ static void test_both_or_ignores_silent_peer(void) {
 /** The frame sent back on the link does not echo the peer's value (anti ping-pong). */
 static void test_both_or_sends_no_echo(void) {
     startHealthLink(LinkEnd::TX_RX, kHealthDev);
+    ensureStable();
     combus_set_digital(rxTargetBus, DigitalComBusID::FAILSAFE, false);
 
     sendPeerFrame(true);
@@ -1275,6 +1303,289 @@ static void test_loss_row11_tx_only_link_never_contributes(void) {
 }
 
 
+// =============================================================================
+// GROUP N — LINK CONTRACT, ACK AND BLOCKING (chantier 1.2)
+//
+// One test per row of the table validated by the owner.  The link is built on
+// the loopback port (Group J helpers).  What a remote peer would send is forged
+// on the wire (handshake or data frame); what this board sends comes back on
+// its own RX, so a request of its own is answered by itself.
+// =============================================================================
+
+static constexpr ComDev kRxOnlyDev = {            ///< one-way intra-node link, wired RX here
+    "test_rx_only", LinkScope::INTRA_NODE, LinkType::UNIDIRECTIONAL,
+    &kHealthProtocol, LinkActivation::ALWAYS, nullptr
+};
+
+static CombusHandshakeContext* linkCtx(void) { return &s_healthRuntime.handshake; }
+
+static bool isStable(void) { return combus_handshake_is_contract_validated(linkCtx()); }
+
+/** Throw away every byte waiting on the loopback RX. */
+static void drainWire(void) {
+    while (s_com->available(s_com->ctx) > 0) { (void)s_com->readByte(s_com->ctx); }
+}
+
+/** Write on the wire a handshake as a remote peer would send it. */
+static void sendForgedHandshake(bool ack, bool goodMd5, uint8_t major, uint8_t minor) {
+    uint8_t frame[CombusFrameHandshakeMinLen];
+    const uint8_t payload = sizeof(CombusFrameSof) + sizeof(CombusFrameHeader);
+
+    frame[0] = CombusFrameSof;
+    frame[1] = 0u;                                          // nAnalog
+    frame[2] = 0u;                                          // nDigital
+    frame[3] = 0u;                                          // seq 0 = handshake
+    frame[4] = ack ? kCombusHandshakeFlagAck : 0u;          // flags
+    for (uint8_t i = 0u; i < 16u; ++i) { frame[payload + i] = linkCtx()->expectedMd5[i]; }
+    if (!goodMd5) { frame[payload] ^= 0xFFu; }
+    frame[payload + 16u] = major;
+    frame[payload + 17u] = minor;
+    frame[payload + 18u] = combus_frame_crc8(frame, (uint8_t)(payload + 18u));
+
+    s_com->write(s_com->ctx, frame, sizeof(frame));
+    delay(kRxPollMs);
+}
+
+static void sendGoodAck(void) {
+    sendForgedHandshake(true, true, combus::wire::kProjectVersionMajor, combus::wire::kProjectVersionMinor);
+}
+
+/** Let the RX module read what is on the wire. */
+static void pumpRx(void) { combus_rx_update(&rxTargetBus); }
+
+/** Row 1: both ends start together: request, ACK, STABLE; the periodic ACK keeps it STABLE. */
+static void test_contract_row1_request_ack_stable(void) {
+    startHealthLink(LinkEnd::TX_RX, kHealthDev);
+    TEST_ASSERT_FALSE(isStable());
+
+    for (uint32_t t0 = millis(); (millis() - t0) < 300u; ) {
+        combus_tx_update(&txComBus);
+        delay(10u);
+        pumpRx();
+    }
+    TEST_ASSERT_TRUE(isStable());
+    TEST_ASSERT_NOT_NULL(combus_rx_snapshot(kLinkIdx));             // the data flows
+
+    for (uint32_t t0 = millis(); (millis() - t0) < 3500u; ) {       // longer than 3 missed ACKs
+        combus_tx_update(&txComBus);
+        delay(10u);
+        pumpRx();
+    }
+    TEST_ASSERT_TRUE(isStable());
+}
+
+/** Row 2: no answer: no data is sent, the requests go on at 1 Hz, the peer that shows up answers. */
+static void test_contract_row2_peer_late(void) {
+    startHealthLink(LinkEnd::TX_RX, kHealthDev);
+
+    for (uint32_t t0 = millis(); (millis() - t0) < 400u; ) {        // the burst, nobody answers
+        combus_tx_update(&txComBus);
+        delay(20u);
+        drainWire();
+    }
+    TEST_ASSERT_FALSE(isStable());
+
+    delay(30u);                                                     // a data frame is due, no request
+    combus_tx_update(&txComBus);
+    delay(kRxPollMs);
+    TEST_ASSERT_EQUAL_INT(0, s_com->available(s_com->ctx));
+
+    ensureStable();                                                 // the next request is answered
+}
+
+/** Row 3: other MD5: refused, a request is still answered, data frames are not applied. */
+static void test_contract_row3_md5_mismatch(void) {
+    startHealthLink(LinkEnd::TX_RX, kHealthDev);
+
+    sendForgedHandshake(false, false, combus::wire::kProjectVersionMajor, combus::wire::kProjectVersionMinor);
+    pumpRx();
+    TEST_ASSERT_FALSE(isStable());
+    TEST_ASSERT_TRUE(linkCtx()->ackPending);
+
+    sendForgedHandshake(true, false, combus::wire::kProjectVersionMajor, combus::wire::kProjectVersionMinor);
+    pumpRx();
+    TEST_ASSERT_FALSE(isStable());
+
+    sendPeerFrame(false);
+    pumpRx();
+    TEST_ASSERT_NULL(combus_rx_snapshot(kLinkIdx));
+    TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::NEVER_SEEN);
+}
+
+/** Row 4: same MD5 and major, other minor: STABLE. */
+static void test_contract_row4_minor_differs(void) {
+    startHealthLink(LinkEnd::TX_RX, kHealthDev);
+
+    sendForgedHandshake(true, true, combus::wire::kProjectVersionMajor,
+                        (uint8_t)(combus::wire::kProjectVersionMinor + 1u));
+    pumpRx();
+    TEST_ASSERT_TRUE(isStable());
+}
+
+/** Row 5: same MD5, other major: refused. */
+static void test_contract_row5_major_differs(void) {
+    startHealthLink(LinkEnd::TX_RX, kHealthDev);
+
+    sendForgedHandshake(true, true, (uint8_t)(combus::wire::kProjectVersionMajor + 1u),
+                        combus::wire::kProjectVersionMinor);
+    pumpRx();
+    TEST_ASSERT_FALSE(isStable());
+}
+
+/** Row 6: data before the contract is not applied and the link is not alive; after the ACK it is. */
+static void test_contract_row6_data_ignored_until_stable(void) {
+    startHealthLink(LinkEnd::TX_RX, kHealthDev);
+
+    sendPeerFrame(false);
+    pumpRx();
+    TEST_ASSERT_NULL(combus_rx_snapshot(kLinkIdx));
+    TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::NEVER_SEEN);
+
+    sendGoodAck();
+    pumpRx();
+    TEST_ASSERT_TRUE(isStable());
+
+    sendPeerFrame(false);
+    pumpRx();
+    TEST_ASSERT_NOT_NULL(combus_rx_snapshot(kLinkIdx));
+    TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::ALIVE);
+}
+
+/** Row 7: silence drops the contract; the data that comes back waits for a new handshake. */
+static void test_contract_row7_silence_then_renegotiation(void) {
+    startHealthLink(LinkEnd::TX_RX, kHealthDev);
+    sendGoodAck();
+    pumpRx();
+    sendPeerFrame(false);
+    pumpRx();
+    TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::ALIVE);
+
+    delay(kHealthProtocol.linkTimeoutMs + 60u);
+    pumpRx();
+    TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::LOST);
+    TEST_ASSERT_FALSE(isStable());
+
+    sendPeerFrame(false);                                           // the peer is back, data first
+    pumpRx();
+    TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::LOST);
+
+    sendGoodAck();
+    pumpRx();
+    sendPeerFrame(false);
+    pumpRx();
+    TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::ALIVE);
+}
+
+/** Row 8: STABLE, a handshake with another MD5 arrives: back to UNKNOWN. */
+static void test_contract_row8_bad_handshake_while_stable(void) {
+    startHealthLink(LinkEnd::TX_RX, kHealthDev);
+    sendGoodAck();
+    pumpRx();
+    TEST_ASSERT_TRUE(isStable());
+
+    sendForgedHandshake(false, false, combus::wire::kProjectVersionMajor, combus::wire::kProjectVersionMinor);
+    pumpRx();
+    TEST_ASSERT_FALSE(isStable());
+}
+
+/** Row 9: data still arrives but no ACK for 3 periods: the peer no longer receives me, the link is lost. */
+static void test_contract_row9_no_ack_means_lost(void) {
+    startHealthLink(LinkEnd::TX_RX, kHealthDev);
+    sendGoodAck();
+    pumpRx();
+
+    bool stableAt2s = false;
+    for (uint32_t t0 = millis(); (millis() - t0) < 3300u; ) {
+        sendPeerFrame(false);                                       // data, never an ACK
+        pumpRx();
+        if ((millis() - t0) > 1900u && (millis() - t0) < 2200u) { stableAt2s = isStable(); }
+    }
+    TEST_ASSERT_TRUE_MESSAGE(stableAt2s, "dropped before 3 missed ACKs");
+    TEST_ASSERT_FALSE(isStable());
+    TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::LOST);
+}
+
+/** Row 10: a receive-only end ignores data until the request of its peer, never answers it. */
+static void test_contract_row10_rx_only_end(void) {
+    startHealthLink(LinkEnd::RX, kRxOnlyDev);
+
+    sendPeerFrame(false);
+    pumpRx();
+    TEST_ASSERT_NULL(combus_rx_snapshot(kLinkIdx));
+
+    sendForgedHandshake(false, true, combus::wire::kProjectVersionMajor, combus::wire::kProjectVersionMinor);
+    pumpRx();
+    TEST_ASSERT_TRUE(isStable());
+    TEST_ASSERT_FALSE(linkCtx()->ackPending);
+
+    sendPeerFrame(false);
+    pumpRx();
+    TEST_ASSERT_NOT_NULL(combus_rx_snapshot(kLinkIdx));
+}
+
+/** Row 11: a transmit-only end sends its data at once and a handshake every second. */
+static void test_contract_row11_tx_only_end(void) {
+    startHealthLink(LinkEnd::TX, kTestDevUni);
+    drainWire();
+
+    combus_tx_update(&txComBus);                                    // burst request + data
+    delay(kRxPollMs);
+    drainWire();
+
+    delay(30u);                                                     // data due, no request due
+    combus_tx_update(&txComBus);
+    delay(kRxPollMs);
+    TEST_ASSERT_EQUAL_INT(frameLen(static_cast<uint8_t>(AnalogComBusBaseID::CH_COUNT),
+                                   static_cast<uint8_t>(DigitalComBusBaseID::CH_COUNT)),
+                          s_com->available(s_com->ctx));
+    drainWire();
+
+    for (uint32_t t0 = millis(); (millis() - t0) < 300u; ) {        // end of the burst
+        combus_handshake_tx_update(linkCtx(), s_com);
+        delay(20u);
+    }
+    drainWire();
+
+    delay(500u);                                                    // less than 1 s after the burst
+    combus_handshake_tx_update(linkCtx(), s_com);
+    delay(kRxPollMs);
+    TEST_ASSERT_EQUAL_INT(0, s_com->available(s_com->ctx));
+
+    delay(600u);                                                    // more than 1 s after the burst
+    combus_handshake_tx_update(linkCtx(), s_com);
+    delay(kRxPollMs);
+    TEST_ASSERT_EQUAL_INT(CombusFrameHandshakeMinLen, s_com->available(s_com->ctx));
+    drainWire();
+
+    combus_links_watch(nullptr, 0u);
+}
+
+/** Row 12: a request is answered, an ACK never is. */
+static void test_contract_row12_no_reply_to_ack(void) {
+    startHealthLink(LinkEnd::TX_RX, kHealthDev);
+
+    sendGoodAck();
+    pumpRx();
+    TEST_ASSERT_FALSE(linkCtx()->ackPending);
+
+    sendForgedHandshake(false, true, combus::wire::kProjectVersionMajor, combus::wire::kProjectVersionMinor);
+    pumpRx();
+    TEST_ASSERT_TRUE(linkCtx()->ackPending);
+}
+
+/** P4 removed: an active FAILSAFE does not drop the contract. */
+static void test_contract_failsafe_keeps_contract(void) {
+    startHealthLink(LinkEnd::TX_RX, kHealthDev);
+    sendGoodAck();
+    pumpRx();
+    TEST_ASSERT_TRUE(isStable());
+
+    combus_set_digital(rxTargetBus, DigitalComBusID::FAILSAFE, true);
+    pumpRx();
+    TEST_ASSERT_TRUE(isStable());
+}
+
+
 // Chantier 12.6 (cleanup): Group F (FS1 failsafe re-arm) REMOVED — link
 // health is now monitored by the per-backend *_LINK_LOST contributors
 // (PS4_DS4_BT_LINK_LOST, COM_LINK_LOST, ...) aggregated into
@@ -1284,33 +1595,30 @@ static void test_loss_row11_tx_only_link_never_contributes(void) {
 // The replacement tests (link health via REMOTE_LINK_LOST aggregation)
 // will be added in a future chantier once the contract is finalised.
 
-/** combus_handshake_compareAndLog() must match when given the right local MD5. */
+/** combus_handshake_compare() must match when given the right local MD5. */
 static void test_md5_compare_match_with_correct_local(void) {
     // Wire MD5 = BASE view (simulating a peer that speaks BASE).
     const uint8_t* wireMd5 = combus::wire::kCombusBaseComBusMd5;
 
     // Compare against the BASE local MD5 — must match.
-    bool match = combus_handshake_compareAndLog(
+    bool match = combus_handshake_compare(
         combus::wire::kCombusBaseComBusMd5,
         wireMd5,
-        combus::wire::kProjectVersionMajor,
-        combus::wire::kProjectVersionMinor);
+        combus::wire::kProjectVersionMajor);
     TEST_ASSERT_TRUE_MESSAGE(match, "BASE local MD5 must match BASE wire MD5");
 
     // Compare against the FULL local MD5 — must NOT match (different views).
-    match = combus_handshake_compareAndLog(
+    match = combus_handshake_compare(
         combus::wire::kCombusComBusMd5,
         wireMd5,
-        combus::wire::kProjectVersionMajor,
-        combus::wire::kProjectVersionMinor);
+        combus::wire::kProjectVersionMajor);
     TEST_ASSERT_FALSE_MESSAGE(match, "FULL local MD5 must NOT match BASE wire MD5");
 
     // Compare against the SYSTEM local MD5 — must NOT match (different views).
-    match = combus_handshake_compareAndLog(
+    match = combus_handshake_compare(
         combus::wire::kCombusSystemComBusMd5,
         wireMd5,
-        combus::wire::kProjectVersionMajor,
-        combus::wire::kProjectVersionMinor);
+        combus::wire::kProjectVersionMajor);
     TEST_ASSERT_FALSE_MESSAGE(match, "SYSTEM local MD5 must NOT match BASE wire MD5");
 }
 
@@ -1403,6 +1711,21 @@ void setup() {
     RUN_TEST(test_loss_row9_none_link_never_contributes);
     RUN_TEST(test_loss_row10_inter_link_failsafe_imposed);
     RUN_TEST(test_loss_row11_tx_only_link_never_contributes);
+
+    // --- Group N: link contract, ACK and blocking (chantier 1.2) ---
+    RUN_TEST(test_contract_row1_request_ack_stable);
+    RUN_TEST(test_contract_row2_peer_late);
+    RUN_TEST(test_contract_row3_md5_mismatch);
+    RUN_TEST(test_contract_row4_minor_differs);
+    RUN_TEST(test_contract_row5_major_differs);
+    RUN_TEST(test_contract_row6_data_ignored_until_stable);
+    RUN_TEST(test_contract_row7_silence_then_renegotiation);
+    RUN_TEST(test_contract_row8_bad_handshake_while_stable);
+    RUN_TEST(test_contract_row9_no_ack_means_lost);
+    RUN_TEST(test_contract_row10_rx_only_end);
+    RUN_TEST(test_contract_row11_tx_only_end);
+    RUN_TEST(test_contract_row12_no_reply_to_ack);
+    RUN_TEST(test_contract_failsafe_keeps_contract);
 
     // Chantier 12.6: Group F (FS1 failsafe re-arm) removed — see
     // header docstring above (5 independent test groups A/B/C/D/E).

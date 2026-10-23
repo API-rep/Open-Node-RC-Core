@@ -51,34 +51,27 @@ uint8_t combus_handshake_tryDecode(
 // =============================================================================
 
 /**
- * @brief Compare an on-wire MD5 + version pair against the locally-generated
- *        copy, log the result, and short-circuit when COMBUS_MD5_CHECK_DISABLE
- *        is active.  Pulled out of combus_handshake.cpp so unit tests can
- *        exercise the compare path without an RX ring buffer.
+ * @brief Compare an on-wire MD5 + major version against the locally-generated
+ *        copy.  Silent: the RX path logs the changes of the contract.
+ *        Exposed so unit tests can exercise the compare without a ring buffer.
  *
- * @details LY4 — the local MD5 pointer is now passed explicitly (was
- *   hardcoded to `combus::wire::kCombusComBusMd5` before).  This lets the
- *   RX path compare against the per-link MD5 resolved at init from
- *   `link->layer` (BASE / SYSTEM / FULL), instead of always against
- *   the FULL view.
+ * @details Chantier 1.2 — only the major version breaks a contract (the
+ *   minor one is logged when the contract becomes STABLE).  LY4 — the local
+ *   MD5 is the per-link one resolved at init from `link->layer`.
  *
  * @param[in] localMd5   Pointer to 16 bytes — the locally-generated MD5
  *                       for this link's layer (typically
  *                       `ctx->expectedMd5`).
  * @param[in] wireMd5    Pointer to 16 bytes received on the wire.
  * @param[in] wireMajor  On-wire project version MAJOR.
- * @param[in] wireMinor  On-wire project version MINOR.
  *
- * @return `true` iff the contract was effectively validated (real
- *         MD5+version match).  `false` for mismatch AND for the
- *         COMBUS_MD5_CHECK_DISABLE bypass path — bypass is a debug
- *         switch and is NOT considered a validated contract.
+ * @return `true` if the MD5 and the major version match, or always with the
+ *         COMBUS_MD5_CHECK_DISABLE bring-up bypass.
  */
-bool combus_handshake_compareAndLog(
+bool combus_handshake_compare(
     const uint8_t* localMd5,
     const uint8_t* wireMd5,
-    uint8_t        wireMajor,
-    uint8_t        wireMinor );
+    uint8_t        wireMajor );
 
 
 // EOF combus_handshake_rx.h

@@ -528,7 +528,8 @@ le câble avant les init (`combus_tx_set_handshake_ctx(linkIdx, ctx)`,
 `combus_rx_set_handshake_ctx(linkIdx, ctx)`, voir §3.7) et y résout le
 pointeur `expectedMd5` selon le layer du lien.
 
-Format de la trame de handshake, rafale au démarrage (3 trames, 100 ms),
+Format de la trame de handshake, rafale au démarrage (3 trames, 100 ms), demande
+par seconde, ACK, contrat du lien (`STABLE` / `INCONNU`, chantier 1.2),
 validation MD5 + version, interrupteurs de compilation :
 `src/core/system/combus/protocol/frame/combus_frame_protocol.md`, §8.
 
