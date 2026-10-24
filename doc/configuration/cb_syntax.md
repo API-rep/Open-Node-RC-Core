@@ -69,6 +69,7 @@ trie les channels de façon canonique (`scope`, `type`, `theme`, `id`).
 | `direction` | oui pour SYSTEM et BASE | `uplink` \| `downlink` \| `both` \| `none` \| `uplink_or` \| `downlink_or` \| `both_or` | Sens de circulation, avec ou sans fusion OR |
 | `requires` | non | liste de flags de compilation | Activation conditionnelle |
 | `value` | non | token statique ou entier | Valeur par défaut, incluse dans le hash MD5 |
+| `candidate` | non | `true` \| `false` | Channel `BASE` à l'essai (le builder ajoute `_NEXT` au nom), voir plus bas |
 | `infoName` | oui | chaîne non vide | Nom lisible pour le debug, hors du hash MD5 |
 
 ### `id`
@@ -207,6 +208,29 @@ la valeur envoyée sur le fil tant que l'écrivain n'a rien écrit : elle fait
 partie du contrat, donc du hash MD5.
 `infoName` est un libellé de debug, hors du hash MD5.
 
+### `candidate`
+
+Un channel `BASE` **à l'essai** (link rework, étape 2.2) : `candidate: true`.
+
+- le `.cb` donne son **nom définitif** (`id: TILT`) ; le builder ajoute le
+  suffixe `_NEXT` (`TILT_NEXT` dans le code C++). À la promotion, on retire
+  seulement `candidate: true` : le channel est généré sous son nom définitif,
+  et le compilateur signale chaque usage de `TILT_NEXT` à renommer ;
+- `_NEXT` écrit à la main dans un `id` est une erreur de build (suffixe réservé) ;
+- le nom définitif d'un candidat ne doit être celui d'aucun autre channel
+  (erreur de build : la promotion créerait un doublon) ;
+- réservé à `scope: BASE` pour l'instant ;
+- il est numéroté après les channels `BASE` stables de son type : en ajouter
+  un ne déplace aucun ID `BASE` stable, mais décale les ID `SYSTEM` ;
+- il est hors de l'ensemble `BASE` **stable** et de son MD5 : l'ajouter ne
+  casse aucun pair. L'ensemble **next** (stables puis candidats) a son propre
+  MD5 ; deux nœuds au même next échangent les candidats, sinon ils restent en
+  mode stable et les candidats gardent leur valeur par défaut (étape 2.2b) ;
+- entre les cartes d'un même nœud, les candidats doivent être identiques : ils
+  sont dans l'ensemble `SYSTEM`, dont le MD5 diffère sinon (lien refusé) ;
+- incrémenter `PROJECT_VERSION_DEV` (`project_version.h`) quand les candidats
+  changent.
+
 ## Validation MD5
 
 Chaque board génère un MD5 par vue (`combus_base`, `combus_system`,
@@ -222,6 +246,9 @@ dans `scripts/combus_builder/README.md`. Ce qu'il faut retenir en écrivant un
   channel, une `value` égale à la valeur par défaut écrite explicitement,
   `requires` en tant que tel, l'ordre des fichiers ou des channels, les
   commentaires YAML.
+- **Ensemble BASE** : deux MD5, stable (sans les candidats) et next (stables
+  puis candidats), égaux sans candidat. Le journal du build affiche une ligne
+  par ensemble (`set BASE`, `set NEXT`, `set SYSTEM`).
 - **Vue SYSTEM** : `uplink`, `downlink`, `uplink_or` et `downlink_or` comptent
   pour un même état. Deux boards d'un nœud peuvent donc avoir des rôles
   opposés sur un channel sans désaccord. `both`, `both_or` et `none` restent

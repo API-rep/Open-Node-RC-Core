@@ -380,7 +380,7 @@ def test_node_mode_unprefixed_files_belong_to_the_current_board(hook, tmp_path):
 
 def test_node_mode_writes_the_project_version(hook, tmp_path):
     """The version read from project_version.h reaches combus_wire_common.h."""
-    staging, _ = _node_staging(hook, tmp_path, project_version=(8, 9))
+    staging, _ = _node_staging(hook, tmp_path, project_version=(8, 9, 0))
     text = (staging / "combus_wire_common.h").read_text(encoding="utf-8")
     assert "kProjectVersionMajor = 8u;" in text
     assert "kProjectVersionMinor = 9u;" in text

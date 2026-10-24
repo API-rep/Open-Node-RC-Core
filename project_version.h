@@ -13,8 +13,9 @@
  * Wire mapping (combus_wire_common.h):
  *   - combus::wire::kProjectVersionMajor = PROJECT_VERSION_MAJOR
  *   - combus::wire::kProjectVersionMinor = PROJECT_VERSION_MINOR
+ *   - combus::wire::kProjectVersionDev   = PROJECT_VERSION_DEV
  *
- * The builder parses the two constants below with a regular expression
+ * The builder parses the three constants below with a regular expression
  * (`PROJECT_VERSION_MAJOR = <n>u;`, each in 0..255): keep that form.
  *
  * This version defines the compatibility contract between communicating
@@ -60,6 +61,17 @@ static constexpr uint8_t PROJECT_VERSION_MAJOR = 0u;
  * DO NOT RENAME the constants
  */
 static constexpr uint8_t PROJECT_VERSION_MINOR = 1u;
+
+/**
+ * @brief Project contract dev version: the pool of candidate channels.
+ *
+ * Increment when the candidate channels (`candidate: true` in a .cb) change;
+ * reset to 0 when they are promoted, at the next MAJOR.  Logged by the
+ * handshake, never compared: the next MD5 decides whether two nodes share
+ * their candidates.
+ * DO NOT RENAME the constants
+ */
+static constexpr uint8_t PROJECT_VERSION_DEV = 0u;
 
 }  // namespace project
 

@@ -335,9 +335,12 @@ def _select_view(
     For combus_base: {"BASE"}.
 
     Sort key (stable, per-type):
-        (scope priority, theme, id)
+        (scope priority, candidate, theme, id)
     Scope priority: BASE < SYSTEM < BOARD (preserves wire order:
     BASE channels are at the lowest indices, SYSTEM next, BOARD last).
+    Link rework 2.2a: the BASE candidates come after the stable BASE
+    channels of their type, so adding one never moves a stable BASE id
+    (the next set is the stable set followed by the candidates).
     """
     selected = [ch for ch in channels if ch.scope in allowed_scopes]
     # Per-type sort: analog and digital are sorted independently.
@@ -346,6 +349,7 @@ def _select_view(
         [ch for ch in selected if ch.type == "analog"],
         key=lambda ch: (
             _VIEW_SCOPE_ORDER[ch.scope],
+            ch.candidate,
             ch.theme,
             ch.id,
         ),
@@ -354,6 +358,7 @@ def _select_view(
         [ch for ch in selected if ch.type == "digital"],
         key=lambda ch: (
             _VIEW_SCOPE_ORDER[ch.scope],
+            ch.candidate,
             ch.theme,
             ch.id,
         ),
@@ -877,7 +882,7 @@ def _emit_md5_files(
     sel: ViewSelection,
     out_dir: Path,
     filename_prefix: str,
-    project_version: tuple[int, int] | None = None,
+    project_version: tuple[int, int, int] | None = None,
 ) -> dict:
     """
     Return the hashes (view name -> ViewHash) of the views.
@@ -900,6 +905,7 @@ def _emit_md5_files(
         version = {
             "project_version_major": project_version[0],
             "project_version_minor": project_version[1],
+            "project_version_dev": project_version[2],
         }
     if not filename_prefix:
         hashes, _ = generate_md5_artifacts(sel, out_dir, **version)
@@ -920,12 +926,18 @@ def _emit_md5_files(
 def _print_set_hashes(sel: ViewSelection, hashes: dict, filename_prefix: str) -> None:
     """Chantier 2.1 — one build-log line per channel set: its MD5 and its size."""
     board = f"  [{filename_prefix}]" if filename_prefix else ""
-    for label, view_name, view in (("BASE", "combus_base", sel.base),
-                                   ("SYSTEM", "combus_system", sel.system)):
+    from .md5 import stable_view
+
+    n_candidates = sum(1 for vc in sel.base.channels if vc.ch.candidate)
+    for label, hash_name, view, extra in (
+            ("BASE", "combus_base", stable_view(sel.base), ""),
+            ("NEXT", "combus_base_next", sel.base,
+             f"  ({n_candidates} candidate{'s' if n_candidates != 1 else ''})"),
+            ("SYSTEM", "combus_system", sel.system, "")):
         n_analog = sum(1 for vc in view.channels if vc.ch.type == "analog")
         n_digital = sum(1 for vc in view.channels if vc.ch.type == "digital")
-        print(f"[combus_builder] set {label:<6}  md5={hashes[view_name].md5_hex}  "
-              f"A{n_analog}+D{n_digital}{board}")
+        print(f"[combus_builder] set {label:<6}  md5={hashes[hash_name].md5_hex}  "
+              f"A{n_analog}+D{n_digital}{extra}{board}")
 
 
 def generate(
@@ -934,7 +946,7 @@ def generate(
     out_dir: Path,
     *,
     filename_prefix: str = "",
-    project_version: tuple[int, int] | None = None,
+    project_version: tuple[int, int, int] | None = None,
 ) -> ViewSelection:
     """
     Full A7 + A12 generation pipeline.
@@ -951,7 +963,7 @@ def generate(
     4. Emit MD5 artifacts (combus_md5.h, combus_system_md5.h,
        combus_base_md5.h, combus_wire_common.h).
 
-    `project_version`: optional (major, minor) written in
+    `project_version`: optional (major, minor, dev) written in
     combus_wire_common.h (see md5.read_project_version()).
 
     `filename_prefix` (ND1): when non-empty, every emitted file is
@@ -972,7 +984,7 @@ def generate(
     emit_view(sel.full, out_dir, ctx, filename_prefix=filename_prefix)
     emit_view(sel.system, out_dir, ctx, filename_prefix=filename_prefix)
     emit_view(sel.base, out_dir, ctx, filename_prefix=filename_prefix)
-    # projectVersion: (major, minor) read from project_version.h by the
+    # projectVersion: (major, minor, dev) read from project_version.h by the
     # caller; None keeps the md5.py placeholder (tests, ad-hoc calls).
     hashes = _emit_md5_files(sel, out_dir, filename_prefix, project_version)
     _print_set_hashes(sel, hashes, filename_prefix)

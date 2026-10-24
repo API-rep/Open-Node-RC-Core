@@ -209,8 +209,13 @@ Deux ordres distincts, à ne pas confondre :
 - `SCOPE_ORDER` (`canon/channels.py:97`) : SYSTEM 0, BASE 1, BOARD 2. Sert au
   **tri canonique** `(scope, type, theme, id)` (`canon/channels.py:208-211`, `787-789`).
 
-Règle d'attribution (`generator.py:332-386`) : les canaux `analog` et `digital`
-sont triés séparément, par `(scope, theme, id)` avec l'ordre `_VIEW_SCOPE_ORDER`.
+Règle d'attribution (`_select_view`) : les canaux `analog` et `digital`
+sont triés séparément, par `(scope, candidate, theme, id)` avec l'ordre
+`_VIEW_SCOPE_ORDER`. Les candidats (`candidate: true`, `BASE` seulement, link
+rework 2.2a) viennent donc après les `BASE` stables de leur type : en ajouter
+un ne déplace aucun ID `BASE` stable. Le `.cb` donne le nom définitif, et
+`validate_channel` ajoute `_NEXT` (suffixe réservé, refusé s'il est écrit à la
+main) ; `merge_channels` refuse un candidat dont le nom définitif est déjà pris.
 Chaque type a son compteur, qui part de 0. Les BASE ont donc les plus petits
 IDs de leur type, puis SYSTEM, puis BOARD. Un canal garde le même ID dans toutes
 les vues où il apparaît. Les vues `combus_system` et `combus_base` sont ainsi
@@ -249,8 +254,8 @@ canonique.
   thème qui ne déplace pas le channel sur le fil, ne casse pas le contrat.
   `requires` n'y est pas (son effet est la présence du channel dans la vue).
 - Le journal du build affiche une ligne par ensemble :
-  `[combus_builder] set BASE    md5=<32 hex>  A9+D9` (et `SYSTEM`), suivie de
-  `[<carte>]` en mode nœud.
+  `[combus_builder] set BASE    md5=<32 hex>  A9+D9`, puis `set NEXT` (avec le
+  nombre de candidats) et `set SYSTEM`, suivies de `[<carte>]` en mode nœud.
 - Le code du builder (`scripts/combus_builder/**/*.py` hors tests) et le hook
   font partie des sources de la génération : les modifier régénère les
   fichiers, comme un `.cb`.
@@ -262,8 +267,15 @@ canonique.
   donnent des empreintes différentes.
 - `_canonical_direction_for_hash` est réservée au hash, jamais à la génération
   (`md5.py:88-90`). `direction_or` est optionnel (rétro-compatibilité).
-- La version du projet n'entre pas dans le hash : constantes dans
-  `combus_wire_common.h` (`md5.py:22-24`).
+- Ensemble `BASE` : deux empreintes (link rework 2.2a). **Stable** : la vue sans
+  ses candidats (`stable_view`), émise en `kCombusBaseComBusMd5`. **Next** : la
+  vue entière (stables puis candidats), émise en `kCombusBaseComBusMd5Next`.
+  Sans candidat, elles sont égales (le drapeau `candidate` n'est pas haché).
+  La vue `combus_system` contient les candidats : deux cartes d'un nœud aux
+  candidats différents n'ont pas le même MD5 `SYSTEM`.
+- La version du projet n'entre pas dans le hash : `MAJOR`, `MINOR` et `DEV`
+  (`project_version.h`, lus par `read_project_version`) sont des constantes de
+  `combus_wire_common.h`.
 - Le hash change donc quand un de ces champs change, quand un canal entre ou
   sort d'une vue (via `requires`), ou quand l'ordre d'attribution des IDs change.
 - Propagation selon le scope du channel modifié (conséquence de la composition
@@ -436,6 +448,7 @@ Fichiers de `scripts/combus_builder/tests/` :
 | `test_mother_not_a_board.py` | l'env racine (« mère ») n'est pas une carte |
 | `test_generator.py` | vues, IDs, rendu C++, compilation |
 | `test_md5.py` | empreintes, canonisation `ONE_WAY` |
+| `test_candidates.py` | channels candidats, MD5 stable et next, champ `DEV` (link rework 2.2a) |
 | `test_hook.py` | fonctions utilitaires du hook SCons (sans SCons) |
 | `test_stress.py` | tests de propriétés sur des `.cb` aléatoires (voir plus bas) |
 | `_cpp_compiler.py` | recherche d'un compilateur C++ (aide, pas un test) |

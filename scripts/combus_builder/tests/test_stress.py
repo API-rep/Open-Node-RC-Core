@@ -246,6 +246,35 @@ def test_hash_ignores_labels_explicit_defaults_and_satisfied_requires(seed):
 
 
 @pytest.mark.parametrize("seed", SEEDS)
+def test_candidates_keep_stable_base_ids_and_stable_md5(seed):
+    """Link rework 2.2a: adding candidates never moves a stable BASE id nor the stable MD5."""
+    from scripts.combus_builder.generator import resolve_requires
+    from scripts.combus_builder.md5 import stable_view
+
+    rng = random.Random(seed)
+    channels = _random_channels(rng)
+    candidates = []
+    for i in range(rng.randint(1, 4)):
+        ch = _random_channel(rng, 1000 + i)
+        ch.update({"id": f"CAND_{i}", "scope": "BASE", "candidate": True})
+        ch.pop("requires", None)
+        if ch.get("direction") is None:
+            ch["direction"] = "uplink"
+        candidates.append(ch)
+
+    def views(chs):
+        result = canonize(_to_parsed(chs))
+        return select_views(resolve_requires(result.canonical_definitions, _ctx(FLAG_POOL)))
+
+    before, after = views(channels), views(channels + candidates)
+    ids_after = {vc.ch.id: vc.numeric_id for vc in after.full.channels}
+    for vc in before.base.channels:
+        assert ids_after[vc.ch.id] == vc.numeric_id, vc.ch.id
+    assert compute_view_hash(stable_view(after.base)).md5_hex == compute_view_hash(before.base).md5_hex
+    assert compute_view_hash(after.system).md5_hex != compute_view_hash(before.system).md5_hex
+
+
+@pytest.mark.parametrize("seed", SEEDS)
 def test_hash_changes_when_direction_changes_on_base(seed):
     """On the BASE view uplink and downlink are NOT equivalent."""
     rng = random.Random(seed)

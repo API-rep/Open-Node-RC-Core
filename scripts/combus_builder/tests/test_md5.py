@@ -394,7 +394,7 @@ def test_generate_md5_artifacts_emits_four_files():
             "combus_md5.h",
             "combus_wire_common.h",
         ])
-        assert set(hashes.keys()) == {"combus_base", "combus_system", "combus"}
+        assert set(hashes.keys()) == {"combus_base", "combus_system", "combus", "combus_base_next"}
 
 
 def test_generate_md5_artifacts_emits_base_first():

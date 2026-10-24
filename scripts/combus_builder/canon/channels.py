@@ -57,7 +57,11 @@ ALLOWED_FIELDS: frozenset[str] = frozenset({
     "direction",
     "requires",
     "value",
+    "candidate",   # link rework 2.2a: BASE channel on trial (id ends with CANDIDATE_SUFFIX)
 })
+
+# Suffixe obligatoire (et réservé) du nom d'un channel candidat (link rework 2.2a).
+CANDIDATE_SUFFIX: str = "_NEXT"
 
 # Tokens acceptés pour `value` sur un channel analog.
 # Mapping vers littéraux C++ uint16_t (cf. src/core/system/combus/combus_res.h).
@@ -205,6 +209,7 @@ class ChannelDefinition:
     source_path: Path
     raw: dict[str, Any] = field(default_factory=dict)
     value: str | int | None = None
+    candidate: bool = False  # link rework 2.2a — BASE channel on trial (id ends with _NEXT)
 
     def sort_key(self) -> tuple[int, str, str, str]:
         """Clé de tri canonique : (scope, type, theme, id)."""
@@ -652,6 +657,31 @@ def validate_channel(
     _check_value_explicit_null(path, cid, raw)
     value = _validate_value(path, cid, ctype, raw.get("value"))
 
+    # --- candidate (optionnel, link rework 2.2a) ---
+    # Un channel BASE à l'essai : hors de l'ensemble stable et de son MD5,
+    # échangé seulement en mode next.  Le `.cb` donne le nom définitif et le
+    # builder ajoute le suffixe : le statut est visible partout dans le code,
+    # et retirer `candidate` promeut le channel sous son nom définitif.  Le
+    # suffixe est réservé au builder.
+    candidate = raw.get("candidate", False)
+    if not isinstance(candidate, bool):
+        raise ChannelValidationError(
+            path, cid, f"`candidate` must be true or false, got {candidate!r}",
+        )
+    if candidate and cscope != "BASE":
+        raise ChannelValidationError(
+            path, cid,
+            f"only a BASE channel can be a candidate (scope is {cscope})",
+        )
+    if cid.endswith(CANDIDATE_SUFFIX):
+        raise ChannelValidationError(
+            path, cid,
+            f"the suffix {CANDIDATE_SUFFIX!r} is reserved: write the final name and "
+            f"`candidate: true`, the builder adds the suffix",
+        )
+    if candidate:
+        cid = cid + CANDIDATE_SUFFIX
+
     return ChannelDefinition(
         id=cid,
         info_name=info_name,
@@ -664,6 +694,7 @@ def validate_channel(
         source_path=path,
         raw=dict(raw),
         value=value,
+        candidate=candidate,
     )
 
 
@@ -778,6 +809,19 @@ def merge_channels(
                     second_def=ch.raw,
                 )
             by_id[ch.id] = ch
+
+    # Link rework 2.2a — the final name of a candidate (without the suffix)
+    # must be free: promoting it would otherwise create a duplicate.
+    for ch in by_id.values():
+        if not ch.candidate:
+            continue
+        final_name = ch.id[:-len(CANDIDATE_SUFFIX)]
+        if final_name in by_id:
+            raise ChannelValidationError(
+                ch.source_path, ch.id,
+                f"candidate {final_name!r} has the name of the channel defined in "
+                f"{by_id[final_name].source_path}; promoting it would create a duplicate",
+            )
     return list(by_id.values())
 
 

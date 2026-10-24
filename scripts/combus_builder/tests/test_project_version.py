@@ -35,6 +35,7 @@ TEMPLATE = """
 namespace project {
 static constexpr uint8_t PROJECT_VERSION_MAJOR = @MAJOR@u;
 static constexpr uint8_t PROJECT_VERSION_MINOR = @MINOR@u;
+static constexpr uint8_t PROJECT_VERSION_DEV = 0u;
 }
 """
 
@@ -45,11 +46,11 @@ def _header(major, minor) -> str:
 
 def test_reads_both_numbers(tmp_path):
     root = _write(tmp_path, _header(3, 17))
-    assert read_project_version(root) == (3, 17)
+    assert read_project_version(root) == (3, 17, 0)
 
 
 def test_real_project_header_is_readable():
-    major, minor = read_project_version(REPO_ROOT)
+    major, minor, _dev = read_project_version(REPO_ROOT)
     assert 0 <= major <= 255 and 0 <= minor <= 255
 
 
@@ -59,7 +60,7 @@ def test_commented_definitions_are_ignored(tmp_path):
         "/* PROJECT_VERSION_MINOR = 9u; */\n"
         + _header(1, 2)
     )
-    assert read_project_version(_write(tmp_path, text)) == (1, 2)
+    assert read_project_version(_write(tmp_path, text)) == (1, 2, 0)
 
 
 @pytest.mark.parametrize("major,minor", [(256, 0), (0, 256), (1000, 1)])
@@ -98,13 +99,13 @@ def _generate(tmp_path: Path, **kwargs) -> str:
 
 
 def test_generate_writes_the_given_version(tmp_path):
-    text = _generate(tmp_path, project_version=(7, 42))
+    text = _generate(tmp_path, project_version=(7, 42, 0))
     assert "kProjectVersionMajor = 7u;" in text
     assert "kProjectVersionMinor = 42u;" in text
 
 
 def test_generate_writes_the_given_version_with_a_prefix(tmp_path):
-    text = _generate(tmp_path, project_version=(5, 6), filename_prefix="board")
+    text = _generate(tmp_path, project_version=(5, 6, 0), filename_prefix="board")
     assert "kProjectVersionMajor = 5u;" in text
     assert "kProjectVersionMinor = 6u;" in text
     assert not (tmp_path / "_md5_scratch").exists()

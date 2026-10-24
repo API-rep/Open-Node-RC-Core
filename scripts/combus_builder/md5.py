@@ -55,7 +55,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from .generator import View, ViewChannel, _render_value
@@ -221,6 +221,17 @@ class ViewHash:
     digest: bytes
 
 
+def stable_view(view: View) -> View:
+    """Return the view without its candidate channels (link rework 2.2a).
+
+    The BASE set has two MD5: the stable one, hashed on this view, and the
+    next one, hashed on the full view (stable channels then candidates).
+    Without candidates both views — and both hashes — are identical: the
+    view keeps its name and the `candidate` flag itself is not hashed.
+    """
+    return replace(view, channels=[vc for vc in view.channels if not vc.ch.candidate])
+
+
 def compute_view_hash(view: View) -> ViewHash:
     """Compute MD5(canonical channels JSON) for the given view."""
     payload = canonical_bytes(view)
@@ -277,17 +288,19 @@ _CPP_COMMON_PROLOGUE = """\
 # The hook and the CLI read the real values from project_version.h.
 _PROJECT_VERSION_MAJOR_PLACEHOLDER = 0
 _PROJECT_VERSION_MINOR_PLACEHOLDER = 1
+_PROJECT_VERSION_DEV_PLACEHOLDER = 0
 
 
 class ProjectVersionError(Exception):
     """project_version.h is missing or does not define a valid version."""
 
 
-def read_project_version(project_root) -> tuple[int, int]:
-    """Read (major, minor) from <project_root>/project_version.h.
+def read_project_version(project_root) -> tuple[int, int, int]:
+    """Read (major, minor, dev) from <project_root>/project_version.h.
 
-    Parses `PROJECT_VERSION_MAJOR` / `PROJECT_VERSION_MINOR` constants
-    (`= 0u;`). Each must be an integer in 0..255 (uint8 on the wire).
+    Parses `PROJECT_VERSION_MAJOR` / `PROJECT_VERSION_MINOR` /
+    `PROJECT_VERSION_DEV` constants (`= 0u;`; DEV since link rework 2.2a).
+    Each must be an integer in 0..255 (uint8 on the wire).
     Raises ProjectVersionError when the file or a constant is missing
     or out of range: a silent fallback would put a wrong version in the
     handshake.
@@ -301,7 +314,7 @@ def read_project_version(project_root) -> tuple[int, int]:
     text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
     text = re.sub(r"//[^\n]*", "", text)
     values = []
-    for name in ("PROJECT_VERSION_MAJOR", "PROJECT_VERSION_MINOR"):
+    for name in ("PROJECT_VERSION_MAJOR", "PROJECT_VERSION_MINOR", "PROJECT_VERSION_DEV"):
         m = re.search(rf"\b{name}\s*=\s*(\d+)\s*u?\s*;", text)
         if m is None:
             raise ProjectVersionError(f"{path}: {name} not found")
@@ -309,7 +322,7 @@ def read_project_version(project_root) -> tuple[int, int]:
         if not 0 <= value <= 255:
             raise ProjectVersionError(f"{path}: {name}={value} is outside 0..255")
         values.append(value)
-    return values[0], values[1]
+    return values[0], values[1], values[2]
 
 
 # Mapping view_name -> (md5 symbol name, hex symbol name).
@@ -324,6 +337,7 @@ _VIEW_SYMBOLS = {
 def _render_common_header(
     project_version_major: int = _PROJECT_VERSION_MAJOR_PLACEHOLDER,
     project_version_minor: int = _PROJECT_VERSION_MINOR_PLACEHOLDER,
+    project_version_dev: int = _PROJECT_VERSION_DEV_PLACEHOLDER,
 ) -> str:
     """Render the shared combus_wire_common.h file.
 
@@ -343,6 +357,8 @@ def _render_common_header(
     body.append("/// Project version (read from project_version.h by the hook and the CLI).")
     body.append(f"static constexpr uint8_t kProjectVersionMajor = {project_version_major}u;")
     body.append(f"static constexpr uint8_t kProjectVersionMinor = {project_version_minor}u;")
+    body.append("/// Candidate pool (link rework 2.2): logged by the handshake, never compared.")
+    body.append(f"static constexpr uint8_t kProjectVersionDev = {project_version_dev}u;")
     body.append("")
     body.append("/// Total handshake wire payload length = 16 (md5) + 2 (version).")
     body.append("static constexpr uint8_t kCombusHandshakeWirePayloadLen = 18u;")
@@ -358,11 +374,14 @@ def _render_view_header(
     hash_: ViewHash,
     project_version_major: int = _PROJECT_VERSION_MAJOR_PLACEHOLDER,
     project_version_minor: int = _PROJECT_VERSION_MINOR_PLACEHOLDER,
+    next_hash: ViewHash | None = None,
 ) -> str:
     """Render a view-specific _md5.h file.
 
     Includes the shared header for projectVersion constants.
-    Declares ONLY this view's md5 + hex constants.
+    Declares ONLY this view's md5 + hex constants.  With `next_hash` (BASE
+    view, link rework 2.2a), the md5 is the stable one and the next one
+    follows as <md5>Next / <hex>Next.
     """
     view = hash_.view_name
     if view not in _VIEW_SYMBOLS:
@@ -396,6 +415,16 @@ def _render_view_header(
     body.append(f"static constexpr const char* {hex_sym} =")
     body.append(f'    "{hex_str}";')
     body.append("")
+    if next_hash is not None:
+        body.append(f"/// MD5 of the next set of the {view} view: stable channels then candidates")
+        body.append("/// (equal to the stable MD5 when there is no candidate).")
+        body.append(f"static constexpr uint8_t {md5_sym}Next[16] = {{")
+        body.append("    " + ", ".join(f"0x{b:02X}u" for b in next_hash.digest))
+        body.append("};")
+        body.append("")
+        body.append(f"static constexpr const char* {hex_sym.replace('Hex', 'NextHex')} =")
+        body.append(f'    "{next_hash.md5_hex}";')
+        body.append("")
     body.append("} // namespace wire")
     body.append("} // namespace combus")
     body.append("")
@@ -408,6 +437,7 @@ def emit_view_header(
     out_dir,
     project_version_major: int = _PROJECT_VERSION_MAJOR_PLACEHOLDER,
     project_version_minor: int = _PROJECT_VERSION_MINOR_PLACEHOLDER,
+    next_hash: ViewHash | None = None,
 ) -> "Path":
     """Render and write the <view>_md5.h file for the given hash.
 
@@ -420,6 +450,7 @@ def emit_view_header(
         hash_,
         project_version_major=project_version_major,
         project_version_minor=project_version_minor,
+        next_hash=next_hash,
     )
     out_path = Path(out_dir) / f"{hash_.view_name}_md5.h"
     _safe_write(out_path, content)
@@ -430,6 +461,7 @@ def emit_common_header(
     out_dir,
     project_version_major: int = _PROJECT_VERSION_MAJOR_PLACEHOLDER,
     project_version_minor: int = _PROJECT_VERSION_MINOR_PLACEHOLDER,
+    project_version_dev: int = _PROJECT_VERSION_DEV_PLACEHOLDER,
 ) -> "Path":
     """Render and write the shared combus_wire_common.h file.
 
@@ -441,6 +473,7 @@ def emit_common_header(
     content = _render_common_header(
         project_version_major=project_version_major,
         project_version_minor=project_version_minor,
+        project_version_dev=project_version_dev,
     )
     out_path = Path(out_dir) / "combus_wire_common.h"
     _safe_write(out_path, content)
@@ -456,23 +489,27 @@ def generate_md5_artifacts(
     out_dir,
     project_version_major: int = _PROJECT_VERSION_MAJOR_PLACEHOLDER,
     project_version_minor: int = _PROJECT_VERSION_MINOR_PLACEHOLDER,
+    project_version_dev: int = _PROJECT_VERSION_DEV_PLACEHOLDER,
 ):
     """Compute MD5 for the three combus views and write 4 headers into out_dir.
 
     Files emitted:
-      - combus_base_md5.h   (kCombusBaseComBusMd5[16] + Hex)
+      - combus_base_md5.h   (kCombusBaseComBusMd5[16] + Hex: stable set;
+                             kCombusBaseComBusMd5Next[16] + NextHex: next set)
       - combus_system_md5.h    (kCombusSystemComBusMd5[16]  + Hex)
       - combus_md5.h          (kCombusComBusMd5[16]       + Hex)
       - combus_wire_common.h  (kProjectVersionMajor/Minor,
                                kCombusHandshakeWirePayloadLen)
 
-    Returns: dict[view_name -> ViewHash], list[Path]
+    Returns: dict[view_name -> ViewHash], list[Path].  The dict also holds
+    "combus_base_next" (next set of the BASE view, link rework 2.2a).
     """
     hashes = {
-        "combus_base": compute_view_hash(sel.base),
+        "combus_base": compute_view_hash(stable_view(sel.base)),
         "combus_system":  compute_view_hash(sel.system),
         "combus":        compute_view_hash(sel.full),
     }
+    base_next = compute_view_hash(sel.base)
     written = []
     # Always emit the shared header FIRST so a consumer that includes a
     # view-specific header after the shared header picks up the constants
@@ -481,6 +518,7 @@ def generate_md5_artifacts(
         out_dir,
         project_version_major=project_version_major,
         project_version_minor=project_version_minor,
+        project_version_dev=project_version_dev,
     ))
     for view_name, hash_ in hashes.items():
         written.append(emit_view_header(
@@ -488,5 +526,7 @@ def generate_md5_artifacts(
             out_dir,
             project_version_major=project_version_major,
             project_version_minor=project_version_minor,
+            next_hash=base_next if view_name == "combus_base" else None,
         ))
+    hashes["combus_base_next"] = base_next
     return hashes, written
