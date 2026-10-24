@@ -68,8 +68,8 @@ trie les channels de façon canonique (`scope`, `type`, `theme`, `id`).
 | `theme` | oui | `core` \| `failsafe` \| `vbat` \| `light` \| `input` | Regroupement fonctionnel (liste fermée) |
 | `direction` | oui pour SYSTEM et BASE | `uplink` \| `downlink` \| `both` \| `none` \| `uplink_or` \| `downlink_or` \| `both_or` | Sens de circulation, avec ou sans fusion OR |
 | `requires` | non | liste de flags de compilation | Activation conditionnelle |
-| `value` | non | token statique ou entier | Valeur par défaut |
-| `infoName` | oui | chaîne non vide | Nom lisible pour le debug, inclus dans le hash MD5 |
+| `value` | non | token statique ou entier | Valeur par défaut, incluse dans le hash MD5 |
+| `infoName` | oui | chaîne non vide | Nom lisible pour le debug, hors du hash MD5 |
 
 ### `id`
 
@@ -82,7 +82,8 @@ même déclaration en double est une erreur de build.
 valeurs de la liste fermée `VALID_THEMES` (`canon/channels.py`) :
 `core`, `failsafe`, `vbat`, `light`, `input`, `com`. Toute autre valeur est une erreur
 de build. Pour ajouter un thème, il faut l'ajouter à cette liste dans le
-builder. Le thème fait partie du tri canonique et du hash MD5.
+builder. Le thème fait partie du tri : il peut déplacer un channel sur le fil
+(ce qui change le hash MD5), mais il n'est pas haché lui-même.
 
 ### `scope`
 
@@ -201,8 +202,10 @@ Interdit sur `scope: BASE`. Un `requires` vide (`[]`) est accepté sur BASE.
 
 ### `value` et `infoName`
 
-`value` est copié tel quel lors d'une diffusion vers une autre board.
-`infoName` est un libellé de debug inclus dans le hash MD5.
+`value` est copié tel quel lors d'une diffusion vers une autre board. C'est
+la valeur envoyée sur le fil tant que l'écrivain n'a rien écrit : elle fait
+partie du contrat, donc du hash MD5.
+`infoName` est un libellé de debug, hors du hash MD5.
 
 ## Validation MD5
 
@@ -211,11 +214,14 @@ Chaque board génère un MD5 par vue (`combus_base`, `combus_system`,
 dans `scripts/combus_builder/README.md`. Ce qu'il faut retenir en écrivant un
 `.cb` :
 
-- **Ce qui change le hash** : `id`, `type`, `scope`, `theme`, `direction` (y
-  compris la variante OR) et `infoName`, ainsi que l'apparition ou la
-  disparition d'un channel dans une vue (par `requires`).
-- **Ce qui ne le change pas** : `value`, `requires` en tant que tel, l'ordre
-  des fichiers ou des channels, les commentaires YAML.
+- **Ce qui change le hash** : `id`, `type`, `scope`, `direction` (y compris la
+  variante OR), `value`, la place du channel sur le fil (l'ordre des ID, où le
+  thème intervient), ainsi que l'apparition ou la disparition d'un channel
+  dans une vue (par `requires`).
+- **Ce qui ne le change pas** : `infoName`, un `theme` qui ne déplace pas le
+  channel, une `value` égale à la valeur par défaut écrite explicitement,
+  `requires` en tant que tel, l'ordre des fichiers ou des channels, les
+  commentaires YAML.
 - **Vue SYSTEM** : `uplink`, `downlink`, `uplink_or` et `downlink_or` comptent
   pour un même état. Deux boards d'un nœud peuvent donc avoir des rôles
   opposés sur un channel sans désaccord. `both`, `both_or` et `none` restent
@@ -224,9 +230,9 @@ dans `scripts/combus_builder/README.md`. Ce qu'il faut retenir en écrivant un
   hash différents.
 - **En cas de désaccord entre deux boards (ou deux nœuds)** : comparer, pour
   chaque côté, les `.cb` réellement pris en compte (filtre de type de machine,
-  `requires`), puis `id`, `scope`, `theme`, `direction` et `infoName` des
-  channels concernés. Une faute de frappe dans `infoName` suffit à changer le
-  hash.
+  `requires`), puis `id`, `scope`, `direction`, `value` et l'ordre des
+  channels concernés. Comparer d'abord les lignes `set` du journal des deux
+  builds.
 
 ## Environnements multi-boards
 
