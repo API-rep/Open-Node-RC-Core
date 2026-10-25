@@ -244,6 +244,18 @@ def parse_yaml_file(path: Path) -> tuple[Path, str, Any]:
             f"top-level YAML must be a mapping, got {type(data).__name__}",
         )
 
+    # Link rework 3.2a: the default value of a channel is its safe value (sent
+    # until the writer has written, taken back when its source is lost). The
+    # implicit default of the generator is not always safe: it must be written.
+    if type_label == "channel_def":
+        for ch in data.get("channels") or []:
+            if isinstance(ch, dict) and "value" not in ch:
+                raise ParseError(
+                    path,
+                    f"channel {ch.get('id')!r}: no `value:`. The default value is the "
+                    f"safe value of the channel and must be written (link rework 3.2a)",
+                )
+
     return path, type_label, data
 
 

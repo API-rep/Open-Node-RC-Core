@@ -50,6 +50,7 @@ channels:
   theme: core
   scope: SYSTEM
   direction: none
+  value: CbusNeutral
   
 - id: STEERING_STICK
   infoName: "Steering stick (raw, LX)"
@@ -57,6 +58,7 @@ channels:
   theme: core
   scope: SYSTEM
   direction: none
+  value: CbusNeutral
 
 - id: DUMP_STICK
   infoName: "Dump stick (raw, RY)"
@@ -64,6 +66,7 @@ channels:
   theme: core
   scope: SYSTEM
   direction: none
+  value: CbusNeutral
 # -----------------------------------------------------------------------------
 # DIGITAL — buttons (PS4 DigitalInputDevID)
 # -----------------------------------------------------------------------------
@@ -74,6 +77,7 @@ channels:
   theme: core
   scope: SYSTEM
   direction: none
+  value: low
 
 - id: GEAR_UP_BTN
   infoName: "Gear up button (raw, UP_ARROW)"
@@ -81,6 +85,7 @@ channels:
   theme: core
   scope: SYSTEM
   direction: none
+  value: low
 
 - id: GEAR_DOWN_BTN
   infoName: "Gear down button (raw, DOWN_ARROW)"
@@ -88,6 +93,7 @@ channels:
   theme: core
   scope: SYSTEM
   direction: none
+  value: low
 
 - id: CRUISE_UPDATE_BTN
   infoName: "Cruise update button (raw, L3)"
@@ -95,6 +101,7 @@ channels:
   theme: core
   scope: SYSTEM
   direction: none
+  value: low
 
 - id: HORN_BTN
   infoName: "Horn button (raw, CIRCLE)"
@@ -102,3 +109,4 @@ channels:
   theme: core
   scope: SYSTEM
   direction: none
+  value: low

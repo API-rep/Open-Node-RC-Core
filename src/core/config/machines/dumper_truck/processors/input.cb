@@ -22,6 +22,7 @@ channels:
   theme: input
   scope: SYSTEM
   direction: uplink
+  value: low
   requires: [HAS_INPUT_PROC, HAS_IGNIT_KEY]
 
 - id: DIRECT_DRIVE
@@ -30,6 +31,7 @@ channels:
   theme: input
   scope: SYSTEM
   direction: uplink
+  value: low
   requires: [HAS_INPUT_PROC]
 
 - id: CRUISE_ACTIVE
@@ -38,4 +40,5 @@ channels:
   theme: input
   scope: SYSTEM
   direction: uplink
+  value: low
   requires: [HAS_INPUT_PROC]

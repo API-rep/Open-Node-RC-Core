@@ -17,3 +17,4 @@ channels:
   scope: BASE
   theme: core
   direction: downlink_pt
+  value: 0

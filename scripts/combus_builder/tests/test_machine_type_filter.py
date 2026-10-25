@@ -406,6 +406,7 @@ def test_filter_does_not_change_nd2_diffusion_behaviour():
                 scope: SYSTEM
                 theme: vbat
                 direction: uplink
+                value: low
                 requires:
                   - IS_MAINBOARD
             """)

@@ -23,6 +23,7 @@ channels:
   scope: BASE
   theme: core
   direction: downlink_pt
+  value: 0
 
 - id: TEST_THROTTLE_BUS
   infoName: "Test throttle"
@@ -30,6 +31,7 @@ channels:
   scope: BASE
   theme: core
   direction: downlink
+  value: CbusNeutral
 
 - id: TEST_TILT_ANGLE
   infoName: "Test trailer tilt angle"
@@ -37,6 +39,7 @@ channels:
   scope: BASE
   theme: core
   direction: downlink
+  value: CbusNeutral
 
 - id: TEST_BEACON
   infoName: "Test beacon"
@@ -44,6 +47,7 @@ channels:
   scope: BASE
   theme: core
   direction: downlink
+  value: low
 
 - id: TEST_LIGHTS
   infoName: "Test lights"
@@ -51,6 +55,7 @@ channels:
   scope: BASE
   theme: light
   direction: downlink_pt
+  value: low
 
 - id: TEST_COUPLED_FAULT
   infoName: "Test convoy fault"
@@ -58,3 +63,4 @@ channels:
   scope: BASE
   theme: failsafe
   direction: both_or
+  value: low

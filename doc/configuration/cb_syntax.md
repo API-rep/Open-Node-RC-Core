@@ -68,7 +68,7 @@ trie les channels de façon canonique (`scope`, `type`, `theme`, `id`).
 | `theme` | oui | `core` \| `failsafe` \| `vbat` \| `light` \| `input` | Regroupement fonctionnel (liste fermée) |
 | `direction` | oui pour SYSTEM et BASE | `uplink` \| `downlink` \| `both` \| `none` \| `uplink_or` \| `downlink_or` \| `both_or` | Sens de circulation, avec ou sans fusion OR |
 | `requires` | non | liste de flags de compilation | Activation conditionnelle |
-| `value` | non | token statique ou entier | Valeur par défaut, incluse dans le hash MD5 |
+| `value` | **oui** (depuis le link rework 3.2a) | token statique ou entier | Valeur par défaut **et valeur sûre** : émise tant que l'écrivain n'a rien écrit, reprise à la perte de la source. Incluse dans le hash MD5. Sans `value:`, le build casse, quelle que soit la portée |
 | `candidate` | non | `true` \| `false` | Channel `BASE` à l'essai (le builder ajoute `_NEXT` au nom), voir plus bas |
 | `infoName` | oui | chaîne non vide | Nom lisible pour le debug, hors du hash MD5 |
 
@@ -264,8 +264,7 @@ dans `scripts/combus_builder/README.md`. Ce qu'il faut retenir en écrivant un
   thème intervient), ainsi que l'apparition ou la disparition d'un channel
   dans une vue (par `requires`).
 - **Ce qui ne le change pas** : `infoName`, un `theme` qui ne déplace pas le
-  channel, une `value` égale à la valeur par défaut écrite explicitement,
-  `requires` en tant que tel, l'ordre des fichiers ou des channels, les
+  channel, `requires` en tant que tel, l'ordre des fichiers ou des channels, les
   commentaires YAML.
 - **Ensemble BASE** : deux MD5, stable (sans les candidats) et next (stables
   puis candidats), égaux sans candidat. Le journal du build affiche une ligne

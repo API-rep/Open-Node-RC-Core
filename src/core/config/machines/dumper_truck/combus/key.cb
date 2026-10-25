@@ -23,3 +23,4 @@ channels:
   theme: core
   scope: BASE
   direction: downlink_pt
+  value: low

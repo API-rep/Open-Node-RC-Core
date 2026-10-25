@@ -83,6 +83,7 @@ channels:
     scope: BASE
     theme: core
     direction: uplink
+    value: CbusNeutral
 """
 
 # Fictitious platformio.ini with a node of 2 sub-envs.

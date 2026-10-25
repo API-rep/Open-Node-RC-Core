@@ -14,6 +14,7 @@ channels:
   theme: core
   scope: BASE
   direction: downlink_pt
+  value: low
 
 - id: CRUISE_TOGGLE_BTN
   infoName: "Cruise toggle button (raw, SQUARE)"
@@ -21,3 +22,4 @@ channels:
   theme: core
   scope: BASE
   direction: downlink_pt
+  value: low
