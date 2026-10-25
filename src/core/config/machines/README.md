@@ -242,23 +242,33 @@ the "Machine / Sound convergence" work in `doc/roadmap.md`.
 ## 8. Build Environment Reference
 
 ```ini
-[env:machines]
-build_flags =
-    -D IS_MACHINE
-```
-
-```ini
 [volvo_A60H_id]
 build_flags =
+    -D IS_VEHICLE
     -D MACHINE_VOLVO_A60_H_BRUDER
 ```
 
 (`[volvo_A60H_id]` is a shared section, referenced as
 `${volvo_A60H_id.build_flags}` by the Volvo environments.)
 
-`MACHINE_*` selects the vehicle instance (and so the family). `IS_MACHINE` no
-longer guards any C++ code; the ComBus Builder hook only checks that the
-structural flags (`IS_MACHINE`, `IS_REMOTE`) are present. Do not remove it.
+`MACHINE_*` selects the vehicle instance (and so the family). "Machine" stays
+the generic word of the project (`src/machines/`, `MACHINE_TYPE_*`): any node
+built with a ComBus.
+
+**Nature of the node** (link rework 3.2b): every env sets exactly one
+structural flag, checked by the ComBus Builder hook (`links.node_nature()`).
+It guards no C++ code; it says what the node is, and so its place in the
+star of the links between nodes:
+
+| Flag | Node | Place | Peers (`-D COMBUS_PEER_<TYPE>`) |
+|---|---|---|---|
+| `IS_VEHICLE` | the prime mover: tractor, dumper, excavator | hub: relays between its links | zero or several |
+| `IS_ATTACHMENT` | what is hitched to a vehicle: trailer, plough, dolly | one link, to its vehicle; never relays to another node | exactly one |
+| `IS_MACHINE` | a stand-alone machine | isolated | none |
+| `IS_REMOTE` | the remote | (remote work, chantier 4) | none for now |
+
+In this project a trailer is an attachment, not a vehicle. `[env:machines]`
+sets no structural flag: each machine identity declares its own.
 
 ---
 

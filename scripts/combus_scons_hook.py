@@ -569,13 +569,14 @@ def _generate_combus_action(target, source, env):
         )
         return 1
 
-    # --- 2. Hard fail if NO structural flag is set ------------------------
-    # At least one of these should be set on every legitimate env.
+    # --- 2. Hard fail unless exactly one structural flag is set ------------
+    # Link rework 3.2b: the structural flag is the nature of the node
+    # (IS_VEHICLE, IS_ATTACHMENT, IS_MACHINE, IS_REMOTE), checked against its
+    # peers by links.node_nature().
     # NOTE: IS_MAINBOARD and IS_EXT_BOARD are DEPRECATED (the "board role"
     # axis no longer exists — every board is an implicit BOARD, owner of
     # the combus of the module it hosts, cf. §1.2 of board_architecture.md).
     # They MUST NOT be used as a validation criterion here.
-    structural_flags = {"IS_MACHINE", "IS_REMOTE"}
     # CPPDEFINES is a list of (name, value) tuples when value-less,
     # or just `name` for the value-less form — normalise to set of names.
     define_names: set[str] = set()
@@ -584,13 +585,16 @@ def _generate_combus_action(target, source, env):
             define_names.add(d[0])
         else:
             define_names.add(d)
-    if not (define_names & structural_flags):
-        sys.stderr.write(
-            f"[combus_scons_action] FATAL: no structural flag set "
-            f"(expected one of {sorted(structural_flags)}). "
-            f"Refusing to generate.\n"
-        )
+    repo_root = env.get("COMBUS_REPO_ROOT")
+    if repo_root and repo_root not in sys.path:
+        sys.path.insert(0, repo_root)
+    from scripts.combus_builder.links import LinkError, node_nature
+    try:
+        nature = node_nature(define_names)
+    except LinkError as e:
+        sys.stderr.write(f"[combus_scons_action] FATAL: {e}. Refusing to generate.\n")
         return 1
+    print(f"[combus_scons_action] node nature: {nature}")
 
     # --- 3. Late imports (so the action only imports when it runs) -------
     # SCons runs actions in a subprocess (or at least a fresh import

@@ -36,6 +36,11 @@ from .parser import parse_yaml_file
 
 PEER_FLAG_PREFIX = "COMBUS_PEER_"
 
+# Nature of a node (step 3.2b): exactly one structural flag per env.  The
+# vehicle is the hub of the star; an attachment has one link, to a vehicle; a
+# stand-alone machine has no peer; the remote is unchanged (chantier 4).
+NODE_NATURES = ("IS_VEHICLE", "IS_ATTACHMENT", "IS_MACHINE", "IS_REMOTE")
+
 _UP, _DOWN = "uplink", "downlink"
 
 
@@ -72,6 +77,22 @@ def peer_types(ctx) -> list[str]:
     """Machine types declared as peers by `-D COMBUS_PEER_<TYPE>`, as directory names, sorted."""
     names = set(ctx.defines) | set(getattr(ctx, "defines_with_value", {}) or {})
     return sorted(n[len(PEER_FLAG_PREFIX):].lower() for n in names if n.startswith(PEER_FLAG_PREFIX))
+
+
+def node_nature(defines) -> str:
+    """Structural flag of the node, checked against its peers; LinkError if the env is wrong."""
+    found = sorted(n for n in NODE_NATURES if n in defines)
+    if not found:
+        raise LinkError(f"no structural flag set (expected exactly one of {', '.join(NODE_NATURES)})")
+    if len(found) > 1:
+        raise LinkError(f"several structural flags set ({', '.join(found)}): a node has exactly one nature")
+    nature = found[0]
+    peers = sorted(d for d in defines if d.startswith(PEER_FLAG_PREFIX))
+    if nature in ("IS_MACHINE", "IS_REMOTE") and peers:
+        raise LinkError(f"{nature} has no peer ({', '.join(peers)}): only a vehicle or an attachment is linked")
+    if nature == "IS_ATTACHMENT" and len(peers) != 1:
+        raise LinkError(f"IS_ATTACHMENT needs exactly one peer, its vehicle (got {len(peers)})")
+    return nature
 
 
 def load_type_base_channels(buildroot: Path, type_dir: str) -> list[ChannelDefinition]:
