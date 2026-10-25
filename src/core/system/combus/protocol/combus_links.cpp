@@ -35,6 +35,18 @@ static void wireCounts( LinkScope scope, uint8_t& nAnalog, uint8_t& nDigital )
 }
 
 
+    // Chantier 2.3 — the RX buffers must hold the frames of any link: a buffer
+    // smaller than the SYSTEM next set does not compile.
+static_assert(sizeof(ComLinkRuntime::analogRx) / sizeof(uint16_t)
+                  >= static_cast<uint8_t>(AnalogComBusSystemID::CH_COUNT)
+              && sizeof(ComLinkRuntime::digitalRx) / sizeof(bool)
+                  >= static_cast<uint8_t>(DigitalComBusSystemID::CH_COUNT),
+              "ComLinkRuntime RX buffers smaller than the SYSTEM next set");
+static_assert(static_cast<uint8_t>(AnalogComBusSystemID::CH_COUNT)  >= static_cast<uint8_t>(AnalogComBusBaseID::CH_COUNT)
+              && static_cast<uint8_t>(DigitalComBusSystemID::CH_COUNT) >= static_cast<uint8_t>(DigitalComBusBaseID::CH_COUNT),
+              "the SYSTEM set must contain the BASE set");
+
+
 static bool endTransmits( LinkEnd end ) { return end != LinkEnd::RX; }
 static bool endReceives ( LinkEnd end ) { return end != LinkEnd::TX; }
 

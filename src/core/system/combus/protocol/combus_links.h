@@ -37,6 +37,7 @@
 #include <core/system/hw/node_com.h>
 #include <core/system/hw/pin_reg.h>
 #include <core/config/machines/combus_types.h>   // AnalogComBusID / DigitalComBusID (FULL view sizes)
+#include "combus_system_ids.h"                    // AnalogComBusSystemID / DigitalComBusSystemID (SYSTEM next set sizes)
 #include <core/system/combus/protocol/combus_protocol.h>
 #include <core/system/combus/protocol/combus_tx.h>
 #include <core/system/combus/protocol/combus_rx.h>
@@ -52,10 +53,11 @@
  *
  * @details Holds the handshake context shared by TX and RX of the link, the RX
  *   decode buffers, and what the link watch needs (does the link receive, after
- *   how long a silence is it lost). The buffers are sized for the FULL view,
- *   which is the largest one, so they fit any scope (BASE and SYSTEM are
- *   prefixes of it). Temporary: to be replaced by buffers generated per
- *   channel set.
+ *   how long a silence is it lost). Chantier 2.3: the buffers are sized to the
+ *   SYSTEM next set (BASE stable channels, candidates, SYSTEM channels), the
+ *   largest set that travels: they fit any link, BASE being a prefix of it.
+ *   BOARD channels never travel and get no room. The limit accepted on a link
+ *   is the set of that link (its rxCfg), not the buffer size.
  */
 
 struct ComLinkRuntime {
@@ -67,8 +69,8 @@ struct ComLinkRuntime {
     LinkLossAction lossAction     = LinkLossAction::NONE;      ///< onLoss of the ComDev, BY_SCOPE resolved
     uint32_t       watchStartMs   = 0u;                        ///< set by combus_links_watch(): start of the grace
     bool           reportedLost   = false;                     ///< last loss state logged by combus_links_update()
-    uint16_t analogRx[static_cast<uint8_t>(AnalogComBusID::CH_COUNT)]   = {};
-    bool     digitalRx[static_cast<uint8_t>(DigitalComBusID::CH_COUNT)] = {};
+    uint16_t analogRx[static_cast<uint8_t>(AnalogComBusSystemID::CH_COUNT)]   = {};   ///< SYSTEM next set
+    bool     digitalRx[static_cast<uint8_t>(DigitalComBusSystemID::CH_COUNT)] = {};   ///< SYSTEM next set
 };
 
 

@@ -255,8 +255,10 @@ Points à retenir (lus dans ces fichiers) :
   reçues dans le ComBus (`combus_frame_apply` n'est pas appelé par ce lien) ;
 - les pools d'états TX et RX sont des tableaux statiques dont la taille est le
   nombre de liens ;
-- les tampons RX de `ComLinkRuntime` sont dimensionnés pour la vue complète (la
-  plus grande), quelle que soit la portée du lien.
+- les buffers RX de `ComLinkRuntime` sont dimensionnés pour l'ensemble `SYSTEM`
+  next (le plus grand qui voyage, chantier 2.3), quelle que soit la portée du
+  lien ; la limite acceptée est l'ensemble du lien (`rxCfg`) : une trame plus
+  grande est refusée.
 
 ### 3.7. `combus_protocol_init_all()` / `combus_protocol_init()` — wire TX/RX au transport
 

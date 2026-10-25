@@ -221,8 +221,9 @@ uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
  * On success, unpacks digital bits (LSB-first) and analog uint16_t LE values
  * into the caller-provided arrays, then copies the header into outputFrame.
  *
- * Digital channels exceeding digitalBufSize are silently dropped (not an error).
- * outputFrame->header.cfg.nDigital reflects the clamped count after decoding.
+ * A frame with more analog or digital channels than the buffers is refused
+ * (chantier 2.3: digital channels were silently dropped before).
+ * outputFrame->header carries the counts of the wire (never above the buffers).
  *
  * LY2 — decode is layer-agnostic.  It writes by index into the
  * caller-provided buffers without any notion of layer.  The layer
@@ -265,9 +266,11 @@ bool combus_frame_decode( const ComBusFrameCfg& cfg,
 	uint16_t expectedLenW = CombusFrameHeaderLen + (uint16_t)nDigBytes + (uint16_t)header.cfg.nAnalog * 2u + 1u;
 	if (expectedLenW > 255u)                { return false; }
 
-		// Reject if analog payload would overflow caller's buffer.
-	if (header.cfg.nAnalog > analogBufSize)     { return false; }
-		// Digital excess bits are silently truncated in the unpack loop below.
+		// Reject a frame larger than the set of the link (= caller's buffers), in
+		// channel counts, never bytes.  Chantier 2.3: the digital channels too,
+		// they were silently truncated before.
+	if (header.cfg.nAnalog  > analogBufSize)    { return false; }
+	if (header.cfg.nDigital > digitalBufSize)   { return false; }
 
 	uint8_t expectedLen = (uint8_t)expectedLenW;
 	if (len < expectedLen)                  { return false; }
@@ -277,17 +280,16 @@ bool combus_frame_decode( const ComBusFrameCfg& cfg,
 	uint8_t crcActual   = combus_frame_crc8(inputBuffer, (uint8_t)(expectedLen - 1u));
 	if (crcActual != crcExpected)           { return false; }
 
-		// 5. Unpack digital bits
-	uint8_t nDigital = header.cfg.nDigital;
-
-	if (nDigital > digitalBufSize) { nDigital = digitalBufSize; }  // clamp to caller's buffer
+		// 5. Unpack digital bits — only the nDigital announced: the padding bits of
+		// the last byte never reach the buffer (chantier 2.3).
+	const uint8_t nDigital = header.cfg.nDigital;
 
 	uint8_t pos = CombusFrameHeaderLen;
 	for (uint8_t b = 0; b < nDigBytes; ++b) {
 		uint8_t packed = inputBuffer[pos++];
 		for (uint8_t bit = 0; bit < 8u; ++bit) {
 			uint8_t ch = (uint8_t)(b * 8u + bit);
-			if (ch < digitalBufSize) {
+			if (ch < nDigital) {
 				outputFrame->digital[ch] = (packed >> bit) & 0x01u;
 			}
 		}
@@ -301,8 +303,7 @@ bool combus_frame_decode( const ComBusFrameCfg& cfg,
 	}
 
 		// 7. Populate frame header
-	outputFrame->header              = header;
-	outputFrame->header.cfg.nDigital = nDigital;   // apply clamped value (may differ from wire value)
+	outputFrame->header = header;
 
 	return true;
 }

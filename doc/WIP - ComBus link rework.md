@@ -189,8 +189,8 @@ Le même mécanisme vaut pour les deux : en intra-nœud, une carte mise à jour 
 
 ### 2.8 Robustesse
 
-- **Tampons de réception générés par le builder**, par ensemble de lien et dimensionnés par ses constantes : la taille ne s'écrit plus à la main ; un tampon trop petit ne compile pas. Dimensionnés pour l'ensemble next.
-- Les numériques en trop font refuser la trame (comme les analogiques), au lieu d'être tronqués.
+- **Buffers de réception** (chantier 2.3) : dimensionnés par les constantes générées de l'ensemble `SYSTEM` next (le plus grand qui voyage : `BASE` stables, candidats, `SYSTEM`), et non plus la vue complète ; un buffer trop petit ne compile pas (`static_assert`). Une seule taille de buffer pour tous les liens ; la **limite acceptée** est l'ensemble du lien (`rxCfg`, d'après sa portée : `BASE` pour un lien inter-nœud, `SYSTEM` pour un lien intra-nœud).
+- Les numériques en trop font refuser la trame (comme les analogiques), au lieu d'être tronqués ; tout se compte en **nombre de channels**, jamais en octets. Les numériques sont paquetés par 8, et le padding du dernier octet n'est plus déballé dans le buffer (2.3).
 - Une trame fait 255 octets au plus (longueur sur un octet), environ 35 aujourd'hui ; un ensemble reste aussi sous la charge utile ESP-NOW (de l'ordre de 250 octets, à vérifier).
 
 ## 3. Roadmap
@@ -235,7 +235,8 @@ Chaque étape se vérifie avec le test de boucle (loopback) puis un build comple
 
 **Constats** :
 - `direction` et `bothOr` sont générés mais ignorés à l'émission et à la réception.
-- Les tampons de réception sont passés par pointeur seul, à côté d'un nombre de channels déclaré à part : rien ne vérifie leur taille. Le décodeur refuse les analogiques en trop mais tronque les numériques en silence. Le tampon circulaire, lui, ne déborde pas (plein, il écrase l'octet le plus ancien).
+- Les tampons de réception sont passés par pointeur seul, à côté d'un nombre de channels déclaré à part : rien ne vérifie leur taille. Le décodeur refuse les analogiques en trop mais tronque les numériques en silence. Le tampon circulaire, lui, ne déborde pas (plein, il écrase l'octet le plus ancien). Fait en 2.3 : buffers à la taille de l'ensemble `SYSTEM` next avec `static_assert`, numériques en trop refusés.
+- Le décodeur déballait les bits de padding du dernier octet de numériques dans le buffer (par exemple 9 numériques sur 2 octets : 7 zéros écrits dans les cases 9 à 15). Sans effet aujourd'hui (l'application et la fusion `both_or` s'arrêtent au nombre de l'en-tête), mais fragile. Corrigé en 2.3.
 - Les champs (`ALLOWED_FIELDS`) et les thèmes (`VALID_THEMES`) du builder sont des listes fermées.
 - Le MD5 hachait `theme` et `infoName` (corriger un libellé cassait le contrat) mais pas la valeur par défaut, qui part pourtant sur le fil tant que l'écrivain n'a rien écrit. Fait en 2.1.
 - Le hook ne déclarait comme sources de la génération que les `.cb` et `project_version.h` : une modification du code du builder (par exemple la règle du MD5) n'atteignait pas les firmwares tant qu'aucun `.cb` ne changeait. Corrigé en 2.1 : le code du builder et le hook sont des sources.
@@ -245,7 +246,7 @@ Chaque étape se vérifie avec le test de boucle (loopback) puis un build comple
 | 2.1 | MD5 par ensemble, affiché au build ; contenu haché = ce qui fait le contrat : nom, portée, type, sens, **valeur par défaut** (envoyée tant que l'écrivain n'a rien écrit), dans l'ordre du fil ; `theme` et `infoName` retirés (tableau de 12 exemples validé le 2026-10-23). Préalable : le code du builder devient une source de la génération | pytest 746 sur 746 (5 tests du MD5 et 50 cas de propriétés réécrits échouent sur l'ancien `md5.py`) ; Volvo et `test_node_mainboard` : fichiers d'ID, `combus.h` et `combus.cpp` identiques, seuls les en-têtes MD5 changent (`BASE` `f06e08dd…`, `SYSTEM` `fac3de41…`) ; **test Unity sur la carte (2026-10-23)** : 65 tests sur 65 |
 | 2.2a | Builder : champ `candidate`, suffixe `_NEXT` ajouté par le builder, nom définitif libre, place des candidats (après les `BASE` stables), MD5 stable et next (`kCombusBaseComBusMd5Next`), `PROJECT_VERSION_DEV` (`kProjectVersionDev`), ligne `set NEXT` au build | pytest 794 sur 794 (`test_candidates.py` : 23 tests, et une propriété de `test_stress.py` sur 25 germes : les candidats ne déplacent ni les ID `BASE` stables ni le MD5 stable, et changent le MD5 `SYSTEM`) ; Volvo et `test_node_mainboard` (sans candidat) : `set BASE` = `set NEXT` = `f06e08dd…` (inchangé depuis 2.1), seuls `combus_wire_common.h` et les en-têtes MD5 `BASE` changent (constantes ajoutées) ; test Unity sur la carte (2026-10-23) : 65 tests sur 65 |
 | 2.2b | Firmware : demandes et ACK NEXT (bit 1 de `flags`), 6 demandes NEXT (salve et 3 relances) puis legacy, legacy seul sans candidat, choix du mode et rattrapage (le mode suit ce que le pair annonce), trames d'un lien `BASE` selon le mode (`kCombusBaseStableAnalogCount` / `DigitalCount`), `DEV` dans le handshake (trame de 25 octets) et journalisé | groupe O du test Unity (10 tests ; candidats simulés par un faux MD5 next, aucun type de machine n'en a) ; pytest 796 sur 796 ; builds Volvo et `test_node_mainboard` OK ; **validé sur la carte (2026-10-25)** : 75 tests sur 75. Reste pour deux cartes : taille réelle des trames avec un vrai candidat, deux bouts qui se rejoignent dans le même mode |
-| 2.3 | Tables de correspondance et tampons générés, utilisés par TX et RX (remplacent les tampons temporaires de `ComLinkRuntime`, 0.4) | test de boucle identique ; un tampon trop petit ne compile pas |
+| 2.3 | Buffers RX à la taille de l'ensemble `SYSTEM` next (remplacent les buffers temporaires de `ComLinkRuntime`, 0.4), `static_assert` ; limite par lien = ensemble du lien, numériques en trop refusés ; padding non déballé. **Tables de correspondance reportées à 3.1** (validé le 2026-10-25) : aujourd'hui l'ordre du fil est l'ordre local pour tous les ensembles, aucun cas ne les teste | groupe P du test Unity (5 tests, 4 échouent sur l'ancien code) ; builds Volvo et `test_node_mainboard` OK ; **validé sur la carte (2026-10-25)** : 80 tests sur 80 |
 | 2.4 | Filtrage par `direction` à la réception | un channel émis localement n'est pas écrasé par le pair |
 
 ### Chantier 3 : égal à égal et relais
@@ -254,7 +255,7 @@ Chaque étape se vérifie avec le test de boucle (loopback) puis un build comple
 
 | Étape | Livrable | Preuve |
 |---|---|---|
-| 3.1 | Seconde lecture des profils compatibles ; ensembles réduits ; étiquette d'égal à égal | tables générées pour un couple tracteur / remorque d'essai |
+| 3.1 | Seconde lecture des profils compatibles ; ensembles réduits ; étiquette d'égal à égal ; **tables de correspondance** (position sur le fil vers channel local, reportées de 2.3), utilisées par TX et RX | tables générées pour un couple tracteur / remorque d'essai |
 | 3.2 | `passthrough` et ses contrôles (la fusion `both_or` sans retour vers l'origine est faite, 1.1b ; un relais devra suivre la même règle) | frein relayé ; failsafe partagé qui retombe |
 | 3.3 | Couplage : `ComCoupling`, activation `ON_COUPLING` d'après un channel déclencheur (`.cb` conditionnel du dispositif, par exemple un lecteur RFID) | un lien s'active au couplage et se suspend au découplage |
 

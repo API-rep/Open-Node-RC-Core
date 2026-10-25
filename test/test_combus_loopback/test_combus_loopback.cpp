@@ -73,6 +73,13 @@
  *     only logged.  No machine type has candidates: the tests give the link a
  *     fake next MD5 (enableCandidates()).  Same TX↔RX jumper as Group B.
  *
+ *   Group P — receive buffers and frame limits (chantier 2.3):
+ *     The RX buffers of a link are sized to the SYSTEM next set (the largest
+ *     that travels), not the full view; a frame whose nAnalog or nDigital
+ *     exceeds the set of its link is refused; only the nDigital bits announced
+ *     are unpacked (the padding bits of the last byte never reach the buffer);
+ *     a shorter frame is accepted.
+ *
  *   Group C — view identity (Phase 3 / A13):
  *     Validates that the 3 view-specific enums (AnalogComBusID,
  *     AnalogComBusSystemID, AnalogComBusBaseID and their digital
@@ -1820,6 +1827,85 @@ static void test_mode_row11_dev_is_only_logged(void) {
 }
 
 
+// =============================================================================
+// GROUP P — RECEIVE BUFFERS AND FRAME LIMITS (chantier 2.3)
+//
+// Codec rows need no wiring; the inter-node row uses the loopback link of
+// Group J.  Counts are always channel counts, never bytes: the digital
+// channels are packed 8 per byte, the last byte padded with zeros.
+// =============================================================================
+
+static constexpr uint8_t kSysA  = static_cast<uint8_t>(AnalogComBusSystemID::CH_COUNT);
+static constexpr uint8_t kSysD  = static_cast<uint8_t>(DigitalComBusSystemID::CH_COUNT);
+static constexpr uint8_t kBaseA = static_cast<uint8_t>(AnalogComBusBaseID::CH_COUNT);
+static constexpr uint8_t kBaseD = static_cast<uint8_t>(DigitalComBusBaseID::CH_COUNT);
+
+/** Row 1: the RX buffers of a link are sized to the SYSTEM next set, not the full view. */
+static void test_buffers_sized_to_system_next_set(void) {
+    TEST_ASSERT_EQUAL_UINT32(kSysA, sizeof(s_healthRuntime.analogRx)  / sizeof(s_healthRuntime.analogRx[0]));
+    TEST_ASSERT_EQUAL_UINT32(kSysD, sizeof(s_healthRuntime.digitalRx) / sizeof(s_healthRuntime.digitalRx[0]));
+}
+
+/** Rows 2 and 3: a frame larger than the set of the link is refused, digital as analog. */
+static void test_frame_larger_than_the_set_is_refused(void) {
+    fillRandom(0x2A3B4C5Dul);
+    const ComBusFrameCfg sysCfg  = { kSysA, kSysD };
+    const ComBusFrameCfg narrowD = { kSysA, (uint8_t)(kSysD - 1u) };
+    const ComBusFrameCfg narrowA = { (uint8_t)(kSysA - 1u), kSysD };
+
+    const uint8_t len = combus_frame_encode(sysCfg, encodeBuf, &txComBus, 3u, kSysA, kSysD);
+    TEST_ASSERT_GREATER_THAN_UINT8(0u, len);
+    TEST_ASSERT_TRUE(combus_frame_decode(sysCfg, &rxFrame, encodeBuf, len));
+    TEST_ASSERT_FALSE_MESSAGE(combus_frame_decode(narrowD, &rxFrame, encodeBuf, len), "one digital too many: must be refused");
+    TEST_ASSERT_FALSE(combus_frame_decode(narrowA, &rxFrame, encodeBuf, len));
+}
+
+/** Row 4: the padding bits of the last digital byte never reach the buffer. */
+static void test_padding_bits_do_not_reach_the_buffer(void) {
+    fillRandom(0x600DF00Dul);
+    const uint8_t nDig = 9u;                                        // 2 bytes, 7 padding bits
+    TEST_ASSERT_TRUE(kNDigital > 16u);
+    const uint8_t len = combus_frame_encode(kCfg, encodeBuf, &txComBus, 4u, kNAnalog, nDig);
+
+    for (uint8_t i = 0u; i < kNDigital; ++i) { rxDigitalBuf[i] = true; }   // sentinel
+    TEST_ASSERT_TRUE(combus_frame_decode(kCfg, &rxFrame, encodeBuf, len));
+    TEST_ASSERT_EQUAL_UINT8(nDig, rxFrame.header.cfg.nDigital);
+    for (uint8_t i = nDig; i < kNDigital; ++i) {
+        TEST_ASSERT_TRUE_MESSAGE(rxDigitalBuf[i], "a padding bit was written in the buffer");
+    }
+}
+
+/** Row 5: a frame shorter than the set of the link is accepted. */
+static void test_shorter_frame_is_accepted(void) {
+    fillRandom(0x51DE51DEul);
+    const uint8_t len = combus_frame_encode(kCfg, encodeBuf, &txComBus, 5u, 4u, 9u);
+    TEST_ASSERT_TRUE(combus_frame_decode(kCfg, &rxFrame, encodeBuf, len));
+    TEST_ASSERT_EQUAL_UINT8(4u, rxFrame.header.cfg.nAnalog);
+    TEST_ASSERT_EQUAL_UINT8(9u, rxFrame.header.cfg.nDigital);
+}
+
+/** Row 2 on a real link: an intra-node size frame on an inter-node link is refused, not cut. */
+static void test_inter_node_link_refuses_more_digitals_than_base(void) {
+    startHealthLink(LinkEnd::TX_RX, kInterDev);
+    sendGoodAck();
+    pumpRx();
+    TEST_ASSERT_TRUE(isStable());
+
+    for (uint8_t i = 0u; i < kNAnalog; ++i)  { peerAnalog[i]  = AnalogComBusArray[i]; }
+    for (uint8_t i = 0u; i < kNDigital; ++i) { peerDigital[i] = DigitalComBusArray[i]; }
+    const ComBusFrameCfg wide = { kBaseA, kSysD };                  // BASE analogs, SYSTEM digitals
+    uint8_t buf[CombusRxBufSize];
+    const uint8_t len = combus_frame_encode(wide, buf, &peerBus, 7u, kBaseA, kSysD);
+    TEST_ASSERT_TRUE(kSysD > kBaseD);
+    s_com->write(s_com->ctx, buf, len);
+    delay(kRxPollMs);
+    pumpRx();
+
+    TEST_ASSERT_NULL(combus_rx_snapshot(kLinkIdx));
+    TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::NEVER_SEEN);
+}
+
+
 // Chantier 12.6 (cleanup): Group F (FS1 failsafe re-arm) REMOVED — link
 // health is now monitored by the per-backend *_LINK_LOST contributors
 // (PS4_DS4_BT_LINK_LOST, COM_LINK_LOST, ...) aggregated into
@@ -1972,6 +2058,13 @@ void setup() {
     RUN_TEST(test_mode_row9_loss_restarts_with_next);
     RUN_TEST(test_mode_next_request_gets_next_ack);
     RUN_TEST(test_mode_row11_dev_is_only_logged);
+
+    // --- Group P: receive buffers and frame limits (chantier 2.3) ---
+    RUN_TEST(test_buffers_sized_to_system_next_set);
+    RUN_TEST(test_frame_larger_than_the_set_is_refused);
+    RUN_TEST(test_padding_bits_do_not_reach_the_buffer);
+    RUN_TEST(test_shorter_frame_is_accepted);
+    RUN_TEST(test_inter_node_link_refuses_more_digitals_than_base);
 
     // Chantier 12.6: Group F (FS1 failsafe re-arm) removed — see
     // header docstring above (5 independent test groups A/B/C/D/E).

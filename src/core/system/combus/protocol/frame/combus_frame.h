@@ -125,8 +125,9 @@ uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
  * @brief Decode a binary frame stored in the input buffer into a ComBusFrame.
  *
  * @details Validates SOF, frame length, and CRC before unpacking.
- * Rejects frames whose analog count exceeds cfg.nAnalog.
- * Digital bits exceeding cfg.nDigital are silently truncated.
+ * Rejects frames whose analog or digital count exceeds cfg.nAnalog /
+ * cfg.nDigital (chantier 2.3).  Only the nDigital bits announced are
+ * unpacked: the padding bits of the last byte never reach the buffer.
  *
  * LY2 — decode is layer-agnostic.  It writes by index into the
  * caller-provided buffers without any notion of layer.  The layer
