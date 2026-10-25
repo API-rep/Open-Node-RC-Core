@@ -159,15 +159,16 @@ Source : `frame/combus_handshake_tx.cpp:32-115` (émission),
 | 1 | 1 | `nAnalog` = 0 |
 | 2 | 1 | `nDigital` = 0 |
 | 3 | 1 | `seq` = 0 (réservé au handshake) |
-| 4 | 1 | `flags` : bit 0 = ACK (`kCombusHandshakeFlagAck`), 0 = demande |
-| 5 à 20 | 16 | MD5 de la vue du lien (BASE, SYSTEM ou complète) |
+| 4 | 1 | `flags` : bit 0 = ACK (`kCombusHandshakeFlagAck`, sinon demande) ; bit 1 = NEXT (`kCombusHandshakeFlagNext`, sinon legacy) |
+| 5 à 20 | 16 | MD5 de l'ensemble du lien (BASE, SYSTEM ou complet) ; MD5 next pour un handshake NEXT |
 | 21 | 1 | version de projet, majeur (`kProjectVersionMajor`) |
 | 22 | 1 | version de projet, mineur (`kProjectVersionMinor`) |
-| 23 | 1 | CRC-8/MAXIM sur les octets 0 à 22 |
+| 23 | 1 | version de projet, dev (`kProjectVersionDev`, chantier 2.2b) |
+| 24 | 1 | CRC-8/MAXIM sur les octets 0 à 23 |
 
-Longueur totale : 24 octets (`CombusFrameHandshakeMinLen` = SOF + en-tête 4 +
-charge utile 18 + CRC). La charge utile fixe est `kCombusHandshakePayloadLen
-= 18` (`combus_handshake.h:118`) ; un `static_assert` de `combus_handshake.cpp`
+Longueur totale : 25 octets (`CombusFrameHandshakeMinLen` = SOF + en-tête 4 +
+charge utile 19 + CRC). La charge utile fixe est `kCombusHandshakePayloadLen
+= 19` (`combus_handshake.h`) ; un `static_assert` de `combus_handshake.cpp`
 la compare à la constante générée `kCombusHandshakeWirePayloadLen`.
 
 ### 8.2 Quel MD5 ?
@@ -204,6 +205,13 @@ appel. Dans l'ordre :
   sur un bout qui n'émet que, elle permet à un récepteur démarré plus tard de
   s'établir en 250 ms au plus.
 
+**Genre des demandes (chantier 2.2b)** : un bout **avec candidats** (MD5 next
+différent du MD5 stable, liens `BASE` seulement) envoie d'abord des demandes
+NEXT, la salve puis 3 relances (`kCombusHandshakeNextRetries`), puis des
+demandes legacy ; une fois le contrat `STABLE`, les demandes ont le genre du
+mode. Un bout **sans candidat** n'envoie que des demandes legacy. Un ACK a le
+genre de la demande à laquelle il répond (`ackPending`, `ackPendingNext`).
+
 Un bout bidirectionnel n'émet **aucune trame de données** tant que son contrat est
 `INCONNU`. Un bout qui n'émet que les émet toujours. `combus_handshake_sendOnce`
 (émission unique, pour le debug et les tests) existe aussi.
@@ -230,8 +238,24 @@ Un bout bidirectionnel n'émet **aucune trame de données** tant que son contrat
   fait sauter qu'un octet, sans avaler la trame suivante. Un pair
   au contrat différent compte donc comme jamais vu, et la politique de perte du
   lien (`onLoss`) s'applique.
-- Journal : une ligne quand le contrat devient `STABLE`, quand il redevient
-  `INCONNU` (avec la raison), et au premier refus d'un handshake.
+- **Mode next / stable / legacy (chantier 2.2b)**, deux pairs par lien :
+  - un handshake NEXT ne décide que du mode, jamais du contrat ;
+  - ACK NEXT conforme (MD5 next et majeure) : contrat `STABLE` en mode next ;
+    ACK legacy conforme : mode stable (ou legacy sans candidat) ;
+  - un ACK NEXT non conforme pendant la négociation fait passer aussitôt aux
+    demandes legacy ;
+  - le mode suit ce que le pair annonce : en mode stable, un handshake NEXT
+    conforme fait passer en next ; en mode next, un handshake NEXT non conforme
+    ramène au mode stable ; le contrat ne tombe pas ;
+  - une perte remet le mode à stable et réarme les demandes NEXT ;
+  - sur un lien `BASE` hors du mode next, l'émetteur n'envoie que les channels
+    stables (`kCombusBaseStableAnalogCount`, `kCombusBaseStableDigitalCount`)
+    et le récepteur n'applique qu'eux : les candidats gardent leur valeur par
+    défaut. Les candidats suivent les stables : une trame next lue en mode
+    stable reste juste sur sa partie stable.
+- Journal : une ligne quand le contrat devient `STABLE` (avec le mode, la
+  version et `DEV` du pair), quand il redevient `INCONNU` (avec la raison), à
+  chaque changement de mode, et au premier refus d'un handshake.
 - Un lien sans contexte de handshake (tests du codec, appel direct de
   `combus_rx_init`) n'a pas de contrat : ses trames sont appliquées.
 

@@ -153,46 +153,87 @@ uint8_t combus_handshake_tryDecode(
 
     combus_handshake_internal::markEverReceived(ctx);
 
-    // --- 5. Request or ACK; MD5 + major compared on EVERY handshake (chantier 1.2).
-    //    Layout: [0..15] = MD5, [16] = major, [17] = minor.
+    // --- 5. Request or ACK, legacy or NEXT; MD5 + major compared on EVERY handshake.
+    //    Layout: [0..15] = MD5 (next set for a NEXT handshake), [16] = major,
+    //    [17] = minor, [18] = dev.
     const uint8_t  flags         = linear[sizeof(CombusFrameSof) + offsetof(CombusFrameHeader, flags)];
-    const bool     isAck         = (flags & kCombusHandshakeFlagAck) != 0u;
+    const bool     isAck         = (flags & kCombusHandshakeFlagAck)  != 0u;
+    const bool     isNext        = (flags & kCombusHandshakeFlagNext) != 0u;
     const uint8_t  payloadOffset = sizeof(CombusFrameSof)
                                  + sizeof(CombusFrameHeader);
     const uint8_t* wireMd5   = &linear[payloadOffset];
     const uint8_t  wireMajor = linear[payloadOffset + 16u];
     const uint8_t  wireMinor = linear[payloadOffset + 17u];
+    const uint8_t  wireDev   = linear[payloadOffset + 18u];
 
-    const bool match = combus_handshake_compare(ctx->expectedMd5, wireMd5, wireMajor);
-
-    // --- 6. A bidirectional end answers every request, matching or not (never an ACK).
-    if (!isAck && ctx->bidirectional) { ctx->ackPending = true; }
-
-    // --- 7. Refused: the contract is (back to) UNKNOWN, logged once.
-    if (!match) {
-        logRefusal(ctx, wireMd5, wireMajor, wireMinor);
-        combus_handshake_internal::dropContract(ctx, "handshake refused");
-        return expectedLen;
+    // --- 6. A bidirectional end answers every request with an ACK of its kind,
+    //    matching or not (never an ACK).
+    if (!isAck && ctx->bidirectional) {
+        if (isNext) { ctx->ackPendingNext = true; }
+        else        { ctx->ackPending     = true; }
     }
 
-    // --- 8. Accepted.  A bidirectional end needs the ACK of its own request
-    //    (proof that the peer receives it); a receive-only end takes the request.
-    if (ctx->bidirectional && !isAck) { return expectedLen; }
+    // --- 7. NEXT handshake (chantier 2.2b): it only decides the mode, never the
+    //    contract.  Without candidates this end stays legacy.
+    if (isNext) {
+        const bool nextMatch = ctx->hasCandidates
+                            && combus_handshake_compare(ctx->expectedMd5Next, wireMd5, wireMajor);
+        if (!nextMatch) {
+            if (ctx->nextMode) {
+                ctx->nextMode = false;
+                sys_log_info("[COMBUS_HANDSHAKE] link '%s' mode stable (the peer announces another next set)\n",
+                             ctx->name ? ctx->name : "?");
+            }
+            if (isAck && !ctx->contractValidated) { ctx->nextTriesLeft = 0u; }   // legacy at once
+            return expectedLen;
+        }
 
-    if (isAck) { ctx->lastAckMs = millis(); }
+        if (isAck) { ctx->lastAckMs = millis(); }
 
-    if (!ctx->contractValidated) {
-        combus_handshake_internal::markContractValidated(ctx);
-        combus_handshake_internal::stopBurst(ctx);
-        ctx->lastAckMs       = millis();     // the ACK window starts now
-        ctx->dataSinceStable = false;
-        ctx->refusalLogged   = false;
+        if (ctx->contractValidated) {
+                // The mode follows what the peer announces: the two ends meet in one period
+            if (!ctx->nextMode) {
+                ctx->nextMode = true;
+                sys_log_info("[COMBUS_HANDSHAKE] link '%s' mode next (the peer announces the same next set)\n",
+                             ctx->name ? ctx->name : "?");
+            }
+            return expectedLen;
+        }
 
-        sys_log_info("[COMBUS_HANDSHAKE] link '%s' contract STABLE  wire ver=%u.%u%s\n",
-                     ctx->name ? ctx->name : "?",
-                     (unsigned)wireMajor, (unsigned)wireMinor,
-                     (wireMinor != combus::wire::kProjectVersionMinor) ? "  (minor version differs)" : "");
+            // UNKNOWN: a bidirectional end needs the ACK of its own request
+        if (ctx->bidirectional && !isAck) { return expectedLen; }
+        ctx->nextMode = true;
+    } else {
+
+        // --- 8. Legacy handshake: refused, the contract is (back to) UNKNOWN, logged once.
+        if (!combus_handshake_compare(ctx->expectedMd5, wireMd5, wireMajor)) {
+            logRefusal(ctx, wireMd5, wireMajor, wireMinor);
+            combus_handshake_internal::dropContract(ctx, "handshake refused");
+            return expectedLen;
+        }
+
+        // Accepted.  A bidirectional end needs the ACK of its own request (proof
+        // that the peer receives it); a receive-only end takes the request.
+        if (ctx->bidirectional && !isAck) { return expectedLen; }
+
+        if (isAck) { ctx->lastAckMs = millis(); }
+        if (ctx->contractValidated) { return expectedLen; }
+        ctx->nextMode = false;
     }
+
+    // --- 9. The contract becomes STABLE, in the mode chosen above ---
+    combus_handshake_internal::markContractValidated(ctx);
+    combus_handshake_internal::stopBurst(ctx);
+    ctx->lastAckMs       = millis();     // the ACK window starts now
+    ctx->dataSinceStable = false;
+    ctx->refusalLogged   = false;
+
+    sys_log_info("[COMBUS_HANDSHAKE] link '%s' contract STABLE  mode %s  wire ver=%u.%u dev=%u%s\n",
+                 ctx->name ? ctx->name : "?",
+                 ctx->nextMode ? "next" : (ctx->hasCandidates ? "stable" : "legacy (no candidate)"),
+                 (unsigned)wireMajor, (unsigned)wireMinor, (unsigned)wireDev,
+                 (wireMinor != combus::wire::kProjectVersionMinor || wireDev != combus::wire::kProjectVersionDev)
+                     ? "  (minor or dev version differs)" : "");
 
     return expectedLen;
 }

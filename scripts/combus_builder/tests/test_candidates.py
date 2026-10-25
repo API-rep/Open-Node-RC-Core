@@ -224,3 +224,21 @@ def test_dev_is_written_in_the_common_header(tmp_path):
     generate(_canon(*STABLE), _ctx(), tmp_path, project_version=(2, 5, 7))
     text = (tmp_path / "combus_wire_common.h").read_text(encoding="utf-8")
     assert "kProjectVersionDev = 7u;" in text
+
+
+# =============================================================================
+# Step 2.2b — what the firmware needs from the builder
+# =============================================================================
+
+def test_base_md5_header_carries_the_stable_channel_counts(tmp_path):
+    """In stable mode a BASE link sends and applies the stable channels only."""
+    generate(_canon(*STABLE, TILT, _ch("ROLL", type_="analog", candidate=True)), _ctx(), tmp_path)
+    text = (tmp_path / "combus_base_md5.h").read_text(encoding="utf-8")
+    assert "kCombusBaseStableAnalogCount = 1u;" in text
+    assert "kCombusBaseStableDigitalCount = 2u;" in text
+
+
+def test_handshake_payload_carries_dev(tmp_path):
+    generate(_canon(*STABLE), _ctx(), tmp_path, project_version=(2, 5, 7))
+    text = (tmp_path / "combus_wire_common.h").read_text(encoding="utf-8")
+    assert "kCombusHandshakeWirePayloadLen = 19u;" in text

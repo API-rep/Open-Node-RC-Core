@@ -30,7 +30,8 @@ Coverage:
       * k<View>ComBusMd5[16]    raw bytes per view
       * k<View>ComBusMd5Hex     32-char lowercase hex per view
       * kProjectVersionMajor/Minor  (in combus_wire_common.h only)
-      * kCombusHandshakeWirePayloadLen = 18u (in combus_wire_common.h only)
+      * kCombusHandshakeWirePayloadLen = 19u (in combus_wire_common.h only;
+        16 md5 + major + minor + dev, link rework 2.2b)
   - NO kMachineType (still removed).
   - 4-en-1 compile check: all four headers can be included together
     in a single TU without redefinition.
@@ -477,7 +478,7 @@ def test_common_header_has_shared_constants():
     assert "kProjectVersionMajor" in out
     assert "kProjectVersionMinor" in out
     assert "kCombusHandshakeWirePayloadLen" in out
-    assert "18u" in out
+    assert "kCombusHandshakeWirePayloadLen = 19u;" in out
     # No MD5 bytes in the shared header
     assert "ComBusMd5[16]" not in out
 

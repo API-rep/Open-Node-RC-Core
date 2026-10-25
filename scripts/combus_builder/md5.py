@@ -360,8 +360,8 @@ def _render_common_header(
     body.append("/// Candidate pool (link rework 2.2): logged by the handshake, never compared.")
     body.append(f"static constexpr uint8_t kProjectVersionDev = {project_version_dev}u;")
     body.append("")
-    body.append("/// Total handshake wire payload length = 16 (md5) + 2 (version).")
-    body.append("static constexpr uint8_t kCombusHandshakeWirePayloadLen = 18u;")
+    body.append("/// Total handshake wire payload length = 16 (md5) + 3 (major, minor, dev).")
+    body.append("static constexpr uint8_t kCombusHandshakeWirePayloadLen = 19u;")
     body.append("")
     body.append("} // namespace wire")
     body.append("} // namespace combus")
@@ -375,6 +375,7 @@ def _render_view_header(
     project_version_major: int = _PROJECT_VERSION_MAJOR_PLACEHOLDER,
     project_version_minor: int = _PROJECT_VERSION_MINOR_PLACEHOLDER,
     next_hash: ViewHash | None = None,
+    stable_counts: tuple[int, int] = (0, 0),
 ) -> str:
     """Render a view-specific _md5.h file.
 
@@ -425,6 +426,11 @@ def _render_view_header(
         body.append(f"static constexpr const char* {hex_sym.replace('Hex', 'NextHex')} =")
         body.append(f'    "{next_hash.md5_hex}";')
         body.append("")
+        body.append("/// Channels of the stable set, per type (link rework 2.2b): a BASE link in")
+        body.append("/// stable mode sends and applies these only; the candidates follow them.")
+        body.append(f"static constexpr uint8_t kCombusBaseStableAnalogCount = {stable_counts[0]}u;")
+        body.append(f"static constexpr uint8_t kCombusBaseStableDigitalCount = {stable_counts[1]}u;")
+        body.append("")
     body.append("} // namespace wire")
     body.append("} // namespace combus")
     body.append("")
@@ -438,6 +444,7 @@ def emit_view_header(
     project_version_major: int = _PROJECT_VERSION_MAJOR_PLACEHOLDER,
     project_version_minor: int = _PROJECT_VERSION_MINOR_PLACEHOLDER,
     next_hash: ViewHash | None = None,
+    stable_counts: tuple[int, int] = (0, 0),
 ) -> "Path":
     """Render and write the <view>_md5.h file for the given hash.
 
@@ -451,6 +458,7 @@ def emit_view_header(
         project_version_major=project_version_major,
         project_version_minor=project_version_minor,
         next_hash=next_hash,
+        stable_counts=stable_counts,
     )
     out_path = Path(out_dir) / f"{hash_.view_name}_md5.h"
     _safe_write(out_path, content)
@@ -510,6 +518,9 @@ def generate_md5_artifacts(
         "combus":        compute_view_hash(sel.full),
     }
     base_next = compute_view_hash(sel.base)
+    stable = stable_view(sel.base)
+    stable_counts = (sum(1 for vc in stable.channels if vc.ch.type == "analog"),
+                     sum(1 for vc in stable.channels if vc.ch.type == "digital"))
     written = []
     # Always emit the shared header FIRST so a consumer that includes a
     # view-specific header after the shared header picks up the constants
@@ -527,6 +538,7 @@ def generate_md5_artifacts(
             project_version_major=project_version_major,
             project_version_minor=project_version_minor,
             next_hash=base_next if view_name == "combus_base" else None,
+            stable_counts=stable_counts,
         ))
     hashes["combus_base_next"] = base_next
     return hashes, written

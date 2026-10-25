@@ -271,11 +271,15 @@ canonique.
   ses candidats (`stable_view`), émise en `kCombusBaseComBusMd5`. **Next** : la
   vue entière (stables puis candidats), émise en `kCombusBaseComBusMd5Next`.
   Sans candidat, elles sont égales (le drapeau `candidate` n'est pas haché).
+  Le même en-tête émet le nombre de channels de l'ensemble stable par type
+  (`kCombusBaseStableAnalogCount`, `kCombusBaseStableDigitalCount`) : taille des
+  trames d'un lien `BASE` hors du mode next (link rework 2.2b).
   La vue `combus_system` contient les candidats : deux cartes d'un nœud aux
   candidats différents n'ont pas le même MD5 `SYSTEM`.
 - La version du projet n'entre pas dans le hash : `MAJOR`, `MINOR` et `DEV`
   (`project_version.h`, lus par `read_project_version`) sont des constantes de
-  `combus_wire_common.h`.
+  `combus_wire_common.h`, avec `kCombusHandshakeWirePayloadLen = 19` (16 octets
+  de MD5 et les trois versions).
 - Le hash change donc quand un de ces champs change, quand un canal entre ou
   sort d'une vue (via `requires`), ou quand l'ordre d'attribution des IDs change.
 - Propagation selon le scope du channel modifié (conséquence de la composition

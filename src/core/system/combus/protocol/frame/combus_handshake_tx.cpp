@@ -52,7 +52,7 @@ uint8_t combus_handshake_sendOnce( NodeCom* nodeCom )
     //   [0]                          SOF
     //   [1..sizeof(Header)]          CombusFrameHeader (nAnalog=0,
     //                                  nDigital=0, seq=0, flags=0)
-    //   [..+kCombusHandshakePayloadLen]  MD5 (16) + major + minor
+    //   [..+kCombusHandshakePayloadLen]  MD5 (16) + major + minor + dev
     //   [..+1]                       CRC-8/MAXIM over header + payload
     //
     // nAnalog / nDigital carry no meaning on the handshake path (payload
@@ -89,6 +89,7 @@ uint8_t combus_handshake_sendOnce( NodeCom* nodeCom )
     }
     frame[payloadStart + 16u] = combus::wire::kProjectVersionMajor;
     frame[payloadStart + 17u] = combus::wire::kProjectVersionMinor;
+    frame[payloadStart + 18u] = combus::wire::kProjectVersionDev;
 
 
     // CRC-8/MAXIM over header + payload.
@@ -117,13 +118,17 @@ uint8_t combus_handshake_sendOnce( NodeCom* nodeCom )
 // =============================================================================
 
     // Build one handshake frame (local MD5 + version, `flags` as given) and write it.
+    // A NEXT handshake carries the next set MD5 (chantier 2.2b).
 static uint8_t sendHandshake( const CombusHandshakeContext* ctx, NodeCom* nodeCom, uint8_t flags )
 {
         // LY4 — the per-link expected MD5 pointer resolved at init from link->layer;
         // FULL view MD5 if null (legacy caller that bypassed combus_protocol_init).
-    const uint8_t* md5ToSend = ctx->expectedMd5
+    const uint8_t* stableMd5 = ctx->expectedMd5
         ? ctx->expectedMd5
         : combus::wire::kCombusComBusMd5;
+    const uint8_t* md5ToSend = ((flags & kCombusHandshakeFlagNext) && ctx->expectedMd5Next)
+        ? ctx->expectedMd5Next
+        : stableMd5;
 
     uint8_t frame[ sizeof(CombusFrameSof)
                  + sizeof(CombusFrameHeader)
@@ -136,13 +141,14 @@ static uint8_t sendHandshake( const CombusHandshakeContext* ctx, NodeCom* nodeCo
     frame[sizeof(CombusFrameSof) + 0u] = 0u;     // nAnalog
     frame[sizeof(CombusFrameSof) + 1u] = 0u;     // nDigital
     frame[sizeof(CombusFrameSof) + 2u] = 0u;     // seq = 0 (RESERVED handshake)
-    frame[sizeof(CombusFrameSof) + 3u] = flags;  // kCombusHandshakeFlagAck or 0 (request)
+    frame[sizeof(CombusFrameSof) + 3u] = flags;  // ACK and / or NEXT bits, 0 = legacy request
 
     for (uint8_t i = 0u; i < 16u; ++i) {
         frame[payloadStart + i] = md5ToSend[i];
     }
     frame[payloadStart + 16u] = combus::wire::kProjectVersionMajor;
     frame[payloadStart + 17u] = combus::wire::kProjectVersionMinor;
+    frame[payloadStart + 18u] = combus::wire::kProjectVersionDev;
 
     const uint8_t crcByteIndex = payloadStart + kCombusHandshakePayloadLen;
     frame[crcByteIndex] = combus_frame_crc8(frame, crcByteIndex);
@@ -161,6 +167,19 @@ static uint8_t sendHandshake( const CombusHandshakeContext* ctx, NodeCom* nodeCo
  *
  *   Per-link state — see CombusHandshakeContext.
  */
+    // Kind of the next request (chantier 2.2b): while UNKNOWN, NEXT as long as
+    // NEXT tries are left; once STABLE, the kind of the mode.
+static uint8_t requestFlags( CombusHandshakeContext* ctx )
+{
+    if (ctx->contractValidated) { return ctx->nextMode ? kCombusHandshakeFlagNext : 0u; }
+    if (ctx->nextTriesLeft > 0u) {
+        ctx->nextTriesLeft--;
+        return kCombusHandshakeFlagNext;
+    }
+    return 0u;
+}
+
+
 uint8_t combus_handshake_tx_update( CombusHandshakeContext* ctx,
                                     NodeCom*                nodeCom )
 {
@@ -170,21 +189,27 @@ uint8_t combus_handshake_tx_update( CombusHandshakeContext* ctx,
     const uint32_t nowMs   = millis();
     uint8_t        written = 0u;
 
-        // --- 2. A request was received: answer it (never answer an ACK) ---
+        // --- 2. A request was received: answer it with an ACK of its kind (never answer an ACK) ---
     if (ctx->ackPending) {
         ctx->ackPending = false;
         written = (uint8_t)(written + sendHandshake(ctx, nodeCom, kCombusHandshakeFlagAck));
     }
+    if (ctx->ackPendingNext) {
+        ctx->ackPendingNext = false;
+        written = (uint8_t)(written + sendHandshake(ctx, nodeCom,
+                                                    kCombusHandshakeFlagAck | kCombusHandshakeFlagNext));
+    }
 
         // --- 3. Boot burst: 3 requests 100 ms apart, stopped once the contract is STABLE ---
 #if !COMBUS_HANDSHAKE_BURST_DISABLE
+    if (ctx->burstActive && ctx->contractValidated) {
+        ctx->burstActive    = false;
+        ctx->burstRemaining = 0u;
+    }
     if (ctx->burstActive) {
-        if (ctx->contractValidated) {
-            ctx->burstActive    = false;
-            ctx->burstRemaining = 0u;
-        } else if (ctx->lastBurstMs == 0u
-                   || (uint32_t)(nowMs - ctx->lastBurstMs) >= kCombusHandshakeBurstPeriodMs) {
-            written = (uint8_t)(written + sendHandshake(ctx, nodeCom, 0u));
+        if (ctx->lastBurstMs == 0u
+            || (uint32_t)(nowMs - ctx->lastBurstMs) >= kCombusHandshakeBurstPeriodMs) {
+            written = (uint8_t)(written + sendHandshake(ctx, nodeCom, requestFlags(ctx)));
             ctx->lastBurstMs   = nowMs;
             ctx->lastRequestMs = nowMs;
             if (ctx->burstRemaining > 0u) { ctx->burstRemaining--; }
@@ -196,7 +221,7 @@ uint8_t combus_handshake_tx_update( CombusHandshakeContext* ctx,
 
         // --- 4. Then one request per period, whatever the state of the contract ---
     if ((uint32_t)(nowMs - ctx->lastRequestMs) >= kCombusHandshakePeriodMs) {
-        written = (uint8_t)(written + sendHandshake(ctx, nodeCom, 0u));
+        written = (uint8_t)(written + sendHandshake(ctx, nodeCom, requestFlags(ctx)));
         ctx->lastRequestMs = nowMs;
     }
 

@@ -89,8 +89,12 @@ static constexpr uint8_t CombusHandshakeSof = CombusFrameSof;  ///< placeholder
  *               for the hash inputs and the deterministic ordering.
  *               The pointer is resolved at init from link->layer and
  *               stored in CombusHandshakeContext::expectedMd5 (LY4).
- *     [16]      Project version MAJOR (see include/project_version.h).
+ *     [16]      Project version MAJOR (see project_version.h).
  *     [17]      Project version MINOR.
+ *     [18]      Project version DEV, the candidate pool (chantier 2.2b, logged only).
+ *
+ *   A NEXT handshake (kCombusHandshakeFlagNext) carries the MD5 of the next
+ *   set instead of the stable one.
  *
  *   The MD5 + version pair is sufficient to detect any accidental mismatch
  *   between two ComBus participants on the wire.  The "friend cache" /
@@ -108,7 +112,7 @@ static constexpr uint8_t CombusHandshakeSof = CombusFrameSof;  ///< placeholder
  *     match against the generated `kCombusHandshakeWirePayloadLen` length.
 
  */
-static constexpr uint8_t kCombusHandshakePayloadLen = 18u;   // 16 (md5) + 1 (major) + 1 (minor)
+static constexpr uint8_t kCombusHandshakePayloadLen = 19u;   // 16 (md5) + major + minor + dev (chantier 2.2b)
 
 
 /// Total handshake frame size on the wire (SOF + header + payload + CRC).
@@ -158,6 +162,24 @@ static constexpr uint32_t kCombusHandshakeBurstPeriodMs = 100u;
  *   every request with an ACK carrying its own MD5; nobody answers an ACK.
  */
 static constexpr uint8_t kCombusHandshakeFlagAck = 0x01u;
+
+/**
+ * @brief Bit of the header `flags` byte that marks a NEXT handshake (chantier 2.2b).
+ *
+ * @details A NEXT request or ACK carries the MD5 of the next set (stable
+ *   channels then candidates); a legacy one carries the stable MD5.  An ACK
+ *   has the kind of the request it answers.
+ */
+static constexpr uint8_t kCombusHandshakeFlagNext = 0x02u;
+
+/**
+ * @brief NEXT requests sent after the burst before switching to legacy (chantier 2.2b).
+ *
+ * @details While the contract is UNKNOWN, an end with candidates sends its
+ *   burst and this many periodic requests as NEXT, then legacy requests.  A
+ *   NEXT ACK that does not match switches to legacy at once.
+ */
+static constexpr uint8_t kCombusHandshakeNextRetries = 3u;
 
 /**
  * @brief Period of the handshake requests after the boot burst, in ms.
@@ -289,6 +311,16 @@ struct CombusHandshakeContext {
     bool     dataSinceStable   = false;  ///< a data frame was applied since the contract became STABLE
     bool     refusalLogged     = false;  ///< one-shot guard for the refusal log, re-armed when STABLE
 
+    // --- Next / legacy mode (chantier 2.2b) — two ends per link: the fields that
+    //    describe the peer (contract, ACK, mode) become one set per peer when a
+    //    link serves several (see the WIP, "Plusieurs pairs sur un lien").
+    const uint8_t* expectedMd5Next = nullptr; ///< next set MD5 (= expectedMd5 when there is no candidate)
+    bool     hasCandidates     = false;  ///< expectedMd5Next differs from expectedMd5 (set by combus_protocol_init())
+    bool     baseSet           = false;  ///< BASE link: the mode sets the size of the frames (set by combus_protocol_init())
+    bool     nextMode          = false;  ///< STABLE in next mode (false: stable mode, or legacy without candidate)
+    uint8_t  nextTriesLeft     = 0u;     ///< NEXT requests left while UNKNOWN before legacy ones
+    bool     ackPendingNext    = false;  ///< a NEXT request was received, the TX answers it with a NEXT ACK
+
     // --- LY4 — expected MD5 pointer, resolved once at init from link->layer.
     //    Points to one of combus::wire::kCombusComBusMd5 (FULL),
     //    kCombusBaseComBusMd5 (BASE), or kCombusSystemComBusMd5 (SYSTEM).
@@ -376,7 +408,8 @@ namespace combus_handshake_internal {
      *        whenever the transport is (re)initialised.
      *
      * @details Chantier 1.2 — also clears the pending ACK and the contract
-     *   timers: a fresh RX session starts UNKNOWN.
+     *   timers: a fresh RX session starts UNKNOWN.  Chantier 2.2b — back to
+     *   stable mode, NEXT requests re-armed when the link has candidates.
      */
     void clearContractValidated(CombusHandshakeContext* ctx);
 

@@ -247,15 +247,22 @@ void combus_tx_update(
 			// --- 3. Encode ---
 			// LY2 — pass st.analogWireEnd / st.digitalWireEnd (resolved
 			// at TX init from link->layer) so the codec iterates only
-			// over the layer's prefix length.  This is the ONLY
-			// behavioural change vs. the pre-LY2 codec.
+			// over the layer's prefix length.  Chantier 2.2b — a BASE link
+			// out of next mode sends the stable channels only (the
+			// candidates follow them).
+		uint8_t analogEnd  = st.analogWireEnd;
+		uint8_t digitalEnd = st.digitalWireEnd;
+		if (st.handshakeCtx && st.handshakeCtx->baseSet && !st.handshakeCtx->nextMode) {
+			analogEnd  = combus::wire::kCombusBaseStableAnalogCount;
+			digitalEnd = combus::wire::kCombusBaseStableDigitalCount;
+		}
 		uint8_t frameLen = combus_frame_encode(
 		    st.frameCfg,
 		    frame,
 		    bus,
 		    st.seq,
-		    st.analogWireEnd,
-		    st.digitalWireEnd,
+		    analogEnd,
+		    digitalEnd,
 		    digitalValues
 		);
 

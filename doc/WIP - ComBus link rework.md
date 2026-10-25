@@ -125,6 +125,26 @@ La table de correspondance entrée vers channel (`inputs_map`) devient elle auss
   - chaque perte et chaque retour d'un lien est journalisé une fois ; des codes sonores ou lumineux viendront plus tard.
 - **Lien à diffusion seule** (accessoire) : pas d'ACK ; salve périodique et espacée ; le mode est déclaré dans le `ComDev`.
 
+#### Plusieurs pairs sur un lien (analyse du 2026-10-24, à reprendre dans un rework « 3 pairs et plus »)
+
+Le rework actuel suppose **deux pairs par lien** : le contrat, l'ACK, la politique de perte et le mode next / stable sont rangés dans le contexte du lien. Principe retenu par le propriétaire pour la suite : **un fil, un émetteur, un ou plusieurs récepteurs**. Au niveau ComBus, chaque flux reçu vient d'un seul émetteur ; c'est le **transport** qui démultiplexe (un `NodeCom` par émetteur), et un lien reçu = un pair = un contexte.
+
+| Transport | Le principe tient | Comment |
+|---|---|---|
+| UART | oui | un TX vers un ou plusieurs RX ; chaque retour est un fil à part ; RS485 multi-émetteur exclu sauf adressage ajouté par le transport |
+| CAN | oui | l'identifiant CAN dit qui émet ; arbitrage du bus ; trames ComBus découpées en trames CAN de 8 octets par le transport (à la ISO-TP) |
+| ESP-NOW | oui | adresse MAC de l'émetteur à la réception : un flux par pair ; émission en diffusion ou adressée |
+| I2C | oui, avec réserve | le maître écrit vers chaque esclave et lit chaque esclave ; un esclave ne parle que lu : le maître doit lire chaque esclave au moins toutes les 250 ms ; deux esclaves ne se parlent pas directement |
+
+Réglé par le principe : identité de l'émetteur, contrat / ACK / silence par pair, collisions au démarrage, ensembles différents sur un même médium (deux bouts TX logiques), et en grande partie la liste des pairs attendus (chaque pair attendu est un lien configuré ; les pairs dynamiques, comme l'appairage ESP-NOW d'une télécommande, demandent le « friend cache »).
+
+**Reste à traiter au niveau ComBus quand un TX servira plusieurs récepteurs :**
+1. **Décisions d'émission agrégées** : un bout TX doit être relié aux liens RX de ses récepteurs. Émettre des données dès qu'**au moins un** récepteur est `STABLE` (pas de blocage pour tous parce qu'un nouveau pair arrive) ; émettre en next si au moins un récepteur est en next (sans danger : préfixe stable, les autres coupent). Aujourd'hui un bout bidirectionnel partage un seul contexte entre TX et RX : juste pour un seul récepteur seulement.
+2. **`both_or` sur une émission en diffusion** : envoyer « valeur de la carte OU autres liens » renverrait à B sa propre valeur (écho, ping-pong). Règle : sur une émission vers plusieurs récepteurs, `both_or` n'envoie que la valeur de la carte (suffisant si tous s'entendent : bus, diffusion) ; le relais passe par des émissions adressées ou le `passthrough` (3.2).
+3. **Deux producteurs du même channel** sur deux liens : le dernier gagne ; relève du filtrage par sens (2.4) et du contrôle des producteurs par le builder.
+4. **Nombre d'ACK** sur un médium partagé : N × 4 demandes/s × (N−1) ACK ; acceptable pour quelques pairs ; piste : une « liste des pairs entendus » dans la demande périodique au lieu des ACK.
+5. **Champs « pair » du contexte** : contrat, dernier ACK, MD5 next annoncé, mode, refus journalisé, données depuis `STABLE` deviendront un état par lien RX (une structure par pair) ; le reste (salve, demandes) reste côté TX.
+
 ### 2.5 Versions et channels candidats
 
 - **Seules les majeures cassent** : la version majeure de `project_version.h` est la seule comparée. Passer de V1 à V2 impose de reflasher tous les véhicules ; une version mineure reste rétrocompatible.
@@ -140,7 +160,11 @@ La table de correspondance entrée vers channel (`inputs_map`) devient elle auss
   - **deux salves** (choix du propriétaire, garde la trame de 24 octets) : le bit 1 de `flags` marque une demande ou un ACK NEXT, qui porte le MD5 next ; tant que le contrat est `INCONNU`, demandes NEXT d'abord (salve puis 3 relances à 250 ms), puis demandes legacy (MD5 stable) ; ACK NEXT conforme : mode next ; ACK legacy conforme : mode stable ; une fois le mode fixé, les demandes périodiques sont de son genre ; après une perte, on recommence par NEXT ;
   - une demande NEXT refusée ne fait jamais tomber un contrat établi (« pas de next possible ») ;
   - mode next : les trames portent stables et candidats ; mode stable : les stables seuls, les candidats gardent leur valeur par défaut des deux côtés ;
-  - `DEV` (troisième champ de `project_version.h`) : la « pool » de candidats, journalisée seulement ;
+  - `DEV` (troisième champ de `project_version.h`) : la « pool » de candidats, journalisée seulement ; il voyage dans le handshake (charge utile 19 octets, trame 25) ;
+  - **sans candidat** (MD5 next = MD5 stable) : pas de phase NEXT, demandes legacy seulement, mode annoncé « legacy » (2026-10-24 : un « next » validé sans candidat serait trompeur) ;
+  - un ACK NEXT non conforme fait passer **aussitôt** aux demandes legacy (les relances ne servent qu'à un pair qui ne répond pas encore) ;
+  - **le mode suit ce que le pair annonce** dans ses handshakes NEXT (deux pairs par lien) : en mode stable, un handshake NEXT conforme fait passer en next, sans retour à `INCONNU` ; en mode next, un handshake NEXT non conforme ramène au mode stable ; les deux bouts se rejoignent en une période (250 ms) ;
+  - en mode stable, une trame plus longue que l'ensemble stable n'est appliquée que sur sa partie stable ;
   - règle des channels critiques : laissée de côté.
 - **Trois niveaux de version** (décidé le 2026-10-23, mis en place en 2.2 avec les candidats) : `project_version.h` reste la référence du versionnage, avec un troisième champ. `MAJOR` = architecture (différent : refus) ; `MINOR` = génération de configuration (journalisée, c'est le MD5 stable qui décide) ; `DEV` = la « pool » des évolutions en essai, les candidats (c'est le MD5 next qui décide l'essai, repli sur le stable). Les trois voyagent dans le handshake. Le MD5 reste le filet automatique : un numéro oublié ne passe pas, il est par ensemble (`BASE` par type, `SYSTEM` par nœud) et il voit les variantes de build ; les numéros portent ce que le hash ne voit pas (protocole, architecture) et se lisent.
 - Proposition à valider : un channel **critique** (`FAILSAFE`, `RUNLEVEL`…) ne peut pas être candidat, pour qu'un retour en mode stable ne coupe jamais la sécurité ; un même nom de channel n'a qu'un seul type dans le dépôt.
@@ -220,7 +244,7 @@ Chaque étape se vérifie avec le test de boucle (loopback) puis un build comple
 |---|---|---|
 | 2.1 | MD5 par ensemble, affiché au build ; contenu haché = ce qui fait le contrat : nom, portée, type, sens, **valeur par défaut** (envoyée tant que l'écrivain n'a rien écrit), dans l'ordre du fil ; `theme` et `infoName` retirés (tableau de 12 exemples validé le 2026-10-23). Préalable : le code du builder devient une source de la génération | pytest 746 sur 746 (5 tests du MD5 et 50 cas de propriétés réécrits échouent sur l'ancien `md5.py`) ; Volvo et `test_node_mainboard` : fichiers d'ID, `combus.h` et `combus.cpp` identiques, seuls les en-têtes MD5 changent (`BASE` `f06e08dd…`, `SYSTEM` `fac3de41…`) ; **test Unity sur la carte (2026-10-23)** : 65 tests sur 65 |
 | 2.2a | Builder : champ `candidate`, suffixe `_NEXT` ajouté par le builder, nom définitif libre, place des candidats (après les `BASE` stables), MD5 stable et next (`kCombusBaseComBusMd5Next`), `PROJECT_VERSION_DEV` (`kProjectVersionDev`), ligne `set NEXT` au build | pytest 794 sur 794 (`test_candidates.py` : 23 tests, et une propriété de `test_stress.py` sur 25 germes : les candidats ne déplacent ni les ID `BASE` stables ni le MD5 stable, et changent le MD5 `SYSTEM`) ; Volvo et `test_node_mainboard` (sans candidat) : `set BASE` = `set NEXT` = `f06e08dd…` (inchangé depuis 2.1), seuls `combus_wire_common.h` et les en-têtes MD5 `BASE` changent (constantes ajoutées) ; test Unity sur la carte (2026-10-23) : 65 tests sur 65 |
-| 2.2b | Firmware : demandes et ACK NEXT (bit 1 de `flags`), relances puis legacy, choix du mode, trames selon le mode, `DEV` journalisé | même release : next ; releases différentes : stable |
+| 2.2b | Firmware : demandes et ACK NEXT (bit 1 de `flags`), 6 demandes NEXT (salve et 3 relances) puis legacy, legacy seul sans candidat, choix du mode et rattrapage (le mode suit ce que le pair annonce), trames d'un lien `BASE` selon le mode (`kCombusBaseStableAnalogCount` / `DigitalCount`), `DEV` dans le handshake (trame de 25 octets) et journalisé | groupe O du test Unity (10 tests ; candidats simulés par un faux MD5 next, aucun type de machine n'en a) ; pytest 796 sur 796 ; builds Volvo et `test_node_mainboard` OK ; **validé sur la carte (2026-10-25)** : 75 tests sur 75. Reste pour deux cartes : taille réelle des trames avec un vrai candidat, deux bouts qui se rejoignent dans le même mode |
 | 2.3 | Tables de correspondance et tampons générés, utilisés par TX et RX (remplacent les tampons temporaires de `ComLinkRuntime`, 0.4) | test de boucle identique ; un tampon trop petit ne compile pas |
 | 2.4 | Filtrage par `direction` à la réception | un channel émis localement n'est pas écrasé par le pair |
 

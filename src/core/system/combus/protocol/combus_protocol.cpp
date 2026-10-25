@@ -5,6 +5,8 @@
 
 #include "combus_protocol.h"
 
+#include <string.h>   // memcmp()
+
 #include <core/system/combus/protocol/combus_tx.h>
 #include <core/system/combus/protocol/combus_rx.h>
 #include <core/system/combus/protocol/frame/combus_handshake.h>  // CombusHandshakeContext
@@ -98,6 +100,17 @@ void combus_protocol_init( uint8_t linkIdx, ComBusLink* link )
         //    sends no data while the contract is UNKNOWN.
     link->handshakeCtx->name          = link->name;
     link->handshakeCtx->bidirectional = link->txCfg.has_value() && link->rxCfg.has_value();
+
+        // --- 3c. Chantier 2.2b — next set: only a BASE link has candidates apart
+        //    (a SYSTEM link carries them in its single set).  Without candidate,
+        //    the next MD5 is the stable one and the link is legacy only.
+    link->handshakeCtx->baseSet         = (link->layer == ChanLayer::BASE);
+    link->handshakeCtx->expectedMd5Next = link->handshakeCtx->baseSet
+        ? combus::wire::kCombusBaseComBusMd5Next
+        : link->handshakeCtx->expectedMd5;
+    link->handshakeCtx->hasCandidates   =
+        memcmp(link->handshakeCtx->expectedMd5Next, link->handshakeCtx->expectedMd5, 16) != 0;
+
     combus_handshake_internal::clearContractValidated(link->handshakeCtx);   // every end starts UNKNOWN
 
         // --- 4. TX protocol layer — only if txCfg is present ---

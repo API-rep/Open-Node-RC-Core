@@ -224,7 +224,14 @@ static uint8_t tryDecode( CombusRxState& st )
         // SYSTEM link write BASE and SYSTEM channels.  A frame can never
         // write a BOARD channel (see combus_rx_init()).
         if (st.target != nullptr) {
-            combus_frame_apply(st.frameCfg, st.target, &st.snap,
+                // Chantier 2.2b — a BASE link out of next mode applies the stable
+                // channels only: the candidates keep their default value.
+            ComBusFrameCfg applyCfg = st.frameCfg;
+            if (st.handshakeCtx && st.handshakeCtx->baseSet && !st.handshakeCtx->nextMode) {
+                applyCfg.nAnalog  = combus::wire::kCombusBaseStableAnalogCount;
+                applyCfg.nDigital = combus::wire::kCombusBaseStableDigitalCount;
+            }
+            combus_frame_apply(applyCfg, st.target, &st.snap,
                                st.writeLayer);
         }
 

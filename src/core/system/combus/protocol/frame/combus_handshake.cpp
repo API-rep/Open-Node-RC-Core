@@ -180,17 +180,27 @@ namespace combus_handshake_internal {
     void markContractValidated(CombusHandshakeContext* ctx) {
         if (ctx) { ctx->contractValidated = true; }
     }
+        // Chantier 2.2b — NEXT requests first, when the link has candidates.
+    static uint8_t nextTries(const CombusHandshakeContext* ctx) {
+        return ctx->hasCandidates ? (uint8_t)(kCombusHandshakeBurstCount + kCombusHandshakeNextRetries) : 0u;
+    }
+
     void clearContractValidated(CombusHandshakeContext* ctx) {
         if (!ctx) { return; }
         ctx->contractValidated = false;
         ctx->ackPending        = false;
+        ctx->ackPendingNext    = false;
         ctx->dataSinceStable   = false;
         ctx->refusalLogged     = false;
+        ctx->nextMode          = false;
+        ctx->nextTriesLeft     = nextTries(ctx);
     }
     void dropContract(CombusHandshakeContext* ctx, const char* reason) {
         if (!ctx || !ctx->contractValidated) { return; }
         ctx->contractValidated = false;
         ctx->dataSinceStable   = false;
+        ctx->nextMode          = false;
+        ctx->nextTriesLeft     = nextTries(ctx);
         sys_log_warn("[COMBUS_HANDSHAKE] link '%s' contract UNKNOWN (%s)\n",
                      ctx->name ? ctx->name : "?", reason);
     }

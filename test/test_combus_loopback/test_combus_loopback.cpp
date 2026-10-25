@@ -64,6 +64,15 @@
  *     touches the contract (P4 removed).  Peer frames are forged on the wire.
  *     Same TX↔RX jumper as Group B.
  *
+ *   Group O — next / legacy mode (chantier 2.2b):
+ *     Rows of the table validated by the owner: without candidates, legacy
+ *     requests only; with candidates, NEXT requests first (burst then 3
+ *     retries), a NEXT ACK that does not match switches to legacy at once; the
+ *     mode follows what the peer announces in its NEXT handshakes; periodic
+ *     requests and ACK follow the mode; a loss starts again with NEXT; DEV is
+ *     only logged.  No machine type has candidates: the tests give the link a
+ *     fake next MD5 (enableCandidates()).  Same TX↔RX jumper as Group B.
+ *
  *   Group C — view identity (Phase 3 / A13):
  *     Validates that the 3 view-specific enums (AnalogComBusID,
  *     AnalogComBusSystemID, AnalogComBusBaseID and their digital
@@ -1340,21 +1349,24 @@ static bool wireHasOnlyHandshakes(void) {
     return true;
 }
 
-/** Write on the wire a handshake as a remote peer would send it. */
-static void sendForgedHandshake(bool ack, bool goodMd5, uint8_t major, uint8_t minor) {
+/** Write on the wire a handshake as a remote peer would send it (NEXT: with the next MD5 of the link). */
+static void sendForgedHandshake(bool ack, bool goodMd5, uint8_t major, uint8_t minor,
+                                bool next = false, uint8_t dev = combus::wire::kProjectVersionDev) {
     uint8_t frame[CombusFrameHandshakeMinLen];
     const uint8_t payload = sizeof(CombusFrameSof) + sizeof(CombusFrameHeader);
+    const uint8_t* md5 = next ? linkCtx()->expectedMd5Next : linkCtx()->expectedMd5;
 
     frame[0] = CombusFrameSof;
     frame[1] = 0u;                                          // nAnalog
     frame[2] = 0u;                                          // nDigital
     frame[3] = 0u;                                          // seq 0 = handshake
-    frame[4] = ack ? kCombusHandshakeFlagAck : 0u;          // flags
-    for (uint8_t i = 0u; i < 16u; ++i) { frame[payload + i] = linkCtx()->expectedMd5[i]; }
+    frame[4] = (uint8_t)((ack ? kCombusHandshakeFlagAck : 0u) | (next ? kCombusHandshakeFlagNext : 0u));
+    for (uint8_t i = 0u; i < 16u; ++i) { frame[payload + i] = md5[i]; }
     if (!goodMd5) { frame[payload] ^= 0xFFu; }
     frame[payload + 16u] = major;
     frame[payload + 17u] = minor;
-    frame[payload + 18u] = combus_frame_crc8(frame, (uint8_t)(payload + 18u));
+    frame[payload + 18u] = dev;
+    frame[payload + 19u] = combus_frame_crc8(frame, (uint8_t)(payload + 19u));
 
     s_com->write(s_com->ctx, frame, sizeof(frame));
     delay(kRxPollMs);
@@ -1597,6 +1609,217 @@ static void test_contract_failsafe_keeps_contract(void) {
 }
 
 
+// =============================================================================
+// GROUP O — NEXT / LEGACY MODE (chantier 2.2b)
+//
+// No machine type has candidates yet: enableCandidates() gives the link a fake
+// next MD5, as if this board had candidates.  On the loopback, a NEXT request
+// of the board comes back to it and is answered with its own next MD5: same
+// release on both ends.  What another release would send is forged.
+// =============================================================================
+
+static const uint8_t kFakeNextMd5[16] = {
+    0x4Eu, 0x45u, 0x58u, 0x54u, 0x01u, 0x02u, 0x03u, 0x04u,
+    0x05u, 0x06u, 0x07u, 0x08u, 0x09u, 0x0Au, 0x0Bu, 0x0Cu
+};
+
+/** Give the link candidates (a next MD5 different from the stable one), contract UNKNOWN. */
+static void enableCandidates(void) {
+    linkCtx()->expectedMd5Next = kFakeNextMd5;
+    linkCtx()->hasCandidates   = true;
+    combus_handshake_internal::clearContractValidated(linkCtx());   // re-arms the NEXT requests
+}
+
+/** One handshake read back from the loopback: its flags and the first byte of its MD5. */
+struct WireHandshake {
+    uint8_t flags;
+    uint8_t md5First;
+};
+
+/** Read the handshakes waiting on the loopback RX (data frames are not expected here). */
+static uint8_t readHandshakes(WireHandshake* out, uint8_t max) {
+    uint8_t n = 0u;
+    while (s_com->available(s_com->ctx) >= (int)CombusFrameHandshakeMinLen && n < max) {
+        uint8_t frame[CombusFrameHandshakeMinLen];
+        for (uint8_t i = 0u; i < CombusFrameHandshakeMinLen; ++i) { frame[i] = (uint8_t)s_com->readByte(s_com->ctx); }
+        TEST_ASSERT_EQUAL_HEX8_MESSAGE(CombusFrameSof, frame[0], "not a handshake on the wire");
+        out[n].flags    = frame[4];
+        out[n].md5First = frame[sizeof(CombusFrameSof) + sizeof(CombusFrameHeader)];
+        ++n;
+    }
+    return n;
+}
+
+static bool isNextFlag(uint8_t flags) { return (flags & kCombusHandshakeFlagNext) != 0u; }
+
+/** Row 12 of the table: a link between the boards of a node has no separate candidates. */
+static void test_mode_system_link_has_no_separate_candidates(void) {
+    startHealthLink(LinkEnd::TX_RX, kHealthDev);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(linkCtx()->expectedMd5, linkCtx()->expectedMd5Next, 16u);
+    TEST_ASSERT_FALSE(linkCtx()->hasCandidates);
+}
+
+/** Row 1: no candidate: legacy requests only, STABLE in legacy mode. */
+static void test_mode_row1_no_candidate_is_legacy(void) {
+    startHealthLink(LinkEnd::TX_RX, kInterDev);
+    TEST_ASSERT_FALSE(linkCtx()->hasCandidates);
+
+    for (uint32_t t0 = millis(); (millis() - t0) < 400u; ) {        // the burst, read back unanswered
+        combus_handshake_tx_update(linkCtx(), s_com);
+        delay(20u);
+        WireHandshake hs[4];
+        const uint8_t n = readHandshakes(hs, 4u);
+        for (uint8_t i = 0u; i < n; ++i) { TEST_ASSERT_FALSE_MESSAGE(isNextFlag(hs[i].flags), "NEXT request without candidate"); }
+    }
+    ensureStable();
+    TEST_ASSERT_FALSE(linkCtx()->nextMode);
+}
+
+/** Row 2: same release with candidates on both ends: NEXT request, NEXT ACK: next mode. */
+static void test_mode_row2_same_candidates_is_next(void) {
+    startHealthLink(LinkEnd::TX_RX, kInterDev);
+    enableCandidates();
+
+    ensureStable();
+    TEST_ASSERT_TRUE(linkCtx()->nextMode);
+}
+
+/** Retries: with candidates and no answer, 6 NEXT requests (burst of 3, then 3 retries), then legacy. */
+static void test_mode_next_requests_then_legacy(void) {
+    startHealthLink(LinkEnd::TX_RX, kInterDev);
+    enableCandidates();
+    drainWire();
+
+    uint8_t nNext = 0u, nLegacy = 0u;
+    bool legacyBeforeNext = false;
+    for (uint32_t t0 = millis(); (millis() - t0) < 1500u; ) {
+        combus_handshake_tx_update(linkCtx(), s_com);
+        delay(20u);
+        WireHandshake hs[4];
+        const uint8_t n = readHandshakes(hs, 4u);
+        for (uint8_t i = 0u; i < n; ++i) {
+            if (isNextFlag(hs[i].flags)) { ++nNext; if (nLegacy > 0u) { legacyBeforeNext = true; } }
+            else                         { ++nLegacy; }
+        }
+    }
+    TEST_ASSERT_EQUAL_UINT8(6u, nNext);
+    TEST_ASSERT_GREATER_THAN_UINT8(0u, nLegacy);
+    TEST_ASSERT_FALSE_MESSAGE(legacyBeforeNext, "a NEXT request after a legacy one");
+}
+
+/** Row 3: the NEXT ACK carries another next MD5: legacy at once, legacy ACK: stable mode. */
+static void test_mode_row3_other_next_falls_back_to_legacy_at_once(void) {
+    startHealthLink(LinkEnd::TX_RX, kInterDev);
+    enableCandidates();
+
+    sendForgedHandshake(true, false, combus::wire::kProjectVersionMajor, combus::wire::kProjectVersionMinor, true);
+    pumpRx();
+    TEST_ASSERT_FALSE(isStable());
+    TEST_ASSERT_EQUAL_UINT8(0u, linkCtx()->nextTriesLeft);
+
+    drainWire();
+    combus_handshake_tx_update(linkCtx(), s_com);                   // first burst request: legacy already
+    delay(kRxPollMs);
+    WireHandshake hs[2];
+    TEST_ASSERT_EQUAL_UINT8(1u, readHandshakes(hs, 2u));
+    TEST_ASSERT_FALSE(isNextFlag(hs[0].flags));
+
+    sendGoodAck();
+    pumpRx();
+    TEST_ASSERT_TRUE(isStable());
+    TEST_ASSERT_FALSE(linkCtx()->nextMode);
+}
+
+/** Rows 4, 5 and 10: in stable mode, a matching NEXT handshake moves to next; the requests follow the mode. */
+static void test_mode_row5_matching_next_moves_to_next(void) {
+    startHealthLink(LinkEnd::TX_RX, kInterDev);
+    enableCandidates();
+    sendGoodAck();                                                  // legacy ACK: stable mode
+    pumpRx();
+    TEST_ASSERT_TRUE(isStable());
+    TEST_ASSERT_FALSE(linkCtx()->nextMode);
+
+    drainWire();
+    delay(kCombusHandshakePeriodMs + 20u);                          // row 10: periodic request is legacy
+    combus_handshake_tx_update(linkCtx(), s_com);
+    delay(kRxPollMs);
+    WireHandshake hs[2];
+    TEST_ASSERT_EQUAL_UINT8(1u, readHandshakes(hs, 2u));
+    TEST_ASSERT_FALSE(isNextFlag(hs[0].flags));
+
+    sendForgedHandshake(false, true, combus::wire::kProjectVersionMajor, combus::wire::kProjectVersionMinor, true);
+    pumpRx();                                                       // the peer announces the same next
+    TEST_ASSERT_TRUE(isStable());
+    TEST_ASSERT_TRUE(linkCtx()->nextMode);
+
+    drainWire();
+    delay(kCombusHandshakePeriodMs + 20u);                          // row 10: periodic request is NEXT now
+    combus_handshake_tx_update(linkCtx(), s_com);
+    delay(kRxPollMs);
+    const uint8_t n = readHandshakes(hs, 2u);
+    TEST_ASSERT_GREATER_THAN_UINT8(0u, n);
+    TEST_ASSERT_TRUE(isNextFlag(hs[n - 1u].flags));
+}
+
+/** Row 6: in next mode, a NEXT handshake with another next MD5: back to stable mode, contract kept. */
+static void test_mode_row6_other_next_while_next_back_to_stable(void) {
+    startHealthLink(LinkEnd::TX_RX, kInterDev);
+    enableCandidates();
+    ensureStable();
+    TEST_ASSERT_TRUE(linkCtx()->nextMode);
+
+    sendForgedHandshake(false, false, combus::wire::kProjectVersionMajor, combus::wire::kProjectVersionMinor, true);
+    pumpRx();
+    TEST_ASSERT_TRUE(isStable());
+    TEST_ASSERT_FALSE(linkCtx()->nextMode);
+}
+
+/** Row 9: the contract is lost: next requests again, from the start. */
+static void test_mode_row9_loss_restarts_with_next(void) {
+    startHealthLink(LinkEnd::TX_RX, kInterDev);
+    enableCandidates();
+    ensureStable();
+    TEST_ASSERT_TRUE(linkCtx()->nextMode);
+
+    delay(kCombusHandshakeAckTimeoutMs + 100u);                     // no ACK: contract dropped
+    pumpRx();
+    TEST_ASSERT_FALSE(isStable());
+    TEST_ASSERT_FALSE(linkCtx()->nextMode);
+    TEST_ASSERT_EQUAL_UINT8(kCombusHandshakeBurstCount + kCombusHandshakeNextRetries, linkCtx()->nextTriesLeft);
+}
+
+/** A NEXT request is answered by a NEXT ACK carrying the next MD5. */
+static void test_mode_next_request_gets_next_ack(void) {
+    startHealthLink(LinkEnd::TX_RX, kInterDev);
+    enableCandidates();
+    linkCtx()->burstActive = false;                                 // only the ACK goes out
+    linkCtx()->lastRequestMs = millis();
+
+    sendForgedHandshake(false, true, combus::wire::kProjectVersionMajor, combus::wire::kProjectVersionMinor, true);
+    pumpRx();
+    TEST_ASSERT_TRUE(linkCtx()->ackPendingNext);
+    TEST_ASSERT_FALSE(linkCtx()->ackPending);
+
+    drainWire();
+    combus_handshake_tx_update(linkCtx(), s_com);
+    delay(kRxPollMs);
+    WireHandshake hs[2];
+    TEST_ASSERT_EQUAL_UINT8(1u, readHandshakes(hs, 2u));
+    TEST_ASSERT_EQUAL_HEX8(kCombusHandshakeFlagAck | kCombusHandshakeFlagNext, hs[0].flags);
+    TEST_ASSERT_EQUAL_HEX8(kFakeNextMd5[0], hs[0].md5First);
+}
+
+/** Row 11: another DEV is only logged. */
+static void test_mode_row11_dev_is_only_logged(void) {
+    startHealthLink(LinkEnd::TX_RX, kInterDev);
+
+    sendForgedHandshake(true, true, combus::wire::kProjectVersionMajor, combus::wire::kProjectVersionMinor,
+                        false, (uint8_t)(combus::wire::kProjectVersionDev + 1u));
+    pumpRx();
+    TEST_ASSERT_TRUE(isStable());
+}
+
+
 // Chantier 12.6 (cleanup): Group F (FS1 failsafe re-arm) REMOVED — link
 // health is now monitored by the per-backend *_LINK_LOST contributors
 // (PS4_DS4_BT_LINK_LOST, COM_LINK_LOST, ...) aggregated into
@@ -1737,6 +1960,18 @@ void setup() {
     RUN_TEST(test_contract_row11_tx_only_end);
     RUN_TEST(test_contract_row12_no_reply_to_ack);
     RUN_TEST(test_contract_failsafe_keeps_contract);
+
+    // --- Group O: next / legacy mode (chantier 2.2b) ---
+    RUN_TEST(test_mode_system_link_has_no_separate_candidates);
+    RUN_TEST(test_mode_row1_no_candidate_is_legacy);
+    RUN_TEST(test_mode_row2_same_candidates_is_next);
+    RUN_TEST(test_mode_next_requests_then_legacy);
+    RUN_TEST(test_mode_row3_other_next_falls_back_to_legacy_at_once);
+    RUN_TEST(test_mode_row5_matching_next_moves_to_next);
+    RUN_TEST(test_mode_row6_other_next_while_next_back_to_stable);
+    RUN_TEST(test_mode_row9_loss_restarts_with_next);
+    RUN_TEST(test_mode_next_request_gets_next_ack);
+    RUN_TEST(test_mode_row11_dev_is_only_logged);
 
     // Chantier 12.6: Group F (FS1 failsafe re-arm) removed — see
     // header docstring above (5 independent test groups A/B/C/D/E).
