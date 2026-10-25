@@ -196,6 +196,7 @@ def render_peer_links_header(links: list[LinkSet], ids_header: str = "combus_ids
         "",
         "#include <stdint.h>",
         "",
+        "#include <core/system/combus/protocol/frame/combus_frame_defs.h>   // ComPeerLink",
         f'#include "{ids_header}"',
         "",
         "namespace combus {",
@@ -220,15 +221,21 @@ def render_peer_links_header(links: list[LinkSet], ids_header: str = "combus_ids
         body.append(f"static constexpr uint8_t kStableAnalogCount  = {sum(1 for c in analog if not c.candidate)}u;")
         body.append(f"static constexpr uint8_t kStableDigitalCount = {sum(1 for c in digital if not c.candidate)}u;")
         body.append("/// Wire position -> local channel ID.")
-        body.append(f"static constexpr AnalogComBusID kAnalog[] = {{ "
-                    f"{', '.join(f'AnalogComBusID::{c.id}' for c in analog) or 'AnalogComBusID::CH_COUNT'} }};")
-        body.append(f"static constexpr DigitalComBusID kDigital[] = {{ "
-                    f"{', '.join(f'DigitalComBusID::{c.id}' for c in digital) or 'DigitalComBusID::CH_COUNT'} }};")
+        body.append(f"static constexpr uint8_t kAnalog[] = {{ "
+                    f"{', '.join(f'static_cast<uint8_t>(AnalogComBusID::{c.id})' for c in analog) or '0u'} }};")
+        body.append(f"static constexpr uint8_t kDigital[] = {{ "
+                    f"{', '.join(f'static_cast<uint8_t>(DigitalComBusID::{c.id})' for c in digital) or '0u'} }};")
         body.append("/// Wire position -> this node receives it on this link (true) or sends it (false).")
         body.append(f"static constexpr bool kAnalogRx[] = {{ "
                     f"{', '.join('true' if c.flow in ('from_peer', 'both', 'or') else 'false' for c in analog) or 'false'} }};")
         body.append(f"static constexpr bool kDigitalRx[] = {{ "
                     f"{', '.join('true' if c.flow in ('from_peer', 'both', 'or') else 'false' for c in digital) or 'false'} }};")
+        body.append("/// The link, for the ComDev of this peer (ComDev::peer).")
+        body.append("static constexpr ComPeerLink kLink = {")
+        body.append(f'    "{link.peer_type}", kMd5, kMd5Stable,')
+        body.append("    kAnalogCount, kDigitalCount, kStableAnalogCount, kStableDigitalCount,")
+        body.append("    kAnalog, kDigital, kAnalogRx, kDigitalRx")
+        body.append("};")
         body.append(f"}} // namespace {ns}")
         body.append("")
     body += ["} // namespace peer", "} // namespace combus", "", "// EOF"]

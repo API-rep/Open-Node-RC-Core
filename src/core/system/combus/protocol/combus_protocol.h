@@ -187,6 +187,7 @@ struct ComDev {
     LinkActivation         activation;  ///< only ALWAYS is accepted for now
     const ComCoupling*     coupling;    ///< nullptr unless activation == ON_COUPLING
     LinkLossAction         onLoss = LinkLossAction::BY_SCOPE;   ///< reaction to the loss of the link
+    const ComPeerLink*     peer   = nullptr;   ///< INTER_NODE only: the link with a peer type (combus_peer_links.h), nullptr = BASE view
 };
 
 
@@ -270,6 +271,7 @@ struct ComBusLink {
     ChanLayer                      layer        = ChanLayer::UNDEFINED; ///< Propagation layer of this link — BASE or SYSTEM only (never BOARD). LY2 — also selects the wire-end counters at TX init.
     const char*                    name         = "combus";  ///< Descriptive tag for logs and debug output.
     ComBus*                        target       = nullptr;   ///< RL5 — optional ComBus instance to auto-apply decoded RX frames onto.  When non-null, combus_rx_update() calls combus_frame_apply() after each successful decode.  When null (default), no auto-apply is performed — caller must call combus_frame_apply() manually.
+    const ComPeerLink*             peer         = nullptr;   ///< Link rework 3.1b — link between nodes: common frame, table and MD5 of the link.  nullptr = view of the layer.
 };
 
 

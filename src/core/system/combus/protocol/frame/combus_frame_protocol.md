@@ -115,6 +115,18 @@ compteur part de 0 (`generator.py:362-386`).
   avoir généré les mêmes IDs. Le handshake compare l'empreinte MD5 de la vue du
   lien (`combus_protocol.cpp:55-88`, `kCombusBaseComBusMd5`,
   `kCombusSystemComBusMd5` ou `kCombusComBusMd5` selon le layer).
+- **Lien entre nœuds avec un type pair (link rework 3.1b)** : quand le `ComDev`
+  porte un `peer` (`ComPeerLink`, `combus_frame_defs.h`, généré dans
+  `combus_peer_links.h` par `-D COMBUS_PEER_<TYPE>`), la trame est la trame
+  commune du lien, et non le préfixe de la vue `BASE`. Ses comptes viennent du
+  lien. À l'émission, chaque position sur le fil lit le channel local que donne
+  la table (`analogMap` / `digitalMap` de `combus_frame_encode`). À la réception,
+  seules les positions que ce nœud reçoit sont écrites (`analogRx` / `digitalRx`),
+  dans le channel local de la table : la table remplace alors le filtre par sens.
+  Les `both_or` restent à la fusion, que `combus_rx_peer_or` fait par position
+  sur le fil. Le contrat est le MD5 du lien (`md5Stable`, `md5` en mode next),
+  et le mode stable s'arrête aux comptes stables du lien. Sans `peer`, rien ne
+  change. Preuve : `test/test_peer_link` (validé sur la carte le 2026-10-25).
 
 Identité d'écriture du RX : `combus_rx_init` reçoit le `layer` du lien et en
 dérive `st.writeLayer`. `_layer_ok` n'autorise l'écriture d'un canal SYSTEM que

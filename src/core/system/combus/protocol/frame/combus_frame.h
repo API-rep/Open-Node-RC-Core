@@ -104,6 +104,11 @@ static constexpr uint8_t CombusFrameMinLen = CombusFrameHeaderLen + sizeof(uint8
  *                             bus values (at least @p digitalWireEnd entries);
  *                             the TX passes the values prepared for one link
  *                             (both_or without echo).  nullptr = bus values.
+ *                             Indexed by wire position.
+ * @param[in]  analogMap       Link between nodes (3.1b): wire position -> analog
+ *                             channel ID (ComPeerLink::analog).  nullptr = the
+ *                             wire position is the channel ID.
+ * @param[in]  digitalMap      Same for the digital channels (ComPeerLink::digital).
  *
  * @return Number of bytes written into outputBuffer, 0 on error.
  *
@@ -118,7 +123,9 @@ uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
                              uint8_t               seq,
                              uint8_t               analogWireEnd,
                              uint8_t               digitalWireEnd,
-                             const bool*           digitalValues = nullptr );
+                             const bool*           digitalValues = nullptr,
+                             const uint8_t*        analogMap     = nullptr,
+                             const uint8_t*        digitalMap    = nullptr );
 
 
 /**
@@ -170,12 +177,18 @@ bool combus_frame_decode( const ComBusFrameCfg& cfg,
  * @param[out] combus      Target ComBus to update.
  * @param[in]  inputFrame  Source frame (from combus_frame_decode).
  * @param[in]  caller      Propagation layer of the node calling this function.
+ * @param[in]  peer        Link between nodes (3.1b): the wire position is mapped
+ *                         to a channel by the table of the link, and only the
+ *                         positions this node receives are written.  nullptr =
+ *                         wire position = channel ID, filtered by the channel
+ *                         direction.
  */
 
 void combus_frame_apply( const ComBusFrameCfg& cfg,
                          ComBus*               combus,
                          const ComBusFrame*    inputFrame,
-                         ChanLayer             caller );
+                         ChanLayer             caller,
+                         const ComPeerLink*    peer = nullptr );
 
 
 

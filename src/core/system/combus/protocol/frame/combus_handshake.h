@@ -316,6 +316,7 @@ struct CombusHandshakeContext {
     //    link serves several (see the WIP, "Plusieurs pairs sur un lien").
     const uint8_t* expectedMd5Next = nullptr; ///< next set MD5 (= expectedMd5 when there is no candidate)
     bool     hasCandidates     = false;  ///< expectedMd5Next differs from expectedMd5 (set by combus_protocol_init())
+    const ComPeerLink* peer    = nullptr; ///< link between nodes (3.1b): common frame and table, nullptr = view of the scope
     bool     baseSet           = false;  ///< BASE link: the mode sets the size of the frames (set by combus_protocol_init())
     bool     nextMode          = false;  ///< STABLE in next mode (false: stable mode, or legacy without candidate)
     uint8_t  nextTriesLeft     = 0u;     ///< NEXT requests left while UNKNOWN before legacy ones

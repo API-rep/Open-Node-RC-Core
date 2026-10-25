@@ -226,13 +226,16 @@ static uint8_t tryDecode( CombusRxState& st )
         if (st.target != nullptr) {
                 // Chantier 2.2b — a BASE link out of next mode applies the stable
                 // channels only: the candidates keep their default value.
+                // Link rework 3.1b — a link between nodes: its own stable counts,
+                // and its table from the wire positions to this node's channels.
+            const ComPeerLink* peer = st.handshakeCtx ? st.handshakeCtx->peer : nullptr;
             ComBusFrameCfg applyCfg = st.frameCfg;
             if (st.handshakeCtx && st.handshakeCtx->baseSet && !st.handshakeCtx->nextMode) {
-                applyCfg.nAnalog  = combus::wire::kCombusBaseStableAnalogCount;
-                applyCfg.nDigital = combus::wire::kCombusBaseStableDigitalCount;
+                applyCfg.nAnalog  = peer ? peer->nStableAnalog  : combus::wire::kCombusBaseStableAnalogCount;
+                applyCfg.nDigital = peer ? peer->nStableDigital : combus::wire::kCombusBaseStableDigitalCount;
             }
             combus_frame_apply(applyCfg, st.target, &st.snap,
-                               st.writeLayer);
+                               st.writeLayer, peer);
         }
 
         rxBufConsume(st, expectedLen);
@@ -437,9 +440,20 @@ bool combus_rx_peer_or( uint8_t ch, uint8_t excludeLink )
             // --- Only live links whose last frame carried the channel ---
         if (i == excludeLink || !st.nodeCom || !st.snap.digital || st.linkTimeoutMs == 0u) { continue; }
         if (!combus_rx_is_alive(i, st.linkTimeoutMs)) { continue; }
-        if (ch >= st.snap.header.cfg.nDigital) { continue; }
 
-        if (st.snap.digital[ch]) { return true; }
+            // --- Wire position of the channel: its ID, or through the table of a
+            //     link between nodes (3.1b), where it must be received ---
+        uint8_t pos = ch;
+        const ComPeerLink* peer = st.handshakeCtx ? st.handshakeCtx->peer : nullptr;
+        if (peer) {
+            pos = peer->nDigital;
+            for (uint8_t p = 0u; p < peer->nDigital; ++p) {
+                if (peer->digital[p] == ch && peer->digitalRx[p]) { pos = p; break; }
+            }
+        }
+        if (pos >= st.snap.header.cfg.nDigital) { continue; }
+
+        if (st.snap.digital[pos]) { return true; }
     }
     return false;
 }

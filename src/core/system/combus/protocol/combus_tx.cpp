@@ -145,6 +145,13 @@ void combus_tx_init(
 			break;
 	}
 
+		// --- 4b. Link rework 3.1b — a link between nodes carries the common frame
+		//    of the link (wired by combus_protocol_init() before this call).
+	if (st.handshakeCtx && st.handshakeCtx->peer) {
+		st.analogWireEnd  = st.handshakeCtx->peer->nAnalog;
+		st.digitalWireEnd = st.handshakeCtx->peer->nDigital;
+	}
+
 		// --- 5. Reset handshake burst state on the linked context (P3).
 	//    combus_protocol_init() wires st.handshakeCtx to the same
 	//    context as the RX side BEFORE calling combus_tx_init().
@@ -232,12 +239,16 @@ void combus_tx_update(
 			// --- 2b. both_or without echo (anti ping-pong, see both_or.md): send this
 			//     board's own value OR what the OTHER links received, never what
 			//     this link sent.  Other digital channels are sent as they are.
+			//     Link rework 3.1b — on a link between nodes, by wire position through
+			//     the table of the link.
+		const ComPeerLink* peer = st.handshakeCtx ? st.handshakeCtx->peer : nullptr;
 		const bool* digitalValues = nullptr;
 		if (bus->digitalBus) {
 			bool anyBothOr = false;
 			for (uint8_t ch = 0u; ch < st.digitalWireEnd && ch < st.frameCfg.nDigital; ++ch) {
-				const DigitalComBus& slot = bus->digitalBus[ch];
-				txDigital[ch] = slot.bothOr.enabled ? (combus_both_or_local(slot) || combus_rx_peer_or(ch, i))
+				const uint8_t id = peer ? peer->digital[ch] : ch;
+				const DigitalComBus& slot = bus->digitalBus[id];
+				txDigital[ch] = slot.bothOr.enabled ? (combus_both_or_local(slot) || combus_rx_peer_or(id, i))
 				                            : slot.value;
 				anyBothOr = anyBothOr || slot.bothOr.enabled;
 			}
@@ -253,8 +264,8 @@ void combus_tx_update(
 		uint8_t analogEnd  = st.analogWireEnd;
 		uint8_t digitalEnd = st.digitalWireEnd;
 		if (st.handshakeCtx && st.handshakeCtx->baseSet && !st.handshakeCtx->nextMode) {
-			analogEnd  = combus::wire::kCombusBaseStableAnalogCount;
-			digitalEnd = combus::wire::kCombusBaseStableDigitalCount;
+			analogEnd  = peer ? peer->nStableAnalog  : combus::wire::kCombusBaseStableAnalogCount;
+			digitalEnd = peer ? peer->nStableDigital : combus::wire::kCombusBaseStableDigitalCount;
 		}
 		uint8_t frameLen = combus_frame_encode(
 		    st.frameCfg,
@@ -263,7 +274,9 @@ void combus_tx_update(
 		    st.seq,
 		    analogEnd,
 		    digitalEnd,
-		    digitalValues
+		    digitalValues,
+		    peer ? peer->analog  : nullptr,
+		    peer ? peer->digital : nullptr
 		);
 
 		if (frameLen == 0u) { continue; }

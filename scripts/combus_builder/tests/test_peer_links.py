@@ -125,8 +125,12 @@ def test_row5_row7_generated_table_and_build_log(tmp_path, tractor, capsys):
     generate(tractor, _ctx("MACHINE_TYPE_TEST_TRACTOR", "COMBUS_PEER_TEST_TRAILER"), tmp_path)
     out = capsys.readouterr().out
     text = (tmp_path / "combus_peer_links.h").read_text(encoding="utf-8")
-    assert "AnalogComBusID::TEST_BRAKE_BUS, AnalogComBusID::TEST_TILT_ANGLE" in text
-    assert "DigitalComBusID::TEST_COUPLED_FAULT, DigitalComBusID::TEST_LIGHTS" in text
+    assert ("static_cast<uint8_t>(AnalogComBusID::TEST_BRAKE_BUS), "
+            "static_cast<uint8_t>(AnalogComBusID::TEST_TILT_ANGLE)") in text
+    assert ("static_cast<uint8_t>(DigitalComBusID::TEST_COUPLED_FAULT), "
+            "static_cast<uint8_t>(DigitalComBusID::TEST_LIGHTS)") in text
+    assert "static constexpr ComPeerLink kLink = {" in text      # step 3.1b: the descriptor of the link
+    assert '"test_trailer", kMd5, kMd5Stable,' in text
     assert "[combus_builder] set LINK test_trailer  md5=" in out
     assert "A2+D2" in out
 

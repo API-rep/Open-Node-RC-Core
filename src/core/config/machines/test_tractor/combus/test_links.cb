@@ -10,7 +10,10 @@
 # - TEST_BRAKE_BUS, TEST_LIGHTS: received from the remote, relayed to the trailer;
 # - TEST_THROTTLE_BUS: received from the remote, not relayed;
 # - TEST_TILT_ANGLE: received from the trailer;
-# - TEST_COUPLED_FAULT: fault shared by the whole convoy (OR merge).
+# - TEST_COUPLED_FAULT: fault shared by the whole convoy (OR merge);
+# - TEST_BEACON: received from the remote, not relayed (the trailer does not
+#   know it).  It comes before the digital channels of the link in the local
+#   order, so that the table of the link is not the identity (step 3.1b).
 
 channels:
 
@@ -31,6 +34,13 @@ channels:
 - id: TEST_TILT_ANGLE
   infoName: "Test trailer tilt angle"
   type: analog
+  scope: BASE
+  theme: core
+  direction: downlink
+
+- id: TEST_BEACON
+  infoName: "Test beacon"
+  type: digital
   scope: BASE
   theme: core
   direction: downlink

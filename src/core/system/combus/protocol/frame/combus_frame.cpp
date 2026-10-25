@@ -99,6 +99,8 @@ uint8_t combus_frame_crc8(const uint8_t* data, uint8_t len) {
  *                              (resolved at TX init from link->layer).
  * @param[in]  digitalWireEnd   LY2 — number of digital channels to encode
  *                              (resolved at TX init from link->layer).
+ * @param[in]  analogMap        Link between nodes: wire position -> channel ID, or nullptr.
+ * @param[in]  digitalMap       Link between nodes: wire position -> channel ID, or nullptr.
  *
  * @return Number of bytes written into outputBuffer, 0 on error.
  *
@@ -113,7 +115,9 @@ uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
                              uint8_t               seq,
                              uint8_t               analogWireEnd,
                              uint8_t               digitalWireEnd,
-                             const bool*           digitalValues ) {
+                             const bool*           digitalValues,
+                             const uint8_t*        analogMap,
+                             const uint8_t*        digitalMap ) {
 
 		// LY2 — the wire payload is sized to the layer's prefix length.
 		// analogWireEnd / digitalWireEnd are resolved at TX init time
@@ -175,9 +179,10 @@ uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
 			if (ch >= nDigital) { continue; }
 
 				// The values prepared for this link (both_or without echo) when given,
-				// the bus values otherwise.
+				// the bus values otherwise (through the table of a link between nodes).
+			const uint8_t id = digitalMap ? digitalMap[ch] : ch;
 			const bool v = digitalValues ? digitalValues[ch]
-			                             : (combus->digitalBus && combus->digitalBus[ch].value);
+			                             : (combus->digitalBus && combus->digitalBus[id].value);
 			if (v) {
 				packed |= (uint8_t)(1u << bit);
 			}
@@ -188,7 +193,8 @@ uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
 
 		// 5. Write analog values (uint16_t little-endian)
 	for (uint8_t a = 0; a < nAnalog; ++a) {
-		uint16_t val = combus->analogBus ? combus->analogBus[a].value : 0;
+		const uint8_t id = analogMap ? analogMap[a] : a;
+		uint16_t val = combus->analogBus ? combus->analogBus[id].value : 0;
 		outputBuffer[pos++] = (uint8_t)(val & 0xFFu);
 		outputBuffer[pos++] = (uint8_t)((val >> 8u) & 0xFFu);
 	}
@@ -341,11 +347,13 @@ bool combus_frame_decode( const ComBusFrameCfg& cfg,
  * @param[out] combus      Target ComBus instance to update.
  * @param[in]  inputFrame  Populated frame from combus_frame_decode().
  * @param[in]  caller      Propagation layer forwarded to combus_set_*() guards.
+ * @param[in]  peer        Table of a link between nodes, or nullptr.
  */
 void combus_frame_apply( const ComBusFrameCfg& cfg,
                           ComBus*               combus,
                           const ComBusFrame*    inputFrame,
-                          ChanLayer             caller ) {
+                          ChanLayer             caller,
+                          const ComPeerLink*    peer ) {
 
 		// Analog and digital channels upper clamp
 	const uint8_t nAnalog  = cfg.nAnalog;    // analog channels bus capacity
@@ -378,16 +386,20 @@ void combus_frame_apply( const ComBusFrameCfg& cfg,
 		return (static_cast<uint8_t>(d) & static_cast<uint8_t>(Direction::Downlink)) != 0u;
 	};
 
+		// Link rework 3.1b — on a link between nodes, the table of the link says
+		// which channel a wire position is, and whether this node receives it:
+		// a channel this node sends on the link is never overwritten by its peer.
 	if (combus->analogBus) {
 		for (uint8_t i = 0; i < nAnalogEff; ++i) {
-			if (!receives(combus->analogBus[i].flow)) { continue; }
+			if (peer ? !peer->analogRx[i] : !receives(combus->analogBus[i].flow)) { continue; }
+			const uint8_t id = peer ? peer->analog[i] : i;
 
 				// LY2 — apply is layer-agnostic.  The layer check is
 				// delegated to combus_set_analog() which reads the
 				// channel's declared `layer` from the shared backing
 				// storage.  We write by index without any notion of
 				// layer here.
-			combus_set_analog(*combus, (AnalogComBusID)i, inputFrame->analog[i], caller);
+			combus_set_analog(*combus, (AnalogComBusID)id, inputFrame->analog[i], caller);
 		}
 	}
 
@@ -396,14 +408,16 @@ void combus_frame_apply( const ComBusFrameCfg& cfg,
 
 	if (combus->digitalBus) {
 		for (uint8_t i = 0; i < nDigitalEff; ++i) {
+			const uint8_t id = peer ? peer->digital[i] : i;
+
 				// both_or: never overwritten by a frame.  The received value stays in
 				// the link snapshot and com_rx_update() merges it with this board's
 				// own value each cycle (anti ping-pong, see protocol/both_or.md).
-			if (combus->digitalBus[i].bothOr.enabled) { continue; }
-			if (!receives(combus->digitalBus[i].flow)) { continue; }
+			if (combus->digitalBus[id].bothOr.enabled) { continue; }
+			if (peer ? !peer->digitalRx[i] : !receives(combus->digitalBus[i].flow)) { continue; }
 
 				// LY2 — see analog loop above.
-			combus_set_digital(*combus, (DigitalComBusID)i, inputFrame->digital[i], caller);
+			combus_set_digital(*combus, (DigitalComBusID)id, inputFrame->digital[i], caller);
 		}
 	}
 
