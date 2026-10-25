@@ -129,12 +129,14 @@ static CbProc kRunlevelProcs[] = {
     },
 #endif
       // 2. runlevel — EDGE-TRIGGERED: KEY_ACTIVE transition → STARTING/TURNING_OFF.
+#if defined(HAS_IGNIT_KEY)   // KEY_ACTIVE only exists with an ignition key
     { .name  = "runlevel",
       .inCh  = DigitalComBusID::KEY_ACTIVE,
       .fn    = cb_runlevel_once_fn,
       .cfg   = &kRunlevelCfg,
       .state = &gRunlevelOnceState,
     },
+#endif
 };
 
 // EOF runlevel_config.h

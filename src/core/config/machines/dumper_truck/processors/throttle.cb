@@ -1,0 +1,33 @@
+# throttle.cb — what the throttle and gear chains of a dumper truck compute (SYSTEM)
+#
+# - DRIVE_STATE_BUS: drive state (forward / reverse), side effect of the
+#   throttle direction processor.  Read by the gear, traction and direct-drive
+#   chains, the dashboards.
+# - ESC_RPM_BUS: engine RPM after the gear ratio.  Written by the throttle
+#   chain, then by the SIM_GEAR chain (gear-inv-ratio + rpm-fade).  Read by the
+#   traction chain, the dashboard, and a sound board (engine sound).
+#
+# Computed values, not commands: SYSTEM, uplink on the board that runs the
+# simulation chains (HAS_SIM_PROC); the other boards of the node receive them.  Lives next to what is
+# responsible for it: the processor chains of the type (link rework, recadrage
+# of 2026-10-25; were BASE none in the generic core/system/combus/processors/).
+
+channels:
+
+- id: DRIVE_STATE_BUS
+  infoName: "Drive state (FWD/REV, side-effect of throttle dir proc)"
+  type: analog
+  value: CbusNeutral
+  theme: sim
+  scope: SYSTEM
+  direction: uplink
+  requires: [HAS_SIM_PROC]
+
+- id: ESC_RPM_BUS
+  infoName: "ESC engine RPM (post gear ratio, side-effect of gear chain)"
+  type: analog
+  value: 0
+  theme: sim
+  scope: SYSTEM
+  direction: uplink
+  requires: [HAS_SIM_PROC]

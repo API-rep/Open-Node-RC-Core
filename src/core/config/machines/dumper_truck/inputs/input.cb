@@ -1,8 +1,11 @@
 # input.cb — Raw input acquisition channels (SYSTEM, direction: none)
 #
 # Purpose:
-#   - Defines all raw acquisition channels (sticks + buttons) that input_update()
+#   - Defines the raw acquisition channels (sticks + buttons) that input_update()
 #     writes each loop, before any INPUT/SIM processor conditions them.
+#   - The buttons a remote can send too are BASE commands in combus/
+#     (KEY_BTN, DIRECT_DRIVE_BTN, CRUISE_TOGGLE_BTN; link rework recadrage of
+#     2026-10-25).
 #   - These channels live in firmware ONLY — NEVER transmitted on the wire
 #     (direction: none). They are private to the acquisition layer.
 #   - They are the SOURCE side of the input mapping (PS4_dualshock_map.cpp)
@@ -65,13 +68,6 @@ channels:
 # DIGITAL — buttons (PS4 DigitalInputDevID)
 # -----------------------------------------------------------------------------
 
-- id: DIRECT_DRIVE_BTN
-  infoName: "Direct-drive toggle button (raw, OPTIONS)"
-  type: digital
-  theme: core
-  scope: SYSTEM
-  direction: none
-
 - id: SUBGEAR_SET_BTN
   infoName: "Sub-gear toggle button (raw, SHARE)"
   type: digital
@@ -88,13 +84,6 @@ channels:
 
 - id: GEAR_DOWN_BTN
   infoName: "Gear down button (raw, DOWN_ARROW)"
-  type: digital
-  theme: core
-  scope: SYSTEM
-  direction: none
-
-- id: CRUISE_TOGGLE_BTN
-  infoName: "Cruise toggle button (raw, SQUARE)"
   type: digital
   theme: core
   scope: SYSTEM

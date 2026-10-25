@@ -1,0 +1,41 @@
+# input.cb — states the input chains of a dumper truck compute from the buttons (SYSTEM)
+#
+# The remote sends the intent (the button, BASE downlink); the machine
+# computes the state (link rework, recadrage of 2026-10-25):
+# - KEY_ACTIVE: engine on / off, toggled from KEY_BTN by the
+#   INPUT_KEY_RUNLEVEL chain.  Read by the runlevel chain (key -> STARTING),
+#   main loop, dashboards.
+# - DIRECT_DRIVE: direct-drive mode (raw passthrough, no simulation), toggled
+#   from DIRECT_DRIVE_BTN.  Read by the throttle, steering, dump, gear and
+#   traction chains, the dashboard.
+# - CRUISE_ACTIVE: cruise control engaged, toggled from CRUISE_TOGGLE_BTN.
+#   Read by the throttle chain (cb_cruise).
+#
+# SYSTEM, uplink on the board that runs the input chains (HAS_INPUT_PROC): the
+# other boards of the node receive them by diffusion.  Were BASE none.
+
+channels:
+
+- id: KEY_ACTIVE
+  infoName: "Engine active flag (0=off, 1=on)"
+  type: digital
+  theme: input
+  scope: SYSTEM
+  direction: uplink
+  requires: [HAS_INPUT_PROC, HAS_IGNIT_KEY]
+
+- id: DIRECT_DRIVE
+  infoName: "Direct-drive mode (1=raw passthrough, 0=normal sim)"
+  type: digital
+  theme: input
+  scope: SYSTEM
+  direction: uplink
+  requires: [HAS_INPUT_PROC]
+
+- id: CRUISE_ACTIVE
+  infoName: "Cruise control active (1=normal cruise on, 0=off)"
+  type: digital
+  theme: input
+  scope: SYSTEM
+  direction: uplink
+  requires: [HAS_INPUT_PROC]

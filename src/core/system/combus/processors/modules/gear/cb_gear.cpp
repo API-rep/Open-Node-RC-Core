@@ -253,7 +253,8 @@ void gear_dyn_ramp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/)
  *   rampTimeMs is not modified (gear_dyn_ramp_fn keeps the per-gear value).
  *   On expiry: resets extAccelSteps = 0, restoring normal acceleration.
  *   Sets proc->outValue = 1 while freeze active, 0 otherwise;
- *   runner commits outValue to outCh = GEAR_SHIFTING (machine-local digital).
+ *   outValue is the shifting signal; committed only if the proc has an outCh
+ *   (GEAR_SHIFTING was removed on 2026-10-25: no reader).
  *   Does NOT modify the pipeline `value` (gear passes through unchanged).
  *
  *   Rationale for GEAR chain placement: if the gear chain is disabled,
@@ -262,7 +263,7 @@ void gear_dyn_ramp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/)
  *   cfg    = GearProcCfg*    (profile — upshiftDampMs).
  *   dynCfg = CbRampCfg*      (traction ramp — rampTimeMs frozen here).
  *   state  = GearDampState*  (prevGear + dampEndMs).
- *   outCh  = GEAR_SHIFTING   (machine-local digital).
+ *   outCh  = none (GEAR_SHIFTING removed: no reader).
  *   @todo winter 2026: promote GEAR_SHIFTING to WIRE region so sound node reads directly.
  */
 void gear_upshift_damp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/)
@@ -298,7 +299,7 @@ void gear_upshift_damp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/)
 
     state->prevGear = curGear;
 
-    // Signal via ComBus — runner commits outValue to outCh = GEAR_SHIFTING.
+    // Shifting signal in outValue (no outCh since GEAR_SHIFTING was removed).
     proc->outValue = (state->dampEndMs > 0u) ? 1u : 0u;
 }
 

@@ -529,9 +529,9 @@ static void test_same_memory_object_analog_system_only(void) {
 
 /** Digital: a BASE channel must be the same object in all 3 views. */
 static void test_same_memory_object_digital_base(void) {
-    DigitalComBus& via_full   = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::CRUISE_ACTIVE)];
-    DigitalComBus& via_base = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusBaseID::CRUISE_ACTIVE)];
-    DigitalComBus& via_system  = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusSystemID::CRUISE_ACTIVE)];
+    DigitalComBus& via_full   = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::KEY_BTN)];
+    DigitalComBus& via_base = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusBaseID::KEY_BTN)];
+    DigitalComBus& via_system  = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusSystemID::KEY_BTN)];
 
     TEST_ASSERT_EQUAL_PTR(&via_full, &via_base);
     TEST_ASSERT_EQUAL_PTR(&via_full, &via_system);
@@ -547,8 +547,8 @@ static void test_same_memory_object_digital_base(void) {
 
 /** Digital: a SYSTEM-only channel must be the same object in combus + combus_system. */
 static void test_same_memory_object_digital_system_only(void) {
-    DigitalComBus& via_full  = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::CRUISE_TOGGLE_BTN)];
-    DigitalComBus& via_system = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusSystemID::CRUISE_TOGGLE_BTN)];
+    DigitalComBus& via_full  = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::HORN_BTN)];
+    DigitalComBus& via_system = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusSystemID::HORN_BTN)];
 
     TEST_ASSERT_EQUAL_PTR(&via_full, &via_system);
 
@@ -578,18 +578,16 @@ static void test_id_prefix_alignment_analog(void) {
 /** Prefix alignment: digital counterpart. */
 static void test_id_prefix_alignment_digital(void) {
     // BASE channels.
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DigitalComBusID::CRUISE_ACTIVE),
-                            static_cast<uint8_t>(DigitalComBusBaseID::CRUISE_ACTIVE));
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DigitalComBusID::CRUISE_ACTIVE),
-                            static_cast<uint8_t>(DigitalComBusSystemID::CRUISE_ACTIVE));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DigitalComBusID::KEY_BTN),
+                            static_cast<uint8_t>(DigitalComBusBaseID::KEY_BTN));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DigitalComBusID::KEY_BTN),
+                            static_cast<uint8_t>(DigitalComBusSystemID::KEY_BTN));
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DigitalComBusID::LIGHTS),
                             static_cast<uint8_t>(DigitalComBusBaseID::LIGHTS));
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DigitalComBusID::LIGHTS),
                             static_cast<uint8_t>(DigitalComBusSystemID::LIGHTS));
 
     // SYSTEM-only channels.
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DigitalComBusID::CRUISE_TOGGLE_BTN),
-                            static_cast<uint8_t>(DigitalComBusSystemID::CRUISE_TOGGLE_BTN));
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DigitalComBusID::HORN_BTN),
                             static_cast<uint8_t>(DigitalComBusSystemID::HORN_BTN));
 }

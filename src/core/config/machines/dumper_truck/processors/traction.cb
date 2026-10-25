@@ -1,0 +1,24 @@
+# traction.cb — what the traction chain of a dumper truck computes (SYSTEM)
+#
+# - ESC_SPEED_BUS: wheel speed sent to the ESC, smoothed by the inertia ramp.
+#   Written by the SIM_TRACTION chain (ESC_RPM_BUS -> upshift damp, sub-gear
+#   cap, gear direction -> ESC_SPEED_BUS).
+#   Read by the ESC output (envCfg), the reversing lights (light_interpreter),
+#   the dashboard.
+#
+# A computed value, not a command: SYSTEM, uplink on the board that runs the
+# simulation chains (HAS_SIM_PROC); the other boards of the node receive it (a
+# motor or sound board).
+# Lives next to what is responsible for it: the processor chains of the type
+# (link rework, recadrage of 2026-10-25; was BASE none in combus/).
+
+channels:
+
+- id: ESC_SPEED_BUS
+  infoName: "ESC speed"
+  type: analog
+  value: CbusNeutral
+  scope: SYSTEM
+  theme: sim
+  direction: uplink
+  requires: [HAS_SIM_PROC]

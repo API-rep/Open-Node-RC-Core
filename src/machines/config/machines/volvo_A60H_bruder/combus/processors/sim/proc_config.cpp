@@ -29,7 +29,7 @@
  *******************************************************************************
  */
 
-#ifdef IS_MAINBOARD
+#if defined(HAS_SIM_PROC)     // the board that runs the simulation chains (was IS_MAINBOARD)
 
 #include "proc_config.h"
 
@@ -98,6 +98,6 @@ CbChain kSimChannels[SIM_CH_COUNT] = {
   },
 };
 
-#endif  // IS_MAINBOARD
+#endif  // HAS_SIM_PROC
 
 // EOF proc_config.cpp

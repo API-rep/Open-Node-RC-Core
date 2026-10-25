@@ -1,11 +1,10 @@
-# key.cb — Engine key / runlevel channels (BASE)
+# key.cb — Engine key button (BASE)
 #
 # - KEY_BTN: physical key switch input (TRIANGLE on PS4 in dumper-truck layout).
-#   Written by input module (PS4 controller).
+#   Written by input module (PS4 controller), or sent by a remote.
 #   Read by INPUT_KEY_RUNLEVEL chain (key_on + key_off + runlevel).
-# - KEY_ACTIVE: engine on/off flag (0 = off, 1 = on).
-#   Written by INPUT_KEY_RUNLEVEL chain.
-#   Read by main loop (RunLevel FSM, sleep timeout), dashboard.
+# - The engine state it toggles, KEY_ACTIVE, is computed by the machine:
+#   processors/input.cb (SYSTEM, link rework recadrage of 2026-10-25).
 #
 # Theme: power / runlevel.
 # History: these channels used to be declared in hand-written .inc files of the
@@ -15,7 +14,7 @@
 channels:
 
 # -----------------------------------------------------------------------------
-# DIGITAL — key switch + active flag
+# DIGITAL — key switch
 # -----------------------------------------------------------------------------
 
 - id: KEY_BTN
@@ -24,10 +23,3 @@ channels:
   theme: core
   scope: BASE
   direction: downlink
-
-- id: KEY_ACTIVE
-  infoName: "Engine active flag (0=off, 1=on)"
-  type: digital
-  theme: core
-  scope: BASE
-  direction: none

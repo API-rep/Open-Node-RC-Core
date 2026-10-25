@@ -30,7 +30,7 @@
  *******************************************************************************
  */
 
-#ifdef IS_MAINBOARD
+#if defined(HAS_INPUT_PROC)   // the board that runs the input chains (was IS_MAINBOARD)
 
 #include "proc_config.h"
 
@@ -126,6 +126,6 @@ CbChain kInputChains[INPUT_CH_COUNT] = {
 
 };
 
-#endif  // IS_MAINBOARD
+#endif  // HAS_INPUT_PROC
 
 // EOF proc_config.cpp

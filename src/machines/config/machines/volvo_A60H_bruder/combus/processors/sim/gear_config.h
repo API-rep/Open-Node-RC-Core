@@ -132,8 +132,7 @@ static CbProc kGearProcs[] = {
       .dynCfg    = &gTractionRampDyn,
     },
       // 8. upshift-damp — observer: freeze ramp + signal GEAR_SHIFTING on upshift.
-    { .name    = "upshift-damp",
-      .outCh   = DigitalComBusID::GEAR_SHIFTING,
+    { .name    = "upshift-damp",                 // GEAR_SHIFTING output removed (no reader)
       .fn      = gear_upshift_damp_fn,
       .cfg     = &kGearCfg,
       .dynCfg  = &gTractionRampDyn,
