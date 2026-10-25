@@ -596,7 +596,7 @@ def _run_full_pipeline(out_dir: Path):
         import pytest
         pytest.skip(f"src/ not found at {buildroot}")
 
-    _, files, parsed = discover_and_parse(project_root=buildroot.parent)
+    _, files, parsed = discover_and_parse(project_root=buildroot.parent, machine_type="dumper_truck")
     cb_files = [f for f in files if f.suffix == ".cb"]
     if not cb_files:
         import pytest
@@ -677,14 +677,14 @@ def test_a10_md5_deterministic_across_file_discovery_order(tmp_path: Path):
     out2.mkdir()
 
     # Run 1: normal order.
-    _, _, parsed1 = discover_and_parse(project_root=buildroot.parent)
+    _, _, parsed1 = discover_and_parse(project_root=buildroot.parent, machine_type="dumper_truck")
     result1 = canonize(parsed1)
     sel1 = select_views(result1.canonical_definitions)
     ctx = _ctx(["HAS_FAILSAFE", "HAS_VBAT_FAILSAFE", "HAS_RUNLEVEL_MANAGER"])
     generate(result1.canonical_definitions, ctx, out1)
 
     # Run 2: reverse the file order to stress the parser/canon.
-    _, files2, parsed2 = discover_and_parse(project_root=buildroot.parent)
+    _, files2, parsed2 = discover_and_parse(project_root=buildroot.parent, machine_type="dumper_truck")
     parsed2_reversed = list(reversed(parsed2))
     result2 = canonize(parsed2_reversed)
     sel2 = select_views(result2.canonical_definitions)

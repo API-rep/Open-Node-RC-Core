@@ -98,9 +98,12 @@ def main(argv: list[str] | None = None) -> int:
         f"{len(ctx.defines_with_value)} valued)"
     )
 
-    # 2. Discover + parse.
+    # 2. Discover + parse (machine type of the context, like the hook: without
+    #    type, no machine type profile is loaded — link rework 3.1).
+    from scripts.combus_builder.machine_type import detect_machine_type
     try:
-        _, _, parsed = discover_and_parse(project_root=project_root)
+        _, _, parsed = discover_and_parse(project_root=project_root,
+                                          machine_type=detect_machine_type(ctx))
     except ParseError as e:
         print(f"combus_builder: FATAL: {e}", file=sys.stderr)
         return 1

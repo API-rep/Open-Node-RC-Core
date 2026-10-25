@@ -31,7 +31,7 @@ from scripts.combus_builder.parser import discover_and_parse  # noqa: E402
 
 @pytest.fixture(scope="module")
 def channels():
-    _, _, parsed = discover_and_parse(project_root=REPO_ROOT)
+    _, _, parsed = discover_and_parse(project_root=REPO_ROOT, machine_type="dumper_truck")
     return {ch.id: ch for ch in canonize(parsed).canonical_definitions}
 
 

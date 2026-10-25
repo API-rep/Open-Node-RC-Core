@@ -1043,7 +1043,44 @@ def generate(
     # caller; None keeps the md5.py placeholder (tests, ad-hoc calls).
     hashes = _emit_md5_files(sel, out_dir, filename_prefix, project_version)
     _print_set_hashes(sel, hashes, filename_prefix)
+    _emit_peer_links(active, ctx, out_dir, filename_prefix)
     return sel
+
+
+def _emit_peer_links(channels: list[ChannelDefinition], ctx: BuildContext, out_dir: Path,
+                     filename_prefix: str) -> None:
+    """Link rework 3.1a — the links with the peer types of this node (combus_peer_links.h).
+
+    Always written (empty without peer), so that the build has a fixed set of
+    artefacts.  One build-log line per link: its MD5 and its size.
+    """
+    from .links import LinkError, compute_link_set, link_md5, load_type_base_channels, \
+        peer_types, render_peer_links_header
+    from .machine_type import detect_machine_type
+
+    links = []
+    peers = peer_types(ctx)
+    if peers:
+        local_type = detect_machine_type(ctx)
+        if local_type is None:
+            raise GeneratorError(f"peer types {peers} declared, but no MACHINE_TYPE_* flag for this node")
+        try:
+            for peer in peers:
+                link = compute_link_set(local_type, channels, peer,
+                                        load_type_base_channels(ctx.buildroot, peer))
+                for warning in link.warnings:
+                    print(f"[combus_builder] link {peer}: {warning}")
+                n_analog = sum(1 for c in link.channels if c.type == "analog")
+                n_digital = sum(1 for c in link.channels if c.type == "digital")
+                board = f"  [{filename_prefix}]" if filename_prefix else ""
+                print(f"[combus_builder] set LINK {peer}  md5={link_md5(link)}  A{n_analog}+D{n_digital}{board}")
+                links.append(link)
+        except LinkError as e:
+            raise GeneratorError(f"link with a peer type: {e}") from e
+
+    ids_header = f"{_file_base('combus', filename_prefix)}_ids.h"
+    _safe_write(out_dir / f"{_file_base('combus_peer_links', filename_prefix)}.h",
+                render_peer_links_header(links, ids_header))
 
 
 # =============================================================================

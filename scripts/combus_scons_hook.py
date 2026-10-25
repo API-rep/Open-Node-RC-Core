@@ -118,6 +118,8 @@ EXPECTED_ARTIFACTS = (
     "combus_base_md5.h",
     "combus_md5.h",
     "combus_wire_common.h",
+    # Links between nodes (link rework 3.1): always written, empty without peer.
+    "combus_peer_links.h",
 )
 
 
@@ -228,6 +230,7 @@ def _expected_artifacts_for_node(
             f"combus_{prefix}_md5.h",
             f"combus_system_{prefix}_md5.h",
             f"combus_base_{prefix}_md5.h",
+            f"combus_peer_links_{prefix}.h",
         ])
     return artifacts
 
@@ -1088,6 +1091,7 @@ def _register_deferred_task(env) -> None:
                     str(out_dir / f"combus_{prefix}_md5.h"),
                     str(out_dir / f"combus_system_{prefix}_md5.h"),
                     str(out_dir / f"combus_base_{prefix}_md5.h"),
+                    str(out_dir / f"combus_peer_links_{prefix}.h"),
                 ])
     except Exception:
         # If node detection fails at registration time, fall back to

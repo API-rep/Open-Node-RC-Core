@@ -254,6 +254,40 @@ nœud (`is_connected_board()`, flags `INTER_NODE_FLAGS`), `downlink` ailleurs ;
 nœud, plusieurs cartes connectées (appelé par le hook). Le drapeau
 `passthrough` du canon n'entre pas dans le MD5.
 
+### Liaisons entre nœuds (link rework 3.1a)
+
+Un nœud déclare les **types** qu'il accepte comme pairs : `-D COMBUS_PEER_<TYPE>`
+(`links.peer_types()`). Pour chaque pair, `links.py` :
+
+- lit les channels `BASE` du type pair **à part** (`load_type_base_channels()`,
+  la « seconde lecture ») : ils n'entrent jamais dans le ComBus local ;
+- calcule l'**ensemble de la liaison** (`compute_link_set()`) : les channels
+  `BASE` (next) de même nom dans les deux types, en ne gardant que ceux qui
+  circulent (un côté émet, l'autre reçoit ; un `downlink_pt` émet, il relaie) ;
+  deux récepteurs : avertissement « channel mort », écarté ; deux émetteurs :
+  erreur sauf `*_or` ; deux relais face à face : erreur jusqu'au contrôle du
+  graphe (3.2) ; même nom avec un autre type ou une autre valeur par défaut :
+  erreur ;
+- trie la **trame commune** sur ce que les deux types partagent : analogiques
+  puis numériques, stables avant candidats, puis le nom (jamais le thème) ;
+- calcule un **MD5 symétrique** (`link_md5()`) : le même vu des deux côtés,
+  avec et sans les candidats ;
+- écrit `combus_peer_links.h` (toujours, vide sans pair) : par type pair, le
+  MD5, les nombres de channels, la **table** position sur le fil → ID local
+  (`kAnalog[]`, `kDigital[]`) et ce que ce nœud reçoit (`kAnalogRx[]`,
+  `kDigitalRx[]`).
+
+Le journal du build affiche une ligne par liaison :
+`[combus_builder] set LINK <type>  md5=<32 hex>  A2+D2`. Les types d'essai
+`test_tractor` et `test_trailer` (`src/core/config/machines/`, channels
+préfixés `TEST_`) servent aux tests (`test_peer_links.py`).
+
+**Filtre par type de machine** : avec un type, on charge le cœur et le profil
+de ce type ; **sans type, aucun profil de type** (depuis 3.1, 2026-10-25 : des
+types pairs partagent volontairement des noms, comme `BRAKE_BUS` chez un
+tracteur et sa remorque, et entreraient en conflit). Un nœud sans type lit les
+machines comme pairs seulement.
+
 ## 7. MD5
 
 - Une empreinte par vue : MD5 d'un JSON canonique (clés triées, séparateurs
@@ -467,6 +501,8 @@ Fichiers de `scripts/combus_builder/tests/` :
 | `test_generator.py` | vues, IDs, rendu C++, compilation |
 | `test_md5.py` | empreintes, canonisation `ONE_WAY` |
 | `test_candidates.py` | channels candidats, MD5 stable et next, champ `DEV` (link rework 2.2a) |
+| `test_peer_links.py` | liaisons entre nœuds : ensemble, ordre, tables, MD5 symétrique (link rework 3.1a) |
+| `test_node_direction.py` | sens dans le nœud, `downlink_pt` (link rework 2.4) |
 | `test_hook.py` | fonctions utilitaires du hook SCons (sans SCons) |
 | `test_stress.py` | tests de propriétés sur des `.cb` aléatoires (voir plus bas) |
 | `_cpp_compiler.py` | recherche d'un compilateur C++ (aide, pas un test) |

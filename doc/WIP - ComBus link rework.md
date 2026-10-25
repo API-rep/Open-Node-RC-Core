@@ -102,6 +102,15 @@ La table de correspondance entrée vers channel (`inputs_map`) devient elle auss
   4. **pas de boucle** : pour chaque channel, les liaisons forment un arbre dont la racine est l'émetteur (contrôle au build ; à l'exécution, seulement « jamais de retour vers le lien d'origine ») ; vaut aussi pour `both_or` (en boucle à 3 nœuds, l'émission sans écho ne suffit plus) ;
   5. `both_pt` interdit (plusieurs sources par nature) ; `both` limité à deux nœuds directement reliés ; `both_or` est le seul channel à plusieurs sources relayable, en arbre ;
   6. plusieurs cartes d'un nœud connectées à d'autres nœuds : confrontation des sens dans le nœud pour vérifier que le passthrough respecte ces règles (avec les ensembles par liaison, 3.1) ; d'ici là, le build s'arrête avec une erreur claire.
+- **Règles de 3.1** (discutées le 2026-10-25) :
+  - **pairs** : une série de flags `-D` sur un nœud, un par **type** compatible (jamais une machine précise), par exemple `-D COMBUS_PEER_DUMPER_TRAILER` ; le nom suit le dossier `core/config/machines/<type>/` ;
+  - **ensemble d'une liaison calculé, jamais écrit à la main** : les channels `BASE` (next) **de même nom** dans les deux types, ne gardant que ceux qui circulent (un côté émet, l'autre reçoit) ; deux `downlink` : avertissement « channel mort » ; deux `uplink` : erreur sauf `*_or` (numériques seulement) ; fichier généré dans le dossier de build (la carte de la liaison), jamais commité, MD5 et taille affichés au build ;
+  - **trame commune triée canoniquement** : clé de tri limitée à ce que les deux types partagent (type analogique / numérique, stable avant candidat, nom ; **pas le thème**, propre à chaque profil) ; chaque nœud a sa **table de correspondance** de son ComBus vers la trame commune (les tables reportées de 2.3) ;
+  - **même nom = même type et même valeur par défaut** dans les deux profils, sinon erreur de build ;
+  - **MD5 de la liaison symétrique** : calculé sur l'ensemble commun avec le sens vu de chacun des deux types, rangés dans un ordre fixe, pour que les deux nœuds compilés séparément obtiennent le même ;
+  - **tous les pairs branchés à la fois** : le builder assemble le graphe des types déclarés et vérifie, channel par channel, un seul émetteur, des liaisons en arbre et les `_pt` des nœuds qui relaient ;
+  - **un type au plus une fois dans un ensemble de nœuds connectés** (décision du 2026-10-25) : le graphe des types est alors le graphe réel.
+- **Plus tard : un même type plusieurs fois** (deux remorques, double traction). Une remorque attelée à une autre est un nœud comme un autre, avec deux liaisons, exactement comme le tracteur ; la mise en série (la première remorque relaie pour la seconde) garde chaque liaison point à point. Mais deux exemplaires d'un même type sont deux émetteurs de ce que ce type émet : seuls les `*_or` passent ; il faudra raisonner sur les instances, plus sur les types. Piste : un mode « twin » / « ghost », deux composants qui ne forment qu'une entité et ne communiquent que comme un seul (double traction). À reprendre avec l'identité des pairs.
 
 ### 2.4 Handshake et état du lien
 
@@ -264,6 +273,7 @@ Chaque étape se vérifie avec le test de boucle (loopback) puis un build comple
 
 | Étape | Livrable | Preuve |
 |---|---|---|
+| 3.1a | Builder : pairs par `-D COMBUS_PEER_<TYPE>`, seconde lecture du type pair (`links.py`), ensemble de la liaison calculé (channels qui circulent), trame commune triée sans le thème, MD5 symétrique (stable et next), `combus_peer_links.h` (tables position sur le fil → ID local, réception), ligne `set LINK` au build ; types d'essai `test_tractor` / `test_trailer` (channels `TEST_`) ; **règle du filtre changée** : sans type de machine, aucun profil de type (les pairs partagent leurs noms) | pytest 857 sur 857 (`test_peer_links.py` : 15 tests, lignes 1 à 13 du tableau validé) ; builds Volvo et `test_node_mainboard` OK, fichiers générés et MD5 identiques, seul `combus_peer_links.h` s'ajoute (vide : aucun pair) |
 | 3.1 | Seconde lecture des profils compatibles ; ensembles réduits ; étiquette d'égal à égal ; **tables de correspondance** (position sur le fil vers channel local, reportées de 2.3), utilisées par TX et RX | tables générées pour un couple tracteur / remorque d'essai |
 | 3.2 | Passthrough unifié (`_pt`) et ses contrôles (§2.3 : un seul émetteur, arbre par channel, `both_pt` interdit, confrontation des ensembles par liaison ; la fusion `both_or` sans retour vers l'origine est faite, 1.1b) | frein relayé ; failsafe partagé qui retombe |
 | 3.3 | Couplage : `ComCoupling`, activation `ON_COUPLING` d'après un channel déclencheur (`.cb` conditionnel du dispositif, par exemple un lecteur RFID) | un lien s'active au couplage et se suspend au découplage |
@@ -321,4 +331,4 @@ D'ici là, chaque règle est validée par le propriétaire sur un exemple avant 
 - Channels critiques et unicité des types (propositions du §2.5).
 - ESP-NOW : nombre maximal de pairs de l'ESP32, charge utile exacte (documentation ESP-IDF).
 - Un module qui fait de sa carte la carte mère : ressources minimales à vérifier au démarrage.
-- Hors périmètre pour l'instant : deux nœuds de même type en égal à égal.
+- Hors périmètre pour l'instant : deux nœuds de même type en égal à égal, et un même type plusieurs fois dans un ensemble de nœuds (§2.3 « Plus tard » : mise en série, mode « twin »).

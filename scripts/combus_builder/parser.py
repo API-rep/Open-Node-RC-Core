@@ -177,12 +177,12 @@ def discover_config_files(
     # ND8: machine-type filter. Done AFTER the walk so we keep a single
     # implementation (this is the only place where the full set of files
     # is materialised). The helper is pure and unit-tested separately.
-    if machine_type is not None:
-        # Local import to keep parser.py importable even if the
-        # machine_type module is in flux (the unit tests can import
-        # parser.py without triggering the machine_type dependency).
-        from .machine_type import filter_files_by_machine_type
-        found = filter_files_by_machine_type(found, machine_type)
+    # Always filtered (link rework 3.1): without machine type, no machine
+    # type profile is kept either (see filter_files_by_machine_type).
+    # Local import to keep parser.py importable even if the machine_type
+    # module is in flux.
+    from .machine_type import filter_files_by_machine_type
+    found = filter_files_by_machine_type(found, machine_type)
 
     return found
 

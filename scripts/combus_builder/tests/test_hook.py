@@ -84,17 +84,18 @@ def test_skip_not_requested_when_unset(hook, monkeypatch):
 # Expected artefacts
 # =============================================================================
 
-NINE = {
+TEN = {
     "combus.cpp", "combus.h", "combus_ids.h",
     "combus_system_ids.h", "combus_base_ids.h",
     "combus_system_md5.h", "combus_base_md5.h", "combus_md5.h",
     "combus_wire_common.h",
+    "combus_peer_links.h",            # link rework 3.1
 }
 
 
-def test_expected_artifacts_are_the_nine_files(hook):
-    assert set(hook.EXPECTED_ARTIFACTS) == NINE
-    assert len(hook.EXPECTED_ARTIFACTS) == 9
+def test_expected_artifacts_are_the_ten_files(hook):
+    assert set(hook.EXPECTED_ARTIFACTS) == TEN
+    assert len(hook.EXPECTED_ARTIFACTS) == 10
 
 
 def test_expected_artifacts_single_board_is_unchanged(hook):
@@ -107,8 +108,8 @@ def test_expected_artifacts_node_prefixes_only_the_other_boards(hook):
               ("soundboard", "volvo_soundboard")]
     got = hook._expected_artifacts_for_node(
         boards, is_node=True, current_env="volvo_mainboard")
-    # 9 unprefixed (current board) + 8 prefixed for the one other board.
-    assert len(got) == 9 + 8
+    # 10 unprefixed (current board) + 9 prefixed for the one other board.
+    assert len(got) == 10 + 9
     assert set(hook.EXPECTED_ARTIFACTS) <= set(got)
     prefix = "soundboard"
     assert {
@@ -323,7 +324,7 @@ def _node_staging(hook, tmp_path, current_env="test_node_mainboard", project_ver
         return BuildContext(buildroot=REPO_ROOT / "src", defines=frozenset(flags),
                             defines_with_value={}, cppdefines_source="override")
 
-    _, _, parsed = discover_and_parse(project_root=REPO_ROOT)
+    _, _, parsed = discover_and_parse(project_root=REPO_ROOT, machine_type="dumper_truck")
     node = NodeContext(
         mother_env="test_node",
         boards={None: ctx(ROOT_FLAGS), "mainboard": ctx(MAIN_FLAGS), "extboard": ctx(EXT_FLAGS)},
@@ -354,7 +355,7 @@ def _node_staging(hook, tmp_path, current_env="test_node_mainboard", project_ver
 def test_node_mode_produces_every_expected_artefact(hook, tmp_path, current, other):
     staging, boards = _node_staging(hook, tmp_path, current)
     expected = hook._expected_artifacts_for_node(boards, is_node=True, current_env=current)
-    assert len(expected) == 9 + 8
+    assert len(expected) == 10 + 9
     missing = [n for n in expected if not (staging / n).is_file()]
     assert not missing, f"files not generated: {missing}"
     # Nothing prefixed for the current board, nothing unexpected overall.

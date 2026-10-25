@@ -9,7 +9,8 @@ Coverage:
       * Two MACHINE_TYPE_* flags -> AmbiguousMachineTypeError
       * Valued defines (e.g. MACHINE_TYPE_X=1) are also detected
   - machine_type.filter_files_by_machine_type():
-      * None (no machine type) -> keep all files (legacy behaviour)
+      * None (no machine type) -> keep the generic files, exclude every
+        machine type profile (link rework 3.1: peer types share names)
       * "dumper_truck" -> keep dumper_truck/, exclude excavator/ and loader/
       * Generic .cb files (outside core/config/machines/) always kept
       * Order of input is preserved
@@ -227,15 +228,15 @@ def test_is_machine_type_path_case_sensitive():
 # 3. filter_files_by_machine_type()
 # =============================================================================
 
-def test_filter_none_keeps_everything():
-    """machine_type=None -> no exclusion, legacy behaviour preserved."""
+def test_filter_none_keeps_only_generic_files():
+    """machine_type=None -> no machine type profile (link rework 3.1: peer types share names)."""
     files = [
         _parts("src", "core", "config", "machines", "dumper_truck", "a.cb"),
         _parts("src", "core", "config", "machines", "excavator", "b.cb"),
         _parts("src", "core", "system", "failsafe", "failsafe.cb"),
     ]
     out = filter_files_by_machine_type(files, None)
-    assert out == files
+    assert out == [files[2]]
 
 
 def test_filter_dumper_truck_excludes_excavator():
@@ -317,8 +318,8 @@ def test_discover_config_files_with_machine_type_excludes_others(tmp_path):
     assert not any("loader" in s for s in found_strs)
 
 
-def test_discover_config_files_no_machine_type_keeps_everything(tmp_path):
-    """Legacy behaviour: no machine_type -> all .cb files kept."""
+def test_discover_config_files_no_machine_type_keeps_no_type_profile(tmp_path):
+    """No machine_type -> no machine type profile (link rework 3.1)."""
     src = tmp_path / "src"
     (src / "core" / "config" / "machines" / "dumper_truck").mkdir(parents=True)
     (src / "core" / "config" / "machines" / "excavator").mkdir(parents=True)
@@ -328,7 +329,7 @@ def test_discover_config_files_no_machine_type_keeps_everything(tmp_path):
               "channels: []\n")
 
     found = discover_config_files(src)  # default: no machine_type
-    assert len(found) == 2
+    assert found == []
 
 
 def test_discover_and_parse_forwards_machine_type(tmp_path):
@@ -361,9 +362,9 @@ def test_discover_and_parse_backward_compatible_no_machine_type(tmp_path):
     _write_cb(src / "core" / "config" / "machines" / "excavator" / "b.cb",
               "channels: []\n")
 
-    # No machine_type -> both .cb files are kept.
+    # No machine_type -> no machine type profile (link rework 3.1).
     _buildroot, _files, parsed = discover_and_parse(project_root=tmp_path)
-    assert len(parsed) == 2
+    assert len(parsed) == 0
 
 
 # =============================================================================
@@ -381,9 +382,10 @@ def test_filter_does_not_change_nd2_diffusion_behaviour():
       - soundboard sees the synthetic downlink (ND2 rule 5).
 
     We verify that:
-      - Without filter (machine_type=None): diffusion still works.
-      - With filter (machine_type='dumper_truck'): diffusion still works
-        and the synthetic copy is present on soundboard.
+      - With filter (machine_type='dumper_truck'): diffusion works and
+        the synthetic copy is present on soundboard.
+      - Without machine type (None): no machine type profile is loaded
+        (link rework 3.1), so BAT_LOW is absent on both boards.
     """
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
@@ -427,21 +429,16 @@ def test_filter_does_not_change_nd2_diffusion_behaviour():
             )
             results[mt_label] = diffuse_system_channels(parsed, node)
 
-        # Both runs must produce the same per-board picture:
+        # Without machine type: no machine type profile, BAT_LOW absent.
         for board_id in ("mainboard", "soundboard"):
-            no_f = _decls_by_id(results["no_filter"][board_id])
-            with_f = _decls_by_id(results["filter_dumper_truck"][board_id])
-            assert no_f == with_f, (
-                f"ND2 diffusion result changed with the filter on board "
-                f"{board_id!r}: without={no_f} with={with_f}"
-            )
+            assert "BAT_LOW" not in _decls_by_id(results["no_filter"][board_id])
 
-        # And specifically: BAT_LOW on mainboard is uplink, on
-        # soundboard is downlink (ND2 rule 5).
-        main_no = _decls_by_id(results["no_filter"]["mainboard"])
+        # With the filter: BAT_LOW on mainboard is uplink, on soundboard
+        # is downlink (ND2 rule 5).
+        main_with = _decls_by_id(results["filter_dumper_truck"]["mainboard"])
         snd_with = _decls_by_id(results["filter_dumper_truck"]["soundboard"])
-        assert main_no.get("BAT_LOW") == "uplink", (
-            f"mainboard BAT_LOW expected uplink, got {main_no.get('BAT_LOW')!r}"
+        assert main_with.get("BAT_LOW") == "uplink", (
+            f"mainboard BAT_LOW expected uplink, got {main_with.get('BAT_LOW')!r}"
         )
         assert snd_with.get("BAT_LOW") == "downlink", (
             f"soundboard BAT_LOW expected downlink (ND2 rule 5), "

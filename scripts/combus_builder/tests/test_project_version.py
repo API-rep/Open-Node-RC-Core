@@ -89,7 +89,7 @@ FLAGS = frozenset({
 
 
 def _generate(tmp_path: Path, **kwargs) -> str:
-    _, _, parsed = discover_and_parse(project_root=REPO_ROOT)
+    _, _, parsed = discover_and_parse(project_root=REPO_ROOT, machine_type="dumper_truck")
     ctx = BuildContext(
         buildroot=REPO_ROOT / "src", defines=FLAGS,
         defines_with_value={}, cppdefines_source="override",

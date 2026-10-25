@@ -1,0 +1,50 @@
+# test_links.cb — BASE profile of the TEST tractor type (link rework, step 3.1)
+#
+# A fictitious machine type used only by the tests of the links between
+# nodes (pytest, and the Unity test env).  Never loaded by a real machine:
+# the machine type filter keeps only the active type (MACHINE_TYPE_TEST_TRACTOR).
+# Names are prefixed TEST_ so that an env without machine type (which loads
+# every type) cannot clash with a real profile.
+#
+# Directions are those of the tractor (node view):
+# - TEST_BRAKE_BUS, TEST_LIGHTS: received from the remote, relayed to the trailer;
+# - TEST_THROTTLE_BUS: received from the remote, not relayed;
+# - TEST_TILT_ANGLE: received from the trailer;
+# - TEST_COUPLED_FAULT: fault shared by the whole convoy (OR merge).
+
+channels:
+
+- id: TEST_BRAKE_BUS
+  infoName: "Test brake"
+  type: analog
+  scope: BASE
+  theme: core
+  direction: downlink_pt
+
+- id: TEST_THROTTLE_BUS
+  infoName: "Test throttle"
+  type: analog
+  scope: BASE
+  theme: core
+  direction: downlink
+
+- id: TEST_TILT_ANGLE
+  infoName: "Test trailer tilt angle"
+  type: analog
+  scope: BASE
+  theme: core
+  direction: downlink
+
+- id: TEST_LIGHTS
+  infoName: "Test lights"
+  type: digital
+  scope: BASE
+  theme: light
+  direction: downlink_pt
+
+- id: TEST_COUPLED_FAULT
+  infoName: "Test convoy fault"
+  type: digital
+  scope: BASE
+  theme: failsafe
+  direction: both_or

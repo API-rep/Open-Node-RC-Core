@@ -79,6 +79,10 @@ MACHINE_TYPE_FLAGS: frozenset[str] = frozenset({
     "MACHINE_TYPE_DUMPER_TRUCK",
     "MACHINE_TYPE_EXCAVATOR",
     "MACHINE_TYPE_LOADER",
+    # Fictitious types of the tests of the links between nodes (link rework
+    # 3.1): listed so that a real machine excludes them.
+    "MACHINE_TYPE_TEST_TRACTOR",
+    "MACHINE_TYPE_TEST_TRAILER",
 })
 
 
@@ -214,12 +218,13 @@ def filter_files_by_machine_type(files, machine_type: str | None) -> list:
     given active machine type.
 
     Behaviour:
-      - machine_type is None (non-machine build): KEEP every file
-        (no exclusion — the discovery layer sees .cb files that are
-        not under core/config/machines/ anyway, plus a few
-        core/config/machines/*/ files which are harmless outside a
-        machine build because they are guarded by MACHINE_TYPE_* in
-        C++ and the generator still validates them).
+      - machine_type is None (non-machine build, e.g. a remote): KEEP the
+        generic files, EXCLUDE every machine type profile.  Link rework
+        3.1: the profiles of node types that are peers share channel names
+        on purpose (BRAKE_BUS in a tractor and in its trailer); loaded
+        together they would clash.  A node without type reads the machine
+        types as peers only (links.load_type_base_channels), never in its
+        own ComBus.  Before 2026-10-25 every file was kept.
       - machine_type is a known directory segment (e.g. "dumper_truck"):
         KEEP every file EXCEPT those under
         core/config/machines/<other_type>/. Generic files
@@ -237,11 +242,10 @@ def filter_files_by_machine_type(files, machine_type: str | None) -> list:
     """
     files = list(files)
     if machine_type is None:
-        # No machine type active: no exclusion. This is the legacy
-        # behaviour (the bug we are fixing never triggered because the
-        # only consumer was the machines env, and that env's
-        # MACHINE_TYPE_DUMPER_TRUCK was always defined).
-        return list(files)
+        # No machine type active: no machine type profile at all (link
+        # rework 3.1, see the docstring).
+        all_dirs = [_flag_to_dir_segment(f) for f in MACHINE_TYPE_FLAGS]
+        return [p for p in files if not is_machine_type_path(p, all_dirs)]
 
     # Active machine type known: exclude paths under
     # core/config/machines/<X>/ for X != machine_type.

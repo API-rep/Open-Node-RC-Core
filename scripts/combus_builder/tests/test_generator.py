@@ -1040,9 +1040,11 @@ def test_generate_does_not_emit_system_base_h_cpp(tmp_path):
     assert (tmp_path / "combus_base_md5.h").is_file()
     assert (tmp_path / "combus_md5.h").is_file()
     assert (tmp_path / "combus_wire_common.h").is_file()
-    # Total: 9 files
+    # Links between nodes (link rework 3.1): always written, empty without peer
+    assert (tmp_path / "combus_peer_links.h").is_file()
+    # Total: 10 files
     all_files = sorted(p.name for p in tmp_path.iterdir())
-    assert len(all_files) == 9, f"Expected 9 files, got {len(all_files)}: {all_files}"
+    assert len(all_files) == 10, f"Expected 10 files, got {len(all_files)}: {all_files}"
 
 
 def test_md5_payload_built_from_view_model_not_files(tmp_path):
@@ -1209,7 +1211,7 @@ def test_generator_against_real_repo_files():
         import pytest
         pytest.skip(f"src/ not found at {buildroot}")
 
-    _, files, parsed = discover_and_parse(project_root=buildroot.parent)
+    _, files, parsed = discover_and_parse(project_root=buildroot.parent, machine_type="dumper_truck")
     cb_files = [f for f in files if f.suffix == ".cb"]
     if not cb_files:
         import pytest
