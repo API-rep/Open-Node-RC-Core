@@ -13,11 +13,11 @@ channels:
   type: digital
   theme: core
   scope: BASE
-  direction: downlink
+  direction: downlink_pt
 
 - id: CRUISE_TOGGLE_BTN
   infoName: "Cruise toggle button (raw, SQUARE)"
   type: digital
   theme: core
   scope: BASE
-  direction: downlink
+  direction: downlink_pt

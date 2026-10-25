@@ -22,4 +22,4 @@ channels:
   type: digital
   theme: core
   scope: BASE
-  direction: downlink
+  direction: downlink_pt

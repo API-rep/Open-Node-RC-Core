@@ -123,6 +123,7 @@ le channel.
 | `downlink_or` | comme `downlink`, avec fusion OR |
 | `both_or` | comme `both`, avec fusion OR |
 | `none` | pas de circulation |
+| `downlink_pt` | `BASE` seulement : comme `downlink`, et **redistribué dans le nœud** (link rework 2.4) |
 
 **Variantes `*_or` (fusion OR).** Les trois variantes `uplink_or`,
 `downlink_or` et `both_or` ajoutent une politique de fusion OR logique au sens
@@ -143,6 +144,26 @@ sens, le résultat est le OR de leurs valeurs au lieu du dernier écrit.
   (anti ping-pong). Détail : `src/core/system/combus/protocol/both_or.md`.
 - **`uplink_or` et `downlink_or` restent déclaratifs** : le canon valide et
   mémorise la variante, sans traitement OR côté C++ (voir « Non implémenté »).
+
+**Sens d'un `BASE` dans le nœud (link rework 2.4).** Le sens d'un channel
+`BASE` est celui **du nœud** (entre nœuds). Dans le nœud, sa source est la
+carte qui établit la connexion avec un autre nœud (un flag de
+`INTER_NODE_FLAGS` du builder, aujourd'hui `INPUT_PS4_DS4_BT`). Le builder en
+déduit, pour chaque carte, un second sens, `nodeDirection`, utilisé sur les
+liens intra-nœud :
+
+| Déclaré (`BASE`) | Carte connectée | Autres cartes |
+|---|---|---|
+| `downlink_pt` | `uplink` (redistribue) | `downlink` (reçoivent) |
+| `downlink` | `none` (s'en sert seule) | `none` |
+| `uplink`, `both`, `none` | `none` | `none` |
+| `both_or` | `both_or` (fusion de 1.1b) | `both_or` |
+
+`both_pt` est refusé (plusieurs sources par nature), `_pt` est refusé sur
+`SYSTEM` (déjà diffusé). Deux cartes d'un nœud connectées à d'autres nœuds :
+erreur de build (confrontation prévue au chantier 3.1). `_pt` ne change pas
+le MD5. À la réception, un channel n'est écrit que si son sens pour le lien
+comprend `downlink`.
 
 **Diffusion entre boards (SYSTEM).** Il suffit de déclarer le channel sur une
 board : les autres boards du nœud reçoivent automatiquement le channel avec

@@ -89,3 +89,10 @@ def test_computed_states_are_produced_by_their_processing_board(channels, cid, r
     """Only the board that runs the chain declares the channel uplink: the others get it by diffusion."""
     assert set(channels[cid].requires) == requires
     assert channels[cid].theme == theme
+
+
+def test_base_downlink_commands_are_redistributed_in_the_node(channels):
+    """Link rework 2.4: every BASE command reaches every board of the node (downlink_pt)."""
+    plain = sorted(cid for cid, ch in channels.items()
+                   if ch.scope == "BASE" and _dir(ch) == "downlink" and not ch.passthrough)
+    assert plain == [], f"BASE downlink without _pt: {plain}"

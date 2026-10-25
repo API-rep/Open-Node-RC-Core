@@ -93,13 +93,17 @@ compteur part de 0 (`generator.py:362-386`).
 ## 5. Décodage et application
 
 - `combus_frame_decode` (`combus_frame.cpp:236-302`) : vérifie `SOF`, la
-  longueur, le CRC. Refuse une trame dont `nAnalog` dépasse la capacité
-  (`cfg.nAnalog`). Les bits numériques en excès sont ignorés sans erreur.
+  longueur, le CRC. Refuse une trame dont `nAnalog` ou `nDigital` dépasse la
+  capacité (`cfg`, chantier 2.3) ; ne déballe que les `nDigital` bits annoncés.
   Le décodage ne connaît pas les layers.
 - `combus_frame_apply` (`combus_frame.cpp:338-395`) : écrit les canaux par
   indice via `combus_set_analog` / `combus_set_digital`, et met à jour
   `combus->lastFrameMs`. Le contrôle de layer est fait par ces fonctions
-  (`_layer_ok`, `combus_access.cpp:28-54`).
+  (`_layer_ok`, `combus_access.cpp:28-54`). **Filtre par sens (chantier 2.4)** :
+  un channel n'est écrit que si son sens pour le lien comprend `Downlink` :
+  `direction` sur un lien inter-nœud (identité `BASE`), `nodeDirection` sur un
+  lien intra-nœud. Un channel que la carte produit (`uplink`) n'est donc jamais
+  écrasé par son pair ; les `both_or` restent traités par la fusion de 1.1b.
 - En production, `combus_frame_apply` n'a qu'un appelant : `tryDecode` dans
   `combus_rx.cpp`, appelé automatiquement quand le lien a une cible
   (`st.target != nullptr`), avec l'identité d'écriture du lien (`st.writeLayer`,
@@ -289,9 +293,9 @@ Un bout bidirectionnel n'émet **aucune trame de données** tant que son contrat
   reçoivent (`src/machines/init/com/combus_uart_init.cpp` lui passe le ComBus du
   nœud) ; un lien TX seul n'en a pas.
 - `combus_rx_update` est appelé par `com_rx_update` en tête de chaque tour de la
-  machine. Sans filtrage par `direction` (chantier 2.4), un lien qui reçoit écrase
-  les channels que son pair lui envoie, y compris `RUNLEVEL` et `FAILSAFE` pour une
-  vue `SYSTEM`.
+  machine. Depuis le chantier 2.4, un lien qui reçoit n'écrit que les channels
+  que la carte reçoit (filtre par sens) : un `RUNLEVEL` produit ici n'est plus
+  écrasé par celui que renvoie le pair.
 
 > À VÉRIFIER : l'en-tête `combus_protocol.h:169-173` annonce que
 > `combus_protocol_init` « return » pour un layer `UNDEFINED` ou `BOARD`. Le

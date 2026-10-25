@@ -97,6 +97,14 @@ enum class ChanLayer : uint8_t {
  *   used by `_layer_ok()` for write protection (audit A6 confirmed it is
  *   functionally required). `direction` is a *data* field, not an
  *   access-control field.
+ *
+ *   Link rework 2.4: each channel has two directions.  `direction` is the
+ *   direction seen by the node (the .cb one, or the diffused one for a
+ *   SYSTEM channel), used on an inter-node link; `nodeDirection` is the
+ *   direction inside the node, used on an intra-node link (the builder
+ *   computes it for a BASE channel from the board that connects to another
+ *   node).  A received frame only writes a channel whose direction for the
+ *   link includes Downlink.
  */
 enum class Direction : uint8_t {
     None     = 0,
@@ -118,6 +126,7 @@ typedef struct {
   uint16_t    value;                               ///< Current channel value (0‑65535)
   ChanLayer   layer       = ChanLayer::BOARD;     ///< Propagation layer — see ChanLayer
   Direction   direction   = Direction::None;       ///< Wire direction — added by A6.1
+  Direction   nodeDirection = Direction::None;     ///< Direction inside the node (intra-node links) — link rework 2.4
 } AnalogComBus;
 
 /**
@@ -128,6 +137,7 @@ typedef struct {
   bool        value;                               ///< Current channel state (true/false)
   ChanLayer   layer       = ChanLayer::BOARD;     ///< Propagation layer — see ChanLayer
   Direction   direction   = Direction::None;       ///< Wire direction — added by A6.1
+  Direction   nodeDirection = Direction::None;     ///< Direction inside the node (intra-node links) — link rework 2.4
   // both_or (anti ping-pong, see protocol/both_or.md): `value` is the OR of
   // this board's own value and of the values received from the live links.
   // A received frame never overwrites the slot; com_rx_update() refreshes

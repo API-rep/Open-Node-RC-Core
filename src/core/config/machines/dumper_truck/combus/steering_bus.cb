@@ -11,4 +11,4 @@ channels:
   value: CbusNeutral
   scope: BASE
   theme: core
-  direction: downlink
+  direction: downlink_pt

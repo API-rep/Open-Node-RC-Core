@@ -708,7 +708,7 @@ def _render_source(view: View, ctx: BuildContext, *, filename_prefix: str = "") 
             f"[static_cast<uint8_t>(Analog{cap}ID::CH_COUNT)] = {{"
         )
         for vc in analog:
-            _emit_channel_init(body, vc, "analog")
+            _emit_channel_init(body, vc, "analog", is_connected_board(ctx))
         body.append("};")
         body.append("")
 
@@ -722,7 +722,7 @@ def _render_source(view: View, ctx: BuildContext, *, filename_prefix: str = "") 
             f"[static_cast<uint8_t>(Digital{cap}ID::CH_COUNT)] = {{"
         )
         for vc in digital:
-            _emit_channel_init(body, vc, "digital")
+            _emit_channel_init(body, vc, "digital", is_connected_board(ctx))
         body.append("};")
         body.append("")
 
@@ -745,7 +745,56 @@ def _render_source(view: View, ctx: BuildContext, *, filename_prefix: str = "") 
     return "\n".join(body) + "\n"
 
 
-def _emit_channel_init(body: list[str], vc: ViewChannel, type_: str) -> None:
+# =============================================================================
+# LINK REWORK 2.4 — DIRECTION INSIDE THE NODE
+# =============================================================================
+
+# Flags that mean "this board establishes the connection with another node":
+# it is the source, inside the node, of the BASE channels it receives.
+INTER_NODE_FLAGS: frozenset[str] = frozenset({
+    "INPUT_PS4_DS4_BT",   # the PS4 controller stands for the remote
+    # Add the inter-node transports here (ESP-NOW, radio, ...).
+})
+
+
+def is_connected_board(ctx: BuildContext) -> bool:
+    """True if the board of `ctx` establishes a connection with another node."""
+    return bool(INTER_NODE_FLAGS & ctx.defines)
+
+
+def node_direction(ch: ChannelDefinition, connected: bool) -> frozenset[str]:
+    """Direction of a channel inside the node, for a board connected or not to another node.
+
+    SYSTEM / BOARD: the direction itself (SYSTEM diffusion).  BASE: the .cb
+    direction is the direction of the node; inside the node only
+    `downlink_pt` circulates (the connected board redistributes it: uplink,
+    the others receive it: downlink) and `both_or` (relayed by the 1.1b
+    merge).  `downlink`, `uplink`, `both`, `none`: not in the node.
+    """
+    if ch.scope != "BASE":
+        return ch.effective_direction
+    if ch.direction_or == frozenset({"uplink", "downlink"}):
+        return ch.effective_direction
+    if ch.passthrough:
+        return frozenset({"uplink"}) if connected else frozenset({"downlink"})
+    return frozenset()
+
+
+def check_single_connected_board(boards: dict) -> None:
+    """Refuse a node with several boards connected to other nodes (confrontation in step 3.1).
+
+    `boards` maps a board id to its BuildContext; the mother env (id None)
+    is not a board and is ignored.
+    """
+    connected = sorted(bid for bid, ctx in boards.items() if bid is not None and is_connected_board(ctx))
+    if len(connected) > 1:
+        raise GeneratorError(
+            f"several boards of the node are connected to other nodes ({', '.join(connected)}); "
+            f"the confrontation of their BASE channels comes with step 3.1 of the link rework"
+        )
+
+
+def _emit_channel_init(body: list[str], vc: ViewChannel, type_: str, connected: bool = False) -> None:
     """
     Emit a single `AnalogComBus` / `DigitalComBus` initializer entry.
 
@@ -761,6 +810,8 @@ def _emit_channel_init(body: list[str], vc: ViewChannel, type_: str) -> None:
 
     The `.layer` field comes from the channel's scope (BASE/SYSTEM/BOARD).
     The `.direction` field is the bitmask from Direction.from_frozenset.
+    The `.nodeDirection` field (link rework 2.4) is the direction inside the
+    node (node_direction()): used by the RX on an intra-node link.
 
     The `.bothOr` field (A2.1) is ONLY emitted for digital channels.
     It is initialised to `true` iff the channel's `direction_or` is
@@ -776,6 +827,7 @@ def _emit_channel_init(body: list[str], vc: ViewChannel, type_: str) -> None:
     escaped_info = _escape_cpp_string(vc.ch.info_name)
     layer = _SCOPE_TO_CHANLAYER[vc.ch.scope]
     dir_name = Direction.to_cpp_enum_name(vc.direction_bits)
+    node_dir_name = Direction.to_cpp_enum_name(Direction.from_frozenset(node_direction(vc.ch, connected)))
     value_literal = _render_value(vc.ch, type_)
     if type_ == "digital":
         # A2.1 : .bothOr = true iff direction_or == {uplink, downlink}
@@ -788,6 +840,7 @@ def _emit_channel_init(body: list[str], vc: ViewChannel, type_: str) -> None:
             f".value = {value_literal}, "
             f".layer = {layer}, "
             f".direction = {dir_name}, "
+            f".nodeDirection = {node_dir_name}, "
             f".bothOr = {both_or_lit} }}, // {vc.ch.id}"
         )
     else:
@@ -797,7 +850,8 @@ def _emit_channel_init(body: list[str], vc: ViewChannel, type_: str) -> None:
             f"    {{ .infoName = \"{escaped_info}\", "
             f".value = {value_literal}, "
             f".layer = {layer}, "
-            f".direction = {dir_name} }}, // {vc.ch.id}"
+            f".direction = {dir_name}, "
+            f".nodeDirection = {node_dir_name} }}, // {vc.ch.id}"
         )
 
 

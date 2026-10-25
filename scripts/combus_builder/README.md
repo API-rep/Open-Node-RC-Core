@@ -242,6 +242,17 @@ Le tri des IDs trie par type d'abord, puis `(scope, theme, id)`
 (`generator.py:332-350`), et non `(scope, type, theme, id)` comme le tri
 canonique.
 
+### Sens dans le nœud (link rework 2.4)
+
+Chaque channel généré porte deux sens : `.direction` (vu du nœud, celui du
+`.cb`, ou celui de la diffusion pour un `SYSTEM`) et `.nodeDirection` (dans le
+nœud), calculé par `node_direction()` (`generator.py`). Pour un `BASE`, seul
+`downlink_pt` circule dans le nœud : `uplink` sur la carte connectée à un autre
+nœud (`is_connected_board()`, flags `INTER_NODE_FLAGS`), `downlink` ailleurs ;
+`both_or` garde son sens. `check_single_connected_board()` refuse, en mode
+nœud, plusieurs cartes connectées (appelé par le hook). Le drapeau
+`passthrough` du canon n'entre pas dans le MD5.
+
 ## 7. MD5
 
 - Une empreinte par vue : MD5 d'un JSON canonique (clés triées, séparateurs

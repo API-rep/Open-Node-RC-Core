@@ -16,4 +16,4 @@ channels:
   type: analog
   scope: BASE
   theme: core
-  direction: downlink
+  direction: downlink_pt

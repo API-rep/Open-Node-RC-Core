@@ -126,6 +126,11 @@ DIRECTION_BY_SCOPE: dict[str, frozenset[str]] = {
     "BOARD": frozenset({"none"}),  # seule valeur de surface acceptée
 }
 
+# Passthrough (link rework 2.4) : `downlink_pt` = un `downlink` de BASE que la
+# carte connectée à un autre nœud redistribue dans le nœud.  Seul jeton `_pt`
+# accepté ; `both_pt` est refusé (plusieurs sources par nature).
+PASSTHROUGH_TOKENS: frozenset[str] = frozenset({"downlink_pt"})
+
 # Tokens `*_OR` (A2.1) — sous-ensemble de DIRECTION_TOKENS.
 DIRECTION_OR_TOKENS: frozenset[str] = frozenset({"uplink_or", "downlink_or", "both_or"})
 
@@ -211,6 +216,7 @@ class ChannelDefinition:
     raw: dict[str, Any] = field(default_factory=dict)
     value: str | int | None = None
     candidate: bool = False  # link rework 2.2a — BASE channel on trial (id ends with _NEXT)
+    passthrough: bool = False  # link rework 2.4 — `downlink_pt`: redistributed in the node
 
     def sort_key(self) -> tuple[int, str, str, str]:
         """Clé de tri canonique : (scope, type, theme, id)."""
@@ -645,8 +651,34 @@ def validate_channel(
         )
 
     # --- direction (contrat par scope + type, A2.1) ---
+    # Link rework 2.4 : `downlink_pt` = `downlink` redistribué dans le nœud par
+    # la carte connectée à un autre nœud ; BASE seulement (SYSTEM est déjà
+    # diffusé) ; `both_pt` refusé (plusieurs sources par nature).
+    raw_direction = raw.get("direction")
+    passthrough = False
+    if isinstance(raw_direction, str) and raw_direction.endswith("_pt"):
+        if raw_direction == "both_pt":
+            raise ChannelValidationError(
+                path, cid,
+                "`direction: both_pt` is refused: a channel relayed in both directions "
+                "has several sources; use `both` (two nodes) or `both_or`",
+            )
+        if raw_direction not in PASSTHROUGH_TOKENS:
+            raise ChannelValidationError(
+                path, cid,
+                f"`direction: {raw_direction}` is not supported; the only `_pt` token "
+                f"is {sorted(PASSTHROUGH_TOKENS)}",
+            )
+        if cscope != "BASE":
+            raise ChannelValidationError(
+                path, cid,
+                f"`_pt` is for BASE channels only (scope is {cscope}): a SYSTEM "
+                f"channel is already diffused in the node",
+            )
+        passthrough = True
+        raw_direction = raw_direction[:-len("_pt")]
     direction, direction_or = _normalize_direction(
-        path, cid, cscope, ctype, raw.get("direction"),
+        path, cid, cscope, ctype, raw_direction,
     )
 
     # --- requires ---
@@ -696,6 +728,7 @@ def validate_channel(
         raw=dict(raw),
         value=value,
         candidate=candidate,
+        passthrough=passthrough,
     )
 
 

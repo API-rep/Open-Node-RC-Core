@@ -368,8 +368,20 @@ void combus_frame_apply( const ComBusFrameCfg& cfg,
 		// 4. Analog channels
 	uint8_t nAnalogEff = (inputFrame->header.cfg.nAnalog < nAnalog) ? inputFrame->header.cfg.nAnalog : nAnalog;
 
+		// Link rework 2.4 — a channel is only written if its direction for this
+		// link includes Downlink: `direction` on an inter-node link (BASE
+		// identity), `nodeDirection` on an intra-node link.  A channel this
+		// board produces (uplink) is never overwritten by its peer.
+	const bool interNode = (caller == ChanLayer::BASE);
+	auto receives = [interNode](Direction direction, Direction nodeDirection) {
+		const Direction d = interNode ? direction : nodeDirection;
+		return (static_cast<uint8_t>(d) & static_cast<uint8_t>(Direction::Downlink)) != 0u;
+	};
+
 	if (combus->analogBus) {
 		for (uint8_t i = 0; i < nAnalogEff; ++i) {
+			if (!receives(combus->analogBus[i].direction, combus->analogBus[i].nodeDirection)) { continue; }
+
 				// LY2 — apply is layer-agnostic.  The layer check is
 				// delegated to combus_set_analog() which reads the
 				// channel's declared `layer` from the shared backing
@@ -388,6 +400,7 @@ void combus_frame_apply( const ComBusFrameCfg& cfg,
 				// the link snapshot and com_rx_update() merges it with this board's
 				// own value each cycle (anti ping-pong, see protocol/both_or.md).
 			if (combus->digitalBus[i].bothOr) { continue; }
+			if (!receives(combus->digitalBus[i].direction, combus->digitalBus[i].nodeDirection)) { continue; }
 
 				// LY2 — see analog loop above.
 			combus_set_digital(*combus, (DigitalComBusID)i, inputFrame->digital[i], caller);

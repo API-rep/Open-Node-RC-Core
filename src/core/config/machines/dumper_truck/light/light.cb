@@ -34,28 +34,28 @@ channels:
   type: digital
   theme: light
   scope: BASE
-  direction: downlink
+  direction: downlink_pt
 
 - id: INDICATOR_LEFT
   infoName: "Left turn indicator"
   type: digital
   theme: light
   scope: BASE
-  direction: downlink
+  direction: downlink_pt
 
 - id: INDICATOR_RIGHT
   infoName: "Right turn indicator"
   type: digital
   theme: light
   scope: BASE
-  direction: downlink
+  direction: downlink_pt
 
 - id: HAZARDS
   infoName: "Hazard flashers"
   type: digital
   theme: light
   scope: BASE
-  direction: downlink
+  direction: downlink_pt
 
 # -----------------------------------------------------------------------------
 # DIGITAL — motion-derived light states (SYSTEM, internal)

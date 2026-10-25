@@ -80,6 +80,13 @@
  *     are unpacked (the padding bits of the last byte never reach the buffer);
  *     a shorter frame is accepted.
  *
+ *   Group Q — receive filter by direction (chantier 2.4):
+ *     A received frame only writes a channel whose direction for the link
+ *     includes Downlink: `direction` on an inter-node link (BASE identity),
+ *     `nodeDirection` on an intra-node link.  The builder writes both in the
+ *     generated arrays (BASE `downlink_pt`: Downlink in the node for a board
+ *     not connected to another node).
+ *
  *   Group C — view identity (Phase 3 / A13):
  *     Validates that the 3 view-specific enums (AnalogComBusID,
  *     AnalogComBusSystemID, AnalogComBusBaseID and their digital
@@ -419,6 +426,11 @@ static void resetRxTarget(void) {
 static void sendAndApply(ChanLayer rxLayer) {
     TEST_ASSERT_NOT_NULL_MESSAGE(s_com, "Run test_loopback_init first");
     resetRxTarget();
+        // Group H tests the write identity, not the direction: RUNLEVEL is
+        // uplink on this test board (HAS_RUNLEVEL_MANAGER), so make it a
+        // received channel here (chantier 2.4 filter, Group Q).
+    rxTargetAnalog[kRunLevelIdx].direction     = Direction::Downlink;
+    rxTargetAnalog[kRunLevelIdx].nodeDirection = Direction::Downlink;
 
     combus_tx_init(kLinkIdx, s_com, kCfg, 50u, ChanLayer::SYSTEM);
     combus_rx_init(kLinkIdx, s_com, kCfg, rxAnalogBuf, rxDigitalBuf, &rxTargetBus, rxLayer);
@@ -1904,6 +1916,83 @@ static void test_inter_node_link_refuses_more_digitals_than_base(void) {
 }
 
 
+// =============================================================================
+// GROUP Q — RECEIVE FILTER BY DIRECTION (chantier 2.4)
+//
+// No wiring: a frame is encoded from txComBus, decoded, then applied onto
+// rxTargetBus with the identity of an inter-node link (BASE) or of an
+// intra-node link (SYSTEM).  The directions of the target channel are set
+// by each test, as the builder would have generated them for the board.
+// =============================================================================
+
+/** Encode txComBus with THROTTLE_BUS = value, decode it and apply it with the identity `caller`. */
+static void applyThrottleFrame(uint16_t value, ChanLayer caller) {
+    fillRandom(0x0D1EC7ul);
+    txComBus.analogBus[kThrottleIdx].value = value;
+    const uint8_t len = combus_frame_encode(kCfg, encodeBuf, &txComBus, 9u, kNAnalog, kNDigital);
+    TEST_ASSERT_TRUE(combus_frame_decode(kCfg, &rxFrame, encodeBuf, len));
+    combus_frame_apply(kCfg, &rxTargetBus, &rxFrame, caller);
+}
+
+/** Set the two directions of THROTTLE_BUS on the receiving board, its value at 0. */
+static void throttleOnTarget(Direction direction, Direction nodeDirection) {
+    resetRxTarget();
+    rxTargetAnalog[kThrottleIdx].direction     = direction;
+    rxTargetAnalog[kThrottleIdx].nodeDirection = nodeDirection;
+}
+
+/** Row 5: inter-node link, the remote sends THROTTLE_BUS (downlink for the node): applied. */
+static void test_filter_inter_node_downlink_is_applied(void) {
+    throttleOnTarget(Direction::Downlink, Direction::Uplink);
+    applyThrottleFrame(777u, ChanLayer::BASE);
+    TEST_ASSERT_EQUAL_UINT16(777u, rxTargetBus.analogBus[kThrottleIdx].value);
+}
+
+/** Inter-node link, a channel the node does not receive (none): not applied. */
+static void test_filter_inter_node_none_is_not_applied(void) {
+    throttleOnTarget(Direction::None, Direction::Downlink);
+    applyThrottleFrame(777u, ChanLayer::BASE);
+    TEST_ASSERT_EQUAL_UINT16(0u, rxTargetBus.analogBus[kThrottleIdx].value);
+}
+
+/** Inter-node link, a channel the node sends (uplink): its peer never overwrites it. */
+static void test_filter_inter_node_uplink_is_not_applied(void) {
+    throttleOnTarget(Direction::Uplink, Direction::Downlink);
+    applyThrottleFrame(777u, ChanLayer::BASE);
+    TEST_ASSERT_EQUAL_UINT16(0u, rxTargetBus.analogBus[kThrottleIdx].value);
+}
+
+/** Row 1: intra-node link, a board not connected receives a downlink_pt channel: applied. */
+static void test_filter_intra_node_downlink_is_applied(void) {
+    throttleOnTarget(Direction::Downlink, Direction::Downlink);
+    applyThrottleFrame(555u, ChanLayer::SYSTEM);
+    TEST_ASSERT_EQUAL_UINT16(555u, rxTargetBus.analogBus[kThrottleIdx].value);
+}
+
+/** Rows 2 and 4: intra-node link, the connected board (node uplink) keeps its own value. */
+static void test_filter_intra_node_uplink_is_not_applied(void) {
+    throttleOnTarget(Direction::Downlink, Direction::Uplink);
+    rxTargetBus.analogBus[kThrottleIdx].value = 123u;               // its own value (from the PS4)
+    applyThrottleFrame(555u, ChanLayer::SYSTEM);
+    TEST_ASSERT_EQUAL_UINT16(123u, rxTargetBus.analogBus[kThrottleIdx].value);
+}
+
+/** Rows 6 and 8: intra-node link, a channel that does not circulate in the node (none): not applied. */
+static void test_filter_intra_node_none_is_not_applied(void) {
+    throttleOnTarget(Direction::Downlink, Direction::None);
+    applyThrottleFrame(555u, ChanLayer::SYSTEM);
+    TEST_ASSERT_EQUAL_UINT16(0u, rxTargetBus.analogBus[kThrottleIdx].value);
+}
+
+/** The generated arrays: THROTTLE_BUS (BASE downlink_pt) on a board not connected, RUNLEVEL produced here. */
+static void test_filter_generated_directions(void) {
+    TEST_ASSERT_TRUE(AnalogComBusArray[kThrottleIdx].direction     == Direction::Downlink);
+    TEST_ASSERT_TRUE(AnalogComBusArray[kThrottleIdx].nodeDirection == Direction::Downlink);
+    TEST_ASSERT_TRUE(AnalogComBusArray[kRunLevelIdx].direction     == Direction::Uplink);
+    TEST_ASSERT_TRUE(AnalogComBusArray[kRunLevelIdx].nodeDirection == Direction::Uplink);
+}
+
+
 // Chantier 12.6 (cleanup): Group F (FS1 failsafe re-arm) REMOVED — link
 // health is now monitored by the per-backend *_LINK_LOST contributors
 // (PS4_DS4_BT_LINK_LOST, COM_LINK_LOST, ...) aggregated into
@@ -2063,6 +2152,15 @@ void setup() {
     RUN_TEST(test_padding_bits_do_not_reach_the_buffer);
     RUN_TEST(test_shorter_frame_is_accepted);
     RUN_TEST(test_inter_node_link_refuses_more_digitals_than_base);
+
+    // --- Group Q: receive filter by direction (chantier 2.4) ---
+    RUN_TEST(test_filter_inter_node_downlink_is_applied);
+    RUN_TEST(test_filter_inter_node_none_is_not_applied);
+    RUN_TEST(test_filter_inter_node_uplink_is_not_applied);
+    RUN_TEST(test_filter_intra_node_downlink_is_applied);
+    RUN_TEST(test_filter_intra_node_uplink_is_not_applied);
+    RUN_TEST(test_filter_intra_node_none_is_not_applied);
+    RUN_TEST(test_filter_generated_directions);
 
     // Chantier 12.6: Group F (FS1 failsafe re-arm) removed — see
     // header docstring above (5 independent test groups A/B/C/D/E).

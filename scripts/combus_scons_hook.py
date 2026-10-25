@@ -869,6 +869,16 @@ def _generate_combus_action(target, source, env):
             is_node=True,
         )
 
+        # --- 7b.1b. Link rework 2.4: one board connected to other nodes ---
+        from scripts.combus_builder.generator import GeneratorError, check_single_connected_board
+        try:
+            check_single_connected_board(node_boards_ctx)
+        except GeneratorError as e:
+            if staging_dir.exists():
+                shutil.rmtree(staging_dir)
+            sys.stderr.write(f"[combus_scons_action] FATAL: {e}\n")
+            return 1
+
         # --- 7b.2. Diffuse SYSTEM channels across boards ---
         try:
             diffused = diffuse_system_channels(parsed, node_resolved)
