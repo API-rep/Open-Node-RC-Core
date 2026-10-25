@@ -101,8 +101,8 @@ compteur part de 0 (`generator.py:362-386`).
   `combus->lastFrameMs`. Le contrôle de layer est fait par ces fonctions
   (`_layer_ok`, `combus_access.cpp:28-54`). **Filtre par sens (chantier 2.4)** :
   un channel n'est écrit que si son sens pour le lien comprend `Downlink` :
-  `direction` sur un lien inter-nœud (identité `BASE`), `nodeDirection` sur un
-  lien intra-nœud. Un channel que la carte produit (`uplink`) n'est donc jamais
+  `flow.betweenNodes` sur un lien inter-nœud (identité `BASE`),
+  `flow.betweenBoards` sur un lien intra-nœud (`ChanFlow`, `combus_defs.h`). Un channel que la carte produit (`uplink`) n'est donc jamais
   écrasé par son pair ; les `both_or` restent traités par la fusion de 1.1b.
 - En production, `combus_frame_apply` n'a qu'un appelant : `tryDecode` dans
   `combus_rx.cpp`, appelé automatiquement quand le lien a une cible
@@ -141,9 +141,10 @@ les canaux du préfixe de la vue (§3).
 
 ## 7. Fusion OR
 
-`DigitalComBus.bothOr` est généré à `true` pour `both_or` (`combus_defs.h:130-137`).
-`combus_frame_apply` ne le lit pas : il écrit la valeur reçue sans fusion OR.
-La fusion OR côté C++ n'est pas implémentée.
+`DigitalComBus.bothOr.enabled` est généré à `true` pour `both_or` (`BothOrMerge`,
+`combus_defs.h`). `combus_frame_apply` n'écrit jamais un `both_or` : la valeur
+reçue reste dans l'instantané du lien, et `com_rx_update()` fait la fusion OR
+à chaque cycle (link rework 1.1b, voir `../both_or.md`).
 
 ## 8. Handshake (`seq == 0`)
 

@@ -113,11 +113,11 @@ bool combus_set_digital(ComBus& bus, DigitalComBusID ch, bool val, ChanLayer cal
         return false;
     }
 
-    if (slot.bothOr) {
+    if (slot.bothOr.enabled) {
           // --- both_or: keep this board's value apart, value = local OR received ---
-        slot.localValue   = val;
-        slot.localWritten = true;
-        slot.value        = val || slot.remoteValue;
+        slot.bothOr.local   = val;
+        slot.bothOr.written = true;
+        slot.value        = val || slot.bothOr.remote;
         return true;
     }
 
@@ -129,7 +129,7 @@ bool combus_set_digital(ComBus& bus, DigitalComBusID ch, bool val, ChanLayer cal
 void combus_both_or_set_remote(ComBus& bus, DigitalComBusID ch, bool remote) {
     auto& slot = bus.digitalBus[static_cast<uint8_t>(ch)];
 
-    slot.remoteValue = remote;
+    slot.bothOr.remote = remote;
     slot.value       = combus_both_or_local(slot) || remote;
 }
 

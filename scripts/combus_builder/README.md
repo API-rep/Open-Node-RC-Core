@@ -244,9 +244,10 @@ canonique.
 
 ### Sens dans le nœud (link rework 2.4)
 
-Chaque channel généré porte deux sens : `.direction` (vu du nœud, celui du
-`.cb`, ou celui de la diffusion pour un `SYSTEM`) et `.nodeDirection` (dans le
-nœud), calculé par `node_direction()` (`generator.py`). Pour un `BASE`, seul
+Chaque channel généré porte deux sens, regroupés dans `.flow` (`ChanFlow`) :
+`.betweenNodes` (sur un lien inter-nœud : celui du `.cb`, ou celui de la
+diffusion pour un `SYSTEM`) et `.betweenBoards` (sur un lien intra-nœud),
+calculé par `node_direction()` (`generator.py`). Pour un `BASE`, seul
 `downlink_pt` circule dans le nœud : `uplink` sur la carte connectée à un autre
 nœud (`is_connected_board()`, flags `INTER_NODE_FLAGS`), `downlink` ailleurs ;
 `both_or` garde son sens. `check_single_connected_board()` refuse, en mode
@@ -391,8 +392,10 @@ racine sont des restes de ces sorties.
 - **Dossier généré partagé** en mode nœud : compiler deux cartes de suite
   réécrit les fichiers non préfixés (dette acceptée, par sécurité).
 - **Inversion BASE** (« ND5 ») : non traitée.
-- **Fusion OR côté C++** : non faite. `DigitalComBus.bothOr` est émis mais
-  `combus_frame_apply` ne le lit pas (`combus_defs.h:130-137`).
+- **Fusion OR côté C++** : faite pour `both_or` (link rework 1.1b,
+  `src/core/system/combus/protocol/both_or.md`), état dans
+  `DigitalComBus.bothOr` (`BothOrMerge`) ; `uplink_or` et `downlink_or` restent
+  déclaratifs.
 - **Build réel à deux cartes** (« T4 ») : jamais testé.
 - **Script YAML vers `platformio.ini`** : prévu, pas écrit. Il doit produire un
   env racine (configuration commune) et un sous-env par carte, mono-carte compris, avec

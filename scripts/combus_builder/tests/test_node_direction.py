@@ -113,14 +113,14 @@ def test_generated_array_carries_the_node_direction(tmp_path):
     chs = _canon(_ch("THROTTLE"), _ch("LIGHTS", type_="digital", direction="downlink"))
     generate(chs, _ctx(), tmp_path)
     text = (tmp_path / "combus.cpp").read_text(encoding="utf-8")
-    assert ".direction = Direction::Downlink, .nodeDirection = Direction::Downlink }, // THROTTLE" in text
-    assert ".nodeDirection = Direction::None, .bothOr = false }, // LIGHTS" in text
+    assert ".flow = { .betweenNodes = Direction::Downlink, .betweenBoards = Direction::Downlink } }, // THROTTLE" in text
+    assert ".betweenBoards = Direction::None }, .bothOr = { .enabled = false } }, // LIGHTS" in text
 
 
 def test_connected_board_redistributes(tmp_path):
     generate(_canon(_ch("THROTTLE")), _ctx("INPUT_PS4_DS4_BT"), tmp_path)
     text = (tmp_path / "combus.cpp").read_text(encoding="utf-8")
-    assert ".direction = Direction::Downlink, .nodeDirection = Direction::Uplink }, // THROTTLE" in text
+    assert ".flow = { .betweenNodes = Direction::Downlink, .betweenBoards = Direction::Uplink } }, // THROTTLE" in text
 
 
 def test_pt_does_not_change_the_md5():

@@ -429,7 +429,7 @@ def test_emit_channel_init_writes_runtime_value_analog_cbus_min_val():
     assert ".value = CbusMinVal," in line
     assert ".layer = ChanLayer::BASE," in line
     # Last field has no trailing comma in the C++ initializer (closed by `, // X`).
-    assert ".direction = Direction::Uplink }" in line or ".direction = Direction::Uplink" in line
+    assert ".betweenNodes = Direction::Uplink," in line or ".betweenNodes = Direction::Uplink" in line
 
 
 def test_emit_channel_init_writes_runtime_value_analog_integer():

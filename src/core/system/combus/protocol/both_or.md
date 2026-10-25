@@ -26,7 +26,7 @@ Pour chaque channel `both_or`, chaque carte garde **trois choses séparées** :
 
 | Terme | Ce que c'est | Où |
 |---|---|---|
-| la valeur **hôte** | ce que le code de la carte écrit lui-même (la chaîne `FAILSAFE` la recalcule à chaque cycle, à partir de `false` : le *clear*) | `DigitalComBus::localValue` |
+| la valeur **hôte** | ce que le code de la carte écrit lui-même (la chaîne `FAILSAFE` la recalcule à chaque cycle, à partir de `false` : le *clear*) | `DigitalComBus::bothOr.local` |
 | le **cache** des entrées | la dernière valeur reçue de **chaque lien**, une par lien | l'instantané de réception du lien (`combus_rx_snapshot`) |
 | la valeur **fusionnée** | ce que lisent tous les consommateurs (runlevel, sorties, tableau de bord) | `DigitalComBus::value` |
 
@@ -40,7 +40,7 @@ Quatre règles :
    `hôte OU (cache des liens AUTRES que L)`. Elle ne renvoie jamais à L ce que L
    lui a envoyé. Avec un seul lien, elle envoie simplement sa valeur hôte.
 3. **Une carte qui n'a jamais écrit le channel ne contribue pas** : son terme hôte
-   vaut `false` (`localWritten`). Une carte qui reçoit `FAILSAFE` par diffusion
+   vaut `false` (`bothOr.written`). Une carte qui reçoit `FAILSAFE` par diffusion
    sans le calculer garde sa valeur par défaut (`high`) dans le slot ; sans cette
    règle, elle l'enverrait à tout le monde, et la machine resterait en failsafe
    dès le démarrage. Elle ne fait que relayer.
@@ -51,7 +51,7 @@ Quatre règles :
 En formules, pour une carte B reliée aux liens L1…Ln :
 
 ```text
-hôte(B)        = localValue si localWritten, sinon false
+hôte(B)        = bothOr.local si bothOr.written, sinon false
 valeur(B)      = hôte(B) OU cache(Li)              pour tous les Li vivants
 envoyé(B → Lk) = hôte(B) OU cache(Li)              pour tous les Li vivants, i ≠ k
 ```
@@ -85,7 +85,7 @@ défaut pour toujours. **Si S contribuait sa valeur par défaut**, elle enverrai
 
 | Quoi | Où |
 |---|---|
-| champs `localValue`, `localWritten`, `remoteValue` | `src/core/system/combus/combus_defs.h` (`DigitalComBus`) |
+| champs `bothOr.enabled`, `bothOr.local`, `bothOr.written`, `bothOr.remote` | `src/core/system/combus/combus_defs.h` (`BothOrMerge`, dans `DigitalComBus`) |
 | écriture locale : garde l'hôte à part, recalcule la valeur | `combus_set_digital()`, `combus_access.cpp` |
 | terme hôte, mise à jour du cache fusionné | `combus_both_or_local()`, `combus_both_or_set_remote()`, `combus_access.h` |
 | une trame n'écrase pas un `both_or` | `combus_frame_apply()`, `frame/combus_frame.cpp` |

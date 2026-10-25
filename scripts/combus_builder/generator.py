@@ -800,7 +800,9 @@ def _emit_channel_init(body: list[str], vc: ViewChannel, type_: str, connected: 
 
     Output format (matches runtime AnalogComBus/DigitalComBus struct):
 
-        { .infoName = "...", .value = ..., .layer = ChanLayer::X, .direction = Direction::Y, .bothOr = false },
+        { .infoName = "...", .value = ..., .layer = ChanLayer::X,
+          .flow = { .betweenNodes = Direction::Y, .betweenBoards = Direction::Z },
+          .bothOr = { .enabled = false } },
 
     The `.value` field is rendered from the canonical channel value
     (see _render_value). It honours the YAML `value:` contract :
@@ -809,12 +811,13 @@ def _emit_channel_init(body: list[str], vc: ViewChannel, type_: str, connected: 
     Falls back to the generator default when `value:` is absent.
 
     The `.layer` field comes from the channel's scope (BASE/SYSTEM/BOARD).
-    The `.direction` field is the bitmask from Direction.from_frozenset.
-    The `.nodeDirection` field (link rework 2.4) is the direction inside the
-    node (node_direction()): used by the RX on an intra-node link.
+    The `.flow` field (ChanFlow) holds the two directions: `.betweenNodes`
+    (the bitmask from Direction.from_frozenset, used on an inter-node link)
+    and `.betweenBoards` (the direction inside the node, node_direction(),
+    used on an intra-node link, link rework 2.4).
 
-    The `.bothOr` field (A2.1) is ONLY emitted for digital channels.
-    It is initialised to `true` iff the channel's `direction_or` is
+    The `.bothOr` field (A2.1, a BothOrMerge) is ONLY emitted for digital
+    channels.  Its `.enabled` is initialised to `true` iff the channel's `direction_or` is
     exactly `{uplink, downlink}` (i.e. the YAML token was `both_or`).
     For all other digital channels (uplink/downlink/both/none and
     uplink_or/downlink_or), it is `false`. For analog channels, the
@@ -839,9 +842,8 @@ def _emit_channel_init(body: list[str], vc: ViewChannel, type_: str, connected: 
             f"    {{ .infoName = \"{escaped_info}\", "
             f".value = {value_literal}, "
             f".layer = {layer}, "
-            f".direction = {dir_name}, "
-            f".nodeDirection = {node_dir_name}, "
-            f".bothOr = {both_or_lit} }}, // {vc.ch.id}"
+            f".flow = {{ .betweenNodes = {dir_name}, .betweenBoards = {node_dir_name} }}, "
+            f".bothOr = {{ .enabled = {both_or_lit} }} }}, // {vc.ch.id}"
         )
     else:
         # analog: .bothOr does not exist (validation rejects
@@ -850,8 +852,7 @@ def _emit_channel_init(body: list[str], vc: ViewChannel, type_: str, connected: 
             f"    {{ .infoName = \"{escaped_info}\", "
             f".value = {value_literal}, "
             f".layer = {layer}, "
-            f".direction = {dir_name}, "
-            f".nodeDirection = {node_dir_name} }}, // {vc.ch.id}"
+            f".flow = {{ .betweenNodes = {dir_name}, .betweenBoards = {node_dir_name} }} }}, // {vc.ch.id}"
         )
 
 

@@ -199,13 +199,15 @@ def test_generated_header_includes_combus_defs():
 # =============================================================================
 
 def test_direction_field_in_combus_defs():
-    """AnalogComBus and DigitalComBus both have a `direction` field."""
+    """AnalogComBus and DigitalComBus carry a ChanFlow: one direction per kind of link (link rework 2.4)."""
     h = (REPO_ROOT / "src" / "core" / "system" / "combus" / "combus_defs.h").read_text(encoding="utf-8")
-    assert "Direction   direction" in h or "Direction direction" in h
+    assert "struct ChanFlow" in h
+    assert "Direction betweenNodes" in h and "Direction betweenBoards" in h
+    assert h.count("ChanFlow    flow") == 2
 
 
 def test_generated_initializers_have_direction_field():
-    """Each generated entry must include `.direction = Direction::X`."""
+    """Each generated entry must include `.betweenNodes = Direction::X`."""
     chs = _canon_from_yamls({"channels": [
         _ch("UP",   direction="uplink"),
         _ch("DOWN", direction="downlink"),
@@ -214,14 +216,14 @@ def test_generated_initializers_have_direction_field():
     ]})
     view = _build_view_with_channels(chs)
     out = _render_source(view, _ctx([]))
-    assert ".direction = Direction::Uplink" in out
-    assert ".direction = Direction::Downlink" in out
-    assert ".direction = Direction::Both" in out
-    assert ".direction = Direction::None" in out
+    assert ".betweenNodes = Direction::Uplink" in out
+    assert ".betweenNodes = Direction::Downlink" in out
+    assert ".betweenNodes = Direction::Both" in out
+    assert ".betweenNodes = Direction::None" in out
 
 
 def test_generated_init_order_infoName_value_layer_direction():
-    """Each entry must keep the field order: infoName, value, layer, direction."""
+    """Each entry must keep the field order: infoName, value, layer, flow (the directions)."""
     chs = _canon_from_yamls({"channels": [
         _ch("FOO", info_name="Foo channel", direction="uplink"),
     ]})
@@ -234,7 +236,7 @@ def test_generated_init_order_infoName_value_layer_direction():
     pos_info = entry.find(".infoName")
     pos_value = entry.find(".value")
     pos_layer = entry.find(".layer")
-    pos_dir = entry.find(".direction")
+    pos_dir = entry.find(".flow")
     assert 0 <= pos_info < pos_value < pos_layer < pos_dir, (
         f"field order broken: {entry!r}"
     )
@@ -1145,9 +1147,11 @@ int main() {
     static_assert(static_cast<int>(AnalogComBusID::A1) == 0, "A1");
     static_assert(static_cast<int>(DigitalComBusID::D1) == 0, "D1");
     static_assert(static_cast<int>(AnalogComBusID::CH_COUNT) > 0, "count");
-    // Read .direction to ensure it is publicly accessible.
-    Direction d = comBus.analogBus[0].direction;
+    // Read both directions of the flow to ensure they are publicly accessible.
+    Direction d = comBus.analogBus[0].flow.betweenNodes;
+    Direction e = comBus.analogBus[0].flow.betweenBoards;
     (void)d;
+    (void)e;
     // The underlying uint8_t representation matches the bitmask contract.
     static_assert(static_cast<uint8_t>(Direction::None) == 0, "none=0");
     static_assert(static_cast<uint8_t>(Direction::Uplink) == 1, "up=1");
@@ -1359,21 +1363,23 @@ def test_python_direction_to_cpp_enum_name_roundtrip():
 def test_runtime_struct_field_order_matches_python_emission():
     """The runtime struct (AnalogComBus / DigitalComBus) must declare its
     fields in the same order as the generator emits initializers:
-    infoName, value, layer, direction."""
+    infoName, value, layer, flow (then bothOr for DigitalComBus)."""
     h = (REPO_ROOT / "src" / "core" / "system" / "combus" / "combus_defs.h").read_text(encoding="utf-8")
     for struct_name in ("AnalogComBus", "DigitalComBus"):
         # Find the struct definition body.
-        m = re.search(rf"typedef\s+struct\s+\{{([^}}]*)\}}\s*{struct_name};", h, re.DOTALL)
+        m = re.search(rf"typedef\s+struct\s+\{{(.*?)\}}\s*{struct_name};", h, re.DOTALL)
         assert m, f"{struct_name} struct not found"
         body = m.group(1)
         pos_info = body.find("infoName")
         pos_value = body.find("value")
         pos_layer = body.find("layer")
-        pos_dir = body.find("direction")
+        pos_dir = body.find("flow")
         assert pos_info >= 0, f"{struct_name} missing infoName"
         assert pos_value > pos_info, f"{struct_name} value before infoName"
         assert pos_layer > pos_value, f"{struct_name} layer before value"
-        assert pos_dir > pos_layer, f"{struct_name} direction before layer"
+        assert pos_dir > pos_layer, f"{struct_name} flow before layer"
+        if struct_name == "DigitalComBus":
+            assert body.find("bothOr") > pos_dir, "DigitalComBus bothOr before flow"
 
 
 def test_generated_cpp_direction_for_both():

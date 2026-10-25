@@ -149,8 +149,8 @@ sens, le résultat est le OR de leurs valeurs au lieu du dernier écrit.
 `BASE` est celui **du nœud** (entre nœuds). Dans le nœud, sa source est la
 carte qui établit la connexion avec un autre nœud (un flag de
 `INTER_NODE_FLAGS` du builder, aujourd'hui `INPUT_PS4_DS4_BT`). Le builder en
-déduit, pour chaque carte, un second sens, `nodeDirection`, utilisé sur les
-liens intra-nœud :
+déduit, pour chaque carte, un second sens, `flow.betweenBoards`, utilisé sur
+les liens intra-nœud (le premier, `flow.betweenNodes`, est celui du `.cb`) :
 
 | Déclaré (`BASE`) | Carte connectée | Autres cartes |
 |---|---|---|

@@ -87,7 +87,7 @@ inline bool combus_set_digital(ComBus& bus, const std::optional<DigitalComBusID>
  */
 
 inline bool combus_both_or_local(const DigitalComBus& slot) {
-    return slot.localWritten && slot.localValue;
+    return slot.bothOr.written && slot.bothOr.local;
 }
 
 

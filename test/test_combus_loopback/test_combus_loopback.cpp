@@ -415,9 +415,9 @@ static void resetRxTarget(void) {
     for (uint8_t i = 0u; i < kNDigital; ++i) {
         rxTargetDigital[i]              = DigitalComBusArray[i];
         rxTargetDigital[i].value        = false;
-        rxTargetDigital[i].localValue   = false;   // both_or state: not inherited from txComBus
-        rxTargetDigital[i].localWritten = false;
-        rxTargetDigital[i].remoteValue  = false;
+        rxTargetDigital[i].bothOr.local   = false;   // both_or state: not inherited from txComBus
+        rxTargetDigital[i].bothOr.written = false;
+        rxTargetDigital[i].bothOr.remote  = false;
     }
     rxTargetBus.analogBusMaxVal = txComBus.analogBusMaxVal;
 }
@@ -429,8 +429,8 @@ static void sendAndApply(ChanLayer rxLayer) {
         // Group H tests the write identity, not the direction: RUNLEVEL is
         // uplink on this test board (HAS_RUNLEVEL_MANAGER), so make it a
         // received channel here (chantier 2.4 filter, Group Q).
-    rxTargetAnalog[kRunLevelIdx].direction     = Direction::Downlink;
-    rxTargetAnalog[kRunLevelIdx].nodeDirection = Direction::Downlink;
+    rxTargetAnalog[kRunLevelIdx].flow.betweenNodes     = Direction::Downlink;
+    rxTargetAnalog[kRunLevelIdx].flow.betweenBoards = Direction::Downlink;
 
     combus_tx_init(kLinkIdx, s_com, kCfg, 50u, ChanLayer::SYSTEM);
     combus_rx_init(kLinkIdx, s_com, kCfg, rxAnalogBuf, rxDigitalBuf, &rxTargetBus, rxLayer);
@@ -1113,7 +1113,7 @@ static void test_both_or_merges_peer_value(void) {
     com_rx_update(rxTargetBus);
 
     TEST_ASSERT_TRUE(failsafeOnBus());
-    TEST_ASSERT_FALSE(rxTargetBus.digitalBus[kFailsafeIdx].localValue);   // the local value is kept apart
+    TEST_ASSERT_FALSE(rxTargetBus.digitalBus[kFailsafeIdx].bothOr.local);   // the local value is kept apart
 }
 
 /** The peer clears its fault: the merged value falls back to false. */
@@ -1172,7 +1172,7 @@ static void test_both_or_board_never_writing_does_not_contribute(void) {
 
         // A diffused copy never written by this board: still at its default value, high (fault)
     rxTargetBus.digitalBus[kFailsafeIdx].value = true;
-    TEST_ASSERT_FALSE(rxTargetBus.digitalBus[kFailsafeIdx].localWritten);
+    TEST_ASSERT_FALSE(rxTargetBus.digitalBus[kFailsafeIdx].bothOr.written);
 
     com_rx_update(rxTargetBus);                       // no peer frame, never written locally
 
@@ -1937,8 +1937,8 @@ static void applyThrottleFrame(uint16_t value, ChanLayer caller) {
 /** Set the two directions of THROTTLE_BUS on the receiving board, its value at 0. */
 static void throttleOnTarget(Direction direction, Direction nodeDirection) {
     resetRxTarget();
-    rxTargetAnalog[kThrottleIdx].direction     = direction;
-    rxTargetAnalog[kThrottleIdx].nodeDirection = nodeDirection;
+    rxTargetAnalog[kThrottleIdx].flow.betweenNodes     = direction;
+    rxTargetAnalog[kThrottleIdx].flow.betweenBoards = nodeDirection;
 }
 
 /** Row 5: inter-node link, the remote sends THROTTLE_BUS (downlink for the node): applied. */
@@ -1986,10 +1986,10 @@ static void test_filter_intra_node_none_is_not_applied(void) {
 
 /** The generated arrays: THROTTLE_BUS (BASE downlink_pt) on a board not connected, RUNLEVEL produced here. */
 static void test_filter_generated_directions(void) {
-    TEST_ASSERT_TRUE(AnalogComBusArray[kThrottleIdx].direction     == Direction::Downlink);
-    TEST_ASSERT_TRUE(AnalogComBusArray[kThrottleIdx].nodeDirection == Direction::Downlink);
-    TEST_ASSERT_TRUE(AnalogComBusArray[kRunLevelIdx].direction     == Direction::Uplink);
-    TEST_ASSERT_TRUE(AnalogComBusArray[kRunLevelIdx].nodeDirection == Direction::Uplink);
+    TEST_ASSERT_TRUE(AnalogComBusArray[kThrottleIdx].flow.betweenNodes     == Direction::Downlink);
+    TEST_ASSERT_TRUE(AnalogComBusArray[kThrottleIdx].flow.betweenBoards == Direction::Downlink);
+    TEST_ASSERT_TRUE(AnalogComBusArray[kRunLevelIdx].flow.betweenNodes     == Direction::Uplink);
+    TEST_ASSERT_TRUE(AnalogComBusArray[kRunLevelIdx].flow.betweenBoards == Direction::Uplink);
 }
 
 

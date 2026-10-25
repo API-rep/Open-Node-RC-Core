@@ -362,34 +362,34 @@ def test_generator_bitmask_and_bothor_for_all_7_tokens():
     }
     for tok, (dir_name, both_or) in expected.items():
         line = _emit_for_token(tok)
-        assert f".direction = {dir_name}" in line, f"{tok}: expected {dir_name}, got {line}"
-        assert f".bothOr = {both_or}" in line, f"{tok}: expected .bothOr = {both_or}, got {line}"
+        assert f".betweenNodes = {dir_name}" in line, f"{tok}: expected {dir_name}, got {line}"
+        assert f".bothOr = {{ .enabled = {both_or} }}" in line, f"{tok}: expected .bothOr.enabled = {both_or}, got {line}"
 
 
 def test_generator_analog_never_emits_bothor():
     """Pour un channel analog, .bothOr n'est jamais émis (champ inexistant)."""
     line = _emit_for_token("both", ctype="analog")
     assert ".bothOr" not in line
-    assert ".direction = Direction::Both" in line
+    assert ".betweenNodes = Direction::Both" in line
 
 
 def test_generator_uplink_or_emits_uplink_not_none():
     """Régression : uplink_or doit produire Direction::Uplink (pas None)."""
     line = _emit_for_token("uplink_or")
-    assert ".direction = Direction::Uplink" in line
-    assert ".direction = Direction::None" not in line
+    assert ".betweenNodes = Direction::Uplink" in line
+    assert ".betweenNodes = Direction::None" not in line
 
 
 def test_generator_downlink_or_emits_downlink_not_none():
     """Régression : downlink_or doit produire Direction::Downlink (pas None)."""
     line = _emit_for_token("downlink_or")
-    assert ".direction = Direction::Downlink" in line
-    assert ".direction = Direction::None" not in line
+    assert ".betweenNodes = Direction::Downlink" in line
+    assert ".betweenNodes = Direction::None" not in line
 
 
 def test_generator_both_or_emits_both_not_none():
     """Régression : both_or doit produire Direction::Both (pas None)."""
     line = _emit_for_token("both_or")
-    assert ".direction = Direction::Both" in line
-    assert ".direction = Direction::None" not in line
-    assert ".bothOr = true" in line
+    assert ".betweenNodes = Direction::Both" in line
+    assert ".betweenNodes = Direction::None" not in line
+    assert ".bothOr = { .enabled = true }" in line

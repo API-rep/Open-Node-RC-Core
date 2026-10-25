@@ -96,15 +96,8 @@ enum class ChanLayer : uint8_t {
  *   alongside `ChanLayer`. Does NOT replace `layer` — `layer` is still
  *   used by `_layer_ok()` for write protection (audit A6 confirmed it is
  *   functionally required). `direction` is a *data* field, not an
- *   access-control field.
- *
- *   Link rework 2.4: each channel has two directions.  `direction` is the
- *   direction seen by the node (the .cb one, or the diffused one for a
- *   SYSTEM channel), used on an inter-node link; `nodeDirection` is the
- *   direction inside the node, used on an intra-node link (the builder
- *   computes it for a BASE channel from the board that connects to another
- *   node).  A received frame only writes a channel whose direction for the
- *   link includes Downlink.
+ *   access-control field.  Link rework 2.4: a channel has one direction per
+ *   kind of link, see ChanFlow.
  */
 enum class Direction : uint8_t {
     None     = 0,
@@ -119,14 +112,57 @@ enum class Direction : uint8_t {
 // =============================================================================
 
 /**
+ * @brief Which way a channel travels, on each kind of link.
+ *
+ * @details A channel crosses two kinds of links, and its direction is not
+ *   the same on both:
+ *   - betweenNodes : on a link to another node (remote, trailer).  This is
+ *                    the direction written in the .cb.
+ *   - betweenBoards: on a link between the boards of this node.  Computed by
+ *                    the builder for this board: a BASE command enters the
+ *                    node through the board connected to the other node,
+ *                    which forwards it (Uplink); the other boards receive it
+ *                    (Downlink).  For a SYSTEM channel: the diffused direction.
+ *   A received frame only writes a channel whose direction for that link
+ *   includes Downlink: a channel this board produces is never overwritten
+ *   (link rework 2.4).
+ */
+
+struct ChanFlow {
+  Direction betweenNodes  = Direction::None;    ///< on an inter-node link (the .cb direction)
+  Direction betweenBoards = Direction::None;    ///< on an intra-node link (computed for this board)
+};
+
+
+/**
+ * @brief OR merge of a both_or channel (anti ping-pong, see protocol/both_or.md).
+ *
+ * @details The value read by everyone is this board's own value OR the values
+ *   received from the live links.  A received frame never overwrites it:
+ *   com_rx_update() refreshes `remote` each cycle and every local write
+ *   recomputes the value.
+ */
+
+struct BothOrMerge {
+  bool enabled = false;   ///< the channel is declared both_or
+  bool local   = false;   ///< last value written by this board's own code
+  bool written = false;   ///< this board wrote it at least once (otherwise it does not contribute)
+  bool remote  = false;   ///< OR of the values received from the live links
+};
+
+    // Same layout as the former flat fields: no padding inside the sub-structs.
+static_assert(sizeof(ChanFlow)    == 2u * sizeof(Direction), "ChanFlow must hold two Direction, no padding");
+static_assert(sizeof(BothOrMerge) == 4u * sizeof(bool),      "BothOrMerge must hold four bool, no padding");
+
+
+/**
  * @brief Analog ComBus channel descriptor.
  */
 typedef struct {
   const char* infoName;                            ///< Short description for debugging and dashboards
-  uint16_t    value;                               ///< Current channel value (0‑65535)
-  ChanLayer   layer       = ChanLayer::BOARD;     ///< Propagation layer — see ChanLayer
-  Direction   direction   = Direction::None;       ///< Wire direction — added by A6.1
-  Direction   nodeDirection = Direction::None;     ///< Direction inside the node (intra-node links) — link rework 2.4
+  uint16_t    value;                               ///< Current channel value (0-65535)
+  ChanLayer   layer = ChanLayer::BOARD;            ///< Scope: who may write it (see ChanLayer)
+  ChanFlow    flow  = {};                          ///< Which way it travels, per kind of link
 } AnalogComBus;
 
 /**
@@ -135,17 +171,9 @@ typedef struct {
 typedef struct {
   const char* infoName;                            ///< Short description for debugging and dashboards
   bool        value;                               ///< Current channel state (true/false)
-  ChanLayer   layer       = ChanLayer::BOARD;     ///< Propagation layer — see ChanLayer
-  Direction   direction   = Direction::None;       ///< Wire direction — added by A6.1
-  Direction   nodeDirection = Direction::None;     ///< Direction inside the node (intra-node links) — link rework 2.4
-  // both_or (anti ping-pong, see protocol/both_or.md): `value` is the OR of
-  // this board's own value and of the values received from the live links.
-  // A received frame never overwrites the slot; com_rx_update() refreshes
-  // `remoteValue` each cycle and every local write recomputes `value`.
-  bool        bothOr       = false;                ///< Anti-oscillation OR-aggregation flag — added by ND6
-  bool        localValue   = false;                ///< both_or: last value written by this board's own code
-  bool        localWritten = false;                ///< both_or: true once this board wrote the channel (otherwise it does not contribute)
-  bool        remoteValue  = false;                ///< both_or: OR of the values received from the live links
+  ChanLayer   layer  = ChanLayer::BOARD;           ///< Scope: who may write it (see ChanLayer)
+  ChanFlow    flow   = {};                         ///< Which way it travels, per kind of link
+  BothOrMerge bothOr = {};                         ///< OR merge, used when bothOr.enabled
 } DigitalComBus;
 
 /**

@@ -237,9 +237,9 @@ void combus_tx_update(
 			bool anyBothOr = false;
 			for (uint8_t ch = 0u; ch < st.digitalWireEnd && ch < st.frameCfg.nDigital; ++ch) {
 				const DigitalComBus& slot = bus->digitalBus[ch];
-				txDigital[ch] = slot.bothOr ? (combus_both_or_local(slot) || combus_rx_peer_or(ch, i))
+				txDigital[ch] = slot.bothOr.enabled ? (combus_both_or_local(slot) || combus_rx_peer_or(ch, i))
 				                            : slot.value;
-				anyBothOr = anyBothOr || slot.bothOr;
+				anyBothOr = anyBothOr || slot.bothOr.enabled;
 			}
 			if (anyBothOr) { digitalValues = txDigital; }
 		}
