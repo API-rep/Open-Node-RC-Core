@@ -73,6 +73,56 @@ Flags, plus tard : `HAS_FAILSAFE` reste le parapluie ; `HAS_REMOTE_LINK_LOST_FAL
 3. `runlevel_procs.h` est mort (voir §4) et décrit encore « `FAILSAFE` (= `IDLE` alias) » ;
 4. une valeur inconnue de `RUNLEVEL` ne fait rien (`default: break`, `main.cpp:224-225`) : les moteurs gardent leur dernier état. Avec « neutre = sûr », une carte qui perd son lien verrait `RUNLEVEL` = 32767 : le `default` doit appliquer la réaction de `HALT`.
 
+### 2.6 Audit S0 (2026-10-26, lecture seule)
+
+**Démarrage : sûr.**
+- `init.cpp:62-68` écrit `RUNLEVEL` = `DEF_RUNLEVEL` (`IDLE`, `config.h:30`), puis arrête, endort et désactive les moteurs.
+- À chaque cycle, `sys_manager_update()` calcule l'agrégat failsafe (`sys_manager.cpp:24-42` : réception, entrées, batterie, `failsafe_update`) **avant** la chaîne runlevel et le `switch` de `main.cpp:57-75`. La valeur de démarrage de `FAILSAFE` n'atteint donc jamais la machine à états.
+
+**Polarité `true` du thème `failsafe` : elle est nécessaire, pas seulement conventionnelle.**
+- La chaîne remet l'agrégat à 0 en début de cycle, fait le OU des contributeurs, puis **réarme chaque contributeur à `true`** (`failsafe_chain.cpp:44-78`, « consume + guard »).
+- Un écrivain qui cesse d'écrire laisse donc son contributeur à `true` : c'est une preuve de vie.
+- Même principe pour la manette (`input_update.cpp:35` : « stays at its failsafe default, true = lost »).
+- Ça confirme la décision §2.5 : `true` pour le thème `failsafe`.
+
+**`RUNLEVEL` au neutre (32767) : rien de sûr aujourd'hui.**
+- `RunLevel` est un `int8_t` (`machines_defs.h:18`). Converti en `RunLevel`, 32767 (0x7FFF) donne -1 = `NOT_YET_SET`.
+- Lecteurs :
+  - `main.cpp:70` tombe dans `default: break` (`main.cpp:224-225`) : les moteurs gardent leur état ;
+  - les feux (`light_interpreter.cpp:59-60`) prennent la case `IDLE` ;
+  - le tableau de bord affiche `---`.
+- Correctif S3 : `default` → réaction de `HALT`, déjà noté au trou n° 4 de §2.5.
+- Seul écrivain : la carte qui a `HAS_RUNLEVEL_MANAGER`. Une carte qui le reçoit (extension, quand elle aura un firmware : `test_node_extboard` n'est jamais compilé, `platformio.ini:253-259`) **ne fait pas tourner la chaîne runlevel** (`HAS_INPUT_PROC` sur la carte mère seulement). À la perte de son lien, elle ne passerait donc jamais en `HALT` par elle-même. **À concevoir** avant le premier firmware d'extension : la réaction locale d'une carte qui perd la carte mère.
+
+**`BRAKE_BUS` : l'entrée et la sortie du traitement sont le même channel.**
+- La manette écrit le frein brut (`PS4_dualshock_map.cpp:38`, gâchette L2).
+- `b-in` le lit (`throttle_config.h:133-137`), puis `brake` **réécrit** `BRAKE_BUS` avec le frein traité (`throttle_config.h:139-145`, `cb_brake.cpp:110`).
+- Au neutre, `cb_brake_fn` donne `raw` = 16383 et `brakeVal` = raw² / neutre ≈ 8191, soit **environ 25 % de frein** (courbe au carré, `cb_brake.cpp:32-34`).
+- Avec une source par lien (trames espacées, pas d'écriture à chaque cycle), le frein traité serait relu comme brut au cycle suivant.
+- À S3 : frein ≤ neutre → nul, et **séparer l'entrée brute de la sortie traitée** (deux channels).
+
+**`GEAR_BUS` et `SUBGEAR_BUS` sont des états calculés, déclarés comme des commandes.**
+- Les deux sont `BASE downlink_pt`, avec `value` `1` et `0`.
+- Mais `GEAR_BUS` est la **sortie** de la chaîne de boîte (`sim/proc_config.cpp:79-84`), et `SUBGEAR_BUS` celle du compteur de boutons (`input/proc_config.cpp:61-66`).
+- Ce sont des états calculés par la machine, comme `ESC_RPM_BUS` : le recadrage des `BASE none` (2026-10-25) les a manqués. Ils devraient être `SYSTEM uplink` (`requires: HAS_SIM_PROC` / `HAS_INPUT_PROC`), la commande restant les boutons.
+- Au neutre (32767), tout lecteur qui teste `!= 0` voit « actif » :
+  - régulateur en maintien de vitesse (`cb_cruise.cpp:52`) ;
+  - boîte forcée en 1re (`gear_config.h:101-106`) ;
+  - vitesse plafonnée (`traction_config.h:39-44`).
+- À traiter avec S3 : recadrage `SYSTEM`, puis codage centré (ci-dessous).
+
+**Décision (2026-10-26) : le codage centré, champ `zeroAt`.**
+- Un analogique peut déclarer `zeroAt: neutral` (le défaut est `zeroAt: start`, le codage d'aujourd'hui). Valeur sur le bus = valeur logique + `CbusNeutral`.
+- La valeur sûre reste toujours `CbusNeutral` sur le bus ; `zeroAt: neutral` dit seulement que le zéro logique s'y trouve. Donc pas d'exception à la règle de §2.5 : au neutre, `SUBGEAR_BUS` vaut logique 0 (pas de sous-rapport), `GEAR_BUS` logique 0 (point mort), et les valeurs négatives deviennent possibles (marche arrière = −1).
+- `zeroAt` est haché dans le MD5 : deux bouts en désaccord sur le codage sont refusés au handshake.
+- Mise en œuvre :
+  - le stockage reste analogique (un vrai troisième type toucherait la trame, le codec, les tables et les buffers) ;
+  - le builder génère un bit `centered` par channel ;
+  - **le moteur des chaînes convertit** l'entrée et la sortie des processors pour les channels marqués, si bien que les processors ne changent pas ;
+  - le code hors chaîne passe par des accesseurs dédiés ; les accès directs au tableau pour ces channels sont à recenser avant de coder.
+- Écartés : un jeton de valeur `value: neutralCenter` (un même mot pour la valeur sûre et le codage) et un type de surface `type: index` (fait croire à un nouveau stockage).
+- À trancher en S3 : `RUNLEVEL` en `zeroAt: neutral` (au neutre, logique 0 = `IDLE`, déjà sûr ; ou réordonner l'énumération pour que 0 = `HALT`).
+
 ## 3. Premier pas fait (recadrage du 2026-10-25)
 
 | Flag | Chaîne | Code | Channels produits |
