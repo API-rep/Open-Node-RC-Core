@@ -69,6 +69,8 @@ struct ComLinkRuntime {
     LinkLossAction lossAction     = LinkLossAction::NONE;      ///< onLoss of the ComDev, BY_SCOPE resolved
     uint32_t       watchStartMs   = 0u;                        ///< set by combus_links_watch(): start of the grace
     bool           reportedLost   = false;                     ///< last loss state logged by combus_links_update()
+    const ComPeerLink* peer       = nullptr;                   ///< link with a peer type (3.1b), nullptr = view of the scope
+    bool           wasAlive       = false;                     ///< 3.2c: alive at the last combus_links_update(), to catch the loss
     uint16_t analogRx[static_cast<uint8_t>(AnalogComBusSystemID::CH_COUNT)]   = {};   ///< SYSTEM next set
     bool     digitalRx[static_cast<uint8_t>(DigitalComBusSystemID::CH_COUNT)] = {};   ///< SYSTEM next set
 };
@@ -215,9 +217,18 @@ bool combus_links_lost( LinkLossAction action );
  *
  * @details Lost here means lost, or never seen once startupGraceMs has elapsed,
  *   whatever the onLoss of the link. Called each cycle by com_rx_update().
+ *
+ *   Link rework 3.2c: when a link with a peer type stops being alive (silence
+ *   or contract dropped), the positions this node receives on it and writes in
+ *   its ComBus take back their safe value (CbusNeutral, false), so a vehicle
+ *   relays the safe value as it is.  The positions it sends do not move; a
+ *   both_or is never written by a frame (a lost link contributes nothing to the
+ *   merge).  A link without peer is unchanged.
+ *
+ * @param bus  ComBus the received positions are written to.
  */
 
-void combus_links_update();
+void combus_links_update( ComBus& bus );
 
 
 

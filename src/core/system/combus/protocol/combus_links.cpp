@@ -9,6 +9,8 @@
 
 #include <core/system/hw/transport/uart_com.h>
 #include <core/system/debug/logging/debug.h>
+#include <core/system/combus/combus_access.h>   // combus_set_analog(), combus_set_digital()
+#include <core/system/combus/combus_res.h>      // CbusNeutral
 
 // The 3 view-specific ID headers give the channel counts of each scope.
 // combus.h transitively includes combus_ids.h (FULL view).
@@ -168,6 +170,7 @@ bool combus_link_build( const ComDevMap& map,
     runtime.linkTimeoutMs  = map.dev->protocol->linkTimeoutMs;
     runtime.startupGraceMs = map.dev->protocol->startupGraceMs;
     runtime.lossAction     = linkLossAction(*map.dev);
+    runtime.peer           = peer;
 
     link = built;
     return true;
@@ -237,6 +240,7 @@ void combus_links_watch( ComLinkRuntime* runtime, uint8_t count )
             // The startup grace starts now, nothing is reported lost yet
         runtime[i].watchStartMs = now;
         runtime[i].reportedLost = false;
+        runtime[i].wasAlive     = false;
 
             // The RX module needs the same timeouts to ignore silent links in the both_or merge
         if (runtime[i].receives) { combus_rx_set_link_timeout(i, runtime[i].linkTimeoutMs); }
@@ -282,11 +286,36 @@ bool combus_links_lost( LinkLossAction action )
 }
 
 
-void combus_links_update()
+    // Link rework 3.2c — the positions received on a lost link with a peer take
+    // back their safe value.  both_or positions are skipped: never written by a
+    // frame, the merge ignores a link that is not alive.
+static void takeBackSafeValues( const ComPeerLink& peer, ComBus& bus )
+{
+    for (uint8_t p = 0u; p < peer.nAnalog; ++p) {
+        if (!peer.analogRx[p]) { continue; }
+        combus_set_analog(bus, static_cast<AnalogComBusID>(peer.analog[p]), CbusNeutral, ChanLayer::BASE);
+    }
+    for (uint8_t p = 0u; p < peer.nDigital; ++p) {
+        if (!peer.digitalRx[p] || bus.digitalBus[peer.digital[p]].bothOr.enabled) { continue; }
+        combus_set_digital(bus, static_cast<DigitalComBusID>(peer.digital[p]), false, ChanLayer::BASE);
+    }
+}
+
+
+void combus_links_update( ComBus& bus )
 {
     for (uint8_t i = 0u; i < s_watchedCount; ++i) {
         ComLinkRuntime& rt = s_watched[i];
         if (!rt.receives) { continue; }
+
+            // --- 3.2c: a link with a peer that stops being alive: safe values ---
+        const bool alive = (combus_link_state(i) == ComLinkState::ALIVE);
+        if (rt.wasAlive && !alive && rt.peer) {
+            takeBackSafeValues(*rt.peer, bus);
+            sys_log_warn("[COMBUS_LINKS] link '%s': received channels back to their safe value\n",
+                         rt.name ? rt.name : "?");
+        }
+        rt.wasAlive = alive;
 
         const bool lost = lostAfterGrace(i);
         if (lost == rt.reportedLost) { continue; }

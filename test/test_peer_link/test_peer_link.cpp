@@ -20,6 +20,8 @@
  *     6  both_or through the table, no echo;
  *     7  end to end on the loopback (handshake with the link MD5, data).
  *   Row 8 (a link without peer is unchanged) is test_combus_loopback.
+ *   Then the loss of the link (3.2c, table of 2026-10-26): the received
+ *   positions take back their safe value.
  *
  *   What the trailer would send is forged.  Requires the TX<->RX jumper on
  *   Serial2 (GPIO 17 <-> 16) for rows 6 and 7.  Run: pio test -e test_peer_link
@@ -37,6 +39,7 @@
 #include <core/system/combus/protocol/combus_rx.h>
 #include <core/system/combus/protocol/combus_links.h>
 #include <core/system/combus/combus_access.h>
+#include <core/system/combus/combus_res.h>     // CbusNeutral (safe value of an analog channel, 3.2c)
 #include <core/system/com/com_manager.h>
 
 #include "combus.h"
@@ -238,6 +241,88 @@ static void test_row7_end_to_end(void) {
 
 
 // =============================================================================
+// LOSS OF THE LINK (link rework 3.2c)
+//
+// Table validated by the owner (2026-10-26): at the loss of a link with a peer
+// (silence, or contract dropped), the positions this node receives and writes
+// in its ComBus take back their safe value (CbusNeutral / false); the
+// positions it sends do not move; both_or is unchanged (a lost link
+// contributes nothing to the merge).
+// =============================================================================
+
+/** The trailer sends one frame (tilt, fault) and com_rx_update() receives it. */
+static void receiveFromTrailer(uint16_t tilt, bool fault, uint8_t seq) {
+    const uint8_t len = encodeTrailerFrame(0u, tilt, fault, false, seq);
+    s_com->write(s_com->ctx, s_buf, len);
+    delay(kRxPollMs);
+    com_rx_update(bus);
+}
+
+/** Rows 1 to 3: the trailer goes silent: the tilt it sent takes back its safe value, nothing else moves. */
+static void test_loss_row1_to_3_received_positions_take_back_their_safe_value(void) {
+    startLink();
+    ensureStable();
+    bus.analogBus[kBrake].value    = 111u;
+    bus.analogBus[kThrottle].value = 999u;
+    bus.digitalBus[kLights].value  = true;
+    bus.digitalBus[kBeacon].value  = true;
+
+    receiveFromTrailer(333u, false, 6u);
+    TEST_ASSERT_EQUAL_UINT16(333u, bus.analogBus[kTilt].value);
+
+    delay(kProto.linkTimeoutMs + 60u);
+    com_rx_update(bus);
+    TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::LOST);
+
+    TEST_ASSERT_EQUAL_UINT16(CbusNeutral, bus.analogBus[kTilt].value);   // received: safe value
+    TEST_ASSERT_EQUAL_UINT16(111u, bus.analogBus[kBrake].value);         // sent by the tractor: kept
+    TEST_ASSERT_TRUE(bus.digitalBus[kLights].value);                     // sent by the tractor: kept
+    TEST_ASSERT_EQUAL_UINT16(999u, bus.analogBus[kThrottle].value);      // not in the link
+    TEST_ASSERT_TRUE(bus.digitalBus[kBeacon].value);                     // not in the link
+}
+
+/** Row 4: the fault raised by the trailer falls back when the link is lost (merge unchanged). */
+static void test_loss_row4_shared_fault_falls_back(void) {
+    startLink();
+    ensureStable();
+    receiveFromTrailer(0u, true, 7u);
+    TEST_ASSERT_TRUE(bus.digitalBus[kFault].value);
+
+    delay(kProto.linkTimeoutMs + 60u);
+    com_rx_update(bus);
+    TEST_ASSERT_FALSE(bus.digitalBus[kFault].value);
+    TEST_ASSERT_FALSE(bus.digitalBus[kFault].bothOr.local);
+}
+
+/** Row 5: the trailer comes back: its frames are applied again. */
+static void test_loss_row5_reconnection(void) {
+    startLink();
+    ensureStable();
+    receiveFromTrailer(333u, false, 8u);
+    delay(kProto.linkTimeoutMs + 60u);
+    com_rx_update(bus);
+    TEST_ASSERT_EQUAL_UINT16(CbusNeutral, bus.analogBus[kTilt].value);
+
+    ensureStable();
+    receiveFromTrailer(444u, false, 9u);
+    TEST_ASSERT_EQUAL_UINT16(444u, bus.analogBus[kTilt].value);
+}
+
+/** Row 6: the contract drops (no ACK) before any silence: same safe value. */
+static void test_loss_row6_contract_dropped(void) {
+    startLink();
+    ensureStable();
+    receiveFromTrailer(333u, false, 10u);
+    TEST_ASSERT_EQUAL_UINT16(333u, bus.analogBus[kTilt].value);
+
+    combus_handshake_internal::dropContract(&s_runtime.handshake, "test: no ACK");
+    com_rx_update(bus);
+    TEST_ASSERT_FALSE(combus_link_state(kLinkIdx) == ComLinkState::ALIVE);
+    TEST_ASSERT_EQUAL_UINT16(CbusNeutral, bus.analogBus[kTilt].value);
+}
+
+
+// =============================================================================
 // RUNNER
 // =============================================================================
 
@@ -256,6 +341,10 @@ void setup() {
     RUN_TEST(test_row5_contract_is_the_link_md5);
     RUN_TEST(test_row6_both_or_through_the_table);
     RUN_TEST(test_row7_end_to_end);
+    RUN_TEST(test_loss_row1_to_3_received_positions_take_back_their_safe_value);
+    RUN_TEST(test_loss_row4_shared_fault_falls_back);
+    RUN_TEST(test_loss_row5_reconnection);
+    RUN_TEST(test_loss_row6_contract_dropped);
 
     UNITY_END();
 }
