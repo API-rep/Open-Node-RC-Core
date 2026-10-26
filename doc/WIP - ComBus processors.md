@@ -2,7 +2,7 @@
 
 Statut : **en cours de rédaction** (document `WIP`), ouvert le 2026-10-25 pendant le *ComBus link rework* (recadrage avant l'étape 2.4). Rien n'est implémenté de ce document, sauf les deux premiers flags de traitement (§3).
 Public : le propriétaire et les futures sessions de travail sur la norme des processors.
-Plan : §1 objectif, §2 intentions, §3 premier pas fait, §4 questions ouvertes.
+Plan : §1 objectif, §2 intentions (dont §2.5 sécurité, décidé le 2026-10-26), §3 premier pas fait, §4 questions ouvertes.
 
 ## 1. Objectif
 
@@ -19,7 +19,7 @@ Le recadrage des `BASE none` (2026-10-25) a montré le besoin. Un channel calcul
 
 ### 2.1 Un flag de fonction par thème
 
-- Chaque grand **thème** (ceux des `.cb` : `input`, `sim`, `light`, `failsafe`, `vbat`, `com`…) a un flag de traitement, `HAS_<THEME>_PROC`, posé dans l'env de la carte qui fait tourner ses chaînes.
+- Chaque grand **thème** (ceux des `.cb` : `input`, `sim`, `light`, `failsafe`, `vbat`… ; `com` sera fusionné dans `failsafe`, §2.5) a un flag de traitement, `HAS_<THEME>_PROC`, posé dans l'env de la carte qui fait tourner ses chaînes.
 - Les flags restent scriptables : un générateur de `platformio.ini` pourra les écrire, ce qui garde la souplesse sans tenue à la main.
 - Les channels produits par les chaînes d'un thème ne sont déclarés que là où ce flag est défini. Les autres cartes du nœud les reçoivent par diffusion.
 
@@ -43,6 +43,35 @@ Règles à garder :
 ### 2.4 Lien avec le link rework
 
 Le link rework garde une seule règle : **un channel `SYSTEM uplink` est déclaré par le traitement qui le produit, actif sur une seule carte**. En attendant les paquets, c'est fait par `requires: [HAS_<THEME>_PROC]` dans les `.cb` de `core/config/machines/<type>/processors/`.
+
+### 2.5 Sécurité : valeur sûre et deux chaînes failsafe (décidé le 2026-10-26)
+
+Côté channels, la règle est dans `doc/WIP - ComBus link rework.md` §2.3 (« Valeur sûre = neutre ») et §2.4 (« `onLoss` supprimé »). Côté traitement, elle impose :
+
+- **Toute chaîne fonctionne de façon sûre aux valeurs sûres** : `CbusNeutral` pour un analogique, `false` pour un numérique, `true` pour un numérique du thème `failsafe`. Exemples : frein ≤ neutre → frein nul (`cb_brake` fait aujourd'hui `>> 1`, donc mi-frein au neutre : à changer) ; rapport, sous-rapport, mode au neutre → point mort ou état sûr ; `RUNLEVEL` au neutre → réaction de `HALT`.
+- **Deux chaînes failsafe**, défendables toutes les deux : une **dure** (agrégat `FAILSAFE_HARD` → runlevel `HALT` : stop, sommeil, désactivation des moteurs, clé bloquée tant que le défaut dure) et une **douce** (agrégat `FAILSAFE_SOFT` → runlevel `IDLE`). Le nom de l'agrégat dit la **sévérité**, pas la réaction (qui peut évoluer sans renommage). Les **contributeurs** disent un **fait**, sans sévérité (`*_FAIL`) : le branchement vers l'une ou l'autre chaîne se décide dans la chaîne, et se change en déplaçant une ligne.
+- **`RunLevel::FAILSAFE` devient `HALT`** : `TURNING_OFF` n'est pas équivalent (transitoire par construction, prévu pour les sons d'extinction, réécrit `IDLE` dans le même cycle, si bien que les autres cartes verraient `IDLE` ; moteurs réveillés et non endormis ; perte de l'information « arrêt sur défaut »). Le mot `FAILSAFE` devient le nom de famille.
+
+Noms (renommage mécanique, étape S1 du link rework) :
+
+| Aujourd'hui | Rôle | Nouveau nom |
+|---|---|---|
+| `RunLevel::FAILSAFE` | runlevel de la chaîne dure (valeur 6 inchangée) | `RunLevel::HALT` |
+| `FAILSAFE` | agrégat dur | `FAILSAFE_HARD` |
+| `REMOTE_LINK_LOST` | agrégat doux (→ `IDLE`) | `FAILSAFE_SOFT` |
+| `FAILSAFE_VBAT` | contributeur, batterie | `VBAT_FAIL` |
+| `FAILSAFE_COM_LINK` | contributeur, lien entre cartes perdu | `BOARD_LINK_FAIL` (S2 : alimenté par portée) |
+| `COM_LINK_LOST` | contributeur, lien vers un autre nœud perdu | `NODE_LINK_FAIL` (S2 : alimenté par portée) |
+| `PS4_DS4_BT_LINK_LOST` | contributeur, manette perdue | `PS4_DS4_BT_FAIL` |
+| `TEST_COUPLED_FAULT` | défaut d'essai partagé | `TEST_COUPLED_FAIL` |
+
+Flags, plus tard : `HAS_FAILSAFE` reste le parapluie ; `HAS_REMOTE_LINK_LOST_FALLBACK` pourrait devenir `HAS_FAILSAFE_SOFT`.
+
+**Trous du runlevel trouvés le 2026-10-26** (à corriger avec la règle, étape S3) :
+1. les feux s'éteignent tous en `FAILSAFE` : `kRunLevelMask` a 7 cases (`RunLevel::COUNT`) mais 6 valeurs écrites (`dumper_truck_lights.h:91-98`), la case `FAILSAFE` vaut `0`, soit « tout éteint de force » ; les warnings de batterie basse (`light_interpreter.cpp:55, 64`) ne peuvent pas clignoter en failsafe ;
+2. le tableau de bord affiche `---` pour `FAILSAFE` (pas de `case`, `dashboard.cpp:285-294`) ;
+3. `runlevel_procs.h` est mort (voir §4) et décrit encore « `FAILSAFE` (= `IDLE` alias) » ;
+4. une valeur inconnue de `RUNLEVEL` ne fait rien (`default: break`, `main.cpp:224-225`) : les moteurs gardent leur dernier état. Avec « neutre = sûr », une carte qui perd son lien verrait `RUNLEVEL` = 32767 : le `default` doit appliquer la réaction de `HALT`.
 
 ## 3. Premier pas fait (recadrage du 2026-10-25)
 
