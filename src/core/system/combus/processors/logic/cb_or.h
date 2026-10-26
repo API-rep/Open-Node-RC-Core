@@ -4,7 +4,7 @@
  *
  * @details `cb_or_fn()` is a generic CbProcFn that implements the
  *   "consume + guard" pattern used to aggregate sub-combus sources
- *   (e.g. `FAILSAFE_VBAT`) into a top-level latch (e.g. `FAILSAFE`).
+ *   (e.g. `VBAT_FAIL`) into a top-level latch (e.g. `FAILSAFE`).
  *
  *   Behaviour:
  *     1. Reads `proc->inValue` (injected by the runner from
@@ -23,8 +23,8 @@
  *   Typical declaration (in a chain array):
  *   @code
  *     { .name = "or-vbat",
- *       .inCh  = DigitalComBusID::FAILSAFE_VBAT,
- *       .outCh = DigitalComBusID::FAILSAFE_VBAT,
+ *       .inCh  = DigitalComBusID::VBAT_FAIL,
+ *       .outCh = DigitalComBusID::VBAT_FAIL,
  *       .fn    = cb_or_fn,
  *     },
  *   @endcode

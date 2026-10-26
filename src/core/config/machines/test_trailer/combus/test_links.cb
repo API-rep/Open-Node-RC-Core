@@ -8,7 +8,7 @@
 # Directions are those of the trailer (node view):
 # - TEST_BRAKE_BUS, TEST_LIGHTS: received from the tractor;
 # - TEST_TILT_ANGLE: sent to the tractor;
-# - TEST_COUPLED_FAULT: fault shared by the whole convoy (OR merge);
+# - TEST_COUPLED_FAIL: fault shared by the whole convoy (OR merge);
 # - TEST_AXLE_LOAD: sent, but the tractor does not know it.
 
 channels:
@@ -45,7 +45,7 @@ channels:
   direction: downlink
   value: low
 
-- id: TEST_COUPLED_FAULT
+- id: TEST_COUPLED_FAIL
   infoName: "Test convoy fault"
   type: digital
   scope: BASE

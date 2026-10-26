@@ -9,7 +9,7 @@
  *
  *   Chain function: FAILSAFE + KEY_ACTIVE → RUNLEVEL.
  *
- *   1  failsafe : FAILSAFE=true → RUNLEVEL=RunLevel::FAILSAFE (= IDLE) + claim.
+ *   1  failsafe : FAILSAFE=true → RUNLEVEL=RunLevel::HALT (= IDLE) + claim.
  *                 Blocks the keyboard runlevel proc when failsafe is active.
  *   2  runlevel : KEY_ACTIVE=true  → RUNLEVEL=STARTING
  *                 KEY_ACTIVE=false → RUNLEVEL=TURNING_OFF
@@ -32,7 +32,7 @@
   ///  failsafe — FAILSAFE=true → force IDLE + claim (blocks keyboard runlevel).
 static constexpr CbRunlevelCfg kFailsafeRunlevelCfg {
     .bus   = &comBus,
-    .high  = RunLevel::FAILSAFE,   // = IDLE (alias)
+    .high  = RunLevel::HALT,   // = IDLE (alias)
     .low   = std::nullopt,         // do not write when FAILSAFE=false
     .claim = true,                 // block downstream procs
 };
@@ -59,7 +59,7 @@ static constexpr CbRunlevelCfg kKeyRunlevelCfg {
 static CbProc kRunlevelProcs[] = {
       // 1. failsafe — FAILSAFE=true → force IDLE + claim.
     { .name  = "failsafe",
-      .inCh  = DigitalComBusID::FAILSAFE,
+      .inCh  = DigitalComBusID::FAILSAFE_HARD,
       .fn    = cb_runlevel_fn,
       .cfg   = &kFailsafeRunlevelCfg,
       .state = nullptr,

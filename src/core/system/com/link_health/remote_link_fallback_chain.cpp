@@ -1,6 +1,6 @@
 /******************************************************************************
  * @file remote_link_fallback_chain.cpp
- * @brief REMOTE_LINK_LOST aggregator chain — mirrors failsafe_chain.cpp.
+ * @brief FAILSAFE_SOFT aggregator chain — mirrors failsafe_chain.cpp.
  *
  * @details This chain implements the "any remote input source alive"
  *   aggregator (chantier 12.5 new design).  It mirrors the
@@ -8,7 +8,7 @@
  *
  *   1. `cb_reset_fn`  (always)        — forces pipeline `value = 0`
  *                                       at cycle start.  Guarantees that
- *                                       REMOTE_LINK_LOST output starts
+ *                                       FAILSAFE_SOFT output starts
  *                                       each cycle in a known state
  *                                       (= healthy).
  *
@@ -20,19 +20,19 @@
  *                                       back to its failsafe default).
  *
  *   Contributors (optional, gated by build flags):
- *     - PS4_DS4_BT_LINK_LOST — PS4 DualShock Bluetooth link health
+ *     - PS4_DS4_BT_FAIL — PS4 DualShock Bluetooth link health
  *       (active when INPUT_PS4_DS4_BT is defined).
- *     - COM_LINK_LOST        — loss of a receiving ComBus link whose loss
+ *     - NODE_LINK_FAIL        — loss of a receiving ComBus link whose loss
  *       policy is IDLE (always present: false when there is no such link;
  *       a TX-only link cannot know the state of its peer and never counts).
  *
- *   The chain has primary `outCh` = DigitalComBusID::REMOTE_LINK_LOST so
+ *   The chain has primary `outCh` = DigitalComBusID::FAILSAFE_SOFT so
  *   the runner commits the latched `value` to the top-level ComBus
  *   channel.  Consumers (FSM, runlevel handler, dashboards) then read
- *   REMOTE_LINK_LOST directly on the bus to trigger their reaction.
+ *   FAILSAFE_SOFT directly on the bus to trigger their reaction.
  *
  *   The IDLE-on-loss reaction (cb_runlevel_once_fn watching
- *   REMOTE_LINK_LOST) is mounted in the RUNLEVEL chain, not here.
+ *   FAILSAFE_SOFT) is mounted in the RUNLEVEL chain, not here.
  *
  *   This whole module is gated by `-D HAS_REMOTE_LINK_LOST_FALLBACK`
  *   (mirroring the umbrella pattern of failsafe.cb / failsafe_chain.cpp).
@@ -48,7 +48,7 @@
 
 #include <core/system/combus/processors/base/cb_reset.h>   // cb_reset_fn
 #include <core/system/combus/processors/logic/cb_or.h>      // cb_or_fn
-#include <core/config/machines/combus_types.h>              // DigitalComBusID::PS4_DS4_BT_LINK_LOST, COM_LINK_LOST, REMOTE_LINK_LOST
+#include <core/config/machines/combus_types.h>              // DigitalComBusID::PS4_DS4_BT_FAIL, NODE_LINK_FAIL, FAILSAFE_SOFT
 
 
 // =============================================================================
@@ -81,21 +81,21 @@ static CbProc kRemoteLinkFallbackProcs[] = {
 
 #if defined(INPUT_PS4_DS4_BT)
     // --- 1. PS4 DualShock Bluetooth link contributor (optional) -----------
-    // Reads PS4_DS4_BT_LINK_LOST (proof-of-life from the PS4_BT input
+    // Reads PS4_DS4_BT_FAIL (proof-of-life from the PS4_BT input
     // backend, written each cycle by input_update.cpp).  If the PS4
     // controller is not connected / not refreshing the bus, the channel
     // stays at its failsafe default (true = lost); this OR-guard latches
     // the pipeline value to 1 and consumes the channel back to true.
     {
         .name    = "remote_link_or_ps4_ds4_bt",
-        .inCh    = DigitalComBusID::PS4_DS4_BT_LINK_LOST,
-        .outCh   = DigitalComBusID::PS4_DS4_BT_LINK_LOST,
+        .inCh    = DigitalComBusID::PS4_DS4_BT_FAIL,
+        .outCh   = DigitalComBusID::PS4_DS4_BT_FAIL,
         .fn      = cb_or_fn,
     },
 #endif
 
     // --- 2. ComBus link contributor (always present) ----------------------
-    // Reads COM_LINK_LOST, written each cycle by com_rx_update() from the
+    // Reads NODE_LINK_FAIL, written each cycle by com_rx_update() from the
     // receiving links whose loss policy is IDLE (combus_links_lost(IDLE)):
     // true while one of them is not alive, never seen included.  This
     // OR-guard latches the pipeline value to 1 and consumes the channel.
@@ -104,8 +104,8 @@ static CbProc kRemoteLinkFallbackProcs[] = {
     // counts (it knows nothing of its peer).
     {
         .name    = "remote_link_or_com",
-        .inCh    = DigitalComBusID::COM_LINK_LOST,
-        .outCh   = DigitalComBusID::COM_LINK_LOST,
+        .inCh    = DigitalComBusID::NODE_LINK_FAIL,
+        .outCh   = DigitalComBusID::NODE_LINK_FAIL,
         .fn      = cb_or_fn,
     },
 
@@ -124,18 +124,18 @@ static const uint8_t kRemoteLinkFallbackProcsCount =
 // =============================================================================
 
 /**
- * @brief REMOTE_LINK_LOST aggregator chain table — single chain.
+ * @brief FAILSAFE_SOFT aggregator chain table — single chain.
  *
  * @details The chain has no primary `inCh` (the reset proc seeds the
  *   pipeline value to 0).  The primary `outCh` is
- *   `DigitalComBusID::REMOTE_LINK_LOST` — the runner commits the latched
+ *   `DigitalComBusID::FAILSAFE_SOFT` — the runner commits the latched
  *   pipeline value to the top-level channel after all procs.
  */
 CbChain kRemoteLinkFallbackChain[] = {
     {
         .name      = "remote_link_fallback_main",
         .inCh      = std::nullopt,                          // no seed (reset proc)
-        .outCh     = DigitalComBusID::REMOTE_LINK_LOST,     // top-level latch
+        .outCh     = DigitalComBusID::FAILSAFE_SOFT,     // top-level latch
         .procs     = kRemoteLinkFallbackProcs,
         .procCount = kRemoteLinkFallbackProcsCount,
     },
@@ -161,7 +161,7 @@ void remote_link_fallback_update(ComBus& bus) {
 // Fallback disabled: expose a no-op façade + empty chain table.  Callers
 // (sys_manager.cpp) can still invoke remote_link_fallback_update() —
 // it just returns immediately without touching the bus.  The
-// REMOTE_LINK_LOST channel does not exist either (its .cb requires
+// FAILSAFE_SOFT channel does not exist either (its .cb requires
 // HAS_REMOTE_LINK_LOST_FALLBACK), which is the correct behaviour for
 // projects that opted out of the fallback (autonomous machines, or
 // projects that handle link-loss at a different level).

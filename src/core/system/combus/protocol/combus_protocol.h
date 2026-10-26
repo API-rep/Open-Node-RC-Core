@@ -164,8 +164,8 @@ struct ComProtocolCfg {
 enum class LinkLossAction : uint8_t {
     BY_SCOPE,       ///< default: FAILSAFE for INTRA_NODE, IDLE for INTER_NODE
     NONE,           ///< the loss is only logged
-    IDLE,           ///< the loss drives COM_LINK_LOST (REMOTE_LINK_LOST -> runlevel IDLE)
-    FAILSAFE        ///< the loss drives FAILSAFE_COM_LINK (FAILSAFE)
+    IDLE,           ///< the loss drives NODE_LINK_FAIL (FAILSAFE_SOFT -> runlevel IDLE)
+    FAILSAFE        ///< the loss drives BOARD_LINK_FAIL (FAILSAFE)
 };
 
 

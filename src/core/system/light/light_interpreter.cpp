@@ -50,9 +50,9 @@ void light_interp_update(const ComBus& bus, const LightModuleCfg& mod, LightStat
   const uint16_t centre     = static_cast<uint16_t>(bus.analogBusMaxVal / 2u);
   const bool escInReverse   = (bus.analogBus[static_cast<uint8_t>(AnalogComBusID::ESC_SPEED_BUS)].value < centre);
   const bool escIsBraking   = bus.digitalBus[static_cast<uint8_t>(DigitalComBusID::BRAKING)].value;
-  // FAILSAFE_VBAT is the Failsafe-contributor for VBAT (combus_v2 vbat_failsafe.cb).
+  // VBAT_FAIL is the Failsafe-contributor for VBAT (combus_v2 vbat_failsafe.cb).
   // When the contributor reports fault (true), lights force the hazard blink.
-  const bool batteryLow     = bus.digitalBus[static_cast<uint8_t>(DigitalComBusID::FAILSAFE_VBAT)].value;
+  const bool batteryLow     = bus.digitalBus[static_cast<uint8_t>(DigitalComBusID::VBAT_FAIL)].value;
 
   // --- 2. Compute the permission mask (runLevelMask) according to current RunLevel
   // RL3: runLevel is now a plain analog channel — read from analogBus[RUNLEVEL].

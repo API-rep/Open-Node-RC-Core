@@ -51,8 +51,8 @@
  *     Rows 1 to 11 of the table validated by the owner: per link, its onLoss
  *     (default by scope: intra-node -> FAILSAFE, inter-node -> IDLE), its state
  *     (never seen, alive, lost), the 3 s startup grace for FAILSAFE (shortened
- *     here), and what com_rx_update() publishes on COM_LINK_LOST (IDLE) and
- *     FAILSAFE_COM_LINK (FAILSAFE).  Same TX↔RX jumper as Group B.
+ *     here), and what com_rx_update() publishes on NODE_LINK_FAIL (IDLE) and
+ *     BOARD_LINK_FAIL (FAILSAFE).  Same TX↔RX jumper as Group B.
  *
  *   Group N — link contract, ACK and blocking (chantier 1.2):
  *     Rows 1 to 12 of the table validated by the owner: a link is UNKNOWN until
@@ -112,8 +112,8 @@
  *     the FS1 open-drain `isNotDrived` flag and a dedicated FS1 contributor
  *     channel.  Both have been removed in chantier 12.5/12.6: link health
  *     is now monitored at transport level by per-backend *_LINK_LOST
- *     contributors (PS4_DS4_BT_LINK_LOST, COM_LINK_LOST, ...) and
- *     aggregated by `remote_link_fallback_chain.cpp` into REMOTE_LINK_LOST,
+ *     contributors (PS4_DS4_BT_FAIL, NODE_LINK_FAIL, ...) and
+ *     aggregated by `remote_link_fallback_chain.cpp` into FAILSAFE_SOFT,
  *     which feeds the top-level FAILSAFE aggregator.
  *     See failsafe_module.md §12.5 (new design) and §12.6 (cleanup).
  *
@@ -1040,8 +1040,8 @@ static void test_link_health_ignores_tx_only_link(void) {
 // =============================================================================
 // GROUP K — DENIED WRITES ARE COUNTED (chantier 1.1)
 //
-// COM_LINK_LOST is a BOARD-scope channel: a SYSTEM caller is refused. This is
-// the mistake that kept REMOTE_LINK_LOST stuck on the Volvo; the count makes
+// NODE_LINK_FAIL is a BOARD-scope channel: a SYSTEM caller is refused. This is
+// the mistake that kept FAILSAFE_SOFT stuck on the Volvo; the count makes
 // it visible (it is also shown on the dashboard).
 // =============================================================================
 
@@ -1049,11 +1049,11 @@ static void test_link_health_ignores_tx_only_link(void) {
 static void test_denied_write_is_counted(void) {
     const uint32_t before = combus_denied_writes();
 
-    TEST_ASSERT_FALSE(combus_set_digital(txComBus, DigitalComBusID::COM_LINK_LOST, true, ChanLayer::SYSTEM));
-    TEST_ASSERT_FALSE(combus_set_digital(txComBus, DigitalComBusID::COM_LINK_LOST, true, ChanLayer::SYSTEM));
+    TEST_ASSERT_FALSE(combus_set_digital(txComBus, DigitalComBusID::NODE_LINK_FAIL, true, ChanLayer::SYSTEM));
+    TEST_ASSERT_FALSE(combus_set_digital(txComBus, DigitalComBusID::NODE_LINK_FAIL, true, ChanLayer::SYSTEM));
     TEST_ASSERT_EQUAL_UINT32(before + 2u, combus_denied_writes());
 
-    TEST_ASSERT_TRUE(combus_set_digital(txComBus, DigitalComBusID::COM_LINK_LOST, false, ChanLayer::BOARD));
+    TEST_ASSERT_TRUE(combus_set_digital(txComBus, DigitalComBusID::NODE_LINK_FAIL, false, ChanLayer::BOARD));
     TEST_ASSERT_EQUAL_UINT32(before + 2u, combus_denied_writes());
 }
 
@@ -1075,7 +1075,7 @@ static ComBus        peerBus = {
     .digitalBus = peerDigital
 };
 
-static constexpr uint8_t kFailsafeIdx = static_cast<uint8_t>(DigitalComBusID::FAILSAFE);
+static constexpr uint8_t kFailsafeIdx = static_cast<uint8_t>(DigitalComBusID::FAILSAFE_HARD);
 
 /** Write on the wire one frame as a remote peer would send it, with FAILSAFE as given. */
 static void sendPeerFrame(bool failsafe) {
@@ -1107,7 +1107,7 @@ static bool failsafeOnBus(void) {
 static void test_both_or_merges_peer_value(void) {
     startHealthLink(LinkEnd::TX_RX, kHealthDev);
     ensureStable();
-    combus_set_digital(rxTargetBus, DigitalComBusID::FAILSAFE, false);   // this board: no fault
+    combus_set_digital(rxTargetBus, DigitalComBusID::FAILSAFE_HARD, false);   // this board: no fault
 
     sendPeerFrame(true);
     com_rx_update(rxTargetBus);
@@ -1120,7 +1120,7 @@ static void test_both_or_merges_peer_value(void) {
 static void test_both_or_falls_back_when_peer_clears(void) {
     startHealthLink(LinkEnd::TX_RX, kHealthDev);
     ensureStable();
-    combus_set_digital(rxTargetBus, DigitalComBusID::FAILSAFE, false);
+    combus_set_digital(rxTargetBus, DigitalComBusID::FAILSAFE_HARD, false);
 
     sendPeerFrame(true);
     com_rx_update(rxTargetBus);
@@ -1135,7 +1135,7 @@ static void test_both_or_falls_back_when_peer_clears(void) {
 static void test_both_or_ignores_silent_peer(void) {
     startHealthLink(LinkEnd::TX_RX, kHealthDev);
     ensureStable();
-    combus_set_digital(rxTargetBus, DigitalComBusID::FAILSAFE, false);
+    combus_set_digital(rxTargetBus, DigitalComBusID::FAILSAFE_HARD, false);
 
     sendPeerFrame(true);
     com_rx_update(rxTargetBus);
@@ -1150,7 +1150,7 @@ static void test_both_or_ignores_silent_peer(void) {
 static void test_both_or_sends_no_echo(void) {
     startHealthLink(LinkEnd::TX_RX, kHealthDev);
     ensureStable();
-    combus_set_digital(rxTargetBus, DigitalComBusID::FAILSAFE, false);
+    combus_set_digital(rxTargetBus, DigitalComBusID::FAILSAFE_HARD, false);
 
     sendPeerFrame(true);
     com_rx_update(rxTargetBus);
@@ -1206,11 +1206,11 @@ static constexpr ComDev kInterFailsafeDev = {     ///< inter-node, onLoss FAILSA
 };
 
 static bool comLinkLostOnBus(void) {
-    return rxTargetBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::COM_LINK_LOST)].value;
+    return rxTargetBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::NODE_LINK_FAIL)].value;
 }
 
 static bool failsafeComLinkOnBus(void) {
-    return rxTargetBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::FAILSAFE_COM_LINK)].value;
+    return rxTargetBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::BOARD_LINK_FAIL)].value;
 }
 
 /** Default onLoss by scope: intra-node -> FAILSAFE, inter-node -> IDLE; an explicit value is kept. */
@@ -1620,7 +1620,7 @@ static void test_contract_failsafe_keeps_contract(void) {
     pumpRx();
     TEST_ASSERT_TRUE(isStable());
 
-    combus_set_digital(rxTargetBus, DigitalComBusID::FAILSAFE, true);
+    combus_set_digital(rxTargetBus, DigitalComBusID::FAILSAFE_HARD, true);
     pumpRx();
     TEST_ASSERT_TRUE(isStable());
 }
@@ -1995,11 +1995,11 @@ static void test_filter_generated_directions(void) {
 
 // Chantier 12.6 (cleanup): Group F (FS1 failsafe re-arm) REMOVED — link
 // health is now monitored by the per-backend *_LINK_LOST contributors
-// (PS4_DS4_BT_LINK_LOST, COM_LINK_LOST, ...) aggregated into
-// REMOTE_LINK_LOST, which feeds the top-level FAILSAFE aggregator
+// (PS4_DS4_BT_FAIL, NODE_LINK_FAIL, ...) aggregated into
+// FAILSAFE_SOFT, which feeds the top-level FAILSAFE aggregator
 // (see failsafe_module.md §12.5 new design).
 //
-// The replacement tests (link health via REMOTE_LINK_LOST aggregation)
+// The replacement tests (link health via FAILSAFE_SOFT aggregation)
 // will be added in a future chantier once the contract is finalised.
 
 /** combus_handshake_compare() must match when given the right local MD5. */

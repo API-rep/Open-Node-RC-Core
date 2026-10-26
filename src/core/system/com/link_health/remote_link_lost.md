@@ -1,19 +1,19 @@
-# REMOTE_LINK_LOST — Chaîne d'agrégation de santé du lien remote
+# FAILSAFE_SOFT — Chaîne d'agrégation de santé du lien remote
 
-> **Note** : ce document décrit l'architecture de la chaîne `REMOTE_LINK_LOST`.  Il est complémentaire à `src/core/system/failsafe/failsafe_module.md` qui décrit le module failsafe central.
+> **Note** : ce document décrit l'architecture de la chaîne `FAILSAFE_SOFT`.  Il est complémentaire à `src/core/system/failsafe/failsafe_module.md` qui décrit le module failsafe central.
 
 ---
 
 ## 1. Vue d'ensemble
 
-`REMOTE_LINK_LOST` est un signal **distinct** du `FAILSAFE` global.  Il représente l'état de santé du lien remote (PS4 Bluetooth, UART, etc.) et déclenche une réaction différente : mise en attente (`RunLevel::IDLE`) plutôt que sécurité hardware complète (`RunLevel::FAILSAFE`).
+`FAILSAFE_SOFT` est un signal **distinct** du `FAILSAFE` global.  Il représente l'état de santé du lien remote (PS4 Bluetooth, UART, etc.) et déclenche une réaction différente : mise en attente (`RunLevel::IDLE`) plutôt que sécurité hardware complète (`RunLevel::HALT`).
 
 **Différence sémantique avec `FAILSAFE`** :
 
 | Signal | Sémantique | Réaction |
 |--------|------------|----------|
-| `FAILSAFE` | Vraie faute (VBAT basse, etc.) | `RunLevel::FAILSAFE` (sécurité hardware complète) |
-| `REMOTE_LINK_LOST` | Silence du lien remote (déconnexion, perte signal) | `RunLevel::IDLE` (mise en attente, reprise automatique) |
+| `FAILSAFE` | Vraie faute (VBAT basse, etc.) | `RunLevel::HALT` (sécurité hardware complète) |
+| `FAILSAFE_SOFT` | Silence du lien remote (déconnexion, perte signal) | `RunLevel::IDLE` (mise en attente, reprise automatique) |
 
 **Justification** : une déconnexion volontaire et brève (ex. changer de machine pilotée) ne doit **pas** déclencher la séquence de sécurité complète (`FAILSAFE`), seulement une mise en attente (`IDLE`) avec reprise automatique.
 
@@ -22,9 +22,9 @@
 ## 2. Architecture
 
 ```text
-PS4_DS4_BT_LINK_LOST ──┐
+PS4_DS4_BT_FAIL ──┐
                        │
-COM_LINK_LOST ─────────┼──► OR-guard (cb_or_fn) ──► REMOTE_LINK_LOST
+NODE_LINK_FAIL ─────────┼──► OR-guard (cb_or_fn) ──► FAILSAFE_SOFT
                        │                              │
 (future contributeurs)──┘                              │
                                                       ▼
@@ -44,14 +44,14 @@ COM_LINK_LOST ─────────┼──► OR-guard (cb_or_fn) ──
 
 ```text
 src/core/system/com/link_health/
-├── remote_link_lost.cb           // Canal REMOTE_LINK_LOST (agrégat)
-├── com_link_lost.cb              // Canal COM_LINK_LOST (contributeur, requires HAS_REMOTE_LINK_LOST_FALLBACK)
-├── failsafe_com_link.cb          // Canal FAILSAFE_COM_LINK (contributeur de FAILSAFE, requires HAS_FAILSAFE)
+├── remote_link_lost.cb           // Canal FAILSAFE_SOFT (agrégat)
+├── com_link_lost.cb              // Canal NODE_LINK_FAIL (contributeur, requires HAS_REMOTE_LINK_LOST_FALLBACK)
+├── failsafe_com_link.cb          // Canal BOARD_LINK_FAIL (contributeur de FAILSAFE, requires HAS_FAILSAFE)
 ├── remote_link_fallback_chain.h  // Déclarations kRemoteLinkFallbackChain[]
 └── remote_link_fallback_chain.cpp // Chaîne d'agrégation (reset + OR-guard)
 
 src/core/config/inputs/
-└── ps4_ds4_bt_link_lost.cb       // Canal PS4_DS4_BT_LINK_LOST (contributeur, requires INPUT_PS4_DS4_BT)
+└── ps4_ds4_bt_link_lost.cb       // Canal PS4_DS4_BT_FAIL (contributeur, requires INPUT_PS4_DS4_BT)
 ```
 
 Les quatre canaux sont du thème `com`.
@@ -60,17 +60,17 @@ Les quatre canaux sont du thème `com`.
 
 ## 4. Contributeurs
 
-### 4.1 — `PS4_DS4_BT_LINK_LOST`
+### 4.1 — `PS4_DS4_BT_FAIL`
 
 **Canal** : `src/core/config/inputs/ps4_ds4_bt_link_lost.cb` (à côté du backend PS4, `requires: INPUT_PS4_DS4_BT`)
 
 **Propriétaire** : `src/machines/system/input/input_update.cpp` (backend PS4_BT)
 
-**Réarmement** : `combus_set_digital(bus, DigitalComBusID::PS4_DS4_BT_LINK_LOST, false, ChanLayer::BOARD)` quand le contrôleur est actif.
+**Réarmement** : `combus_set_digital(bus, DigitalComBusID::PS4_DS4_BT_FAIL, false, ChanLayer::BOARD)` quand le contrôleur est actif.
 
 **Gating** : `#if defined(INPUT_PS4_DS4_BT)`
 
-### 4.2 — `COM_LINK_LOST`
+### 4.2 — `NODE_LINK_FAIL`
 
 **Canal** : `src/core/system/com/link_health/com_link_lost.cb` (BOARD, `requires: HAS_REMOTE_LINK_LOST_FALLBACK`)
 
@@ -87,8 +87,8 @@ Chaque `ComDev` porte sa réaction à la perte (`LinkLossAction`) :
 | `onLoss` | Réaction | Quand le lien compte comme perdu |
 |---|---|---|
 | `BY_SCOPE` (défaut) | `FAILSAFE` pour un lien intra-nœud, `IDLE` pour un lien inter-nœud | — |
-| `IDLE` | `COM_LINK_LOST` → `REMOTE_LINK_LOST` → runlevel `IDLE` | jamais vu, ou silence > `linkTimeoutMs` |
-| `FAILSAFE` | `FAILSAFE_COM_LINK` → `FAILSAFE` | silence > `linkTimeoutMs`, ou jamais vu après `startupGraceMs` (3 s sur la Volvo) |
+| `IDLE` | `NODE_LINK_FAIL` → `FAILSAFE_SOFT` → runlevel `IDLE` | jamais vu, ou silence > `linkTimeoutMs` |
+| `FAILSAFE` | `BOARD_LINK_FAIL` → `FAILSAFE` | silence > `linkTimeoutMs`, ou jamais vu après `startupGraceMs` (3 s sur la Volvo) |
 | `NONE` | journal seulement | — |
 
 Chaque perte et chaque retour d'un lien est journalisé une fois (`combus_links_update()`). Si plusieurs liens tombent, `FAILSAFE` l'emporte sur `IDLE` par la priorité du runlevel.
@@ -103,7 +103,7 @@ Chaque perte et chaque retour d'un lien est journalisé une fois (`combus_links_
 
 **Gating global** : `#if defined(HAS_REMOTE_LINK_LOST_FALLBACK)` — si le flag n'est pas défini, la chaîne est un no-op complet (tableau placeholder de taille 1, count = 0).
 
-**Sortie** : `DigitalComBusID::REMOTE_LINK_LOST` (canal SYSTEM, scope partagé par toutes les cartes du nœud).
+**Sortie** : `DigitalComBusID::FAILSAFE_SOFT` (canal SYSTEM, scope partagé par toutes les cartes du nœud).
 
 ---
 
@@ -111,13 +111,13 @@ Chaque perte et chaque retour d'un lien est journalisé une fois (`combus_links_
 
 **Fichier** : `src/machines/config/machines/volvo_A60H_bruder/combus/processors/runlevel/runlevel_procs.h`
 
-**Processor** : `cb_runlevel_once_fn` (edge-triggered) câblé sur `DigitalComBusID::REMOTE_LINK_LOST`.
+**Processor** : `cb_runlevel_once_fn` (edge-triggered) câblé sur `DigitalComBusID::FAILSAFE_SOFT`.
 
 **Config** : `kRemoteLinkRunlevelCfg`
 ```cpp
 static constexpr CbRunlevelCfg kRemoteLinkRunlevelCfg {
-    .high  = RunLevel::IDLE,        // REMOTE_LINK_LOST 0→1 → write IDLE
-    .low   = std::nullopt,          // REMOTE_LINK_LOST 1→0 → no write (stays IDLE until KEY)
+    .high  = RunLevel::IDLE,        // FAILSAFE_SOFT 0→1 → write IDLE
+    .low   = std::nullopt,          // FAILSAFE_SOFT 1→0 → no write (stays IDLE until KEY)
     .claim = true,                  // Block KEY_ACTIVE proc on link loss
 };
 ```
@@ -145,14 +145,14 @@ void sys_manager_update(ComBus& bus) {
     // 3. Failsafe chain (publie FAILSAFE)
     failsafe_update(bus);
 
-    // 4. REMOTE_LINK_LOST → IDLE fallback (chantier 12.5)
+    // 4. FAILSAFE_SOFT → IDLE fallback (chantier 12.5)
 #if defined(HAS_REMOTE_LINK_LOST_FALLBACK)
     remote_link_fallback_update(bus);
 #endif
 }
 ```
 
-**Note** : `remote_link_fallback_update()` tourne **après** `failsafe_update()` et **avant** la FSM RunLevel.  Cela garantit que `REMOTE_LINK_LOST` est frais pour le même cycle.
+**Note** : `remote_link_fallback_update()` tourne **après** `failsafe_update()` et **avant** la FSM RunLevel.  Cela garantit que `FAILSAFE_SOFT` est frais pour le même cycle.
 
 ---
 

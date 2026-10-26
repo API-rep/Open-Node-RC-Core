@@ -31,7 +31,7 @@
  *   @code
  *     // failsafe instance — continuous: forces IDLE while FAILSAFE=true
  *     { .inCh = FAILSAFE, .fn = cb_runlevel_fn,
- *       .cfg = { .high = RunLevel::FAILSAFE, .low = std::nullopt, .claim = true } }
+ *       .cfg = { .high = RunLevel::HALT, .low = std::nullopt, .claim = true } }
  *     // runlevel instance — edge-triggered: KEY_ACTIVE 0→1 → STARTING (once)
  *     { .inCh = KEY_ACTIVE, .fn = cb_runlevel_once_fn,
  *       .cfg = { .high = RunLevel::STARTING, .low = RunLevel::TURNING_OFF, .claim = false } }

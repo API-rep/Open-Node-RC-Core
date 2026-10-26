@@ -22,7 +22,7 @@
 #include <string.h>
 #include <Arduino.h>
 #include <core/system/combus/combus_access.h>
-#include <core/config/machines/combus_types.h>  // DigitalComBusID::REMOTE_LINK_LOST (chantier 12.5)
+#include <core/config/machines/combus_types.h>  // DigitalComBusID::FAILSAFE_SOFT (chantier 12.5)
 
 
 
@@ -105,7 +105,7 @@ uint8_t combus_frame_crc8(const uint8_t* data, uint8_t len) {
  * @return Number of bytes written into outputBuffer, 0 on error.
  *
  * @note FS2 — the legacy `failSafe` parameter has been removed.  The
- *   failsafe state is now carried by the `DigitalComBusID::FAILSAFE`
+ *   failsafe state is now carried by the `DigitalComBusID::FAILSAFE_HARD`
  *   channel (SYSTEM, both_or) — no out-of-band bit needed.
  */
 
@@ -152,7 +152,7 @@ uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
 	uint8_t flags = 0;   // transport-level status bits (COMBUS_FLAG_*)
 
 	// FS2 — COMBUS_FLAG_FAILSAFE removed.  Failsafe state is now carried
-	// by the DigitalComBusID::FAILSAFE channel (SYSTEM, both_or) — no
+	// by the DigitalComBusID::FAILSAFE_HARD channel (SYSTEM, both_or) — no
 	// out-of-band bit needed.
 	//if (...)     { flags |= COMBUS_FLAG_... ; }       // next flag — bit 1
 	//if (...)     { flags |= COMBUS_FLAG_... ; }       // next flag — bit 2
@@ -329,7 +329,7 @@ bool combus_frame_decode( const ComBusFrameCfg& cfg,
  *   2. Stamp combus->lastFrameMs = millis()
  *      (Chantier 12.6: link-loss detection is no longer the codec's
  *      responsibility — it now lives at transport level, in the
- *      `COM_LINK_LOST` / `FAILSAFE_COM_LINK` contributor channels.)
+ *      `NODE_LINK_FAIL` / `BOARD_LINK_FAIL` contributor channels.)
  *   3. Reserved — transport flags (unused for now).
  *   4. Write analog channels [0 .. min(cfg.nAnalog, header.cfg.nAnalog)-1].
  *   5. Write digital channels [0 .. min(cfg.nDigital, header.cfg.nDigital)-1].
@@ -425,8 +425,8 @@ void combus_frame_apply( const ComBusFrameCfg& cfg,
 		// chantier 12.5 (new design): the codec stays PURE — it does NOT
 		// touch any *_LINK_LOST channel.  The UART link health is monitored
 		// at a HIGHER level (com_rx_update(), which applies the loss policy
-		// of each link each cycle and writes COM_LINK_LOST and
-		// FAILSAFE_COM_LINK accordingly).  REMOTE_LINK_LOST is then the
+		// of each link each cycle and writes NODE_LINK_FAIL and
+		// BOARD_LINK_FAIL accordingly).  FAILSAFE_SOFT is then the
 		// OR-aggregated result computed by the remote_link_fallback_chain
 		// (reset + OR-guard).
 		//
@@ -435,7 +435,7 @@ void combus_frame_apply( const ComBusFrameCfg& cfg,
 	// Chantier 12.6: the `combus->isNotDrived = false;` line is REMOVED.
 	// The codec stays 100% pure (decode + apply).  Link-loss detection is
 	// now the link layer's job — see com_rx_update(), which publishes
-	// COM_LINK_LOST and FAILSAFE_COM_LINK when no frame arrives within the
+	// NODE_LINK_FAIL and BOARD_LINK_FAIL when no frame arrives within the
 	// timeout window.
 }
 

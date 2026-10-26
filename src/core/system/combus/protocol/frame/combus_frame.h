@@ -113,7 +113,7 @@ static constexpr uint8_t CombusFrameMinLen = CombusFrameHeaderLen + sizeof(uint8
  * @return Number of bytes written into outputBuffer, 0 on error.
  *
  * @note FS2 — the legacy `failSafe` parameter has been removed.  The
- *   failsafe state is now carried by the `DigitalComBusID::FAILSAFE`
+ *   failsafe state is now carried by the `DigitalComBusID::FAILSAFE_HARD`
  *   channel (SYSTEM, both_or) — no out-of-band bit needed.
  */
 

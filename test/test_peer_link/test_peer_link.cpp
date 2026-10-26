@@ -6,7 +6,7 @@
  *   trailer (core/config/machines/test_tractor/, test_trailer/).  The builder
  *   computed the channel set of that link and its table (combus_peer_links.h):
  *     analog  0: TEST_BRAKE_BUS (the tractor sends it), 1: TEST_TILT_ANGLE (it receives it);
- *     digital 0: TEST_COUPLED_FAULT (both_or), 1: TEST_LIGHTS (it sends it).
+ *     digital 0: TEST_COUPLED_FAIL (both_or), 1: TEST_LIGHTS (it sends it).
  *   TEST_THROTTLE_BUS and TEST_BEACON are in the tractor ComBus but not in the
  *   link; they come before channels of the link in the local order, so the
  *   table is not the identity for either type.
@@ -59,7 +59,7 @@ static constexpr uint32_t kRxPollMs = 50u;
 static constexpr uint8_t kBrake    = static_cast<uint8_t>(AnalogComBusID::TEST_BRAKE_BUS);
 static constexpr uint8_t kTilt     = static_cast<uint8_t>(AnalogComBusID::TEST_TILT_ANGLE);
 static constexpr uint8_t kThrottle = static_cast<uint8_t>(AnalogComBusID::TEST_THROTTLE_BUS);
-static constexpr uint8_t kFault    = static_cast<uint8_t>(DigitalComBusID::TEST_COUPLED_FAULT);
+static constexpr uint8_t kFault    = static_cast<uint8_t>(DigitalComBusID::TEST_COUPLED_FAIL);
 static constexpr uint8_t kLights   = static_cast<uint8_t>(DigitalComBusID::TEST_LIGHTS);
 static constexpr uint8_t kBeacon   = static_cast<uint8_t>(DigitalComBusID::TEST_BEACON);
 

@@ -138,7 +138,7 @@ Quick index to the documents that sit next to the code. Start from the subject, 
 **Safety and link health**
 
 * [Failsafe module](../src/core/system/failsafe/failsafe_module.md)
-* [REMOTE_LINK_LOST chain](../src/core/system/com/link_health/remote_link_lost.md)
+* [FAILSAFE_SOFT chain](../src/core/system/com/link_health/remote_link_lost.md)
 
 **Machines and configuration**
 

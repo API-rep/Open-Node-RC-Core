@@ -1,19 +1,19 @@
-# remote_link_lost.cb — REMOTE_LINK_LOST aggregator channel
+# remote_link_lost.cb — FAILSAFE_SOFT aggregator channel
 #
-# This file declares the REMOTE_LINK_LOST ComBus channel. It is the
+# This file declares the FAILSAFE_SOFT ComBus channel. It is the
 # AGGREGATED "any remote input source is alive" signal — the OR-merge
-# result of all *_LINK_LOST contributors (PS4_DS4_BT_LINK_LOST,
-# COM_LINK_LOST, future ESP_NOW_LINK_LOST, …).
+# result of all *_LINK_LOST contributors (PS4_DS4_BT_FAIL,
+# NODE_LINK_FAIL, future ESP_NOW_LINK_LOST, …).
 #
-# REMOTE_LINK_LOST is COMPUTED, not directly written by input sources:
+# FAILSAFE_SOFT is COMPUTED, not directly written by input sources:
 #   - Input sources write their dedicated *_LINK_LOST channel each cycle
 #     (false = healthy, true = fault — failsafe-by-default).
-#   - The REMOTE_LINK_LOST → IDLE fallback chain (see
+#   - The FAILSAFE_SOFT → IDLE fallback chain (see
 #     src/core/system/com/link_health/remote_link_fallback_chain.cpp) reads each
-#     contributor, OR-merges them, and writes the result to REMOTE_LINK_LOST
+#     contributor, OR-merges them, and writes the result to FAILSAFE_SOFT
 #     via the same `both_or` direction semantics.
 #   - Downstream consumers (FSM, runlevel handler, dashboards) only read
-#     REMOTE_LINK_LOST — they never look at the per-source contributors.
+#     FAILSAFE_SOFT — they never look at the per-source contributors.
 #
 # This indirection solves the "open-drain ordering" issue raised during the
 # chantier 12.5 review: instead of having every source clear a single shared
@@ -23,7 +23,7 @@
 #
 # Notes:
 # - SYSTEM scope: the channel is shared by all boards composing the local
-#   node. Any board may read REMOTE_LINK_LOST to react (FSM, dashboards).
+#   node. Any board may read FAILSAFE_SOFT to react (FSM, dashboards).
 #   Only the consumer chain (remote_link_fallback_update) writes it.
 # - Direction [both_or]: uplink + downlink + OR-merge on import.  In
 #   practice only the consumer chain writes; external code should read.
@@ -37,11 +37,11 @@
 #   (runlevel fallback proc, dashboards) are under the same flag.  A machine
 #   without the fallback (autonomous) simply has no such channel.  In node mode
 #   it is diffused (SYSTEM, both_or) to the boards without the flag.
-#   The contributors are optional: PS4_DS4_BT_LINK_LOST requires
-#   INPUT_PS4_DS4_BT; COM_LINK_LOST (written every cycle by com_rx_update())
+#   The contributors are optional: PS4_DS4_BT_FAIL requires
+#   INPUT_PS4_DS4_BT; NODE_LINK_FAIL (written every cycle by com_rx_update())
 #   is always read by the chain.
 # - NOT a contributor to the FAILSAFE aggregator (only "hard" faults
-#   like VBAT / temperature are).  REMOTE_LINK_LOST feeds its own,
+#   like VBAT / temperature are).  FAILSAFE_SOFT feeds its own,
 #   optional fallback chain (IDLE on loss).
 # - This channel replaces the historical FAILSAFE_COMBUS_LINK (FS1)
 #   and the underlying `isDrived` / `isNotDrived` open-drain flag on
@@ -51,7 +51,7 @@
 
 
 channels:
-  - id: REMOTE_LINK_LOST
+  - id: FAILSAFE_SOFT
     infoName: "Remote input link lost (aggregated)"
     type: digital
     scope: SYSTEM

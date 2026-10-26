@@ -1544,7 +1544,7 @@ def test_real_failsafe_cb_validates():
     result = canonize(parsed)
     assert len(result.canonical_definitions) == 1
     ch = result.canonical_definitions[0]
-    assert ch.id == "FAILSAFE"
+    assert ch.id == "FAILSAFE_HARD"
     assert ch.info_name == "Failsafe aggregator"
     assert ch.type == "digital"
     assert ch.scope == "SYSTEM"
@@ -1569,7 +1569,7 @@ def test_real_vbat_failsafe_cb_validates():
     result = canonize(parsed)
     assert len(result.canonical_definitions) == 1
     ch = result.canonical_definitions[0]
-    assert ch.id == "FAILSAFE_VBAT"
+    assert ch.id == "VBAT_FAIL"
     assert ch.info_name == "VBAT failsafe contributor"
     assert ch.type == "digital"
     assert ch.scope == "SYSTEM"
@@ -1599,7 +1599,7 @@ def test_real_both_cb_files_together():
     assert len(result.canonical_definitions) == 2
     ids = [ch.id for ch in result.canonical_definitions]
     # Both are SYSTEM, digital, failsafe → sorted by id.
-    assert ids == ["FAILSAFE", "FAILSAFE_VBAT"]
+    assert ids == ["FAILSAFE_HARD", "VBAT_FAIL"]
 
 
 # =============================================================================

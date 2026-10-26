@@ -503,8 +503,8 @@ est dans [`frame/combus_frame_protocol.md`](frame/combus_frame_protocol.md).
 > chaque lien (`ComDev::onLoss`, `combus_links_lost()`) : un lien qui reçoit est
 > jamais vu tant qu'il n'a rien reçu, puis perdu après `linkTimeoutMs` de silence
 > (250 ms pour le lien d'extension). Un lien `IDLE` (défaut inter-nœud) écrit
-> `COM_LINK_LOST` dès qu'il n'est pas vivant ; un lien `FAILSAFE` (défaut
-> intra-nœud) écrit `FAILSAFE_COM_LINK` quand il est perdu, ou jamais vu après
+> `NODE_LINK_FAIL` dès qu'il n'est pas vivant ; un lien `FAILSAFE` (défaut
+> intra-nœud) écrit `BOARD_LINK_FAIL` quand il est perdu, ou jamais vu après
 > `startupGraceMs` (3 s). Voir `src/core/system/com/link_health/remote_link_lost.md` §4.3.
 
 ---

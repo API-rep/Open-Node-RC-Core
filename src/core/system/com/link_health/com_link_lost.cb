@@ -1,24 +1,24 @@
 # com_link_lost.cb — loss of a ComBus link with the IDLE reaction
 #
-# This file declares the COM_LINK_LOST ComBus channel: true when at least one
+# This file declares the NODE_LINK_FAIL ComBus channel: true when at least one
 # receiving ComBus link of the board whose loss policy is IDLE (onLoss, by
 # default an inter-node link) is not alive, never seen included.  It is a
-# contributor of the REMOTE_LINK_LOST chain (remote_link_fallback_chain.cpp),
+# contributor of the FAILSAFE_SOFT chain (remote_link_fallback_chain.cpp),
 # which brings the runlevel to IDLE.
 #
 # Notes:
 # - BOARD scope: only the board that owns the links knows their state.  The
-#   whole node learns of it through REMOTE_LINK_LOST and RUNLEVEL.
+#   whole node learns of it through FAILSAFE_SOFT and RUNLEVEL.
 # - Written each cycle by com_rx_update() from combus_links_lost(IDLE);
 #   false when no such link exists.  A link that only transmits never counts.
 # - value: high = lost until com_rx_update() writes it (failsafe-by-default);
 #   the chain consumes it each cycle (cb_or_fn, inCh == outCh).
 # - requires: HAS_REMOTE_LINK_LOST_FALLBACK — no chain, no contributor.
-# - The FAILSAFE reaction has its own channel: FAILSAFE_COM_LINK.
+# - The FAILSAFE reaction has its own channel: BOARD_LINK_FAIL.
 
 
 channels:
-  - id: COM_LINK_LOST
+  - id: NODE_LINK_FAIL
     infoName: "ComBus link lost (IDLE reaction)"
     type: digital
     scope: BOARD          # private to the board owning the links (NOT shared)

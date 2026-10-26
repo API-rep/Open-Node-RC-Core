@@ -1,6 +1,6 @@
 # Failsafe Module — Architecture
 
-> **Note** : ce document décrit l'architecture du module failsafe central.  La chaîne `REMOTE_LINK_LOST` (signal séparé) est documentée dans `src/core/system/com/link_health/remote_link_lost.md`.
+> **Note** : ce document décrit l'architecture du module failsafe central.  La chaîne `FAILSAFE_SOFT` (signal séparé) est documentée dans `src/core/system/com/link_health/remote_link_lost.md`.
 
 ---
 
@@ -79,7 +79,7 @@ Chaque source possède son propre sous-ComBus :
 
 ```text
 FAILSAFE
-FAILSAFE_VBAT
+VBAT_FAIL
 FAILSAFE_XXX
 ```
 
@@ -114,12 +114,12 @@ Exemple :
 
 ```text
 cycle N
-  module VBAT → FAILSAFE_VBAT = healthy
-  chaîne failsafe → processor VBAT lit, évalue, force FAILSAFE_VBAT = fault
+  module VBAT → VBAT_FAIL = healthy
+  chaîne failsafe → processor VBAT lit, évalue, force VBAT_FAIL = fault
 
 cycle suivant
-  module VBAT tourne      → réarme FAILSAFE_VBAT
-  module VBAT ne tourne plus → FAILSAFE_VBAT reste fault
+  module VBAT tourne      → réarme VBAT_FAIL
+  module VBAT ne tourne plus → VBAT_FAIL reste fault
 ```
 
 `FAILSAFE_X` représente à la fois un état de santé et une preuve de vie.  Pas besoin de TTL ni de timestamp.
@@ -175,24 +175,24 @@ machine/config/combus/processors/runlevel/
   runlevel_procs.h  // kRunlevelProcs[] — failsafe + remote_link + runlevel
 ```
 
-Le processor `cb_runlevel_fn` (générique "set runlevel") est câblé sur `DigitalComBusID::FAILSAFE` avec la config `kFailsafeRunlevelCfg` :
+Le processor `cb_runlevel_fn` (générique "set runlevel") est câblé sur `DigitalComBusID::FAILSAFE_HARD` avec la config `kFailsafeRunlevelCfg` :
 
 ```cpp
 static constexpr CbRunlevelCfg kFailsafeRunlevelCfg {
-    .high  = RunLevel::FAILSAFE,    // FAILSAFE=true → write FAILSAFE (valeur dédiée)
+    .high  = RunLevel::HALT,    // FAILSAFE=true → write FAILSAFE (valeur dédiée)
     .low   = std::nullopt,          // FAILSAFE=false → no write
     .claim = true,                  // Block KEY_ACTIVE proc on link loss
 };
 ```
 
-Le `case RunLevel::FAILSAFE` dans le `switch(curRunLevel)` de `main.cpp` exécute `stopAllDcDrivers` / `sleepAllDcDrivers` / `disableAllDcDrivers` sur `isNewRunLevel`.
+Le `case RunLevel::HALT` dans le `switch(curRunLevel)` de `main.cpp` exécute `stopAllDcDrivers` / `sleepAllDcDrivers` / `disableAllDcDrivers` sur `isNewRunLevel`.
 
 Découplage strict :
 
 ```text
 core/system/failsafe  → détecte et publie FAILSAFE
-machine/.../runlevel  → consomme FAILSAFE, force RunLevel::FAILSAFE
-main.cpp              → réagit à RunLevel::FAILSAFE (sécurité hardware)
+machine/.../runlevel  → consomme FAILSAFE, force RunLevel::HALT
+main.cpp              → réagit à RunLevel::HALT (sécurité hardware)
 ```
 
 ---
@@ -225,7 +225,7 @@ main.cpp              → réagit à RunLevel::FAILSAFE (sécurité hardware)
         vbat          autre           autre
           │ réarme       │ réarme       │ réarme
           ▼              ▼              ▼
-     FAILSAFE_VBAT  FAILSAFE_X       FAILSAFE_Y
+     VBAT_FAIL  FAILSAFE_X       FAILSAFE_Y
           └──────────────┼──────────────┘
                          ▼
                  chaîne failsafe → FAILSAFE global
@@ -234,7 +234,7 @@ main.cpp              → réagit à RunLevel::FAILSAFE (sécurité hardware)
               kRunlevelProcs[] (machine)
                          │
                          ▼
-              RunLevel::FAILSAFE
+              RunLevel::HALT
                          │
                          ▼
               main.cpp → stop/sleep/disable drivers
@@ -244,9 +244,9 @@ main.cpp              → réagit à RunLevel::FAILSAFE (sécurité hardware)
 
 ---
 
-## 12. Lien avec `REMOTE_LINK_LOST` (signal séparé)
+## 12. Lien avec `FAILSAFE_SOFT` (signal séparé)
 
-`REMOTE_LINK_LOST` est un signal **distinct** du `FAILSAFE` global.  Il est géré par sa propre chaîne et déclenche une réaction différente (`RunLevel::IDLE` au lieu de `RunLevel::FAILSAFE`).
+`FAILSAFE_SOFT` est un signal **distinct** du `FAILSAFE` global.  Il est géré par sa propre chaîne et déclenche une réaction différente (`RunLevel::IDLE` au lieu de `RunLevel::HALT`).
 
 **Voir** : `src/core/system/com/link_health/remote_link_lost.md` pour le détail de l'architecture, des contributeurs et de la réaction.
 
@@ -254,8 +254,8 @@ main.cpp              → réagit à RunLevel::FAILSAFE (sécurité hardware)
 
 | Signal | Sémantique | Réaction |
 |--------|------------|----------|
-| `FAILSAFE` | Vraie faute (VBAT basse, etc.) | `RunLevel::FAILSAFE` (sécurité hardware complète) |
-| `REMOTE_LINK_LOST` | Silence du lien remote (déconnexion, perte signal) | `RunLevel::IDLE` (mise en attente, reprise automatique) |
+| `FAILSAFE` | Vraie faute (VBAT basse, etc.) | `RunLevel::HALT` (sécurité hardware complète) |
+| `FAILSAFE_SOFT` | Silence du lien remote (déconnexion, perte signal) | `RunLevel::IDLE` (mise en attente, reprise automatique) |
 
 **Priorité** : `failsafe > remote_link > runlevel` — une vraie faute (`FAILSAFE`) l'emporte toujours sur une simple perte de lien.
 
@@ -276,23 +276,23 @@ src/core/system/failsafe/
 
 ```text
 src/core/system/vbat/
-└── vbat_failsafe.cb     // Canal FAILSAFE_VBAT (réarmé par vbat_update)
+└── vbat_failsafe.cb     // Canal VBAT_FAIL (réarmé par vbat_update)
 
 src/core/system/com/link_health/
-└── failsafe_com_link.cb // Canal FAILSAFE_COM_LINK (écrit par com_rx_update : lien onLoss FAILSAFE perdu)
+└── failsafe_com_link.cb // Canal BOARD_LINK_FAIL (écrit par com_rx_update : lien onLoss FAILSAFE perdu)
 ```
 
-**Chaîne REMOTE_LINK_LOST** (séparée) :
+**Chaîne FAILSAFE_SOFT** (séparée) :
 
 ```text
 src/core/system/com/link_health/
-├── remote_link_lost.cb           // Canal REMOTE_LINK_LOST (agrégat)
-├── com_link_lost.cb              // Canal COM_LINK_LOST (contributeur : lien onLoss IDLE)
+├── remote_link_lost.cb           // Canal FAILSAFE_SOFT (agrégat)
+├── com_link_lost.cb              // Canal NODE_LINK_FAIL (contributeur : lien onLoss IDLE)
 ├── remote_link_fallback_chain.h  // Déclarations kRemoteLinkFallbackChain[]
 └── remote_link_fallback_chain.cpp // Chaîne d'agrégation (reset + OR-guard)
 
 src/core/config/inputs/
-└── ps4_ds4_bt_link_lost.cb       // Canal PS4_DS4_BT_LINK_LOST (contributeur)
+└── ps4_ds4_bt_link_lost.cb       // Canal PS4_DS4_BT_FAIL (contributeur)
 ```
 
 ---
@@ -304,10 +304,10 @@ src/core/config/inputs/
 | Canal `FAILSAFE` | `src/core/system/failsafe/failsafe.cb` |
 | Chaîne `kFailsafeChain[]` | `src/core/system/failsafe/failsafe_chain.cpp` |
 | Processor `cb_or_fn` | `src/core/system/combus/processors/logic/cb_or.h` |
-| Réarmement `FAILSAFE_VBAT` | `src/core/system/vbat/vbat.cpp` (`vbat_update()`) |
+| Réarmement `VBAT_FAIL` | `src/core/system/vbat/vbat.cpp` (`vbat_update()`) |
 | Orchestration | `src/machines/system/sys_manager.cpp` (`sys_manager_update()`) |
 | Réaction runlevel | `src/machines/config/machines/volvo_A60H_bruder/combus/processors/runlevel/runlevel_procs.h` |
-| Réaction hardware | `src/machines/main.cpp` (`case RunLevel::FAILSAFE`) |
-| Lecture état | `comBus.digitalBus[DigitalComBusID::FAILSAFE].value` |
+| Réaction hardware | `src/machines/main.cpp` (`case RunLevel::HALT`) |
+| Lecture état | `comBus.digitalBus[DigitalComBusID::FAILSAFE_HARD].value` |
 
 **Note** : `runlevel_procs.h` est actuellement situé dans la config machine (`volvo_A60H_bruder/...`).  Une migration vers le core est prévue lors d'un rework futur des processors combus, pour harmoniser l'organisation des chaînes de processors.

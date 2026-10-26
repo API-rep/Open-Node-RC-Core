@@ -5,7 +5,7 @@
 
 #include "com_manager.h"
 
-#include <core/config/machines/combus_types.h>          // DigitalComBusID::COM_LINK_LOST, FAILSAFE_COM_LINK
+#include <core/config/machines/combus_types.h>          // DigitalComBusID::NODE_LINK_FAIL, BOARD_LINK_FAIL
 #include <core/system/combus/combus_access.h>           // combus_set_digital()
 #include <core/system/combus/protocol/combus_rx.h>      // combus_rx_update()
 #include <core/system/combus/protocol/combus_links.h>   // combus_links_lost(), combus_links_update()
@@ -34,10 +34,10 @@ void com_rx_update(ComBus& bus) {
 	// --- Link loss policy (onLoss): log the changes, feed the IDLE and FAILSAFE contributors each cycle ---
   combus_links_update(bus);
 #if defined(HAS_REMOTE_LINK_LOST_FALLBACK)
-  combus_set_digital(bus, DigitalComBusID::COM_LINK_LOST, combus_links_lost(LinkLossAction::IDLE));
+  combus_set_digital(bus, DigitalComBusID::NODE_LINK_FAIL, combus_links_lost(LinkLossAction::IDLE));
 #endif
 #if defined(HAS_FAILSAFE)
-  combus_set_digital(bus, DigitalComBusID::FAILSAFE_COM_LINK, combus_links_lost(LinkLossAction::FAILSAFE));
+  combus_set_digital(bus, DigitalComBusID::BOARD_LINK_FAIL, combus_links_lost(LinkLossAction::FAILSAFE));
 #endif
 
 }

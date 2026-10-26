@@ -10,7 +10,7 @@
  *                                       (consume + guard pattern,
  *                                       WIP §5 / §6).
  *
- *   The chain has a primary `outCh` = `DigitalComBusID::FAILSAFE` so
+ *   The chain has a primary `outCh` = `DigitalComBusID::FAILSAFE_HARD` so
  *   the runner commits the latched `value` to the top-level ComBus
  *   channel. Consumers (e.g. `main.cpp`) then read `FAILSAFE` directly
  *   on the bus to trigger their reaction.
@@ -27,7 +27,7 @@
 
 #include <core/system/combus/processors/base/cb_reset.h>   // cb_reset_fn
 #include <core/system/combus/processors/logic/cb_or.h>      // cb_or_fn
-#include <core/config/machines/combus_types.h>              // DigitalComBusID::FAILSAFE / FAILSAFE_VBAT / FAILSAFE_COM_LINK
+#include <core/config/machines/combus_types.h>              // DigitalComBusID::FAILSAFE_HARD / VBAT_FAIL / BOARD_LINK_FAIL
 
 
 // =============================================================================
@@ -53,27 +53,27 @@ CbProc kFailsafeProcs[] = {
 
 #if defined(HAS_VBAT_FAILSAFE)
     // --- 1. VBAT OR-guard contributor (optional) ---------------------------
-    // Reads FAILSAFE_VBAT (proof-of-life from vbat_update). If the cell
-    // voltage is below cutoff, FAILSAFE_VBAT is true; this OR-guard
-    // latches the pipeline value to 1 (= DigitalComBusID::FAILSAFE fault)
-    // and resets FAILSAFE_VBAT back to fault (consume + guard).
+    // Reads VBAT_FAIL (proof-of-life from vbat_update). If the cell
+    // voltage is below cutoff, VBAT_FAIL is true; this OR-guard
+    // latches the pipeline value to 1 (= DigitalComBusID::FAILSAFE_HARD fault)
+    // and resets VBAT_FAIL back to fault (consume + guard).
     {
         .name    = "failsafe_or_vbat",
-        .inCh    = DigitalComBusID::FAILSAFE_VBAT,
-        .outCh   = DigitalComBusID::FAILSAFE_VBAT,
+        .inCh    = DigitalComBusID::VBAT_FAIL,
+        .outCh   = DigitalComBusID::VBAT_FAIL,
         .fn      = cb_or_fn,
     },
 #endif
 
     // --- 2. ComBus link contributor (always present) -----------------------
-    // Reads FAILSAFE_COM_LINK, written each cycle by com_rx_update() from the
+    // Reads BOARD_LINK_FAIL, written each cycle by com_rx_update() from the
     // receiving links whose loss policy is FAILSAFE (combus_links_lost()):
     // true while one of them is lost, or never seen after its startup grace.
     // A board without such a link gets false each cycle.
     {
         .name    = "failsafe_or_com_link",
-        .inCh    = DigitalComBusID::FAILSAFE_COM_LINK,
-        .outCh   = DigitalComBusID::FAILSAFE_COM_LINK,
+        .inCh    = DigitalComBusID::BOARD_LINK_FAIL,
+        .outCh   = DigitalComBusID::BOARD_LINK_FAIL,
         .fn      = cb_or_fn,
     },
 
@@ -95,14 +95,14 @@ const uint8_t kFailsafeProcsCount = sizeof(kFailsafeProcs) / sizeof(kFailsafePro
  *
  * @details The chain has no primary `inCh` (the reset proc seeds the
  *   pipeline value to 0).  The primary `outCh` is
- *   `DigitalComBusID::FAILSAFE` — the runner commits the latched
+ *   `DigitalComBusID::FAILSAFE_HARD` — the runner commits the latched
  *   pipeline value to the top-level channel after all procs.
  */
 CbChain kFailsafeChain[] = {
     {
         .name      = "failsafe_main",
         .inCh      = std::nullopt,                          // no seed
-        .outCh     = DigitalComBusID::FAILSAFE,             // top-level latch
+        .outCh     = DigitalComBusID::FAILSAFE_HARD,             // top-level latch
         .procs     = kFailsafeProcs,
         .procCount = kFailsafeProcsCount,
     },

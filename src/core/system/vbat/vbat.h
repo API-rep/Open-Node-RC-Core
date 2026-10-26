@@ -6,17 +6,17 @@
  *   Composed of two independent sub-modules:
  *
  *   - `vbat_sense` : hardware ADC sensing, sliding average, cell auto-detection,
- *     low-bat flag. Writes `DigitalComBusID::FAILSAFE_VBAT` (see vbat_failsafe.cb)
+ *     low-bat flag. Writes `DigitalComBusID::VBAT_FAIL` (see vbat_failsafe.cb)
  *     as proof-of-life each cycle. Activated by `-D VBAT_LIPO` (or other
  *     VBAT_xxx flags) in platformio.ini. Sets HAS_VBAT_SENSING when active
  *     (defined by the battery profile backend).
  *
  *   - `vbat_alert` : reactions to low battery (beep, sound alert, LED alert, etc.).
- *     Reads `DigitalComBusID::FAILSAFE_VBAT` from the ComBus digital bus and
+ *     Reads `DigitalComBusID::VBAT_FAIL` from the ComBus digital bus and
  *     triggers reactions. Activated by any of the `-D VBAT_ALERT_*` compile flags.
  *
  *   Both sub-modules are optional and can operate independently.
- *   The `FAILSAFE_VBAT` ComBus channel is the pivot of battery sensing:
+ *   The `VBAT_FAIL` ComBus channel is the pivot of battery sensing:
  *   `vbat_sense` (or any remote node on the bus) writes it, and `vbat_alert`
  *   reads it, regardless of who produced the sensing data.
  *
@@ -56,16 +56,16 @@ void vbat_init(VBatSense* sense = nullptr);
  * @details Sequences four steps in order:
  *   1. `vbat_sense_tick()` — (if HAS_VBAT_SENSING) ADC read, sliding average,
  *      low-bat detection.
- *   2. (if HAS_VBAT_FAILSAFE) — writes `DigitalComBusID::FAILSAFE_VBAT` from
- *      `vbat_is_low(0)`. This re-arms the FAILSAFE_VBAT contributor each cycle.
+ *   2. (if HAS_VBAT_FAILSAFE) — writes `DigitalComBusID::VBAT_FAIL` from
+ *      `vbat_is_low(0)`. This re-arms the VBAT_FAIL contributor each cycle.
  *   3. (future)            — ComBus runlevel sleeping / re-arm.
- *   4. `vbat_alert_tick()`  — read `DigitalComBusID::FAILSAFE_VBAT`, trigger
+ *   4. `vbat_alert_tick()`  — read `DigitalComBusID::VBAT_FAIL`, trigger
  *      gated reactions.
  *
  *   In ComBus-only mode, the input bridge must populate
- *   `DigitalComBusID::FAILSAFE_VBAT` before this function is called.
+ *   `DigitalComBusID::VBAT_FAIL` before this function is called.
  *
- * @param bus  Node ComBus receiving the `FAILSAFE_VBAT` contributor.
+ * @param bus  Node ComBus receiving the `VBAT_FAIL` contributor.
  */
 
 void vbat_update(ComBus& bus);

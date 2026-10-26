@@ -9,12 +9,12 @@
  *      `input_update(bus)` — each backend writes its OWN *_LINK_LOST
  *      contributor (FS1 redesign, see doc/failsafe_module.md §12.5).
  *   2. Battery update via `vbat_update()` — ADC sensing, sliding average,
- *      low-bat detection, and re-arm of `DigitalComBusID::FAILSAFE_VBAT`.
+ *      low-bat detection, and re-arm of `DigitalComBusID::VBAT_FAIL`.
  *   3. Failsafe update via `failsafe_update(bus)` — runs the FAILSAFE
  *      processor chain (reset + contributors), publishes the aggregated
- *      `DigitalComBusID::FAILSAFE` channel.
+ *      `DigitalComBusID::FAILSAFE_HARD` channel.
  *   4. Chantier 12.5 — `remote_link_fallback_update(bus)` (gated by
- *      `HAS_REMOTE_LINK_LOST_FALLBACK`) — if REMOTE_LINK_LOST just rose,
+ *      `HAS_REMOTE_LINK_LOST_FALLBACK`) — if FAILSAFE_SOFT just rose,
  *      forces RUNLEVEL = IDLE.
  *
  *   **Chantier 12.6 (cleanup):** the historical open-drain
@@ -38,12 +38,12 @@
  *   in `loop()`.
  *
  *   Sound node: no equivalent needed — link health is monitored per-link
- *   by com_rx_update(), which publishes `COM_LINK_LOST` and
- *   `FAILSAFE_COM_LINK` from the loss policy of each link.  See
+ *   by com_rx_update(), which publishes `NODE_LINK_FAIL` and
+ *   `BOARD_LINK_FAIL` from the loss policy of each link.  See
  *   `com_manager.cpp` for the wiring.
  *
  *   The aggregated Failsafe state is published on
- *   `comBus.digitalBus[DigitalComBusID::FAILSAFE]` by the Failsafe chain
+ *   `comBus.digitalBus[DigitalComBusID::FAILSAFE_HARD]` by the Failsafe chain
  *   (see `doc/failsafe_module.md`).
  *****************************************************************************/
 #pragma once
@@ -61,14 +61,14 @@
  * @details Executes in order:
  *   1. `input_refresh()` (core) — physical acquisition.
  *      `input_update(bus)` (machine) — input -> ComBus mapping.
- *   2. `vbat_update()` — battery sensing + re-arm of `FAILSAFE_VBAT`.
+ *   2. `vbat_update()` — battery sensing + re-arm of `VBAT_FAIL`.
  *   3. `failsafe_update(bus)` — runs the FAILSAFE chain, publishes
- *      `DigitalComBusID::FAILSAFE` on the bus.
+ *      `DigitalComBusID::FAILSAFE_HARD` on the bus.
  *   4. Chantier 12.5 — `remote_link_fallback_update(bus)` (only if
  *      `HAS_REMOTE_LINK_LOST_FALLBACK` is defined): observes
- *      `REMOTE_LINK_LOST` and forces RUNLEVEL = IDLE on the rising edge.
+ *      `FAILSAFE_SOFT` and forces RUNLEVEL = IDLE on the rising edge.
  *
- *   Returns `void`.  Consumers read `comBus.digitalBus[DigitalComBusID::FAILSAFE]`
+ *   Returns `void`.  Consumers read `comBus.digitalBus[DigitalComBusID::FAILSAFE_HARD]`
  *   for the aggregated Failsafe state.
  */
 void sys_manager_update(ComBus& bus);

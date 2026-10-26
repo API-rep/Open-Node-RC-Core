@@ -9,7 +9,7 @@
  *     standard `proc_chain_update()` runner.
  *
  *   No global pivot (`failsafeBus`) is maintained here — the chain
- *   writes its aggregated result directly to the `DigitalComBusID::FAILSAFE`
+ *   writes its aggregated result directly to the `DigitalComBusID::FAILSAFE_HARD`
  *   ComBus channel.  Consumers read `FAILSAFE` on the bus.
  *****************************************************************************/
 

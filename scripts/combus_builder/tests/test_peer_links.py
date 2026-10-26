@@ -98,7 +98,7 @@ def test_row1_link_set_and_wire_order(link):
     analog = [c.id for c in link.channels if c.type == "analog"]
     digital = [c.id for c in link.channels if c.type == "digital"]
     assert analog == ["TEST_BRAKE_BUS", "TEST_TILT_ANGLE"]
-    assert digital == ["TEST_COUPLED_FAULT", "TEST_LIGHTS"]
+    assert digital == ["TEST_COUPLED_FAIL", "TEST_LIGHTS"]
 
 
 def test_row2_row3_channels_known_on_one_side_only_are_absent(link):
@@ -111,7 +111,7 @@ def test_row4_flow_on_the_link(link):
     flow = {c.id: c.flow for c in link.channels}
     assert flow == {"TEST_BRAKE_BUS": "to_peer",       # downlink_pt: the tractor relays it
                     "TEST_TILT_ANGLE": "from_peer",
-                    "TEST_COUPLED_FAULT": "or",
+                    "TEST_COUPLED_FAIL": "or",
                     "TEST_LIGHTS": "to_peer"}
 
 
@@ -128,7 +128,7 @@ def test_row5_row7_generated_table_and_build_log(tmp_path, tractor, capsys):
     text = (tmp_path / "combus_peer_links.h").read_text(encoding="utf-8")
     assert ("static_cast<uint8_t>(AnalogComBusID::TEST_BRAKE_BUS), "
             "static_cast<uint8_t>(AnalogComBusID::TEST_TILT_ANGLE)") in text
-    assert ("static_cast<uint8_t>(DigitalComBusID::TEST_COUPLED_FAULT), "
+    assert ("static_cast<uint8_t>(DigitalComBusID::TEST_COUPLED_FAIL), "
             "static_cast<uint8_t>(DigitalComBusID::TEST_LIGHTS)") in text
     assert "static constexpr ComPeerLink kLink = {" in text      # step 3.1b: the descriptor of the link
     assert '"test_trailer", kMd5, kMd5Stable,' in text

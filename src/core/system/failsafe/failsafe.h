@@ -18,7 +18,7 @@
  *
  *   The Failsafe module is fully **decoupled from RunLevels**: it
  *   does not decide to switch to `IDLE`, `SLEEP`, etc. — it only
- *   publishes the aggregated `DigitalComBusID::FAILSAFE` channel.
+ *   publishes the aggregated `DigitalComBusID::FAILSAFE_HARD` channel.
  *   Environment-specific reactions (e.g. `main.cpp` reading `FAILSAFE`
  *   to force `RunLevel::SLEEPING`) are handled separately.
  *****************************************************************************/
@@ -51,7 +51,7 @@ void failsafe_init();
  *     - for each proc: read `proc->inCh` into `proc->inValue`,
  *       call `proc.fn(&proc, value, claimed)`, commit `proc->outValue`
  *       to `proc->outCh` (using `combus_set_digital()` layer-checked);
- *     - commit final `value` to `ch.outCh` (here = `DigitalComBusID::FAILSAFE`).
+ *     - commit final `value` to `ch.outCh` (here = `DigitalComBusID::FAILSAFE_HARD`).
  *
  *   WIP §6 invariant: every contributor must run every cycle
  *   (the standard runner skips procs when `claimed = true`; Failsafe

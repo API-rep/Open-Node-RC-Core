@@ -15,12 +15,12 @@
  *                 When FAILSAFE=true → write RUNLEVEL=FAILSAFE (dedicated value, see machines_defs.h)
  *                 and claim the chain (blocks runlevel proc).
  *                 When FAILSAFE=false → no write, no claim.
- *                 The dedicated RunLevel::FAILSAFE value triggers the
+ *                 The dedicated RunLevel::HALT value triggers the
  *                 hardware safety reaction (stop/sleep/disable drivers)
  *                 in main.cpp's switch(curRunLevel).
  *
- *   1b remote_link: inCh = REMOTE_LINK_LOST.  EDGE-TRIGGERED (cb_runlevel_once_fn).
- *                 chantier 12.5: REMOTE_LINK_LOST is the OR-aggregated health of all
+ *   1b remote_link: inCh = FAILSAFE_SOFT.  EDGE-TRIGGERED (cb_runlevel_once_fn).
+ *                 chantier 12.5: FAILSAFE_SOFT is the OR-aggregated health of all
  *                 remote input sources (PS4_BT, UART, …) computed by the
  *                 remote_link_fallback_chain.  On its rising edge (0→1, link
  *                 just dropped), force RUNLEVEL=IDLE and claim the chain (so
@@ -54,7 +54,7 @@
 
   ///  failsafe — FAILSAFE=true → force RUNLEVEL=FAILSAFE (dedicated value, see machines_defs.h), claim chain.
 static constexpr CbRunlevelCfg kFailsafeRunlevelCfg {
-    .high  = RunLevel::FAILSAFE,    ///< FAILSAFE=true → write FAILSAFE (dedicated value — triggers hardware safety in main.cpp).
+    .high  = RunLevel::HALT,    ///< FAILSAFE=true → write FAILSAFE (dedicated value — triggers hardware safety in main.cpp).
     .low   = std::nullopt,          ///< FAILSAFE=false → no write.
     .claim = true,                  ///< Block runlevel proc when failsafe is active.
 };
@@ -67,12 +67,12 @@ static constexpr CbRunlevelCfg kRunlevelCfg {
 };
 
 #if defined(HAS_REMOTE_LINK_LOST_FALLBACK)
-  ///  remote_link — chantier 12.5: REMOTE_LINK_LOST 0→1 → force RUNLEVEL=IDLE + claim.
+  ///  remote_link — chantier 12.5: FAILSAFE_SOFT 0→1 → force RUNLEVEL=IDLE + claim.
   ///  Rising edge only (edge-triggered).  Falling edge = manual recovery via KEY.
   ///  Sits AFTER failsafe so a FAILSAFE condition always wins.
 static constexpr CbRunlevelCfg kRemoteLinkRunlevelCfg {
-    .high  = RunLevel::IDLE,        ///< REMOTE_LINK_LOST 0→1 → write IDLE.
-    .low   = std::nullopt,          ///< REMOTE_LINK_LOST 1→0 → no write: the machine stays IDLE until the operator presses KEY.
+    .high  = RunLevel::IDLE,        ///< FAILSAFE_SOFT 0→1 → write IDLE.
+    .low   = std::nullopt,          ///< FAILSAFE_SOFT 1→0 → no write: the machine stays IDLE until the operator presses KEY.
     .claim = true,                  ///< Block KEY_ACTIVE proc on link loss.
 };
 #endif  // HAS_REMOTE_LINK_LOST_FALLBACK
@@ -99,7 +99,7 @@ static CbRunlevelOnceState gRemoteLinkOnceState {};
  * @brief  Runlevel chain proc array.
  * @details Steps (chantier 12.5 new design):
  *   1  failsafe    : CONTINUOUS — FAILSAFE=true → RUNLEVEL=FAILSAFE + claim (highest priority).
- *   1b remote_link : EDGE-TRIGGERED — REMOTE_LINK_LOST 0→1 → RUNLEVEL=IDLE + claim.
+ *   1b remote_link : EDGE-TRIGGERED — FAILSAFE_SOFT 0→1 → RUNLEVEL=IDLE + claim.
  *   2  runlevel    : EDGE-TRIGGERED — KEY_ACTIVE transition → RUNLEVEL=STARTING or TURNING_OFF.
  *
  *   Priority: failsafe > remote_link > runlevel.  Failsafe always wins
@@ -108,21 +108,21 @@ static CbRunlevelOnceState gRemoteLinkOnceState {};
  *   explicitly reset (KEY → STARTING) once the link is back.
  */
 static CbProc kRunlevelProcs[] = {
-      // 1. failsafe — CONTINUOUS: FAILSAFE=true → force RunLevel::FAILSAFE (dedicated) + claim chain.
+      // 1. failsafe — CONTINUOUS: FAILSAFE=true → force RunLevel::HALT (dedicated) + claim chain.
     { .name  = "failsafe",
-      .inCh  = DigitalComBusID::FAILSAFE,
+      .inCh  = DigitalComBusID::FAILSAFE_HARD,
       .fn    = cb_runlevel_fn,
       .cfg   = &kFailsafeRunlevelCfg,
       .state = nullptr,
     },
 #if defined(HAS_REMOTE_LINK_LOST_FALLBACK)
-      // 1b. remote_link — EDGE-TRIGGERED: REMOTE_LINK_LOST 0→1 → RUNLEVEL=IDLE + claim.
+      // 1b. remote_link — EDGE-TRIGGERED: FAILSAFE_SOFT 0→1 → RUNLEVEL=IDLE + claim.
       //     Sits right after failsafe so it benefits from failsafe's claim
       //     (no need to check FAILSAFE here — chain is already claimed).
       //     Gated by HAS_REMOTE_LINK_LOST_FALLBACK — without the aggregator
-      //     chain, the proc is meaningless (REMOTE_LINK_LOST is never latched).
+      //     chain, the proc is meaningless (FAILSAFE_SOFT is never latched).
     { .name  = "remote_link",
-      .inCh  = DigitalComBusID::REMOTE_LINK_LOST,
+      .inCh  = DigitalComBusID::FAILSAFE_SOFT,
       .fn    = cb_runlevel_once_fn,
       .cfg   = &kRemoteLinkRunlevelCfg,
       .state = &gRemoteLinkOnceState,

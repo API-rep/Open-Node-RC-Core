@@ -33,7 +33,7 @@ static uint16_t cbRead(const ComBus& bus, const ChanOpt& ch)
  *         outputs no longer touch link-health state.  Each input backend
  *         (PS4_BT, UART, ...) writes its own *_LINK_LOST contributor channel,
  *         and the aggregator chain (`remote_link_fallback_chain.cpp`) handles
- *         the OR-aggregation into `REMOTE_LINK_LOST`.
+ *         the OR-aggregation into `FAILSAFE_SOFT`.
  */
 static void cbWrite(ComBus& bus, const ChanOpt& ch, uint16_t value)
 {

@@ -1,6 +1,6 @@
 /******************************************************************************
  * @file remote_link_fallback_chain.h
- * @brief REMOTE_LINK_LOST → IDLE fallback chain — registry declarations.
+ * @brief FAILSAFE_SOFT → IDLE fallback chain — registry declarations.
  *
  * @details Companion header to remote_link_fallback_chain.cpp.  Exposes the
  *   static chain table and count for the runner to iterate over.  When
@@ -44,7 +44,7 @@ extern const uint8_t kRemoteLinkFallbackChainCount;
 // =============================================================================
 
 /**
- * @brief Run the REMOTE_LINK_LOST → IDLE fallback chain once.
+ * @brief Run the FAILSAFE_SOFT → IDLE fallback chain once.
  *
  * @details Convenience façade equivalent to
  *   `proc_chain_update(kRemoteLinkFallbackChain, kRemoteLinkFallbackChainCount, bus)`.

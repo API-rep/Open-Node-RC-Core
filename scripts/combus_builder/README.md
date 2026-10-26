@@ -373,7 +373,7 @@ compiler avec les fichiers écrits par un autre. C'était sans effet tant que to
 les envs généraient le même contenu ; depuis que `requires` écarte les channels
 dont un flag manque, deux envs peuvent avoir des jeux de channels différents
 (constaté : la Volvo compilée après l'env de test ne trouvait plus
-`REMOTE_LINK_LOST`). Le dossier n'est pas nettoyé par `-t clean` : pour forcer la
+`FAILSAFE_SOFT`). Le dossier n'est pas nettoyé par `-t clean` : pour forcer la
 régénération d'un env, supprimer `<build_dir>/<env>/combus_generated`.
 `scripts/combus_test_add_generated_source.py` suit la même règle. L'ancien dossier
 partagé `<build_dir>/combus_generated` n'est plus utilisé et peut être supprimé.

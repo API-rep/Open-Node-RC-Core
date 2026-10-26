@@ -11,7 +11,7 @@
 #
 # Notes:
 # - FAILSAFE is the aggregator, not a contributor.
-# - Contributors (FAILSAFE_VBAT, etc.) are declared in their own .cb
+# - Contributors (VBAT_FAIL, etc.) are declared in their own .cb
 #   files (e.g. src/core/system/vbat/vbat_failsafe.cb).
 # - FAILSAFE_END is a legacy range marker. The generator deduces it
 #   automatically from the list of channels in the group.
@@ -28,7 +28,7 @@
 
 
 channels:
-  - id: FAILSAFE
+  - id: FAILSAFE_HARD
     infoName: "Failsafe aggregator"
     type: digital
     scope: SYSTEM

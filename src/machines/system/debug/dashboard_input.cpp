@@ -38,10 +38,10 @@ static uint8_t       s_digitalCh  = 0;
  */
 static void renderDigitalCompact(const ComBus* bus, uint8_t n)
 {
-	// Chantier 12.6: '*' = healthy is now derived from REMOTE_LINK_LOST
+	// Chantier 12.6: '*' = healthy is now derived from FAILSAFE_SOFT
 	// (SYSTEM aggregator).  Fallback to lastFrameMs proxy on autonomous builds.
 #if defined(HAS_REMOTE_LINK_LOST_FALLBACK)
-	const bool busDriven = !bus->digitalBus[static_cast<uint8_t>(DigitalComBusID::REMOTE_LINK_LOST)].value;
+	const bool busDriven = !bus->digitalBus[static_cast<uint8_t>(DigitalComBusID::FAILSAFE_SOFT)].value;
 #else
 	const bool busDriven = (millis() - bus->lastFrameMs) < 2000u;
 #endif
@@ -108,7 +108,7 @@ static void render_input_view() {
 	dLine("  RunLevel: %-14s  keyOn: %-5s  battLow: %-5s  analogBusMax: %-7u  %u analog + %u digital ch  denied: %u",
 	      dashRunLevelStr((RunLevel)s_bus->analogBus[static_cast<uint8_t>(AnalogComBusID::RUNLEVEL)].value),
 	      s_bus->digitalBus[static_cast<uint8_t>(DigitalComBusID::KEY_ACTIVE)].value ? "YES" : "NO",
-	      s_bus->digitalBus[static_cast<uint8_t>(DigitalComBusID::FAILSAFE_VBAT)].value ? "FAIL" : "OK",
+	      s_bus->digitalBus[static_cast<uint8_t>(DigitalComBusID::VBAT_FAIL)].value ? "FAIL" : "OK",
 	      (unsigned)s_bus->analogBusMaxVal, s_analogCh, s_digitalCh, (unsigned)combus_denied_writes());
 
 	dBot();

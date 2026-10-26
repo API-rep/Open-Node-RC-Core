@@ -12,7 +12,7 @@ Coverage:
   - Comportement absent : reproduit le défaut générateur
                            (CbusNeutral / false).
   - Conflit de fusion : deux `value` différents pour le même id → erreur.
-  - Failsafe : channels FAILSAFE / FAILSAFE_VBAT démarrent à `true`.
+  - Failsafe : channels FAILSAFE / VBAT_FAIL démarrent à `true`.
   - Régression : tests existants pour `value=CbusNeutral` / `false`
                  restent verts.
 
@@ -525,7 +525,7 @@ def test_failsafe_cb_declares_value_high(tmp_path: Path):
     with p.open("r", encoding="utf-8") as f:
         raw = yaml.safe_load(f)
     channels = raw.get("channels", [])
-    failsafe = next((c for c in channels if c.get("id") == "FAILSAFE"), None)
+    failsafe = next((c for c in channels if c.get("id") == "FAILSAFE_HARD"), None)
     assert failsafe is not None
     assert failsafe.get("value") == "high", (
         f"FAILSAFE channel must declare `value: high` for fail-safe default; "
@@ -544,10 +544,10 @@ def test_vbat_failsafe_cb_declares_value_high(tmp_path: Path):
     with p2.open("r", encoding="utf-8") as f:
         raw = yaml.safe_load(f)
     channels = raw.get("channels", [])
-    vbat = next((c for c in channels if c.get("id") == "FAILSAFE_VBAT"), None)
+    vbat = next((c for c in channels if c.get("id") == "VBAT_FAIL"), None)
     assert vbat is not None
     assert vbat.get("value") == "high", (
-        f"FAILSAFE_VBAT channel must declare `value: high`; "
+        f"VBAT_FAIL channel must declare `value: high`; "
         f"got {vbat.get('value')!r}"
     )
 
@@ -563,7 +563,7 @@ def test_failsafe_channels_canonicalise_to_true():
     # Simulate A3 output: list[tuple[Path, type_label, raw_dict]]
     parsed = [(p, "cb", raw)]
     result = canonize(parsed)
-    ch = next(c for c in result.canonical_definitions if c.id == "FAILSAFE")
+    ch = next(c for c in result.canonical_definitions if c.id == "FAILSAFE_HARD")
     assert ch.value == "high"
 
 

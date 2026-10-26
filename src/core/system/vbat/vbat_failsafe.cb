@@ -16,12 +16,12 @@
 # - requires: [HAS_FAILSAFE, HAS_VBAT_FAILSAFE] — the contributor is
 #   only emitted when both flags are set (no aggregator → no contributor).
 # - The legacy BATTERY_LOW channel and comBus.batteryIsLow struct field
-#   have been removed. Consumers must migrate to FAILSAFE_VBAT (or its
+#   have been removed. Consumers must migrate to VBAT_FAIL (or its
 #   derived local signal) directly.
 
 
 channels:
-  - id: FAILSAFE_VBAT
+  - id: VBAT_FAIL
     infoName: "VBAT failsafe contributor"
     type: digital
     scope: SYSTEM

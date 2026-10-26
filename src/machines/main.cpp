@@ -163,7 +163,7 @@ void loop() {
         uint8_t  chIdx    = static_cast<uint8_t>(machine.dcDev[i].comChannel.value());
         uint16_t busVal   = comBus.analogBus[chIdx].value;  ///< read-only — ComBus is never modified here
 
-        uint16_t motorCmd = busVal;   // Chantier 12.6: legacy `isDrived` comment removed — link health is now monitored by REMOTE_LINK_LOST.
+        uint16_t motorCmd = busVal;   // Chantier 12.6: legacy `isDrived` comment removed — link health is now monitored by FAILSAFE_SOFT.
 
 #ifndef PATCH_MOTORS_FORCE_SLEEP
         float finalSpeed = (float)map(motorCmd, 0, comBus.analogBusMaxVal, -PERCENT_MAX, PERCENT_MAX);
@@ -205,7 +205,7 @@ void loop() {
     }
 
     // ---------------------------------------------------------
-    case RunLevel::FAILSAFE : {
+    case RunLevel::HALT : {
     // ---------------------------------------------------------
       // FS2 — dedicated hardware safety reaction.  Triggered by the
       // `cb_runlevel_fn` instance in runlevelProcs[] when FAILSAFE=true.

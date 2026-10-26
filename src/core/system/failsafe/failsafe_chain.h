@@ -10,7 +10,7 @@
  *       conditionally under `#if defined(HAS_XXX_FAILSAFE)` blocks.
  *
  *   The single chain writes the latched pipeline value to
- *   `DigitalComBusID::FAILSAFE` via its primary `outCh`.  Consumers
+ *   `DigitalComBusID::FAILSAFE_HARD` via its primary `outCh`.  Consumers
  *   (e.g. `main.cpp`) read this channel directly on the bus.
  *
  *   The `kFailsafeProcsCount` is computed at link time
@@ -57,7 +57,7 @@ extern const uint8_t kFailsafeProcsCount;
  *
  * @details The chain has no primary `inCh` (the reset proc seeds the
  *   pipeline value to 0).  The primary `outCh` is
- *   `DigitalComBusID::FAILSAFE` — the standard runner commits the
+ *   `DigitalComBusID::FAILSAFE_HARD` — the standard runner commits the
  *   latched pipeline value to the top-level ComBus channel after all
  *   procs.
  */

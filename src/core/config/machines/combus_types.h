@@ -6,7 +6,7 @@
  *
  * USAGE
  *   #include <core/config/machines/combus_types.h>
- *   combus_set_digital(comBus, DigitalComBusID::FAILSAFE_VBAT, true);
+ *   combus_set_digital(comBus, DigitalComBusID::VBAT_FAIL, true);
  *
  *   This is the single entry point for core code (vbat, light, sound_module,
  *   dashboard helpers, ...) that needs to reference machine-specific channel

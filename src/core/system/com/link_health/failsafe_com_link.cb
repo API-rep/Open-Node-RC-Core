@@ -1,6 +1,6 @@
 # failsafe_com_link.cb — loss of a ComBus link with the FAILSAFE reaction
 #
-# This file declares the FAILSAFE_COM_LINK ComBus channel: true when at least
+# This file declares the BOARD_LINK_FAIL ComBus channel: true when at least
 # one receiving ComBus link of the board whose loss policy is FAILSAFE (onLoss,
 # by default an intra-node link) is lost, or still never seen once its startup
 # grace (startupGraceMs) has elapsed.  It is a contributor of the FAILSAFE
@@ -17,7 +17,7 @@
 
 
 channels:
-  - id: FAILSAFE_COM_LINK
+  - id: BOARD_LINK_FAIL
     infoName: "ComBus link lost (FAILSAFE reaction)"
     type: digital
     scope: BOARD          # private to the board owning the links (NOT shared)

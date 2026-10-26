@@ -1,8 +1,8 @@
 # ps4_ds4_bt_link_lost.cb — PS4 DualShock Bluetooth link health signal
 #
-# This file declares the PS4_DS4_BT_LINK_LOST ComBus channel. It is the
+# This file declares the PS4_DS4_BT_FAIL ComBus channel. It is the
 # dedicated "PS4 BT link alive" signal of the PS4 DualShock Bluetooth input
-# backend (src/core/config/inputs/PS4_dualshock.*). The REMOTE_LINK_LOST
+# backend (src/core/config/inputs/PS4_dualshock.*). The FAILSAFE_SOFT
 # fallback chain (src/core/system/com/link_health/remote_link_fallback_chain.cpp)
 # consumes it when HAS_REMOTE_LINK_LOST_FALLBACK is defined.
 #
@@ -14,7 +14,7 @@
 #   to false (= healthy) each cycle while the controller is connected; the
 #   consumer chain puts it back to true after reading it (cb_or_fn: consume +
 #   guard), so its instantaneous value on the bus is not the link state: read
-#   REMOTE_LINK_LOST instead.
+#   FAILSAFE_SOFT instead.
 # - requires: [INPUT_PS4_DS4_BT] — the channel exists only when the flag is
 #   defined (node mode: per board; single environment: for the environment;
 #   the builder logs a channel it does not generate).  An environment without
@@ -23,14 +23,14 @@
 #   same flag.
 # - theme: com — all link-health channels share the `com` theme.
 # - type: digital (bool).
-# - This channel is a CONTRIBUTOR to REMOTE_LINK_LOST (chantier 12.5
-#   new design).  The REMOTE_LINK_LOST channel is the OR-aggregated
+# - This channel is a CONTRIBUTOR to FAILSAFE_SOFT (chantier 12.5
+#   new design).  The FAILSAFE_SOFT channel is the OR-aggregated
 #   result of all *_LINK_LOST contributors.  See failsafe_module.md
 #   §12.5 (new design).
 
 
 channels:
-  - id: PS4_DS4_BT_LINK_LOST
+  - id: PS4_DS4_BT_FAIL
     infoName: "PS4 DualShock Bluetooth link lost"
     type: digital
     scope: BOARD        # private to the board owning the PS4 backend (NOT shared)
