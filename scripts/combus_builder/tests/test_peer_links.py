@@ -39,6 +39,7 @@ from scripts.combus_builder.links import (
 )
 
 SRC = REPO_ROOT / "src"
+V = "IS_VEHICLE"     # nature of the local node (3.2b): the tractor is the vehicle of the link
 
 
 def _ctx(*flags):
@@ -73,7 +74,7 @@ def trailer():
 
 @pytest.fixture(scope="module")
 def link(tractor, trailer):
-    return compute_link_set("test_tractor", tractor, "test_trailer", trailer)
+    return compute_link_set("test_tractor", tractor, "test_trailer", trailer, V)
 
 
 # =============================================================================
@@ -115,14 +116,14 @@ def test_row4_flow_on_the_link(link):
 
 
 def test_row6_md5_is_symmetric(tractor, trailer):
-    a = compute_link_set("test_tractor", tractor, "test_trailer", trailer)
-    b = compute_link_set("test_trailer", trailer, "test_tractor", tractor)
+    a = compute_link_set("test_tractor", tractor, "test_trailer", trailer, V)
+    b = compute_link_set("test_trailer", trailer, "test_tractor", tractor, "IS_ATTACHMENT")
     assert link_md5(a) == link_md5(b)
     assert [c.id for c in a.channels] == [c.id for c in b.channels]
 
 
 def test_row5_row7_generated_table_and_build_log(tmp_path, tractor, capsys):
-    generate(tractor, _ctx("MACHINE_TYPE_TEST_TRACTOR", "COMBUS_PEER_TEST_TRAILER"), tmp_path)
+    generate(tractor, _ctx("IS_VEHICLE", "MACHINE_TYPE_TEST_TRACTOR", "COMBUS_PEER_TEST_TRAILER"), tmp_path)
     out = capsys.readouterr().out
     text = (tmp_path / "combus_peer_links.h").read_text(encoding="utf-8")
     assert ("static_cast<uint8_t>(AnalogComBusID::TEST_BRAKE_BUS), "
@@ -148,20 +149,20 @@ def test_row8_same_name_different_type_is_an_error():
     a = _canon(_ch("X"))
     b = _canon(_ch("X", type_="digital"))
     with pytest.raises(LinkError, match="X"):
-        compute_link_set("ta", a, "tb", b)
+        compute_link_set("ta", a, "tb", b, V)
 
 
 def test_row9_same_name_different_default_value_is_an_error():
     a = _canon(_ch("X", direction="downlink_pt", value="CbusMinVal"))
     b = _canon(_ch("X", value="CbusMaxVal"))
     with pytest.raises(LinkError, match="X"):
-        compute_link_set("ta", a, "tb", b)
+        compute_link_set("ta", a, "tb", b, V)
 
 
 def test_row10_two_receivers_is_a_dead_channel():
     a = _canon(_ch("HORN"))
     b = _canon(_ch("HORN"))
-    link = compute_link_set("ta", a, "tb", b)
+    link = compute_link_set("ta", a, "tb", b, V)
     assert link.channels == []
     assert any("HORN" in w for w in link.warnings)
 
@@ -170,14 +171,14 @@ def test_row11_two_emitters_is_an_error():
     a = _canon(_ch("X", direction="uplink"))
     b = _canon(_ch("X", direction="uplink"))
     with pytest.raises(LinkError, match="X"):
-        compute_link_set("ta", a, "tb", b)
+        compute_link_set("ta", a, "tb", b, V)
 
 
 def test_row12_theme_does_not_change_order_nor_md5():
     a1 = _canon(_ch("AA", direction="uplink", theme="core"), _ch("BB", direction="uplink", theme="light"))
     a2 = _canon(_ch("AA", direction="uplink", theme="light"), _ch("BB", direction="uplink", theme="core"))
     b = _canon(_ch("AA"), _ch("BB"))
-    l1, l2 = compute_link_set("ta", a1, "tb", b), compute_link_set("ta", a2, "tb", b)
+    l1, l2 = compute_link_set("ta", a1, "tb", b, V), compute_link_set("ta", a2, "tb", b, V)
     assert [c.id for c in l1.channels] == [c.id for c in l2.channels] == ["AA", "BB"]
     assert link_md5(l1) == link_md5(l2)
 
@@ -185,16 +186,9 @@ def test_row12_theme_does_not_change_order_nor_md5():
 def test_row13_candidates_follow_the_stable_channels_and_leave_the_stable_md5():
     a = _canon(_ch("ZZ", direction="uplink"), _ch("AA", direction="uplink", candidate=True))
     b = _canon(_ch("ZZ"), _ch("AA", candidate=True))
-    link = compute_link_set("ta", a, "tb", b)
+    link = compute_link_set("ta", a, "tb", b, V)
     assert [c.id for c in link.channels] == ["ZZ", "AA_NEXT"]
-    only_stable = compute_link_set("ta", _canon(_ch("ZZ", direction="uplink")), "tb", _canon(_ch("ZZ")))
+    only_stable = compute_link_set("ta", _canon(_ch("ZZ", direction="uplink")), "tb", _canon(_ch("ZZ")), V)
     assert link_md5(link, stable=True) == link_md5(only_stable)
     assert link_md5(link) != link_md5(only_stable)
 
-
-def test_two_relays_facing_each_other_is_an_error():
-    """Both sides downlink_pt: which one is the source? Refused until the graph check of 3.2."""
-    a = _canon(_ch("X", direction="downlink_pt"))
-    b = _canon(_ch("X", direction="downlink_pt"))
-    with pytest.raises(LinkError, match="X"):
-        compute_link_set("ta", a, "tb", b)

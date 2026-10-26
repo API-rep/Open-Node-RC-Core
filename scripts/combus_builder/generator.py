@@ -1054,7 +1054,8 @@ def _emit_peer_links(channels: list[ChannelDefinition], ctx: BuildContext, out_d
     Always written (empty without peer), so that the build has a fixed set of
     artefacts.  One build-log line per link: its MD5 and its size.
     """
-    from .links import LinkError, compute_link_set, link_md5, load_type_base_channels, \
+    from . import links as links_module
+    from .links import LinkError, check_single_source, compute_link_set, link_md5, node_nature, \
         peer_types, render_peer_links_header
     from .machine_type import detect_machine_type
 
@@ -1065,9 +1066,10 @@ def _emit_peer_links(channels: list[ChannelDefinition], ctx: BuildContext, out_d
         if local_type is None:
             raise GeneratorError(f"peer types {peers} declared, but no MACHINE_TYPE_* flag for this node")
         try:
+            nature = node_nature(set(ctx.defines) | set(ctx.defines_with_value or {}))
             for peer in peers:
                 link = compute_link_set(local_type, channels, peer,
-                                        load_type_base_channels(ctx.buildroot, peer))
+                                        links_module.load_type_base_channels(ctx.buildroot, peer), nature)
                 for warning in link.warnings:
                     print(f"[combus_builder] link {peer}: {warning}")
                 n_analog = sum(1 for c in link.channels if c.type == "analog")
@@ -1075,6 +1077,7 @@ def _emit_peer_links(channels: list[ChannelDefinition], ctx: BuildContext, out_d
                 board = f"  [{filename_prefix}]" if filename_prefix else ""
                 print(f"[combus_builder] set LINK {peer}  md5={link_md5(link)}  A{n_analog}+D{n_digital}{board}")
                 links.append(link)
+            check_single_source(links)          # step 3.2b: one source per channel on the node
         except LinkError as e:
             raise GeneratorError(f"link with a peer type: {e}") from e
 

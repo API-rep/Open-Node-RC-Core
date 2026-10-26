@@ -9,15 +9,19 @@ channel set of the link:
 
   - the BASE channels (next: candidates included) of the same name in both
     types, keeping only those that flow: one side emits, the other receives;
-  - a side emits on the link when its direction is `uplink`, `both`, or
-    `downlink_pt` (it relays what it received from another link);
+  - star "vehicle + 1" (step 3.2b): on the attachment, `downlink_pt` only
+    redistributes in its node, it receives on the link; on the vehicle,
+    `downlink_pt` receives where the attachment emits (that link is its
+    source) and emits where the attachment receives;
   - two receivers: "dead channel" warning, not in the set; two emitters:
-    error, unless `*_or` (digital only); two relays facing each other
-    (`downlink_pt` on both sides): error until the graph check of 3.2;
+    error, unless `*_or` (digital only); one source per channel on the node
+    (check_single_source, both_or excepted);
   - same name = same type and same default value, else error;
   - the common frame is sorted on what both types share: analog then
     digital, stable before candidate, then the name (never the theme);
-  - the MD5 of the link is symmetric: both nodes, built apart, get the same.
+  - the MD5 of the link is symmetric: both nodes, built apart, get the same;
+    it names the vehicle of the link, so two vehicles (or two attachments)
+    linked by mistake disagree and the handshake refuses.
 
 Each node then has a table from its ComBus to the common frame
 (combus_peer_links.h, emitted by generator.generate()).
@@ -65,6 +69,7 @@ class LinkSet:
     """The channel set of the link local type <-> peer type, in wire order."""
     local_type: str
     peer_type: str
+    vehicle_type: str = ""    # step 3.2b: the type this side takes for the vehicle of the link (in the MD5)
     channels: list[LinkChannel] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
@@ -118,16 +123,15 @@ def _token(ch: ChannelDefinition) -> str:
     return base + ("_pt" if ch.passthrough else "")
 
 
-def _emits(ch: ChannelDefinition) -> bool:
-    return _UP in ch.direction or (ch.passthrough and _DOWN in ch.direction)
+def _flow(a: ChannelDefinition, b: ChannelDefinition, local_is_vehicle: bool,
+          warnings: list[str]) -> str | None:
+    """Flow of one channel on the link a (local) <-> b (peer), None if it does not flow (warning).
 
-
-def _receives(ch: ChannelDefinition) -> bool:
-    return _DOWN in ch.direction
-
-
-def _flow(a: ChannelDefinition, b: ChannelDefinition, warnings: list[str]) -> str | None:
-    """Flow of one channel on the link a <-> b, None if it does not flow (warning), LinkError if refused."""
+    Step 3.2b, star "vehicle + 1": on the attachment, `_pt` only redistributes
+    in its node (a plain receiver on the link); on the vehicle, `_pt` receives
+    where the attachment emits (that link is its source) and emits where the
+    attachment receives.  LinkError if refused.
+    """
     cid = a.id
     if a.direction_or or b.direction_or:
         ta, tb = _token(a), _token(b)
@@ -135,31 +139,40 @@ def _flow(a: ChannelDefinition, b: ChannelDefinition, warnings: list[str]) -> st
             return "or" if ta == "both_or" else ("to_peer" if ta == "uplink_or" else "from_peer")
         raise LinkError(f"channel {cid!r}: OR directions do not match ({ta} / {tb})")
 
-    a_to_b = _emits(a) and _receives(b)
-    b_to_a = _emits(b) and _receives(a)
-    if a_to_b and b_to_a:
-        if a.direction == b.direction == frozenset({_UP, _DOWN}) and not (a.passthrough or b.passthrough):
+    v, t = (a, b) if local_is_vehicle else (b, a)
+    v_up, v_down = _UP in v.direction, _DOWN in v.direction
+    t_up, t_down = _UP in t.direction, _DOWN in t.direction
+
+    if v_up and t_up:
+        if v.direction == t.direction == frozenset({_UP, _DOWN}) and not (v.passthrough or t.passthrough):
             return "both"
-        raise LinkError(f"channel {cid!r}: both sides emit and receive ({_token(a)} / {_token(b)}); "
-                        f"two relays facing each other are refused until the graph check (3.2)")
-    if a_to_b:
-        return "to_peer"
-    if b_to_a:
-        return "from_peer"
-    if _emits(a) and _emits(b):
         raise LinkError(f"channel {cid!r}: two emitters on the link ({_token(a)} / {_token(b)})")
-    warnings.append(f"channel {cid!r}: nobody emits it to a receiver on this link "
-                    f"({_token(a)} / {_token(b)}): dead channel, left out")
-    return None
+    if t_up and v_down:
+        to_vehicle = True                       # this link is the source of the vehicle
+    elif t_down and (v_up or (v.passthrough and v_down)):
+        to_vehicle = False                      # the vehicle emits (its own value, or relayed)
+    else:
+        warnings.append(f"channel {cid!r}: nobody emits it to a receiver on this link "
+                        f"({_token(a)} / {_token(b)}): dead channel, left out")
+        return None
+    return "from_peer" if to_vehicle == local_is_vehicle else "to_peer"
 
 
-def compute_link_set(local_type: str, local_chs, peer_type: str, peer_chs) -> LinkSet:
-    """Channel set of the link between two node types, in wire order."""
+def compute_link_set(local_type: str, local_chs, peer_type: str, peer_chs, local_nature: str) -> LinkSet:
+    """Channel set of the link between two node types, in wire order.
+
+    local_nature: IS_VEHICLE or IS_ATTACHMENT, the structural flag of the node
+    built (step 3.2b); the peer is taken for the other nature.
+    """
     from .generator import _render_value
 
+    if local_nature not in ("IS_VEHICLE", "IS_ATTACHMENT"):
+        raise LinkError(f"a {local_nature} node has no link with a peer type")
+    local_is_vehicle = local_nature == "IS_VEHICLE"
     local = {ch.id: ch for ch in local_chs if ch.scope == "BASE"}
     peer = {ch.id: ch for ch in peer_chs if ch.scope == "BASE"}
-    link = LinkSet(local_type=local_type, peer_type=peer_type)
+    link = LinkSet(local_type=local_type, peer_type=peer_type,
+                   vehicle_type=local_type if local_is_vehicle else peer_type)
 
     for cid in sorted(set(local) & set(peer)):
         a, b = local[cid], peer[cid]
@@ -168,7 +181,7 @@ def compute_link_set(local_type: str, local_chs, peer_type: str, peer_chs) -> Li
         va, vb = _render_value(a, a.type), _render_value(b, b.type)
         if va != vb:
             raise LinkError(f"channel {cid!r}: default value {va} in {local_type}, {vb} in {peer_type}")
-        flow = _flow(a, b, link.warnings)
+        flow = _flow(a, b, local_is_vehicle, link.warnings)
         if flow is None:
             continue
         link.channels.append(LinkChannel(id=cid, type=a.type, candidate=a.candidate or b.candidate,
@@ -177,6 +190,19 @@ def compute_link_set(local_type: str, local_chs, peer_type: str, peer_chs) -> Li
 
     link.channels.sort(key=lambda c: (0 if c.type == "analog" else 1, c.candidate, c.id))
     return link
+
+
+def check_single_source(links: list[LinkSet]) -> None:
+    """One source per channel on the node: received on one of its links at most (both_or excepted)."""
+    sources: dict[str, list[str]] = {}
+    for link in links:
+        for c in link.channels:
+            if c.flow in ("from_peer", "both"):
+                sources.setdefault(c.id, []).append(link.peer_type)
+    for cid, peers in sorted(sources.items()):
+        if len(peers) > 1:
+            raise LinkError(f"channel {cid!r}: received from several links ({', '.join(peers)}): "
+                            f"one source per channel")
 
 
 def link_md5(link: LinkSet, stable: bool = False) -> str:
@@ -189,7 +215,7 @@ def link_md5(link: LinkSet, stable: bool = False) -> str:
         dirs = {link.local_type: c.local_token, link.peer_type: c.peer_token}
         entries.append({"id": c.id, "type": c.type, "candidate": c.candidate, "value": c.value,
                         "dirs": [dirs[t] for t in types]})
-    payload = {"link": types, "channels": entries}
+    payload = {"link": types, "vehicle": link.vehicle_type, "channels": entries}
     return hashlib.md5(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
