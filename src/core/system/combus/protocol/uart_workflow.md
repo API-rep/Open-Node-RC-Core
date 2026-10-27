@@ -473,7 +473,7 @@ est dans [`frame/combus_frame_protocol.md`](frame/combus_frame_protocol.md).
   (`combus_frame_crc8`, `combus_frame.cpp:33-47`) : valeur initiale 0,
   polynôme réfléchi `0x8C`.
 - Il n'y a plus de paramètre `failSafe` : l'état failsafe voyage par le canal
-  `FAILSAFE`.
+  `FAILSAFE_HARD`.
 
 ---
 
@@ -485,9 +485,9 @@ est dans [`frame/combus_frame_protocol.md`](frame/combus_frame_protocol.md).
   reçoit l'identité SYSTEM), remet à zéro l'état du lien et invalide le contrat
   de handshake.
 - `combus_rx_update(bus)` : pour chaque lien, vide le transport dans un tampon
-  circulaire puis décode tant que possible. Si `HAS_FAILSAFE` est défini et que le
-  canal `FAILSAFE` de `bus` est actif, invalide le contrat de handshake du lien
-  (`bus` peut être `nullptr` : la réaction est alors ignorée).
+  circulaire puis décode tant que possible. `bus` n'est plus lu : la réaction P4,
+  qui invalidait le contrat de handshake pendant un failsafe actif, a été retirée
+  au chantier 1.2 (elle aurait bloqué le failsafe des autres cartes).
 - `tryDecode` : cherche le `SOF`, lit l'octet `seq`
   (décalage 3) pour distinguer le handshake (`seq == 0`, chemin séparé) d'une
   trame de contrôle, vérifie la longueur et le CRC, puis, si le lien a une
@@ -505,7 +505,7 @@ est dans [`frame/combus_frame_protocol.md`](frame/combus_frame_protocol.md).
 > (250 ms pour le lien d'extension). Un lien `IDLE` (défaut inter-nœud) écrit
 > `NODE_LINK_FAIL` dès qu'il n'est pas vivant ; un lien `FAILSAFE` (défaut
 > intra-nœud) écrit `BOARD_LINK_FAIL` quand il est perdu, ou jamais vu après
-> `startupGraceMs` (3 s). Voir `src/core/system/com/link_health/remote_link_lost.md` §4.3.
+> `startupGraceMs` (3 s). Voir `src/core/system/failsafe/failsafe_module.md` §3.
 
 ---
 
@@ -571,7 +571,7 @@ Ordre d'un tour de `loop()` (`src/machines/main.cpp`, appels aux lignes 51, 57-5
 
 1. `sys_manager_update(comBus)` : réception ComBus (`com_rx_update`), acquisition
    des entrées (`input_refresh`, `input_update`), `vbat_update`, `failsafe_update`
-   (chaîne FAILSAFE), puis `remote_link_fallback_update` si
+   (chaîne failsafe dure), puis `remote_link_fallback_update` si
    `HAS_REMOTE_LINK_LOST_FALLBACK`
    (`src/machines/system/sys_manager.cpp:19-43`) ;
 2. chaînes de processors d'entrée et de simulation (`proc_chain_update`) ;

@@ -4,7 +4,7 @@
  *
  * @details `cb_reset_fn()` is a generic CbProcFn that forces `value = 0`
  *   unconditionally. It is used as the first processor of pipelines that
- *   need a per-cycle reset (e.g. the FAILSAFE chain).
+ *   need a per-cycle reset (e.g. the failsafe chains).
  *
  *   Behaviour:
  *     - reads no channel;

@@ -1575,7 +1575,7 @@ def test_real_vbat_failsafe_cb_validates():
     assert ch.scope == "SYSTEM"
     assert ch.theme == "failsafe"
     # A2.1 : vbat_fail.cb uses `direction: uplink_or` (a
-    # contributor that OR-merges into the FAILSAFE aggregator).
+    # contributor that OR-merges into the FAILSAFE_HARD aggregator).
     # `effective_direction` is the union of `direction` and
     # `direction_or` — the canonical accessor for "what the wire
     # sees".

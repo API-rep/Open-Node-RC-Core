@@ -1,313 +1,145 @@
-# Failsafe Module — Architecture
+# Module failsafe
 
-> **Note** : ce document décrit l'architecture du module failsafe central.  La chaîne `FAILSAFE_SOFT` (signal séparé) est documentée dans `src/core/system/com/link_health/remote_link_lost.md`.
+Ce document est la référence du module failsafe : ses deux chaînes (dure et douce), ses conventions de nom et ses règles. La chaîne douce a son propre document, `src/core/system/com/link_health/failsafe_soft.md`.
+
+Mis à jour le 2026-10-27 (link rework, lot « sécurité », étapes S1 à S3a). Les noms d'avant (`FAILSAFE`, `REMOTE_LINK_LOST`, `FAILSAFE_VBAT`…) se retrouvent dans l'historique git.
 
 ---
 
-## 1. Architecture générale
+## 1. Deux sévérités, deux chaînes
 
-Le failsafe est un module **inconditionnel** situé dans :
+Le module distingue deux sévérités de faute. Chacune a son agrégat et sa réaction :
+
+| Chaîne | Agrégat | Réaction (runlevel) | Exemple de cause |
+|---|---|---|---|
+| **dure** | `FAILSAFE_HARD` | `HALT` : moteurs arrêtés, endormis, désactivés ; clé bloquée tant que la faute dure | batterie basse, perte d'un lien entre cartes |
+| **douce** | `FAILSAFE_SOFT` | `IDLE` : mise en attente ; la reprise demande la clé | perte de la télécommande, perte d'un lien vers un autre nœud |
+
+L'agrégat dit la **sévérité**, pas la réaction : la réaction peut évoluer sans renommage. La chaîne dure l'emporte toujours sur la douce (§6).
+
+Le module entier est activé par `HAS_FAILSAFE` (posé par `[env:machines]`). Sans lui, il n'y a ni chaîne, ni agrégat, ni contributeur.
+
+---
+
+## 2. Conventions de nom
+
+| Élément | Forme | Exemples |
+|---|---|---|
+| agrégat | `FAILSAFE_<SÉVÉRITÉ>` | `FAILSAFE_HARD`, `FAILSAFE_SOFT` |
+| contributeur | `<SOURCE>_FAIL` | `VBAT_FAIL`, `BOARD_LINK_FAIL`, `NODE_LINK_FAIL`, `LOCAL_REMOTE_FAIL` |
+| flag d'un contributeur | `HAS_<SOURCE>_FAILSAFE` | `HAS_VBAT_FAILSAFE`, `HAS_BOARD_LINK_FAILSAFE` |
+| flag du module | `HAS_FAILSAFE` | — |
+
+Tous ces channels sont du thème **`failsafe`** : c'est le **groupe failsafe**. Ce sont des alarmes, « vrai = faute ». Leur valeur sûre est donc `true`, déclarée `value: fault` dans le `.cb` (§4).
+
+---
+
+## 3. Contributeurs
+
+Un contributeur dit un **fait** (« la batterie défaille », « un lien entre cartes est tombé »), sans sévérité. C'est la chaîne qui le lit qui décide de la sévérité.
+
+| Contributeur | Fait | Écrit par | Flag | Chaîne aujourd'hui |
+|---|---|---|---|---|
+| `VBAT_FAIL` | batterie sous le seuil | `vbat_update()` (`src/core/system/vbat/vbat.cpp`) | `HAS_VBAT_FAILSAFE` | dure |
+| `BOARD_LINK_FAIL` | un lien qui reçoit, entre cartes du nœud, est perdu | `com_rx_update()` (`src/core/system/com/com_manager.cpp`) | `HAS_BOARD_LINK_FAILSAFE` | dure |
+| `NODE_LINK_FAIL` | un lien qui reçoit, vers un autre nœud, est perdu | `com_rx_update()` | `HAS_NODE_LINK_FAILSAFE` | douce |
+| `LOCAL_REMOTE_FAIL` | la télécommande locale (manette PS4 ; demain récepteur PPM/SBUS) ne répond plus | `input_update()` (`src/machines/system/input/input_update.cpp`) | `HAS_LOCAL_REMOTE_FAILSAFE` | douce |
+
+Un contributeur exige `HAS_FAILSAFE` et **son propre flag**, jamais celui d'une chaîne : il reste neutre et **rebranchable**.
+
+**Rebranchable veut dire déplaçable, jamais dupliqué.** Un contributeur est lu par **une seule chaîne** : la chaîne le réarme à `true` après lecture (§4), si bien qu'une seconde chaîne lirait une fausse faute. Pour changer la sévérité d'un contributeur, on déplace sa ligne d'une chaîne à l'autre.
+
+Aujourd'hui `BOARD_LINK_FAIL` et `NODE_LINK_FAIL` sont alimentés selon la politique de perte de chaque lien (`ComDev::onLoss`). L'étape S2 du link rework les alimentera par portée (lien entre cartes, lien vers un autre nœud) et supprimera `onLoss` : voir `doc/WIP - ComBus link rework.md`.
+
+---
+
+## 4. Preuve de vie : `fault` par défaut et réarmement
+
+Chaque alarme vaut `true` (faute) par défaut : `value: fault` dans son `.cb`. Le builder le vérifie : un numérique du thème `failsafe` doit déclarer `fault`, et `fault` est refusé ailleurs.
+
+À chaque cycle :
+
+```text
+module source  → écrit son contributeur à false (sain) s'il va bien
+chaîne         → lit le contributeur, fait le OU dans l'agrégat,
+                 puis le remet à true (cb_or_fn : « consume + guard »)
+```
+
+Si le module source cesse d'écrire, son contributeur reste à `true` : la faute est levée. Le contributeur est à la fois un état de santé et une **preuve de vie**, sans délai ni horodatage. Conséquence : la valeur instantanée d'un contributeur sur le bus n'est pas l'état de santé ; il faut lire l'agrégat.
+
+---
+
+## 5. Les chaînes
+
+Les deux chaînes ont la même forme : un reset en tête (`cb_reset_fn`, agrégat à 0 = sain), puis un `cb_or_fn` par contributeur (entrée = sortie = le contributeur). L'agrégat passe à `true` dès qu'un contributeur est en faute, pour le cycle.
+
+| | Chaîne dure | Chaîne douce |
+|---|---|---|
+| code | `src/core/system/failsafe/failsafe_chain.cpp` (`kFailsafeChain[]`) | `src/core/system/com/link_health/remote_link_fallback_chain.cpp` (`kRemoteLinkFallbackChain[]`) |
+| lancée par | `failsafe_update()` | `remote_link_fallback_update()` |
+| contributeurs | `VBAT_FAIL`, `BOARD_LINK_FAIL` | `LOCAL_REMOTE_FAIL`, `NODE_LINK_FAIL` |
+
+Chaque contributeur est dans un bloc `#if defined(HAS_<SOURCE>_FAILSAFE)`. Une chaîne sans contributeur écrit `false` à chaque cycle.
+
+**Ordre d'exécution** (`sys_manager_update()`, `src/machines/system/sys_manager.cpp`) : réception (`com_rx_update`, qui écrit les contributeurs de lien), entrées (`input_update`), batterie (`vbat_update`), chaîne dure, chaîne douce. Toutes les sources ont donc écrit avant les chaînes, et les deux agrégats sont frais avant la chaîne runlevel et la machine à états de `main.cpp`. La valeur de démarrage des agrégats n'atteint jamais la machine à états.
+
+---
+
+## 6. Réaction : la chaîne runlevel
+
+Le module ne connaît ni les runlevels, ni les machines. La réaction est dans la chaîne runlevel de la machine, `kRunlevelProcs[]` (`src/machines/config/machines/volvo_A60H_bruder/combus/processors/input/runlevel_config.h`), dans cet ordre :
+
+1. **`FAILSAFE_HARD`** (`cb_runlevel_fn`, à chaque cycle) : tant qu'il est vrai, écrit `HALT` et fait un *claim*, ce qui saute les étapes suivantes ;
+2. **`FAILSAFE_SOFT`** (`cb_runlevel_once_fn`, sur front montant) : écrit `IDLE` et fait un *claim* ;
+3. **la clé** (`KEY_ACTIVE`, sur ses fronts) : `STARTING` ou `TURNING_OFF`.
+
+`main.cpp` réagit au runlevel : `case RunLevel::HALT` arrête, endort et désactive les moteurs à l'entrée.
+
+**Cas à connaître** : pendant un *claim* de la chaîne dure, l'étape douce est sautée et ne met pas à jour sa mémoire de front. Si la faute douce est apparue pendant la faute dure et dure encore quand celle-ci retombe, l'étape douce voit alors un front et écrit `IDLE`. La machine passe de `HALT` à `IDLE` sans la clé : on applique la réaction de la faute qui reste.
+
+**Décidé, pas encore fait** (lot « sécurité », S3) : sortir de `HALT` demandera un redémarrage. Ce cas et la sortie par la clé disparaîtront alors.
+
+---
+
+## 7. Règles à conserver
+
+- **Le module** ne contient aucune logique métier (batterie, liens, entrées) : il agrège des contributeurs et publie deux agrégats.
+- **Un module source** est propriétaire de son contributeur et l'écrit à chaque cycle.
+- **Un contributeur** est lu par une seule chaîne.
+- **Une machine** choisit ses contributeurs (flags) et leur chaîne (ligne dans la chaîne), et fournit sa réaction (chaîne runlevel).
+
+---
+
+## 8. Fichiers
 
 ```text
 src/core/system/failsafe/
-```
-
-Il existe dans toutes les builds, sans `HAS_FAILSAFE`.
-
-En version minimale, il contient :
-
-- le ComBus global `FAILSAFE` ;
-- la chaîne de processors failsafe ;
-- un processor initial de reset ;
-- aucune source de failsafe optionnelle.
-
-Une chaîne vide, hors reset, est donc valide.
-
----
-
-## 2. Responsabilité du module `core/system/failsafe`
-
-Le module central est responsable de :
-
-- déclarer le ComBus global `FAILSAFE` ;
-- agréger les sous-ComBus `FAILSAFE_X` ;
-- construire la chaîne principale de processing ;
-- remettre `FAILSAFE` à `false` au début de chaque cycle ;
-- intégrer conditionnellement les contributions des autres modules ;
-- ne connaître ni les RunLevels, ni les machines, ni les remotes.
-
-Le failsafe produit uniquement :
-
-```text
-FAILSAFE = false → système sans fault détecté
-FAILSAFE = true  → au moins un fault détecté
-```
-
-Il ne décide pas directement quoi faire de cet état.
-
----
-
-## 3. Organisation des modules contributeurs
-
-Chaque module reste propriétaire de sa logique failsafe.
-
-Exemple :
-
-```text
-core/system/
-├── failsafe/
-│   ├── failsafe.h/.cpp
-│   ├── failsafe_chain.h/.cpp
-│   └── failsafe.cb
-│
-└── vbat/
-    ├── vbat.h/.cpp
-    ├── vbat_sense.h/.cpp
-    ├── vbat_alert.h/.cpp
-    └── vbat_failsafe.cb
-```
-
-Le module central agrège les contributions via la chaîne `kFailsafeChain[]` (déclarée dans `failsafe_chain.cpp`).  Chaque contributeur est un `CbProc` câblé sur un canal `FAILSAFE_X` avec le pattern `cb_or_fn` (consume + guard).
-
-Le processor et la logique métier restent dans leur module d'origine.  Le module `failsafe` central ne contient pas de logique spécifique VBAT, ComBus, température, etc.
-
----
-
-## 4. ComBus global et sous-ComBus
-
-Chaque source possède son propre sous-ComBus :
-
-```text
-FAILSAFE
-VBAT_FAIL
-FAILSAFE_XXX
-```
-
-La relation est :
-
-```text
-module source
-    │
-    ├── réarme FAILSAFE_X
-    │
-    ▼
-FAILSAFE_X
-    │
-    ▼
-processor FAILSAFE_X (cb_or_fn)
-    │
-    ▼
-FAILSAFE
-```
-
-Le module source connaît son propre état.  Le module failsafe central agrège tous les états.
-
----
-
-## 5. Cycle de vie des `FAILSAFE_X`
-
-Principe :
-
-> Chaque `FAILSAFE_X` doit être réarmé à chaque cycle par son module propriétaire, puis son processor failsafe le remet systématiquement à `FAULT`.
-
-Exemple :
-
-```text
-cycle N
-  module VBAT → VBAT_FAIL = healthy
-  chaîne failsafe → processor VBAT lit, évalue, force VBAT_FAIL = fault
-
-cycle suivant
-  module VBAT tourne      → réarme VBAT_FAIL
-  module VBAT ne tourne plus → VBAT_FAIL reste fault
-```
-
-`FAILSAFE_X` représente à la fois un état de santé et une preuve de vie.  Pas besoin de TTL ni de timestamp.
-
----
-
-## 6. Contrat d'un processor failsafe
-
-```text
-Entrées : FAILSAFE (global) + FAILSAFE_X (levier/état)
-Sorties : FAILSAFE (global, éventuellement activé) + FAILSAFE_X (toujours forcé à fault)
-
-1. FAILSAFE global déjà true ?
-   oui → skip logique métier, force FAILSAFE_X = fault
-   non → vérifie FAILSAFE_X, évalue le levier, active FAILSAFE si nécessaire, force FAILSAFE_X = fault
-```
-
-Pas d'early exit global de la chaîne — tous les processors tournent à chaque cycle pour que tous les `FAILSAFE_X` soient consommés et remis à `FAULT`.  Une fois `FAILSAFE` activé, les processors suivants bypassent leur logique métier mais exécutent toujours leur maintenance (`force FAILSAFE_X = fault`).  Comportement : **guarded execution** / **local short-circuit**.
-
----
-
-## 7. Chaîne principale
-
-```text
-[ RESET FAILSAFE ]
-        │
-        ▼
-[ FAILSAFE VBAT ]
-        │
-        ▼
-[ FAILSAFE ... ]
-        │
-        ▼
-[ FAILSAFE XXX ]
-```
-
-`FAILSAFE` est une forme de latch limitée au cycle : `false` en tête, peut passer à `true` pendant le cycle, reste dans son état en fin de cycle, reset à `false` au cycle suivant.
-
----
-
-## 8. Initialisation et passe à vide
-
-Au démarrage, une première passe peut avoir lieu avant que tous les modules aient produit leur état normal.  Pas besoin d'état `INITIALIZING` explicite — le fonctionnement normal se met en place après cette passe à vide, à condition que l'orchestrateur garantisse l'ordre (voir §10).
-
----
-
-## 9. Réaction au `FAILSAFE`
-
-Le module central ne connaît ni `RUNNING`/`IDLE`/`SLEEPING`, ni machine, ni remote.  Il expose uniquement `FAILSAFE`.  Chaque environnement fournit sa propre réaction via la chaîne `kRunlevelProcs[]` :
-
-```text
-machine/config/combus/processors/runlevel/
-  runlevel_procs.h  // kRunlevelProcs[] — failsafe + remote_link + runlevel
-```
-
-Le processor `cb_runlevel_fn` (générique "set runlevel") est câblé sur `DigitalComBusID::FAILSAFE_HARD` avec la config `kFailsafeRunlevelCfg` :
-
-```cpp
-static constexpr CbRunlevelCfg kFailsafeRunlevelCfg {
-    .high  = RunLevel::HALT,    // FAILSAFE=true → write FAILSAFE (valeur dédiée)
-    .low   = std::nullopt,          // FAILSAFE=false → no write
-    .claim = true,                  // Block KEY_ACTIVE proc on link loss
-};
-```
-
-Le `case RunLevel::HALT` dans le `switch(curRunLevel)` de `main.cpp` exécute `stopAllDcDrivers` / `sleepAllDcDrivers` / `disableAllDcDrivers` sur `isNewRunLevel`.
-
-Découplage strict :
-
-```text
-core/system/failsafe  → détecte et publie FAILSAFE
-machine/.../runlevel  → consomme FAILSAFE, force RunLevel::HALT
-main.cpp              → réagit à RunLevel::HALT (sécurité hardware)
-```
-
----
-
-## 10. Règles à conserver
-
-**Core failsafe** : toujours présent, indépendant des RunLevels/machines/sources métier, propriétaire du `FAILSAFE` global, assemble les contributions compile-time.
-
-**Modules contributeurs** : propriétaires de leur logique métier, leur processor failsafe, leur canal `FAILSAFE_X` ; réarment leur `FAILSAFE_X` à chaque cycle.
-
-**Chaîne failsafe** : reset en tête, exécute tous les processors, premier fault verrouille `FAILSAFE` pour le cycle, processors suivants bypassent la logique métier mais forcent leur `FAILSAFE_X` à `FAULT`.
-
-**Ordre d'exécution** : toutes les sources (`input_update`, `vbat_update`, ...) doivent avoir tourné avant `failsafe_update()`, à chaque cycle, sans exception.  Cet invariant est garanti par `sys_manager_update()`.
-
-**Environnements** : ne modifient pas la logique centrale, consomment `FAILSAFE`, définissent leur propre réaction.
-
----
-
-## 11. Vue d'ensemble
-
-```text
-                    CORE / SYSTEM
-              ┌─────────────────────┐
-              │      FAILSAFE       │
-              │ FAILSAFE = false    │
-              │ chaîne centrale     │
-              └──────────┬──────────┘
-          ┌──────────────┼──────────────┐
-          ▼              ▼              ▼
-        vbat          autre           autre
-          │ réarme       │ réarme       │ réarme
-          ▼              ▼              ▼
-     VBAT_FAIL  FAILSAFE_X       FAILSAFE_Y
-          └──────────────┼──────────────┘
-                         ▼
-                 chaîne failsafe → FAILSAFE global
-                         │
-                         ▼
-              kRunlevelProcs[] (machine)
-                         │
-                         ▼
-              RunLevel::HALT
-                         │
-                         ▼
-              main.cpp → stop/sleep/disable drivers
-```
-
-**Ligne de conduite** : le failsafe central agrège des preuves de santé fournies par les modules, les consomme à chaque cycle, les remet à `FAULT`, et publie un unique `FAILSAFE` global.  Les modules restent propriétaires de leur logique et de leurs processors.  Les environnements restent propriétaires de la réaction au failsafe.
-
----
-
-## 12. Lien avec `FAILSAFE_SOFT` (signal séparé)
-
-`FAILSAFE_SOFT` est un signal **distinct** du `FAILSAFE` global.  Il est géré par sa propre chaîne et déclenche une réaction différente (`RunLevel::IDLE` au lieu de `RunLevel::HALT`).
-
-**Voir** : `src/core/system/com/link_health/remote_link_lost.md` pour le détail de l'architecture, des contributeurs et de la réaction.
-
-**Résumé** :
-
-| Signal | Sémantique | Réaction |
-|--------|------------|----------|
-| `FAILSAFE` | Vraie faute (VBAT basse, etc.) | `RunLevel::HALT` (sécurité hardware complète) |
-| `FAILSAFE_SOFT` | Silence du lien remote (déconnexion, perte signal) | `RunLevel::IDLE` (mise en attente, reprise automatique) |
-
-**Priorité** : `failsafe > remote_link > runlevel` — une vraie faute (`FAILSAFE`) l'emporte toujours sur une simple perte de lien.
-
----
-
-## 13. Fichiers du module
-
-```text
-src/core/system/failsafe/
-├── failsafe.h           // API publique (failsafe_update)
-├── failsafe.cpp         // Implémentation orchestrateur
-├── failsafe_chain.h     // Déclarations kFailsafeChain[]
-├── failsafe_chain.cpp   // Définition kFailsafeChain[] (reset + contributeurs)
-└── failsafe.cb          // Déclaration canal ComBus FAILSAFE
-```
-
-**Contributeurs actifs** :
-
-```text
-src/core/system/vbat/
-└── vbat_failsafe.cb     // Canal VBAT_FAIL (réarmé par vbat_update)
+├── failsafe.h / .cpp         // failsafe_update() : lance la chaîne dure
+├── failsafe_chain.h / .cpp   // kFailsafeChain[] : reset + contributeurs de la chaîne dure
+└── failsafe_hard.cb          // FAILSAFE_HARD (SYSTEM, both_or)
 
 src/core/system/com/link_health/
-└── failsafe_com_link.cb // Canal BOARD_LINK_FAIL (écrit par com_rx_update : lien onLoss FAILSAFE perdu)
-```
+├── failsafe_soft.cb          // FAILSAFE_SOFT (SYSTEM, both_or)
+├── remote_link_fallback_chain.h / .cpp   // kRemoteLinkFallbackChain[] : chaîne douce
+├── board_link_fail.cb        // BOARD_LINK_FAIL (BOARD)
+├── node_link_fail.cb         // NODE_LINK_FAIL (BOARD)
+└── failsafe_soft.md          // la chaîne douce
 
-**Chaîne FAILSAFE_SOFT** (séparée) :
-
-```text
-src/core/system/com/link_health/
-├── remote_link_lost.cb           // Canal FAILSAFE_SOFT (agrégat)
-├── com_link_lost.cb              // Canal NODE_LINK_FAIL (contributeur : lien onLoss IDLE)
-├── remote_link_fallback_chain.h  // Déclarations kRemoteLinkFallbackChain[]
-└── remote_link_fallback_chain.cpp // Chaîne d'agrégation (reset + OR-guard)
-
-src/core/config/inputs/
-└── ps4_ds4_bt_link_lost.cb       // Canal LOCAL_REMOTE_FAIL (contributeur)
+src/core/system/vbat/vbat_fail.cb          // VBAT_FAIL (SYSTEM, uplink_or)
+src/core/config/inputs/local_remote_fail.cb // LOCAL_REMOTE_FAIL (BOARD)
+src/core/system/combus/processors/logic/cb_or.h   // cb_or_fn
 ```
 
 ---
 
-## 14. Référence rapide
+## 9. Référence rapide
 
-| Concept | Implémentation |
-|---------|----------------|
-| Canal `FAILSAFE` | `src/core/system/failsafe/failsafe.cb` |
-| Chaîne `kFailsafeChain[]` | `src/core/system/failsafe/failsafe_chain.cpp` |
-| Processor `cb_or_fn` | `src/core/system/combus/processors/logic/cb_or.h` |
-| Réarmement `VBAT_FAIL` | `src/core/system/vbat/vbat.cpp` (`vbat_update()`) |
-| Orchestration | `src/machines/system/sys_manager.cpp` (`sys_manager_update()`) |
-| Réaction runlevel | `src/machines/config/machines/volvo_A60H_bruder/combus/processors/runlevel/runlevel_procs.h` |
-| Réaction hardware | `src/machines/main.cpp` (`case RunLevel::HALT`) |
-| Lecture état | `comBus.digitalBus[DigitalComBusID::FAILSAFE_HARD].value` |
-
-**Note** : `runlevel_procs.h` est actuellement situé dans la config machine (`volvo_A60H_bruder/...`).  Une migration vers le core est prévue lors d'un rework futur des processors combus, pour harmoniser l'organisation des chaînes de processors.
+| Concept | Où |
+|---|---|
+| Agrégats | `failsafe_hard.cb`, `failsafe_soft.cb` |
+| Chaînes | `failsafe_chain.cpp`, `remote_link_fallback_chain.cpp` |
+| Contributeurs de lien | `com_rx_update()`, `src/core/system/com/com_manager.cpp` |
+| Ordre d'exécution | `sys_manager_update()`, `src/machines/system/sys_manager.cpp` |
+| Réaction runlevel | `kRunlevelProcs[]`, `.../processors/input/runlevel_config.h` |
+| Réaction moteurs | `src/machines/main.cpp`, `case RunLevel::HALT` |
+| Lecture | `comBus.digitalBus[DigitalComBusID::FAILSAFE_HARD].value` (ou `FAILSAFE_SOFT`) |

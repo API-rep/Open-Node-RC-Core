@@ -4,18 +4,18 @@
 # aggregator. It is set to 1 (fault) if at least one FAILSAFE_X
 # contributor reports a fault.
 #
-# This .cb is the source of truth: the ComBus Builder generates the FAILSAFE
+# This .cb is the source of truth: the ComBus Builder generates the FAILSAFE_HARD
 # enum entry (the legacy hand-written .inc files no longer exist).
 # FAILSAFE_END,       ///< Range marker — first index after Failsafe group.
 # #endif
 #
 # Notes:
-# - FAILSAFE is the aggregator, not a contributor.
+# - FAILSAFE_HARD is the aggregator, not a contributor.
 # - Contributors (VBAT_FAIL, etc.) are declared in their own .cb
 #   files (e.g. src/core/system/vbat/vbat_fail.cb).
 # - FAILSAFE_END is a legacy range marker. The generator deduces it
 #   automatically from the list of channels in the group.
-# - SYSTEM scope is required because FAILSAFE is shared by all boards
+# - SYSTEM scope is required because FAILSAFE_HARD is shared by all boards
 #   composing the local node. It allows the Failsafe state to be
 #   propagated to, and collected from, the different boards of that node.
 # - Direction is both uplink and downlink: any board may publish or

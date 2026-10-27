@@ -17,9 +17,9 @@
  *     INPUT_KEY_RUNLEVEL : in(KEY_ACTIVE) -> key_on(ON_PRESS, 0ms) -> key_off(ON_PRESS, 3000ms)
  *                                         -> out(KEY_ACTIVE)
  *                          key_on fires on press-down; key_off fires WHILE held >= 3 s.
- *     INPUT_RUNLEVEL     : in(RUNLEVEL) -> failsafe(FAILSAFE) -> runlevel(KEY_ACTIVE)
+ *     INPUT_RUNLEVEL     : in(RUNLEVEL) -> failsafe(FAILSAFE_HARD) -> runlevel(KEY_ACTIVE)
  *                                         -> out(RUNLEVEL)
- *                          failsafe forces RUNLEVEL=IDLE when FAILSAFE=true (claims chain).
+ *                          failsafe forces RUNLEVEL=HALT when FAILSAFE_HARD=true (claims chain).
  *                          runlevel drives STARTING/TURNING_OFF from KEY_ACTIVE.
  *     INPUT_CRUISE_NORMAL : in(CRUISE_ACTIVE) -> gate(SUBGEAR_BUS != 0 → force 0)
  *                                              -> toggle(CRUISE_TOGGLE_BTN)

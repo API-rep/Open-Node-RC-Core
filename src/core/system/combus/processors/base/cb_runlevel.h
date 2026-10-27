@@ -9,7 +9,7 @@
  *       Writes `value` to `cfg->high` or `cfg->low` on EVERY cycle, depending
  *       on the lever state.  No state required.  Use when the lever must
  *       keep the channel pinned to a value as long as the condition holds
- *       (e.g. failsafe: while FAILSAFE=true, force RUNLEVEL=IDLE).
+ *       (e.g. failsafe: while FAILSAFE_HARD=true, force RUNLEVEL=HALT).
  *
  *   - cb_runlevel_once_fn (edge-triggered / stateful):
  *       Writes `value` ONLY on a transition of the lever (inValue != prevValue).
@@ -29,8 +29,8 @@
  *
  *   Typical usage in a dedicated runlevel chain (inCh = RUNLEVEL, outCh = RUNLEVEL):
  *   @code
- *     // failsafe instance — continuous: forces IDLE while FAILSAFE=true
- *     { .inCh = FAILSAFE, .fn = cb_runlevel_fn,
+ *     // failsafe instance — continuous: forces HALT while FAILSAFE_HARD=true
+ *     { .inCh = FAILSAFE_HARD, .fn = cb_runlevel_fn,
  *       .cfg = { .high = RunLevel::HALT, .low = std::nullopt, .claim = true } }
  *     // runlevel instance — edge-triggered: KEY_ACTIVE 0→1 → STARTING (once)
  *     { .inCh = KEY_ACTIVE, .fn = cb_runlevel_once_fn,

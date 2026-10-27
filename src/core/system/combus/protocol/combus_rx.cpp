@@ -343,7 +343,7 @@ void combus_rx_init(
  *
  *   @p bus is no longer read: the FAILSAFE reaction (P4), which dropped the
  *   contract while FAILSAFE was active, is removed (chantier 1.2) — with the
- *   contract blocking the frames, it would block the FAILSAFE of the peers.
+ *   contract blocking the frames, it would block the FAILSAFE_HARD of the peers.
  */
 void combus_rx_update(const ComBus* bus)
 {

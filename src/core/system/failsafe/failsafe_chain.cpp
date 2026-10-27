@@ -12,7 +12,7 @@
  *
  *   The chain has a primary `outCh` = `DigitalComBusID::FAILSAFE_HARD` so
  *   the runner commits the latched `value` to the top-level ComBus
- *   channel. Consumers (e.g. `main.cpp`) then read `FAILSAFE` directly
+ *   channel. Consumers (e.g. `main.cpp`) then read `FAILSAFE_HARD` directly
  *   on the bus to trigger their reaction.
  *
  *   Future contributors (temperature, …) will be appended to

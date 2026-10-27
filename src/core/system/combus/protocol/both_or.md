@@ -1,6 +1,6 @@
 # Fusion `both_or` — l'anti ping-pong
 
-Comment un channel `both_or` (par exemple `FAILSAFE`) est partagé entre les
+Comment un channel `both_or` (par exemple `FAILSAFE_HARD`) est partagé entre les
 cartes : la règle, la mécanique, un exemple, et ce qui se passerait sans elle.
 Mis en place le 2026-10-22 (étape 1.1b du WIP *ComBus link rework*).
 
@@ -8,14 +8,14 @@ Mis en place le 2026-10-22 (étape 1.1b du WIP *ComBus link rework*).
 
 Un channel `both_or` est une valeur que toutes les cartes partagent. **Toute
 valeur positive, locale à la carte ou venant d'une carte distante, rend le
-channel vrai** sur la carte. Pour `FAILSAFE` : il suffit qu'une carte soit en
+channel vrai** sur la carte. Pour `FAILSAFE_HARD` : il suffit qu'une carte soit en
 défaut pour que tout le nœud soit en failsafe, et le failsafe retombe quand plus
 aucune carte n'est en défaut.
 
 Deux pièges sont à éviter :
 
 - **écraser** : si la trame reçue écrasait la valeur de la carte, le calcul local
-  (la chaîne `FAILSAFE`) l'effacerait au cycle suivant, ou inversement ;
+  (la chaîne failsafe dure) l'effacerait au cycle suivant, ou inversement ;
 - **le ping-pong** : si une carte renvoyait à une autre la valeur qu'elle vient
   d'en recevoir, chacune entretiendrait celle de l'autre et un `true` ne
   retomberait jamais.
@@ -26,7 +26,7 @@ Pour chaque channel `both_or`, chaque carte garde **trois choses séparées** :
 
 | Terme | Ce que c'est | Où |
 |---|---|---|
-| la valeur **hôte** | ce que le code de la carte écrit lui-même (la chaîne `FAILSAFE` la recalcule à chaque cycle, à partir de `false` : le *clear*) | `DigitalComBus::bothOr.local` |
+| la valeur **hôte** | ce que le code de la carte écrit lui-même (la chaîne failsafe dure la recalcule à chaque cycle, à partir de `false` : le *clear*) | `DigitalComBus::bothOr.local` |
 | le **cache** des entrées | la dernière valeur reçue de **chaque lien**, une par lien | l'instantané de réception du lien (`combus_rx_snapshot`) |
 | la valeur **fusionnée** | ce que lisent tous les consommateurs (runlevel, sorties, tableau de bord) | `DigitalComBus::value` |
 
@@ -40,13 +40,13 @@ Quatre règles :
    `hôte OU (cache des liens AUTRES que L)`. Elle ne renvoie jamais à L ce que L
    lui a envoyé. Avec un seul lien, elle envoie simplement sa valeur hôte.
 3. **Une carte qui n'a jamais écrit le channel ne contribue pas** : son terme hôte
-   vaut `false` (`bothOr.written`). Une carte qui reçoit `FAILSAFE` par diffusion
+   vaut `false` (`bothOr.written`). Une carte qui reçoit `FAILSAFE_HARD` par diffusion
    sans le calculer garde sa valeur par défaut (`high`) dans le slot ; sans cette
    règle, elle l'enverrait à tout le monde, et la machine resterait en failsafe
    dès le démarrage. Elle ne fait que relayer.
 4. **Un lien perdu ne compte plus** : sa dernière valeur reçue est périmée. La
    sécurité est alors assurée par la politique de perte du lien (`onLoss`, voir
-   `src/core/system/com/link_health/remote_link_lost.md` §4.3).
+   `src/core/system/failsafe/failsafe_module.md` §3).
 
 En formules, pour une carte B reliée aux liens L1…Ln :
 
@@ -59,7 +59,7 @@ envoyé(B → Lk) = hôte(B) OU cache(Li)              pour tous les Li vivants,
 ## 3. Exemple
 
 Trois cartes d'un nœud, reliées à la carte principale M. E (extension moteurs)
-calcule son propre `FAILSAFE` (par exemple une surchauffe de driver). S (carte
+calcule son propre `FAILSAFE_HARD` (par exemple une surchauffe de driver). S (carte
 son) ne le calcule pas : elle le reçoit par diffusion.
 
 ```text
@@ -72,9 +72,9 @@ son) ne le calcule pas : elle le reçoit par diffusion.
 | t1 | E surchauffe | 1 → **1** | 0, reçoit 1 de L1 → **1** | reçoit 1 de M → **1** | 0 OU (L2 : 0) = **0** | 0 OU (L1 : 1) = **1** |
 | t2 | E refroidit | 0 → **0** | 0, reçoit 0 de L1 → **0** | reçoit 0 → **0** | 0 | 0 |
 
-À t1, M passe en `FAILSAFE` ; sa chaîne de runlevel écrit `RUNLEVEL = FAILSAFE`,
+À t1, M passe en `FAILSAFE_HARD` ; sa chaîne de runlevel écrit `RUNLEVEL = HALT`,
 qui est diffusé à E et S. À t2, tout retombe de soi-même (la sortie du runlevel
-`FAILSAFE` reste manuelle, à la clé).
+`HALT` reste manuelle, à la clé).
 
 **Sans l'émission sans écho**, à t1 M renverrait `1` à E ; à t2, E n'a plus de
 cause mais reçoit `1` de M, qui reçoit `1` de E : le ping-pong entretient le

@@ -122,7 +122,7 @@ Quick index to the documents that sit next to the code. Start from the subject, 
 * [Protocol layer](../src/core/system/combus/protocol/~README.md) — transport-independent services
 * [Frame and handshake format](../src/core/system/combus/protocol/frame/combus_frame_protocol.md) — wire format, handshake, MD5 contract
 * [UART workflow](../src/core/system/combus/protocol/uart_workflow.md) — how the UART link is set up
-* [both_or merge (anti ping-pong)](../src/core/system/combus/protocol/both_or.md) — how a both_or channel such as FAILSAFE is shared between boards
+* [both_or merge (anti ping-pong)](../src/core/system/combus/protocol/both_or.md) — how a both_or channel such as FAILSAFE_HARD is shared between boards
 * [ComBus link rework](<WIP - ComBus link rework.md>) — preliminary study for the communication rework: multi-link, multi-protocol, versioning (work in progress)
 * [ComBus processors](<WIP - ComBus processors.md>) — intentions for the processor norm: processing flag per theme, processing packages, redefinition core → machine type → machine (work in progress)
 * [ComBus Builder](../scripts/combus_builder/README.md) — developer README of the generator (pipeline, node mode, tests)
@@ -138,7 +138,8 @@ Quick index to the documents that sit next to the code. Start from the subject, 
 **Safety and link health**
 
 * [Failsafe module](../src/core/system/failsafe/failsafe_module.md)
-* [FAILSAFE_SOFT chain](../src/core/system/com/link_health/remote_link_lost.md)
+* [Failsafe module (hard and soft chains)](../src/core/system/failsafe/failsafe_module.md)
+* [Soft failsafe chain](../src/core/system/com/link_health/failsafe_soft.md)
 
 **Machines and configuration**
 

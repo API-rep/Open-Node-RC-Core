@@ -14,7 +14,7 @@
  *   removed (A16.1), the vbat module now writes VBAT_FAIL directly:
  *     - low  (=false) when the cell voltage drops below threshold
  *     - high (=true)  when the cell is healthy
- *   The FAILSAFE aggregator consumes VBAT_FAIL each cycle.
+ *   The FAILSAFE_HARD aggregator consumes VBAT_FAIL each cycle.
  *****************************************************************************/
 
 #include "vbat.h"

@@ -10,7 +10,7 @@
  *      contributor (FS1 redesign, see doc/failsafe_module.md §12.5).
  *   2. Battery update via `vbat_update()` — ADC sensing, sliding average,
  *      low-bat detection, and re-arm of `DigitalComBusID::VBAT_FAIL`.
- *   3. Failsafe update via `failsafe_update(bus)` — runs the FAILSAFE
+ *   3. Failsafe update via `failsafe_update(bus)` — runs the hard failsafe
  *      processor chain (reset + contributors), publishes the aggregated
  *      `DigitalComBusID::FAILSAFE_HARD` channel.
  *   4. Chantier 12.5 — `remote_link_fallback_update(bus)` (gated by
@@ -62,7 +62,7 @@
  *   1. `input_refresh()` (core) — physical acquisition.
  *      `input_update(bus)` (machine) — input -> ComBus mapping.
  *   2. `vbat_update()` — battery sensing + re-arm of `VBAT_FAIL`.
- *   3. `failsafe_update(bus)` — runs the FAILSAFE chain, publishes
+ *   3. `failsafe_update(bus)` — runs the hard failsafe chain, publishes
  *      `DigitalComBusID::FAILSAFE_HARD` on the bus.
  *   4. Chantier 12.5 — `remote_link_fallback_update(bus)` (only if
  *      `HAS_FAILSAFE` is defined): observes

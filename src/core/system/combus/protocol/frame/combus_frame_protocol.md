@@ -245,9 +245,9 @@ Un bout bidirectionnel n'émet **aucune trame de données** tant que son contrat
 - Retour à `INCONNU` : un handshake refusé (MD5 ou majeure différents) ; un
   silence plus long que `linkTimeoutMs` après des données ; sur un bout
   bidirectionnel, aucun ACK pendant 1 s (`kCombusHandshakeAckTimeoutMs`, 4 demandes) :
-  le pair ne reçoit plus ; une réinitialisation (`combus_rx_init`). Un `FAILSAFE`
+  le pair ne reçoit plus ; une réinitialisation (`combus_rx_init`). Un `FAILSAFE_HARD`
   actif ne touche plus au contrat (l'ancienne réaction P4 est retirée : avec le
-  blocage, elle aurait bloqué le `FAILSAFE` des autres cartes).
+  blocage, elle aurait bloqué le `FAILSAFE_HARD` des autres cartes).
 - En `INCONNU`, une trame de données bien reçue est ignorée : elle n'est pas
   appliquée, et la dernière trame gardée pour ce lien est effacée
   (`combus_rx_snapshot()` renvoie `nullptr`) ; le lien n'est pas vivant

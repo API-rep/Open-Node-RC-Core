@@ -222,7 +222,7 @@ Exemple : `RUNLEVEL` (`runlevel.cb`) n'existe que sur la board qui définit
 `HAS_RUNLEVEL_MANAGER`, par convention la `mainboard` (une seule par machine).
 Ce channel est **obligatoire sur la carte principale** : `main.cpp` en dépend
 sans garde, donc en environnement unique `HAS_RUNLEVEL_MANAGER` doit être
-défini ; les autres cartes d'un nœud le reçoivent par diffusion. `FAILSAFE`
+défini ; les autres cartes d'un nœud le reçoivent par diffusion. `FAILSAFE_HARD`
 (`HAS_FAILSAFE`) est dans le même cas en pratique (décision à confirmer).
 Ce n'est pas l'env racine (voir plus bas : l'env racine n'est pas une board).
 Interdit sur `scope: BASE`. Un `requires` vide (`[]`) est accepté sur BASE.
@@ -322,7 +322,7 @@ par le nom de la board pour les autres (`combus_<board>.h`, etc. ;
 - Inversion/diffusion de `direction` pour le scope BASE côté télécommande.
 - Fusion OR côté C++ pour `uplink_or` et `downlink_or`. `both_or` est câblé
   (voir `src/core/system/combus/protocol/both_or.md`). La fusion des contributeurs
-  locaux d'un agrégat (par exemple `VBAT_FAIL` → `FAILSAFE`) reste faite par une
+  locaux d'un agrégat (par exemple `VBAT_FAIL` → `FAILSAFE_HARD`) reste faite par une
   chaîne CbProc (`cb_reset_fn` en tête puis `cb_or_fn` :
   `src/core/system/failsafe/failsafe_chain.cpp`).
 

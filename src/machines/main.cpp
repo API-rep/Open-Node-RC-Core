@@ -208,10 +208,10 @@ void loop() {
     case RunLevel::HALT : {
     // ---------------------------------------------------------
       // FS2 — dedicated hardware safety reaction.  Triggered by the
-      // `cb_runlevel_fn` instance in runlevelProcs[] when FAILSAFE=true.
+      // `cb_runlevel_fn` instance in runlevelProcs[] when FAILSAFE_HARD=true.
       // Runs the same stop/sleep/disable sequence as the legacy ad-hoc
       // block (removed in FS2).  isNewRunLevel guards against re-running
-      // the sequence every cycle while FAILSAFE stays asserted.
+      // the sequence every cycle while FAILSAFE_HARD stays asserted.
       if (isNewRunLevel) {
         sys_log_warn("[SYSTEM][SAFE] reason=failsafe_aggregator action=force_idle_and_lock\n");
         stopAllDcDrivers(machine);

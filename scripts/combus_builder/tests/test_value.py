@@ -12,7 +12,7 @@ Coverage:
   - Comportement absent : reproduit le défaut générateur
                            (CbusNeutral / false).
   - Conflit de fusion : deux `value` différents pour le même id → erreur.
-  - Failsafe : channels FAILSAFE / VBAT_FAIL démarrent à `true`.
+  - Failsafe : channels FAILSAFE_HARD / VBAT_FAIL démarrent à `true` (`fault`).
   - Régression : tests existants pour `value=CbusNeutral` / `false`
                  restent verts.
 
@@ -516,7 +516,7 @@ def test_merge_two_channels_with_same_value_succeeds(tmp_path: Path):
 # =============================================================================
 
 def test_failsafe_cb_declares_value_high(tmp_path: Path):
-    """Read src/core/system/failsafe/failsafe_hard.cb and assert FAILSAFE has value=high."""
+    """Read src/core/system/failsafe/failsafe_hard.cb and assert FAILSAFE_HARD has value=fault."""
     p = REPO_ROOT / "src" / "core" / "system" / "failsafe" / "failsafe_hard.cb"
     assert p.exists(), f"failsafe.cb not found at {p}"
     # We re-implement the YAML read inline so the test is independent of

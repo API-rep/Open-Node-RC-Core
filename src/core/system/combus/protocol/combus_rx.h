@@ -222,8 +222,8 @@ void combus_rx_init( uint8_t            linkIdx,
  *   Updates the internal snapshot on each valid frame.  Iterates over
  *   every link registered by combus_rx_register_pool().
  *
- * @param bus  Node ComBus, read only for the FAILSAFE reaction (the cached
- *             handshake contract of every link is invalidated while FAILSAFE
+ * @param bus  Node ComBus, read only for the FAILSAFE_HARD reaction (the cached
+ *             handshake contract of every link is invalidated while FAILSAFE_HARD
  *             is set, HAS_FAILSAFE only).  May be nullptr: the reaction is
  *             then skipped.  Same convention as combus_tx_update().
  */

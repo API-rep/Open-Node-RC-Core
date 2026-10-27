@@ -10,7 +10,7 @@
  *
  *   No global pivot (`failsafeBus`) is maintained here — the chain
  *   writes its aggregated result directly to the `DigitalComBusID::FAILSAFE_HARD`
- *   ComBus channel.  Consumers read `FAILSAFE` on the bus.
+ *   ComBus channel.  Consumers read `FAILSAFE_HARD` on the bus.
  *****************************************************************************/
 
 #include "failsafe.h"
