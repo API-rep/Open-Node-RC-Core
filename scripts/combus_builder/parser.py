@@ -255,8 +255,31 @@ def parse_yaml_file(path: Path) -> tuple[Path, str, Any]:
                     f"channel {ch.get('id')!r}: no `value:`. The default value is the "
                     f"safe value of the channel and must be written (link rework 3.2a)",
                 )
+            if isinstance(ch, dict):
+                _check_fault_value(path, ch)
 
     return path, type_label, data
+
+
+def _check_fault_value(path: Path, ch: dict) -> None:
+    """Link rework S3a: the true safe value of a failsafe alarm is declared `fault`.
+
+    A digital channel of the theme `failsafe` (the failsafe group, "true =
+    fault") must declare `value: fault`; `fault` outside that group is an error;
+    `high` is refused (a true safe value only makes sense for an alarm).
+    """
+    if ch.get("type") != "digital":
+        return
+    cid, theme, value = ch.get("id"), ch.get("theme"), ch.get("value")
+    if value == "high":
+        raise ParseError(path, f"channel {cid!r}: `value: high` is refused. A true safe value only "
+                               f"makes sense for a failsafe alarm, written `value: fault` (link rework S3a)")
+    if theme == "failsafe" and value != "fault":
+        raise ParseError(path, f"channel {cid!r}: a digital channel of the theme `failsafe` is an "
+                               f"alarm, its safe value is declared `value: fault` (link rework S3a)")
+    if value == "fault" and theme != "failsafe":
+        raise ParseError(path, f"channel {cid!r}: `value: fault` belongs to the theme `failsafe` only "
+                               f"(link rework S3a)")
 
 
 def parse_all(files: list[Path]) -> list[tuple[Path, str, Any]]:

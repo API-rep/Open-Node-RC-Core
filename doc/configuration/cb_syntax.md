@@ -65,10 +65,10 @@ trie les channels de façon canonique (`scope`, `type`, `theme`, `id`).
 | `id` | oui | chaîne non vide, ex. `BAT_LOW`, `STEERING` | Identifiant unique du channel (devient un nom d'énumération C++) |
 | `type` | oui | `digital` \| `analog` | Famille du channel |
 | `scope` | oui | `BASE` \| `SYSTEM` \| `BOARD` | Portée de diffusion |
-| `theme` | oui | `core` \| `failsafe` \| `vbat` \| `light` \| `input` | Regroupement fonctionnel (liste fermée) |
+| `theme` | oui | `core` \| `failsafe` \| `vbat` \| `light` \| `input` \| `sim` | Regroupement fonctionnel (liste fermée) |
 | `direction` | oui pour SYSTEM et BASE | `uplink` \| `downlink` \| `both` \| `none` \| `uplink_or` \| `downlink_or` \| `both_or` | Sens de circulation, avec ou sans fusion OR |
 | `requires` | non | liste de flags de compilation | Activation conditionnelle |
-| `value` | **oui** (depuis le link rework 3.2a) | token statique ou entier | Valeur par défaut **et valeur sûre** : émise tant que l'écrivain n'a rien écrit, reprise à la perte de la source. Incluse dans le hash MD5. Sans `value:`, le build casse, quelle que soit la portée |
+| `value` | **oui** (depuis le link rework 3.2a) | analogique : `CbusMinVal` \| `CbusNeutral` \| `CbusMaxVal` \| entier ; numérique : `low` \| `fault` | Valeur par défaut **et valeur sûre** : émise tant que l'écrivain n'a rien écrit, reprise à la perte de la source. Incluse dans le hash MD5. Sans `value:`, le build casse, quelle que soit la portée. Un numérique du thème `failsafe` (une alarme, « vrai = faute ») déclare `fault` (vrai) ; `fault` est refusé ailleurs, et `high` est refusé partout (link rework S3a) |
 | `candidate` | non | `true` \| `false` | Channel `BASE` à l'essai (le builder ajoute `_NEXT` au nom), voir plus bas |
 | `infoName` | oui | chaîne non vide | Nom lisible pour le debug, hors du hash MD5 |
 
@@ -81,10 +81,15 @@ même déclaration en double est une erreur de build.
 
 `theme` regroupe les channels par fonction. Le générateur n'accepte que les
 valeurs de la liste fermée `VALID_THEMES` (`canon/channels.py`) :
-`core`, `failsafe`, `vbat`, `light`, `input`, `com`. Toute autre valeur est une erreur
+`core`, `failsafe`, `vbat`, `light`, `input`, `sim`. Toute autre valeur est une erreur
 de build. Pour ajouter un thème, il faut l'ajouter à cette liste dans le
 builder. Le thème fait partie du tri : il peut déplacer un channel sur le fil
 (ce qui change le hash MD5), mais il n'est pas haché lui-même.
+
+Le thème `failsafe` est le **groupe failsafe** : agrégats `FAILSAFE_*` et
+contributeurs `*_FAIL`, des alarmes (« vrai = faute »). Ses numériques
+déclarent `value: fault` ; le contrôle est fait par le builder (link rework
+S3a, qui y a aussi fusionné l'ancien thème `com`).
 
 ### `scope`
 

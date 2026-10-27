@@ -75,6 +75,7 @@ VALID_ANALOG_VALUES: frozenset[str] = frozenset({
 VALID_DIGITAL_VALUES: frozenset[str] = frozenset({
     "low",
     "high",
+    "fault",       # link rework S3a: true, the safe value of a failsafe alarm (theme failsafe only)
 })
 
 # Bornes pour les valeurs analog numériques brutes (entier accepté dans [0..65535]).
@@ -90,12 +91,11 @@ VALID_SCOPES: frozenset[str] = frozenset({"SYSTEM", "BASE", "BOARD"})
 # Thèmes autorisés. À étendre ici quand un nouveau thème apparaît.
 VALID_THEMES: frozenset[str] = frozenset({
     "core",        # A9.1: STEERING_BUS (dumper_truck/combus/steering_bus.cb)
-    "failsafe",
+    "failsafe",    # the failsafe group: aggregators FAILSAFE_*, contributors *_FAIL (link rework S3a: `com` merged here)
     "vbat",
     "light",
     "input",
-    "com",         # communication: LOCAL_REMOTE_FAIL, NODE_LINK_FAIL, BOARD_LINK_FAIL, FAILSAFE_SOFT (link health)
-    "sim",         # values computed by the simulation chains (HAS_SIM_PROC): ESC_SPEED_BUS, ESC_RPM_BUS, DRIVE_STATE_BUS
+    "sim",        # values computed by the simulation chains (HAS_SIM_PROC): ESC_SPEED_BUS, ESC_RPM_BUS, DRIVE_STATE_BUS
     # Ajouter ici les nouveaux thèmes légitimes.
 })
 

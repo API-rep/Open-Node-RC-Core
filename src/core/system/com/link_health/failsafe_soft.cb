@@ -29,8 +29,8 @@ channels:
     infoName: "Soft failsafe (aggregated)"
     type: digital
     scope: SYSTEM
-    theme: com            # link-health channels share the `com` theme
+    theme: failsafe            # failsafe group (link health)
     direction: both_or   # aggregator writes via the consumer chain; readers consume
-    value: high         # default to fault (failsafe-by-default — see chain reset)
+    value: fault         # default to fault (failsafe-by-default — see chain reset)
     requires:
       - HAS_FAILSAFE

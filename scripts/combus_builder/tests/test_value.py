@@ -109,7 +109,7 @@ def _raw_channel(
 def test_value_vocabulary_exposed():
     """VALID_ANALOG_VALUES / VALID_DIGITAL_VALUES / ANALOG_VALUE_{MIN,MAX} exposed."""
     assert VALID_ANALOG_VALUES == frozenset({"CbusMinVal", "CbusNeutral", "CbusMaxVal"})
-    assert VALID_DIGITAL_VALUES == frozenset({"low", "high"})
+    assert VALID_DIGITAL_VALUES == frozenset({"low", "high", "fault"})
     assert ANALOG_VALUE_MIN == 0
     assert ANALOG_VALUE_MAX == 65535
 
@@ -512,7 +512,7 @@ def test_merge_two_channels_with_same_value_succeeds(tmp_path: Path):
 
 
 # =============================================================================
-# 11. USAGE RÉEL : channels failsafe déclarés value: high
+# 11. USAGE RÉEL : channels failsafe déclarés value: fault (link rework S3a)
 # =============================================================================
 
 def test_failsafe_cb_declares_value_high(tmp_path: Path):
@@ -527,8 +527,8 @@ def test_failsafe_cb_declares_value_high(tmp_path: Path):
     channels = raw.get("channels", [])
     failsafe = next((c for c in channels if c.get("id") == "FAILSAFE_HARD"), None)
     assert failsafe is not None
-    assert failsafe.get("value") == "high", (
-        f"FAILSAFE channel must declare `value: high` for fail-safe default; "
+    assert failsafe.get("value") == "fault", (
+        f"FAILSAFE_HARD channel must declare `value: fault` for fail-safe default; "
         f"got {failsafe.get('value')!r}"
     )
 
@@ -546,14 +546,14 @@ def test_vbat_failsafe_cb_declares_value_high(tmp_path: Path):
     channels = raw.get("channels", [])
     vbat = next((c for c in channels if c.get("id") == "VBAT_FAIL"), None)
     assert vbat is not None
-    assert vbat.get("value") == "high", (
-        f"VBAT_FAIL channel must declare `value: high`; "
+    assert vbat.get("value") == "fault", (
+        f"VBAT_FAIL channel must declare `value: fault`; "
         f"got {vbat.get('value')!r}"
     )
 
 
 def test_failsafe_channels_canonicalise_to_true():
-    """End-to-end: failsafe.cb → parse → canonise → FAILSAFE.value='high'."""
+    """End-to-end: failsafe_hard.cb → parse → canonise → FAILSAFE_HARD.value='fault'."""
     from scripts.combus_builder.canon import canonize
     p = REPO_ROOT / "src" / "core" / "system" / "failsafe" / "failsafe_hard.cb"
     assert p.exists()
@@ -564,7 +564,7 @@ def test_failsafe_channels_canonicalise_to_true():
     parsed = [(p, "cb", raw)]
     result = canonize(parsed)
     ch = next(c for c in result.canonical_definitions if c.id == "FAILSAFE_HARD")
-    assert ch.value == "high"
+    assert ch.value == "fault"
 
 
 # =============================================================================

@@ -27,7 +27,7 @@ channels:
     scope: SYSTEM
     theme: failsafe
     direction: uplink_or
-    value: high    # default to fault state: contributor reports fault until
+    value: fault    # default to fault state: contributor reports fault until
                    # proven healthy. Failsafe-by-default contract.
     requires:
       - HAS_FAILSAFE

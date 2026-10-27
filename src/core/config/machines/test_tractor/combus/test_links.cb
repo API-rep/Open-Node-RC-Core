@@ -63,4 +63,4 @@ channels:
   scope: BASE
   theme: failsafe
   direction: both_or
-  value: low
+  value: fault

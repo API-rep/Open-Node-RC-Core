@@ -18,7 +18,7 @@
 # - requires: [HAS_FAILSAFE, HAS_LOCAL_REMOTE_FAILSAFE] — the failsafe module,
 #   and this contributor (link rework S1b).  The backend writes it only when
 #   its own INPUT_* flag is set too.
-# - theme: com — link-health channels (merged into `failsafe` in S3).
+# - theme: failsafe — the failsafe group (link rework S3a: `com` merged).
 # - type: digital (bool).
 
 
@@ -27,9 +27,9 @@ channels:
     infoName: "Local remote link lost"
     type: digital
     scope: BOARD        # private to the board owning the input backend (NOT shared)
-    theme: com          # link-health channels share the `com` theme
+    theme: failsafe          # failsafe group (link health)
     direction: none       # BOARD scope: pure in-board state, no wire transport
-    value: high         # default to "lost" (failsafe-by-default — see chain reset)
+    value: fault         # default to "lost" (failsafe-by-default — see chain reset)
     requires:
       - HAS_FAILSAFE
       - HAS_LOCAL_REMOTE_FAILSAFE

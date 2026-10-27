@@ -25,9 +25,9 @@ channels:
     infoName: "ComBus link lost (FAILSAFE reaction)"
     type: digital
     scope: BOARD          # private to the board owning the links (NOT shared)
-    theme: com            # link-health channels share the `com` theme
+    theme: failsafe            # failsafe group (link health)
     direction: none       # BOARD scope: pure in-board state, no wire transport
-    value: high           # default to fault (failsafe-by-default — see chain reset)
+    value: fault           # default to fault (failsafe-by-default — see chain reset)
     requires:
       - HAS_FAILSAFE
       - HAS_BOARD_LINK_FAILSAFE

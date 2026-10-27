@@ -493,6 +493,7 @@ _VALUE_TOKEN_TO_CPP: dict[str, str] = {
     # digital
     "low":  "false",
     "high": "true",
+    "fault": "true",   # link rework S3a: safe value of a failsafe alarm, same literal as `high`
 }
 
 
