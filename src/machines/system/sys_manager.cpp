@@ -37,18 +37,17 @@ void sys_manager_update(ComBus& bus) {
       //
       // Chantier 12.6: the historical open-drain pre-clear of `bus.isNotDrived`
       // (FS1) is REMOVED — link health is now monitored at transport level by
-      // per-link contributors (PS4_DS4_BT_FAIL, NODE_LINK_FAIL, ...) and
+      // per-link contributors (LOCAL_REMOTE_FAIL, NODE_LINK_FAIL, ...) and
       // aggregated by the remote_link_fallback_chain into FAILSAFE_SOFT.
     failsafe_update(bus);
 
       // --- 4. Chantier 12.5 — FAILSAFE_SOFT → IDLE fallback chain ---
-      // Runs AFTER the failsafe aggregator and BEFORE the FSM.  When the
-      // project defines HAS_REMOTE_LINK_LOST_FALLBACK, this chain watches
-      // FAILSAFE_SOFT and forces RUNLEVEL = IDLE on the rising edge.
-      // The call itself is gated so we don't pay the cost of the no-op
-      // façade on autonomous machines (no FS contributors).  See
+      // Runs AFTER the failsafe aggregator and BEFORE the FSM: the soft chain
+      // aggregates its contributors into FAILSAFE_SOFT, which the runlevel
+      // chain turns into RUNLEVEL = IDLE on the rising edge.  Part of the
+      // failsafe module (link rework S1b: HAS_FAILSAFE).  See
       // failsafe_module.md §12.5 (new design).
-#if defined(HAS_REMOTE_LINK_LOST_FALLBACK)
+#if defined(HAS_FAILSAFE)
     remote_link_fallback_update(bus);
 #endif
 }

@@ -1,6 +1,6 @@
-# failsafe.cb — Failsafe aggregator
+# failsafe_hard.cb — aggregator of the hard failsafe chain
 #
-# This file declares the ComBus channel FAILSAFE, the Failsafe system
+# This file declares the ComBus channel FAILSAFE_HARD, the Failsafe system
 # aggregator. It is set to 1 (fault) if at least one FAILSAFE_X
 # contributor reports a fault.
 #
@@ -12,7 +12,7 @@
 # Notes:
 # - FAILSAFE is the aggregator, not a contributor.
 # - Contributors (VBAT_FAIL, etc.) are declared in their own .cb
-#   files (e.g. src/core/system/vbat/vbat_failsafe.cb).
+#   files (e.g. src/core/system/vbat/vbat_fail.cb).
 # - FAILSAFE_END is a legacy range marker. The generator deduces it
 #   automatically from the list of channels in the group.
 # - SYSTEM scope is required because FAILSAFE is shared by all boards

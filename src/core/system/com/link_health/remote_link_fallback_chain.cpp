@@ -20,7 +20,7 @@
  *                                       back to its failsafe default).
  *
  *   Contributors (optional, gated by build flags):
- *     - PS4_DS4_BT_FAIL — PS4 DualShock Bluetooth link health
+ *     - LOCAL_REMOTE_FAIL — PS4 DualShock Bluetooth link health
  *       (active when INPUT_PS4_DS4_BT is defined).
  *     - NODE_LINK_FAIL        — loss of a receiving ComBus link whose loss
  *       policy is IDLE (always present: false when there is no such link;
@@ -34,7 +34,7 @@
  *   The IDLE-on-loss reaction (cb_runlevel_once_fn watching
  *   FAILSAFE_SOFT) is mounted in the RUNLEVEL chain, not here.
  *
- *   This whole module is gated by `-D HAS_REMOTE_LINK_LOST_FALLBACK`
+ *   This whole module is gated by `-D HAS_FAILSAFE`
  *   (mirroring the umbrella pattern of failsafe.cb / failsafe_chain.cpp).
  *   Without the flag, the chain is empty (count == 0) and the
  *   `remote_link_fallback_update()` façade is a no-op.
@@ -44,11 +44,11 @@
 
 #include "remote_link_fallback_chain.h"
 
-#if defined(HAS_REMOTE_LINK_LOST_FALLBACK)
+#if defined(HAS_FAILSAFE)   // link rework S1b: the soft chain is part of the failsafe module
 
 #include <core/system/combus/processors/base/cb_reset.h>   // cb_reset_fn
 #include <core/system/combus/processors/logic/cb_or.h>      // cb_or_fn
-#include <core/config/machines/combus_types.h>              // DigitalComBusID::PS4_DS4_BT_FAIL, NODE_LINK_FAIL, FAILSAFE_SOFT
+#include <core/config/machines/combus_types.h>              // DigitalComBusID::LOCAL_REMOTE_FAIL, NODE_LINK_FAIL, FAILSAFE_SOFT
 
 
 // =============================================================================
@@ -79,22 +79,23 @@ static CbProc kRemoteLinkFallbackProcs[] = {
         .fn      = cb_reset_fn,
     },
 
-#if defined(INPUT_PS4_DS4_BT)
-    // --- 1. PS4 DualShock Bluetooth link contributor (optional) -----------
-    // Reads PS4_DS4_BT_FAIL (proof-of-life from the PS4_BT input
+#if defined(HAS_LOCAL_REMOTE_FAILSAFE)
+    // --- 1. Local remote contributor (optional) --------------------------
+    // Reads LOCAL_REMOTE_FAIL (proof-of-life from the PS4_BT input
     // backend, written each cycle by input_update.cpp).  If the PS4
     // controller is not connected / not refreshing the bus, the channel
     // stays at its failsafe default (true = lost); this OR-guard latches
     // the pipeline value to 1 and consumes the channel back to true.
     {
         .name    = "remote_link_or_ps4_ds4_bt",
-        .inCh    = DigitalComBusID::PS4_DS4_BT_FAIL,
-        .outCh   = DigitalComBusID::PS4_DS4_BT_FAIL,
+        .inCh    = DigitalComBusID::LOCAL_REMOTE_FAIL,
+        .outCh   = DigitalComBusID::LOCAL_REMOTE_FAIL,
         .fn      = cb_or_fn,
     },
 #endif
 
-    // --- 2. ComBus link contributor (always present) ----------------------
+#if defined(HAS_NODE_LINK_FAILSAFE)
+    // --- 2. ComBus link contributor (optional) ---------------------------
     // Reads NODE_LINK_FAIL, written each cycle by com_rx_update() from the
     // receiving links whose loss policy is IDLE (combus_links_lost(IDLE)):
     // true while one of them is not alive, never seen included.  This
@@ -108,6 +109,7 @@ static CbProc kRemoteLinkFallbackProcs[] = {
         .outCh   = DigitalComBusID::NODE_LINK_FAIL,
         .fn      = cb_or_fn,
     },
+#endif
 
     // Add new contributors here with their own #if defined(...) blocks.
     // Each must follow the same shape: inCh == outCh, fn = cb_or_fn,
@@ -156,20 +158,17 @@ void remote_link_fallback_update(ComBus& bus) {
     proc_chain_update(kRemoteLinkFallbackChain, kRemoteLinkFallbackChainCount, bus);
 }
 
-#else  // HAS_REMOTE_LINK_LOST_FALLBACK
+#else  // HAS_FAILSAFE
 
-// Fallback disabled: expose a no-op façade + empty chain table.  Callers
-// (sys_manager.cpp) can still invoke remote_link_fallback_update() —
-// it just returns immediately without touching the bus.  The
-// FAILSAFE_SOFT channel does not exist either (its .cb requires
-// HAS_REMOTE_LINK_LOST_FALLBACK), which is the correct behaviour for
-// projects that opted out of the fallback (autonomous machines, or
-// projects that handle link-loss at a different level).
+// Failsafe module disabled: expose a no-op façade + empty chain table.
+// Callers can still invoke remote_link_fallback_update() — it just returns
+// immediately without touching the bus.  The FAILSAFE_SOFT channel does not
+// exist either (its .cb requires HAS_FAILSAFE).
 void remote_link_fallback_update(ComBus& /*bus*/) {
     // no-op
 }
 const uint8_t kRemoteLinkFallbackChainCount = 0u;
 
-#endif  // HAS_REMOTE_LINK_LOST_FALLBACK
+#endif  // HAS_FAILSAFE
 
 // EOF remote_link_fallback_chain.cpp

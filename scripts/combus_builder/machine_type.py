@@ -228,7 +228,7 @@ def filter_files_by_machine_type(files, machine_type: str | None) -> list:
       - machine_type is a known directory segment (e.g. "dumper_truck"):
         KEEP every file EXCEPT those under
         core/config/machines/<other_type>/. Generic files
-        (e.g. core/system/failsafe/failsafe.cb) are always kept.
+        (e.g. core/system/failsafe/failsafe_hard.cb) are always kept.
 
     The returned list preserves the input order.
 

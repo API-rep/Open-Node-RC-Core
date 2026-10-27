@@ -1534,7 +1534,7 @@ def test_vocabularies_centralized_in_channels():
 
 def test_real_failsafe_cb_validates():
     """The real failsafe.cb must validate against the strict contract."""
-    real = REPO_ROOT / "src" / "core" / "system" / "failsafe" / "failsafe.cb"
+    real = REPO_ROOT / "src" / "core" / "system" / "failsafe" / "failsafe_hard.cb"
     if not real.exists():
         # Skip if the file is not present (e.g. on a different branch).
         return
@@ -1559,8 +1559,8 @@ def test_real_failsafe_cb_validates():
 
 
 def test_real_vbat_failsafe_cb_validates():
-    """The real vbat_failsafe.cb must validate against the strict contract."""
-    real = REPO_ROOT / "src" / "core" / "system" / "vbat" / "vbat_failsafe.cb"
+    """The real vbat_fail.cb must validate against the strict contract."""
+    real = REPO_ROOT / "src" / "core" / "system" / "vbat" / "vbat_fail.cb"
     if not real.exists():
         return
     import yaml
@@ -1574,7 +1574,7 @@ def test_real_vbat_failsafe_cb_validates():
     assert ch.type == "digital"
     assert ch.scope == "SYSTEM"
     assert ch.theme == "failsafe"
-    # A2.1 : vbat_failsafe.cb uses `direction: uplink_or` (a
+    # A2.1 : vbat_fail.cb uses `direction: uplink_or` (a
     # contributor that OR-merges into the FAILSAFE aggregator).
     # `effective_direction` is the union of `direction` and
     # `direction_or` — the canonical accessor for "what the wire
@@ -1586,8 +1586,8 @@ def test_real_vbat_failsafe_cb_validates():
 
 def test_real_both_cb_files_together():
     """Both real .cb files together must canonize without conflict."""
-    p1 = REPO_ROOT / "src" / "core" / "system" / "failsafe" / "failsafe.cb"
-    p2 = REPO_ROOT / "src" / "core" / "system" / "vbat" / "vbat_failsafe.cb"
+    p1 = REPO_ROOT / "src" / "core" / "system" / "failsafe" / "failsafe_hard.cb"
+    p2 = REPO_ROOT / "src" / "core" / "system" / "vbat" / "vbat_fail.cb"
     if not (p1.exists() and p2.exists()):
         return
     import yaml

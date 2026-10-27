@@ -65,7 +65,8 @@ CbProc kFailsafeProcs[] = {
     },
 #endif
 
-    // --- 2. ComBus link contributor (always present) -----------------------
+#if defined(HAS_BOARD_LINK_FAILSAFE)
+    // --- 2. ComBus link contributor (optional) ----------------------------
     // Reads BOARD_LINK_FAIL, written each cycle by com_rx_update() from the
     // receiving links whose loss policy is FAILSAFE (combus_links_lost()):
     // true while one of them is lost, or never seen after its startup grace.
@@ -76,6 +77,7 @@ CbProc kFailsafeProcs[] = {
         .outCh   = DigitalComBusID::BOARD_LINK_FAIL,
         .fn      = cb_or_fn,
     },
+#endif
 
     // Add new contributors here with their own #if defined(HAS_XXX_FAILSAFE)
     // blocks.  Each must follow the same shape: inCh == outCh, fn = cb_or_fn,

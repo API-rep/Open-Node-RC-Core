@@ -22,7 +22,7 @@
 ## 2. Architecture
 
 ```text
-PS4_DS4_BT_FAIL ──┐
+LOCAL_REMOTE_FAIL ──┐
                        │
 NODE_LINK_FAIL ─────────┼──► OR-guard (cb_or_fn) ──► FAILSAFE_SOFT
                        │                              │
@@ -51,7 +51,7 @@ src/core/system/com/link_health/
 └── remote_link_fallback_chain.cpp // Chaîne d'agrégation (reset + OR-guard)
 
 src/core/config/inputs/
-└── ps4_ds4_bt_link_lost.cb       // Canal PS4_DS4_BT_FAIL (contributeur, requires INPUT_PS4_DS4_BT)
+└── ps4_ds4_bt_link_lost.cb       // Canal LOCAL_REMOTE_FAIL (contributeur, requires INPUT_PS4_DS4_BT)
 ```
 
 Les quatre canaux sont du thème `com`.
@@ -60,13 +60,13 @@ Les quatre canaux sont du thème `com`.
 
 ## 4. Contributeurs
 
-### 4.1 — `PS4_DS4_BT_FAIL`
+### 4.1 — `LOCAL_REMOTE_FAIL`
 
 **Canal** : `src/core/config/inputs/ps4_ds4_bt_link_lost.cb` (à côté du backend PS4, `requires: INPUT_PS4_DS4_BT`)
 
 **Propriétaire** : `src/machines/system/input/input_update.cpp` (backend PS4_BT)
 
-**Réarmement** : `combus_set_digital(bus, DigitalComBusID::PS4_DS4_BT_FAIL, false, ChanLayer::BOARD)` quand le contrôleur est actif.
+**Réarmement** : `combus_set_digital(bus, DigitalComBusID::LOCAL_REMOTE_FAIL, false, ChanLayer::BOARD)` quand le contrôleur est actif.
 
 **Gating** : `#if defined(INPUT_PS4_DS4_BT)`
 

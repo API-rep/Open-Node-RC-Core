@@ -33,10 +33,10 @@ void com_rx_update(ComBus& bus) {
 
 	// --- Link loss policy (onLoss): log the changes, feed the IDLE and FAILSAFE contributors each cycle ---
   combus_links_update(bus);
-#if defined(HAS_REMOTE_LINK_LOST_FALLBACK)
+#if defined(HAS_FAILSAFE) && defined(HAS_NODE_LINK_FAILSAFE)
   combus_set_digital(bus, DigitalComBusID::NODE_LINK_FAIL, combus_links_lost(LinkLossAction::IDLE));
 #endif
-#if defined(HAS_FAILSAFE)
+#if defined(HAS_FAILSAFE) && defined(HAS_BOARD_LINK_FAILSAFE)
   combus_set_digital(bus, DigitalComBusID::BOARD_LINK_FAIL, combus_links_lost(LinkLossAction::FAILSAFE));
 #endif
 

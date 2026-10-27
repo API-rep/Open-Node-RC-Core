@@ -112,7 +112,7 @@
  *     the FS1 open-drain `isNotDrived` flag and a dedicated FS1 contributor
  *     channel.  Both have been removed in chantier 12.5/12.6: link health
  *     is now monitored at transport level by per-backend *_LINK_LOST
- *     contributors (PS4_DS4_BT_FAIL, NODE_LINK_FAIL, ...) and
+ *     contributors (LOCAL_REMOTE_FAIL, NODE_LINK_FAIL, ...) and
  *     aggregated by `remote_link_fallback_chain.cpp` into FAILSAFE_SOFT,
  *     which feeds the top-level FAILSAFE aggregator.
  *     See failsafe_module.md §12.5 (new design) and §12.6 (cleanup).
@@ -1995,7 +1995,7 @@ static void test_filter_generated_directions(void) {
 
 // Chantier 12.6 (cleanup): Group F (FS1 failsafe re-arm) REMOVED — link
 // health is now monitored by the per-backend *_LINK_LOST contributors
-// (PS4_DS4_BT_FAIL, NODE_LINK_FAIL, ...) aggregated into
+// (LOCAL_REMOTE_FAIL, NODE_LINK_FAIL, ...) aggregated into
 // FAILSAFE_SOFT, which feeds the top-level FAILSAFE aggregator
 // (see failsafe_module.md §12.5 new design).
 //

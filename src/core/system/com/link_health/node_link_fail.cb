@@ -1,20 +1,22 @@
-# com_link_lost.cb — loss of a ComBus link with the IDLE reaction
+# node_link_fail.cb — loss of a ComBus link (contributor)
 #
 # This file declares the NODE_LINK_FAIL ComBus channel: true when at least one
 # receiving ComBus link of the board whose loss policy is IDLE (onLoss, by
-# default an inter-node link) is not alive, never seen included.  It is a
-# contributor of the FAILSAFE_SOFT chain (remote_link_fallback_chain.cpp),
-# which brings the runlevel to IDLE.
+# default a link to another node) is not alive, never seen included.  It is a
+# contributor: a chain of the failsafe module reads it (today the soft chain,
+# remote_link_fallback_chain.cpp, FAILSAFE_SOFT).  Link rework S2 will feed it
+# by scope (links to another node) instead of by loss policy.
 #
 # Notes:
 # - BOARD scope: only the board that owns the links knows their state.  The
-#   whole node learns of it through FAILSAFE_SOFT and RUNLEVEL.
+#   whole node learns of it through the aggregator and RUNLEVEL.
 # - Written each cycle by com_rx_update() from combus_links_lost(IDLE);
 #   false when no such link exists.  A link that only transmits never counts.
 # - value: high = lost until com_rx_update() writes it (failsafe-by-default);
-#   the chain consumes it each cycle (cb_or_fn, inCh == outCh).
-# - requires: HAS_REMOTE_LINK_LOST_FALLBACK — no chain, no contributor.
-# - The FAILSAFE reaction has its own channel: BOARD_LINK_FAIL.
+#   the chain consumes it each cycle (cb_or_fn, inCh == outCh).  A contributor
+#   is read by ONE chain only.
+# - requires: [HAS_FAILSAFE, HAS_NODE_LINK_FAILSAFE] — the failsafe module,
+#   and this contributor (link rework S1b).
 
 
 channels:
@@ -26,4 +28,5 @@ channels:
     direction: none       # BOARD scope: pure in-board state, no wire transport
     value: high           # default to "lost" (failsafe-by-default — see chain reset)
     requires:
-      - HAS_REMOTE_LINK_LOST_FALLBACK
+      - HAS_FAILSAFE
+      - HAS_NODE_LINK_FAILSAFE

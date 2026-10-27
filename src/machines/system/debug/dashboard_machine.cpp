@@ -113,9 +113,9 @@ static void render_overview() {
 	// Chantier 12.6: ctrlConn now derived from FAILSAFE_SOFT contributor
 	// (SYSTEM aggregator published by the remote_link_fallback_chain).  For
 	// backward compatibility, fallback to the historical `lastFrameMs` proxy
-	// when the channel is not active (autonomous builds without HAS_REMOTE_LINK_LOST_FALLBACK).
+	// when the channel is not active (autonomous builds without HAS_FAILSAFE).
 	bool ctrlConn;
-#if defined(HAS_REMOTE_LINK_LOST_FALLBACK)
+#if defined(HAS_FAILSAFE)
 	ctrlConn = !s_bus->digitalBus[static_cast<uint8_t>(DigitalComBusID::FAILSAFE_SOFT)].value;
 #else
 	ctrlConn = (millis() - s_bus->lastFrameMs) < 2000u;
@@ -143,7 +143,7 @@ static void render_overview() {
 		int16_t     pct  = dashPctBipolar(raw, s_bus->analogBusMaxVal);
 		// Chantier 12.6: same heuristic as ctrlConn — see above.
 		bool        drv;
-#if defined(HAS_REMOTE_LINK_LOST_FALLBACK)
+#if defined(HAS_FAILSAFE)
 		drv = !s_bus->digitalBus[static_cast<uint8_t>(DigitalComBusID::FAILSAFE_SOFT)].value;
 #else
 		drv = (millis() - s_bus->lastFrameMs) < 2000u;

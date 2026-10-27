@@ -14,7 +14,7 @@
  *      processor chain (reset + contributors), publishes the aggregated
  *      `DigitalComBusID::FAILSAFE_HARD` channel.
  *   4. Chantier 12.5 — `remote_link_fallback_update(bus)` (gated by
- *      `HAS_REMOTE_LINK_LOST_FALLBACK`) — if FAILSAFE_SOFT just rose,
+ *      `HAS_FAILSAFE`) — if FAILSAFE_SOFT just rose,
  *      forces RUNLEVEL = IDLE.
  *
  *   **Chantier 12.6 (cleanup):** the historical open-drain
@@ -65,7 +65,7 @@
  *   3. `failsafe_update(bus)` — runs the FAILSAFE chain, publishes
  *      `DigitalComBusID::FAILSAFE_HARD` on the bus.
  *   4. Chantier 12.5 — `remote_link_fallback_update(bus)` (only if
- *      `HAS_REMOTE_LINK_LOST_FALLBACK` is defined): observes
+ *      `HAS_FAILSAFE` is defined): observes
  *      `FAILSAFE_SOFT` and forces RUNLEVEL = IDLE on the rising edge.
  *
  *   Returns `void`.  Consumers read `comBus.digitalBus[DigitalComBusID::FAILSAFE_HARD]`

@@ -1,8 +1,8 @@
-# vbat_failsafe.cb — VBAT-as-Failsafe-contributor
+# vbat_fail.cb — VBAT-as-Failsafe-contributor
 #
 # This file declares the VBAT Failsafe contributor channel. It is the
 # single, authoritative battery-failure signal consumed by the
-# FAILSAFE aggregator (declared in src/core/system/failsafe/failsafe.cb).
+# FAILSAFE aggregator (declared in src/core/system/failsafe/failsafe_hard.cb).
 #
 # Notes:
 # - SYSTEM scope: the contributor is shared by all boards composing the

@@ -516,8 +516,8 @@ def test_merge_two_channels_with_same_value_succeeds(tmp_path: Path):
 # =============================================================================
 
 def test_failsafe_cb_declares_value_high(tmp_path: Path):
-    """Read src/core/system/failsafe/failsafe.cb and assert FAILSAFE has value=high."""
-    p = REPO_ROOT / "src" / "core" / "system" / "failsafe" / "failsafe.cb"
+    """Read src/core/system/failsafe/failsafe_hard.cb and assert FAILSAFE has value=high."""
+    p = REPO_ROOT / "src" / "core" / "system" / "failsafe" / "failsafe_hard.cb"
     assert p.exists(), f"failsafe.cb not found at {p}"
     # We re-implement the YAML read inline so the test is independent of
     # any top-level yaml loader version.
@@ -534,9 +534,9 @@ def test_failsafe_cb_declares_value_high(tmp_path: Path):
 
 
 def test_vbat_failsafe_cb_declares_value_high(tmp_path: Path):
-    p = REPO_ROOT / "src" / "system" / "vbat" / "vbat_failsafe.cb"  # likely wrong path
+    p = REPO_ROOT / "src" / "system" / "vbat" / "vbat_fail.cb"  # likely wrong path
     # Try the actual path:
-    p2 = REPO_ROOT / "src" / "core" / "system" / "vbat" / "vbat_failsafe.cb"
+    p2 = REPO_ROOT / "src" / "core" / "system" / "vbat" / "vbat_fail.cb"
     if not p2.exists():
         # Skip silently if the file path is not where expected.
         return
@@ -555,7 +555,7 @@ def test_vbat_failsafe_cb_declares_value_high(tmp_path: Path):
 def test_failsafe_channels_canonicalise_to_true():
     """End-to-end: failsafe.cb → parse → canonise → FAILSAFE.value='high'."""
     from scripts.combus_builder.canon import canonize
-    p = REPO_ROOT / "src" / "core" / "system" / "failsafe" / "failsafe.cb"
+    p = REPO_ROOT / "src" / "core" / "system" / "failsafe" / "failsafe_hard.cb"
     assert p.exists()
     import yaml
     with p.open("r", encoding="utf-8") as f:

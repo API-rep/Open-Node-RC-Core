@@ -65,7 +65,11 @@ Noms (renommage mécanique, étape S1 du link rework) :
 | `PS4_DS4_BT_LINK_LOST` | contributeur, manette perdue | `PS4_DS4_BT_FAIL` |
 | `TEST_COUPLED_FAULT` | défaut d'essai partagé | `TEST_COUPLED_FAIL` |
 
-Flags, plus tard : `HAS_FAILSAFE` reste le parapluie ; `HAS_REMOTE_LINK_LOST_FALLBACK` pourrait devenir `HAS_FAILSAFE_SOFT`.
+Flags (fait en S1b, 2026-10-26) : `HAS_FAILSAFE` est le module entier (les deux chaînes et leurs agrégats) ; chaque contributeur a son flag `HAS_<CONTRIBUTEUR>_FAILSAFE` ; `PS4_DS4_BT_FAIL` est devenu le contributeur générique `LOCAL_REMOTE_FAIL`.
+
+Décisions complémentaires (2026-10-26) :
+- **un contributeur est lu par une seule chaîne** : chaque chaîne le réarme à `true` après lecture (« consume + guard »), donc branché dans deux chaînes, la seconde lirait une fausse faute. « Rebranchable » veut dire **déplaçable, jamais dupliqué** ;
+- **sortir de `HALT` demande un redémarrage** (à mettre en œuvre en S3) : aujourd'hui `HALT` se quitte par un front de clé après la retombée de la faute, ou par le front de la chaîne douce (qui, sautée par le *claim* de la chaîne dure, voit son front à la retombée et écrit `IDLE`) ; avec un `HALT` verrouillé jusqu'au redémarrage, ces deux sorties disparaissent.
 
 **Trous du runlevel trouvés le 2026-10-26** (à corriger avec la règle, étape S3) :
 1. les feux s'éteignent tous en `FAILSAFE` : `kRunLevelMask` a 7 cases (`RunLevel::COUNT`) mais 6 valeurs écrites (`dumper_truck_lights.h:91-98`), la case `FAILSAFE` vaut `0`, soit « tout éteint de force » ; les warnings de batterie basse (`light_interpreter.cpp:55, 64`) ne peuvent pas clignoter en failsafe ;

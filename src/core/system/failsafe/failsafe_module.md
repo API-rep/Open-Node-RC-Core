@@ -292,7 +292,7 @@ src/core/system/com/link_health/
 └── remote_link_fallback_chain.cpp // Chaîne d'agrégation (reset + OR-guard)
 
 src/core/config/inputs/
-└── ps4_ds4_bt_link_lost.cb       // Canal PS4_DS4_BT_FAIL (contributeur)
+└── ps4_ds4_bt_link_lost.cb       // Canal LOCAL_REMOTE_FAIL (contributeur)
 ```
 
 ---

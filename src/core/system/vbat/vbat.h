@@ -6,7 +6,7 @@
  *   Composed of two independent sub-modules:
  *
  *   - `vbat_sense` : hardware ADC sensing, sliding average, cell auto-detection,
- *     low-bat flag. Writes `DigitalComBusID::VBAT_FAIL` (see vbat_failsafe.cb)
+ *     low-bat flag. Writes `DigitalComBusID::VBAT_FAIL` (see vbat_fail.cb)
  *     as proof-of-life each cycle. Activated by `-D VBAT_LIPO` (or other
  *     VBAT_xxx flags) in platformio.ini. Sets HAS_VBAT_SENSING when active
  *     (defined by the battery profile backend).

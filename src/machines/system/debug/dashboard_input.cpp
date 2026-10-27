@@ -40,7 +40,7 @@ static void renderDigitalCompact(const ComBus* bus, uint8_t n)
 {
 	// Chantier 12.6: '*' = healthy is now derived from FAILSAFE_SOFT
 	// (SYSTEM aggregator).  Fallback to lastFrameMs proxy on autonomous builds.
-#if defined(HAS_REMOTE_LINK_LOST_FALLBACK)
+#if defined(HAS_FAILSAFE)
 	const bool busDriven = !bus->digitalBus[static_cast<uint8_t>(DigitalComBusID::FAILSAFE_SOFT)].value;
 #else
 	const bool busDriven = (millis() - bus->lastFrameMs) < 2000u;

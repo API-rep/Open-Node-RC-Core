@@ -94,7 +94,7 @@ VALID_THEMES: frozenset[str] = frozenset({
     "vbat",
     "light",
     "input",
-    "com",         # communication: PS4_DS4_BT_FAIL, NODE_LINK_FAIL, BOARD_LINK_FAIL, FAILSAFE_SOFT (link health)
+    "com",         # communication: LOCAL_REMOTE_FAIL, NODE_LINK_FAIL, BOARD_LINK_FAIL, FAILSAFE_SOFT (link health)
     "sim",         # values computed by the simulation chains (HAS_SIM_PROC): ESC_SPEED_BUS, ESC_RPM_BUS, DRIVE_STATE_BUS
     # Ajouter ici les nouveaux thèmes légitimes.
 })

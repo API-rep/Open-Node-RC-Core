@@ -32,7 +32,7 @@ void input_update(ComBus &bus) {
     for (uint8_t i = 0; i < InputDigitalMapCount; i++) {
       combus_set_digital(bus, InputDigitalMapArray[i].busChannel, false, ChanLayer::SYSTEM);
     }
-    return;   // source inactive — PS4_DS4_BT_FAIL stays at its failsafe default (true = lost)
+    return;   // source inactive — LOCAL_REMOTE_FAIL stays at its failsafe default (true = lost)
   }
 
 // ==========================================================
@@ -69,14 +69,14 @@ void input_update(ComBus &bus) {
     // is REMOVED — the open-drain flag no longer exists.  Each input
     // backend now writes its own *_LINK_LOST contributor (see below).
     //
-    // PS4_BT backend publishes PS4_DS4_BT_FAIL here.  If the PS4
+    // PS4_BT backend publishes LOCAL_REMOTE_FAIL here.  If the PS4
     // controller stops refreshing the input device (no analog/digital
     // values), input_is_connected() above returns false and this block
     // is skipped — the channel stays at its failsafe default (true =
     // lost), and the aggregator chain picks it up next cycle.
   bus.lastFrameMs = millis();
-#if defined(INPUT_PS4_DS4_BT)
-  combus_set_digital(bus, DigitalComBusID::PS4_DS4_BT_FAIL, false, ChanLayer::BOARD);   // BOARD-scope channel: only a BOARD caller may write it
+#if defined(INPUT_PS4_DS4_BT) && defined(HAS_FAILSAFE) && defined(HAS_LOCAL_REMOTE_FAILSAFE)
+  combus_set_digital(bus, DigitalComBusID::LOCAL_REMOTE_FAIL, false, ChanLayer::BOARD);   // BOARD-scope channel: only a BOARD caller may write it
 #endif
 }
 

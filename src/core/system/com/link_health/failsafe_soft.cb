@@ -1,0 +1,36 @@
+# failsafe_soft.cb — aggregator of the soft failsafe chain
+#
+# This file declares the FAILSAFE_SOFT ComBus channel: the OR-merge of the
+# contributors branched into the soft chain (today LOCAL_REMOTE_FAIL and
+# NODE_LINK_FAIL).  Its reaction is the runlevel IDLE (the hard chain,
+# FAILSAFE_HARD, leads to HALT).
+#
+# FAILSAFE_SOFT is COMPUTED, not directly written by the sources:
+#   - each source writes its own *_FAIL contributor each cycle
+#     (false = healthy, true = fault — failsafe-by-default);
+#   - the soft chain (src/core/system/com/link_health/remote_link_fallback_chain.cpp)
+#     resets its value, ORs the contributors it lists, and writes the result to
+#     FAILSAFE_SOFT;
+#   - downstream consumers (runlevel chain, dashboards) only read FAILSAFE_SOFT.
+#
+# Notes:
+# - SYSTEM scope: shared by all boards of the local node.  Only the soft chain
+#   writes it.
+# - Direction [both_or]: any fault wins on import.
+# - value: high = fault (failsafe-by-default) until the chain writes it.
+# - requires: [HAS_FAILSAFE] — the failsafe module as a whole (link rework
+#   S1b).  The contributors are optional, each under its own HAS_*_FAILSAFE
+#   flag; without any, the chain writes false each cycle.
+# - type: digital (bool).
+
+
+channels:
+  - id: FAILSAFE_SOFT
+    infoName: "Soft failsafe (aggregated)"
+    type: digital
+    scope: SYSTEM
+    theme: com            # link-health channels share the `com` theme
+    direction: both_or   # aggregator writes via the consumer chain; readers consume
+    value: high         # default to fault (failsafe-by-default — see chain reset)
+    requires:
+      - HAS_FAILSAFE

@@ -29,7 +29,7 @@
  *                 manual via the operator (KEY → STARTING).
  *                 This proc sits RIGHT AFTER failsafe in the priority order,
  *                 so a FAILSAFE condition always wins.
- *                 Gated by `-D HAS_REMOTE_LINK_LOST_FALLBACK` (mirrors the
+ *                 Gated by `-D HAS_FAILSAFE` (mirrors the
  *                 umbrella pattern of the aggregator chain itself — no
  *                 chain → no edge-triggered proc needed).
  *
@@ -66,7 +66,7 @@ static constexpr CbRunlevelCfg kRunlevelCfg {
     .claim = false,                 ///< Last proc — nothing to protect behind.
 };
 
-#if defined(HAS_REMOTE_LINK_LOST_FALLBACK)
+#if defined(HAS_FAILSAFE)
   ///  remote_link — chantier 12.5: FAILSAFE_SOFT 0→1 → force RUNLEVEL=IDLE + claim.
   ///  Rising edge only (edge-triggered).  Falling edge = manual recovery via KEY.
   ///  Sits AFTER failsafe so a FAILSAFE condition always wins.
@@ -75,7 +75,7 @@ static constexpr CbRunlevelCfg kRemoteLinkRunlevelCfg {
     .low   = std::nullopt,          ///< FAILSAFE_SOFT 1→0 → no write: the machine stays IDLE until the operator presses KEY.
     .claim = true,                  ///< Block KEY_ACTIVE proc on link loss.
 };
-#endif  // HAS_REMOTE_LINK_LOST_FALLBACK
+#endif  // HAS_FAILSAFE
 
 
 // =============================================================================
@@ -85,7 +85,7 @@ static constexpr CbRunlevelCfg kRemoteLinkRunlevelCfg {
   //  runlevel edge-triggered state — prevValue initialised to 0 (no prior lever state).
 static CbRunlevelOnceState gRunlevelOnceState {};
 
-#if defined(HAS_REMOTE_LINK_LOST_FALLBACK)
+#if defined(HAS_FAILSAFE)
   //  remote_link edge-triggered state — separate instance (one per proc).
 static CbRunlevelOnceState gRemoteLinkOnceState {};
 #endif
@@ -115,11 +115,11 @@ static CbProc kRunlevelProcs[] = {
       .cfg   = &kFailsafeRunlevelCfg,
       .state = nullptr,
     },
-#if defined(HAS_REMOTE_LINK_LOST_FALLBACK)
+#if defined(HAS_FAILSAFE)
       // 1b. remote_link — EDGE-TRIGGERED: FAILSAFE_SOFT 0→1 → RUNLEVEL=IDLE + claim.
       //     Sits right after failsafe so it benefits from failsafe's claim
       //     (no need to check FAILSAFE here — chain is already claimed).
-      //     Gated by HAS_REMOTE_LINK_LOST_FALLBACK — without the aggregator
+      //     Gated by HAS_FAILSAFE — without the aggregator
       //     chain, the proc is meaningless (FAILSAFE_SOFT is never latched).
     { .name  = "remote_link",
       .inCh  = DigitalComBusID::FAILSAFE_SOFT,
