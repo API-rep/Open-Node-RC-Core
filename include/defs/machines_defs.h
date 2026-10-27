@@ -24,7 +24,7 @@ enum class RunLevel : int8_t {
     SLEEPING    =  4,
     RESET       =  5,
     HALT        =  6,    ///< Dedicated value (FS2 — was alias of IDLE). Triggers hardware safety (stop/sleep/disable drivers) via dedicated case in main.cpp. Held until a reboot (link rework S3).
-    COUNT            ///< Number of indexable run levels (IDLE … FAILSAFE). NOT_YET_SET excluded.
+    COUNT            ///< Number of indexable run levels (IDLE … HALT). NOT_YET_SET excluded.
 };
 
 

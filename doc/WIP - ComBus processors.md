@@ -73,9 +73,9 @@ Décisions complémentaires (2026-10-26) :
 
 **Trous du runlevel trouvés le 2026-10-26** (à corriger avec la règle, étape S3) :
 1. les feux s'éteignent tous en `FAILSAFE` : `kRunLevelMask` a 7 cases (`RunLevel::COUNT`) mais 6 valeurs écrites (`dumper_truck_lights.h:91-98`), la case `FAILSAFE` vaut `0`, soit « tout éteint de force » ; les warnings de batterie basse (`light_interpreter.cpp:55, 64`) ne peuvent pas clignoter en failsafe ;
-2. le tableau de bord affiche `---` pour `FAILSAFE` (pas de `case`, `dashboard.cpp:285-294`) ;
-3. `runlevel_procs.h` est mort (voir §4) et décrit encore « `FAILSAFE` (= `IDLE` alias) » ;
-4. une valeur inconnue de `RUNLEVEL` ne fait rien (`default: break`, `main.cpp:224-225`) : les moteurs gardent leur dernier état. Avec « neutre = sûr », une carte qui perd son lien verrait `RUNLEVEL` = 32767 : le `default` doit appliquer la réaction de `HALT`.
+2. le tableau de bord affiche `---` pour `FAILSAFE` (pas de `case`, `dashboard.cpp:285-294`) ; **fait** (link rework S3-2) ; le trou n° 1 (feux) est reporté au rework des feux, `doc/WIP - Light rework.md` ;
+3. `runlevel_procs.h` est mort (voir §4) et décrit encore « `FAILSAFE` (= `IDLE` alias) » ; **fait** : supprimé (link rework S3-1, `1d371b9`) ;
+4. une valeur inconnue de `RUNLEVEL` ne fait rien (`default: break`, `main.cpp:224-225`) : les moteurs gardent leur dernier état. Avec « neutre = sûr », une carte qui perd son lien verrait `RUNLEVEL` = 32767 : le `default` doit appliquer la réaction de `HALT`. **Fait** : le `default` écrit `HALT`, maintenu jusqu'au redémarrage (link rework S3-1, `1d371b9`).
 
 ### 2.6 Audit S0 (2026-10-26, lecture seule)
 

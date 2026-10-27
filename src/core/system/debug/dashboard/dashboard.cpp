@@ -290,6 +290,7 @@ const char* dashRunLevelStr(RunLevel rl) {
 		case RunLevel::TURNING_OFF: return "TURNING_OFF";
 		case RunLevel::SLEEPING:    return "SLEEPING";
 		case RunLevel::RESET:       return "RESET";
+		case RunLevel::HALT:        return "HALT";
 		default:                    return "---";
 	}
 }
