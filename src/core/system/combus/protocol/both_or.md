@@ -45,8 +45,8 @@ Quatre règles :
    règle, elle l'enverrait à tout le monde, et la machine resterait en failsafe
    dès le démarrage. Elle ne fait que relayer.
 4. **Un lien perdu ne compte plus** : sa dernière valeur reçue est périmée. La
-   sécurité est alors assurée par la politique de perte du lien (`onLoss`, voir
-   `src/core/system/failsafe/failsafe_module.md` §3).
+   sécurité est alors assurée par le contributeur de perte de lien
+   (`BOARD_LINK_FAIL` / `NODE_LINK_FAIL`, voir `src/core/system/failsafe/failsafe_module.md` §3).
 
 En formules, pour une carte B reliée aux liens L1…Ln :
 
@@ -104,4 +104,4 @@ silencieux, pas d'écho, carte qui n'écrit jamais).
   que la diffusion refuse aujourd'hui (deux `uplink` = erreur de build).
 - Un relais (`passthrough`, étape 3.2) devra suivre la même règle d'émission
   sans écho.
-- La perte d'un lien est traitée par sa politique `onLoss`, pas par la fusion.
+- La perte d'un lien est traitée par les contributeurs de perte de lien, pas par la fusion.

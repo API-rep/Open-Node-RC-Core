@@ -76,7 +76,7 @@ static ComBus& bus = comBus;
 static constexpr ComProtocolCfg kProto = { 115200u, 50u, 200u, 200u };
 static constexpr ComDev kTrailerDev = {
     "test_trailer", LinkScope::INTER_NODE, LinkType::BIDIRECTIONAL,
-    &kProto, LinkActivation::ALWAYS, nullptr, LinkLossAction::BY_SCOPE, &kLink
+    &kProto, LinkActivation::ALWAYS, nullptr, &kLink
 };
 static const ComPort s_port = ComPort::makeUart("test", { 2, kTxPin, kRxPin, 115200u });
 static ComLinkRuntime s_runtime;

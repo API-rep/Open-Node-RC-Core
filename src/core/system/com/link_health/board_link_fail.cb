@@ -1,12 +1,11 @@
 # board_link_fail.cb — loss of a ComBus link between boards (contributor)
 #
 # This file declares the BOARD_LINK_FAIL ComBus channel: true when at least
-# one receiving ComBus link of the board whose loss policy is FAILSAFE (onLoss,
-# by default a link between the boards of the node) is lost, or still never
-# seen once its startup grace (startupGraceMs) has elapsed.  It is a
-# contributor: a chain of the failsafe module reads it (today the hard chain,
-# failsafe_chain.cpp, FAILSAFE_HARD).  Link rework S2 will feed it by scope
-# (links between boards) instead of by loss policy.
+# one receiving ComBus link of the board between the boards of the node
+# (scope INTRA_NODE, link rework S2) is lost, or still never seen once its
+# startup grace (startupGraceMs) has elapsed.  It is a contributor: a chain
+# of the failsafe module reads it (today the hard chain, failsafe_chain.cpp,
+# FAILSAFE_HARD).
 #
 # Notes:
 # - BOARD scope: only the board that owns the links knows their state.  The

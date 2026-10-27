@@ -26,7 +26,7 @@
 // =============================================================================
 
 	/// Protocol of the extension link: 115200 baud, 50 frames per second, lost after 250 ms of silence,
-	/// 3 s for a first frame before a FAILSAFE loss.  onLoss is left BY_SCOPE: intra-node -> FAILSAFE.
+	/// 3 s for a first frame before the link counts as lost: intra-node, its loss feeds BOARD_LINK_FAIL.
 inline constexpr ComProtocolCfg kComProtoExt = { 115200u, 50u, 250u, 3000u };
 
 

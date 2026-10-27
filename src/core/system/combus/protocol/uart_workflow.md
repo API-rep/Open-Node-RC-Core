@@ -387,7 +387,7 @@ inline constexpr ComDev kComDevExtBi = {           // COMBUS_UART
 Le lien d'extension est intra-nœud : il est défini une fois pour le nœud, à la racine
 de `board/`, et chaque carte le câble sur son port. `combus_uart_init()` vérifie à la
 compilation `kComProtoExt.rate <= UartMaxBaud` et `kComProtoExt.txHz <= ComBusUartMaxTxHz`.
-Son `onLoss` est laissé à `BY_SCOPE` : intra-nœud, sa perte est un `FAILSAFE` (voir §8).
+Intra-nœud, sa perte alimente `BOARD_LINK_FAIL` (voir §8).
 
 ### 4.3. Configuration frame layout
 
@@ -499,12 +499,12 @@ est dans [`frame/combus_frame_protocol.md`](frame/combus_frame_protocol.md).
 > (`src/core/system/com/com_manager.cpp`), en tête de `sys_manager_update`. Le lien
 > d'extension de la Volvo est en TX seul (`COMBUS_UART_TX`) : il ne reçoit rien.
 > Pour un lien qui reçoit (`COMBUS_UART`), `combus_links_init` renseigne la `target`
-> avec le ComBus du nœud, et `com_rx_update()` applique la politique de perte de
-> chaque lien (`ComDev::onLoss`, `combus_links_lost()`) : un lien qui reçoit est
+> avec le ComBus du nœud, et `com_rx_update()` rapporte la perte de chaque lien
+> selon sa portée (`combus_links_lost(scope)`, link rework S2) : un lien qui reçoit est
 > jamais vu tant qu'il n'a rien reçu, puis perdu après `linkTimeoutMs` de silence
-> (250 ms pour le lien d'extension). Un lien `IDLE` (défaut inter-nœud) écrit
-> `NODE_LINK_FAIL` dès qu'il n'est pas vivant ; un lien `FAILSAFE` (défaut
-> intra-nœud) écrit `BOARD_LINK_FAIL` quand il est perdu, ou jamais vu après
+> (250 ms pour le lien d'extension). Un lien vers un autre nœud écrit
+> `NODE_LINK_FAIL` dès qu'il n'est pas vivant ; un lien entre cartes
+> écrit `BOARD_LINK_FAIL` quand il est perdu, ou jamais vu après
 > `startupGraceMs` (3 s). Voir `src/core/system/failsafe/failsafe_module.md` §3.
 
 ---
@@ -518,7 +518,7 @@ Chaque lien ComBus indépendant possède son propre `CombusHandshakeContext` :
 ```cpp
 struct ComLinkRuntime {
     CombusHandshakeContext handshake = {};
-    // ... nom, délais et politique de perte du lien, tampons de réception
+    // ... nom, délais et portée du lien, tampons de réception
 };
 ```
 

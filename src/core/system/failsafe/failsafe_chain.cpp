@@ -68,7 +68,7 @@ CbProc kFailsafeProcs[] = {
 #if defined(HAS_BOARD_LINK_FAILSAFE)
     // --- 2. ComBus link contributor (optional) ----------------------------
     // Reads BOARD_LINK_FAIL, written each cycle by com_rx_update() from the
-    // receiving links whose loss policy is FAILSAFE (combus_links_lost()):
+    // receiving links between boards (combus_links_lost(INTRA_NODE)):
     // true while one of them is lost, or never seen after its startup grace.
     // A board without such a link gets false each cycle.
     {

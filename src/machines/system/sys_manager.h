@@ -39,7 +39,7 @@
  *
  *   Sound node: no equivalent needed — link health is monitored per-link
  *   by com_rx_update(), which publishes `NODE_LINK_FAIL` and
- *   `BOARD_LINK_FAIL` from the loss policy of each link.  See
+ *   `BOARD_LINK_FAIL` from the scope of each link.  See
  *   `com_manager.cpp` for the wiring.
  *
  *   The aggregated Failsafe state is published on

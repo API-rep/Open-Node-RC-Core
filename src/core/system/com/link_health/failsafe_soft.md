@@ -42,7 +42,7 @@ La chaîne dure passe toujours avant (voir `failsafe_module.md` §6).
 
 Les deux sont des channels `BOARD` (privés à la carte qui porte la source), du groupe failsafe, `value: fault`. Ils sont réarmés à `true` par la chaîne après lecture : leur valeur instantanée n'est pas l'état du lien, il faut lire `FAILSAFE_SOFT`.
 
-`NODE_LINK_FAIL` est aujourd'hui alimenté par les liens dont la politique de perte (`ComDev::onLoss`) vaut `IDLE`, par défaut les liens vers un autre nœud. L'étape S2 du link rework l'alimentera directement par portée et supprimera `onLoss`. À cette occasion, un lien jamais vu comptera tout de suite (pas de délai de grâce, contrairement à `BOARD_LINK_FAIL`).
+`NODE_LINK_FAIL` est alimenté par les liens vers un autre nœud (portée `INTER_NODE`, link rework S2). Un lien jamais vu compte tout de suite : pas de délai de grâce, contrairement à `BOARD_LINK_FAIL`.
 
 ---
 

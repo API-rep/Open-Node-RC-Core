@@ -15,7 +15,8 @@
  *
  *   A receiving link is also watched: combus_links_rx_lost() tells whether one
  *   of them has gone silent for longer than its linkTimeoutMs, and
- *   combus_links_lost() applies the loss policy of each link (onLoss).
+ *   combus_links_lost() tells whether a link of a given scope counts as lost
+ *   (link rework S2: BOARD_LINK_FAIL / NODE_LINK_FAIL).
  *
  *   All storage is caller-owned and static (nothing is allocated here):
  * @code
@@ -65,8 +66,8 @@ struct ComLinkRuntime {
     const char*    name           = nullptr;                   ///< ComDev name, for the logs
     bool           receives       = false;                     ///< true when this link has an RX side
     uint32_t       linkTimeoutMs  = 0u;                        ///< silence after which a receiving link is lost (ms)
-    uint32_t       startupGraceMs = 0u;                        ///< wait for a first frame before a FAILSAFE loss (ms)
-    LinkLossAction lossAction     = LinkLossAction::NONE;      ///< onLoss of the ComDev, BY_SCOPE resolved
+    uint32_t       startupGraceMs = 0u;                        ///< link between boards: wait for a first frame before it counts as lost (ms)
+    LinkScope      scope          = LinkScope::INTRA_NODE;     ///< scope of the ComDev: which contributor its loss feeds (S2)
     uint32_t       watchStartMs   = 0u;                        ///< set by combus_links_watch(): start of the grace
     bool           reportedLost   = false;                     ///< last loss state logged by combus_links_update()
     const ComPeerLink* peer       = nullptr;                   ///< link with a peer type (3.1b), nullptr = view of the scope
@@ -196,19 +197,21 @@ ComLinkState combus_link_state( uint8_t linkIdx );
 
 
 /**
- * @brief Whether a receiving link with the given reaction counts as lost.
+ * @brief Whether a receiving link of the given scope counts as lost.
  *
- * @details Per link, with its onLoss resolved (linkLossAction()):
- *   - IDLE: the link is not alive (never seen or lost), no grace;
- *   - FAILSAFE: the link is lost, or never seen once startupGraceMs has elapsed;
- *   - NONE: never.
+ * @details Link rework S2 — the loss is reported by scope, the failsafe chain
+ *   that reads the contributor decides the severity:
+ *   - INTRA_NODE (link between boards, BOARD_LINK_FAIL): the link is lost, or
+ *     never seen once startupGraceMs has elapsed (the boards start together);
+ *   - INTER_NODE (link to another node, NODE_LINK_FAIL): the link is not alive,
+ *     never seen included, no grace (the other node may not be there).
  *   A link that only transmits never counts: it cannot know its peer.
  *
- * @param action  IDLE or FAILSAFE (NONE and BY_SCOPE always return false).
- * @return        true if at least one link with this reaction counts as lost.
+ * @param scope  Scope of the links to look at.
+ * @return       true if at least one receiving link of this scope counts as lost.
  */
 
-bool combus_links_lost( LinkLossAction action );
+bool combus_links_lost( LinkScope scope );
 
 
 
@@ -216,7 +219,7 @@ bool combus_links_lost( LinkLossAction action );
  * @brief Log the loss and the recovery of each receiving link, once per change.
  *
  * @details Lost here means lost, or never seen once startupGraceMs has elapsed,
- *   whatever the onLoss of the link. Called each cycle by com_rx_update().
+ *   whatever the scope of the link. Called each cycle by com_rx_update().
  *
  *   Link rework 3.2c: when a link with a peer type stops being alive (silence
  *   or contract dropped), the positions this node receives on it and writes in

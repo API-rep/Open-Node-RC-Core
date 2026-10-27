@@ -49,7 +49,7 @@ Un contributeur exige `HAS_FAILSAFE` et **son propre flag**, jamais celui d'une 
 
 **Rebranchable veut dire déplaçable, jamais dupliqué.** Un contributeur est lu par **une seule chaîne** : la chaîne le réarme à `true` après lecture (§4), si bien qu'une seconde chaîne lirait une fausse faute. Pour changer la sévérité d'un contributeur, on déplace sa ligne d'une chaîne à l'autre.
 
-Aujourd'hui `BOARD_LINK_FAIL` et `NODE_LINK_FAIL` sont alimentés selon la politique de perte de chaque lien (`ComDev::onLoss`). L'étape S2 du link rework les alimentera par portée (lien entre cartes, lien vers un autre nœud) et supprimera `onLoss` : voir `doc/WIP - ComBus link rework.md`.
+`BOARD_LINK_FAIL` et `NODE_LINK_FAIL` sont alimentés par la **portée** du lien (link rework S2) : un lien entre cartes compte comme perdu s'il est silencieux, ou jamais vu une fois son délai de grâce (`startupGraceMs`) écoulé ; un lien vers un autre nœud compte dès qu'il n'est pas vivant, jamais vu compris. Il n'y a plus de politique de perte par lien (`onLoss`, supprimé) : la sévérité se décide en plaçant le contributeur dans une chaîne.
 
 ---
 

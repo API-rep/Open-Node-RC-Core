@@ -424,8 +424,8 @@ void combus_frame_apply( const ComBusFrameCfg& cfg,
 		// 6. Mark bus as actively driven by this frame.
 		// chantier 12.5 (new design): the codec stays PURE — it does NOT
 		// touch any *_LINK_LOST channel.  The UART link health is monitored
-		// at a HIGHER level (com_rx_update(), which applies the loss policy
-		// of each link each cycle and writes NODE_LINK_FAIL and
+		// at a HIGHER level (com_rx_update(), which reports the loss of each
+		// link by scope each cycle and writes NODE_LINK_FAIL and
 		// BOARD_LINK_FAIL accordingly).  FAILSAFE_SOFT is then the
 		// OR-aggregated result computed by the remote_link_fallback_chain
 		// (reset + OR-guard).

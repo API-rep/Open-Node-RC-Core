@@ -148,24 +148,7 @@ struct ComProtocolCfg {
     uint32_t rate;           ///< line rate (baud for a UART), identical at both ends
     uint32_t txHz;           ///< frame transmit rate (Hz) — used where the end transmits
     uint32_t linkTimeoutMs;  ///< receiving end: silence after which the link is declared lost (ms)
-    uint32_t startupGraceMs = 3000u;  ///< receiving end: wait for a first frame before a FAILSAFE loss (ms)
-};
-
-
-/**
- * @brief What the loss of a receiving link triggers on the board.
- *
- * @details BY_SCOPE resolves to FAILSAFE for an intra-node link and to IDLE for
- *   an inter-node link (see linkLossAction()). IDLE applies as soon as the link
- *   is not alive, never seen included; FAILSAFE waits for the startup grace
- *   before a link never seen counts as lost.
- */
-
-enum class LinkLossAction : uint8_t {
-    BY_SCOPE,       ///< default: FAILSAFE for INTRA_NODE, IDLE for INTER_NODE
-    NONE,           ///< the loss is only logged
-    IDLE,           ///< the loss drives NODE_LINK_FAIL (FAILSAFE_SOFT -> runlevel IDLE)
-    FAILSAFE        ///< the loss drives BOARD_LINK_FAIL (FAILSAFE)
+    uint32_t startupGraceMs = 3000u;  ///< receiving end of a link between boards: wait for a first frame before it counts as lost (ms)
 };
 
 
@@ -176,7 +159,10 @@ struct ComCoupling;     // trigger channel and expected value — defined with t
  * @brief A logical link of a node (or between nodes).
  *
  * @details Does not name a port and does not list channels: the channel set
- *   follows the scope.
+ *   follows the scope.  The loss of a receiving link is reported according to
+ *   the scope too (link rework S2): BOARD_LINK_FAIL for a link between boards,
+ *   NODE_LINK_FAIL for a link to another node; the failsafe chain that reads
+ *   the contributor decides the severity.
  */
 
 struct ComDev {
@@ -186,7 +172,6 @@ struct ComDev {
     const ComProtocolCfg*  protocol;
     LinkActivation         activation;  ///< only ALWAYS is accepted for now
     const ComCoupling*     coupling;    ///< nullptr unless activation == ON_COUPLING
-    LinkLossAction         onLoss = LinkLossAction::BY_SCOPE;   ///< reaction to the loss of the link
     const ComPeerLink*     peer   = nullptr;   ///< INTER_NODE only: the link with a peer type (combus_peer_links.h), nullptr = BASE view
 };
 
@@ -212,20 +197,6 @@ struct ComDevMap {
 constexpr ChanLayer linkScopeLayer( LinkScope scope )
 {
     return (scope == LinkScope::INTER_NODE) ? ChanLayer::BASE : ChanLayer::SYSTEM;
-}
-
-
-/**
- * @brief Reaction to the loss of a link, BY_SCOPE resolved.
- *
- * @param dev  Link description.
- * @return     dev.onLoss, or FAILSAFE (INTRA_NODE) / IDLE (INTER_NODE) for BY_SCOPE.
- */
-
-constexpr LinkLossAction linkLossAction( const ComDev& dev )
-{
-    if (dev.onLoss != LinkLossAction::BY_SCOPE) { return dev.onLoss; }
-    return (dev.scope == LinkScope::INTRA_NODE) ? LinkLossAction::FAILSAFE : LinkLossAction::IDLE;
 }
 
 

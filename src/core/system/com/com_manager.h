@@ -21,13 +21,13 @@
 // =============================================================================
 
 /**
- * @brief Receive on every receiving link and apply the link loss policy.
+ * @brief Receive on every receiving link and report the loss of each link.
  *
  * @details Non-blocking. Drains the receiving links, which apply the frames
  * they decode to @p bus, merges the both_or channels, logs the loss and the
  * recovery of each link, then writes (BOARD scope) `NODE_LINK_FAIL` from the
- * links whose onLoss is IDLE and `BOARD_LINK_FAIL` from those whose onLoss is
- * FAILSAFE (combus_links_lost(); false when there is no such link). Call once
+ * links to another node and `BOARD_LINK_FAIL` from the links between boards
+ * (combus_links_lost(scope), link rework S2; false when there is no such link). Call once
  * per main loop iteration, BEFORE the hard and soft failsafe chains and
  * the application logic.
  *

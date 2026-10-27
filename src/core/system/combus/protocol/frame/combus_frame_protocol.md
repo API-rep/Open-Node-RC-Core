@@ -253,8 +253,8 @@ Un bout bidirectionnel n'émet **aucune trame de données** tant que son contrat
   (`combus_rx_snapshot()` renvoie `nullptr`) ; le lien n'est pas vivant
   (`combus_rx_is_alive`). Le CRC est vérifié avant : un faux octet `0xAA` ne
   fait sauter qu'un octet, sans avaler la trame suivante. Un pair
-  au contrat différent compte donc comme jamais vu, et la politique de perte du
-  lien (`onLoss`) s'applique.
+  au contrat différent compte donc comme jamais vu, et sa perte est rapportée
+  selon la portée du lien (`BOARD_LINK_FAIL` / `NODE_LINK_FAIL`).
 - **Mode next / stable / legacy (chantier 2.2b)**, deux pairs par lien :
   - un handshake NEXT ne décide que du mode, jamais du contrat ;
   - ACK NEXT conforme (MD5 next et majeure) : contrat `STABLE` en mode next ;

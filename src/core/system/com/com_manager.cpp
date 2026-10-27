@@ -31,13 +31,13 @@ void com_rx_update(ComBus& bus) {
     }
   }
 
-	// --- Link loss policy (onLoss): log the changes, feed the IDLE and FAILSAFE contributors each cycle ---
+	// --- Link loss by scope (link rework S2): log the changes, feed the contributors each cycle ---
   combus_links_update(bus);
 #if defined(HAS_FAILSAFE) && defined(HAS_NODE_LINK_FAILSAFE)
-  combus_set_digital(bus, DigitalComBusID::NODE_LINK_FAIL, combus_links_lost(LinkLossAction::IDLE));
+  combus_set_digital(bus, DigitalComBusID::NODE_LINK_FAIL, combus_links_lost(LinkScope::INTER_NODE));
 #endif
 #if defined(HAS_FAILSAFE) && defined(HAS_BOARD_LINK_FAILSAFE)
-  combus_set_digital(bus, DigitalComBusID::BOARD_LINK_FAIL, combus_links_lost(LinkLossAction::FAILSAFE));
+  combus_set_digital(bus, DigitalComBusID::BOARD_LINK_FAIL, combus_links_lost(LinkScope::INTRA_NODE));
 #endif
 
 }

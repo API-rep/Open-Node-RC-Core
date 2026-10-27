@@ -97,7 +97,7 @@ static CbProc kRemoteLinkFallbackProcs[] = {
 #if defined(HAS_NODE_LINK_FAILSAFE)
     // --- 2. ComBus link contributor (optional) ---------------------------
     // Reads NODE_LINK_FAIL, written each cycle by com_rx_update() from the
-    // receiving links whose loss policy is IDLE (combus_links_lost(IDLE)):
+    // receiving links to another node (combus_links_lost(INTER_NODE)):
     // true while one of them is not alive, never seen included.  This
     // OR-guard latches the pipeline value to 1 and consumes the channel.
     //

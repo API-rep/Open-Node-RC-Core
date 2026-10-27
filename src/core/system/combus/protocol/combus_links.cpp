@@ -169,7 +169,7 @@ bool combus_link_build( const ComDevMap& map,
     runtime.receives       = endReceives(map.end);
     runtime.linkTimeoutMs  = map.dev->protocol->linkTimeoutMs;
     runtime.startupGraceMs = map.dev->protocol->startupGraceMs;
-    runtime.lossAction     = linkLossAction(*map.dev);
+    runtime.scope          = map.dev->scope;
     runtime.peer           = peer;
 
     link = built;
@@ -258,7 +258,7 @@ ComLinkState combus_link_state( uint8_t linkIdx )
 }
 
 
-    // Lost, or never seen once the startup grace has elapsed — the FAILSAFE reading.
+    // Lost, or never seen once the startup grace has elapsed — the reading of a link between boards.
 static bool lostAfterGrace( uint8_t linkIdx )
 {
     switch (combus_link_state(linkIdx)) {
@@ -273,14 +273,16 @@ static bool lostAfterGrace( uint8_t linkIdx )
 }
 
 
-bool combus_links_lost( LinkLossAction action )
+bool combus_links_lost( LinkScope scope )
 {
     for (uint8_t i = 0u; i < s_watchedCount; ++i) {
         const ComLinkRuntime& rt = s_watched[i];
-        if (!rt.receives || rt.lossAction != action) { continue; }
+        if (!rt.receives || rt.scope != scope) { continue; }
 
-        if (action == LinkLossAction::IDLE     && combus_link_state(i) != ComLinkState::ALIVE) { return true; }
-        if (action == LinkLossAction::FAILSAFE && lostAfterGrace(i))                         { return true; }
+            // Link rework S2: a link to another node counts at once (it may not be
+            // there); a link between boards waits for the startup grace.
+        if (scope == LinkScope::INTER_NODE && combus_link_state(i) != ComLinkState::ALIVE) { return true; }
+        if (scope == LinkScope::INTRA_NODE && lostAfterGrace(i))                         { return true; }
     }
     return false;
 }
@@ -322,8 +324,8 @@ void combus_links_update( ComBus& bus )
         rt.reportedLost = lost;
 
         if (lost) {
-            sys_log_warn("[COMBUS_LINKS] link '%s' lost (onLoss=%u)\n",
-                         rt.name ? rt.name : "?", (unsigned)rt.lossAction);
+            sys_log_warn("[COMBUS_LINKS] link '%s' lost (%s)\n", rt.name ? rt.name : "?",
+                         rt.scope == LinkScope::INTRA_NODE ? "between boards" : "to another node");
         } else {
             sys_log_info("[COMBUS_LINKS] link '%s' back\n", rt.name ? rt.name : "?");
         }
