@@ -67,6 +67,8 @@ static constexpr CbRunlevelCfg kRemoteLinkRunlevelCfg {
 };
 ```
 
+Si la machine est déjà en `HALT`, cette étape ne s'exécute pas : le maintien de `HALT`, en tête de chaîne, a fait un *claim*. Seul un redémarrage sort de `HALT` (link rework S3).
+
 Le processor est `cb_runlevel_once_fn` : il n'agit que sur le **front montant**. La faute douce ne « tient » pas le runlevel, contrairement à la chaîne dure. Comme les commandes de clé viennent de la télécommande, elles ne peuvent de toute façon pas arriver tant que la télécommande est perdue.
 
 ---

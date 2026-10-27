@@ -212,6 +212,8 @@ void loop() {
       // Runs the same stop/sleep/disable sequence as the legacy ad-hoc
       // block (removed in FS2).  isNewRunLevel guards against re-running
       // the sequence every cycle while FAILSAFE_HARD stays asserted.
+      // Link rework S3: HALT is held by the runlevel chain (halt_hold) —
+      // only a reboot leaves it.
       if (isNewRunLevel) {
         sys_log_warn("[SYSTEM][SAFE] reason=failsafe_aggregator action=force_idle_and_lock\n");
         stopAllDcDrivers(machine);
@@ -221,8 +223,28 @@ void loop() {
       break;
     }
 
-    default:
+    // ---------------------------------------------------------
+    case RunLevel::RESET : {
+    // ---------------------------------------------------------
+      // Nobody writes RESET yet: its behaviour is still to be defined.
+      // The case only keeps it out of `default` (which would HALT).
+      if (isNewRunLevel) {
+        sys_log_info("[SYSTEM][STATE] runlevel=RESET\n");
+        stateTM = millis();
+      }
       break;
+    }
+
+    // ---------------------------------------------------------
+    default : {
+    // ---------------------------------------------------------
+      // Link rework S3: a value outside RunLevel (bug, corrupted value) is
+      // a hard fault.  Write HALT: next cycle runs its reaction, and the
+      // runlevel chain (halt_hold) keeps it until a reboot.
+      sys_log_warn("[SYSTEM][SAFE] reason=unknown_runlevel value=%d action=halt\n", static_cast<int>(curRunLevel));
+      combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::HALT, ChanLayer::SYSTEM);
+      break;
+    }
   }
 
 // =============================================================================

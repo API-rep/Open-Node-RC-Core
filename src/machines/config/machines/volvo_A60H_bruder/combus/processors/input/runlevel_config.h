@@ -4,12 +4,18 @@
  *
  * @details Private include — included only from proc_config.cpp.
  *   Context provided by umbrella (do not include standalone):
- *     CbRunlevelCfg, CbRunlevelOnceState, CbProc, cb_runlevel_fn,
- *     cb_runlevel_once_fn, AnalogComBusID, DigitalComBusID, RunLevel, comBus.
+ *     CbRunlevelCfg, CbRunlevelHoldCfg, CbRunlevelOnceState, CbProc,
+ *     cb_runlevel_fn, cb_runlevel_once_fn, cb_runlevel_hold_fn,
+ *     AnalogComBusID, DigitalComBusID, RunLevel, comBus.
  *
- *   Chain function: RUNLEVEL → [failsafe, runlevel] → RUNLEVEL.
+ *   Chain function: RUNLEVEL → [halt_hold, failsafe, remote_link, runlevel] → RUNLEVEL.
  *   In:  RUNLEVEL (current RunLevel value, seeded into pipeline value).
  *   Out: RUNLEVEL (committed after pipeline).
+ *
+ *   0  halt_hold: no lever.  HOLD (cb_runlevel_hold_fn).
+ *                 When RUNLEVEL is already HALT → claim the chain: nothing
+ *                 behind runs (soft fault, key), so HALT is left only by a
+ *                 reboot (init.cpp writes IDLE).  Link rework S3.
  *
  *   1  failsafe:  inCh = FAILSAFE_HARD.  CONTINUOUS (cb_runlevel_fn).
  *                 When FAILSAFE_HARD=true → write RUNLEVEL=HALT (dedicated value, see machines_defs.h)
@@ -51,6 +57,11 @@
 // =============================================================================
 // 1. CONFIG
 // =============================================================================
+
+  ///  halt_hold — once RUNLEVEL is HALT, claim the chain every cycle: only a reboot leaves HALT.
+static constexpr CbRunlevelHoldCfg kHaltHoldCfg {
+    .hold = RunLevel::HALT,
+};
 
   ///  failsafe — FAILSAFE_HARD=true → force RUNLEVEL=HALT (dedicated value, see machines_defs.h), claim chain.
 static constexpr CbRunlevelCfg kFailsafeRunlevelCfg {
@@ -98,16 +109,24 @@ static CbRunlevelOnceState gRemoteLinkOnceState {};
 /**
  * @brief  Runlevel chain proc array.
  * @details Steps (chantier 12.5 new design):
+ *   0  halt_hold   : HOLD — RUNLEVEL already HALT → claim (nothing behind runs, until a reboot).
  *   1  failsafe    : CONTINUOUS — FAILSAFE_HARD=true → RUNLEVEL=HALT + claim (highest priority).
  *   1b remote_link : EDGE-TRIGGERED — FAILSAFE_SOFT 0→1 → RUNLEVEL=IDLE + claim.
  *   2  runlevel    : EDGE-TRIGGERED — KEY_ACTIVE transition → RUNLEVEL=STARTING or TURNING_OFF.
  *
- *   Priority: failsafe > remote_link > runlevel.  Failsafe always wins
- *   (the safety condition overrides everything).  remote_link claims when
- *   active so KEY_ACTIVE cannot immediately recover — the operator must
- *   explicitly reset (KEY → STARTING) once the link is back.
+ *   Priority: halt_hold > failsafe > remote_link > runlevel.  Failsafe always
+ *   wins (the safety condition overrides everything), and the HALT it writes
+ *   is held by halt_hold.  remote_link claims when active so KEY_ACTIVE
+ *   cannot immediately recover — the operator must explicitly reset
+ *   (KEY → STARTING) once the link is back.
  */
 static CbProc kRunlevelProcs[] = {
+      // 0. halt_hold — HOLD: RUNLEVEL already HALT → claim the chain (only a reboot leaves HALT).
+    { .name  = "halt_hold",
+      .fn    = cb_runlevel_hold_fn,
+      .cfg   = &kHaltHoldCfg,
+      .state = nullptr,
+    },
       // 1. failsafe — CONTINUOUS: FAILSAFE_HARD=true → force RunLevel::HALT (dedicated) + claim chain.
     { .name  = "failsafe",
       .inCh  = DigitalComBusID::FAILSAFE_HARD,

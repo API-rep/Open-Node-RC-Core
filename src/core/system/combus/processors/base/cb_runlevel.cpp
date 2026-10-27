@@ -1,6 +1,6 @@
 /******************************************************************************
  * @file  cb_runlevel.cpp
- * @brief CbProc — RunLevel setters (continuous + edge-triggered) — implementation.
+ * @brief CbProc — RunLevel setters (continuous + edge-triggered) and hold — implementation.
  ******************************************************************************/
 
 #include "cb_runlevel.h"
@@ -74,6 +74,19 @@ void cb_runlevel_once_fn(CbProc* proc, uint16_t& value, bool& claimed) {
 
     // --- Always update prevValue on exit ---
     state->prevValue = cur;
+}
+
+
+// =============================================================================
+// 3. HOLD VARIANT
+// =============================================================================
+
+void cb_runlevel_hold_fn(CbProc* proc, uint16_t& value, bool& claimed) {
+    const auto* cfg = static_cast<const CbRunlevelHoldCfg*>(proc->cfg);
+
+    if (value == static_cast<uint16_t>(cfg->hold)) {
+        claimed = true;
+    }
 }
 
 

@@ -12,7 +12,7 @@ Le module distingue deux sévérités de faute. Chacune a son agrégat et sa ré
 
 | Chaîne | Agrégat | Réaction (runlevel) | Exemple de cause |
 |---|---|---|---|
-| **dure** | `FAILSAFE_HARD` | `HALT` : moteurs arrêtés, endormis, désactivés ; clé bloquée tant que la faute dure | batterie basse, perte d'un lien entre cartes |
+| **dure** | `FAILSAFE_HARD` | `HALT` : moteurs arrêtés, endormis, désactivés ; on n'en sort que par un redémarrage | batterie basse, perte d'un lien entre cartes |
 | **douce** | `FAILSAFE_SOFT` | `IDLE` : mise en attente ; la reprise demande la clé | perte de la télécommande, perte d'un lien vers un autre nœud |
 
 L'agrégat dit la **sévérité**, pas la réaction : la réaction peut évoluer sans renommage. La chaîne dure l'emporte toujours sur la douce (§6).
@@ -89,15 +89,16 @@ Chaque contributeur est dans un bloc `#if defined(HAS_<SOURCE>_FAILSAFE)`. Une c
 
 Le module ne connaît ni les runlevels, ni les machines. La réaction est dans la chaîne runlevel de la machine, `kRunlevelProcs[]` (`src/machines/config/machines/volvo_A60H_bruder/combus/processors/input/runlevel_config.h`), dans cet ordre :
 
-1. **`FAILSAFE_HARD`** (`cb_runlevel_fn`, à chaque cycle) : tant qu'il est vrai, écrit `HALT` et fait un *claim*, ce qui saute les étapes suivantes ;
-2. **`FAILSAFE_SOFT`** (`cb_runlevel_once_fn`, sur front montant) : écrit `IDLE` et fait un *claim* ;
-3. **la clé** (`KEY_ACTIVE`, sur ses fronts) : `STARTING` ou `TURNING_OFF`.
+1. **le maintien de `HALT`** (`cb_runlevel_hold_fn`) : si le runlevel vaut déjà `HALT`, fait un *claim*, ce qui saute toutes les étapes suivantes ;
+2. **`FAILSAFE_HARD`** (`cb_runlevel_fn`, à chaque cycle) : tant qu'il est vrai, écrit `HALT` et fait un *claim* ;
+3. **`FAILSAFE_SOFT`** (`cb_runlevel_once_fn`, sur front montant) : écrit `IDLE` et fait un *claim* ;
+4. **la clé** (`KEY_ACTIVE`, sur ses fronts) : `STARTING` ou `TURNING_OFF`.
 
 `main.cpp` réagit au runlevel : `case RunLevel::HALT` arrête, endort et désactive les moteurs à l'entrée.
 
-**Cas à connaître** : pendant un *claim* de la chaîne dure, l'étape douce est sautée et ne met pas à jour sa mémoire de front. Si la faute douce est apparue pendant la faute dure et dure encore quand celle-ci retombe, l'étape douce voit alors un front et écrit `IDLE`. La machine passe de `HALT` à `IDLE` sans la clé : on applique la réaction de la faute qui reste.
+**`HALT` ne se quitte que par un redémarrage** (link rework S3) : une fois la faute dure retombée, ni la clé ni la faute douce n'en sortent. Au redémarrage, `init.cpp` écrit `IDLE`. Le maintien ne garde aucun état : il lit seulement la valeur de `RUNLEVEL`.
 
-**Décidé, pas encore fait** (lot « sécurité », S3) : sortir de `HALT` demandera un redémarrage. Ce cas et la sortie par la clé disparaîtront alors.
+**Valeur inconnue** : le `default` du `switch` de `main.cpp` traite toute valeur hors de `RunLevel` (bug, valeur corrompue) comme une faute dure. Il écrit `HALT`, qui est ensuite maintenu.
 
 ---
 
@@ -136,6 +137,7 @@ src/core/system/combus/processors/logic/cb_or.h   // cb_or_fn
 
 | Concept | Où |
 |---|---|
+| Maintien de `HALT` | `cb_runlevel_hold_fn`, `src/core/system/combus/processors/base/cb_runlevel.h` |
 | Agrégats | `failsafe_hard.cb`, `failsafe_soft.cb` |
 | Chaînes | `failsafe_chain.cpp`, `remote_link_fallback_chain.cpp` |
 | Contributeurs de lien | `com_rx_update()`, `src/core/system/com/com_manager.cpp` |

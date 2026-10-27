@@ -1,8 +1,8 @@
 /******************************************************************************
  * @file  cb_runlevel.h
- * @brief CbProc — RunLevel setters (continuous + edge-triggered variants).
+ * @brief CbProc — RunLevel setters (continuous + edge-triggered variants) and hold.
  *
- * @details Two processor functions are provided, both sharing the same
+ * @details Two setter functions are provided, both sharing the same
  *   `CbRunlevelCfg` (high/low/claim) but differing in WHEN they write:
  *
  *   - cb_runlevel_fn (continuous / stateless):
@@ -16,6 +16,11 @@
  *       Requires a `CbRunlevelOnceState` per instance.  Use when the lever
  *       drives a one-shot transition (e.g. KEY_ACTIVE 0→1 → STARTING, then
  *       leave RUNLEVEL alone so the FSM in main.cpp can progress to RUNNING).
+ *
+ *   A third function, cb_runlevel_hold_fn, writes nothing: while the current
+ *   run level is the held one (`CbRunlevelHoldCfg::hold`), it claims the
+ *   chain, so no later proc can leave it.  Placed first in the runlevel
+ *   chain with `hold = HALT`, it makes HALT a state left only by a reboot.
  *
  *   Both variants manipulate the pipeline `value` directly (read-modify-write
  *   pattern), NOT via a side-effect call to `combus_set_analog()`.
@@ -59,6 +64,13 @@ struct CbRunlevelCfg {
     std::optional<RunLevel> high;   ///< Value to write when lever == true.  nullopt = no write.
     std::optional<RunLevel> low;    ///< Value to write when lever == false. nullopt = no write.
     bool                     claim; ///< Claim the chain when a write actually occurred.
+};
+
+/**
+ * @brief Static configuration for the RunLevel hold processor.
+ */
+struct CbRunlevelHoldCfg {
+    RunLevel hold;   ///< Run level held: once reached, the chain is claimed every cycle.
 };
 
 
@@ -111,6 +123,20 @@ void cb_runlevel_fn(CbProc* proc, uint16_t& value, bool& claimed);
  * @param claimed  Set to `true` when `cfg->claim` is true and a write occurred.
  */
 void cb_runlevel_once_fn(CbProc* proc, uint16_t& value, bool& claimed);
+
+
+/**
+ * @brief RunLevel hold processor function.
+ *
+ * @details No lever (`inCh` unused).  When the pipeline `value` (seeded from
+ *   RUNLEVEL) equals `cfg->hold`, sets `claimed = true`: the remaining procs
+ *   are skipped and the run level stays.  Never writes `value`.
+ *
+ * @param proc     CbProc descriptor.  `cfg` = CbRunlevelHoldCfg*.  No state used.
+ * @param value    Pipeline value (in) — read only.
+ * @param claimed  Set to `true` when `value` is the held run level.
+ */
+void cb_runlevel_hold_fn(CbProc* proc, uint16_t& value, bool& claimed);
 
 
 // EOF cb_runlevel.h
