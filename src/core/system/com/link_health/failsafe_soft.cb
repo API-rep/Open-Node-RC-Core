@@ -17,7 +17,7 @@
 # - SYSTEM scope: shared by all boards of the local node.  Only the soft chain
 #   writes it.
 # - Direction [both_or]: any fault wins on import.
-# - value: high = fault (failsafe-by-default) until the chain writes it.
+# - value: fault (true), a fault (failsafe-by-default) until the chain writes it.
 # - requires: [HAS_FAILSAFE] — the failsafe module as a whole (link rework
 #   S1b).  The contributors are optional, each under its own HAS_*_FAILSAFE
 #   flag; without any, the chain writes false each cycle.

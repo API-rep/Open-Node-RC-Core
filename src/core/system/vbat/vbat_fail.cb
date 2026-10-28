@@ -11,7 +11,7 @@
 #   boards (sound node, dashboard) consume it through the same SYSTEM bus.
 # - Direction [both]: uplink + downlink — any board may write (re-arm
 #   each cycle) or read (react) the channel.
-# - value: high = fail-safe by default. The contributor reports fault
+# - value: fault = fail-safe by default. The contributor reports fault
 #   until proven healthy each cycle (see failsafe_module.md).
 # - requires: [HAS_FAILSAFE, HAS_VBAT_FAILSAFE] — the contributor is
 #   only emitted when both flags are set (no aggregator → no contributor).

@@ -10,7 +10,7 @@
 # - BOARD scope: private to the board owning the input backend (not shared and
 #   not on the wire).  Only a BOARD caller may write it: the backend writes it
 #   from src/machines/system/input/input_update.cpp.
-# - value: high = local remote lost (failsafe-by-default).  The backend
+# - value: fault = local remote lost (failsafe-by-default).  The backend
 #   re-arms it to false (= healthy) each cycle while the remote is connected;
 #   the consumer chain puts it back to true after reading it (cb_or_fn: consume
 #   + guard), so its instantaneous value on the bus is not the link state: read

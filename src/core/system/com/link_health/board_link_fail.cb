@@ -12,7 +12,7 @@
 #   whole node learns of it through the aggregator (both_or) and RUNLEVEL.
 # - Written each cycle by com_rx_update() from combus_links_lost(FAILSAFE);
 #   false when no such link exists.  A link that only transmits never counts.
-# - value: high = fault until com_rx_update() writes it (failsafe-by-default);
+# - value: fault (true), a fault until com_rx_update() writes it (failsafe-by-default);
 #   the chain consumes it each cycle (cb_or_fn, inCh == outCh).  A contributor
 #   is read by ONE chain only.
 # - requires: [HAS_FAILSAFE, HAS_BOARD_LINK_FAILSAFE] — the failsafe module,
