@@ -58,7 +58,13 @@ ALLOWED_FIELDS: frozenset[str] = frozenset({
     "requires",
     "value",
     "candidate",   # link rework 2.2a: BASE channel on trial (id ends with CANDIDATE_SUFFIX)
+    "zeroAt",      # link rework S3-4: place of the logical zero of an analog channel
 })
+
+# Values of `zeroAt` (link rework S3-4): where the LOGICAL zero of an analog
+# channel sits in its raw range — at 0 (`start`, the default) or at
+# `CbusNeutral` (`neutral`).  Storage (raw uint16_t) and frame are unchanged.
+VALID_ZERO_AT: frozenset[str] = frozenset({"start", "neutral"})
 
 # Suffixe obligatoire (et réservé) du nom d'un channel candidat (link rework 2.2a).
 CANDIDATE_SUFFIX: str = "_NEXT"
@@ -217,6 +223,7 @@ class ChannelDefinition:
     value: str | int | None = None
     candidate: bool = False  # link rework 2.2a — BASE channel on trial (id ends with _NEXT)
     passthrough: bool = False  # link rework 2.4 — `downlink_pt`: redistributed in the node
+    zero_at_neutral: bool = False  # link rework S3-4 — `zeroAt: neutral`: logical zero at CbusNeutral
 
     def sort_key(self) -> tuple[int, str, str, str]:
         """Clé de tri canonique : (scope, type, theme, id)."""
@@ -715,6 +722,23 @@ def validate_channel(
     if candidate:
         cid = cid + CANDIDATE_SUFFIX
 
+    # --- zeroAt (optionnel, link rework S3-4) ---
+    # Place du zéro LOGIQUE dans la plage brute d'un analogique : au début
+    # (`start`, défaut, le codage d'aujourd'hui) ou au neutre (`neutral`).
+    # Ne change ni le stockage (uint16_t brut) ni la trame.
+    raw_zero_at = raw.get("zeroAt", "start")
+    if not isinstance(raw_zero_at, str) or raw_zero_at not in VALID_ZERO_AT:
+        raise ChannelValidationError(
+            path, cid,
+            f"`zeroAt` is one of {sorted(VALID_ZERO_AT)}, got {raw_zero_at!r}",
+        )
+    if "zeroAt" in raw and ctype != "analog":
+        raise ChannelValidationError(
+            path, cid,
+            f"`zeroAt` is for an analog channel only (type is {ctype})",
+        )
+    zero_at_neutral = raw_zero_at == "neutral"
+
     return ChannelDefinition(
         id=cid,
         info_name=info_name,
@@ -729,6 +753,7 @@ def validate_channel(
         value=value,
         candidate=candidate,
         passthrough=passthrough,
+        zero_at_neutral=zero_at_neutral,
     )
 
 
