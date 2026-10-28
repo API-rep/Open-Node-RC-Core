@@ -257,6 +257,7 @@ def parse_yaml_file(path: Path) -> tuple[Path, str, Any]:
                 )
             if isinstance(ch, dict):
                 _check_fault_value(path, ch)
+                _check_neutral_value(path, ch)
 
     return path, type_label, data
 
@@ -280,6 +281,35 @@ def _check_fault_value(path: Path, ch: dict) -> None:
     if value == "fault" and theme != "failsafe":
         raise ParseError(path, f"channel {cid!r}: `value: fault` belongs to the theme `failsafe` only "
                                f"(link rework S3a)")
+
+
+# Link rework S3: an analog channel not at neutral is a warning until the chains
+# of the real channels are safe at neutral; then switch to True (error).
+NEUTRAL_VALUE_IS_ERROR = False
+
+# Channels already reported: a build parses the same file more than once.
+_neutral_warned: set[tuple[str, str]] = set()
+
+
+def _check_neutral_value(path: Path, ch: dict) -> None:
+    """Link rework S3: the safe value of an analog channel is `CbusNeutral`, on every scope.
+
+    Another value is reported once per channel on stderr, without breaking the
+    build (`NEUTRAL_VALUE_IS_ERROR` turns it into an error): the build log is
+    the living list of the channels whose chain is not safe at neutral yet.
+    """
+    if ch.get("type") != "analog" or ch.get("value") == "CbusNeutral":
+        return
+    cid, value = ch.get("id"), ch.get("value")
+    msg = (f"channel {cid!r}: the safe value of an analog channel is `CbusNeutral`, "
+           f"declared `value: {value}` (link rework S3)")
+    if NEUTRAL_VALUE_IS_ERROR:
+        raise ParseError(path, msg)
+    key = (str(path), str(cid))
+    if key in _neutral_warned:
+        return
+    _neutral_warned.add(key)
+    sys.stderr.write(f"[combus_builder] WARNING: {path}: {msg}\n")
 
 
 def parse_all(files: list[Path]) -> list[tuple[Path, str, Any]]:

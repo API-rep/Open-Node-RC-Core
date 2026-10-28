@@ -19,7 +19,7 @@ channels:
   scope: BASE
   theme: light
   direction: downlink
-  value: 0
+  value: CbusNeutral
 
 - id: TEST_TILT_ANGLE
   infoName: "Test tilt angle"
@@ -35,7 +35,7 @@ channels:
   scope: BASE
   theme: core
   direction: uplink
-  value: 0
+  value: CbusNeutral
 
 - id: TEST_LIGHTS
   infoName: "Test lights"

@@ -23,7 +23,7 @@ channels:
   scope: BASE
   theme: core
   direction: downlink_pt
-  value: 0
+  value: CbusNeutral
 
 - id: TEST_THROTTLE_BUS
   infoName: "Test throttle"
