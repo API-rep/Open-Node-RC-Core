@@ -163,7 +163,17 @@ typedef struct {
   uint16_t    value;                               ///< Current channel value (0-65535)
   ChanLayer   layer = ChanLayer::BOARD;            ///< Scope: who may write it (see ChanLayer)
   ChanFlow    flow  = {};                          ///< Which way it travels, per kind of link
+  bool        zeroAtNeutral = false;               ///< Logical zero at CbusNeutral (`.cb` `zeroAt: neutral`), else at 0.
+                                                   ///< Place of the LOGICAL zero in the raw range, not a type choice:
+                                                   ///< `value` stays a raw uint16_t, the frame is unchanged; only the
+                                                   ///< application accessors apply the offset (link rework S3-4).
 } AnalogComBus;
+
+    // zeroAtNeutral sits in the padding that already existed: an analog channel
+    // still takes 12 bytes on the ESP32 (32-bit pointer).
+#if UINTPTR_MAX == 0xFFFFFFFFu
+static_assert(sizeof(AnalogComBus) == 12u, "AnalogComBus must stay 12 bytes on a 32-bit target");
+#endif
 
 /**
  * @brief Digital ComBus channel descriptor.

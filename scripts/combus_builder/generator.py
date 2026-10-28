@@ -849,11 +849,14 @@ def _emit_channel_init(body: list[str], vc: ViewChannel, type_: str, connected: 
     else:
         # analog: .bothOr does not exist (validation rejects
         # both_or=true on analog channels at the canon layer).
+        # Link rework S3-4: `.zeroAtNeutral = true` only for a `zeroAt: neutral`
+        # channel; the entry of every other channel is unchanged.
+        zero_at = ", .zeroAtNeutral = true" if vc.ch.zero_at_neutral else ""
         body.append(
             f"    {{ .infoName = \"{escaped_info}\", "
             f".value = {value_literal}, "
             f".layer = {layer}, "
-            f".flow = {{ .betweenNodes = {dir_name}, .betweenBoards = {node_dir_name} }} }}, // {vc.ch.id}"
+            f".flow = {{ .betweenNodes = {dir_name}, .betweenBoards = {node_dir_name} }}{zero_at} }}, // {vc.ch.id}"
         )
 
 
