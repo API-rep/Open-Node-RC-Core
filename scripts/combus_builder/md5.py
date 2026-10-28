@@ -173,7 +173,7 @@ def _view_channel_canonical(vc: ViewChannel, apply_one_way: bool = False) -> dic
     # explicit default hash the same).  The position on the wire is the order
     # of the list.  theme and infoName are not hashed: a debug label or a theme
     # that does not move the channel does not change the wire.
-    return {
+    entry = {
         "id": vc.ch.id,
         "type": vc.ch.type,
         "scope": vc.ch.scope,
@@ -181,6 +181,12 @@ def _view_channel_canonical(vc: ViewChannel, apply_one_way: bool = False) -> dic
         "direction_or": direction_or,
         "value": _render_value(vc.ch, vc.ch.type),
     }
+    # Link rework S3-4: the place of the logical zero is part of the contract
+    # (two ends disagreeing on it read the same raw value differently).  Hashed
+    # only when it is `neutral`, so the MD5 of every other channel is unchanged.
+    if vc.ch.zero_at_neutral:
+        entry["zeroAt"] = "neutral"
+    return entry
 
 
 def canonical_bytes(view: View) -> bytes:

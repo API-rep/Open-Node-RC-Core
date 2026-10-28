@@ -62,6 +62,7 @@ class LinkChannel:
     flow: str                 # "to_peer" | "from_peer" | "both" | "or"
     local_token: str          # surface direction of the local type (for the MD5)
     peer_token: str           # surface direction of the peer type
+    zero_at_neutral: bool = False  # step S3-4: logical zero at CbusNeutral, the same on both sides
 
 
 @dataclass
@@ -181,12 +182,16 @@ def compute_link_set(local_type: str, local_chs, peer_type: str, peer_chs, local
         va, vb = _render_value(a, a.type), _render_value(b, b.type)
         if va != vb:
             raise LinkError(f"channel {cid!r}: default value {va} in {local_type}, {vb} in {peer_type}")
+        if a.zero_at_neutral != b.zero_at_neutral:
+            raise LinkError(f"channel {cid!r}: zeroAt differs between {local_type} and {peer_type} "
+                            f"(the two ends would read the same raw value differently)")
         flow = _flow(a, b, local_is_vehicle, link.warnings)
         if flow is None:
             continue
         link.channels.append(LinkChannel(id=cid, type=a.type, candidate=a.candidate or b.candidate,
                                          value=va, flow=flow,
-                                         local_token=_token(a), peer_token=_token(b)))
+                                         local_token=_token(a), peer_token=_token(b),
+                                         zero_at_neutral=a.zero_at_neutral))
 
     link.channels.sort(key=lambda c: (0 if c.type == "analog" else 1, c.candidate, c.id))
     return link
@@ -213,8 +218,11 @@ def link_md5(link: LinkSet, stable: bool = False) -> str:
         if stable and c.candidate:
             continue
         dirs = {link.local_type: c.local_token, link.peer_type: c.peer_token}
-        entries.append({"id": c.id, "type": c.type, "candidate": c.candidate, "value": c.value,
-                        "dirs": [dirs[t] for t in types]})
+        entry = {"id": c.id, "type": c.type, "candidate": c.candidate, "value": c.value,
+                 "dirs": [dirs[t] for t in types]}
+        if c.zero_at_neutral:                    # step S3-4: hashed only when neutral (other MD5 unchanged)
+            entry["zeroAt"] = "neutral"
+        entries.append(entry)
     payload = {"link": types, "vehicle": link.vehicle_type, "channels": entries}
     return hashlib.md5(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 

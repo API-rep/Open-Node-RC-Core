@@ -27,6 +27,9 @@ if str(REPO_ROOT) not in sys.path:
 
 from scripts.combus_builder.canon import canonize  # noqa: E402
 from scripts.combus_builder.canon.channels import ChannelValidationError  # noqa: E402
+from scripts.combus_builder.generator import select_views  # noqa: E402
+from scripts.combus_builder.links import LinkError, compute_link_set, link_md5  # noqa: E402
+from scripts.combus_builder.md5 import canonical_bytes, compute_view_hash  # noqa: E402
 from scripts.combus_builder.parser import discover_and_parse  # noqa: E402
 
 
@@ -59,6 +62,58 @@ def test_row2_zero_at_on_a_digital_breaks_the_build(tmp_path):
 def test_row3_unknown_value_breaks_the_build(tmp_path, zero_at):
     with pytest.raises(ChannelValidationError, match="`zeroAt` is"):
         _canon(tmp_path, zero_at)
+
+
+# =============================================================================
+# Point 2: the MD5 (view MD5 and link MD5)
+# =============================================================================
+
+def _raw(zero_at=None, scope="BASE", direction="downlink_pt"):
+    raw = {"id": "X_BUS", "infoName": "x", "type": "analog", "scope": scope, "theme": "core",
+           "direction": direction, "value": "CbusNeutral"}
+    if zero_at is not None:
+        raw["zeroAt"] = zero_at
+    return raw
+
+
+def _defs(*raws):
+    parsed = [(Path(f"ch{i}.cb"), "channel_def", {"channels": [r]}) for i, r in enumerate(raws)]
+    return canonize(parsed).canonical_definitions
+
+
+def _view_bytes(zero_at, scope="BASE"):
+    sel = select_views(_defs(_raw(zero_at, scope=scope, direction="uplink")))
+    return canonical_bytes(sel.base if scope == "BASE" else sel.system)
+
+
+@pytest.mark.parametrize("scope", ["BASE", "SYSTEM"])
+def test_row5_neutral_and_start_give_two_view_md5(scope):
+    assert compute_view_hash(_view_bytes_view("neutral", scope)) != compute_view_hash(_view_bytes_view("start", scope))
+
+
+@pytest.mark.parametrize("scope", ["BASE", "SYSTEM"])
+def test_row4_start_hashes_like_absent_md5_unchanged(scope):
+    assert _view_bytes(None, scope) == _view_bytes("start", scope)   # existing MD5 do not move
+    assert b"zeroAt" not in _view_bytes("start", scope)
+
+
+def _view_bytes_view(zero_at, scope):
+    sel = select_views(_defs(_raw(zero_at, scope=scope, direction="uplink")))
+    return sel.base if scope == "BASE" else sel.system
+
+
+def test_row5_link_md5_follows_zero_at():
+    def md5(zero_at):
+        t, r = _defs(_raw(zero_at)), _defs(_raw(zero_at))
+        return link_md5(compute_link_set("t", t, "r", r, "IS_VEHICLE"))
+    assert md5("neutral") != md5("start")
+    assert md5(None) == md5("start")                                  # existing link MD5 do not move
+
+
+def test_link_refuses_two_types_disagreeing_on_zero_at():
+    t, r = _defs(_raw("neutral")), _defs(_raw("start"))
+    with pytest.raises(LinkError, match="zeroAt"):
+        compute_link_set("t", t, "r", r, "IS_VEHICLE")
 
 
 def test_no_real_channel_uses_it_yet():
