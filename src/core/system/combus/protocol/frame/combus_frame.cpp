@@ -395,11 +395,11 @@ void combus_frame_apply( const ComBusFrameCfg& cfg,
 			const uint8_t id = peer ? peer->analog[i] : i;
 
 				// LY2 — apply is layer-agnostic.  The layer check is
-				// delegated to combus_set_analog() which reads the
+				// delegated to combus_set_raw_analog() which reads the
 				// channel's declared `layer` from the shared backing
 				// storage.  We write by index without any notion of
 				// layer here.
-			combus_set_analog(*combus, (AnalogComBusID)id, inputFrame->analog[i], caller);
+			combus_set_raw_analog(*combus, (AnalogComBusID)id, inputFrame->analog[i], caller);
 		}
 	}
 

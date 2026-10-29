@@ -22,6 +22,10 @@
  *   Row 8 (a link without peer is unchanged) is test_combus_loopback.
  *   Then the loss of the link (3.2c, table of 2026-10-26): the received
  *   positions take back their safe value.
+ *   Then the accessors of the logical value (step S3-4, table of 2026-10-29):
+ *   TEST_GEAR_BUS declares `zeroAt: neutral` (logical zero at CbusNeutral);
+ *   combus_get_analog / combus_set_analog apply the offset, the raw accessors
+ *   and the transport do not.
  *
  *   What the trailer would send is forged.  Requires the TX<->RX jumper on
  *   Serial2 (GPIO 17 <-> 16) for rows 6 and 7.  Run: pio test -e test_peer_link
@@ -323,6 +327,77 @@ static void test_loss_row6_contract_dropped(void) {
 
 
 // =============================================================================
+// ACCESSORS OF THE LOGICAL VALUE (step S3-4)
+// =============================================================================
+
+static constexpr AnalogComBusID kGearId  = AnalogComBusID::TEST_GEAR_BUS;
+static constexpr AnalogComBusID kBrakeId = AnalogComBusID::TEST_BRAKE_BUS;
+
+static uint16_t rawOf(AnalogComBusID id) { return bus.analogBus[static_cast<uint8_t>(id)].value; }
+static void     setRaw(AnalogComBusID id, uint16_t v) { bus.analogBus[static_cast<uint8_t>(id)].value = v; }
+
+
+void test_zero_row1_flag_generated(void) {
+    TEST_ASSERT_TRUE(bus.analogBus[static_cast<uint8_t>(kGearId)].zeroAtNeutral);
+    TEST_ASSERT_FALSE(bus.analogBus[static_cast<uint8_t>(kBrakeId)].zeroAtNeutral);
+}
+
+
+void test_zero_row2_read_logical(void) {
+    setRaw(kGearId, CbusNeutral);
+    TEST_ASSERT_EQUAL_INT32(0, combus_get_analog(bus, kGearId));
+    setRaw(kGearId, CbusNeutral + 2u);
+    TEST_ASSERT_EQUAL_INT32(2, combus_get_analog(bus, kGearId));
+    setRaw(kGearId, CbusNeutral - 767u);
+    TEST_ASSERT_EQUAL_INT32(-767, combus_get_analog(bus, kGearId));      // negative: a real value
+    setRaw(kGearId, 0u);
+    TEST_ASSERT_EQUAL_INT32(-static_cast<int32_t>(CbusNeutral), combus_get_analog(bus, kGearId));
+    setRaw(kGearId, CbusMaxVal);
+    TEST_ASSERT_EQUAL_INT32(static_cast<int32_t>(CbusMaxVal) - static_cast<int32_t>(CbusNeutral),
+                            combus_get_analog(bus, kGearId));
+}
+
+
+void test_zero_row3_write_logical(void) {
+    TEST_ASSERT_TRUE(combus_set_analog(bus, kGearId, 3, ChanLayer::BASE));
+    TEST_ASSERT_EQUAL_UINT16(CbusNeutral + 3u, rawOf(kGearId));
+    TEST_ASSERT_TRUE(combus_set_analog(bus, kGearId, -1, ChanLayer::BASE));
+    TEST_ASSERT_EQUAL_UINT16(CbusNeutral - 1u, rawOf(kGearId));
+}
+
+
+void test_zero_row4_write_is_bounded(void) {
+    combus_set_analog(bus, kGearId, 70000, ChanLayer::BASE);
+    TEST_ASSERT_EQUAL_UINT16(CbusMaxVal, rawOf(kGearId));
+    combus_set_analog(bus, kGearId, -40000, ChanLayer::BASE);
+    TEST_ASSERT_EQUAL_UINT16(0u, rawOf(kGearId));
+}
+
+
+void test_zero_row5_channel_without_zero_at_unchanged(void) {
+    combus_set_analog(bus, kBrakeId, 111, ChanLayer::BASE);
+    TEST_ASSERT_EQUAL_UINT16(111u, rawOf(kBrakeId));
+    TEST_ASSERT_EQUAL_INT32(111, combus_get_analog(bus, kBrakeId));
+    combus_set_analog(bus, kBrakeId, -5, ChanLayer::BASE);                // no negative without zeroAt: bounded at 0
+    TEST_ASSERT_EQUAL_UINT16(0u, rawOf(kBrakeId));
+}
+
+
+void test_zero_row6_raw_accessors_never_offset(void) {
+    TEST_ASSERT_TRUE(combus_set_raw_analog(bus, kGearId, 1234u, ChanLayer::BASE));
+    TEST_ASSERT_EQUAL_UINT16(1234u, rawOf(kGearId));
+    TEST_ASSERT_EQUAL_UINT16(1234u, combus_get_raw_analog(bus, kGearId));
+}
+
+
+void test_zero_row7_layer_check_kept(void) {
+    setRaw(AnalogComBusID::RUNLEVEL, 0u);
+    TEST_ASSERT_FALSE(combus_set_analog(bus, AnalogComBusID::RUNLEVEL, 5, ChanLayer::BASE));   // BASE may not write SYSTEM
+    TEST_ASSERT_EQUAL_UINT16(0u, rawOf(AnalogComBusID::RUNLEVEL));
+}
+
+
+// =============================================================================
 // RUNNER
 // =============================================================================
 
@@ -345,6 +420,14 @@ void setup() {
     RUN_TEST(test_loss_row4_shared_fault_falls_back);
     RUN_TEST(test_loss_row5_reconnection);
     RUN_TEST(test_loss_row6_contract_dropped);
+
+    RUN_TEST(test_zero_row1_flag_generated);
+    RUN_TEST(test_zero_row2_read_logical);
+    RUN_TEST(test_zero_row3_write_logical);
+    RUN_TEST(test_zero_row4_write_is_bounded);
+    RUN_TEST(test_zero_row5_channel_without_zero_at_unchanged);
+    RUN_TEST(test_zero_row6_raw_accessors_never_offset);
+    RUN_TEST(test_zero_row7_layer_check_kept);
 
     UNITY_END();
 }

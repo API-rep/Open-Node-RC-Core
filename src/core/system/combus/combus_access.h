@@ -32,25 +32,79 @@ enum class DigitalComBusID : uint8_t;
 // 1. CHANNEL WRITE ACCESSORS
 // =============================================================================
 
+/*
+ *   Analog channels have two families of accessors (link rework S3-4):
+ *   - application: combus_get_analog() / combus_set_analog() — the LOGICAL
+ *     value (int32_t).  For a channel declared `zeroAt: neutral`
+ *     (AnalogComBus::zeroAtNeutral) the logical zero is CbusNeutral, so the
+ *     value may be negative; for any other channel logical = raw.  This is
+ *     the family to use in application code (main loop, dashboards…).
+ *   - system: combus_get_raw_analog() / combus_set_raw_analog() — the RAW
+ *     uint16_t, as stored and sent on the wire, never offset.  Reserved to
+ *     the transport (codec, RX, links), the input drivers (sticks) and the
+ *     chain runner (until the processors are decided, simulation WIP).
+ */
+
 /**
- * @brief Write a value to an analog ComBus channel.
+ * @brief Write the raw value of an analog ComBus channel (system side, no offset).
  * @param bus     Target ComBus instance.
  * @param ch      Channel index (typed enum, machine-specific).
- * @param val     New value to write.
+ * @param val     New raw value.
  * @param caller  Layer of the calling module — checked against ch.layer.
  * @return true if the write was accepted, false if layer mismatch.
  */
 
-bool combus_set_analog(ComBus& bus, AnalogComBusID ch, uint16_t val, ChanLayer caller);
+bool combus_set_raw_analog(ComBus& bus, AnalogComBusID ch, uint16_t val, ChanLayer caller);
 
-  /// Write an optional analog channel — no-op (returns false) if absent.
-inline bool combus_set_analog(ComBus& bus, const std::optional<AnalogComBusID>& ch,
-                              uint16_t val, ChanLayer caller)
+  /// Write the raw value of an optional analog channel — no-op (returns false) if absent.
+inline bool combus_set_raw_analog(ComBus& bus, const std::optional<AnalogComBusID>& ch,
+                                  uint16_t val, ChanLayer caller)
 {
     if (!ch.has_value()) return false;
 
-    return combus_set_analog(bus, ch.value(), val, caller);
+    return combus_set_raw_analog(bus, ch.value(), val, caller);
 }
+
+
+/**
+ * @brief Read the raw value of an analog ComBus channel (system side, no offset).
+ * @param bus  ComBus instance.
+ * @param ch   Channel index.
+ * @return     The raw uint16_t value.
+ */
+
+uint16_t combus_get_raw_analog(const ComBus& bus, AnalogComBusID ch);
+
+
+/**
+ * @brief Write the logical value of an analog ComBus channel (application side).
+ *
+ * @details raw = val, plus CbusNeutral when the channel is `zeroAtNeutral`,
+ *   bounded to the raw range [0, CbusMaxVal].  Without `zeroAt: neutral` a
+ *   negative value is bounded to 0.
+ *
+ * @param bus     Target ComBus instance.
+ * @param ch      Channel index.
+ * @param val     New logical value.
+ * @param caller  Layer of the calling module — checked against ch.layer.
+ * @return true if the write was accepted, false if layer mismatch.
+ */
+
+bool combus_set_analog(ComBus& bus, AnalogComBusID ch, int32_t val, ChanLayer caller);
+
+
+/**
+ * @brief Read the logical value of an analog ComBus channel (application side).
+ *
+ * @details raw, minus CbusNeutral when the channel is `zeroAtNeutral`
+ *   (range -CbusNeutral..CbusMaxVal-CbusNeutral), else raw (0..CbusMaxVal).
+ *
+ * @param bus  ComBus instance.
+ * @param ch   Channel index.
+ * @return     The logical value.
+ */
+
+int32_t combus_get_analog(const ComBus& bus, AnalogComBusID ch);
 
 
 /**
@@ -135,7 +189,7 @@ uint32_t combus_denied_writes();
  */
 
 // RL3: combus_set_runlevel() removed — runLevel is now a plain analog channel (RUNLEVEL).
-//       Write it via combus_set_analog(bus, AnalogComBusID::RUNLEVEL, (uint16_t)rl, ChanLayer::SYSTEM).
+//       Write it via combus_set_analog(bus, AnalogComBusID::RUNLEVEL, (int32_t)rl, ChanLayer::SYSTEM).
 
 
 // =============================================================================
@@ -172,14 +226,6 @@ struct CbAnalog {
 // =============================================================================
 // 4. INTERNAL USAGE OVERLOADS (BOARD-level access)
 // =============================================================================
-
-/**
- * @brief Internal overload for processors running with BOARD-level access.
- * @details Used by CbProcFn implementations (local firmware).
- */
-inline bool combus_set_analog(ComBus& bus, AnalogComBusID ch, uint16_t val) {
-    return combus_set_analog(bus, ch, val, ChanLayer::BOARD);
-}
 
 /**
  * @brief Internal overload for processors running with BOARD-level access.

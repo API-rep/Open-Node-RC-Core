@@ -216,7 +216,7 @@ static void fillRandom(uint32_t seed) {
     }
     // RL3: runLevel is no longer a struct field — write RUNLEVEL via the generic
     // analog accessor (RUNLEVEL is a SYSTEM channel, so a SYSTEM caller may write it).
-    combus_set_analog(txComBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::RUNNING, ChanLayer::SYSTEM);
+    combus_set_raw_analog(txComBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::RUNNING, ChanLayer::SYSTEM);
 }
 
 /** Assert that the decoded frame matches txComBus, over the channels the frame carries. */
@@ -437,7 +437,7 @@ static void sendAndApply(ChanLayer rxLayer) {
 
     fillRandom(0x5EEDC0DEul);
     txComBus.analogBus[kThrottleIdx].value = kThrottleVal;
-    combus_set_analog(txComBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::RUNNING, ChanLayer::SYSTEM);
+    combus_set_raw_analog(txComBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::RUNNING, ChanLayer::SYSTEM);
 
     delay(30u);
     combus_tx_update(&txComBus);
@@ -681,7 +681,7 @@ static void test_wire_end_clamped_to_cfg(void) {
 /** RUNLEVEL round-trip — encode→decode preserves the RUNLEVEL analog value. */
 static void test_runlevel_roundtrip_via_channel(void) {
     // Write RUNLEVEL via the generic analog accessor (mainboard pattern).
-    bool written = combus_set_analog(txComBus, AnalogComBusID::RUNLEVEL,
+    bool written = combus_set_raw_analog(txComBus, AnalogComBusID::RUNLEVEL,
                                      (uint16_t)RunLevel::STARTING, ChanLayer::SYSTEM);
     TEST_ASSERT_TRUE_MESSAGE(written, "RUNLEVEL write denied (layer check)");
 

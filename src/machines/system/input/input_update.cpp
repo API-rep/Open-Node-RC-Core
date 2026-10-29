@@ -6,7 +6,7 @@
 #include "input_update.h"
 
 #include <core/system/input/input_manager.h>   // input_is_connected(), inputAnalogValue[], inputDigitalValue[], inputDev
-#include <core/system/combus/combus_access.h>  // combus_set_analog, combus_set_digital
+#include <core/system/combus/combus_access.h>  // combus_set_raw_analog (sticks: raw), combus_set_digital
 #include <core/config/machines/dumper_truck/inputs/inputs_map/inputs_map.h>  // A9.9: default mapping (replaces instance-specific inputs_map.h)
 
 void input_update(ComBus &bus) {
@@ -26,7 +26,7 @@ void input_update(ComBus &bus) {
                          ? (int16_t)dev.minVal
                          : (int16_t)((dev.minVal + dev.maxVal) / 2);
       uint16_t neutral = (uint16_t)map(restRaw, dev.minVal, dev.maxVal, 0, bus.analogBusMaxVal);
-      combus_set_analog(bus, m.busChannel, neutral, ChanLayer::SYSTEM);
+      combus_set_raw_analog(bus, m.busChannel, neutral, ChanLayer::SYSTEM);
     }
 
     for (uint8_t i = 0; i < InputDigitalMapCount; i++) {
@@ -47,7 +47,7 @@ void input_update(ComBus &bus) {
     uint16_t val    = map(inputAnalogValue[devID], dev.minVal, dev.maxVal, 0, bus.analogBusMaxVal);
     uint16_t busVal = m.isInverted ? (bus.analogBusMaxVal - val) : val;
 
-    combus_set_analog(bus, m.busChannel, busVal, ChanLayer::SYSTEM);
+    combus_set_raw_analog(bus, m.busChannel, busVal, ChanLayer::SYSTEM);
   }
 
 // ==========================================================

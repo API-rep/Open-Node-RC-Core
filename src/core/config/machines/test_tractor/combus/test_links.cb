@@ -14,6 +14,9 @@
 # - TEST_BEACON: received from the remote, not relayed (the trailer does not
 #   know it).  It comes before the digital channels of the link in the local
 #   order, so that the table of the link is not the identity (step 3.1b).
+# - TEST_GEAR_BUS: received from the remote, not relayed; its logical zero is
+#   at CbusNeutral (`zeroAt: neutral`): test of the application accessors
+#   (step S3-4).
 
 channels:
 
@@ -32,6 +35,15 @@ channels:
   theme: core
   direction: downlink
   value: CbusNeutral
+
+- id: TEST_GEAR_BUS
+  infoName: "Test gear"
+  type: analog
+  scope: BASE
+  theme: core
+  direction: downlink
+  value: CbusNeutral
+  zeroAt: neutral
 
 - id: TEST_TILT_ANGLE
   infoName: "Test trailer tilt angle"

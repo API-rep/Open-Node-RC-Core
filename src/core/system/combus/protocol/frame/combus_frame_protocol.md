@@ -97,7 +97,7 @@ compteur part de 0 (`generator.py:362-386`).
   capacité (`cfg`, chantier 2.3) ; ne déballe que les `nDigital` bits annoncés.
   Le décodage ne connaît pas les layers.
 - `combus_frame_apply` (`combus_frame.cpp:338-395`) : écrit les canaux par
-  indice via `combus_set_analog` / `combus_set_digital`, et met à jour
+  indice via `combus_set_raw_analog` (brut, sans décalage du zéro logique) / `combus_set_digital`, et met à jour
   `combus->lastFrameMs`. Le contrôle de layer est fait par ces fonctions
   (`_layer_ok`, `combus_access.cpp:28-54`). **Filtre par sens (chantier 2.4)** :
   un channel n'est écrit que si son sens pour le lien comprend `Downlink` :

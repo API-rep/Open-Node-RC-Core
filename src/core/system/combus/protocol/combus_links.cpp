@@ -9,7 +9,7 @@
 
 #include <core/system/hw/transport/uart_com.h>
 #include <core/system/debug/logging/debug.h>
-#include <core/system/combus/combus_access.h>   // combus_set_analog(), combus_set_digital()
+#include <core/system/combus/combus_access.h>   // combus_set_raw_analog(), combus_set_digital()
 #include <core/system/combus/combus_res.h>      // CbusNeutral
 
 // The 3 view-specific ID headers give the channel counts of each scope.
@@ -295,7 +295,7 @@ static void takeBackSafeValues( const ComPeerLink& peer, ComBus& bus )
 {
     for (uint8_t p = 0u; p < peer.nAnalog; ++p) {
         if (!peer.analogRx[p]) { continue; }
-        combus_set_analog(bus, static_cast<AnalogComBusID>(peer.analog[p]), CbusNeutral, ChanLayer::BASE);
+        combus_set_raw_analog(bus, static_cast<AnalogComBusID>(peer.analog[p]), CbusNeutral, ChanLayer::BASE);
     }
     for (uint8_t p = 0u; p < peer.nDigital; ++p) {
         if (!peer.digitalRx[p] || bus.digitalBus[peer.digital[p]].bothOr.enabled) { continue; }

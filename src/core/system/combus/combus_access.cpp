@@ -11,6 +11,7 @@
 #include "combus_access.h"
 
 #include <core/system/debug/logging/debug.h>
+#include <core/system/combus/combus_res.h>     // CbusNeutral, CbusMaxVal (logical accessors, S3-4)
 
 
 // =============================================================================
@@ -90,7 +91,7 @@ static void _note_denied(const char* label, bool isAnalog, uint8_t ch,
 // 2. CHANNEL WRITE ACCESSORS
 // =============================================================================
 
-bool combus_set_analog(ComBus& bus, AnalogComBusID ch, uint16_t val, ChanLayer caller) {
+bool combus_set_raw_analog(ComBus& bus, AnalogComBusID ch, uint16_t val, ChanLayer caller) {
     auto& slot = bus.analogBus[static_cast<uint8_t>(ch)];
 
     if (!_layer_ok(slot.layer, caller)) {
@@ -101,6 +102,31 @@ bool combus_set_analog(ComBus& bus, AnalogComBusID ch, uint16_t val, ChanLayer c
 
     slot.value = val;
     return true;
+}
+
+
+uint16_t combus_get_raw_analog(const ComBus& bus, AnalogComBusID ch) {
+    return bus.analogBus[static_cast<uint8_t>(ch)].value;
+}
+
+
+bool combus_set_analog(ComBus& bus, AnalogComBusID ch, int32_t val, ChanLayer caller) {
+    const auto& slot = bus.analogBus[static_cast<uint8_t>(ch)];
+
+      // --- Logical → raw: offset of the logical zero, then the raw range ---
+    int32_t raw = slot.zeroAtNeutral ? val + static_cast<int32_t>(CbusNeutral) : val;
+    if (raw < 0)                                  raw = 0;
+    if (raw > static_cast<int32_t>(CbusMaxVal))   raw = static_cast<int32_t>(CbusMaxVal);
+
+    return combus_set_raw_analog(bus, ch, static_cast<uint16_t>(raw), caller);
+}
+
+
+int32_t combus_get_analog(const ComBus& bus, AnalogComBusID ch) {
+    const auto& slot = bus.analogBus[static_cast<uint8_t>(ch)];
+
+    return slot.zeroAtNeutral ? static_cast<int32_t>(slot.value) - static_cast<int32_t>(CbusNeutral)
+                              : static_cast<int32_t>(slot.value);
 }
 
 

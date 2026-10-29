@@ -6,7 +6,7 @@
 #include "proc_chain.h"
 
 #include <core/system/combus/combus_defs.h>              // ComBus
-#include <core/system/combus/combus_access.h>  // combus_set_analog, combus_set_digital
+#include <core/system/combus/combus_access.h>  // combus_set_raw_analog, combus_set_digital
 
 
 // =============================================================================
@@ -39,7 +39,9 @@ static void cbWrite(ComBus& bus, const ChanOpt& ch, uint16_t value)
 {
     if (!ch.has_value()) return;
     if (std::holds_alternative<AnalogComBusID>(*ch)) {
-        combus_set_analog(bus, std::get<AnalogComBusID>(*ch), value);
+          // Raw, no offset of the logical zero (link rework S3-4): whether the
+          // processors work on the logical value is decided with the simulation WIP.
+        combus_set_raw_analog(bus, std::get<AnalogComBusID>(*ch), value, ChanLayer::BOARD);
     } else {
         combus_set_digital(bus, std::get<DigitalComBusID>(*ch), value != 0u);
     }
