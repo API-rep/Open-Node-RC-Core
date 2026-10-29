@@ -124,6 +124,7 @@ Quick index to the documents that sit next to the code. Start from the subject, 
 * [UART workflow](../src/core/system/combus/protocol/uart_workflow.md) — how the UART link is set up
 * [both_or merge (anti ping-pong)](../src/core/system/combus/protocol/both_or.md) — how a both_or channel such as FAILSAFE_HARD is shared between boards
 * [ComBus link rework](<WIP - ComBus link rework.md>) — preliminary study for the communication rework: multi-link, multi-protocol, versioning (work in progress)
+* [Simulation chain](<WIP - Simulation chain.md>) — putting the machine processing chain in order: type contract (inputs, BASE outputs), default mapping in the core, overwrite by the machine, safe at neutral (work in progress)
 * [Light rework](<WIP - Light rework.md>) — state of the light module (complete but unplugged: no caller, no env, channels out of date) and the rules decided for it during the link rework (work in progress)
 * [ComBus processors](<WIP - ComBus processors.md>) — intentions for the processor norm: processing flag per theme, processing packages, redefinition core → machine type → machine (work in progress)
 * [ComBus Builder](../scripts/combus_builder/README.md) — developer README of the generator (pipeline, node mode, tests)

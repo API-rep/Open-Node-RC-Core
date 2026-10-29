@@ -127,6 +127,16 @@ Décisions complémentaires (2026-10-26) :
 - Écartés : un jeton de valeur `value: neutralCenter` (un même mot pour la valeur sûre et le codage) et un type de surface `type: index` (fait croire à un nouveau stockage).
 - À trancher en S3 : `RUNLEVEL` en `zeroAt: neutral` (au neutre, logique 0 = `IDLE`, déjà sûr ; ou réordonner l'énumération pour que 0 = `HALT`).
 
+### 2.7 Valeur logique dans les chaînes (décidé le 2026-10-29)
+
+Suite du codage centré `zeroAt` (link rework S3-4 : champ `.cb`, drapeau `AnalogComBus::zeroAtNeutral`, accesseurs `combus_get_analog` / `combus_set_analog` en `int32_t` logique, et `combus_*_raw_analog` en brut).
+
+- **Les processors ne voient que des valeurs logiques.** Un processor n'accède jamais au bus (contrat de `CbProcFn`) : c'est le moteur des chaînes (`cbRead` / `cbWrite`, `proc_chain.cpp`) qui convertira à l'entrée et à la sortie. Aujourd'hui il travaille en brut (S3-4), ce qui est juste tant qu'aucun channel réel n'est centré.
+- **Le pipeline passe en `int32_t`** (valeur de pipeline, `CbProc::inValue` / `outValue`) : un négatif est une vraie valeur pour un channel `zeroAtNeutral` (marche arrière).
+- **Pas de brut dans une chaîne.** Pourquoi : la règle « neutre = sûr » ne tient que si les processors qui testent `!= 0` lisent 0 logique au neutre (le bug d'origine : `SUBGEAR_BUS` au neutre vu actif) ; un mélange brut / logique donnerait deux sens à une même valeur, et se tromperait en silence quand un channel passe en `zeroAt: neutral`. Gain d'optimisation négligeable : environ 3 instructions par entrée ou sortie de chaîne, une soixantaine par tour pour la Volvo, et ~120 octets de RAM pour le pipeline signé. Une exception ne s'envisagerait qu'après une mesure, déclarée par processor.
+- **Le brut reste réservé** au transport (codec, RX, perte de lien), aux pilotes d'entrée (sticks) et au moteur lui-même.
+- **Travail** (étape SC1 de `doc/WIP - Simulation chain.md`) : signature des `cb_*` en `int32_t&`, relecture des processors qui supposent 0..65535 (bornes, `CbusMaxVal`, `CbAnalog` signe/grandeur sur 16 bits), sans changer de comportement.
+
 ## 3. Premier pas fait (recadrage du 2026-10-25)
 
 | Flag | Chaîne | Code | Channels produits |
