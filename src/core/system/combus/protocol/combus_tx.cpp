@@ -63,6 +63,15 @@ void combus_tx_set_handshake_ctx( uint8_t                linkIdx,
 }
 
 
+void combus_tx_set_active( uint8_t linkIdx, bool active )
+{
+    if (!s_txStates || linkIdx >= s_capacity) { return; }
+    CombusTxState& st = s_txStates[linkIdx];
+    if (active && !st.active) { combus_handshake_internal::startBurst(st.handshakeCtx); }   // a new handshake, as at boot
+    st.active = active;
+}
+
+
 
 
 // =============================================================================
@@ -104,6 +113,7 @@ void combus_tx_init(
 		// --- 2. Store transport interface and frame layout ---
 	st.nodeCom  = nodeCom;
 	st.frameCfg = frameCfg;
+	st.active   = true;     // 3.3: a link starts active; combus_links_watch() suspends an unhitched one
 
 		// --- 3. Derive transmit period ---
 	st.periodMs = 1000u / txHz;
@@ -210,8 +220,8 @@ void combus_tx_update(
 	for (uint8_t i = 0u; i < s_capacity; ++i) {
 		CombusTxState& st = s_txStates[i];
 
-			// --- 1. Per-link guard check ---
-		if (!st.nodeCom || st.periodMs == 0u) { continue; }
+			// --- 1. Per-link guard check (3.3: a suspended link sends nothing) ---
+		if (!st.nodeCom || st.periodMs == 0u || !st.active) { continue; }
 
 			// --- 1b. P3, chantier 1.2 — drive the handshake on the linked
 		//    context: pending ACK, boot burst, one request per period.

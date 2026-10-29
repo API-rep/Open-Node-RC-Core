@@ -283,6 +283,7 @@ void combus_rx_init(
     // --- 2. Store transport interface and frame layout ---
     st.nodeCom  = nodeCom;
     st.frameCfg = frameCfg;
+    st.active   = true;     // 3.3: a link starts active; combus_links_watch() suspends an unhitched one
     st.target   = target;   // RL5 — may be nullptr (legacy / test behaviour)
 
     // --- 3. Resolve the write identity from the link layer.
@@ -358,6 +359,12 @@ void combus_rx_update(const ComBus* bus)
         // --- 2. Per-link guard check ---
         if (!st.nodeCom) { continue; }
 
+        // --- 2b. Link rework 3.3: a suspended link (unhitched) drops what it receives ---
+        if (!st.active) {
+            while (st.nodeCom->available(st.nodeCom->ctx) > 0) { st.nodeCom->readByte(st.nodeCom->ctx); }
+            continue;
+        }
+
         // --- 3. Drain available bytes into ring buffer ---
         while (st.nodeCom->available(st.nodeCom->ctx) > 0) {
             int b = st.nodeCom->readByte(st.nodeCom->ctx);
@@ -425,6 +432,23 @@ void combus_rx_set_link_timeout( uint8_t linkIdx, uint32_t timeoutMs )
 {
     if (!s_rxStates || linkIdx >= s_capacity) { return; }
     s_rxStates[linkIdx].linkTimeoutMs = timeoutMs;
+}
+
+
+
+/** @brief Activate or suspend the reception of one link (coupling, link rework 3.3). */
+void combus_rx_set_active( uint8_t linkIdx, bool active )
+{
+    if (!s_rxStates || linkIdx >= s_capacity) { return; }
+    CombusRxState& st = s_rxStates[linkIdx];
+    st.active = active;
+    if (active) { return; }
+
+        // --- Suspended: forget the link, it starts again as never seen ---
+    st.rxCount      = 0u;
+    st.snapValid    = false;
+    st.everReceived = false;
+    combus_handshake_internal::dropContract(st.handshakeCtx, "uncoupled");
 }
 
 

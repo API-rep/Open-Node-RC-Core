@@ -26,6 +26,10 @@
  *   TEST_GEAR_BUS declares `zeroAt: neutral` (logical zero at CbusNeutral);
  *   combus_get_analog / combus_set_analog apply the offset, the raw accessors
  *   and the transport do not.
+ *   Then the coupling (step 3.3, table of 2026-10-29): a link ON_COUPLING
+ *   described by a CouplingDev (trigger TEST_HITCHED, contributor
+ *   TEST_HITCH_LINK_FAIL) is inactive while unhitched, active with a grace
+ *   once hitched, and reports its loss only through its contributor.
  *
  *   What the trailer would send is forged.  Requires the TX<->RX jumper on
  *   Serial2 (GPIO 17 <-> 16) for rows 6 and 7.  Run: pio test -e test_peer_link
@@ -327,6 +331,135 @@ static void test_loss_row6_contract_dropped(void) {
 
 
 // =============================================================================
+// COUPLING (step 3.3)
+// =============================================================================
+
+static constexpr uint8_t kHitched   = static_cast<uint8_t>(DigitalComBusID::TEST_HITCHED);
+static constexpr uint8_t kHitchFail = static_cast<uint8_t>(DigitalComBusID::TEST_HITCH_LINK_FAIL);
+
+static constexpr CouplingDev kHitch = {
+    "test_hitch", DigitalComBusID::TEST_HITCHED, DigitalComBusID::TEST_HITCH_LINK_FAIL
+};
+static constexpr ComDev kHitchedTrailerDev = {
+    "test_trailer_hitched", LinkScope::INTER_NODE, LinkType::BIDIRECTIONAL,
+    &kProto, LinkActivation::ON_COUPLING, &kHitch, &kLink
+};
+
+/** Build the coupled link on the loopback port and put it under watch (unhitched). */
+static void startCoupledLink(void) {
+    resetBus();
+    const ComDevMap map = { &kHitchedTrailerDev, &s_port, LinkEnd::TX_RX };
+    TEST_ASSERT_TRUE(combus_link_build(map, s_com, s_runtime, s_link));
+    s_link.target = &bus;
+    combus_protocol_init(kLinkIdx, &s_link);
+    combus_links_watch(&s_runtime, 1u);
+    while (s_com->available(s_com->ctx) > 0) { s_com->readByte(s_com->ctx); }   // nothing left from the last test
+}
+
+static void hitch(bool on) {
+    bus.digitalBus[kHitched].value = on;
+    com_rx_update(bus);
+}
+
+/** Bytes that came back on the loopback after `ms` of transmit updates. */
+static int bytesSentDuring(uint32_t ms) {
+    while (s_com->available(s_com->ctx) > 0) { s_com->readByte(s_com->ctx); }
+    for (uint32_t t0 = millis(); (millis() - t0) < ms; ) { combus_tx_update(&bus); delay(5u); }
+    delay(20u);
+    int n = 0;
+    while (s_com->available(s_com->ctx) > 0) { s_com->readByte(s_com->ctx); ++n; }
+    return n;
+}
+
+
+/** Row 1: unhitched at start: inactive, nothing sent, no fault anywhere. */
+static void test_coupling_row1_unhitched_link_is_inactive(void) {
+    startCoupledLink();
+    hitch(false);
+    TEST_ASSERT_EQUAL_INT(0, bytesSentDuring(300u));
+    TEST_ASSERT_FALSE(bus.digitalBus[kHitchFail].value);
+    TEST_ASSERT_FALSE(combus_links_lost(LinkScope::INTER_NODE));
+}
+
+/** Row 2: unhitched, a frame of the trailer arrives anyway: not applied. */
+static void test_coupling_row2_unhitched_frame_not_applied(void) {
+    startCoupledLink();
+    hitch(false);
+    receiveFromTrailer(333u, false, 11u);
+    TEST_ASSERT_EQUAL_UINT16(0u, bus.analogBus[kTilt].value);
+}
+
+/** Row 3: hitched, within the grace, no handshake yet: active (it sends), no fault. */
+static void test_coupling_row3_hitched_within_grace(void) {
+    startCoupledLink();
+    hitch(true);
+    TEST_ASSERT_FALSE(bus.digitalBus[kHitchFail].value);
+    TEST_ASSERT_TRUE(bytesSentDuring(100u) > 0);                         // the handshake goes out
+}
+
+/** Row 4: hitched, handshake done, data received: applied. */
+static void test_coupling_row4_hitched_alive_applies(void) {
+    startCoupledLink();
+    hitch(true);
+    ensureStable();
+    receiveFromTrailer(333u, false, 12u);
+    TEST_ASSERT_EQUAL_UINT16(333u, bus.analogBus[kTilt].value);
+    TEST_ASSERT_FALSE(bus.digitalBus[kHitchFail].value);
+}
+
+/** Row 5: hitched, the trailer stays mute after the grace: its own contributor only. */
+static void test_coupling_row5_hitched_mute_after_grace(void) {
+    startCoupledLink();
+    hitch(true);
+    delay(kProto.startupGraceMs + 60u);
+    com_rx_update(bus);
+    TEST_ASSERT_TRUE(bus.digitalBus[kHitchFail].value);
+    TEST_ASSERT_FALSE(combus_links_lost(LinkScope::INTER_NODE));          // a coupled link no longer counts there
+}
+
+/** Row 6: unhitching a live link: safe values, contract unknown, the trailer's fault no longer counts. */
+static void test_coupling_row6_unhitch_live_link(void) {
+    startCoupledLink();
+    hitch(true);
+    ensureStable();
+    receiveFromTrailer(333u, true, 13u);
+    TEST_ASSERT_EQUAL_UINT16(333u, bus.analogBus[kTilt].value);
+    TEST_ASSERT_TRUE(bus.digitalBus[kFault].value);
+
+    hitch(false);
+    TEST_ASSERT_EQUAL_UINT16(CbusNeutral, bus.analogBus[kTilt].value);
+    TEST_ASSERT_FALSE(combus_handshake_is_contract_validated(&s_runtime.handshake));
+    com_rx_update(bus);
+    TEST_ASSERT_FALSE(bus.digitalBus[kFault].value);
+    TEST_ASSERT_FALSE(bus.digitalBus[kHitchFail].value);
+}
+
+/** Row 7: hitched again: a new grace and a new handshake. */
+static void test_coupling_row7_rehitch_new_grace(void) {
+    startCoupledLink();
+    hitch(true);
+    delay(kProto.startupGraceMs + 60u);
+    com_rx_update(bus);
+    TEST_ASSERT_TRUE(bus.digitalBus[kHitchFail].value);
+
+    hitch(false);
+    hitch(true);
+    TEST_ASSERT_FALSE(bus.digitalBus[kHitchFail].value);                 // the grace starts again
+    TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::NEVER_SEEN);
+}
+
+/** Row 9: ON_COUPLING needs its CouplingDev; with it, the link is accepted. */
+static void test_coupling_row9_on_coupling_needs_its_coupling_dev(void) {
+    static constexpr ComDev kNoCoupling = {
+        "no_coupling", LinkScope::INTER_NODE, LinkType::BIDIRECTIONAL,
+        &kProto, LinkActivation::ON_COUPLING, nullptr, &kLink
+    };
+    TEST_ASSERT_FALSE(combus_link_check({ &kNoCoupling, &s_port, LinkEnd::TX_RX }));
+    TEST_ASSERT_TRUE(combus_link_check({ &kHitchedTrailerDev, &s_port, LinkEnd::TX_RX }));
+}
+
+
+// =============================================================================
 // ACCESSORS OF THE LOGICAL VALUE (step S3-4)
 // =============================================================================
 
@@ -428,6 +561,15 @@ void setup() {
     RUN_TEST(test_zero_row5_channel_without_zero_at_unchanged);
     RUN_TEST(test_zero_row6_raw_accessors_never_offset);
     RUN_TEST(test_zero_row7_layer_check_kept);
+
+    RUN_TEST(test_coupling_row1_unhitched_link_is_inactive);
+    RUN_TEST(test_coupling_row2_unhitched_frame_not_applied);
+    RUN_TEST(test_coupling_row3_hitched_within_grace);
+    RUN_TEST(test_coupling_row4_hitched_alive_applies);
+    RUN_TEST(test_coupling_row5_hitched_mute_after_grace);
+    RUN_TEST(test_coupling_row6_unhitch_live_link);
+    RUN_TEST(test_coupling_row7_rehitch_new_grace);
+    RUN_TEST(test_coupling_row9_on_coupling_needs_its_coupling_dev);
 
     UNITY_END();
 }

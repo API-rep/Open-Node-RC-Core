@@ -80,6 +80,10 @@ struct CombusTxState {
     // Multiple independent ComBus interfaces may coexist; each link has
     // its own context.  See CombusHandshakeContext in combus_handshake.h.
     CombusHandshakeContext* handshakeCtx = nullptr;
+
+    // Link rework 3.3 — false while a coupled link is unhitched: neither
+    // handshake nor data is sent.
+    bool                   active       = true;
 };
 
 
@@ -183,5 +187,17 @@ void combus_tx_update( const ComBus* bus );
  */
 void combus_tx_set_handshake_ctx( uint8_t                linkIdx,
                                   CombusHandshakeContext* ctx );
+
+
+/**
+ * @brief Activate or suspend the emission of one link (coupling, link rework 3.3).
+ *
+ * @details Suspended: neither handshake nor data is sent.  Activated: the
+ *   handshake starts again with a burst, as at boot.
+ *
+ * @param linkIdx  Index of this link in the per-link state array.
+ * @param active   true to transmit, false to suspend.
+ */
+void combus_tx_set_active( uint8_t linkIdx, bool active );
 
 // EOF combus_tx.h

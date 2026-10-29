@@ -135,6 +135,10 @@ struct CombusRxState {
     // Silence after which the link counts as lost (ms), set by
     // combus_rx_set_link_timeout().  0 = never alive for combus_rx_peer_or().
     uint32_t               linkTimeoutMs     = 0u;
+
+    // Link rework 3.3 — false while a coupled link is unhitched: the bytes
+    // received are drained and dropped, nothing is decoded nor applied.
+    bool                   active            = true;
 };
 
 /// "No link" value for the excluded link of combus_rx_peer_or().
@@ -284,6 +288,20 @@ bool combus_rx_is_alive( uint8_t linkIdx, uint32_t timeoutMs );
  */
 
 void combus_rx_set_link_timeout( uint8_t linkIdx, uint32_t timeoutMs );
+
+
+/**
+ * @brief Activate or suspend the reception of one link (coupling, link rework 3.3).
+ *
+ * @details Suspended: the bytes received are dropped, the link is never
+ *   alive and its contract drops to UNKNOWN.  Suspending also forgets the
+ *   last frame, so that a link activated again starts as never seen.
+ *
+ * @param linkIdx  Index of this link in the per-link state array.
+ * @param active   true to receive, false to suspend.
+ */
+
+void combus_rx_set_active( uint8_t linkIdx, bool active );
 
 
 /**

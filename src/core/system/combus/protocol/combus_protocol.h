@@ -130,8 +130,8 @@ enum class LinkEnd : uint8_t {
 /**
  * @brief When a link is active.
  *
- * @details ON_COUPLING is reserved for the coupling of two elements (see
- *   ComCoupling); it is refused for now.
+ * @details ON_COUPLING: the link exists only while two elements are coupled,
+ *   as told by the trigger of its CouplingDev (link rework 3.3).
  */
 
 enum class LinkActivation : uint8_t {
@@ -152,7 +152,25 @@ struct ComProtocolCfg {
 };
 
 
-struct ComCoupling;     // trigger channel and expected value — defined with the coupling logic
+enum class DigitalComBusID : uint8_t;   // generated (combus_ids.h)
+
+
+/**
+ * @brief The coupling device (attache) of a link ON_COUPLING (link rework 3.3).
+ *
+ * @details Run-time part of an attache: what says "coupled", and where the loss
+ *   of the coupled link is reported.  Step 3.4 adds its contract (channels,
+ *   lite / full variants).  While the trigger is false the link is inactive:
+ *   nothing sent, nothing received, no handshake, no fault.  Once true, the
+ *   link starts with the startup grace of its protocol; lost after it, the
+ *   link reports its loss through `fail` only (never NODE_LINK_FAIL).
+ */
+
+struct CouplingDev {
+    const char*                    name;      ///< type of attache, for the logs (ex. "fifth_wheel")
+    DigitalComBusID                trigger;   ///< true = coupled (hardware or software, computed by the machine)
+    std::optional<DigitalComBusID> fail;      ///< failsafe contributor of the coupled link (true = fault), absent = none
+};
 
 
 /**
@@ -161,8 +179,9 @@ struct ComCoupling;     // trigger channel and expected value — defined with t
  * @details Does not name a port and does not list channels: the channel set
  *   follows the scope.  The loss of a receiving link is reported according to
  *   the scope too (link rework S2): BOARD_LINK_FAIL for a link between boards,
- *   NODE_LINK_FAIL for a link to another node; the failsafe chain that reads
- *   the contributor decides the severity.
+ *   NODE_LINK_FAIL for a link to another node, or the contributor of its
+ *   CouplingDev for a coupled link (3.3); the failsafe chain that reads the
+ *   contributor decides the severity.
  */
 
 struct ComDev {
@@ -170,8 +189,8 @@ struct ComDev {
     LinkScope              scope;
     LinkType               type;
     const ComProtocolCfg*  protocol;
-    LinkActivation         activation;  ///< only ALWAYS is accepted for now
-    const ComCoupling*     coupling;    ///< nullptr unless activation == ON_COUPLING
+    LinkActivation         activation;
+    const CouplingDev*     coupling;    ///< required when activation == ON_COUPLING, else nullptr
     const ComPeerLink*     peer   = nullptr;   ///< INTER_NODE only: the link with a peer type (combus_peer_links.h), nullptr = BASE view
 };
 

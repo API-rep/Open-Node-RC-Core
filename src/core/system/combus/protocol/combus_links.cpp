@@ -87,8 +87,8 @@ bool combus_link_check( const ComDevMap& map )
     }
     const ComDev& dev = *map.dev;
 
-    if (dev.activation != LinkActivation::ALWAYS) {
-        sys_log_err("[COMBUS_LINKS] link '%s': activation other than ALWAYS is not supported yet\n", dev.name);
+    if (dev.activation == LinkActivation::ON_COUPLING && !dev.coupling) {
+        sys_log_err("[COMBUS_LINKS] link '%s': a link ON_COUPLING needs its CouplingDev\n", dev.name);
         return false;
     }
     if (dev.type == LinkType::BIDIRECTIONAL && map.end != LinkEnd::TX_RX) {
@@ -171,6 +171,7 @@ bool combus_link_build( const ComDevMap& map,
     runtime.startupGraceMs = map.dev->protocol->startupGraceMs;
     runtime.scope          = map.dev->scope;
     runtime.peer           = peer;
+    runtime.coupling       = (map.dev->activation == LinkActivation::ON_COUPLING) ? map.dev->coupling : nullptr;
 
     link = built;
     return true;
@@ -241,6 +242,13 @@ void combus_links_watch( ComLinkRuntime* runtime, uint8_t count )
         runtime[i].watchStartMs = now;
         runtime[i].reportedLost = false;
         runtime[i].wasAlive     = false;
+        runtime[i].coupled      = false;
+
+            // 3.3: a coupled link starts suspended, until its trigger says hitched
+        if (runtime[i].coupling) {
+            combus_tx_set_active(i, false);
+            combus_rx_set_active(i, false);
+        }
 
             // The RX module needs the same timeouts to ignore silent links in the both_or merge
         if (runtime[i].receives) { combus_rx_set_link_timeout(i, runtime[i].linkTimeoutMs); }
@@ -277,7 +285,7 @@ bool combus_links_lost( LinkScope scope )
 {
     for (uint8_t i = 0u; i < s_watchedCount; ++i) {
         const ComLinkRuntime& rt = s_watched[i];
-        if (!rt.receives || rt.scope != scope) { continue; }
+        if (!rt.receives || rt.scope != scope || rt.coupling) { continue; }   // 3.3: a coupled link has its own contributor
 
             // Link rework S2: a link to another node counts at once (it may not be
             // there); a link between boards waits for the startup grace.
@@ -304,10 +312,45 @@ static void takeBackSafeValues( const ComPeerLink& peer, ComBus& bus )
 }
 
 
+    // Link rework 3.3 — follow the trigger of a coupled link: suspend it when
+    // unhitched (received positions back to their safe value), activate it
+    // with a new grace when hitched.
+static void followCoupling( uint8_t i, ComBus& bus )
+{
+    ComLinkRuntime& rt = s_watched[i];
+    const bool hitched = bus.digitalBus[static_cast<uint8_t>(rt.coupling->trigger)].value;
+    if (hitched == rt.coupled) { return; }
+    rt.coupled = hitched;
+
+    if (hitched) {
+        rt.watchStartMs = millis();
+        rt.reportedLost = false;
+        combus_rx_set_active(i, true);
+        combus_tx_set_active(i, true);
+        sys_log_info("[COMBUS_LINKS] link '%s' coupled (%s)\n", rt.name ? rt.name : "?", rt.coupling->name);
+        return;
+    }
+
+    if (rt.wasAlive && rt.peer) { takeBackSafeValues(*rt.peer, bus); }
+    rt.wasAlive     = false;
+    rt.reportedLost = false;
+    combus_tx_set_active(i, false);
+    combus_rx_set_active(i, false);
+    sys_log_info("[COMBUS_LINKS] link '%s' uncoupled (%s)\n", rt.name ? rt.name : "?", rt.coupling->name);
+}
+
+
 void combus_links_update( ComBus& bus )
 {
     for (uint8_t i = 0u; i < s_watchedCount; ++i) {
         ComLinkRuntime& rt = s_watched[i];
+        if (rt.coupling) {
+            followCoupling(i, bus);
+            if (rt.coupling->fail) {
+                combus_set_digital(bus, *rt.coupling->fail, rt.coupled && rt.receives && lostAfterGrace(i), ChanLayer::BOARD);
+            }
+            if (!rt.coupled) { continue; }
+        }
         if (!rt.receives) { continue; }
 
             // --- 3.2c: a link with a peer that stops being alive: safe values ---
@@ -336,6 +379,7 @@ void combus_links_update( ComBus& bus )
 bool combus_links_rx_lost()
 {
     for (uint8_t i = 0u; i < s_watchedCount; ++i) {
+        if (s_watched[i].coupling && !s_watched[i].coupled) { continue; }   // 3.3: unhitched, not lost
         if (s_watched[i].receives && !combus_rx_is_alive(i, s_watched[i].linkTimeoutMs)) {
             return true;
         }

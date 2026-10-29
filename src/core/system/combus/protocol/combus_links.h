@@ -72,6 +72,8 @@ struct ComLinkRuntime {
     bool           reportedLost   = false;                     ///< last loss state logged by combus_links_update()
     const ComPeerLink* peer       = nullptr;                   ///< link with a peer type (3.1b), nullptr = view of the scope
     bool           wasAlive       = false;                     ///< 3.2c: alive at the last combus_links_update(), to catch the loss
+    const CouplingDev* coupling   = nullptr;                   ///< 3.3: link ON_COUPLING, nullptr = always active
+    bool           coupled        = false;                     ///< 3.3: trigger true at the last combus_links_update()
     uint16_t analogRx[static_cast<uint8_t>(AnalogComBusSystemID::CH_COUNT)]   = {};   ///< SYSTEM next set
     bool     digitalRx[static_cast<uint8_t>(DigitalComBusSystemID::CH_COUNT)] = {};   ///< SYSTEM next set
 };
@@ -112,7 +114,7 @@ struct ComLinksStorage {
  *
  * @details Refused (logged, returns false): a null device, port or protocol;
  *   a BIDIRECTIONAL link not wired TX_RX, or a UNIDIRECTIONAL one wired TX_RX;
- *   an activation other than ALWAYS; a missing transmit rate on a transmitting
+ *   a link ON_COUPLING without its CouplingDev; a missing transmit rate on a transmitting
  *   end; a missing link timeout on a receiving end; a line rate above the port
  *   ceiling.
  *
@@ -205,6 +207,8 @@ ComLinkState combus_link_state( uint8_t linkIdx );
  *     never seen once startupGraceMs has elapsed (the boards start together);
  *   - INTER_NODE (link to another node, NODE_LINK_FAIL): the link is not alive,
  *     never seen included, no grace (the other node may not be there).
+ *   A coupled link (ON_COUPLING, 3.3) never counts here: its loss goes to the
+ *   contributor of its CouplingDev (combus_links_update()).
  *   A link that only transmits never counts: it cannot know its peer.
  *
  * @param scope  Scope of the links to look at.
@@ -227,6 +231,13 @@ bool combus_links_lost( LinkScope scope );
  *   relays the safe value as it is.  The positions it sends do not move; a
  *   both_or is never written by a frame (a lost link contributes nothing to the
  *   merge).  A link without peer is unchanged.
+ *
+ *   Link rework 3.3, coupled link (ON_COUPLING): its trigger is read here.
+ *   Unhitched, the link is suspended (combus_tx/rx_set_active): nothing sent
+ *   or received, contract UNKNOWN, received positions back to their safe
+ *   value.  Hitched, it is activated with a new startup grace.  Its
+ *   contributor (CouplingDev::fail) is written each cycle: true when hitched
+ *   and lost, or never seen once the grace has elapsed; false otherwise.
  *
  * @param bus  ComBus the received positions are written to.
  */

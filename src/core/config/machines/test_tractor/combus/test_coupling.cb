@@ -1,0 +1,27 @@
+# test_coupling.cb — coupling of the TEST tractor to its trailer (link rework, step 3.3)
+#
+# A fictitious machine type used only by the tests (see test_links.cb).
+#
+# - TEST_HITCHED: the trigger of the coupling (true = hitched).  On a real
+#   machine it is computed from hardware or software stimuli (contact, Hall,
+#   RFID…); the tests write it directly.  Local to the board.
+# - TEST_HITCH_LINK_FAIL: the failsafe contributor of the coupled link
+#   (failsafe group, true = fault): written by combus_links_update(), healthy
+#   while unhitched, at fault when hitched but lost after the grace.
+
+channels:
+
+- id: TEST_HITCHED
+  infoName: "Test hitch trigger"
+  type: digital
+  scope: BOARD
+  theme: core
+  value: low
+
+- id: TEST_HITCH_LINK_FAIL
+  infoName: "Test hitch link fail"
+  type: digital
+  scope: BOARD
+  theme: failsafe
+  value: fault
+  requires: [HAS_FAILSAFE]
