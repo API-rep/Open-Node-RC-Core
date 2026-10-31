@@ -53,7 +53,7 @@ Refer to:
 
 * `include/README.md`
 * `include/defs/README.md`
-* `include/struct/README.md`
+* `include/struct/README.md` (design patterns; the directory is deprecated as a location: a new structure goes to the master header of its theme, see `doc/developement/conventions/coding_structures.md` §5)
 
 ---
 

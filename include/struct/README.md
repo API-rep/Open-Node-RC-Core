@@ -1,5 +1,7 @@
 # Structure Design
 
+> **Deprecated location (2026-10-20).** `include/struct/` takes no new structure. A new structure goes at the top of the master header of its theme, or in a `<theme>_defs.h` next to it; the existing files here are moved back to their themes over time (see `doc/developement/conventions/coding_structures.md` §5 and `doc/roadmap.md`). The design patterns described below (`cfg`, `state`, `dynCfg`, substructures) remain valid wherever the structure lives.
+
 This directory contains the shared structures used throughout Open RC Node.
 
 These structures act as common contracts between the different environments of the project: machines, remotes, dashboard views, services, simulations, and future extensions. They define how data is organized and exchanged, independently from the modules that process it.

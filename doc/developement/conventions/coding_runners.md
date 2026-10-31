@@ -172,10 +172,10 @@ core/system/ramp/
 
 This co-location reduces fragmentation, keeps the scope obvious for both human readers and AI agents, and makes ownership immediately visible.
 
-Avoid exposing engine structures as shared project definitions unless the engine itself represents a genuinely reusable concept.
+Avoid exposing engine structures as shared project definitions unless the engine itself represents a genuinely reusable concept. Even then, a shared definition goes to the master header of its theme, or to a `<theme>_defs.h` next to it (see `coding_structures.md` §5), never to the deprecated `include/struct/`.
 
 ```text
-include/struct/ramp_engine.h    // Discouraged unless broadly shared
+include/struct/ramp_engine.h    // Deprecated location: no new structure here
 ```
 
 The engine's local contract — what it expects from its environment and what it produces — is defined alongside the subsystem implementation.

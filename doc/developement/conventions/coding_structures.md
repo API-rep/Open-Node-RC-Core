@@ -4,7 +4,7 @@ This document defines the coding conventions used when implementing structures i
 
 It focuses on the structure definitions themselves: field organization, lightweight helpers, and readability considerations.
 
-Subsystem decomposition patterns (`cfg`, `state`, `dynCfg`) are described in `include/struct/README.md`.
+Subsystem decomposition patterns (`cfg`, `state`, `dynCfg`) are described in `include/struct/README.md`. The patterns remain valid; the directory itself is deprecated as a location (see §5).
 
 ---
 
@@ -144,3 +144,75 @@ const RampCfg* eff = rampDynActive
 For larger configurations, prefer separating immutable and mutable parameters into distinct structures so that only the truly dynamic subset consumes RAM.
 
 Refer to `include/struct/README.md` for the rationale and memory considerations behind this pattern.
+
+---
+
+## 4. Group Repeated Fields Into Sub-Structures
+
+When a structure grows, look for the axes that repeat: the same set of fields per kind, per direction or per role, or a block of fields that serves a single concern. Name the axis once with a sub-structure, then use it once per instance.
+
+Signals:
+
+* the same prefix or suffix on several fields (`nAnalog`, `analog`, `analogRx` and `nDigital`, `digital`, `digitalRx`; `md5`, `md5Stable`, `md5Peer`, `md5PeerStable`);
+* a block of fields that the same functions read and write together (the watch of a link, its coupling);
+* fields that only one feature uses: grouped, they become a single member, easy to find and to guard by a flag.
+
+Avoid:
+
+```cpp
+struct ComPeerLink {
+    const char*    coupler;
+    const uint8_t* md5;
+    const uint8_t* md5Stable;
+    const uint8_t* md5Peer;
+    const uint8_t* md5PeerStable;
+    uint8_t        nAnalog;
+    uint8_t        nDigital;
+    uint8_t        nStableAnalog;
+    uint8_t        nStableDigital;
+    const uint8_t* analog;
+    const uint8_t* digital;
+    const bool*    analogRx;
+    const bool*    digitalRx;
+};
+```
+
+Prefer:
+
+```cpp
+struct ComLinkMd5 {
+    const uint8_t* stable;
+    const uint8_t* next;
+};
+
+struct ComLinkTable {
+    uint8_t        count;
+    uint8_t        stableCount;
+    const uint8_t* ids;
+    const bool*    rx;
+};
+
+struct ComPeerLink {
+    const char*  coupler;
+    ComLinkMd5   announced;
+    ComLinkMd5   expected;
+    ComLinkTable analog;
+    ComLinkTable digital;
+};
+```
+
+An access then reads as a sentence (`peer->analog.ids[i]`, `peer->expected.stable`), a function that handles one half takes one `ComLinkTable`, and a whole sub-structure is copied in one assignment (`ctx->expected = peer->expected;`).
+
+Keep in mind:
+
+* name a sub-structure after its concern (`ComLinkWatch`, `ComLinkCoupling`), and its members after their role, without repeating the prefix the member name already gives (`analog.count`, not `analog.nAnalog`);
+* the regrouping costs nothing at run time: the same fields, the same bytes (padding aside); when the structure is generated or sent, check that the generated files and the MD5 do not move;
+* do not group two or three unrelated fields for the sake of symmetry: a short, homogeneous structure stays flat.
+
+---
+
+## 5. Where a Structure Lives
+
+`include/struct/` is deprecated. A new structure goes at the top of the **master header of its theme**, the one that already defines the neighbouring type (for example `ComDev` in `core/system/combus/protocol/combus_protocol.h`).
+
+When several related types form a theme of their own (pure definitions, used by several modules, without code), they move to a `<theme>_defs.h` file next to the master header, which includes it. Such a file holds type definitions only: no feature flag, no function. Examples: `combus_frame_defs.h` (the frame), `combus_peer_link_defs.h` (a link between two nodes: `ComLinkMd5`, `ComLinkTable`, `ComPeerLink`).
