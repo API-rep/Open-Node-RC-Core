@@ -291,6 +291,41 @@ Un bout bidirectionnel n'émet **aucune trame de données** tant que son contrat
 > cite un « friend cache » hors périmètre. Le code lu (§8.1 à 8.4) implémente
 > l'émission, la rafale et la validation : ce commentaire est périmé.
 
+### 8.6 Trame de couplage (link rework 3.4b)
+
+Une trame **à part** du handshake : elle porte l'identité d'un nœud, l'âge de
+son attelage et ses fonctions, et ne sert qu'à l'appairage d'un lien couplé
+(`ON_COUPLING`). Elle ne rend pas un lien vivant (`lastRxMs` ne bouge qu'avec
+une trame de données acceptée) et ne touche pas au contrat : le handshake, les
+trames de données et la surveillance des liens sont inchangés. Source :
+`frame/combus_coupling.h` / `.cpp`.
+
+**Aiguillage** : `seq == 0` et le bit `kCombusFrameFlagCoupling` (`0x04`) de
+`flags` ; `combus_rx` (`tryDecode`) l'envoie à `combus_coupling_tryDecode`,
+tout autre `seq == 0` au handshake. Un firmware qui ne la connaît pas la lit
+comme un handshake de mauvaise longueur : le CRC échoue, il jette l'octet de
+SOF et se resynchronise, sans toucher au contrat.
+
+| Octet | Taille | Champ |
+|---|---|---|
+| 0 | 1 | SOF |
+| 1, 2 | 2 | `nAnalog` = 0, `nDigital` = 0 |
+| 3 | 1 | `seq` = 0 |
+| 4 | 1 | `flags` : bit 2 = couplage (`kCombusFrameFlagCoupling`) |
+| 5 | 1 | `msg` : `CouplingMsg` (1 = requête du véhicule, 2 = réponse d'un attelage) |
+| 6 | 1 | `round` : tour de l'appairage (1..N) |
+| 7 | 1 | `addr.type` : `LinkAddrType` (0 = aucune, 1 = MAC48) |
+| 8 à 13 | 6 | `addr.bytes` : l'adresse (MAC de l'ESP32, `esp_read_mac`) |
+| 14, 15 | 2 | `hitchAgeMs` : ms depuis le front du déclencheur, saturé à 65 535, little-endian |
+| 16, 17 | 2 | `features` : masque des fonctions, réservé (0 tant qu'il n'est pas défini), little-endian |
+| 18 | 1 | CRC-8 sur les octets 0 à 17 |
+
+Longueur totale : 19 octets (`kCombusCouplingFrameLen`). Étape 3.4b : la
+dernière trame reçue par lien est seulement enregistrée
+(`combus_coupling_rx_count`, `combus_coupling_last_rx`) ; l'appairage (tours,
+conflit, corrélation) est l'étape 3.4c. Preuve : `test/test_peer_link`, groupe
+« COUPLING FRAME ».
+
 ## 9. Liens, pools et états par lien
 
 - `ComBusLink` (`combus_protocol.h:108-119`) décrit un lien : transport

@@ -13,6 +13,29 @@
 
 
 /**
+ * @brief Kind of address that identifies a node on a link (link rework 3.4b).
+ *
+ * @details Common to the project, open to other transports: MAC48 is the
+ *   factory MAC of the ESP32 (the same on a wire and over the air).
+ */
+
+enum class LinkAddrType : uint8_t {
+    NONE  = 0u,   ///< no address (unknown, or not set)
+    MAC48 = 1u    ///< 48-bit MAC address
+};
+
+
+/**
+ * @brief Identity of a node on a link (link rework 3.4b).
+ */
+
+struct NodeAddr {
+    LinkAddrType type     = LinkAddrType::NONE;
+    uint8_t      bytes[6] = {};   ///< MAC48: the six bytes, in transmission order
+};
+
+
+/**
  * @brief A contract of a link: the MD5 of the stable set and of the next set.
  *
  * @details The next set adds the candidates (chantier 2.2b); without

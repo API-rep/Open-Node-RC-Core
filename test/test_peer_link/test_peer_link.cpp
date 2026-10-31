@@ -50,6 +50,7 @@
 #include <core/system/combus/protocol/frame/combus_frame.h>
 #include <core/system/combus/protocol/frame/combus_handshake.h>
 #include <core/system/combus/protocol/frame/combus_handshake_tx.h>
+#include <core/system/combus/protocol/frame/combus_coupling.h>
 #include <core/system/hw/transport/uart_com.h>
 #include <core/system/combus/protocol/combus_tx.h>
 #include <core/system/combus/protocol/combus_rx.h>
@@ -495,6 +496,128 @@ static void test_coupling_row9_on_coupling_needs_its_coupling_dev(void) {
 
 
 // =============================================================================
+// COUPLING FRAME (step 3.4b)
+//
+// Table validated by the owner (2026-10-31): the coupling frame is apart from
+// the handshake (seq == 0 + flag kCombusFrameFlagCoupling, 19 bytes), routed
+// by combus_rx to the coupling module; it neither makes the link alive nor
+// touches the contract.  Step 3.4b records a received frame, the pairing is
+// step 3.4c.
+// =============================================================================
+
+static CouplingFrame sampleCouplingFrame(void) {
+    CouplingFrame f;
+    f.msg        = CouplingMsg::REQUEST;
+    f.round      = 2u;
+    f.addr.type  = LinkAddrType::MAC48;
+    for (uint8_t i = 0u; i < 6u; ++i) { f.addr.bytes[i] = (uint8_t)(0x10u + i); }
+    f.hitchAgeMs = 40u;
+    f.features   = 0u;
+    return f;
+}
+
+/** Send one coupling frame on the loopback and let combus_rx_update() receive it. */
+static void sendCouplingFrame(const CouplingFrame& f) {
+    uint8_t buf[kCombusCouplingFrameLen];
+    TEST_ASSERT_EQUAL_UINT8(kCombusCouplingFrameLen, combus_coupling_encode(buf, sizeof(buf), f));
+    s_com->write(s_com->ctx, buf, kCombusCouplingFrameLen);
+    delay(kRxPollMs);
+    combus_rx_update(&bus);
+}
+
+/** Row 1: encode then decode: the same fields, 19 bytes. */
+static void test_cpl_frame_row1_round_trip(void) {
+    const CouplingFrame f = sampleCouplingFrame();
+    uint8_t buf[kCombusCouplingFrameLen];
+    TEST_ASSERT_EQUAL_UINT8(19u, kCombusCouplingFrameLen);
+    TEST_ASSERT_EQUAL_UINT8(19u, combus_coupling_encode(buf, sizeof(buf), f));
+    TEST_ASSERT_EQUAL_UINT8(0u, buf[1 + 2]);                              // seq == 0
+    TEST_ASSERT_EQUAL_UINT8(kCombusFrameFlagCoupling, buf[1 + 3]);        // the coupling flag
+
+    CouplingFrame out;
+    TEST_ASSERT_TRUE(combus_coupling_decode(buf, sizeof(buf), out));
+    TEST_ASSERT_TRUE(out.msg == CouplingMsg::REQUEST);
+    TEST_ASSERT_EQUAL_UINT8(2u, out.round);
+    TEST_ASSERT_TRUE(out.addr.type == LinkAddrType::MAC48);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(f.addr.bytes, out.addr.bytes, 6u);
+    TEST_ASSERT_EQUAL_UINT16(40u, out.hitchAgeMs);
+    TEST_ASSERT_EQUAL_UINT16(0u, out.features);
+    TEST_ASSERT_EQUAL_UINT8(0u, combus_coupling_encode(buf, 18u, f));    // buffer too small
+}
+
+/** Row 2: a corrupted byte (payload or CRC) is refused. */
+static void test_cpl_frame_row2_corrupted_is_refused(void) {
+    uint8_t buf[kCombusCouplingFrameLen];
+    CouplingFrame out;
+    for (uint8_t pos : { (uint8_t)7u, (uint8_t)(kCombusCouplingFrameLen - 1u) }) {
+        combus_coupling_encode(buf, sizeof(buf), sampleCouplingFrame());
+        buf[pos] ^= 0x5Au;
+        TEST_ASSERT_FALSE(combus_coupling_decode(buf, sizeof(buf), out));
+    }
+}
+
+/** Row 3: the age of the hitch saturates at 65535 ms. */
+static void test_cpl_frame_row3_hitch_age_saturates(void) {
+    TEST_ASSERT_EQUAL_UINT16(40u, combus_coupling_hitch_age(40u));
+    TEST_ASSERT_EQUAL_UINT16(65535u, combus_coupling_hitch_age(65535u));
+    TEST_ASSERT_EQUAL_UINT16(65535u, combus_coupling_hitch_age(70000u));
+}
+
+/** Row 4: on the loopback, a coupling frame goes to the coupling module, never to the handshake. */
+static void test_cpl_frame_row4_routed_to_the_coupling_module(void) {
+    startLink();
+    combus_coupling_reset();
+    while (s_com->available(s_com->ctx) > 0) { s_com->readByte(s_com->ctx); }
+    s_runtime.handshake.everReceived = false;     // kept from the previous tests: cleared to see this frame only
+
+    sendCouplingFrame(sampleCouplingFrame());
+    TEST_ASSERT_EQUAL_UINT32(1u, combus_coupling_rx_count(kLinkIdx));
+    CouplingFrame out;
+    TEST_ASSERT_TRUE(combus_coupling_last_rx(kLinkIdx, out));
+    TEST_ASSERT_EQUAL_UINT8(2u, out.round);
+    TEST_ASSERT_EQUAL_UINT16(40u, out.hitchAgeMs);
+    TEST_ASSERT_FALSE_MESSAGE(s_runtime.handshake.everReceived, "the handshake took the coupling frame");
+}
+
+/** Row 5: a handshake right after it is handled as before: the contract becomes STABLE. */
+static void test_cpl_frame_row5_handshake_after_it(void) {
+    startLink();
+    combus_coupling_reset();
+    sendCouplingFrame(sampleCouplingFrame());
+    ensureStable();
+    TEST_ASSERT_EQUAL_UINT32(1u, combus_coupling_rx_count(kLinkIdx));
+}
+
+/** Row 6: on a live link, a coupling frame leaves the contract STABLE and applies no data. */
+static void test_cpl_frame_row6_live_link_unchanged(void) {
+    startLink();
+    ensureStable();
+    combus_coupling_reset();
+    receiveFromTrailer(333u, false, 13u);
+    TEST_ASSERT_EQUAL_UINT16(333u, bus.analogBus[kTilt].value);
+
+    sendCouplingFrame(sampleCouplingFrame());
+    TEST_ASSERT_EQUAL_UINT32(1u, combus_coupling_rx_count(kLinkIdx));
+    TEST_ASSERT_TRUE(combus_handshake_is_contract_validated(&s_runtime.handshake));
+    TEST_ASSERT_EQUAL_UINT16(333u, bus.analogBus[kTilt].value);       // no data in a coupling frame
+
+    receiveFromTrailer(444u, false, 14u);                              // the stream is still in sync
+    TEST_ASSERT_EQUAL_UINT16(444u, bus.analogBus[kTilt].value);
+}
+
+/** Row 7: the identity of this node: a MAC48, not null, the same at each read. */
+static void test_cpl_frame_row7_local_addr(void) {
+    const NodeAddr a = combus_coupling_local_addr();
+    const NodeAddr b = combus_coupling_local_addr();
+    TEST_ASSERT_TRUE(a.type == LinkAddrType::MAC48);
+    bool nonZero = false;
+    for (uint8_t i = 0u; i < 6u; ++i) { nonZero = nonZero || (a.bytes[i] != 0u); }
+    TEST_ASSERT_TRUE(nonZero);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(a.bytes, b.bytes, 6u);
+}
+
+
+// =============================================================================
 // ACCESSORS OF THE LOGICAL VALUE (step S3-4)
 // =============================================================================
 
@@ -606,6 +729,14 @@ void setup() {
     RUN_TEST(test_coupling_row6_unhitch_live_link);
     RUN_TEST(test_coupling_row7_rehitch_new_grace);
     RUN_TEST(test_coupling_row9_on_coupling_needs_its_coupling_dev);
+
+    RUN_TEST(test_cpl_frame_row1_round_trip);
+    RUN_TEST(test_cpl_frame_row2_corrupted_is_refused);
+    RUN_TEST(test_cpl_frame_row3_hitch_age_saturates);
+    RUN_TEST(test_cpl_frame_row4_routed_to_the_coupling_module);
+    RUN_TEST(test_cpl_frame_row5_handshake_after_it);
+    RUN_TEST(test_cpl_frame_row6_live_link_unchanged);
+    RUN_TEST(test_cpl_frame_row7_local_addr);
 
     UNITY_END();
 }

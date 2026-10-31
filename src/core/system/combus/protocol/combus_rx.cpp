@@ -11,6 +11,7 @@
 #include <core/system/combus/protocol/frame/combus_frame.h>
 #include <core/system/combus/protocol/frame/combus_handshake.h>
 #include <core/system/combus/protocol/frame/combus_handshake_rx.h>  // combus_handshake_tryDecode
+#include <core/system/combus/protocol/frame/combus_coupling.h>      // combus_coupling_tryDecode (3.4b)
 #include <core/system/debug/logging/debug.h>
 
 // RL5 — auto-apply support.  combus_frame_apply() takes a ChanLayer
@@ -120,7 +121,9 @@ static void rxBufConsume( CombusRxState& st, uint8_t n )
  *      is only ever called for non-zero seq, and the handshake stub in
  *      `combus_handshake.cpp` is only ever called for seq == 0.  This keeps
  *      the future versioning logic free to grow inside `combus_handshake.*`
- *      without any refactor of the control-frame path.
+ *      without any refactor of the control-frame path.  Link rework 3.4b: a
+ *      seq == 0 frame with the coupling flag goes to `combus_coupling.*`
+ *      instead, never to the handshake.
  *   3. Control-frame path — reads `nAnalog` / `nDigital` from the wire
  *      header, computes the expected frame length, discards SOF and
  *      re-syncs if the size would exceed `CombusRxBufSize`, copies the frame
@@ -130,7 +133,7 @@ static void rxBufConsume( CombusRxState& st, uint8_t n )
  *
  * @return Number of bytes consumed, or 0 if no complete valid frame was found.
  */
-static uint8_t tryDecode( CombusRxState& st )
+static uint8_t tryDecode( uint8_t linkIdx, CombusRxState& st )
 {
     // --- 1. Scan for SOF ---
     while (st.rxCount > 0u && rxBufAt(st, 0u) != CombusFrameSof) {
@@ -147,7 +150,13 @@ static uint8_t tryDecode( CombusRxState& st )
                                     offsetof(ComBusFrameCfg, nDigital) + 1u);
 
     if (seqByte == 0u) {
-        // --- 2a. HANDSHAKE PATH — structurally separate from control ---
+        // --- 2a. Link rework 3.4b — COUPLING PATH: seq == 0 with the coupling flag ---
+        const uint8_t flagsByte = rxBufAt(st, 1u + offsetof(CombusFrameHeader, flags));
+        if (flagsByte & kCombusFrameFlagCoupling) {
+            return combus_coupling_tryDecode(linkIdx, st.rxBuf, CombusRxBufSize, st.rxHead, st.rxCount);
+        }
+
+        // --- 2b. HANDSHAKE PATH — structurally separate from control ---
         // Handshake decoder owns its ring-buffer consumption and CRC check.
         // Returning 0 here means "try again next poll" or "no handshake
         // available yet" — the SOF stays in place until either a full
@@ -373,7 +382,7 @@ void combus_rx_update(const ComBus* bus)
 
         // --- 4. Try to decode (may process multiple back-to-back frames) ---
         while (st.rxCount >= CombusFrameMinLen) {
-            if (tryDecode(st) == 0u) {
+            if (tryDecode(i, st) == 0u) {
                 break;
             }
         }

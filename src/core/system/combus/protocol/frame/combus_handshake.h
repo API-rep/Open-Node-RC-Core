@@ -97,9 +97,9 @@ static constexpr uint8_t CombusHandshakeSof = CombusFrameSof;  ///< placeholder
  *   set instead of the stable one.
  *
  *   The MD5 + version pair is sufficient to detect any accidental mismatch
- *   between two ComBus participants on the wire.  The "friend cache" /
- *   sender-address layer is OUT OF SCOPE of this revision (planned for a
- *   future commit) and will ride on top of this same payload slot.
+ *   between two ComBus participants on the wire.  The sender address does
+ *   not ride here: it travels in the coupling frame (combus_coupling.h, link
+ *   rework 3.4b), apart from the handshake.
  *
  *   Total wire bytes for a handshake frame = 1 (SOF) +
  *   `sizeof(CombusFrameHeader)` + `kCombusHandshakePayloadLen` + 1 (CRC-8).
