@@ -73,6 +73,17 @@ static constexpr uint8_t CombusRxBufSize = UINT8_MAX;  ///< max encodable frame 
 // =============================================================================
 
 /**
+ * @brief Mode of the reception of one link (link rework 3.3, 3.4c).
+ */
+
+enum class CombusRxMode : uint8_t {
+    OFF,       ///< coupled link detached: the bytes received are dropped
+    PAIRING,   ///< coupled link pairing: coupling frames only
+    ON         ///< every frame
+};
+
+
+/**
  * @brief One ComBus RX link state slot.
  *
  * @details Exposed (not opaque) so the caller (board) can declare its
@@ -136,9 +147,10 @@ struct CombusRxState {
     // combus_rx_set_link_timeout().  0 = never alive for combus_rx_peer_or().
     uint32_t               linkTimeoutMs     = 0u;
 
-    // Link rework 3.3 — false while a coupled link is unhitched: the bytes
-    // received are drained and dropped, nothing is decoded nor applied.
-    bool                   active            = true;
+    // Link rework 3.3 / 3.4c — mode of the reception: OFF while a coupled link
+    // is detached (the bytes received are drained and dropped), PAIRING while
+    // it pairs (coupling frames only), ON otherwise.
+    CombusRxMode           mode              = CombusRxMode::ON;
 };
 
 /// "No link" value for the excluded link of combus_rx_peer_or().
@@ -291,17 +303,18 @@ void combus_rx_set_link_timeout( uint8_t linkIdx, uint32_t timeoutMs );
 
 
 /**
- * @brief Activate or suspend the reception of one link (coupling, link rework 3.3).
+ * @brief Set the mode of the reception of one link (coupling, link rework 3.3, 3.4c).
  *
- * @details Suspended: the bytes received are dropped, the link is never
- *   alive and its contract drops to UNKNOWN.  Suspending also forgets the
- *   last frame, so that a link activated again starts as never seen.
+ * @details OFF: the bytes received are dropped.  PAIRING: only the coupling
+ *   frames are decoded (combus_coupling.h), every other byte is dropped.
+ *   Leaving ON, the link is never alive and its contract drops to UNKNOWN;
+ *   the last frame is forgotten, so that a link back ON starts as never seen.
  *
  * @param linkIdx  Index of this link in the per-link state array.
- * @param active   true to receive, false to suspend.
+ * @param mode     the new mode.
  */
 
-void combus_rx_set_active( uint8_t linkIdx, bool active );
+void combus_rx_set_mode( uint8_t linkIdx, CombusRxMode mode );
 
 
 /**

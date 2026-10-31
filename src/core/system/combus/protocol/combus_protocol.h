@@ -161,15 +161,20 @@ enum class DigitalComBusID : uint8_t;   // generated (combus_ids.h)
  * @details Run-time part of an attache: what says "coupled", and where the loss
  *   of the coupled link is reported.  The contract of the link is its coupler
  *   (ComDev::peer, step 3.4a).  While the trigger is false the link is inactive:
- *   nothing sent, nothing received, no handshake, no fault.  Once true, the
- *   link starts with the startup grace of its protocol; lost after it, the
- *   link reports its loss through `fail` only (never NODE_LINK_FAIL).
+ *   nothing sent, nothing received, no handshake, no fault.  Once true (after
+ *   `engageMs`), the two ends pair (combus_pairing.h, step 3.4c); paired, the
+ *   link starts with the startup grace of its protocol; lost after it, or not
+ *   paired, the link reports it through `fail` only (never NODE_LINK_FAIL).
+ *   It is detached once the trigger stays false for `releaseMs`.
  */
 
 struct CouplingDev {
     const char*                    name;      ///< type of attache, for the logs (ex. "fifth_wheel")
     DigitalComBusID                trigger;   ///< true = coupled (hardware or software, computed by the machine)
     std::optional<DigitalComBusID> fail;      ///< failsafe contributor of the coupled link (true = fault), absent = none
+    uint16_t ageToleranceMs = 200u;           ///< 3.4c: the two ages of the hitch agree within this (actuator dependent)
+    uint16_t engageMs       = 50u;            ///< 3.4c: the trigger stays true this long before the pairing starts
+    uint16_t releaseMs      = 500u;           ///< 3.4c: the trigger stays false this long before the link is detached
 };
 
 

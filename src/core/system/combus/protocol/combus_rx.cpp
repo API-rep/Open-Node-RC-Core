@@ -155,8 +155,16 @@ static uint8_t tryDecode( uint8_t linkIdx, CombusRxState& st )
         if (flagsByte & kCombusFrameFlagCoupling) {
             return combus_coupling_tryDecode(linkIdx, st.rxBuf, CombusRxBufSize, st.rxHead, st.rxCount);
         }
+    }
 
-        // --- 2b. HANDSHAKE PATH — structurally separate from control ---
+    // --- 2b. Link rework 3.4c — PAIRING: coupling frames only, any other byte is dropped ---
+    if (st.mode == CombusRxMode::PAIRING) {
+        rxBufConsume(st, 1u);
+        return 1u;
+    }
+
+    if (seqByte == 0u) {
+        // --- 2c. HANDSHAKE PATH — structurally separate from control ---
         // Handshake decoder owns its ring-buffer consumption and CRC check.
         // Returning 0 here means "try again next poll" or "no handshake
         // available yet" — the SOF stays in place until either a full
@@ -292,7 +300,7 @@ void combus_rx_init(
     // --- 2. Store transport interface and frame layout ---
     st.nodeCom  = nodeCom;
     st.frameCfg = frameCfg;
-    st.active   = true;     // 3.3: a link starts active; combus_links_watch() suspends an unhitched one
+    st.mode     = CombusRxMode::ON;   // 3.3: a link starts on; combus_links_watch() turns a coupled one off
     st.target   = target;   // RL5 — may be nullptr (legacy / test behaviour)
 
     // --- 3. Resolve the write identity from the link layer.
@@ -368,8 +376,8 @@ void combus_rx_update(const ComBus* bus)
         // --- 2. Per-link guard check ---
         if (!st.nodeCom) { continue; }
 
-        // --- 2b. Link rework 3.3: a suspended link (unhitched) drops what it receives ---
-        if (!st.active) {
+        // --- 2b. Link rework 3.3: a link off (detached) drops what it receives ---
+        if (st.mode == CombusRxMode::OFF) {
             while (st.nodeCom->available(st.nodeCom->ctx) > 0) { st.nodeCom->readByte(st.nodeCom->ctx); }
             continue;
         }
@@ -445,13 +453,14 @@ void combus_rx_set_link_timeout( uint8_t linkIdx, uint32_t timeoutMs )
 
 
 
-/** @brief Activate or suspend the reception of one link (coupling, link rework 3.3). */
-void combus_rx_set_active( uint8_t linkIdx, bool active )
+/** @brief Set the mode of the reception of one link (coupling, link rework 3.3, 3.4c). */
+void combus_rx_set_mode( uint8_t linkIdx, CombusRxMode mode )
 {
     if (!s_rxStates || linkIdx >= s_capacity) { return; }
     CombusRxState& st = s_rxStates[linkIdx];
-    st.active = active;
-    if (active) { return; }
+    const CombusRxMode before = st.mode;
+    st.mode = mode;
+    if (mode == CombusRxMode::ON || before != CombusRxMode::ON) { return; }
 
         // --- Suspended: forget the link, it starts again as never seen ---
     st.rxCount      = 0u;

@@ -49,7 +49,7 @@ Un contributeur exige `HAS_FAILSAFE` et **son propre flag**, jamais celui d'une 
 
 **Rebranchable veut dire déplaçable, jamais dupliqué.** Un contributeur est lu par **une seule chaîne** : la chaîne le réarme à `true` après lecture (§4), si bien qu'une seconde chaîne lirait une fausse faute. Pour changer la sévérité d'un contributeur, on déplace sa ligne d'une chaîne à l'autre.
 
-**Un lien couplé** (`ON_COUPLING`, link rework 3.3) a son propre contributeur, désigné par son `CouplingDev` (`fail`, par exemple `TRAILER_LINK_FAIL`) : sain tant que l'attelage est dételé, en faute s'il est attelé et perdu après le délai de grâce compté depuis l'attelage. Un lien couplé ne compte jamais dans `NODE_LINK_FAIL` : la machine range ce contributeur dans la chaîne de son choix.
+**Un lien couplé** (`ON_COUPLING`, link rework 3.3 et 3.4c) a son propre contributeur, désigné par son `CouplingDev` (`fail`, par exemple `TRAILER_LINK_FAIL`) : sain tant que l'attelage est dételé et pendant l'appairage ; en faute s'il est attelé sans lien sain : appairage en conflit (deux candidats) ou en échec (trop peu de réponses), ou lien appairé puis perdu après le délai de grâce compté depuis l'appairage. Un lien couplé ne compte jamais dans `NODE_LINK_FAIL` : la machine range ce contributeur dans la chaîne de son choix.
 
 `BOARD_LINK_FAIL` et `NODE_LINK_FAIL` sont alimentés par la **portée** du lien (link rework S2) : un lien entre cartes compte comme perdu s'il est silencieux, ou jamais vu une fois son délai de grâce (`startupGraceMs`) écoulé ; un lien vers un autre nœud compte dès qu'il n'est pas vivant, jamais vu compris. Il n'y a plus de politique de perte par lien (`onLoss`, supprimé) : la sévérité se décide en plaçant le contributeur dans une chaîne.
 

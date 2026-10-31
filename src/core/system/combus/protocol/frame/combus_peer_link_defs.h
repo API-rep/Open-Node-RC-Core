@@ -36,6 +36,20 @@ struct NodeAddr {
 
 
 /**
+ * @brief Role of this node on a link through a coupler (link rework 3.4c).
+ *
+ * @details Written by the builder (the nature of the node: IS_VEHICLE or
+ *   IS_ATTACHMENT).  The pairing depends on it: the vehicle sends the
+ *   requests, the attachment answers them.
+ */
+
+enum class ComLinkRole : uint8_t {
+    VEHICLE    = 0u,
+    ATTACHMENT = 1u
+};
+
+
+/**
  * @brief A contract of a link: the MD5 of the stable set and of the next set.
  *
  * @details The next set adds the candidates (chantier 2.2b); without
@@ -81,6 +95,7 @@ struct ComLinkTable {
 
 struct ComPeerLink {
     const char*  coupler;     ///< coupler of the link (directory name)
+    ComLinkRole  role;        ///< role of this node on the link (3.4c)
     ComLinkMd5   announced;   ///< MD5 announced by this node (its role)
     ComLinkMd5   expected;    ///< MD5 expected from the other end (the other role)
     ComLinkTable analog;      ///< analog half of the frame (AnalogComBusID)

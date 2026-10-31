@@ -91,6 +91,10 @@ bool combus_link_check( const ComDevMap& map )
         sys_log_err("[COMBUS_LINKS] link '%s': a link ON_COUPLING needs its CouplingDev\n", dev.name);
         return false;
     }
+    if (dev.activation == LinkActivation::ON_COUPLING && !dev.peer) {
+        sys_log_err("[COMBUS_LINKS] link '%s': a link ON_COUPLING pairs through its coupler (ComDev::peer)\n", dev.name);
+        return false;
+    }
     if (dev.type == LinkType::BIDIRECTIONAL && map.end != LinkEnd::TX_RX) {
         sys_log_err("[COMBUS_LINKS] link '%s': a bidirectional link must be wired TX_RX\n", dev.name);
         return false;
@@ -166,12 +170,14 @@ bool combus_link_build( const ComDevMap& map,
 
         // --- 4. What the link watch needs ---
     runtime.name                 = map.dev->name;
+    runtime.com                  = com;
     runtime.watch.receives       = endReceives(map.end);
     runtime.watch.linkTimeoutMs  = map.dev->protocol->linkTimeoutMs;
     runtime.watch.startupGraceMs = map.dev->protocol->startupGraceMs;
     runtime.scope                = map.dev->scope;
     runtime.peer                 = peer;
     runtime.coupling.dev         = (map.dev->activation == LinkActivation::ON_COUPLING) ? map.dev->coupling : nullptr;
+    runtime.coupling.role        = peer ? peer->role : ComLinkRole::VEHICLE;
 
     link = built;
     return true;
@@ -231,10 +237,20 @@ static ComLinkRuntime* s_watched      = nullptr;
 static uint8_t         s_watchedCount = 0u;
 
 
+    // Link rework 3.4c — a coupling frame received on a watched link goes to its pairing.
+static void onCouplingFrame( uint8_t linkIdx, const CouplingFrame& frame )
+{
+    if (!s_watched || linkIdx >= s_watchedCount || !s_watched[linkIdx].coupling.dev) { return; }
+    ComLinkRuntime& rt = s_watched[linkIdx];
+    combus_pairing_on_frame(rt.coupling.pairing, *rt.coupling.dev, rt.coupling.role, frame, millis());
+}
+
+
 void combus_links_watch( ComLinkRuntime* runtime, uint8_t count )
 {
     s_watched      = runtime;
     s_watchedCount = count;
+    combus_coupling_set_rx_handler(onCouplingFrame);
 
     const uint32_t now = millis();
     for (uint8_t i = 0u; i < count; ++i) {
@@ -243,11 +259,12 @@ void combus_links_watch( ComLinkRuntime* runtime, uint8_t count )
         runtime[i].watch.reportedLost = false;
         runtime[i].watch.wasAlive     = false;
         runtime[i].coupling.coupled   = false;
+        runtime[i].coupling.pairing   = {};
 
-            // 3.3: a coupled link starts suspended, until its trigger says hitched
+            // 3.3: a coupled link starts off, until it is paired
         if (runtime[i].coupling.dev) {
             combus_tx_set_active(i, false);
-            combus_rx_set_active(i, false);
+            combus_rx_set_mode(i, CombusRxMode::OFF);
         }
 
             // The RX module needs the same timeouts to ignore silent links in the both_or merge
@@ -312,31 +329,35 @@ static void takeBackSafeValues( const ComPeerLink& peer, ComBus& bus )
 }
 
 
-    // Link rework 3.3 — follow the trigger of a coupled link: suspend it when
-    // unhitched (received positions back to their safe value), activate it
-    // with a new grace when hitched.
+    // Link rework 3.3 / 3.4c — step the pairing of a coupled link and follow its
+    // state: on with a new grace once COUPLED, coupling frames only while
+    // PAIRING, off otherwise (received positions back to their safe value).
 static void followCoupling( uint8_t i, ComBus& bus )
 {
-    ComLinkRuntime& rt = s_watched[i];
-    const bool hitched = bus.digitalBus[static_cast<uint8_t>(rt.coupling.dev->trigger)].value;
-    if (hitched == rt.coupling.coupled) { return; }
-    rt.coupling.coupled = hitched;
+    ComLinkRuntime& rt     = s_watched[i];
+    const uint32_t  now    = millis();
+    const bool      trig   = bus.digitalBus[static_cast<uint8_t>(rt.coupling.dev->trigger)].value;
+    const PairingState was = rt.coupling.pairing.state;
+    const PairingState is  = combus_pairing_update(rt.coupling.pairing, *rt.coupling.dev, rt.coupling.role,
+                                                   trig, rt.com, now);
+    if (is == was) { return; }
+    sys_log_info("[COMBUS_LINKS] link '%s' %s -> %s (%s)\n", rt.name ? rt.name : "?",
+                 combus_pairing_state_name(was), combus_pairing_state_name(is), rt.coupling.dev->name);
 
-    if (hitched) {
-        rt.watch.watchStartMs = millis();
+    rt.coupling.coupled = (is == PairingState::COUPLED);
+    if (is == PairingState::COUPLED) {
+        rt.watch.watchStartMs = now;
         rt.watch.reportedLost = false;
-        combus_rx_set_active(i, true);
+        combus_rx_set_mode(i, CombusRxMode::ON);
         combus_tx_set_active(i, true);
-        sys_log_info("[COMBUS_LINKS] link '%s' coupled (%s)\n", rt.name ? rt.name : "?", rt.coupling.dev->name);
         return;
     }
 
-    if (rt.watch.wasAlive && rt.peer) { takeBackSafeValues(*rt.peer, bus); }
+    if (was == PairingState::COUPLED && rt.watch.wasAlive && rt.peer) { takeBackSafeValues(*rt.peer, bus); }
     rt.watch.wasAlive     = false;
     rt.watch.reportedLost = false;
     combus_tx_set_active(i, false);
-    combus_rx_set_active(i, false);
-    sys_log_info("[COMBUS_LINKS] link '%s' uncoupled (%s)\n", rt.name ? rt.name : "?", rt.coupling.dev->name);
+    combus_rx_set_mode(i, (is == PairingState::PAIRING) ? CombusRxMode::PAIRING : CombusRxMode::OFF);
 }
 
 
@@ -347,7 +368,12 @@ void combus_links_update( ComBus& bus )
         if (rt.coupling.dev) {
             followCoupling(i, bus);
             if (rt.coupling.dev->fail) {
-                combus_set_digital(bus, *rt.coupling.dev->fail, rt.coupling.coupled && rt.watch.receives && lostAfterGrace(i), ChanLayer::BOARD);
+                    // 3.4c (P10): hitched without a sound link; sound while PAIRING
+                const PairingState st = rt.coupling.pairing.state;
+                const bool fault = rt.coupling.pairing.engaged
+                    && (st == PairingState::CONFLICT || st == PairingState::FAILED
+                        || (st == PairingState::COUPLED && rt.watch.receives && lostAfterGrace(i)));
+                combus_set_digital(bus, *rt.coupling.dev->fail, fault, ChanLayer::BOARD);
             }
             if (!rt.coupling.coupled) { continue; }
         }
@@ -373,6 +399,13 @@ void combus_links_update( ComBus& bus )
             sys_log_info("[COMBUS_LINKS] link '%s' back\n", rt.name ? rt.name : "?");
         }
     }
+}
+
+
+PairingState combus_links_pairing_state( uint8_t linkIdx )
+{
+    if (!s_watched || linkIdx >= s_watchedCount || !s_watched[linkIdx].coupling.dev) { return PairingState::DETACHED; }
+    return s_watched[linkIdx].coupling.pairing.state;
 }
 
 

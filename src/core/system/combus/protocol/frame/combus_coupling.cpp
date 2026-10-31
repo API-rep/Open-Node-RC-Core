@@ -28,6 +28,7 @@ struct CouplingRxRecord {
 };
 
 CouplingRxRecord s_rx[kCombusCouplingMaxLinks];
+CouplingRxHandler s_handler = nullptr;
 
 constexpr uint8_t kPayloadStart = CombusFrameHeaderLen;
 
@@ -140,7 +141,7 @@ uint8_t combus_coupling_tryDecode( uint8_t  linkIdx,
         return 0u;
     }
 
-        // --- 3. Accepted: consume and record (step 3.4b: not acted upon) ---
+        // --- 3. Accepted: consume, record, hand to the pairing (3.4c) ---
     ringHead  = (uint8_t)(ringHead + kCombusCouplingFrameLen) % ringBufSize;
     ringCount = (uint8_t)(ringCount - kCombusCouplingFrameLen);
     if (linkIdx < kCombusCouplingMaxLinks) {
@@ -148,6 +149,7 @@ uint8_t combus_coupling_tryDecode( uint8_t  linkIdx,
         s_rx[linkIdx].valid = true;
         s_rx[linkIdx].last  = frame;
     }
+    if (s_handler) { s_handler(linkIdx, frame); }
     return kCombusCouplingFrameLen;
 }
 
@@ -181,6 +183,12 @@ bool combus_coupling_last_rx( uint8_t linkIdx, CouplingFrame& out )
 void combus_coupling_reset( void )
 {
     for (auto& r : s_rx) { r = CouplingRxRecord{}; }
+}
+
+
+void combus_coupling_set_rx_handler( CouplingRxHandler handler )
+{
+    s_handler = handler;
 }
 
 // EOF combus_coupling.cpp

@@ -345,6 +345,7 @@ def render_peer_links_header(links: list[LinkSet], ids_header: str = "combus_ids
         body.append("/// The link, for the ComDev of this coupler (ComDev::peer).")
         body.append("static constexpr ComPeerLink kLink = {")
         body.append(f'    .coupler   = "{link.coupler}",')
+        body.append(f"    .role      = ComLinkRole::{link.role.upper()},")
         body.append("    .announced = { .stable = kAnnouncedMd5, .next = kAnnouncedMd5Next },")
         body.append("    .expected  = { .stable = kExpectedMd5,  .next = kExpectedMd5Next },")
         body.append("    .analog    = { .count = kAnalogCount,  .stableCount = kStableAnalogCount,  "

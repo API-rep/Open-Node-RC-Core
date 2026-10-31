@@ -43,6 +43,7 @@
 #include <core/system/combus/protocol/combus_tx.h>
 #include <core/system/combus/protocol/combus_rx.h>
 #include <core/system/combus/protocol/frame/combus_handshake.h>
+#include <core/system/combus/protocol/combus_pairing.h>    // ComLinkPairing (3.4c)
 
 
 // =============================================================================
@@ -68,8 +69,10 @@ struct ComLinkWatch {
  */
 
 struct ComLinkCoupling {
-    const CouplingDev* dev     = nullptr;   ///< link ON_COUPLING, nullptr = always active
-    bool               coupled = false;     ///< trigger true at the last combus_links_update()
+    const CouplingDev* dev     = nullptr;               ///< link ON_COUPLING, nullptr = always active
+    ComLinkRole        role    = ComLinkRole::VEHICLE;  ///< 3.4c: role of this node, from its coupler (ComPeerLink::role)
+    ComLinkPairing     pairing = {};                    ///< 3.4c: pairing of the two ends
+    bool               coupled = false;                 ///< paired (PairingState::COUPLED) at the last combus_links_update()
 };
 
 
@@ -88,6 +91,7 @@ struct ComLinkCoupling {
 struct ComLinkRuntime {
     CombusHandshakeContext handshake = {};
     const char*        name     = nullptr;                 ///< ComDev name, for the logs
+    NodeCom*           com      = nullptr;                 ///< 3.4c: transport of the link (the pairing writes its coupling frames to it)
     LinkScope          scope    = LinkScope::INTRA_NODE;   ///< scope of the ComDev: which contributor its loss feeds (S2)
     const ComPeerLink* peer     = nullptr;                 ///< link through a coupler (3.1b, 3.4a), nullptr = view of the scope
     ComLinkWatch       watch    = {};                      ///< what the link watch needs (S2, 3.2c)
@@ -250,17 +254,26 @@ bool combus_links_lost( LinkScope scope );
  *   both_or is never written by a frame (a lost link contributes nothing to the
  *   merge).  A link without peer is unchanged.
  *
- *   Link rework 3.3, coupled link (ON_COUPLING): its trigger is read here.
- *   Unhitched, the link is suspended (combus_tx/rx_set_active): nothing sent
- *   or received, contract UNKNOWN, received positions back to their safe
- *   value.  Hitched, it is activated with a new startup grace.  Its
- *   contributor (CouplingDev::fail) is written each cycle: true when hitched
- *   and lost, or never seen once the grace has elapsed; false otherwise.
+ *   Link rework 3.3 / 3.4c, coupled link (ON_COUPLING): its pairing is stepped
+ *   here (combus_pairing.h).  DETACHED, CONFLICT or FAILED, the link is off
+ *   (combus_rx_set_mode, combus_tx_set_active): nothing sent or received,
+ *   contract UNKNOWN, received positions back to their safe value.  PAIRING,
+ *   only the coupling frames pass.  COUPLED, it is on with a new startup
+ *   grace.  Its contributor (CouplingDev::fail) is written each cycle: true
+ *   when hitched without a sound link (CONFLICT, FAILED, or COUPLED and lost,
+ *   or never seen once the grace has elapsed); false otherwise.
  *
  * @param bus  ComBus the received positions are written to.
  */
 
 void combus_links_update( ComBus& bus );
+
+
+/**
+ * @brief Pairing state of a coupled link (DETACHED for a link that is not coupled).
+ */
+
+PairingState combus_links_pairing_state( uint8_t linkIdx );
 
 
 

@@ -22,9 +22,9 @@
  *     [9..10]   hitchAgeMs    ms since the hitch trigger rose, saturated at 65535
  *     [11..12]  features      mask of the functions (reserved: 0 until defined)
  *
- *   Step 3.4b: format, encoding, decoding and routing only; a received frame
- *   is recorded, not acted upon.  The pairing (rounds, conflict, correlation)
- *   is step 3.4c.
+ *   A received frame is recorded (diagnostics, tests) and handed to the
+ *   handler registered by the pairing (combus_pairing.h, step 3.4c), so that
+ *   this module does not depend on the layer above it.
  *******************************************************************************///
 #pragma once
 
@@ -157,5 +157,16 @@ bool combus_coupling_last_rx( uint8_t linkIdx, CouplingFrame& out );
  */
 
 void combus_coupling_reset( void );
+
+
+/// Handler of a received coupling frame (link rework 3.4c).
+using CouplingRxHandler = void (*)( uint8_t linkIdx, const CouplingFrame& frame );
+
+
+/**
+ * @brief Register the handler of the received coupling frames (nullptr: none).
+ */
+
+void combus_coupling_set_rx_handler( CouplingRxHandler handler );
 
 // EOF combus_coupling.h

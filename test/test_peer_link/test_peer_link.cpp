@@ -373,8 +373,9 @@ static void test_loss_row6_contract_dropped(void) {
 static constexpr uint8_t kHitched   = static_cast<uint8_t>(DigitalComBusID::TEST_HITCHED);
 static constexpr uint8_t kHitchFail = static_cast<uint8_t>(DigitalComBusID::TEST_HITCH_LINK_FAIL);
 
+    // No debounce here (engageMs = releaseMs = 0): the trigger acts at once (3.4c rows 16 and 17 test it).
 static constexpr CouplingDev kHitch = {
-    "test_hitch", DigitalComBusID::TEST_HITCHED, DigitalComBusID::TEST_HITCH_LINK_FAIL
+    "test_hitch", DigitalComBusID::TEST_HITCHED, DigitalComBusID::TEST_HITCH_LINK_FAIL, 200u, 0u, 0u
 };
 static constexpr ComDev kHitchedTrailerDev = {
     "test_trailer_hitched", LinkScope::INTER_NODE, LinkType::BIDIRECTIONAL,
@@ -392,10 +393,72 @@ static void startCoupledLink(void) {
     while (s_com->available(s_com->ctx) > 0) { s_com->readByte(s_com->ctx); }   // nothing left from the last test
 }
 
+static uint32_t s_hitchMs = 0u;   ///< raw rising edge of the trigger, origin of the age of the hitch (3.4c)
+
 static void hitch(bool on) {
+    if (on && !bus.digitalBus[kHitched].value) { s_hitchMs = millis(); }
     bus.digitalBus[kHitched].value = on;
     com_rx_update(bus);
 }
+
+/** Run the reception and the link watch (pairing included) for `ms`. */
+static void runLinks(uint32_t ms) {
+    for (uint32_t t0 = millis(); (millis() - t0) < ms; ) { com_rx_update(bus); delay(2u); }
+}
+
+static PairingState pairing(void) { return combus_links_pairing_state(kLinkIdx); }
+
+/** A fake identity (locally administered MAC). */
+static NodeAddr fakeAddr(uint8_t tag) {
+    NodeAddr a;
+    a.type = LinkAddrType::MAC48;
+    const uint8_t bytes[6] = { 0x02u, 0x00u, 0x00u, 0x00u, 0x00u, tag };
+    memcpy(a.bytes, bytes, 6u);
+    return a;
+}
+
+/** Write a coupling frame on the loopback, as another node would send it (age offset in ms). */
+static void sendCoupling(CouplingMsg msg, const NodeAddr& from, uint8_t round, int32_t ageOffsetMs = 0) {
+    CouplingFrame f;
+    f.msg        = msg;
+    f.round      = round;
+    f.addr       = from;
+    f.hitchAgeMs = combus_coupling_hitch_age((uint32_t)((int32_t)(millis() - s_hitchMs) + ageOffsetMs));
+    uint8_t buf[kCombusCouplingFrameLen];
+    combus_coupling_encode(buf, sizeof(buf), f);
+    s_com->write(s_com->ctx, buf, kCombusCouplingFrameLen);
+}
+
+/**
+ * Stand for up to two trailers during `ms`: each request of the tractor that
+ * comes back on the loopback is answered by A and / or B as their masks say
+ * (bit r-1: round r).  Stops once the state is neither DETACHED nor PAIRING
+ * when `untilDone`.
+ */
+static PairingState answerRequests(uint32_t ms, const NodeAddr* a, uint8_t maskA,
+                                   const NodeAddr* b = nullptr, uint8_t maskB = 0u, int32_t ageOffsetB = 0,
+                                   bool untilDone = true) {
+    uint32_t seen = combus_coupling_rx_count(kLinkIdx);
+    for (uint32_t t0 = millis(); (millis() - t0) < ms; ) {
+        com_rx_update(bus);
+        const uint32_t n = combus_coupling_rx_count(kLinkIdx);
+        CouplingFrame last;
+        if (n != seen && combus_coupling_last_rx(kLinkIdx, last) && last.msg == CouplingMsg::REQUEST) {
+            const uint8_t bit = (uint8_t)(1u << (last.round - 1u));
+            if (a && (maskA & bit)) { sendCoupling(CouplingMsg::ANSWER, *a, last.round); }
+            if (b && (maskB & bit)) { sendCoupling(CouplingMsg::ANSWER, *b, last.round, ageOffsetB); }
+        }
+        seen = n;
+        const PairingState s = pairing();
+        if (untilDone && s != PairingState::DETACHED && s != PairingState::PAIRING) { return s; }
+        delay(2u);
+    }
+    return pairing();
+}
+
+static const NodeAddr kTrailerA = fakeAddr(0xA1u);
+static const NodeAddr kTrailerB = fakeAddr(0xB2u);
+static constexpr uint8_t kAllRounds = 0x1Fu;
 
 /** Bytes that came back on the loopback after `ms` of transmit updates. */
 static int bytesSentDuring(uint32_t ms) {
@@ -425,29 +488,34 @@ static void test_coupling_row2_unhitched_frame_not_applied(void) {
     TEST_ASSERT_EQUAL_UINT16(0u, bus.analogBus[kTilt].value);
 }
 
-/** Row 3: hitched, within the grace, no handshake yet: active (it sends), no fault. */
+/** Row 3: hitched: it pairs (3.4c: the requests go out), no fault meanwhile. */
 static void test_coupling_row3_hitched_within_grace(void) {
     startCoupledLink();
+    combus_coupling_reset();
     hitch(true);
+    runLinks(60u);
     TEST_ASSERT_FALSE(bus.digitalBus[kHitchFail].value);
-    TEST_ASSERT_TRUE(bytesSentDuring(100u) > 0);                         // the handshake goes out
+    CouplingFrame last;
+    TEST_ASSERT_TRUE(combus_coupling_last_rx(kLinkIdx, last));          // its own request, back on the loopback
+    TEST_ASSERT_TRUE(last.msg == CouplingMsg::REQUEST);
 }
 
-/** Row 4: hitched, handshake done, data received: applied. */
+/** Row 4: hitched, paired, handshake done, data received: applied. */
 static void test_coupling_row4_hitched_alive_applies(void) {
     startCoupledLink();
     hitch(true);
+    TEST_ASSERT_TRUE(answerRequests(1500u, &kTrailerA, kAllRounds) == PairingState::COUPLED);
     ensureStable();
     receiveFromTrailer(333u, false, 12u);
     TEST_ASSERT_EQUAL_UINT16(333u, bus.analogBus[kTilt].value);
     TEST_ASSERT_FALSE(bus.digitalBus[kHitchFail].value);
 }
 
-/** Row 5: hitched, the trailer stays mute after the grace: its own contributor only. */
+/** Row 5: hitched, the trailer stays mute: not paired (3.4c), its own contributor only. */
 static void test_coupling_row5_hitched_mute_after_grace(void) {
     startCoupledLink();
     hitch(true);
-    delay(kProto.startupGraceMs + 60u);
+    TEST_ASSERT_TRUE(answerRequests(1500u, nullptr, 0u) == PairingState::FAILED);
     com_rx_update(bus);
     TEST_ASSERT_TRUE(bus.digitalBus[kHitchFail].value);
     TEST_ASSERT_FALSE(combus_links_lost(LinkScope::INTER_NODE));          // a coupled link no longer counts there
@@ -457,6 +525,7 @@ static void test_coupling_row5_hitched_mute_after_grace(void) {
 static void test_coupling_row6_unhitch_live_link(void) {
     startCoupledLink();
     hitch(true);
+    TEST_ASSERT_TRUE(answerRequests(1500u, &kTrailerA, kAllRounds) == PairingState::COUPLED);
     ensureStable();
     receiveFromTrailer(333u, true, 13u);
     TEST_ASSERT_EQUAL_UINT16(333u, bus.analogBus[kTilt].value);
@@ -470,17 +539,18 @@ static void test_coupling_row6_unhitch_live_link(void) {
     TEST_ASSERT_FALSE(bus.digitalBus[kHitchFail].value);
 }
 
-/** Row 7: hitched again: a new grace and a new handshake. */
+/** Row 7: hitched again: a new pairing (3.4c), no fault meanwhile. */
 static void test_coupling_row7_rehitch_new_grace(void) {
     startCoupledLink();
     hitch(true);
-    delay(kProto.startupGraceMs + 60u);
+    TEST_ASSERT_TRUE(answerRequests(1500u, nullptr, 0u) == PairingState::FAILED);
     com_rx_update(bus);
     TEST_ASSERT_TRUE(bus.digitalBus[kHitchFail].value);
 
     hitch(false);
     hitch(true);
-    TEST_ASSERT_FALSE(bus.digitalBus[kHitchFail].value);                 // the grace starts again
+    TEST_ASSERT_TRUE(pairing() == PairingState::PAIRING);
+    TEST_ASSERT_FALSE(bus.digitalBus[kHitchFail].value);                 // sound while pairing
     TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::NEVER_SEEN);
 }
 
@@ -618,6 +688,282 @@ static void test_cpl_frame_row7_local_addr(void) {
 
 
 // =============================================================================
+// PAIRING (step 3.4c)
+//
+// Rules P1 to P12 validated by the owner (2026-10-31).  The board is the
+// tractor (vehicle): its requests come back on the loopback and are ignored;
+// the answers of the trailers are forged (answerRequests()).  Rows 12 to 15
+// make it an attachment (a copy of the link with role ATTACHMENT), the
+// requests of the vehicles being forged.
+// =============================================================================
+
+/** Row 1: one trailer answers the 5 rounds: COUPLED, then the handshake of today. */
+static void test_pair_row1_five_answers_coupled(void) {
+    startCoupledLink();
+    hitch(true);
+    TEST_ASSERT_TRUE(answerRequests(1500u, &kTrailerA, kAllRounds) == PairingState::COUPLED);
+    com_rx_update(bus);
+    TEST_ASSERT_FALSE(bus.digitalBus[kHitchFail].value);
+    TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::NEVER_SEEN);   // a new grace
+    ensureStable();
+}
+
+/** Row 2: 4 rounds out of 5: COUPLED. */
+static void test_pair_row2_four_answers_coupled(void) {
+    startCoupledLink();
+    hitch(true);
+    TEST_ASSERT_TRUE(answerRequests(1500u, &kTrailerA, 0x1Eu) == PairingState::COUPLED);
+}
+
+/** Row 3: 3 rounds out of 5: FAILED, fault, nothing more sent (until a retry). */
+static void test_pair_row3_three_answers_failed(void) {
+    startCoupledLink();
+    hitch(true);
+    TEST_ASSERT_TRUE(answerRequests(1500u, &kTrailerA, 0x07u) == PairingState::FAILED);
+    com_rx_update(bus);
+    TEST_ASSERT_TRUE(bus.digitalBus[kHitchFail].value);
+    const uint32_t before = combus_coupling_rx_count(kLinkIdx);
+    runLinks(500u);
+    TEST_ASSERT_EQUAL_UINT32(before, combus_coupling_rx_count(kLinkIdx));
+}
+
+/** Row 4: two trailers answer, both agreeing: CONFLICT, no link, fault. */
+static void test_pair_row4_two_trailers_conflict(void) {
+    startCoupledLink();
+    hitch(true);
+    TEST_ASSERT_TRUE(answerRequests(1500u, &kTrailerA, kAllRounds, &kTrailerB, kAllRounds) == PairingState::CONFLICT);
+    com_rx_update(bus);
+    TEST_ASSERT_TRUE(bus.digitalBus[kHitchFail].value);
+}
+
+/** Row 5: B hitched 10 s ago (out of the tolerance), A agrees: COUPLED with A, B ignored. */
+static void test_pair_row5_old_hitch_ignored(void) {
+    startCoupledLink();
+    hitch(true);
+    TEST_ASSERT_TRUE(answerRequests(1500u, &kTrailerA, kAllRounds, &kTrailerB, kAllRounds, 10000) == PairingState::COUPLED);
+}
+
+/** Row 6: the requests: 5, rounds 1 to 5, 75 to 125 ms apart. */
+static void test_pair_row6_requests_timing(void) {
+    startCoupledLink();
+    combus_coupling_reset();
+    hitch(true);
+    uint32_t at[kCouplingRounds] = {};
+    uint8_t  n = 0u;
+    uint32_t seen = 0u;
+    for (uint32_t t0 = millis(); (millis() - t0) < 1500u && pairing() == PairingState::PAIRING; ) {
+        com_rx_update(bus);
+        CouplingFrame last;
+        const uint32_t c = combus_coupling_rx_count(kLinkIdx);
+        if (c != seen && combus_coupling_last_rx(kLinkIdx, last) && last.msg == CouplingMsg::REQUEST && n < kCouplingRounds) {
+            TEST_ASSERT_EQUAL_UINT8(n + 1u, last.round);
+            at[n++] = millis();
+        }
+        seen = c;
+        delay(1u);
+    }
+    TEST_ASSERT_EQUAL_UINT8(kCouplingRounds, n);
+    for (uint8_t i = 1u; i < n; ++i) {
+        const uint32_t gap = at[i] - at[i - 1u];
+        TEST_ASSERT_TRUE_MESSAGE(gap >= 70u && gap <= 135u, "a gap between two requests is out of 75..125 ms");
+    }
+}
+
+/** Rows 7 and 8: only its own requests come back: FAILED; nothing but coupling frames meanwhile. */
+static void test_pair_row7_no_self_pairing(void) {
+    startCoupledLink();
+    s_runtime.handshake.everReceived = false;
+    hitch(true);
+    TEST_ASSERT_TRUE(answerRequests(1500u, nullptr, 0u) == PairingState::FAILED);
+    TEST_ASSERT_FALSE_MESSAGE(s_runtime.handshake.everReceived, "a handshake went out while pairing");
+    TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::NEVER_SEEN);
+}
+
+/** Row 9: the command goes off while pairing: DETACHED at once, no fault. */
+static void test_pair_row9_off_while_pairing(void) {
+    startCoupledLink();
+    hitch(true);
+    runLinks(120u);
+    TEST_ASSERT_TRUE(pairing() == PairingState::PAIRING);
+    hitch(false);
+    TEST_ASSERT_TRUE(pairing() == PairingState::DETACHED);
+    com_rx_update(bus);
+    TEST_ASSERT_FALSE(bus.digitalBus[kHitchFail].value);
+}
+
+/** Row 10: CONFLICT, then the command off and on: a new pairing. */
+static void test_pair_row10_conflict_then_new_pairing(void) {
+    startCoupledLink();
+    hitch(true);
+    TEST_ASSERT_TRUE(answerRequests(1500u, &kTrailerA, kAllRounds, &kTrailerB, kAllRounds) == PairingState::CONFLICT);
+    hitch(false);
+    hitch(true);
+    TEST_ASSERT_TRUE(answerRequests(1500u, &kTrailerA, kAllRounds) == PairingState::COUPLED);
+}
+
+/** Row 11: COUPLED, then an answer of B arrives: ignored. */
+static void test_pair_row11_coupled_ignores_coupling_frames(void) {
+    startCoupledLink();
+    hitch(true);
+    TEST_ASSERT_TRUE(answerRequests(1500u, &kTrailerA, kAllRounds) == PairingState::COUPLED);
+    sendCoupling(CouplingMsg::ANSWER, kTrailerB, 1u);
+    runLinks(60u);
+    TEST_ASSERT_TRUE(pairing() == PairingState::COUPLED);
+}
+
+
+    // --- The board as an attachment (rows 12 to 15) ---
+static constexpr ComPeerLink kAttLink = {
+    kLink.coupler, ComLinkRole::ATTACHMENT, kLink.expected, kLink.announced, kLink.analog, kLink.digital
+};
+static constexpr ComDev kAttachmentDev = {
+    "test_as_attachment", LinkScope::INTER_NODE, LinkType::BIDIRECTIONAL,
+    &kProto, LinkActivation::ON_COUPLING, &kHitch, &kAttLink
+};
+static const NodeAddr kVehicle1 = fakeAddr(0xC1u);
+static const NodeAddr kVehicle2 = fakeAddr(0xC2u);
+
+static void startAttachmentLink(void) {
+    resetBus();
+    const ComDevMap map = { &kAttachmentDev, &s_port, LinkEnd::TX_RX };
+    TEST_ASSERT_TRUE(combus_link_build(map, s_com, s_runtime, s_link));
+    s_link.target = &bus;
+    combus_protocol_init(kLinkIdx, &s_link);
+    combus_links_watch(&s_runtime, 1u);
+    while (s_com->available(s_com->ctx) > 0) { s_com->readByte(s_com->ctx); }
+    combus_coupling_reset();
+}
+
+/** Row 12: a request that agrees: an answer, same round, its MAC, its age. */
+static void test_pair_row12_attachment_answers(void) {
+    startAttachmentLink();
+    hitch(true);
+    sendCoupling(CouplingMsg::REQUEST, kVehicle1, 1u);
+    runLinks(60u);
+    CouplingFrame last;
+    TEST_ASSERT_TRUE(combus_coupling_last_rx(kLinkIdx, last));
+    TEST_ASSERT_TRUE_MESSAGE(last.msg == CouplingMsg::ANSWER, "no answer to the request");
+    TEST_ASSERT_EQUAL_UINT8(1u, last.round);
+    const NodeAddr own = combus_coupling_local_addr();
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(own.bytes, last.addr.bytes, 6u);
+    const uint32_t age = millis() - s_hitchMs;
+    TEST_ASSERT_TRUE(last.hitchAgeMs <= age && (age - last.hitchAgeMs) < 100u);
+}
+
+/** Row 13: a request out of the tolerance: no answer. */
+static void test_pair_row13_attachment_ignores_old_request(void) {
+    startAttachmentLink();
+    hitch(true);
+    sendCoupling(CouplingMsg::REQUEST, kVehicle1, 1u, 10000);
+    runLinks(60u);
+    CouplingFrame last;
+    TEST_ASSERT_TRUE(combus_coupling_last_rx(kLinkIdx, last));
+    TEST_ASSERT_TRUE_MESSAGE(last.msg == CouplingMsg::REQUEST, "it answered a request out of the tolerance");
+    TEST_ASSERT_EQUAL_UINT32(1u, combus_coupling_rx_count(kLinkIdx));
+}
+
+/** Row 14: requests from two vehicles: CONFLICT, no link. */
+static void test_pair_row14_attachment_two_vehicles(void) {
+    startAttachmentLink();
+    hitch(true);
+    sendCoupling(CouplingMsg::REQUEST, kVehicle1, 1u);
+    runLinks(40u);
+    sendCoupling(CouplingMsg::REQUEST, kVehicle2, 2u);
+    runLinks(40u);
+    TEST_ASSERT_TRUE(pairing() == PairingState::CONFLICT);
+    com_rx_update(bus);
+    TEST_ASSERT_TRUE(bus.digitalBus[kHitchFail].value);
+}
+
+/** Row 15: 4 requests from one vehicle: COUPLED once the window closes. */
+static void test_pair_row15_attachment_coupled(void) {
+    startAttachmentLink();
+    hitch(true);
+    for (uint8_t r = 1u; r <= 4u; ++r) {
+        sendCoupling(CouplingMsg::REQUEST, kVehicle1, r);
+        runLinks(100u);
+    }
+    TEST_ASSERT_TRUE(pairing() == PairingState::PAIRING);              // the window is still open
+    runLinks(600u);
+    TEST_ASSERT_TRUE(pairing() == PairingState::COUPLED);
+}
+
+
+    // --- Debounce (rows 16 and 17) and retries (rows 18 and 19) ---
+static constexpr CouplingDev kDebouncedHitch = {
+    "test_hitch_debounced", DigitalComBusID::TEST_HITCHED, DigitalComBusID::TEST_HITCH_LINK_FAIL, 200u, 50u, 300u
+};
+static constexpr ComDev kDebouncedDev = {
+    "test_trailer_debounced", LinkScope::INTER_NODE, LinkType::BIDIRECTIONAL,
+    &kProto, LinkActivation::ON_COUPLING, &kDebouncedHitch, &kLink
+};
+
+static void startDebouncedLink(void) {
+    resetBus();
+    const ComDevMap map = { &kDebouncedDev, &s_port, LinkEnd::TX_RX };
+    TEST_ASSERT_TRUE(combus_link_build(map, s_com, s_runtime, s_link));
+    s_link.target = &bus;
+    combus_protocol_init(kLinkIdx, &s_link);
+    combus_links_watch(&s_runtime, 1u);
+    while (s_com->available(s_com->ctx) > 0) { s_com->readByte(s_com->ctx); }
+}
+
+/** Row 16: the trigger drops 100 ms (releaseMs = 300) and comes back: still COUPLED, data applied. */
+static void test_pair_row16_short_drop_kept(void) {
+    startDebouncedLink();
+    hitch(true);
+    TEST_ASSERT_TRUE(answerRequests(1500u, &kTrailerA, kAllRounds) == PairingState::COUPLED);
+    ensureStable();
+    bus.digitalBus[kHitched].value = false;
+    runLinks(100u);
+    bus.digitalBus[kHitched].value = true;
+    runLinks(20u);
+    TEST_ASSERT_TRUE(pairing() == PairingState::COUPLED);
+    receiveFromTrailer(444u, false, 15u);
+    TEST_ASSERT_EQUAL_UINT16(444u, bus.analogBus[kTilt].value);
+}
+
+/** Row 17: the trigger stays down beyond releaseMs: DETACHED, safe values. */
+static void test_pair_row17_long_drop_detached(void) {
+    startDebouncedLink();
+    hitch(true);
+    TEST_ASSERT_TRUE(answerRequests(1500u, &kTrailerA, kAllRounds) == PairingState::COUPLED);
+    ensureStable();
+    receiveFromTrailer(333u, false, 16u);
+    TEST_ASSERT_EQUAL_UINT16(333u, bus.analogBus[kTilt].value);
+    bus.digitalBus[kHitched].value = false;
+    runLinks(200u);
+    TEST_ASSERT_TRUE(pairing() == PairingState::COUPLED);             // not yet
+    runLinks(200u);
+    TEST_ASSERT_TRUE(pairing() == PairingState::DETACHED);
+    TEST_ASSERT_EQUAL_UINT16(CbusNeutral, bus.analogBus[kTilt].value);
+}
+
+/** Row 18: FAILED, the command still on: a new pairing after kCouplingRetryMs, which succeeds. */
+static void test_pair_row18_retry_succeeds(void) {
+    startCoupledLink();
+    hitch(true);
+    TEST_ASSERT_TRUE(answerRequests(1500u, nullptr, 0u) == PairingState::FAILED);
+    const uint32_t failedAt = millis();
+    TEST_ASSERT_TRUE(answerRequests(kCouplingRetryMs + 1500u, &kTrailerA, kAllRounds, nullptr, 0u, 0, false) == PairingState::COUPLED);
+    TEST_ASSERT_TRUE(millis() - failedAt >= kCouplingRetryMs);
+}
+
+/** Row 19: every retry fails: FAILED for good, no more request. */
+static void test_pair_row19_retries_exhausted(void) {
+    startCoupledLink();
+    hitch(true);
+    answerRequests((kCouplingRetries + 1u) * (kCouplingRetryMs + 800u), nullptr, 0u, nullptr, 0u, 0, false);
+    TEST_ASSERT_TRUE(pairing() == PairingState::FAILED);
+    const uint32_t before = combus_coupling_rx_count(kLinkIdx);
+    runLinks(kCouplingRetryMs + 500u);
+    TEST_ASSERT_EQUAL_UINT32(before, combus_coupling_rx_count(kLinkIdx));
+    com_rx_update(bus);
+    TEST_ASSERT_TRUE(bus.digitalBus[kHitchFail].value);
+}
+
+
+// =============================================================================
 // ACCESSORS OF THE LOGICAL VALUE (step S3-4)
 // =============================================================================
 
@@ -737,6 +1083,25 @@ void setup() {
     RUN_TEST(test_cpl_frame_row5_handshake_after_it);
     RUN_TEST(test_cpl_frame_row6_live_link_unchanged);
     RUN_TEST(test_cpl_frame_row7_local_addr);
+
+    RUN_TEST(test_pair_row1_five_answers_coupled);
+    RUN_TEST(test_pair_row2_four_answers_coupled);
+    RUN_TEST(test_pair_row3_three_answers_failed);
+    RUN_TEST(test_pair_row4_two_trailers_conflict);
+    RUN_TEST(test_pair_row5_old_hitch_ignored);
+    RUN_TEST(test_pair_row6_requests_timing);
+    RUN_TEST(test_pair_row7_no_self_pairing);
+    RUN_TEST(test_pair_row9_off_while_pairing);
+    RUN_TEST(test_pair_row10_conflict_then_new_pairing);
+    RUN_TEST(test_pair_row11_coupled_ignores_coupling_frames);
+    RUN_TEST(test_pair_row12_attachment_answers);
+    RUN_TEST(test_pair_row13_attachment_ignores_old_request);
+    RUN_TEST(test_pair_row14_attachment_two_vehicles);
+    RUN_TEST(test_pair_row15_attachment_coupled);
+    RUN_TEST(test_pair_row16_short_drop_kept);
+    RUN_TEST(test_pair_row17_long_drop_detached);
+    RUN_TEST(test_pair_row18_retry_succeeds);
+    RUN_TEST(test_pair_row19_retries_exhausted);
 
     UNITY_END();
 }

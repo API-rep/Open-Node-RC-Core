@@ -320,11 +320,14 @@ SOF et se resynchronise, sans toucher au contrat.
 | 16, 17 | 2 | `features` : masque des fonctions, réservé (0 tant qu'il n'est pas défini), little-endian |
 | 18 | 1 | CRC-8 sur les octets 0 à 17 |
 
-Longueur totale : 19 octets (`kCombusCouplingFrameLen`). Étape 3.4b : la
-dernière trame reçue par lien est seulement enregistrée
-(`combus_coupling_rx_count`, `combus_coupling_last_rx`) ; l'appairage (tours,
-conflit, corrélation) est l'étape 3.4c. Preuve : `test/test_peer_link`, groupe
-« COUPLING FRAME ».
+Longueur totale : 19 octets (`kCombusCouplingFrameLen`). La dernière trame
+reçue par lien est enregistrée (`combus_coupling_rx_count`,
+`combus_coupling_last_rx`, diagnostic et tests) et passée à l'appairage par le
+rappel enregistré (`combus_coupling_set_rx_handler`, link rework 3.4c :
+`protocol/combus_pairing.*`). Pendant l'appairage, RX est en mode `PAIRING`
+(`combus_rx_set_mode`) : seules les trames de couplage sont décodées, tout
+autre octet est jeté. Preuve : `test/test_peer_link`, groupes « COUPLING
+FRAME » et « PAIRING ».
 
 ## 9. Liens, pools et états par lien
 

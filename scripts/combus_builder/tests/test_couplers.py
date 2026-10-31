@@ -365,6 +365,7 @@ def test_row1_t7_generated_header_and_build_log(tmp_path, tractor, capsys):
             "static_cast<uint8_t>(AnalogComBusID::TEST_BRAKE_BUS), "
             "static_cast<uint8_t>(AnalogComBusID::TEST_TILT_ANGLE)") in text
     assert '.coupler   = "test_hitch",' in text
+    assert ".role      = ComLinkRole::VEHICLE," in text      # step 3.4c: the role of this node
     assert ".announced = { .stable = kAnnouncedMd5, .next = kAnnouncedMd5Next }," in text
     assert ".expected  = { .stable = kExpectedMd5,  .next = kExpectedMd5Next }," in text
     assert ".ids = kAnalog,  .rx = kAnalogRx }," in text
