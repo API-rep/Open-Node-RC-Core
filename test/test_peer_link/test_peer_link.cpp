@@ -136,8 +136,7 @@ static void startLink(void) {
 
 /** On the loopback the tractor hears itself: make it announce the attachment MD5, as the trailer would (3.4a). */
 static void actAsTheTrailer(void) {
-    s_runtime.handshake.announcedMd5     = kLink.md5PeerStable;
-    s_runtime.handshake.announcedMd5Next = kLink.md5Peer;
+    s_runtime.handshake.announced = kLink.expected;
 }
 
 /** Run the handshake on the loopback, standing for the trailer, until the contract is STABLE. */
@@ -160,18 +159,18 @@ static void ensureStable(void) {
 /** Row 1: the descriptor generated for the link with the trailer. */
 static void test_row1_generated_descriptor(void) {
     TEST_ASSERT_EQUAL_STRING("test_hitch", kLink.coupler);
-    TEST_ASSERT_EQUAL_UINT8(3u, kLink.nAnalog);
-    TEST_ASSERT_EQUAL_UINT8(2u, kLink.nDigital);
-    TEST_ASSERT_EQUAL_UINT8(kAxle,   kLink.analog[0]);
-    TEST_ASSERT_EQUAL_UINT8(kBrake,  kLink.analog[1]);
-    TEST_ASSERT_EQUAL_UINT8(kTilt,   kLink.analog[2]);
-    TEST_ASSERT_EQUAL_UINT8(kFault,  kLink.digital[0]);
-    TEST_ASSERT_EQUAL_UINT8(kLights, kLink.digital[1]);
-    TEST_ASSERT_TRUE(kLink.analogRx[0]);        // it receives the axle load (injected channel)
-    TEST_ASSERT_FALSE(kLink.analogRx[1]);       // the tractor sends the brake
-    TEST_ASSERT_TRUE(kLink.analogRx[2]);        // it receives the tilt
-    TEST_ASSERT_TRUE(kLink.digitalRx[0]);       // the shared fault (OR)
-    TEST_ASSERT_FALSE(kLink.digitalRx[1]);      // it sends the lights
+    TEST_ASSERT_EQUAL_UINT8(3u, kLink.analog.count);
+    TEST_ASSERT_EQUAL_UINT8(2u, kLink.digital.count);
+    TEST_ASSERT_EQUAL_UINT8(kAxle,   kLink.analog.ids[0]);
+    TEST_ASSERT_EQUAL_UINT8(kBrake,  kLink.analog.ids[1]);
+    TEST_ASSERT_EQUAL_UINT8(kTilt,   kLink.analog.ids[2]);
+    TEST_ASSERT_EQUAL_UINT8(kFault,  kLink.digital.ids[0]);
+    TEST_ASSERT_EQUAL_UINT8(kLights, kLink.digital.ids[1]);
+    TEST_ASSERT_TRUE(kLink.analog.rx[0]);        // it receives the axle load (injected channel)
+    TEST_ASSERT_FALSE(kLink.analog.rx[1]);       // the tractor sends the brake
+    TEST_ASSERT_TRUE(kLink.analog.rx[2]);        // it receives the tilt
+    TEST_ASSERT_TRUE(kLink.digital.rx[0]);       // the shared fault (OR)
+    TEST_ASSERT_FALSE(kLink.digital.rx[1]);      // it sends the lights
 
         // The test only bites if the wire order differs from the local order.
     TEST_ASSERT_TRUE_MESSAGE(kTilt != 2u && kFault != 0u, "the table is the identity: the tests cannot bite");
@@ -185,7 +184,7 @@ static void test_row2_emission_through_the_table(void) {
     bus.analogBus[kThrottle].value = 999u;
     bus.digitalBus[kLights].value  = true;
 
-    const uint8_t len = combus_frame_encode(kLinkCfg, s_buf, &bus, 3u, 3u, 2u, nullptr, kLink.analog, kLink.digital);
+    const uint8_t len = combus_frame_encode(kLinkCfg, s_buf, &bus, 3u, 3u, 2u, nullptr, kLink.analog.ids, kLink.digital.ids);
     TEST_ASSERT_TRUE(combus_frame_decode(kLinkCfg, &s_frame, s_buf, len));
     TEST_ASSERT_EQUAL_UINT8(3u, s_frame.header.cfg.nAnalog);
     TEST_ASSERT_EQUAL_UINT16(111u, frameAnalog[1]);
@@ -217,11 +216,11 @@ static void test_row5_contract_is_the_link_md5(void) {
     startLink();
     const CombusHandshakeContext& ctx = s_runtime.handshake;
     TEST_ASSERT_TRUE(ctx.peer == &kLink);
-    TEST_ASSERT_EQUAL_UINT8_ARRAY(kLink.md5PeerStable, ctx.expectedMd5, 16u);
-    TEST_ASSERT_EQUAL_UINT8_ARRAY(kLink.md5Peer, ctx.expectedMd5Next, 16u);
-    TEST_ASSERT_TRUE(ctx.announcedMd5 == kLink.md5Stable);
-    TEST_ASSERT_TRUE(ctx.announcedMd5Next == kLink.md5);
-    TEST_ASSERT_FALSE_MESSAGE(memcmp(kLink.md5Stable, kLink.md5PeerStable, 16u) == 0,
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(kLink.expected.stable, ctx.expected.stable, 16u);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(kLink.expected.next, ctx.expected.next, 16u);
+    TEST_ASSERT_TRUE(ctx.announced.stable == kLink.announced.stable);
+    TEST_ASSERT_TRUE(ctx.announced.next == kLink.announced.next);
+    TEST_ASSERT_FALSE_MESSAGE(memcmp(kLink.announced.stable, kLink.expected.stable, 16u) == 0,
                               "the two roles have the same MD5");
     TEST_ASSERT_FALSE(ctx.hasCandidates);
     TEST_ASSERT_TRUE(s_link.rxCfg.has_value());

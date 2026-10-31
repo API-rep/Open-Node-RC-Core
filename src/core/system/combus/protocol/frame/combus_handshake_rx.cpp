@@ -62,7 +62,7 @@ bool combus_handshake_compare(
         // combus_protocol_init(): config error, never substituted silently.
     if (!localMd5) {
         sys_log_err(
-            "[COMBUS_HANDSHAKE] FATAL: CombusHandshakeContext::expectedMd5 is null "
+            "[COMBUS_HANDSHAKE] FATAL: CombusHandshakeContext::expected.stable is null "
             "— link was not properly initialized via combus_protocol_init() "
             "— system halted\n");
         while (1) { /* halt */ }
@@ -82,7 +82,7 @@ static void logRefusal( CombusHandshakeContext* ctx, const uint8_t* wireMd5,
 
     char localMd5Hex[33];
     char wireMd5Hex[33];
-    combus_handshake_formatMd5Hex(ctx->expectedMd5, localMd5Hex);
+    combus_handshake_formatMd5Hex(ctx->expected.stable, localMd5Hex);
     combus_handshake_formatMd5Hex(wireMd5, wireMd5Hex);
 
     sys_log_warn(
@@ -177,7 +177,7 @@ uint8_t combus_handshake_tryDecode(
     //    contract.  Without candidates this end stays legacy.
     if (isNext) {
         const bool nextMatch = ctx->hasCandidates
-                            && combus_handshake_compare(ctx->expectedMd5Next, wireMd5, wireMajor);
+                            && combus_handshake_compare(ctx->expected.next, wireMd5, wireMajor);
         if (!nextMatch) {
             if (ctx->nextMode) {
                 ctx->nextMode = false;
@@ -206,7 +206,7 @@ uint8_t combus_handshake_tryDecode(
     } else {
 
         // --- 8. Legacy handshake: refused, the contract is (back to) UNKNOWN, logged once.
-        if (!combus_handshake_compare(ctx->expectedMd5, wireMd5, wireMajor)) {
+        if (!combus_handshake_compare(ctx->expected.stable, wireMd5, wireMajor)) {
             logRefusal(ctx, wireMd5, wireMajor, wireMinor);
             combus_handshake_internal::dropContract(ctx, "handshake refused");
             return expectedLen;

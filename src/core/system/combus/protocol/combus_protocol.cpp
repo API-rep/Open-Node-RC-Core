@@ -68,15 +68,15 @@ void combus_protocol_init( uint8_t linkIdx, ComBusLink* link )
         //    UNDEFINED FATAL in combus_tx_init()).
     switch (link->layer) {
         case ChanLayer::BASE:
-            link->handshakeCtx->expectedMd5 = combus::wire::kCombusBaseComBusMd5;
+            link->handshakeCtx->expected.stable = combus::wire::kCombusBaseComBusMd5;
             break;
         case ChanLayer::SYSTEM:
-            link->handshakeCtx->expectedMd5 = combus::wire::kCombusSystemComBusMd5;
+            link->handshakeCtx->expected.stable = combus::wire::kCombusSystemComBusMd5;
             break;
         case ChanLayer::BOARD:
             // BOARD — reserved for a future intra-device loopback.
             // Falls back to the FULL view (machine node default).
-            link->handshakeCtx->expectedMd5 = combus::wire::kCombusComBusMd5;
+            link->handshakeCtx->expected.stable = combus::wire::kCombusComBusMd5;
             break;
         case ChanLayer::UNDEFINED:
         default:
@@ -105,24 +105,21 @@ void combus_protocol_init( uint8_t linkIdx, ComBusLink* link )
         //    (a SYSTEM link carries them in its single set).  Without candidate,
         //    the next MD5 is the stable one and the link is legacy only.
     link->handshakeCtx->baseSet         = (link->layer == ChanLayer::BASE);
-    link->handshakeCtx->expectedMd5Next = link->handshakeCtx->baseSet
+    link->handshakeCtx->expected.next = link->handshakeCtx->baseSet
         ? combus::wire::kCombusBaseComBusMd5Next
-        : link->handshakeCtx->expectedMd5;
+        : link->handshakeCtx->expected.stable;
 
         // --- 3d. Link rework 3.1b / 3.4a — a link between nodes has its own
         //    contract: the MD5 of its coupler and a role.  This end announces
         //    its role and expects the other one.
     link->handshakeCtx->peer             = link->peer;
-    link->handshakeCtx->announcedMd5     = nullptr;
-    link->handshakeCtx->announcedMd5Next = nullptr;
+    link->handshakeCtx->announced        = {};
     if (link->peer) {
-        link->handshakeCtx->expectedMd5      = link->peer->md5PeerStable;
-        link->handshakeCtx->expectedMd5Next  = link->peer->md5Peer;
-        link->handshakeCtx->announcedMd5     = link->peer->md5Stable;
-        link->handshakeCtx->announcedMd5Next = link->peer->md5;
+        link->handshakeCtx->expected  = link->peer->expected;
+        link->handshakeCtx->announced = link->peer->announced;
     }
     link->handshakeCtx->hasCandidates   =
-        memcmp(link->handshakeCtx->expectedMd5Next, link->handshakeCtx->expectedMd5, 16) != 0;
+        memcmp(link->handshakeCtx->expected.next, link->handshakeCtx->expected.stable, 16) != 0;
 
     combus_handshake_internal::clearContractValidated(link->handshakeCtx);   // every end starts UNKNOWN
 

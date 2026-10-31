@@ -290,8 +290,8 @@ coupleur est **refusé explicitement** (`node_nature()`), comme l'ancien
   (`peer=True`), si bien que deux véhicules, ou deux attelages, reliés par
   erreur se refusent.
 - `combus_peer_links.h` (toujours écrit, vide sans coupleur) : par coupleur,
-  les MD5 annoncés (`kMd5`, `kMd5Stable`) et attendus (`kMd5Peer`,
-  `kMd5PeerStable`), les nombres de channels, la **table** position sur le fil
+  les MD5 annoncés (`kAnnouncedMd5`, `kAnnouncedMd5Next`) et attendus
+  (`kExpectedMd5`, `kExpectedMd5Next`), les nombres de channels, la **table** position sur le fil
   → ID local (`kAnalog[]`, `kDigital[]`) et ce que ce nœud reçoit
   (`kAnalogRx[]`, `kDigitalRx[]`).
 

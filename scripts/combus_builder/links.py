@@ -307,7 +307,7 @@ def render_peer_links_header(links: list[LinkSet], ids_header: str = "combus_ids
         "",
         "#include <stdint.h>",
         "",
-        "#include <core/system/combus/protocol/frame/combus_frame_defs.h>   // ComPeerLink",
+        "#include <core/system/combus/protocol/frame/combus_peer_link_defs.h>   // ComPeerLink",
         f'#include "{ids_header}"',
         "",
         "namespace combus {",
@@ -324,10 +324,10 @@ def render_peer_links_header(links: list[LinkSet], ids_header: str = "combus_ids
         body.append(f"/// Link through the {link.coupler} coupler, this node being the {link.role}.")
         body.append(f"namespace {ns} {{")
         body.append("/// MD5 announced by this node (its role), and expected from the other end (the other role).")
-        body.append(_md5_array("kMd5[16]          ", link_md5(link)))
-        body.append(_md5_array("kMd5Stable[16]    ", link_md5(link, stable=True)))
-        body.append(_md5_array("kMd5Peer[16]      ", link_md5(link, peer=True)))
-        body.append(_md5_array("kMd5PeerStable[16]", link_md5(link, stable=True, peer=True)))
+        body.append(_md5_array("kAnnouncedMd5[16]    ", link_md5(link, stable=True)))
+        body.append(_md5_array("kAnnouncedMd5Next[16]", link_md5(link)))
+        body.append(_md5_array("kExpectedMd5[16]     ", link_md5(link, stable=True, peer=True)))
+        body.append(_md5_array("kExpectedMd5Next[16] ", link_md5(link, peer=True)))
         body.append(f"static constexpr uint8_t kAnalogCount        = {len(analog)}u;")
         body.append(f"static constexpr uint8_t kDigitalCount       = {len(digital)}u;")
         body.append(f"static constexpr uint8_t kStableAnalogCount  = {sum(1 for c in analog if not c.candidate)}u;")
@@ -344,9 +344,13 @@ def render_peer_links_header(links: list[LinkSet], ids_header: str = "combus_ids
                     f"{', '.join('true' if c.flow in ('from_peer', 'both', 'or') else 'false' for c in digital) or 'false'} }};")
         body.append("/// The link, for the ComDev of this coupler (ComDev::peer).")
         body.append("static constexpr ComPeerLink kLink = {")
-        body.append(f'    "{link.coupler}", kMd5, kMd5Stable, kMd5Peer, kMd5PeerStable,')
-        body.append("    kAnalogCount, kDigitalCount, kStableAnalogCount, kStableDigitalCount,")
-        body.append("    kAnalog, kDigital, kAnalogRx, kDigitalRx")
+        body.append(f'    .coupler   = "{link.coupler}",')
+        body.append("    .announced = { .stable = kAnnouncedMd5, .next = kAnnouncedMd5Next },")
+        body.append("    .expected  = { .stable = kExpectedMd5,  .next = kExpectedMd5Next },")
+        body.append("    .analog    = { .count = kAnalogCount,  .stableCount = kStableAnalogCount,  "
+                    ".ids = kAnalog,  .rx = kAnalogRx },")
+        body.append("    .digital   = { .count = kDigitalCount, .stableCount = kStableDigitalCount, "
+                    ".ids = kDigital, .rx = kDigitalRx },")
         body.append("};")
         body.append(f"}} // namespace {ns}")
         body.append("")

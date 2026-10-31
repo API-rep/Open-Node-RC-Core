@@ -391,8 +391,8 @@ void combus_frame_apply( const ComBusFrameCfg& cfg,
 		// a channel this node sends on the link is never overwritten by its peer.
 	if (combus->analogBus) {
 		for (uint8_t i = 0; i < nAnalogEff; ++i) {
-			if (peer ? !peer->analogRx[i] : !receives(combus->analogBus[i].flow)) { continue; }
-			const uint8_t id = peer ? peer->analog[i] : i;
+			if (peer ? !peer->analog.rx[i] : !receives(combus->analogBus[i].flow)) { continue; }
+			const uint8_t id = peer ? peer->analog.ids[i] : i;
 
 				// LY2 — apply is layer-agnostic.  The layer check is
 				// delegated to combus_set_raw_analog() which reads the
@@ -408,13 +408,13 @@ void combus_frame_apply( const ComBusFrameCfg& cfg,
 
 	if (combus->digitalBus) {
 		for (uint8_t i = 0; i < nDigitalEff; ++i) {
-			const uint8_t id = peer ? peer->digital[i] : i;
+			const uint8_t id = peer ? peer->digital.ids[i] : i;
 
 				// both_or: never overwritten by a frame.  The received value stays in
 				// the link snapshot and com_rx_update() merges it with this board's
 				// own value each cycle (anti ping-pong, see protocol/both_or.md).
 			if (combus->digitalBus[id].bothOr.enabled) { continue; }
-			if (peer ? !peer->digitalRx[i] : !receives(combus->digitalBus[i].flow)) { continue; }
+			if (peer ? !peer->digital.rx[i] : !receives(combus->digitalBus[i].flow)) { continue; }
 
 				// LY2 — see analog loop above.
 			combus_set_digital(*combus, (DigitalComBusID)id, inputFrame->digital[i], caller);

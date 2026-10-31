@@ -28,7 +28,7 @@
 #include <core/system/hw/node_com.h>                // NodeCom (TX path)
 
 // LY4 — the MD5 pointer is now resolved at init from link->layer and
-// stored in CombusHandshakeContext::expectedMd5.  The hardcoded include
+// stored in CombusHandshakeContext::expected.stable.  The hardcoded include
 // of dumper_truck/combus_ids_remote_md5.h is gone — the handshake
 // module is now machine-type-agnostic.  The 3 MD5 arrays
 // (kCombusComBusMd5 / kCombusBaseComBusMd5 / kCombusSystemComBusMd5)
@@ -88,7 +88,7 @@ static constexpr uint8_t CombusHandshakeSof = CombusFrameSof;  ///< placeholder
  *               (BASE / SYSTEM / FULL).  See scripts/combus_builder/md5.py
  *               for the hash inputs and the deterministic ordering.
  *               The pointer is resolved at init from link->layer and
- *               stored in CombusHandshakeContext::expectedMd5 (LY4).
+ *               stored in CombusHandshakeContext::expected.stable (LY4).
  *     [16]      Project version MAJOR (see project_version.h).
  *     [17]      Project version MINOR.
  *     [18]      Project version DEV, the candidate pool (chantier 2.2b, logged only).
@@ -314,27 +314,27 @@ struct CombusHandshakeContext {
     // --- Next / legacy mode (chantier 2.2b) — two ends per link: the fields that
     //    describe the peer (contract, ACK, mode) become one set per peer when a
     //    link serves several (see the WIP, "Plusieurs pairs sur un lien").
-    const uint8_t* expectedMd5Next = nullptr; ///< next set MD5 (= expectedMd5 when there is no candidate)
-    bool     hasCandidates     = false;  ///< expectedMd5Next differs from expectedMd5 (set by combus_protocol_init())
+    bool     hasCandidates     = false;  ///< expected.next differs from expected.stable (set by combus_protocol_init())
     const ComPeerLink* peer    = nullptr; ///< link between nodes (3.1b): common frame and table, nullptr = view of the scope
     bool     baseSet           = false;  ///< BASE link: the mode sets the size of the frames (set by combus_protocol_init())
     bool     nextMode          = false;  ///< STABLE in next mode (false: stable mode, or legacy without candidate)
     uint8_t  nextTriesLeft     = 0u;     ///< NEXT requests left while UNKNOWN before legacy ones
     bool     ackPendingNext    = false;  ///< a NEXT request was received, the TX answers it with a NEXT ACK
 
-    // --- LY4 — expected MD5 pointer, resolved once at init from link->layer.
-    //    Points to one of combus::wire::kCombusComBusMd5 (FULL),
-    //    kCombusBaseComBusMd5 (BASE), or kCombusSystemComBusMd5 (SYSTEM).
-    //    Read by both TX (to embed in the magic frame) and RX (to compare
-    //    against the on-wire MD5).  Same pattern as LY2 wireEnd counters.
-    const uint8_t* expectedMd5 = nullptr;
+    // --- LY4 — expected MD5, resolved once at init from link->layer.
+    //    `stable` points to one of combus::wire::kCombusComBusMd5 (FULL),
+    //    kCombusBaseComBusMd5 (BASE), or kCombusSystemComBusMd5 (SYSTEM);
+    //    `next` to the next set MD5 (chantier 2.2b, = `stable` when there is
+    //    no candidate).  Read by the RX (to compare against the on-wire MD5)
+    //    and by the TX unless `announced` is set.  Same pattern as LY2
+    //    wireEnd counters.
+    ComLinkMd5 expected  = {};
 
     // --- Link rework 3.4a — MD5 announced by this end, when it differs from the
     //    expected one: on a link through a coupler, each end announces its role
-    //    and expects the other one.  nullptr = the expected MD5 (same contract
-    //    both ways: views of a scope).
-    const uint8_t* announcedMd5      = nullptr; ///< stable MD5 sent by the TX (nullptr = expectedMd5)
-    const uint8_t* announcedMd5Next  = nullptr; ///< next set MD5 sent by the TX (nullptr = expectedMd5Next)
+    //    and expects the other one.  A null pointer = the expected one (same
+    //    contract both ways: views of a scope).
+    ComLinkMd5 announced = {};
 };
 
 

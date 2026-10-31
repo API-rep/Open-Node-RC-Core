@@ -102,7 +102,7 @@
  *
  *   Group E — MD5 pointer resolution by layer (LY4):
  *     Verifies that combus_protocol_init() resolves the per-link
- *     expectedMd5 pointer from link->layer (BASE / SYSTEM / BOARD),
+ *     expected.stable pointer from link->layer (BASE / SYSTEM / BOARD),
  *     and that combus_handshake_compare() matches correctly when
  *     given the right local MD5 pointer.  Same pattern as Group D —
  *     verify the resolution at init, not the per-frame behaviour.
@@ -701,7 +701,7 @@ static void test_runlevel_roundtrip_via_channel(void) {
 // GROUP E — MD5 POINTER RESOLUTION BY LAYER (LY4)
 //
 // Verifies that combus_protocol_init() resolves the per-link
-// expectedMd5 pointer from link->layer (BASE / SYSTEM / BOARD), and
+// expected.stable pointer from link->layer (BASE / SYSTEM / BOARD), and
 // that combus_handshake_compareAndLog() matches correctly when given
 // the right local MD5 pointer.  Same pattern as Group D — verify the
 // resolution at init, not the per-frame behaviour.
@@ -772,8 +772,8 @@ static void test_md5_resolution_base(void) {
 
     // Content, not address: the generated MD5 arrays are `static constexpr`, so each
     // translation unit has its own copy at a different address.
-    TEST_ASSERT_NOT_NULL(ctx.expectedMd5);
-    TEST_ASSERT_EQUAL_UINT8_ARRAY(combus::wire::kCombusBaseComBusMd5, ctx.expectedMd5, 16u);
+    TEST_ASSERT_NOT_NULL(ctx.expected.stable);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(combus::wire::kCombusBaseComBusMd5, ctx.expected.stable, 16u);
 }
 
 /** combus_protocol_init() with SYSTEM layer must resolve to kCombusSystemComBusMd5. */
@@ -790,8 +790,8 @@ static void test_md5_resolution_system(void) {
 
     combus_protocol_init(kLinkIdx, &link);
 
-    TEST_ASSERT_NOT_NULL(ctx.expectedMd5);
-    TEST_ASSERT_EQUAL_UINT8_ARRAY(combus::wire::kCombusSystemComBusMd5, ctx.expectedMd5, 16u);
+    TEST_ASSERT_NOT_NULL(ctx.expected.stable);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(combus::wire::kCombusSystemComBusMd5, ctx.expected.stable, 16u);
 }
 
 /** combus_protocol_init() with BOARD layer must resolve to kCombusComBusMd5 (FULL). */
@@ -808,8 +808,8 @@ static void test_md5_resolution_board(void) {
 
     combus_protocol_init(kLinkIdx, &link);
 
-    TEST_ASSERT_NOT_NULL(ctx.expectedMd5);
-    TEST_ASSERT_EQUAL_UINT8_ARRAY(combus::wire::kCombusComBusMd5, ctx.expectedMd5, 16u);
+    TEST_ASSERT_NOT_NULL(ctx.expected.stable);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(combus::wire::kCombusComBusMd5, ctx.expected.stable, 16u);
 }
 
 // =============================================================================
@@ -1336,7 +1336,7 @@ static void sendForgedHandshake(bool ack, bool goodMd5, uint8_t major, uint8_t m
                                 bool next = false, uint8_t dev = combus::wire::kProjectVersionDev) {
     uint8_t frame[CombusFrameHandshakeMinLen];
     const uint8_t payload = sizeof(CombusFrameSof) + sizeof(CombusFrameHeader);
-    const uint8_t* md5 = next ? linkCtx()->expectedMd5Next : linkCtx()->expectedMd5;
+    const uint8_t* md5 = next ? linkCtx()->expected.next : linkCtx()->expected.stable;
 
     frame[0] = CombusFrameSof;
     frame[1] = 0u;                                          // nAnalog
@@ -1607,7 +1607,7 @@ static const uint8_t kFakeNextMd5[16] = {
 
 /** Give the link candidates (a next MD5 different from the stable one), contract UNKNOWN. */
 static void enableCandidates(void) {
-    linkCtx()->expectedMd5Next = kFakeNextMd5;
+    linkCtx()->expected.next = kFakeNextMd5;
     linkCtx()->hasCandidates   = true;
     combus_handshake_internal::clearContractValidated(linkCtx());   // re-arms the NEXT requests
 }
@@ -1637,7 +1637,7 @@ static bool isNextFlag(uint8_t flags) { return (flags & kCombusHandshakeFlagNext
 /** Row 12 of the table: a link between the boards of a node has no separate candidates. */
 static void test_mode_system_link_has_no_separate_candidates(void) {
     startHealthLink(LinkEnd::TX_RX, kHealthDev);
-    TEST_ASSERT_EQUAL_UINT8_ARRAY(linkCtx()->expectedMd5, linkCtx()->expectedMd5Next, 16u);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(linkCtx()->expected.stable, linkCtx()->expected.next, 16u);
     TEST_ASSERT_FALSE(linkCtx()->hasCandidates);
 }
 

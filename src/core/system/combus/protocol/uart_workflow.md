@@ -275,7 +275,7 @@ void combus_protocol_init_all( ComBusLink* links, uint8_t count )
 void combus_protocol_init( uint8_t linkIdx, ComBusLink* link )
 {
     // 1. Garde : link et link->com non nuls ; handshakeCtx obligatoire (sinon erreur loguée, return)
-    // 2. LY4 : switch (link->layer) -> ctx->expectedMd5 = kCombus{Base|System|}ComBusMd5
+    // 2. LY4 : switch (link->layer) -> ctx->expected.stable = kCombus{Base|System|}ComBusMd5
     //          UNDEFINED -> log d'erreur FATAL + boucle infinie (arrêt du système)
 
     // 3. Contexte de handshake partagé TX/RX, câblé AVANT les init
@@ -528,7 +528,7 @@ Un `ComLinkRuntime` est fourni par lien (tableau statique de l'appelant) ;
 Le contexte est partagé entre TX et RX du même lien. `combus_protocol_init()`
 le câble avant les init (`combus_tx_set_handshake_ctx(linkIdx, ctx)`,
 `combus_rx_set_handshake_ctx(linkIdx, ctx)`, voir §3.7) et y résout le
-pointeur `expectedMd5` selon le layer du lien.
+pointeur `expected.stable` selon le layer du lien.
 
 Format de la trame de handshake, rafale au démarrage (3 trames, 100 ms), demande
 toutes les 250 ms, ACK, contrat du lien (`STABLE` / `INCONNU`, chantier 1.2),

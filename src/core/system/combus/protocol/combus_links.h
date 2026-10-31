@@ -50,6 +50,30 @@
 // =============================================================================
 
 /**
+ * @brief What the watch of a link needs: does it receive, after how long a silence is it lost (S2, 3.2c).
+ */
+
+struct ComLinkWatch {
+    bool     receives       = false;   ///< true when this link has an RX side
+    uint32_t linkTimeoutMs  = 0u;      ///< silence after which a receiving link is lost (ms)
+    uint32_t startupGraceMs = 0u;      ///< link between boards: wait for a first frame before it counts as lost (ms)
+    uint32_t watchStartMs   = 0u;      ///< set by combus_links_watch() (or at the hitch): start of the grace
+    bool     reportedLost   = false;   ///< last loss state logged by combus_links_update()
+    bool     wasAlive       = false;   ///< 3.2c: alive at the last combus_links_update(), to catch the loss
+};
+
+
+/**
+ * @brief Coupling of a link ON_COUPLING (link rework 3.3).
+ */
+
+struct ComLinkCoupling {
+    const CouplingDev* dev     = nullptr;   ///< link ON_COUPLING, nullptr = always active
+    bool               coupled = false;     ///< trigger true at the last combus_links_update()
+};
+
+
+/**
  * @brief Per-link storage that the protocol layers keep pointing to.
  *
  * @details Holds the handshake context shared by TX and RX of the link, the RX
@@ -63,17 +87,11 @@
 
 struct ComLinkRuntime {
     CombusHandshakeContext handshake = {};
-    const char*    name           = nullptr;                   ///< ComDev name, for the logs
-    bool           receives       = false;                     ///< true when this link has an RX side
-    uint32_t       linkTimeoutMs  = 0u;                        ///< silence after which a receiving link is lost (ms)
-    uint32_t       startupGraceMs = 0u;                        ///< link between boards: wait for a first frame before it counts as lost (ms)
-    LinkScope      scope          = LinkScope::INTRA_NODE;     ///< scope of the ComDev: which contributor its loss feeds (S2)
-    uint32_t       watchStartMs   = 0u;                        ///< set by combus_links_watch(): start of the grace
-    bool           reportedLost   = false;                     ///< last loss state logged by combus_links_update()
-    const ComPeerLink* peer       = nullptr;                   ///< link through a coupler (3.1b, 3.4a), nullptr = view of the scope
-    bool           wasAlive       = false;                     ///< 3.2c: alive at the last combus_links_update(), to catch the loss
-    const CouplingDev* coupling   = nullptr;                   ///< 3.3: link ON_COUPLING, nullptr = always active
-    bool           coupled        = false;                     ///< 3.3: trigger true at the last combus_links_update()
+    const char*        name     = nullptr;                 ///< ComDev name, for the logs
+    LinkScope          scope    = LinkScope::INTRA_NODE;   ///< scope of the ComDev: which contributor its loss feeds (S2)
+    const ComPeerLink* peer     = nullptr;                 ///< link through a coupler (3.1b, 3.4a), nullptr = view of the scope
+    ComLinkWatch       watch    = {};                      ///< what the link watch needs (S2, 3.2c)
+    ComLinkCoupling    coupling = {};                      ///< 3.3: coupling of the link
     uint16_t analogRx[static_cast<uint8_t>(AnalogComBusSystemID::CH_COUNT)]   = {};   ///< SYSTEM next set
     bool     digitalRx[static_cast<uint8_t>(DigitalComBusSystemID::CH_COUNT)] = {};   ///< SYSTEM next set
 };

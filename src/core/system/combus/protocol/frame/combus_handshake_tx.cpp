@@ -44,8 +44,8 @@ uint8_t combus_handshake_sendOnce( NodeCom* nodeCom )
     // LY4 — use the per-link expected MD5 pointer resolved at init from
     // link->layer.  Falls back to the FULL view MD5 if the pointer is
     // null (legacy caller that bypassed combus_protocol_init).
-    const uint8_t* md5ToSend = s_txBootCtx.expectedMd5
-        ? s_txBootCtx.expectedMd5
+    const uint8_t* md5ToSend = s_txBootCtx.expected.stable
+        ? s_txBootCtx.expected.stable
         : combus::wire::kCombusComBusMd5;
 
     // Frame layout (mirror of RX):
@@ -123,13 +123,13 @@ static uint8_t sendHandshake( const CombusHandshakeContext* ctx, NodeCom* nodeCo
 {
         // LY4 — the per-link expected MD5 pointer resolved at init from link->layer;
         // FULL view MD5 if null (legacy caller that bypassed combus_protocol_init).
-    const uint8_t* stableMd5 = ctx->expectedMd5
-        ? ctx->expectedMd5
+    const uint8_t* stableMd5 = ctx->expected.stable
+        ? ctx->expected.stable
         : combus::wire::kCombusComBusMd5;
-    const uint8_t* nextMd5   = ctx->expectedMd5Next;
+    const uint8_t* nextMd5   = ctx->expected.next;
         // Link rework 3.4a — through a coupler, this end announces its own role.
-    if (ctx->announcedMd5)     { stableMd5 = ctx->announcedMd5; }
-    if (ctx->announcedMd5Next) { nextMd5   = ctx->announcedMd5Next; }
+    if (ctx->announced.stable) { stableMd5 = ctx->announced.stable; }
+    if (ctx->announced.next)   { nextMd5   = ctx->announced.next; }
     const uint8_t* md5ToSend = ((flags & kCombusHandshakeFlagNext) && nextMd5)
         ? nextMd5
         : stableMd5;

@@ -116,7 +116,7 @@ compteur part de 0 (`generator.py:362-386`).
   lien (`combus_protocol.cpp:55-88`, `kCombusBaseComBusMd5`,
   `kCombusSystemComBusMd5` ou `kCombusComBusMd5` selon le layer).
 - **Lien entre nœuds à travers un coupleur (link rework 3.1b, 3.4a)** : quand le
-  `ComDev` porte un `peer` (`ComPeerLink`, `combus_frame_defs.h`, généré dans
+  `ComDev` porte un `peer` (`ComPeerLink`, `combus_peer_link_defs.h`, généré dans
   `combus_peer_links.h` par `-D COMBUS_COUPLER_<NOM>`), la trame est la trame
   commune du lien (le coupleur complet), et non le préfixe de la vue `BASE`. Ses comptes viennent du
   lien. À l'émission, chaque position sur le fil lit le channel local que donne
@@ -125,9 +125,9 @@ compteur part de 0 (`generator.py:362-386`).
   dans le channel local de la table : la table remplace alors le filtre par sens.
   Les `both_or` restent à la fusion, que `combus_rx_peer_or` fait par position
   sur le fil. Le contrat est le MD5 du coupleur et du rôle : ce nœud annonce le sien
-  (`md5Stable`, `md5` en mode next ; `CombusHandshakeContext::announcedMd5`) et
-  attend celui de l'autre rôle (`md5PeerStable`, `md5Peer` ;
-  `expectedMd5`) : deux véhicules reliés par erreur se refusent,
+  (`ComPeerLink::announced`, `.stable` et `.next` en mode next ;
+  `CombusHandshakeContext::announced.stable`) et attend celui de l'autre rôle
+  (`ComPeerLink::expected` ; `expected.stable`) : deux véhicules reliés par erreur se refusent,
   et le mode stable s'arrête aux comptes stables du lien. Sans `peer`, rien ne
   change. Preuve : `test/test_peer_link` (validé sur la carte le 2026-10-25).
 
@@ -193,7 +193,7 @@ la compare à la constante générée `kCombusHandshakeWirePayloadLen`.
 
 ### 8.2 Quel MD5 ?
 
-À l'initialisation du lien, `combus_protocol_init` résout `expectedMd5` selon
+À l'initialisation du lien, `combus_protocol_init` résout `expected.stable` selon
 `link->layer` (`combus_protocol.cpp:55-88`) :
 
 | Layer du lien | MD5 |
@@ -203,7 +203,7 @@ la compare à la constante générée `kCombusHandshakeWirePayloadLen`.
 | BOARD | `kCombusComBusMd5` (vue complète) |
 | UNDEFINED | arrêt fatal |
 
-TX et RX lisent le même pointeur dans le contexte du lien. Si `expectedMd5`
+TX et RX lisent le même pointeur dans le contexte du lien. Si `expected.stable`
 est nul à la réception, `combus_handshake_compare` s'arrête en erreur
 fatale (`combus_handshake_rx.cpp`). L'émetteur, lui, replie sur le MD5 de
 la vue complète si le pointeur est nul (`combus_handshake_tx.cpp:51-53`,

@@ -120,8 +120,8 @@ void combus_handshake_logBootWarningIfNeeded(CombusHandshakeContext* ctx)
     // LY4 — use the per-link expected MD5 pointer resolved at init from
     // link->layer.  Falls back to the FULL view MD5 if the pointer is
     // null (legacy caller that bypassed combus_protocol_init).
-    const uint8_t* md5ToShow = ctx->expectedMd5
-        ? ctx->expectedMd5
+    const uint8_t* md5ToShow = ctx->expected.stable
+        ? ctx->expected.stable
         : combus::wire::kCombusComBusMd5;
 
     char md5Hex[33];

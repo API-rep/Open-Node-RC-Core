@@ -231,8 +231,8 @@ static uint8_t tryDecode( CombusRxState& st )
             const ComPeerLink* peer = st.handshakeCtx ? st.handshakeCtx->peer : nullptr;
             ComBusFrameCfg applyCfg = st.frameCfg;
             if (st.handshakeCtx && st.handshakeCtx->baseSet && !st.handshakeCtx->nextMode) {
-                applyCfg.nAnalog  = peer ? peer->nStableAnalog  : combus::wire::kCombusBaseStableAnalogCount;
-                applyCfg.nDigital = peer ? peer->nStableDigital : combus::wire::kCombusBaseStableDigitalCount;
+                applyCfg.nAnalog  = peer ? peer->analog.stableCount  : combus::wire::kCombusBaseStableAnalogCount;
+                applyCfg.nDigital = peer ? peer->digital.stableCount : combus::wire::kCombusBaseStableDigitalCount;
             }
             combus_frame_apply(applyCfg, st.target, &st.snap,
                                st.writeLayer, peer);
@@ -470,9 +470,9 @@ bool combus_rx_peer_or( uint8_t ch, uint8_t excludeLink )
         uint8_t pos = ch;
         const ComPeerLink* peer = st.handshakeCtx ? st.handshakeCtx->peer : nullptr;
         if (peer) {
-            pos = peer->nDigital;
-            for (uint8_t p = 0u; p < peer->nDigital; ++p) {
-                if (peer->digital[p] == ch && peer->digitalRx[p]) { pos = p; break; }
+            pos = peer->digital.count;
+            for (uint8_t p = 0u; p < peer->digital.count; ++p) {
+                if (peer->digital.ids[p] == ch && peer->digital.rx[p]) { pos = p; break; }
             }
         }
         if (pos >= st.snap.header.cfg.nDigital) { continue; }

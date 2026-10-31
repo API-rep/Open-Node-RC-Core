@@ -61,7 +61,7 @@ uint8_t combus_handshake_tryDecode(
  *
  * @param[in] localMd5   Pointer to 16 bytes — the locally-generated MD5
  *                       for this link's layer (typically
- *                       `ctx->expectedMd5`).
+ *                       `ctx->expected.stable`).
  * @param[in] wireMd5    Pointer to 16 bytes received on the wire.
  * @param[in] wireMajor  On-wire project version MAJOR.
  *

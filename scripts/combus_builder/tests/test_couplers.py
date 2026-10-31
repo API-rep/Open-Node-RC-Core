@@ -364,6 +364,9 @@ def test_row1_t7_generated_header_and_build_log(tmp_path, tractor, capsys):
     assert ("static_cast<uint8_t>(AnalogComBusID::TEST_AXLE_LOAD), "
             "static_cast<uint8_t>(AnalogComBusID::TEST_BRAKE_BUS), "
             "static_cast<uint8_t>(AnalogComBusID::TEST_TILT_ANGLE)") in text
-    assert '"test_hitch", kMd5, kMd5Stable, kMd5Peer, kMd5PeerStable,' in text
+    assert '.coupler   = "test_hitch",' in text
+    assert ".announced = { .stable = kAnnouncedMd5, .next = kAnnouncedMd5Next }," in text
+    assert ".expected  = { .stable = kExpectedMd5,  .next = kExpectedMd5Next }," in text
+    assert ".ids = kAnalog,  .rx = kAnalogRx }," in text
     assert "[combus_builder] set LINK test_hitch (vehicle)  md5=" in out
     assert "A3+D2" in out

@@ -135,14 +135,14 @@ bool combus_link_build( const ComDevMap& map,
             sys_log_err("[COMBUS_LINKS] link '%s': a coupler is for a link between nodes only\n", map.dev->name);
             return false;
         }
-        if (peer->nAnalog > sizeof(runtime.analogRx) / sizeof(runtime.analogRx[0])
-            || peer->nDigital > sizeof(runtime.digitalRx) / sizeof(runtime.digitalRx[0])) {
+        if (peer->analog.count > sizeof(runtime.analogRx) / sizeof(runtime.analogRx[0])
+            || peer->digital.count > sizeof(runtime.digitalRx) / sizeof(runtime.digitalRx[0])) {
             sys_log_err("[COMBUS_LINKS] link '%s': the link through '%s' exceeds the RX buffers\n",
                         map.dev->name, peer->coupler);
             return false;
         }
-        nAnalog  = peer->nAnalog;
-        nDigital = peer->nDigital;
+        nAnalog  = peer->analog.count;
+        nDigital = peer->digital.count;
     }
     const ComBusFrameCfg frameCfg = { nAnalog, nDigital };
 
@@ -165,13 +165,13 @@ bool combus_link_build( const ComDevMap& map,
     }
 
         // --- 4. What the link watch needs ---
-    runtime.name           = map.dev->name;
-    runtime.receives       = endReceives(map.end);
-    runtime.linkTimeoutMs  = map.dev->protocol->linkTimeoutMs;
-    runtime.startupGraceMs = map.dev->protocol->startupGraceMs;
-    runtime.scope          = map.dev->scope;
-    runtime.peer           = peer;
-    runtime.coupling       = (map.dev->activation == LinkActivation::ON_COUPLING) ? map.dev->coupling : nullptr;
+    runtime.name                 = map.dev->name;
+    runtime.watch.receives       = endReceives(map.end);
+    runtime.watch.linkTimeoutMs  = map.dev->protocol->linkTimeoutMs;
+    runtime.watch.startupGraceMs = map.dev->protocol->startupGraceMs;
+    runtime.scope                = map.dev->scope;
+    runtime.peer                 = peer;
+    runtime.coupling.dev         = (map.dev->activation == LinkActivation::ON_COUPLING) ? map.dev->coupling : nullptr;
 
     link = built;
     return true;
@@ -239,29 +239,29 @@ void combus_links_watch( ComLinkRuntime* runtime, uint8_t count )
     const uint32_t now = millis();
     for (uint8_t i = 0u; i < count; ++i) {
             // The startup grace starts now, nothing is reported lost yet
-        runtime[i].watchStartMs = now;
-        runtime[i].reportedLost = false;
-        runtime[i].wasAlive     = false;
-        runtime[i].coupled      = false;
+        runtime[i].watch.watchStartMs = now;
+        runtime[i].watch.reportedLost = false;
+        runtime[i].watch.wasAlive     = false;
+        runtime[i].coupling.coupled   = false;
 
             // 3.3: a coupled link starts suspended, until its trigger says hitched
-        if (runtime[i].coupling) {
+        if (runtime[i].coupling.dev) {
             combus_tx_set_active(i, false);
             combus_rx_set_active(i, false);
         }
 
             // The RX module needs the same timeouts to ignore silent links in the both_or merge
-        if (runtime[i].receives) { combus_rx_set_link_timeout(i, runtime[i].linkTimeoutMs); }
+        if (runtime[i].watch.receives) { combus_rx_set_link_timeout(i, runtime[i].watch.linkTimeoutMs); }
     }
 }
 
 
 ComLinkState combus_link_state( uint8_t linkIdx )
 {
-    if (linkIdx >= s_watchedCount || !s_watched[linkIdx].receives) { return ComLinkState::NEVER_SEEN; }
+    if (linkIdx >= s_watchedCount || !s_watched[linkIdx].watch.receives) { return ComLinkState::NEVER_SEEN; }
 
     if (combus_rx_age_ms(linkIdx) == UINT32_MAX)                       { return ComLinkState::NEVER_SEEN; }
-    if (combus_rx_is_alive(linkIdx, s_watched[linkIdx].linkTimeoutMs)) { return ComLinkState::ALIVE; }
+    if (combus_rx_is_alive(linkIdx, s_watched[linkIdx].watch.linkTimeoutMs)) { return ComLinkState::ALIVE; }
     return ComLinkState::LOST;
 }
 
@@ -273,7 +273,7 @@ static bool lostAfterGrace( uint8_t linkIdx )
         case ComLinkState::LOST:
             return true;
         case ComLinkState::NEVER_SEEN:
-            return (millis() - s_watched[linkIdx].watchStartMs) >= s_watched[linkIdx].startupGraceMs;
+            return (millis() - s_watched[linkIdx].watch.watchStartMs) >= s_watched[linkIdx].watch.startupGraceMs;
         case ComLinkState::ALIVE:
         default:
             return false;
@@ -285,7 +285,7 @@ bool combus_links_lost( LinkScope scope )
 {
     for (uint8_t i = 0u; i < s_watchedCount; ++i) {
         const ComLinkRuntime& rt = s_watched[i];
-        if (!rt.receives || rt.scope != scope || rt.coupling) { continue; }   // 3.3: a coupled link has its own contributor
+        if (!rt.watch.receives || rt.scope != scope || rt.coupling.dev) { continue; }   // 3.3: a coupled link has its own contributor
 
             // Link rework S2: a link to another node counts at once (it may not be
             // there); a link between boards waits for the startup grace.
@@ -301,13 +301,13 @@ bool combus_links_lost( LinkScope scope )
     // frame, the merge ignores a link that is not alive.
 static void takeBackSafeValues( const ComPeerLink& peer, ComBus& bus )
 {
-    for (uint8_t p = 0u; p < peer.nAnalog; ++p) {
-        if (!peer.analogRx[p]) { continue; }
-        combus_set_raw_analog(bus, static_cast<AnalogComBusID>(peer.analog[p]), CbusNeutral, ChanLayer::BASE);
+    for (uint8_t p = 0u; p < peer.analog.count; ++p) {
+        if (!peer.analog.rx[p]) { continue; }
+        combus_set_raw_analog(bus, static_cast<AnalogComBusID>(peer.analog.ids[p]), CbusNeutral, ChanLayer::BASE);
     }
-    for (uint8_t p = 0u; p < peer.nDigital; ++p) {
-        if (!peer.digitalRx[p] || bus.digitalBus[peer.digital[p]].bothOr.enabled) { continue; }
-        combus_set_digital(bus, static_cast<DigitalComBusID>(peer.digital[p]), false, ChanLayer::BASE);
+    for (uint8_t p = 0u; p < peer.digital.count; ++p) {
+        if (!peer.digital.rx[p] || bus.digitalBus[peer.digital.ids[p]].bothOr.enabled) { continue; }
+        combus_set_digital(bus, static_cast<DigitalComBusID>(peer.digital.ids[p]), false, ChanLayer::BASE);
     }
 }
 
@@ -318,25 +318,25 @@ static void takeBackSafeValues( const ComPeerLink& peer, ComBus& bus )
 static void followCoupling( uint8_t i, ComBus& bus )
 {
     ComLinkRuntime& rt = s_watched[i];
-    const bool hitched = bus.digitalBus[static_cast<uint8_t>(rt.coupling->trigger)].value;
-    if (hitched == rt.coupled) { return; }
-    rt.coupled = hitched;
+    const bool hitched = bus.digitalBus[static_cast<uint8_t>(rt.coupling.dev->trigger)].value;
+    if (hitched == rt.coupling.coupled) { return; }
+    rt.coupling.coupled = hitched;
 
     if (hitched) {
-        rt.watchStartMs = millis();
-        rt.reportedLost = false;
+        rt.watch.watchStartMs = millis();
+        rt.watch.reportedLost = false;
         combus_rx_set_active(i, true);
         combus_tx_set_active(i, true);
-        sys_log_info("[COMBUS_LINKS] link '%s' coupled (%s)\n", rt.name ? rt.name : "?", rt.coupling->name);
+        sys_log_info("[COMBUS_LINKS] link '%s' coupled (%s)\n", rt.name ? rt.name : "?", rt.coupling.dev->name);
         return;
     }
 
-    if (rt.wasAlive && rt.peer) { takeBackSafeValues(*rt.peer, bus); }
-    rt.wasAlive     = false;
-    rt.reportedLost = false;
+    if (rt.watch.wasAlive && rt.peer) { takeBackSafeValues(*rt.peer, bus); }
+    rt.watch.wasAlive     = false;
+    rt.watch.reportedLost = false;
     combus_tx_set_active(i, false);
     combus_rx_set_active(i, false);
-    sys_log_info("[COMBUS_LINKS] link '%s' uncoupled (%s)\n", rt.name ? rt.name : "?", rt.coupling->name);
+    sys_log_info("[COMBUS_LINKS] link '%s' uncoupled (%s)\n", rt.name ? rt.name : "?", rt.coupling.dev->name);
 }
 
 
@@ -344,27 +344,27 @@ void combus_links_update( ComBus& bus )
 {
     for (uint8_t i = 0u; i < s_watchedCount; ++i) {
         ComLinkRuntime& rt = s_watched[i];
-        if (rt.coupling) {
+        if (rt.coupling.dev) {
             followCoupling(i, bus);
-            if (rt.coupling->fail) {
-                combus_set_digital(bus, *rt.coupling->fail, rt.coupled && rt.receives && lostAfterGrace(i), ChanLayer::BOARD);
+            if (rt.coupling.dev->fail) {
+                combus_set_digital(bus, *rt.coupling.dev->fail, rt.coupling.coupled && rt.watch.receives && lostAfterGrace(i), ChanLayer::BOARD);
             }
-            if (!rt.coupled) { continue; }
+            if (!rt.coupling.coupled) { continue; }
         }
-        if (!rt.receives) { continue; }
+        if (!rt.watch.receives) { continue; }
 
             // --- 3.2c: a link with a peer that stops being alive: safe values ---
         const bool alive = (combus_link_state(i) == ComLinkState::ALIVE);
-        if (rt.wasAlive && !alive && rt.peer) {
+        if (rt.watch.wasAlive && !alive && rt.peer) {
             takeBackSafeValues(*rt.peer, bus);
             sys_log_warn("[COMBUS_LINKS] link '%s': received channels back to their safe value\n",
                          rt.name ? rt.name : "?");
         }
-        rt.wasAlive = alive;
+        rt.watch.wasAlive = alive;
 
         const bool lost = lostAfterGrace(i);
-        if (lost == rt.reportedLost) { continue; }
-        rt.reportedLost = lost;
+        if (lost == rt.watch.reportedLost) { continue; }
+        rt.watch.reportedLost = lost;
 
         if (lost) {
             sys_log_warn("[COMBUS_LINKS] link '%s' lost (%s)\n", rt.name ? rt.name : "?",
@@ -379,8 +379,8 @@ void combus_links_update( ComBus& bus )
 bool combus_links_rx_lost()
 {
     for (uint8_t i = 0u; i < s_watchedCount; ++i) {
-        if (s_watched[i].coupling && !s_watched[i].coupled) { continue; }   // 3.3: unhitched, not lost
-        if (s_watched[i].receives && !combus_rx_is_alive(i, s_watched[i].linkTimeoutMs)) {
+        if (s_watched[i].coupling.dev && !s_watched[i].coupling.coupled) { continue; }   // 3.3: unhitched, not lost
+        if (s_watched[i].watch.receives && !combus_rx_is_alive(i, s_watched[i].watch.linkTimeoutMs)) {
             return true;
         }
     }

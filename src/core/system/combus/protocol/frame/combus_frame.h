@@ -106,9 +106,9 @@ static constexpr uint8_t CombusFrameMinLen = CombusFrameHeaderLen + sizeof(uint8
  *                             (both_or without echo).  nullptr = bus values.
  *                             Indexed by wire position.
  * @param[in]  analogMap       Link between nodes (3.1b): wire position -> analog
- *                             channel ID (ComPeerLink::analog).  nullptr = the
+ *                             channel ID (ComPeerLink::analog.ids).  nullptr = the
  *                             wire position is the channel ID.
- * @param[in]  digitalMap      Same for the digital channels (ComPeerLink::digital).
+ * @param[in]  digitalMap      Same for the digital channels (ComPeerLink::digital.ids).
  *
  * @return Number of bytes written into outputBuffer, 0 on error.
  *
