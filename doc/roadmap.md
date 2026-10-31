@@ -51,7 +51,7 @@ Aujourd'hui, seul l'UART est implémenté, de façon assez statique (flags `COMB
 **Early stage — filtrage selon `direction`.** Le champ `direction` est généré dans chaque canal mais n'est lu nulle part dans le runtime : l'émission envoie tous les canaux de la vue du lien. À traiter avec le rework de fond du mécanisme de communication, pas avant.
 - Volet « timeout » de ce chantier : relance côté télécommande pour un lien sans retour (uplink seul) ; accusé de réception et délai d'attente pour un lien avec retour (downlink). Aucune trace dans le code aujourd'hui.
 
-**Secondaire — qualité de service à deux niveaux (basse / haute priorité).** À envisager seulement si le besoin apparaît (encombrement du réseau, etc.). Aucune trace dans le code.
+**Secondaire — qualité de service à deux niveaux (basse / haute priorité).** À envisager seulement si le besoin apparaît (encombrement du réseau, etc.). Aucune trace dans le code. Piste (2026-10-31) : c'est le plan des **données** (`seq` 1..255) qui se dédouble, pas `seq == 0` (réservé au contrôle : handshake, couplage) ; une trame rapide (gaz, direction, frein, failsafe, runlevel) à `txHz` élevé et une trame lente (phares, options) moins souvent, distinguées par un bit de `flags` ; un champ `.cb` `priority: high | low` haché dans le MD5, deux `ComLinkTable` par lien, la vie du lien portée par la trame rapide, les failsafe toujours rapides (contrôle du builder).
 
 ### Autres chantiers ###
 

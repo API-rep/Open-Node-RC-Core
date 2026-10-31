@@ -39,6 +39,7 @@ Exemple, `GEAR_BUS` (un même contrat, trois variantes) :
 | **Les processors ne voient que des valeurs logiques** (acté dans `doc/WIP - ComBus processors.md` §2.7) : le moteur des chaînes convertit à l'entrée et à la sortie, le pipeline passe en `int32_t` ; pas de brut dans une chaîne (gain d'optimisation négligeable, risque de mélange silencieux) ; une exception seulement après une mesure, déclarée par processor | 2026-10-29 | ce WIP |
 | Une seule chaîne écrit chaque sortie `BASE` sur un nœud (le défaut **ou** son remplacement) | 2026-10-27 | ce WIP (le builder pourra le vérifier, comme `check_single_source()`) |
 | `GEAR_BUS` reste `BASE` (sortie du contrat du type), en `zeroAt: neutral` (point mort = 0 logique, marche arrière = −1) | 2026-10-27 | ce WIP |
+| Les chaînes déclarées (`.cbch`) auront un champ `requires`, identique à celui des `.cb` ; d'ici là, une chaîne C++ se garde par un `#if` (forme temporaire, ex. la chaîne d'un coupleur gardée par `COMBUS_COUPLER_<NOM>`, link rework 3.4e) | 2026-10-31 | link rework 3.4e |
 
 ---
 
