@@ -70,7 +70,7 @@ struct ComLinkRuntime {
     LinkScope      scope          = LinkScope::INTRA_NODE;     ///< scope of the ComDev: which contributor its loss feeds (S2)
     uint32_t       watchStartMs   = 0u;                        ///< set by combus_links_watch(): start of the grace
     bool           reportedLost   = false;                     ///< last loss state logged by combus_links_update()
-    const ComPeerLink* peer       = nullptr;                   ///< link with a peer type (3.1b), nullptr = view of the scope
+    const ComPeerLink* peer       = nullptr;                   ///< link through a coupler (3.1b, 3.4a), nullptr = view of the scope
     bool           wasAlive       = false;                     ///< 3.2c: alive at the last combus_links_update(), to catch the loss
     const CouplingDev* coupling   = nullptr;                   ///< 3.3: link ON_COUPLING, nullptr = always active
     bool           coupled        = false;                     ///< 3.3: trigger true at the last combus_links_update()

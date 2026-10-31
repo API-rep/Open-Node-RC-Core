@@ -260,12 +260,12 @@ structural flag, checked by the ComBus Builder hook (`links.node_nature()`).
 It guards no C++ code; it says what the node is, and so its place in the
 star of the links between nodes:
 
-| Flag | Node | Place | Peers (`-D COMBUS_PEER_<TYPE>`) |
+| Flag | Node | Place | Couplers (`-D COMBUS_COUPLER_<NAME>`, step 3.4a) |
 |---|---|---|---|
 | `IS_VEHICLE` | the prime mover: tractor, dumper, excavator | hub: relays between its links | zero or several |
 | `IS_ATTACHMENT` | what is hitched to a vehicle: trailer, plough, dolly | one link, to its vehicle; never relays to another node | exactly one |
-| `IS_MACHINE` | a stand-alone machine | isolated | none |
-| `IS_REMOTE` | the remote | (remote work, chantier 4) | none for now |
+| `IS_MACHINE` | a stand-alone machine | isolated | none (refused explicitly) |
+| `IS_REMOTE` | the remote | (remote work, chantier 4) | none for now (refused explicitly) |
 
 In this project a trailer is an attachment, not a vehicle. `[env:machines]`
 sets no structural flag: each machine identity declares its own.

@@ -2,14 +2,22 @@
  * @file test_peer_link.cpp
  * @brief Link between two nodes through the generated tables (link rework 3.1b).
  *
- * @details The board is a fictitious TEST tractor; its peer type is the TEST
- *   trailer (core/config/machines/test_tractor/, test_trailer/).  The builder
- *   computed the channel set of that link and its table (combus_peer_links.h):
- *     analog  0: TEST_BRAKE_BUS (the tractor sends it), 1: TEST_TILT_ANGLE (it receives it);
+ * @details The board is a fictitious TEST tractor carrying the TEST coupler
+ *   (core/config/machines/test_tractor/, core/config/couplers/test_hitch/,
+ *   step 3.4a).  The frame of the link is the full coupler, and its table
+ *   (combus_peer_links.h):
+ *     analog  0: TEST_AXLE_LOAD (it receives it; unknown to the tractor type,
+ *                injected: an absent function), 1: TEST_BRAKE_BUS (it sends
+ *                it), 2: TEST_TILT_ANGLE (it receives it);
  *     digital 0: TEST_COUPLED_FAIL (both_or), 1: TEST_LIGHTS (it sends it).
  *   TEST_THROTTLE_BUS and TEST_BEACON are in the tractor ComBus but not in the
  *   link; they come before channels of the link in the local order, so the
- *   table is not the identity for either type.
+ *   table is not the identity.
+ *
+ *   The MD5 carries the coupler and a role (step 3.4a): the tractor announces
+ *   the vehicle MD5 and expects the attachment one.  On the loopback it hears
+ *   itself, so it refuses (row 5b, two vehicles); to stand for the trailer,
+ *   the tests make it announce the attachment MD5 (actAsTheTrailer()).
  *
  *   Rows of the table validated by the owner (2026-10-25):
  *     1  the generated descriptor;
@@ -53,7 +61,7 @@
 #include "combus.h"
 #include "combus_peer_links.h"
 
-using combus::peer::TestTrailer::kLink;
+using combus::peer::TestHitch::kLink;
 
 
 // =============================================================================
@@ -64,6 +72,7 @@ static constexpr int      kTxPin    = 17;
 static constexpr int      kRxPin    = 16;
 static constexpr uint32_t kRxPollMs = 50u;
 
+static constexpr uint8_t kAxle     = static_cast<uint8_t>(AnalogComBusID::TEST_AXLE_LOAD);
 static constexpr uint8_t kBrake    = static_cast<uint8_t>(AnalogComBusID::TEST_BRAKE_BUS);
 static constexpr uint8_t kTilt     = static_cast<uint8_t>(AnalogComBusID::TEST_TILT_ANGLE);
 static constexpr uint8_t kThrottle = static_cast<uint8_t>(AnalogComBusID::TEST_THROTTLE_BUS);
@@ -71,7 +80,7 @@ static constexpr uint8_t kFault    = static_cast<uint8_t>(DigitalComBusID::TEST_
 static constexpr uint8_t kLights   = static_cast<uint8_t>(DigitalComBusID::TEST_LIGHTS);
 static constexpr uint8_t kBeacon   = static_cast<uint8_t>(DigitalComBusID::TEST_BEACON);
 
-static constexpr ComBusFrameCfg kLinkCfg = { 2u, 2u };
+static constexpr ComBusFrameCfg kLinkCfg = { 3u, 2u };
 
 static UartCtx        s_uartPool[1];
 static CombusTxState  s_txStates[1];
@@ -90,7 +99,7 @@ static const ComPort s_port = ComPort::makeUart("test", { 2, kTxPin, kRxPin, 115
 static ComLinkRuntime s_runtime;
 static ComBusLink     s_link;
 
-static uint16_t frameAnalog[2]  = {};
+static uint16_t frameAnalog[3]  = {};
 static bool     frameDigital[2] = {};
 static ComBusFrame s_frame = { .analog = frameAnalog, .digital = frameDigital };
 static uint8_t  s_buf[CombusRxBufSize];
@@ -106,13 +115,13 @@ static void resetBus(void) {
 
 /** A frame as the trailer would send it: wire order of the link. */
 static uint8_t encodeTrailerFrame(uint16_t brake, uint16_t tilt, bool fault, bool lights, uint8_t seq) {
-    static AnalogComBus  a[2];
+    static AnalogComBus  a[3];
     static DigitalComBus d[2];
     static ComBus trailer = { .analogBus = a, .digitalBus = d };
-    a[0].value = brake;  a[1].value = tilt;
+    a[0].value = 0u;     a[1].value = brake;  a[2].value = tilt;
     d[0].value = fault;  d[1].value = lights;
     trailer.analogBusMaxVal = bus.analogBusMaxVal;
-    return combus_frame_encode(kLinkCfg, s_buf, &trailer, seq, 2u, 2u);
+    return combus_frame_encode(kLinkCfg, s_buf, &trailer, seq, 3u, 2u);
 }
 
 /** Build the link with the trailer on the loopback port and put it under watch. */
@@ -125,9 +134,16 @@ static void startLink(void) {
     combus_links_watch(&s_runtime, 1u);
 }
 
-/** Run the handshake on the loopback until the contract is STABLE. */
+/** On the loopback the tractor hears itself: make it announce the attachment MD5, as the trailer would (3.4a). */
+static void actAsTheTrailer(void) {
+    s_runtime.handshake.announcedMd5     = kLink.md5PeerStable;
+    s_runtime.handshake.announcedMd5Next = kLink.md5Peer;
+}
+
+/** Run the handshake on the loopback, standing for the trailer, until the contract is STABLE. */
 static void ensureStable(void) {
     CombusHandshakeContext* ctx = &s_runtime.handshake;
+    actAsTheTrailer();
     for (uint32_t t0 = millis(); !combus_handshake_is_contract_validated(ctx) && (millis() - t0) < 1500u; ) {
         combus_handshake_tx_update(ctx, s_com);
         delay(10u);
@@ -143,19 +159,22 @@ static void ensureStable(void) {
 
 /** Row 1: the descriptor generated for the link with the trailer. */
 static void test_row1_generated_descriptor(void) {
-    TEST_ASSERT_EQUAL_UINT8(2u, kLink.nAnalog);
+    TEST_ASSERT_EQUAL_STRING("test_hitch", kLink.coupler);
+    TEST_ASSERT_EQUAL_UINT8(3u, kLink.nAnalog);
     TEST_ASSERT_EQUAL_UINT8(2u, kLink.nDigital);
-    TEST_ASSERT_EQUAL_UINT8(kBrake,  kLink.analog[0]);
-    TEST_ASSERT_EQUAL_UINT8(kTilt,   kLink.analog[1]);
+    TEST_ASSERT_EQUAL_UINT8(kAxle,   kLink.analog[0]);
+    TEST_ASSERT_EQUAL_UINT8(kBrake,  kLink.analog[1]);
+    TEST_ASSERT_EQUAL_UINT8(kTilt,   kLink.analog[2]);
     TEST_ASSERT_EQUAL_UINT8(kFault,  kLink.digital[0]);
     TEST_ASSERT_EQUAL_UINT8(kLights, kLink.digital[1]);
-    TEST_ASSERT_FALSE(kLink.analogRx[0]);       // the tractor sends the brake
-    TEST_ASSERT_TRUE(kLink.analogRx[1]);        // it receives the tilt
+    TEST_ASSERT_TRUE(kLink.analogRx[0]);        // it receives the axle load (injected channel)
+    TEST_ASSERT_FALSE(kLink.analogRx[1]);       // the tractor sends the brake
+    TEST_ASSERT_TRUE(kLink.analogRx[2]);        // it receives the tilt
     TEST_ASSERT_TRUE(kLink.digitalRx[0]);       // the shared fault (OR)
     TEST_ASSERT_FALSE(kLink.digitalRx[1]);      // it sends the lights
 
         // The test only bites if the wire order differs from the local order.
-    TEST_ASSERT_TRUE_MESSAGE(kTilt != 1u && kFault != 0u, "the table is the identity: the tests cannot bite");
+    TEST_ASSERT_TRUE_MESSAGE(kTilt != 2u && kFault != 0u, "the table is the identity: the tests cannot bite");
 }
 
 /** Rows 2 and 4: emission in wire order, through the table; the throttle is not in the frame. */
@@ -166,11 +185,11 @@ static void test_row2_emission_through_the_table(void) {
     bus.analogBus[kThrottle].value = 999u;
     bus.digitalBus[kLights].value  = true;
 
-    const uint8_t len = combus_frame_encode(kLinkCfg, s_buf, &bus, 3u, 2u, 2u, nullptr, kLink.analog, kLink.digital);
+    const uint8_t len = combus_frame_encode(kLinkCfg, s_buf, &bus, 3u, 3u, 2u, nullptr, kLink.analog, kLink.digital);
     TEST_ASSERT_TRUE(combus_frame_decode(kLinkCfg, &s_frame, s_buf, len));
-    TEST_ASSERT_EQUAL_UINT8(2u, s_frame.header.cfg.nAnalog);
-    TEST_ASSERT_EQUAL_UINT16(111u, frameAnalog[0]);
-    TEST_ASSERT_EQUAL_UINT16(222u, frameAnalog[1]);
+    TEST_ASSERT_EQUAL_UINT8(3u, s_frame.header.cfg.nAnalog);
+    TEST_ASSERT_EQUAL_UINT16(111u, frameAnalog[1]);
+    TEST_ASSERT_EQUAL_UINT16(222u, frameAnalog[2]);
     TEST_ASSERT_FALSE(frameDigital[0]);
     TEST_ASSERT_TRUE(frameDigital[1]);
 }
@@ -193,17 +212,34 @@ static void test_row3_reception_through_the_table(void) {
     TEST_ASSERT_FALSE(bus.digitalBus[kBeacon].value);                 // not in the link
 }
 
-/** Row 5: the contract of the link is the MD5 of the link. */
+/** Row 5: the contract of the link is the MD5 of its coupler: the tractor announces its role, expects the other (3.4a). */
 static void test_row5_contract_is_the_link_md5(void) {
     startLink();
     const CombusHandshakeContext& ctx = s_runtime.handshake;
     TEST_ASSERT_TRUE(ctx.peer == &kLink);
-    TEST_ASSERT_EQUAL_UINT8_ARRAY(kLink.md5Stable, ctx.expectedMd5, 16u);
-    TEST_ASSERT_EQUAL_UINT8_ARRAY(kLink.md5, ctx.expectedMd5Next, 16u);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(kLink.md5PeerStable, ctx.expectedMd5, 16u);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(kLink.md5Peer, ctx.expectedMd5Next, 16u);
+    TEST_ASSERT_TRUE(ctx.announcedMd5 == kLink.md5Stable);
+    TEST_ASSERT_TRUE(ctx.announcedMd5Next == kLink.md5);
+    TEST_ASSERT_FALSE_MESSAGE(memcmp(kLink.md5Stable, kLink.md5PeerStable, 16u) == 0,
+                              "the two roles have the same MD5");
     TEST_ASSERT_FALSE(ctx.hasCandidates);
     TEST_ASSERT_TRUE(s_link.rxCfg.has_value());
-    TEST_ASSERT_EQUAL_UINT8(2u, s_link.rxCfg->nAnalog);
+    TEST_ASSERT_EQUAL_UINT8(3u, s_link.rxCfg->nAnalog);
     TEST_ASSERT_EQUAL_UINT8(2u, s_link.rxCfg->nDigital);
+}
+
+/** Row 5b: on the loopback the tractor hears its own role, as a second vehicle: the contract is refused (3.4a). */
+static void test_row5b_two_vehicles_refuse_each_other(void) {
+    startLink();
+    CombusHandshakeContext* ctx = &s_runtime.handshake;
+    for (uint32_t t0 = millis(); (millis() - t0) < 1000u; ) {
+        combus_handshake_tx_update(ctx, s_com);
+        delay(10u);
+        combus_rx_update(&bus);
+    }
+    TEST_ASSERT_FALSE_MESSAGE(combus_handshake_is_contract_validated(ctx), "two vehicles agreed on a contract");
+    ensureStable();                     // control: same jumper, the attachment role is accepted
 }
 
 /** Row 6: the fault raised by the trailer is merged through the table; the tractor does not echo it. */
@@ -241,9 +277,9 @@ static void test_row7_end_to_end(void) {
 
     const ComBusFrame* snap = combus_rx_snapshot(kLinkIdx);
     TEST_ASSERT_NOT_NULL(snap);
-    TEST_ASSERT_EQUAL_UINT8(2u, snap->header.cfg.nAnalog);
-    TEST_ASSERT_EQUAL_UINT16(555u, snap->analog[0]);
-    TEST_ASSERT_EQUAL_UINT16(444u, snap->analog[1]);
+    TEST_ASSERT_EQUAL_UINT8(3u, snap->header.cfg.nAnalog);
+    TEST_ASSERT_EQUAL_UINT16(555u, snap->analog[1]);
+    TEST_ASSERT_EQUAL_UINT16(444u, snap->analog[2]);
     TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::ALIVE);
 }
 
@@ -547,6 +583,7 @@ void setup() {
     RUN_TEST(test_row2_emission_through_the_table);
     RUN_TEST(test_row3_reception_through_the_table);
     RUN_TEST(test_row5_contract_is_the_link_md5);
+    RUN_TEST(test_row5b_two_vehicles_refuse_each_other);
     RUN_TEST(test_row6_both_or_through_the_table);
     RUN_TEST(test_row7_end_to_end);
     RUN_TEST(test_loss_row1_to_3_received_positions_take_back_their_safe_value);

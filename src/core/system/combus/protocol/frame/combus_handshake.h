@@ -328,6 +328,13 @@ struct CombusHandshakeContext {
     //    Read by both TX (to embed in the magic frame) and RX (to compare
     //    against the on-wire MD5).  Same pattern as LY2 wireEnd counters.
     const uint8_t* expectedMd5 = nullptr;
+
+    // --- Link rework 3.4a — MD5 announced by this end, when it differs from the
+    //    expected one: on a link through a coupler, each end announces its role
+    //    and expects the other one.  nullptr = the expected MD5 (same contract
+    //    both ways: views of a scope).
+    const uint8_t* announcedMd5      = nullptr; ///< stable MD5 sent by the TX (nullptr = expectedMd5)
+    const uint8_t* announcedMd5Next  = nullptr; ///< next set MD5 sent by the TX (nullptr = expectedMd5Next)
 };
 
 

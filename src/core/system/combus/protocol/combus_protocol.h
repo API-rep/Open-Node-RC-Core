@@ -159,8 +159,8 @@ enum class DigitalComBusID : uint8_t;   // generated (combus_ids.h)
  * @brief The coupling device (attache) of a link ON_COUPLING (link rework 3.3).
  *
  * @details Run-time part of an attache: what says "coupled", and where the loss
- *   of the coupled link is reported.  Step 3.4 adds its contract (channels,
- *   lite / full variants).  While the trigger is false the link is inactive:
+ *   of the coupled link is reported.  The contract of the link is its coupler
+ *   (ComDev::peer, step 3.4a).  While the trigger is false the link is inactive:
  *   nothing sent, nothing received, no handshake, no fault.  Once true, the
  *   link starts with the startup grace of its protocol; lost after it, the
  *   link reports its loss through `fail` only (never NODE_LINK_FAIL).
@@ -191,7 +191,7 @@ struct ComDev {
     const ComProtocolCfg*  protocol;
     LinkActivation         activation;
     const CouplingDev*     coupling;    ///< required when activation == ON_COUPLING, else nullptr
-    const ComPeerLink*     peer   = nullptr;   ///< INTER_NODE only: the link with a peer type (combus_peer_links.h), nullptr = BASE view
+    const ComPeerLink*     peer   = nullptr;   ///< INTER_NODE only: the link through a coupler (combus_peer_links.h), nullptr = BASE view
 };
 
 

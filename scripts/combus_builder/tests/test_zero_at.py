@@ -32,7 +32,7 @@ from scripts.combus_builder.canon import canonize  # noqa: E402
 from scripts.combus_builder.canon.channels import ChannelValidationError  # noqa: E402
 from scripts.combus_builder.flags import BuildContext  # noqa: E402
 from scripts.combus_builder.generator import generate, select_views  # noqa: E402
-from scripts.combus_builder.links import LinkError, compute_link_set, link_md5  # noqa: E402
+from scripts.combus_builder.links import LinkError, compute_coupler_link, link_md5  # noqa: E402
 from scripts.combus_builder.md5 import canonical_bytes, compute_view_hash  # noqa: E402
 from scripts.combus_builder.parser import discover_and_parse  # noqa: E402
 from scripts.combus_builder.tests._cpp_compiler import find_cpp_compiler  # noqa: E402
@@ -109,16 +109,16 @@ def _view_bytes_view(zero_at, scope):
 
 def test_row5_link_md5_follows_zero_at():
     def md5(zero_at):
-        t, r = _defs(_raw(zero_at)), _defs(_raw(zero_at))
-        return link_md5(compute_link_set("t", t, "r", r, "IS_VEHICLE"))
+        coupler, t = _defs(_raw(zero_at, direction="downlink")), _defs(_raw(zero_at))
+        return link_md5(compute_coupler_link("c", coupler, t, "IS_VEHICLE"))
     assert md5("neutral") != md5("start")
-    assert md5(None) == md5("start")                                  # existing link MD5 do not move
+    assert md5(None) == md5("start")                                  # zeroAt hashed only when neutral
 
 
-def test_link_refuses_two_types_disagreeing_on_zero_at():
-    t, r = _defs(_raw("neutral")), _defs(_raw("start"))
+def test_link_refuses_a_node_disagreeing_with_its_coupler_on_zero_at():
+    coupler, t = _defs(_raw("neutral", direction="downlink")), _defs(_raw("start"))
     with pytest.raises(LinkError, match="zeroAt"):
-        compute_link_set("t", t, "r", r, "IS_VEHICLE")
+        compute_coupler_link("c", coupler, t, "IS_VEHICLE")
 
 
 # =============================================================================

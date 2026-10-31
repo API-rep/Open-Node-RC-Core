@@ -1034,6 +1034,7 @@ def generate(
     Returns the ViewSelection so callers (tests, diagnostics) can
     inspect what was generated.
     """
+    channels, couplers = _inject_couplers(channels, ctx)
     skipped: list[tuple[str, list[str]]] = []
     active = resolve_requires(channels, ctx, skipped)
     for channel_id, missing in skipped:
@@ -1047,43 +1048,59 @@ def generate(
     # caller; None keeps the md5.py placeholder (tests, ad-hoc calls).
     hashes = _emit_md5_files(sel, out_dir, filename_prefix, project_version)
     _print_set_hashes(sel, hashes, filename_prefix)
-    _emit_peer_links(active, ctx, out_dir, filename_prefix)
+    _emit_peer_links(active, couplers, ctx, out_dir, filename_prefix)
     return sel
 
 
-def _emit_peer_links(channels: list[ChannelDefinition], ctx: BuildContext, out_dir: Path,
-                     filename_prefix: str) -> None:
-    """Link rework 3.1a — the links with the peer types of this node (combus_peer_links.h).
+def _inject_couplers(channels: list[ChannelDefinition], ctx: BuildContext):
+    """Link rework 3.4a — the ComBus of the couplers merges into the ComBus of the node.
 
-    Always written (empty without peer), so that the build has a fixed set of
-    artefacts.  One build-log line per link: its MD5 and its size.
+    Returns the channels with the channels of the declared couplers injected
+    (links.inject_coupler_channels), and the couplers as (nature, {name:
+    channels}); (None, {}) when the node declares no coupler.  A node that
+    declares a coupler, or the removed COMBUS_PEER_<TYPE>, has its nature
+    checked: a wrong env is refused explicitly, never ignored.
     """
     from . import links as links_module
-    from .links import LinkError, check_single_source, compute_link_set, link_md5, node_nature, \
-        peer_types, render_peer_links_header
-    from .machine_type import detect_machine_type
+    from .links import COUPLER_FLAG_PREFIX, REMOVED_PEER_FLAG_PREFIX, LinkError, coupler_names,         inject_coupler_channels, node_nature
 
+    defines = set(ctx.defines) | set(ctx.defines_with_value or {})
+    if not any(d.startswith((COUPLER_FLAG_PREFIX, REMOVED_PEER_FLAG_PREFIX)) for d in defines):
+        return channels, (None, {})
+    try:
+        nature = node_nature(defines)
+        couplers = {}
+        for name in coupler_names(ctx):
+            couplers[name] = links_module.load_coupler_channels(ctx.buildroot, name)
+            channels = inject_coupler_channels(channels, couplers[name], nature)
+    except LinkError as e:
+        raise GeneratorError(f"link through a coupler: {e}") from e
+    return channels, (nature, couplers)
+
+
+def _emit_peer_links(channels: list[ChannelDefinition], couplers, ctx: BuildContext, out_dir: Path,
+                     filename_prefix: str) -> None:
+    """Link rework 3.1a / 3.4a — the links through the couplers of this node (combus_peer_links.h).
+
+    Always written (empty without coupler), so that the build has a fixed set
+    of artefacts.  One build-log line per link: its MD5 and its size.
+    """
+    from .links import LinkError, check_single_source, compute_coupler_link, link_md5,         render_peer_links_header
+
+    nature, by_name = couplers
     links = []
-    peers = peer_types(ctx)
-    if peers:
-        local_type = detect_machine_type(ctx)
-        if local_type is None:
-            raise GeneratorError(f"peer types {peers} declared, but no MACHINE_TYPE_* flag for this node")
-        try:
-            nature = node_nature(set(ctx.defines) | set(ctx.defines_with_value or {}))
-            for peer in peers:
-                link = compute_link_set(local_type, channels, peer,
-                                        links_module.load_type_base_channels(ctx.buildroot, peer), nature)
-                for warning in link.warnings:
-                    print(f"[combus_builder] link {peer}: {warning}")
-                n_analog = sum(1 for c in link.channels if c.type == "analog")
-                n_digital = sum(1 for c in link.channels if c.type == "digital")
-                board = f"  [{filename_prefix}]" if filename_prefix else ""
-                print(f"[combus_builder] set LINK {peer}  md5={link_md5(link)}  A{n_analog}+D{n_digital}{board}")
-                links.append(link)
-            check_single_source(links)          # step 3.2b: one source per channel on the node
-        except LinkError as e:
-            raise GeneratorError(f"link with a peer type: {e}") from e
+    try:
+        for name, coupler_chs in by_name.items():
+            link = compute_coupler_link(name, coupler_chs, channels, nature)
+            n_analog = sum(1 for c in link.channels if c.type == "analog")
+            n_digital = sum(1 for c in link.channels if c.type == "digital")
+            board = f"  [{filename_prefix}]" if filename_prefix else ""
+            print(f"[combus_builder] set LINK {name} ({link.role})  md5={link_md5(link)}  "
+                  f"A{n_analog}+D{n_digital}{board}")
+            links.append(link)
+        check_single_source(links)          # step 3.2b: one source per channel on the node
+    except LinkError as e:
+        raise GeneratorError(f"link through a coupler: {e}") from e
 
     ids_header = f"{_file_base('combus', filename_prefix)}_ids.h"
     _safe_write(out_dir / f"{_file_base('combus_peer_links', filename_prefix)}.h",

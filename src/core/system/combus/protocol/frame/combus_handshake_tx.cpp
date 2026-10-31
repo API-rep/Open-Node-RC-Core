@@ -126,8 +126,12 @@ static uint8_t sendHandshake( const CombusHandshakeContext* ctx, NodeCom* nodeCo
     const uint8_t* stableMd5 = ctx->expectedMd5
         ? ctx->expectedMd5
         : combus::wire::kCombusComBusMd5;
-    const uint8_t* md5ToSend = ((flags & kCombusHandshakeFlagNext) && ctx->expectedMd5Next)
-        ? ctx->expectedMd5Next
+    const uint8_t* nextMd5   = ctx->expectedMd5Next;
+        // Link rework 3.4a — through a coupler, this end announces its own role.
+    if (ctx->announcedMd5)     { stableMd5 = ctx->announcedMd5; }
+    if (ctx->announcedMd5Next) { nextMd5   = ctx->announcedMd5Next; }
+    const uint8_t* md5ToSend = ((flags & kCombusHandshakeFlagNext) && nextMd5)
+        ? nextMd5
         : stableMd5;
 
     uint8_t frame[ sizeof(CombusFrameSof)

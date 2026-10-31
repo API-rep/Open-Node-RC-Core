@@ -254,39 +254,57 @@ nœud (`is_connected_board()`, flags `INTER_NODE_FLAGS`), `downlink` ailleurs ;
 nœud, plusieurs cartes connectées (appelé par le hook). Le drapeau
 `passthrough` du canon n'entre pas dans le MD5.
 
-### Liaisons entre nœuds (link rework 3.1a)
+### Liaisons entre nœuds : les coupleurs (link rework 3.1a, 3.4a)
 
-Un nœud déclare les **types** qu'il accepte comme pairs : `-D COMBUS_PEER_<TYPE>`
-(`links.peer_types()`). Pour chaque pair, `links.py` :
+Le contrat d'une liaison est un **coupleur**, la norme du lien, comme une prise
+normalisée : `src/core/config/couplers/<nom>/*.cb`, des channels `BASE`
+ordinaires, au **sens vu de l'attelage** (`uplink` : vers le véhicule,
+`downlink` : depuis le véhicule, `both_or` : faute partagée), sans `_pt` (le
+relais est l'affaire d'un nœud), `value` = la valeur sûre. Un nœud déclare ses
+coupleurs : `-D COMBUS_COUPLER_<NOM>` (`links.coupler_names()`), de 0 à n sur
+un véhicule, exactement 1 sur un attelage ; `IS_MACHINE` ou `IS_REMOTE` avec un
+coupleur est **refusé explicitement** (`node_nature()`), comme l'ancien
+`-D COMBUS_PEER_<TYPE>` (supprimé en 3.4a).
 
-- lit les channels `BASE` du type pair **à part** (`load_type_base_channels()`,
-  la « seconde lecture ») : ils n'entrent jamais dans le ComBus local ;
-- calcule l'**ensemble de la liaison** (`compute_link_set()`) : les channels
-  `BASE` (next) de même nom dans les deux types, en ne gardant que ceux qui
-  circulent (un côté émet, l'autre reçoit ; un `downlink_pt` émet, il relaie) ;
-  deux récepteurs : avertissement « channel mort », écarté ; deux émetteurs :
-  erreur sauf `*_or` ; deux relais face à face : erreur jusqu'au contrôle du
-  graphe (3.2) ; même nom avec un autre type ou une autre valeur par défaut :
-  erreur ;
-- trie la **trame commune** sur ce que les deux types partagent : analogiques
-  puis numériques, stables avant candidats, puis le nom (jamais le thème) ;
-- calcule un **MD5 symétrique** (`link_md5()`) : le même vu des deux côtés,
-  avec et sans les candidats ;
-- écrit `combus_peer_links.h` (toujours, vide sans pair) : par type pair, le
-  MD5, les nombres de channels, la **table** position sur le fil → ID local
-  (`kAnalog[]`, `kDigital[]`) et ce que ce nœud reçoit (`kAnalogRx[]`,
-  `kDigitalRx[]`).
+- **Lecture à part** (`load_coupler_channels()`) : la découverte des `.cb`
+  n'entre jamais dans `core/config/couplers/` (`parser._is_coupler_path()`) ;
+  seuls les coupleurs déclarés sont lus.
+- **Injection** (`inject_coupler_channels()`, appelée par `generate()` avant
+  les vues) : le ComBus du coupleur **se fond** dans celui du nœud ; un channel
+  du coupleur inconnu du type de machine est ajouté à sa valeur sûre (une
+  fonction absente reste sûre), au sens du coupleur sur l'attelage, au sens
+  miroir sur le véhicule. Ajouter un channel à un coupleur change donc le
+  ComBus de chaque nœud qui le porte : changement **cassant**.
+- **Ensemble de la liaison** (`compute_coupler_link()`) : **tout** le coupleur
+  (contrat complet). Un channel de même nom dans le type de machine doit avoir
+  le même type, la même valeur et le même `zeroAt`, et **circuler** : deux
+  émetteurs, ou personne qui émet, est une erreur (plus de « channel mort »).
+  Sur le véhicule, `downlink_pt` relaie (il émet vers l'attelage, ou reçoit
+  là où l'attelage émet) ; une source par channel sur le nœud
+  (`check_single_source()`, `both_or` excepté).
+- **Trame commune** : analogiques puis numériques, stables avant candidats,
+  puis le nom (jamais le thème).
+- **MD5 du coupleur et du rôle** (`link_md5()`) : il ne porte que le coupleur
+  (le même pour toutes les machines qui le portent) et un rôle ; chaque côté
+  annonce MD5(coupleur + son rôle) et attend MD5(coupleur + l'autre rôle)
+  (`peer=True`), si bien que deux véhicules, ou deux attelages, reliés par
+  erreur se refusent.
+- `combus_peer_links.h` (toujours écrit, vide sans coupleur) : par coupleur,
+  les MD5 annoncés (`kMd5`, `kMd5Stable`) et attendus (`kMd5Peer`,
+  `kMd5PeerStable`), les nombres de channels, la **table** position sur le fil
+  → ID local (`kAnalog[]`, `kDigital[]`) et ce que ce nœud reçoit
+  (`kAnalogRx[]`, `kDigitalRx[]`).
 
 Le journal du build affiche une ligne par liaison :
-`[combus_builder] set LINK <type>  md5=<32 hex>  A2+D2`. Les types d'essai
-`test_tractor` et `test_trailer` (`src/core/config/machines/`, channels
-préfixés `TEST_`) servent aux tests (`test_peer_links.py`).
+`[combus_builder] set LINK <coupleur> (<rôle>)  md5=<32 hex>  A3+D2`. Le
+coupleur d'essai `test_hitch` et les types d'essai `test_tractor` et
+`test_trailer` (channels préfixés `TEST_`) servent aux tests
+(`test_couplers.py`).
 
 **Filtre par type de machine** : avec un type, on charge le cœur et le profil
 de ce type ; **sans type, aucun profil de type** (depuis 3.1, 2026-10-25 : des
-types pairs partagent volontairement des noms, comme `BRAKE_BUS` chez un
-tracteur et sa remorque, et entreraient en conflit). Un nœud sans type lit les
-machines comme pairs seulement.
+types voisins partagent volontairement des noms, comme `BRAKE_BUS` chez un
+tracteur et sa remorque, et entreraient en conflit).
 
 ## 7. MD5
 

@@ -1,14 +1,14 @@
 """Nature of a node: one structural flag per env (link rework, step 3.2b).
 
-Rules validated by the owner (2026-10-25):
+Rules validated by the owner (2026-10-25; couplers: 2026-10-31, step 3.4a):
   - exactly one structural flag per env: IS_VEHICLE, IS_ATTACHMENT,
     IS_MACHINE or IS_REMOTE;
   - IS_VEHICLE: the prime mover (tractor, dumper, excavator), the hub of the
-    star: zero or several peers (-D COMBUS_PEER_<TYPE>);
+    star: zero or several couplers (-D COMBUS_COUPLER_<NAME>);
   - IS_ATTACHMENT: what is hitched to a vehicle (trailer, plough, dolly), an
-    electron: exactly one peer for now;
-  - IS_MACHINE: a stand-alone machine, isolated: no peer;
-  - IS_REMOTE: unchanged, no peer before the remote work (chantier 4).
+    electron: exactly one coupler, the one of its vehicle;
+  - IS_MACHINE: a stand-alone machine, isolated: no coupler (refused explicitly);
+  - IS_REMOTE: unchanged, no coupler before the remote work (chantier 4).
 """
 
 from __future__ import annotations
@@ -25,14 +25,14 @@ if str(REPO_ROOT) not in sys.path:
 
 from scripts.combus_builder.links import LinkError, node_nature  # noqa: E402
 
-P1, P2 = "COMBUS_PEER_TEST_TRAILER", "COMBUS_PEER_TEST_DOLLY"
+P1, P2 = "COMBUS_COUPLER_TEST_HITCH", "COMBUS_COUPLER_FIFTH_WHEEL"
 
 
 @pytest.mark.parametrize("defines,nature", [
     ({"IS_VEHICLE"}, "IS_VEHICLE"),
     ({"IS_VEHICLE", P1}, "IS_VEHICLE"),
     ({"IS_VEHICLE", P1, P2}, "IS_VEHICLE"),
-    ({"IS_ATTACHMENT", "COMBUS_PEER_TEST_TRACTOR"}, "IS_ATTACHMENT"),
+    ({"IS_ATTACHMENT", P1}, "IS_ATTACHMENT"),
     ({"IS_MACHINE", "HAS_FAILSAFE"}, "IS_MACHINE"),
     ({"IS_REMOTE"}, "IS_REMOTE"),
 ])

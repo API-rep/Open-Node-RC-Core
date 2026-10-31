@@ -184,7 +184,18 @@ def discover_config_files(
     from .machine_type import filter_files_by_machine_type
     found = filter_files_by_machine_type(found, machine_type)
 
+    # Link rework 3.4a: a coupler (core/config/couplers/<name>/) is read apart,
+    # only for the couplers declared by the node (links.load_coupler_channels),
+    # never by discovery.
+    found = [p for p in found if not _is_coupler_path(p)]
+
     return found
+
+
+def _is_coupler_path(path: Path) -> bool:
+    """True iff `path` is under core/config/couplers/."""
+    parts = path.parts
+    return any(parts[i:i + 3] == ("core", "config", "couplers") for i in range(len(parts) - 2))
 
 
 # =============================================================================

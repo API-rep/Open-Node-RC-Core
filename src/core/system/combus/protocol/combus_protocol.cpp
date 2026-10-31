@@ -109,12 +109,17 @@ void combus_protocol_init( uint8_t linkIdx, ComBusLink* link )
         ? combus::wire::kCombusBaseComBusMd5Next
         : link->handshakeCtx->expectedMd5;
 
-        // --- 3d. Link rework 3.1b — a link between nodes has its own contract:
-        //    the MD5 of the link, computed by the builder from both types.
-    link->handshakeCtx->peer = link->peer;
+        // --- 3d. Link rework 3.1b / 3.4a — a link between nodes has its own
+        //    contract: the MD5 of its coupler and a role.  This end announces
+        //    its role and expects the other one.
+    link->handshakeCtx->peer             = link->peer;
+    link->handshakeCtx->announcedMd5     = nullptr;
+    link->handshakeCtx->announcedMd5Next = nullptr;
     if (link->peer) {
-        link->handshakeCtx->expectedMd5     = link->peer->md5Stable;
-        link->handshakeCtx->expectedMd5Next = link->peer->md5;
+        link->handshakeCtx->expectedMd5      = link->peer->md5PeerStable;
+        link->handshakeCtx->expectedMd5Next  = link->peer->md5Peer;
+        link->handshakeCtx->announcedMd5     = link->peer->md5Stable;
+        link->handshakeCtx->announcedMd5Next = link->peer->md5;
     }
     link->handshakeCtx->hasCandidates   =
         memcmp(link->handshakeCtx->expectedMd5Next, link->handshakeCtx->expectedMd5, 16) != 0;

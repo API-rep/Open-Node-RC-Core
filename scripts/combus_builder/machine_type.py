@@ -220,11 +220,9 @@ def filter_files_by_machine_type(files, machine_type: str | None) -> list:
     Behaviour:
       - machine_type is None (non-machine build, e.g. a remote): KEEP the
         generic files, EXCLUDE every machine type profile.  Link rework
-        3.1: the profiles of node types that are peers share channel names
-        on purpose (BRAKE_BUS in a tractor and in its trailer); loaded
-        together they would clash.  A node without type reads the machine
-        types as peers only (links.load_type_base_channels), never in its
-        own ComBus.  Before 2026-10-25 every file was kept.
+        3.1: the profiles of neighbour node types share channel names on
+        purpose (BRAKE_BUS in a tractor and in its trailer); loaded
+        together they would clash.  Before 2026-10-25 every file was kept.
       - machine_type is a known directory segment (e.g. "dumper_truck"):
         KEEP every file EXCEPT those under
         core/config/machines/<other_type>/. Generic files

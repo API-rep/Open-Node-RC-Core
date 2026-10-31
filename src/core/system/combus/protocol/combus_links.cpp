@@ -125,20 +125,20 @@ bool combus_link_build( const ComDevMap& map,
         // --- 1. Validate ---
     if (!com || !combus_link_check(map)) { return false; }
 
-        // --- 2. Frame layout of the scope's view, or of the link with a peer type (3.1b) ---
+        // --- 2. Frame layout of the scope's view, or of the link through a coupler (3.1b, 3.4a) ---
     const ComPeerLink* peer = map.dev->peer;
     uint8_t nAnalog  = 0u;
     uint8_t nDigital = 0u;
     wireCounts(map.dev->scope, nAnalog, nDigital);
     if (peer) {
         if (map.dev->scope != LinkScope::INTER_NODE) {
-            sys_log_err("[COMBUS_LINKS] link '%s': a peer type is for a link between nodes only\n", map.dev->name);
+            sys_log_err("[COMBUS_LINKS] link '%s': a coupler is for a link between nodes only\n", map.dev->name);
             return false;
         }
         if (peer->nAnalog > sizeof(runtime.analogRx) / sizeof(runtime.analogRx[0])
             || peer->nDigital > sizeof(runtime.digitalRx) / sizeof(runtime.digitalRx[0])) {
-            sys_log_err("[COMBUS_LINKS] link '%s': the link with '%s' exceeds the RX buffers\n",
-                        map.dev->name, peer->peerType);
+            sys_log_err("[COMBUS_LINKS] link '%s': the link through '%s' exceeds the RX buffers\n",
+                        map.dev->name, peer->coupler);
             return false;
         }
         nAnalog  = peer->nAnalog;

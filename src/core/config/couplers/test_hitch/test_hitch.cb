@@ -1,0 +1,58 @@
+# test_hitch.cb — the TEST coupler (link rework, step 3.4a)
+#
+# A fictitious coupler used only by the tests (pytest, and the Unity test
+# env), carried by the TEST tractor (vehicle) and the TEST trailer
+# (attachment).  A coupler is the norm of a link, like a standard plug: its
+# channels are the full contract of the link, whatever the machines carrying
+# it know.  A channel of the coupler unknown to a machine type is injected in
+# the ComBus of the node, at its safe value.
+#
+# Directions are those of the ATTACHMENT (the vehicle reads them mirrored):
+# - TEST_BRAKE_BUS, TEST_LIGHTS: sent by the vehicle (relayed from the remote);
+# - TEST_TILT_ANGLE, TEST_AXLE_LOAD: sent by the attachment (the TEST tractor
+#   does not know TEST_AXLE_LOAD: injected, an absent function);
+# - TEST_COUPLED_FAIL: fault shared by the whole convoy (OR merge).
+#
+# No `_pt` here: relaying is the business of a node, not of the coupler.
+
+channels:
+
+- id: TEST_BRAKE_BUS
+  infoName: "Test brake"
+  type: analog
+  scope: BASE
+  theme: core
+  direction: downlink
+  value: CbusNeutral
+
+- id: TEST_TILT_ANGLE
+  infoName: "Test tilt angle"
+  type: analog
+  scope: BASE
+  theme: core
+  direction: uplink
+  value: CbusNeutral
+
+- id: TEST_AXLE_LOAD
+  infoName: "Test axle load"
+  type: analog
+  scope: BASE
+  theme: core
+  direction: uplink
+  value: CbusNeutral
+
+- id: TEST_LIGHTS
+  infoName: "Test lights"
+  type: digital
+  scope: BASE
+  theme: light
+  direction: downlink
+  value: low
+
+- id: TEST_COUPLED_FAIL
+  infoName: "Test convoy fault"
+  type: digital
+  scope: BASE
+  theme: failsafe
+  direction: both_or
+  value: fault
