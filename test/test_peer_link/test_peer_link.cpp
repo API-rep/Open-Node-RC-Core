@@ -974,7 +974,7 @@ static void test_pair_row19_retries_exhausted(void) {
 // once on the press (ON_PRESS, no hold), never on a release (the loss of the
 // remote would read as one); coupling needs the engaged switch
 // (TEST_COUPLER_ENGAGED_SW, HAS_TEST_COUPLER_ENGAGED_SW) settled for
-// kTestCouplerEngagedSettleMs (cb_guard_fn), uncoupling never.
+// kTestCouplerEngagedDelayMs (cb_delay_fn), uncoupling never.
 // =============================================================================
 
 static constexpr uint8_t kCouplerBtn = static_cast<uint8_t>(DigitalComBusID::TEST_COUPLER_BTN);
@@ -1001,7 +1001,7 @@ static void startChainedLink(bool engaged) {
     while (s_com->available(s_com->ctx) > 0) { s_com->readByte(s_com->ctx); }
     bus.digitalBus[kEngagedSw].value = engaged;
     com_rx_update(bus);                                 // the toggle sees the button released
-    if (engaged) { runLinks(kTestCouplerEngagedSettleMs + 30u); }   // the switch has settled
+    if (engaged) { runLinks(kTestCouplerEngagedDelayMs + 30u); }   // the switch has settled
 }
 
 /** The button goes down: one cycle (the command must already have moved: ON_PRESS). */
@@ -1079,7 +1079,7 @@ static void test_chain_row10b_held_button_couples_on_engagement(void) {
     bus.digitalBus[kEngagedSw].value = true;
     com_rx_update(bus);
     TEST_ASSERT_FALSE_MESSAGE(bus.digitalBus[kCouplerCmd].value, "coupled before the switch has settled");
-    runLinks(kTestCouplerEngagedSettleMs + 30u);
+    runLinks(kTestCouplerEngagedDelayMs + 30u);
     TEST_ASSERT_TRUE(bus.digitalBus[kCouplerCmd].value);
     buttonUp();
 }
@@ -1090,7 +1090,7 @@ static void test_chain_row10c_bouncing_switch_never_couples(void) {
     buttonDown();
     for (uint8_t i = 0u; i < 4u; ++i) {
         bus.digitalBus[kEngagedSw].value = true;
-        runLinks(kTestCouplerEngagedSettleMs / 2u);
+        runLinks(kTestCouplerEngagedDelayMs / 2u);
         bus.digitalBus[kEngagedSw].value = false;
         runLinks(20u);
     }

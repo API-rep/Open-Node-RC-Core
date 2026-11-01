@@ -22,21 +22,21 @@
  *   Never ON_RELEASE: at the loss of the remote, the button takes back its
  *   safe value (false), which would read as a release and uncouple.  With
  *   HAS_TEST_COUPLER_ENGAGED_SW, coupling (false to true) needs the engaged
- *   switch, settled for kTestCouplerEngagedSettleMs; uncoupling never does.
+ *   switch, on for kTestCouplerEngagedDelayMs; uncoupling never does.
  */
 
 void test_coupler_vehicle_chain( ComBus& bus );
 
 
 /**
- * @brief Forget the state of the chain (button and guard history): tests, re-init.
+ * @brief Forget the state of the chain (button and delay history): tests, re-init.
  */
 
 void test_coupler_vehicle_chain_reset( void );
 
 
-/// The engaged switch stays on this long before a coupling is accepted (cb_guard_fn).
-static constexpr uint16_t kTestCouplerEngagedSettleMs = 200u;
+/// The engaged switch stays on this long before a coupling is accepted (cb_delay_fn).
+static constexpr uint16_t kTestCouplerEngagedDelayMs = 200u;
 
 #endif
 
