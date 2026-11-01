@@ -56,6 +56,7 @@ Aujourd'hui, seul l'UART est implémenté, de façon assez statique (flags `COMB
 ### Autres chantiers ###
 
 - Rapatrier les définitions de structures du dossier `include/struct` vers leurs fichiers respectifs.
+- **Tableau de bord des liens** (vue 7 « links », commencé le 2026-11-01, link rework) : une page d'accueil générique qui relève les liens existants (nom, portée, état, contrat, mode ; coupleur et rôle ; état de l'appairage d'un lien couplé ; les coupleurs passifs) et une page de détail par lien, navigable comme les autres détails du tableau de bord (contrat et MD5, âge de la dernière trame ; si couplé : commande, `coupled`, détecteur, faute, candidats et tours de l'appairage, relances, identité) ; lecture par une photo exposée par `combus_links` (`combus_links_view`), jamais par ses structures internes. Prérequis des essais à deux cartes. La télécommande (chantier 4) s'y greffera : son lien apparaîtra dans la page d'accueil comme les autres.
 - Vérifier la documentation actuelle (contenu, liens vers les fichiers) et sa segmentation, pour une prise de contexte optimale de l'agent IA lors de la (re)prise d'un job.
 - Écrire le script de parsing des configurations YAML de cartes et de machines (base du script de génération ci-dessous).
 - Créer le script de génération du `platformio.ini` d'une machine (env racine + sous-envs par carte) depuis un YAML (+ éventuellement une interface graphique de configuration).

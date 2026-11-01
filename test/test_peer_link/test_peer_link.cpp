@@ -1255,6 +1255,51 @@ static void test_tool_row9_active_coupled_output(void) {
 
 
 // =============================================================================
+// SNAPSHOTS FOR THE DASHBOARDS (links view)
+//
+// The links view reads copies exposed by combus_links (combus_links_view,
+// combus_couplings_view), never its internal structures.
+// =============================================================================
+
+/** View row 1: a coupled link, paired: its snapshot tells the coupler, the role, the pairing, the candidate. */
+static void test_view_row1_coupled_link_snapshot(void) {
+    combus_couplings_watch(nullptr, 0u);
+    startCoupledLink();
+    hitch(true);
+    TEST_ASSERT_TRUE(answerRequests(1500u, &kTrailerA, kAllRounds) == PairingState::COUPLED);
+    TEST_ASSERT_EQUAL_UINT8(1u, combus_links_count());
+    ComLinkView v;
+    TEST_ASSERT_TRUE(combus_links_view(kLinkIdx, v));
+    TEST_ASSERT_EQUAL_STRING("test_trailer_hitched", v.name);
+    TEST_ASSERT_TRUE(v.scope == LinkScope::INTER_NODE);
+    TEST_ASSERT_TRUE(v.receives);
+    TEST_ASSERT_NOT_NULL(v.peer);
+    TEST_ASSERT_EQUAL_STRING("test_coupler", v.peer->coupler);
+    TEST_ASSERT_TRUE(v.peer->role == ComLinkRole::VEHICLE);
+    TEST_ASSERT_TRUE(v.coupling == &kHitch);
+    TEST_ASSERT_TRUE(v.pairing.state == PairingState::COUPLED);
+    TEST_ASSERT_EQUAL_UINT8(1u, v.pairing.nCand);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(kTrailerA.bytes, v.pairing.cand[0].addr.bytes, 6u);
+    TEST_ASSERT_EQUAL_HEX8(kAllRounds, v.pairing.cand[0].rounds);
+    TEST_ASSERT_FALSE(combus_links_view(1u, v));                       // out of range
+}
+
+/** View row 2: a passive coupler: its snapshot tells its state and identity. */
+static void test_view_row2_passive_coupler_snapshot(void) {
+    startTool(kToolDev);
+    bus.digitalBus[kToolDetect].value = true;
+    runLinks(80u);
+    TEST_ASSERT_EQUAL_UINT8(1u, combus_couplings_count());
+    ComCouplingRuntime c;
+    TEST_ASSERT_TRUE(combus_couplings_view(0u, c));
+    TEST_ASSERT_TRUE(c.dev == &kToolDev);
+    TEST_ASSERT_TRUE(c.pairing.state == PairingState::COUPLED);
+    TEST_ASSERT_EQUAL_UINT16(1u, c.pairing.id.type);
+    TEST_ASSERT_FALSE(combus_couplings_view(1u, c));
+}
+
+
+// =============================================================================
 // ACCESSORS OF THE LOGICAL VALUE (step S3-4)
 // =============================================================================
 
@@ -1409,6 +1454,9 @@ void setup() {
     RUN_TEST(test_tool_row7_reader_identity);
     RUN_TEST(test_tool_row8_reader_fails_default);
     RUN_TEST(test_tool_row9_active_coupled_output);
+
+    RUN_TEST(test_view_row1_coupled_link_snapshot);
+    RUN_TEST(test_view_row2_passive_coupler_snapshot);
 
     UNITY_END();
 }

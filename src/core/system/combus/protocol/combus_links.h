@@ -312,6 +312,63 @@ CouplingId combus_couplings_id( uint8_t idx );
 
 
 
+// =============================================================================
+// SNAPSHOTS FOR THE DASHBOARDS (links view)
+// =============================================================================
+
+/**
+ * @brief Read-only snapshot of a watched link, for the dashboards.
+ *
+ * @details A copy taken at the call: the dashboards never read the internal
+ *   structures of the links.  `peer` and `coupling` point to the generated or
+ *   configured descriptors (const); `pairing` is a copy of the pairing state.
+ */
+
+struct ComLinkView {
+    const char*        name           = nullptr;
+    LinkScope          scope          = LinkScope::INTRA_NODE;
+    bool               receives       = false;   ///< the link has an RX side
+    uint32_t           linkTimeoutMs  = 0u;
+    uint32_t           startupGraceMs = 0u;
+    ComLinkState       state          = ComLinkState::NEVER_SEEN;
+    bool               contractStable = false;   ///< handshake contract STABLE
+    bool               nextMode       = false;   ///< STABLE in next mode (candidates)
+    uint32_t           rxAgeMs        = 0u;      ///< ms since the last frame applied (meaningful once seen)
+    const ComPeerLink* peer           = nullptr; ///< link through a coupler: coupler, role, MD5, tables
+    const CouplingDev* coupling       = nullptr; ///< coupled link (ON_COUPLING), nullptr otherwise
+    ComLinkPairing     pairing        = {};      ///< copy of its pairing state (coupled link)
+};
+
+
+/**
+ * @brief Number of links under watch.
+ */
+
+uint8_t combus_links_count( void );
+
+
+/**
+ * @brief Snapshot of a link under watch; false if @p linkIdx is out of range.
+ */
+
+bool combus_links_view( uint8_t linkIdx, ComLinkView& out );
+
+
+/**
+ * @brief Number of passive couplers under watch.
+ */
+
+uint8_t combus_couplings_count( void );
+
+
+/**
+ * @brief Snapshot (copy) of a passive coupler; false if @p idx is out of range.
+ */
+
+bool combus_couplings_view( uint8_t idx, ComCouplingRuntime& out );
+
+
+
 /**
  * @brief Whether a receiving link has gone silent.
  *

@@ -400,6 +400,47 @@ CouplingId combus_couplings_id( uint8_t idx )
 }
 
 
+uint8_t combus_couplings_count( void )
+{
+    return s_couplings ? s_couplingCount : 0u;
+}
+
+
+bool combus_couplings_view( uint8_t idx, ComCouplingRuntime& out )
+{
+    if (!s_couplings || idx >= s_couplingCount) { return false; }
+    out = s_couplings[idx];
+    return true;
+}
+
+
+uint8_t combus_links_count( void )
+{
+    return s_watched ? s_watchedCount : 0u;
+}
+
+
+bool combus_links_view( uint8_t linkIdx, ComLinkView& out )
+{
+    if (!s_watched || linkIdx >= s_watchedCount) { return false; }
+    const ComLinkRuntime& rt = s_watched[linkIdx];
+    out                = ComLinkView{};
+    out.name           = rt.name;
+    out.scope          = rt.scope;
+    out.receives       = rt.watch.receives;
+    out.linkTimeoutMs  = rt.watch.linkTimeoutMs;
+    out.startupGraceMs = rt.watch.startupGraceMs;
+    out.state          = combus_link_state(linkIdx);
+    out.contractStable = rt.handshake.contractValidated;
+    out.nextMode       = rt.handshake.nextMode;
+    out.rxAgeMs        = combus_rx_age_ms(linkIdx);
+    out.peer           = rt.peer;
+    out.coupling       = rt.coupling.dev;
+    out.pairing        = rt.coupling.pairing;
+    return true;
+}
+
+
 void combus_links_update( ComBus& bus )
 {
     followPassiveCouplings(bus);
