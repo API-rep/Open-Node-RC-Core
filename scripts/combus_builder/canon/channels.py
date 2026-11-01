@@ -102,6 +102,8 @@ VALID_THEMES: frozenset[str] = frozenset({
     "light",
     "input",
     "sim",        # values computed by the simulation chains (HAS_SIM_PROC): ESC_SPEED_BUS, ESC_RPM_BUS, DRIVE_STATE_BUS
+    "coupler",    # link rework 3.4e: local channels of a coupler (command, engaged switch...)
+    "remote",     # link rework 3.4e: inputs sent by the remote (buttons, sticks); the existing ones move later (WIP simulation)
     # Ajouter ici les nouveaux thèmes légitimes.
 })
 

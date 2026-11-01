@@ -24,7 +24,12 @@ Rules validated by the owner (2026-10-31; vehicle view: 2026-11-01, step 3.4e):
   - T7 the generated header has one namespace per coupler;
   - T8 the names of the coupler are the norm (no renaming);
   - T9 the coupler files never enter the ComBus by discovery: they are read
-    apart, and only for the couplers declared by the node.
+    apart, and only for the couplers declared by the node;
+  - L (step 3.4e, 2026-11-01) local channels: a channel of the coupler that
+    requires IS_VEHICLE or IS_ATTACHMENT belongs to that end only (filtered
+    by `requires`), never on the link (frame, MD5); BOARD; its name starts
+    with the name of the coupler; an input from the remote (the coupling
+    button) belongs to the machine type, not to the coupler.
 """
 
 from __future__ import annotations
@@ -49,6 +54,7 @@ from scripts.combus_builder.links import (  # noqa: E402
     compute_coupler_link,
     coupler_names,
     inject_coupler_channels,
+    is_local_channel,
     link_md5,
     load_coupler_channels,
     node_nature,
@@ -57,7 +63,7 @@ from scripts.combus_builder.parser import discover_config_files  # noqa: E402
 
 SRC = REPO_ROOT / "src"
 V, A = "IS_VEHICLE", "IS_ATTACHMENT"
-HITCH = "COMBUS_COUPLER_TEST_HITCH"
+HITCH = "COMBUS_COUPLER_TEST_COUPLER"
 
 
 def _ctx(*flags):
@@ -94,7 +100,7 @@ def _link(coupler_raws, local_raws, nature=V, name="cpl"):
 
 @pytest.fixture(scope="module")
 def hitch():
-    return load_coupler_channels(SRC, "test_hitch")
+    return load_coupler_channels(SRC, "test_coupler")
 
 
 @pytest.fixture(scope="module")
@@ -112,8 +118,77 @@ def trailer():
 # =============================================================================
 
 def test_t1_the_test_coupler_is_read_apart(hitch):
-    assert sorted(c.id for c in hitch) == ["TEST_AXLE_LOAD", "TEST_BRAKE_BUS", "TEST_COUPLED_FAIL",
-                                           "TEST_LIGHTS", "TEST_TILT_ANGLE"]
+    assert sorted(c.id for c in hitch if not is_local_channel(c)) == [
+        "TEST_AXLE_LOAD", "TEST_BRAKE_BUS", "TEST_COUPLED_FAIL", "TEST_LIGHTS", "TEST_TILT_ANGLE"]
+    assert sorted(c.id for c in hitch if is_local_channel(c)) == ["TEST_COUPLER_CMD", "TEST_COUPLER_ENGAGED_SW"]
+
+
+# =============================================================================
+# L: local channels (step 3.4e)
+# =============================================================================
+
+def _coupler_folder(tmp_path, name, body):
+    folder = tmp_path / "core" / "config" / "couplers" / name
+    folder.mkdir(parents=True)
+    (folder / f"{name}.cb").write_text("channels:\n" + body, encoding="utf-8")
+    return tmp_path
+
+
+def _local(id_, scope="BOARD", requires="[IS_VEHICLE]"):
+    direction = "" if scope == "BOARD" else "  direction: uplink\n"
+    return (f"- id: {id_}\n  infoName: x\n  type: digital\n  scope: {scope}\n  theme: core\n"
+            f"{direction}  value: low\n  requires: {requires}\n")
+
+
+def test_l1_a_prefixed_board_local_channel_is_accepted(tmp_path):
+    chs = load_coupler_channels(_coupler_folder(tmp_path, "front_coupler", _local("FRONT_COUPLER_CMD")), "front_coupler")
+    assert is_local_channel(chs[0])
+
+
+def test_l2_a_local_channel_without_the_prefix_is_refused(tmp_path):
+    with pytest.raises(LinkError, match="FRONT_COUPLER_"):
+        load_coupler_channels(_coupler_folder(tmp_path, "front_coupler", _local("COUPLER_CMD")), "front_coupler")
+
+
+def test_l3_a_local_channel_of_both_natures_is_refused(tmp_path):
+    root = _coupler_folder(tmp_path, "front_coupler", _local("FRONT_COUPLER_CMD", requires="[IS_VEHICLE, IS_ATTACHMENT]"))
+    with pytest.raises(LinkError, match="both natures"):
+        load_coupler_channels(root, "front_coupler")
+
+
+def test_l4_a_local_channel_may_be_system(tmp_path):
+    """The engaged switch on another board of the node: SYSTEM, still local."""
+    root = _coupler_folder(tmp_path, "front_coupler", _local("FRONT_COUPLER_ENGAGED_SW", scope="SYSTEM"))
+    assert is_local_channel(load_coupler_channels(root, "front_coupler")[0])
+
+
+def test_l4b_a_local_channel_is_never_base(tmp_path):
+    """BASE with a requires is refused (the frame of a machine type is fixed): the remote input belongs to the type."""
+    root = _coupler_folder(tmp_path, "front_coupler", _local("FRONT_COUPLER_BTN", scope="BASE"))
+    with pytest.raises(Exception, match="FRONT_COUPLER_BTN"):
+        load_coupler_channels(root, "front_coupler")
+
+
+def test_l5_local_channels_on_the_vehicle_only_and_off_the_link(tmp_path, tractor, trailer):
+    generate(tractor, _ctx(V, "MACHINE_TYPE_TEST_TRACTOR", HITCH), tmp_path / "v")
+    ids_v = (tmp_path / "v" / "combus_ids.h").read_text(encoding="utf-8")
+    assert "TEST_COUPLER_CMD" in ids_v
+    assert "TEST_COUPLER_ENGAGED_SW" not in ids_v                    # its flag is not set
+    links_v = (tmp_path / "v" / "combus_peer_links.h").read_text(encoding="utf-8")
+    assert "TEST_COUPLER_" not in links_v                            # never on the link
+
+    generate(tractor, _ctx(V, "MACHINE_TYPE_TEST_TRACTOR", HITCH, "HAS_TEST_COUPLER_ENGAGED_SW"), tmp_path / "g")
+    assert "TEST_COUPLER_ENGAGED_SW" in (tmp_path / "g" / "combus_ids.h").read_text(encoding="utf-8")
+
+    generate(trailer, _ctx(A, "MACHINE_TYPE_TEST_TRAILER", HITCH), tmp_path / "a")
+    assert "TEST_COUPLER_CMD" not in (tmp_path / "a" / "combus_ids.h").read_text(encoding="utf-8")
+
+
+def test_l6_local_channels_leave_the_md5_of_the_link(hitch, tractor):
+    link_only = [c for c in hitch if not is_local_channel(c)]
+    with_local = compute_coupler_link("test_coupler", hitch, inject_coupler_channels(tractor, hitch, V), V)
+    without = compute_coupler_link("test_coupler", link_only, inject_coupler_channels(tractor, link_only, V), V)
+    assert link_md5(with_local) == link_md5(without)
 
 
 def test_t1_unknown_coupler_is_an_error():
@@ -138,7 +213,7 @@ def test_t1_a_coupler_channel_is_base_only(tmp_path):
     (folder / "bad.cb").write_text(
         "channels:\n- id: X\n  infoName: x\n  type: digital\n  scope: BOARD\n  theme: core\n"
         "  value: low\n", encoding="utf-8")
-    with pytest.raises(LinkError, match="BASE"):
+    with pytest.raises(LinkError, match="a link channel is BASE"):
         load_coupler_channels(tmp_path, "bad")
 
 
@@ -153,7 +228,7 @@ def test_t9_discovery_never_loads_a_coupler(machine_type):
 # =============================================================================
 
 def test_t2_couplers_from_flags():
-    assert coupler_names(_ctx(HITCH, "COMBUS_COUPLER_FIFTH_WHEEL", "IS_VEHICLE")) == ["fifth_wheel", "test_hitch"]
+    assert coupler_names(_ctx(HITCH, "COMBUS_COUPLER_FIFTH_WHEEL", "IS_VEHICLE")) == ["fifth_wheel", "test_coupler"]
 
 
 @pytest.mark.parametrize("defines,nature", [
@@ -185,7 +260,7 @@ def test_row2_row3_row14_refused_natures(defines, match):
 # =============================================================================
 
 def test_row1_the_frame_is_the_full_coupler(hitch, tractor):
-    link = compute_coupler_link("test_hitch", hitch, inject_coupler_channels(tractor, hitch, V), V)
+    link = compute_coupler_link("test_coupler", hitch, inject_coupler_channels(tractor, hitch, V), V)
     assert [c.id for c in link.channels if c.type == "analog"] == ["TEST_AXLE_LOAD", "TEST_BRAKE_BUS",
                                                                    "TEST_TILT_ANGLE"]
     assert [c.id for c in link.channels if c.type == "digital"] == ["TEST_COUPLED_FAIL", "TEST_LIGHTS"]
@@ -269,7 +344,7 @@ def test_row8b_a_channel_that_does_not_flow_is_an_error():
 
 
 def test_row4_flow_of_the_test_link(hitch, tractor):
-    link = compute_coupler_link("test_hitch", hitch, inject_coupler_channels(tractor, hitch, V), V)
+    link = compute_coupler_link("test_coupler", hitch, inject_coupler_channels(tractor, hitch, V), V)
     assert {c.id: c.flow for c in link.channels} == {
         "TEST_BRAKE_BUS": "to_peer", "TEST_TILT_ANGLE": "from_peer", "TEST_AXLE_LOAD": "from_peer",
         "TEST_COUPLED_FAIL": "or", "TEST_LIGHTS": "to_peer"}
@@ -282,8 +357,8 @@ def test_row4_flow_of_the_test_link(hitch, tractor):
 def test_row9_two_machines_carrying_the_coupler_get_the_same_md5(hitch, tractor):
     other_vehicle = _canon(_ch("TEST_BRAKE_BUS", "uplink"), _ch("TEST_TILT_ANGLE", "downlink"),
                            _ch("UNRELATED", "downlink"))
-    a = compute_coupler_link("test_hitch", hitch, inject_coupler_channels(tractor, hitch, V), V)
-    b = compute_coupler_link("test_hitch", hitch, inject_coupler_channels(other_vehicle, hitch, V), V)
+    a = compute_coupler_link("test_coupler", hitch, inject_coupler_channels(tractor, hitch, V), V)
+    b = compute_coupler_link("test_coupler", hitch, inject_coupler_channels(other_vehicle, hitch, V), V)
     assert link_md5(a) == link_md5(b)
 
 
@@ -293,8 +368,8 @@ def test_row10_a_channel_added_to_the_coupler_changes_the_md5():
 
 
 def test_row11_each_side_expects_the_md5_of_the_other_role(hitch, tractor, trailer):
-    v = compute_coupler_link("test_hitch", hitch, inject_coupler_channels(tractor, hitch, V), V)
-    a = compute_coupler_link("test_hitch", hitch, inject_coupler_channels(trailer, hitch, A), A)
+    v = compute_coupler_link("test_coupler", hitch, inject_coupler_channels(tractor, hitch, V), V)
+    a = compute_coupler_link("test_coupler", hitch, inject_coupler_channels(trailer, hitch, A), A)
     assert link_md5(v) != link_md5(a)                               # two vehicles would not agree
     assert link_md5(v, peer=True) == link_md5(a)                    # the vehicle expects the attachment
     assert link_md5(a, peer=True) == link_md5(v)                    # and the other way round
@@ -363,14 +438,14 @@ def test_row1_t7_generated_header_and_build_log(tmp_path, tractor, capsys):
     generate(tractor, _ctx(V, "MACHINE_TYPE_TEST_TRACTOR", HITCH), tmp_path)
     out = capsys.readouterr().out
     text = (tmp_path / "combus_peer_links.h").read_text(encoding="utf-8")
-    assert "namespace TestHitch {" in text
+    assert "namespace TestCoupler {" in text
     assert ("static_cast<uint8_t>(AnalogComBusID::TEST_AXLE_LOAD), "
             "static_cast<uint8_t>(AnalogComBusID::TEST_BRAKE_BUS), "
             "static_cast<uint8_t>(AnalogComBusID::TEST_TILT_ANGLE)") in text
-    assert '.coupler   = "test_hitch",' in text
+    assert '.coupler   = "test_coupler",' in text
     assert ".role      = ComLinkRole::VEHICLE," in text      # step 3.4c: the role of this node
     assert ".announced = { .stable = kAnnouncedMd5, .next = kAnnouncedMd5Next }," in text
     assert ".expected  = { .stable = kExpectedMd5,  .next = kExpectedMd5Next }," in text
     assert ".ids = kAnalog,  .rx = kAnalogRx }," in text
-    assert "[combus_builder] set LINK test_hitch (vehicle)  md5=" in out
+    assert "[combus_builder] set LINK test_coupler (vehicle)  md5=" in out
     assert "A3+D2" in out

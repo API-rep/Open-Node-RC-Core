@@ -3,7 +3,7 @@
  * @brief Link between two nodes through the generated tables (link rework 3.1b).
  *
  * @details The board is a fictitious TEST tractor carrying the TEST coupler
- *   (core/config/machines/test_tractor/, core/config/couplers/test_hitch/,
+ *   (core/config/machines/test_tractor/, core/config/couplers/test_coupler/,
  *   step 3.4a).  The frame of the link is the full coupler, and its table
  *   (combus_peer_links.h):
  *     analog  0: TEST_AXLE_LOAD (it receives it; unknown to the tractor type,
@@ -51,6 +51,7 @@
 #include <core/system/combus/protocol/frame/combus_handshake.h>
 #include <core/system/combus/protocol/frame/combus_handshake_tx.h>
 #include <core/system/combus/protocol/frame/combus_coupling.h>
+#include <core/config/couplers/test_coupler/test_coupler_chain.h>   // test_coupler_vehicle_chain (3.4e)
 #include <core/system/hw/transport/uart_com.h>
 #include <core/system/combus/protocol/combus_tx.h>
 #include <core/system/combus/protocol/combus_rx.h>
@@ -62,7 +63,7 @@
 #include "combus.h"
 #include "combus_peer_links.h"
 
-using combus::peer::TestHitch::kLink;
+using combus::peer::TestCoupler::kLink;
 
 
 // =============================================================================
@@ -159,7 +160,7 @@ static void ensureStable(void) {
 
 /** Row 1: the descriptor generated for the link with the trailer. */
 static void test_row1_generated_descriptor(void) {
-    TEST_ASSERT_EQUAL_STRING("test_hitch", kLink.coupler);
+    TEST_ASSERT_EQUAL_STRING("test_coupler", kLink.coupler);
     TEST_ASSERT_EQUAL_UINT8(3u, kLink.analog.count);
     TEST_ASSERT_EQUAL_UINT8(2u, kLink.digital.count);
     TEST_ASSERT_EQUAL_UINT8(kAxle,   kLink.analog.ids[0]);
@@ -375,7 +376,7 @@ static constexpr uint8_t kHitchFail = static_cast<uint8_t>(DigitalComBusID::TEST
 
     // No debounce here (engageMs = releaseMs = 0): the trigger acts at once (3.4c rows 16 and 17 test it).
 static constexpr CouplingDev kHitch = {
-    "test_hitch", DigitalComBusID::TEST_HITCHED, DigitalComBusID::TEST_HITCH_LINK_FAIL, 200u, 0u, 0u
+    "test_coupler", DigitalComBusID::TEST_HITCHED, DigitalComBusID::TEST_HITCH_LINK_FAIL, 200u, 0u, 0u
 };
 static constexpr ComDev kHitchedTrailerDev = {
     "test_trailer_hitched", LinkScope::INTER_NODE, LinkType::BIDIRECTIONAL,
@@ -891,7 +892,7 @@ static void test_pair_row15_attachment_coupled(void) {
 
     // --- Debounce (rows 16 and 17) and retries (rows 18 and 19) ---
 static constexpr CouplingDev kDebouncedHitch = {
-    "test_hitch_debounced", DigitalComBusID::TEST_HITCHED, DigitalComBusID::TEST_HITCH_LINK_FAIL, 200u, 50u, 300u
+    "test_coupler_debounced", DigitalComBusID::TEST_HITCHED, DigitalComBusID::TEST_HITCH_LINK_FAIL, 200u, 50u, 300u
 };
 static constexpr ComDev kDebouncedDev = {
     "test_trailer_debounced", LinkScope::INTER_NODE, LinkType::BIDIRECTIONAL,
@@ -960,6 +961,153 @@ static void test_pair_row19_retries_exhausted(void) {
     TEST_ASSERT_EQUAL_UINT32(before, combus_coupling_rx_count(kLinkIdx));
     com_rx_update(bus);
     TEST_ASSERT_TRUE(bus.digitalBus[kHitchFail].value);
+}
+
+
+// =============================================================================
+// CHAIN OF THE COUPLER (step 3.4e)
+//
+// Rules validated by the owner (2026-11-01): the chain of the TEST coupler
+// (core/config/couplers/test_coupler/test_coupler_chain.cpp) latches the
+// coupling button (TEST_COUPLER_BTN, input of the machine type) into the
+// command (TEST_COUPLER_CMD, local channel of the coupler, the trigger): at
+// once on the press (ON_PRESS, no hold), never on a release (the loss of the
+// remote would read as one); coupling needs the engaged switch
+// (TEST_COUPLER_ENGAGED_SW, HAS_TEST_COUPLER_ENGAGED_SW) settled for
+// kTestCouplerEngagedSettleMs (cb_guard_fn), uncoupling never.
+// =============================================================================
+
+static constexpr uint8_t kCouplerBtn = static_cast<uint8_t>(DigitalComBusID::TEST_COUPLER_BTN);
+static constexpr uint8_t kCouplerCmd = static_cast<uint8_t>(DigitalComBusID::TEST_COUPLER_CMD);
+static constexpr uint8_t kEngagedSw  = static_cast<uint8_t>(DigitalComBusID::TEST_COUPLER_ENGAGED_SW);
+
+static constexpr CouplingDev kChainedCoupler = {
+    "test_coupler_chained", DigitalComBusID::TEST_COUPLER_CMD, DigitalComBusID::TEST_HITCH_LINK_FAIL,
+    200u, 0u, 0u, &test_coupler_vehicle_chain
+};
+static constexpr ComDev kChainedDev = {
+    "test_trailer_chained", LinkScope::INTER_NODE, LinkType::BIDIRECTIONAL,
+    &kProto, LinkActivation::ON_COUPLING, &kChainedCoupler, &kLink
+};
+
+static void startChainedLink(bool engaged) {
+    resetBus();
+    test_coupler_vehicle_chain_reset();                 // no history from the previous test
+    const ComDevMap map = { &kChainedDev, &s_port, LinkEnd::TX_RX };
+    TEST_ASSERT_TRUE(combus_link_build(map, s_com, s_runtime, s_link));
+    s_link.target = &bus;
+    combus_protocol_init(kLinkIdx, &s_link);
+    combus_links_watch(&s_runtime, 1u);
+    while (s_com->available(s_com->ctx) > 0) { s_com->readByte(s_com->ctx); }
+    bus.digitalBus[kEngagedSw].value = engaged;
+    com_rx_update(bus);                                 // the toggle sees the button released
+    if (engaged) { runLinks(kTestCouplerEngagedSettleMs + 30u); }   // the switch has settled
+}
+
+/** The button goes down: one cycle (the command must already have moved: ON_PRESS). */
+static void buttonDown(void) {
+    if (!bus.digitalBus[kCouplerCmd].value) { s_hitchMs = millis(); }   // the command rises now: origin of the age
+    bus.digitalBus[kCouplerBtn].value = true;
+    com_rx_update(bus);
+}
+
+static void buttonUp(void) {
+    bus.digitalBus[kCouplerBtn].value = false;
+    com_rx_update(bus);
+}
+
+/** Rows 1 and 2: a short press latches the command at once, the pairing starts. */
+static void test_chain_row1_press_latches_at_once(void) {
+    startChainedLink(true);
+    TEST_ASSERT_FALSE(bus.digitalBus[kCouplerCmd].value);              // low at boot
+    buttonDown();
+    TEST_ASSERT_TRUE_MESSAGE(bus.digitalBus[kCouplerCmd].value, "the command waits for the release");
+    TEST_ASSERT_TRUE(pairing() == PairingState::PAIRING);
+    buttonUp();
+    TEST_ASSERT_TRUE(bus.digitalBus[kCouplerCmd].value);
+}
+
+/** Rows 3 and 4: coupled, the button stays at its safe value (remote lost, then back released): nothing moves. */
+static void test_chain_row3_remote_loss_keeps_the_command(void) {
+    startChainedLink(true);
+    buttonDown();
+    buttonUp();
+    TEST_ASSERT_TRUE(answerRequests(1500u, &kTrailerA, kAllRounds) == PairingState::COUPLED);
+    bus.digitalBus[kCouplerBtn].value = false;                         // the safe value of a lost remote
+    runLinks(300u);
+    TEST_ASSERT_TRUE(bus.digitalBus[kCouplerCmd].value);
+    TEST_ASSERT_TRUE(pairing() == PairingState::COUPLED);
+}
+
+/** Row 5: coupled, a new press: the command falls, DETACHED. */
+static void test_chain_row5_second_press_uncouples(void) {
+    startChainedLink(true);
+    buttonDown();
+    buttonUp();
+    TEST_ASSERT_TRUE(answerRequests(1500u, &kTrailerA, kAllRounds) == PairingState::COUPLED);
+    buttonDown();
+    buttonUp();
+    TEST_ASSERT_FALSE(bus.digitalBus[kCouplerCmd].value);
+    TEST_ASSERT_TRUE(pairing() == PairingState::DETACHED);
+}
+
+/** Row 6: the button held: one toggle only. */
+static void test_chain_row6_held_button_toggles_once(void) {
+    startChainedLink(true);
+    buttonDown();
+    runLinks(300u);
+    TEST_ASSERT_TRUE(bus.digitalBus[kCouplerCmd].value);
+    buttonUp();
+    TEST_ASSERT_TRUE(bus.digitalBus[kCouplerCmd].value);
+}
+
+/** Row 10: a press without the engaged switch: nothing. */
+static void test_chain_row10_no_coupling_without_the_switch(void) {
+    startChainedLink(false);
+    buttonDown();
+    buttonUp();
+    TEST_ASSERT_FALSE(bus.digitalBus[kCouplerCmd].value);
+    TEST_ASSERT_TRUE(pairing() == PairingState::DETACHED);
+}
+
+/** Row 10b: the button held while approaching: it couples once the switch has settled, not before. */
+static void test_chain_row10b_held_button_couples_on_engagement(void) {
+    startChainedLink(false);
+    buttonDown();
+    runLinks(50u);
+    TEST_ASSERT_FALSE(bus.digitalBus[kCouplerCmd].value);
+    bus.digitalBus[kEngagedSw].value = true;
+    com_rx_update(bus);
+    TEST_ASSERT_FALSE_MESSAGE(bus.digitalBus[kCouplerCmd].value, "coupled before the switch has settled");
+    runLinks(kTestCouplerEngagedSettleMs + 30u);
+    TEST_ASSERT_TRUE(bus.digitalBus[kCouplerCmd].value);
+    buttonUp();
+}
+
+/** Row 10c: the switch bounces (on shorter than its settle time) while the button is held: no coupling. */
+static void test_chain_row10c_bouncing_switch_never_couples(void) {
+    startChainedLink(false);
+    buttonDown();
+    for (uint8_t i = 0u; i < 4u; ++i) {
+        bus.digitalBus[kEngagedSw].value = true;
+        runLinks(kTestCouplerEngagedSettleMs / 2u);
+        bus.digitalBus[kEngagedSw].value = false;
+        runLinks(20u);
+    }
+    TEST_ASSERT_FALSE(bus.digitalBus[kCouplerCmd].value);
+    buttonUp();
+}
+
+/** Row 11: uncoupling never needs the switch. */
+static void test_chain_row11_uncoupling_without_the_switch(void) {
+    startChainedLink(true);
+    buttonDown();
+    buttonUp();
+    TEST_ASSERT_TRUE(bus.digitalBus[kCouplerCmd].value);
+    bus.digitalBus[kEngagedSw].value = false;
+    buttonDown();
+    buttonUp();
+    TEST_ASSERT_FALSE(bus.digitalBus[kCouplerCmd].value);
 }
 
 
@@ -1102,6 +1250,15 @@ void setup() {
     RUN_TEST(test_pair_row17_long_drop_detached);
     RUN_TEST(test_pair_row18_retry_succeeds);
     RUN_TEST(test_pair_row19_retries_exhausted);
+
+    RUN_TEST(test_chain_row1_press_latches_at_once);
+    RUN_TEST(test_chain_row3_remote_loss_keeps_the_command);
+    RUN_TEST(test_chain_row5_second_press_uncouples);
+    RUN_TEST(test_chain_row6_held_button_toggles_once);
+    RUN_TEST(test_chain_row10_no_coupling_without_the_switch);
+    RUN_TEST(test_chain_row10b_held_button_couples_on_engagement);
+    RUN_TEST(test_chain_row10c_bouncing_switch_never_couples);
+    RUN_TEST(test_chain_row11_uncoupling_without_the_switch);
 
     UNITY_END();
 }

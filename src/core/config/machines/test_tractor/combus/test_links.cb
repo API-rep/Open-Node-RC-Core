@@ -17,6 +17,9 @@
 # - TEST_GEAR_BUS: received from the remote, not relayed; its logical zero is
 #   at CbusNeutral (`zeroAt: neutral`): test of the application accessors
 #   (step S3-4).
+# - TEST_COUPLER_BTN: the coupling button of the TEST coupler, an input from
+#   the remote (input contract of the machine type), read by the chain of the
+#   coupler (step 3.4e).
 
 channels:
 
@@ -76,3 +79,11 @@ channels:
   theme: failsafe
   direction: both_or
   value: fault
+
+- id: TEST_COUPLER_BTN
+  infoName: "Test coupler button"
+  type: digital
+  scope: BASE
+  theme: remote
+  direction: downlink
+  value: low

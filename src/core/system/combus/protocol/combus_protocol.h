@@ -165,7 +165,10 @@ enum class DigitalComBusID : uint8_t;   // generated (combus_ids.h)
  *   `engageMs`), the two ends pair (combus_pairing.h, step 3.4c); paired, the
  *   link starts with the startup grace of its protocol; lost after it, or not
  *   paired, the link reports it through `fail` only (never NODE_LINK_FAIL).
- *   It is detached once the trigger stays false for `releaseMs`.
+ *   It is detached once the trigger stays false for `releaseMs`.  The chain
+ *   of the coupler (3.4e, `chain`, in the folder of the coupler) is run by
+ *   combus_links before the trigger is read: on the vehicle it latches the
+ *   coupling button into the command (the trigger).
  */
 
 struct CouplingDev {
@@ -175,6 +178,7 @@ struct CouplingDev {
     uint16_t ageToleranceMs = 200u;           ///< 3.4c: the two ages of the hitch agree within this (actuator dependent)
     uint16_t engageMs       = 50u;            ///< 3.4c: the trigger stays true this long before the pairing starts
     uint16_t releaseMs      = 500u;           ///< 3.4c: the trigger stays false this long before the link is detached
+    void (*chain)(ComBus& bus) = nullptr;     ///< 3.4e: chain of the coupler for this end (writes the trigger), nullptr = none
 };
 
 

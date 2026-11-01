@@ -28,6 +28,15 @@ ComBus by discovery) and:
     (check_single_source, both_or excepted);
   - the common frame is sorted: analog then digital, stable before candidate,
     then the name (never the theme);
+  - local channels (step 3.4e): a channel of the coupler that requires
+    IS_VEHICLE or IS_ATTACHMENT belongs to that end only (the button, the
+    latched command, an engaged switch...): injected as written (the
+    nature filter of `requires` keeps it on its end only), never on the link
+    (neither in the frame nor in the MD5); its name starts with the name of
+    the coupler (several couplers on one vehicle never clash); it is BOARD,
+    or SYSTEM when it comes from another board of the node, never BASE (an
+    input from the remote, as the coupling button, belongs to the input
+    contract of the machine type); a link channel is BASE;
   - the MD5 of the link carries the coupler and the role: each side announces
     MD5(coupler + its role) and expects MD5(coupler + the other role), so two
     vehicles (or two attachments) linked by mistake refuse each other.
@@ -57,6 +66,7 @@ REMOVED_PEER_FLAG_PREFIX = "COMBUS_PEER_"   # step 3.4a: replaced by the coupler
 NODE_NATURES = ("IS_VEHICLE", "IS_ATTACHMENT", "IS_MACHINE", "IS_REMOTE")
 
 _UP, _DOWN = "uplink", "downlink"
+_NATURE_REQUIRES = frozenset({"IS_VEHICLE", "IS_ATTACHMENT"})   # step 3.4e: marks a local channel of a coupler
 _SWAP = {_UP: _DOWN, _DOWN: _UP}
 
 
@@ -124,16 +134,35 @@ def load_type_base_channels(buildroot: Path, type_dir: str) -> list[ChannelDefin
     return [ch for ch in canonize(parsed).canonical_definitions if ch.scope == "BASE"]
 
 
+def is_local_channel(ch: ChannelDefinition) -> bool:
+    """A local channel of a coupler: it requires a nature (IS_VEHICLE or IS_ATTACHMENT), never on the link."""
+    return bool(ch.requires & _NATURE_REQUIRES)
+
+
 def load_coupler_channels(buildroot: Path, name: str) -> list[ChannelDefinition]:
-    """Read the channels of a coupler apart: BASE only, written from the vehicle."""
+    """Read the channels of a coupler apart: link channels BASE, local channels prefixed by the coupler."""
     folder = Path(buildroot) / "core" / "config" / "couplers" / name
     if not folder.is_dir():
         raise LinkError(f"coupler {name!r}: no folder {folder}")
     parsed = [parse_yaml_file(p) for p in sorted(folder.rglob("*.cb"))]
     channels = canonize(parsed).canonical_definitions
+    prefix = name.upper() + "_"
     for ch in channels:
+        natures = ch.requires & _NATURE_REQUIRES
+        if len(natures) > 1:
+            raise LinkError(f"coupler {name!r}: channel {ch.id!r} requires both natures, a local channel "
+                            f"belongs to one end")
+        if natures:
+            if not ch.id.startswith(prefix):
+                raise LinkError(f"coupler {name!r}: local channel {ch.id!r} must start with {prefix} "
+                                f"(several couplers on one vehicle never clash)")
+            if ch.scope not in ("BOARD", "SYSTEM"):
+                raise LinkError(f"coupler {name!r}: local channel {ch.id!r} is {ch.scope}, a local channel "
+                                f"is BOARD or SYSTEM (an input from the remote belongs to the machine type)")
+            continue
         if ch.scope != "BASE":
-            raise LinkError(f"coupler {name!r}: channel {ch.id!r} is {ch.scope}, a coupler is BASE only")
+            raise LinkError(f"coupler {name!r}: channel {ch.id!r} is {ch.scope}, a link channel is BASE "
+                            f"(a local channel requires IS_VEHICLE or IS_ATTACHMENT)")
     return channels
 
 
@@ -183,7 +212,8 @@ def inject_coupler_channels(channels, coupler_chs, nature: str) -> list[ChannelD
     declared (compute_coupler_link checks the agreement).
     """
     known = {ch.id for ch in channels}
-    added = [ch if nature == "IS_VEHICLE" else _attachment_view(ch) for ch in coupler_chs if ch.id not in known]
+    added = [ch if (nature == "IS_VEHICLE" or is_local_channel(ch)) else _attachment_view(ch)
+             for ch in coupler_chs if ch.id not in known]
     return list(channels) + added
 
 
@@ -238,7 +268,7 @@ def compute_coupler_link(name: str, coupler_chs, local_chs, nature: str) -> Link
     local = {ch.id: ch for ch in local_chs if ch.scope == "BASE"}
     link = LinkSet(coupler=name, role="vehicle" if local_is_vehicle else "attachment")
 
-    for c in sorted(coupler_chs, key=lambda ch: ch.id):
+    for c in sorted((ch for ch in coupler_chs if not is_local_channel(ch)), key=lambda ch: ch.id):
         a = local.get(c.id)
         if a is None:
             raise LinkError(f"coupler {name!r}: channel {c.id!r} missing from the node (not injected)")

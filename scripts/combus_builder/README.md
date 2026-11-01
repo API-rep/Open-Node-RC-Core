@@ -268,6 +268,16 @@ un véhicule, exactement 1 sur un attelage ; `IS_MACHINE` ou `IS_REMOTE` avec un
 coupleur est **refusé explicitement** (`node_nature()`), comme l'ancien
 `-D COMBUS_PEER_<TYPE>` (supprimé en 3.4a).
 
+- **Channels locaux** (3.4e) : un channel du coupleur qui exige `IS_VEHICLE` ou
+  `IS_ATTACHMENT` (`requires`) appartient à ce bout seulement (`is_local_channel()`) :
+  injecté tel quel, filtré par `requires`, jamais sur le lien (ni trame, ni MD5
+  de lien) ; il est BOARD (ou SYSTEM s'il vient d'une autre carte du nœud,
+  jamais BASE), au thème `coupler`, et son nom commence par celui du coupleur
+  (`FRONT_COUPLER_CMD` : plusieurs coupleurs sur un véhicule ne se heurtent
+  pas). Une entrée de la télécommande (le bouton d'attelage) appartient au
+  contrat d'entrées du type de machine, pas au coupleur. Le dossier du coupleur
+  peut porter sa chaîne (`<nom>_chain.cpp`, gardée par `COMBUS_COUPLER_<NOM>`
+  et la nature), branchée par `CouplingDev::chain`.
 - **Lecture à part** (`load_coupler_channels()`) : la découverte des `.cb`
   n'entre jamais dans `core/config/couplers/` (`parser._is_coupler_path()`) ;
   seuls les coupleurs déclarés sont lus.
@@ -300,7 +310,7 @@ coupleur est **refusé explicitement** (`node_nature()`), comme l'ancien
 
 Le journal du build affiche une ligne par liaison :
 `[combus_builder] set LINK <coupleur> (<rôle>)  md5=<32 hex>  A3+D2`. Le
-coupleur d'essai `test_hitch` et les types d'essai `test_tractor` et
+coupleur d'essai `test_coupler` et les types d'essai `test_tractor` et
 `test_trailer` (channels préfixés `TEST_`) servent aux tests
 (`test_couplers.py`).
 

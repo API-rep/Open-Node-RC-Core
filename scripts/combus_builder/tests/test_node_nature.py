@@ -25,7 +25,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from scripts.combus_builder.links import LinkError, node_nature  # noqa: E402
 
-P1, P2 = "COMBUS_COUPLER_TEST_HITCH", "COMBUS_COUPLER_FIFTH_WHEEL"
+P1, P2 = "COMBUS_COUPLER_TEST_COUPLER", "COMBUS_COUPLER_FIFTH_WHEEL"
 
 
 @pytest.mark.parametrize("defines,nature", [

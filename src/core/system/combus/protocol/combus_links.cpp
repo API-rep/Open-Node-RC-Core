@@ -336,6 +336,7 @@ static void followCoupling( uint8_t i, ComBus& bus )
 {
     ComLinkRuntime& rt     = s_watched[i];
     const uint32_t  now    = millis();
+    if (rt.coupling.dev->chain) { rt.coupling.dev->chain(bus); }   // 3.4e: the chain of the coupler writes the trigger
     const bool      trig   = bus.digitalBus[static_cast<uint8_t>(rt.coupling.dev->trigger)].value;
     const PairingState was = rt.coupling.pairing.state;
     const PairingState is  = combus_pairing_update(rt.coupling.pairing, *rt.coupling.dev, rt.coupling.role,

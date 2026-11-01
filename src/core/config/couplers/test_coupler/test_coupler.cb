@@ -1,4 +1,4 @@
-# test_hitch.cb — the TEST coupler (link rework, step 3.4a)
+# test_coupler.cb — the TEST coupler (link rework, steps 3.4a and 3.4e)
 #
 # A fictitious coupler used only by the tests (pytest, and the Unity test
 # env), carried by the TEST tractor (vehicle) and the TEST trailer
@@ -14,6 +14,18 @@
 # - TEST_TILT_ANGLE, TEST_AXLE_LOAD: received from the attachment (the TEST
 #   tractor does not know TEST_AXLE_LOAD: injected, an absent function);
 # - TEST_COUPLED_FAIL: fault shared by the whole convoy (OR merge).
+#
+# Local channels (step 3.4e): BOARD (or SYSTEM when the switch sits on another
+# board of the node), they require a nature, so they exist on
+# that end only and never travel on the link; their names start with the name
+# of the coupler (TEST_COUPLER_), so that several couplers on one vehicle never
+# clash.  The coupling button is not here: an input from the remote belongs to
+# the input contract of the machine type (TEST_COUPLER_BTN, test_tractor):
+# - TEST_COUPLER_CMD: the latched coupling command, the trigger of the
+#   CouplingDev, written by the chain of the coupler (test_coupler_chain.cpp);
+#   low at boot: a new press is needed after a reboot;
+# - TEST_COUPLER_ENGAGED_SW: the engaged switch of the coupler, an optional
+#   guard ("you may couple"), present with HAS_TEST_COUPLER_ENGAGED_SW.
 
 channels:
 
@@ -56,3 +68,19 @@ channels:
   theme: failsafe
   direction: both_or
   value: fault
+
+- id: TEST_COUPLER_CMD
+  infoName: "Test coupler command"
+  type: digital
+  scope: BOARD
+  theme: coupler
+  value: low
+  requires: [IS_VEHICLE]
+
+- id: TEST_COUPLER_ENGAGED_SW
+  infoName: "Test coupler engaged switch"
+  type: digital
+  scope: BOARD
+  theme: coupler
+  value: low
+  requires: [IS_VEHICLE, HAS_TEST_COUPLER_ENGAGED_SW]
