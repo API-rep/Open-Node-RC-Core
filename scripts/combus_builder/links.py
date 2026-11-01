@@ -258,6 +258,53 @@ def inject_coupler_channels(channels, coupler_chs, name: str, side: str) -> list
 
 
 # =============================================================================
+# Remote (chantier 4)
+# =============================================================================
+
+def _remote_view(ch: ChannelDefinition) -> ChannelDefinition:
+    """A BASE channel of the machine type (machine view) seen from the remote that drives it.
+
+    The machine receives it (`downlink`, or `downlink_pt`: received then
+    relayed): the remote sends it (`uplink`).  The machine sends it
+    (`uplink`): the remote receives it (`downlink`, a feedback).  `both`
+    stays; the OR directions swap.
+    """
+    if ch.direction_or:
+        seen = replace(ch, direction_or=frozenset(_SWAP[d] for d in ch.direction_or))
+    elif ch.direction == frozenset({_UP, _DOWN}):
+        seen = replace(ch, passthrough=False)
+    elif _DOWN in ch.direction:
+        seen = replace(ch, direction=frozenset({_UP}), passthrough=False)
+    elif _UP in ch.direction:
+        seen = replace(ch, direction=frozenset({_DOWN}))
+    else:
+        seen = ch
+    raw = dict(ch.raw)
+    raw["direction"] = _token(seen)
+    return replace(seen, raw=raw)
+
+
+def remote_channels(channels, machine_type: str) -> list[ChannelDefinition]:
+    """The ComBus of a remote driving `machine_type` (chantier 4, R2).
+
+    Every BASE channel (the contract of the machine type) seen from the
+    remote (_remote_view); the SYSTEM and BOARD channels of the machine type
+    stay inside the machine; the other channels (core, remote) are kept.
+    The BASE MD5 of the remote is hashed on the machine view (generator):
+    the contract of the link is the BASE of the machine type as written.
+    """
+    from .machine_type import is_machine_type_path
+
+    out = []
+    for ch in channels:
+        if ch.scope == "BASE":
+            out.append(_remote_view(ch))
+        elif not is_machine_type_path(ch.source_path, [machine_type]):
+            out.append(ch)
+    return out
+
+
+# =============================================================================
 # Link set
 # =============================================================================
 

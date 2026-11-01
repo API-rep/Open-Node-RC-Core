@@ -271,6 +271,12 @@ coupleur des deux côtés, deux fiches, ou une télécommande (`IS_REMOTE`) avec
 un coupleur sont **refusés explicitement** (`node_category()`), comme l'ancien
 `-D COMBUS_PEER_<TYPE>` (supprimé en 3.4a).
 
+- **Télécommande** (chantier 4, embryon) : un nœud `IS_REMOTE` pilote un type
+  de machine (`-D MACHINE_TYPE_<TYPE>`) ; son ComBus est la vue BASE de ce
+  type **en miroir** (`remote_channels()` : ce que la machine reçoit, la
+  télécommande l'émet), sans les channels SYSTEM et BOARD du type ; son MD5
+  BASE est haché sur la vue de la machine (le même aux deux bouts) ; sans
+  `MACHINE_TYPE_*`, erreur.
 - **Coupleur passif** (3.4d) : un coupleur sans channel de lien, seulement des
   channels locaux (un outil attelé à la main) : une instance locale, sans lien
   ni `ComPeerLink` (`is_passive_coupler()`, journal `set COUPLER <nom>

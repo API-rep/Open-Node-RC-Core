@@ -309,12 +309,18 @@ void combus_tx_update(
 		st.seq++;
 		if (st.seq == 0u) { st.seq = 1u; }
 
-		// RL3: runLevel is now a plain analog channel — read from analogBus[RUNLEVEL].
+		// RL3: runLevel is now a plain analog channel — read from analogBus[RUNLEVEL],
+		// which exists only on the board that owns it (a remote has none, chantier 4).
+	#if defined(HAS_RUNLEVEL_MANAGER)
 		output_log_dbg("[COMBUS_TX] link=%u  seq=%u  len=%u  rl=%d\n",
 		               (unsigned)i,
 		               (unsigned)seqSent,
 		               (unsigned)frameLen,
 		               (int)bus->analogBus[static_cast<uint8_t>(AnalogComBusID::RUNLEVEL)].value);
+	#else
+		output_log_dbg("[COMBUS_TX] link=%u  seq=%u  len=%u\n",
+		               (unsigned)i, (unsigned)seqSent, (unsigned)frameLen);
+	#endif
 	}
 }
 

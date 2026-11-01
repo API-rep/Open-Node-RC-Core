@@ -87,7 +87,7 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from .canon.channels import ChannelDefinition
@@ -1034,6 +1034,8 @@ def generate(
     Returns the ViewSelection so callers (tests, diagnostics) can
     inspect what was generated.
     """
+    machine_view = channels                 # chantier 4: the contract of a remote is the BASE of the machine
+    channels = _remote_view(channels, ctx)
     channels, couplers = _inject_couplers(channels, ctx)
     skipped: list[tuple[str, list[str]]] = []
     active = resolve_requires(channels, ctx, skipped)
@@ -1046,10 +1048,38 @@ def generate(
     emit_view(sel.base, out_dir, ctx, filename_prefix=filename_prefix)
     # projectVersion: (major, minor, dev) read from project_version.h by the
     # caller; None keeps the md5.py placeholder (tests, ad-hoc calls).
-    hashes = _emit_md5_files(sel, out_dir, filename_prefix, project_version)
-    _print_set_hashes(sel, hashes, filename_prefix)
+    md5_sel = sel
+    if _is_remote(ctx):
+            # Chantier 4 (R3): the BASE view of a remote is the BASE of the
+            # machine type, mirrored; its contract is that BASE as written, so
+            # its BASE MD5 is hashed on the machine view (the same on both
+            # ends).  The generated code keeps the mirrored directions.
+        md5_sel = replace(sel, base=select_views(resolve_requires(machine_view, ctx, [])).base)
+    hashes = _emit_md5_files(md5_sel, out_dir, filename_prefix, project_version)
+    _print_set_hashes(md5_sel, hashes, filename_prefix)
     _emit_peer_links(active, couplers, ctx, out_dir, filename_prefix)
     return sel
+
+
+def _is_remote(ctx: BuildContext) -> bool:
+    return "IS_REMOTE" in (set(ctx.defines) | set(ctx.defines_with_value or {}))
+
+
+def _remote_view(channels: list[ChannelDefinition], ctx: BuildContext) -> list[ChannelDefinition]:
+    """Chantier 4 — a remote (IS_REMOTE): the BASE view of the machine type it drives, mirrored.
+
+    GeneratorError when the remote names no machine type.  Unchanged for a
+    machine.
+    """
+    from .links import remote_channels
+    from .machine_type import detect_machine_type
+
+    if not _is_remote(ctx):
+        return channels
+    machine_type = detect_machine_type(ctx)
+    if machine_type is None:
+        raise GeneratorError("a remote drives a machine type: set -D MACHINE_TYPE_<TYPE> (chantier 4)")
+    return remote_channels(channels, machine_type)
 
 
 def _inject_couplers(channels: list[ChannelDefinition], ctx: BuildContext):
