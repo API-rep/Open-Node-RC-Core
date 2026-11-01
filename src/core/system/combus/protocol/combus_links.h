@@ -70,7 +70,7 @@ struct ComLinkWatch {
 
 struct ComLinkCoupling {
     const CouplingDev* dev     = nullptr;               ///< link ON_COUPLING, nullptr = always active
-    ComLinkRole        role    = ComLinkRole::VEHICLE;  ///< 3.4c: role of this node, from its coupler (ComPeerLink::role)
+    ComLinkRole        role    = ComLinkRole::SOCKET;   ///< 3.4c: side of this node, from its coupler (ComPeerLink::role)
     ComLinkPairing     pairing = {};                    ///< 3.4c: pairing of the two ends
     bool               coupled = false;                 ///< paired (PairingState::COUPLED) at the last combus_links_update()
 };

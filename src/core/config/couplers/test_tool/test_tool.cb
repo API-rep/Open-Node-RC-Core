@@ -23,7 +23,7 @@ channels:
   scope: BOARD
   theme: coupler
   value: low
-  requires: [IS_VEHICLE]
+  requires: [HAS_COUPLER_SOCKET_TEST_TOOL]
 
 - id: TEST_TOOL_ATTACHED
   infoName: "Test tool attached"
@@ -31,4 +31,4 @@ channels:
   scope: BOARD
   theme: coupler
   value: low
-  requires: [IS_VEHICLE]
+  requires: [HAS_COUPLER_SOCKET_TEST_TOOL]

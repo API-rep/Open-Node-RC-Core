@@ -4,12 +4,12 @@
  *
  * @details Temporary form until the declared chains (.cbch, WIP "Simulation
  *   chain"): a C++ chain in the folder of the coupler, guarded by the flag of
- *   the coupler and the nature of the node.  The machine points its
+ *   its side (the socket).  The machine points its
  *   CouplingDev::chain to it.
  *******************************************************************************///
 #pragma once
 
-#if defined(COMBUS_COUPLER_TEST_COUPLER) && defined(IS_VEHICLE)
+#if defined(HAS_COUPLER_SOCKET_TEST_COUPLER)
 
 #include <core/system/combus/combus_defs.h>   // ComBus
 

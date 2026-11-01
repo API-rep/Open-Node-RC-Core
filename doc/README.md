@@ -111,6 +111,21 @@ See also:
 
 ---
 
+### Glossary
+
+Words used throughout the project (decided on 2026-11-01, link rework 3.5).
+
+| Word | Meaning |
+|---|---|
+| **node** | any compiled firmware with a ComBus |
+| **machine** | a node that is driven (`IS_MACHINE`): first level (the remote connects to it) or carried (an attachment, reached through what carries it, or directly when stand-alone) |
+| **remote** | a node that drives (`IS_REMOTE`) |
+| **coupler** | the norm of a link between a socket and a plug (its folder `src/core/config/couplers/<name>/`) |
+| **socket** | the side that carries: `HAS_COUPLER_SOCKET_<NAME>` (0 to n per node) |
+| **plug** | the side that is carried: `HAS_COUPLER_PLUG_<NAME>` (0 or 1 per node) |
+| **tool** | an element carried without a node: a passive coupler, socket only |
+| **coupled / stand-alone** | the role at a given time, read in the state of the coupling (a towed trommel is coupled when hitched, stand-alone otherwise) |
+
 ### By Subject
 
 Quick index to the documents that sit next to the code. Start from the subject, then follow the links of the document you land on.

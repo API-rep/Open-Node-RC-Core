@@ -1053,33 +1053,34 @@ def generate(
 
 
 def _inject_couplers(channels: list[ChannelDefinition], ctx: BuildContext):
-    """Link rework 3.4a — the ComBus of the couplers merges into the ComBus of the node.
+    """Link rework 3.4a / 3.5 — the ComBus of the couplers merges into the ComBus of the node.
 
     Returns the channels with the channels of the declared couplers injected
-    (links.inject_coupler_channels), and the couplers as (nature, {name:
-    channels}); (None, {}) when the node declares no coupler.  A node that
-    declares a coupler, or the removed COMBUS_PEER_<TYPE>, has its nature
+    (links.inject_coupler_channels), and the couplers as {name: (side,
+    channels)}; {} when the node declares no coupler.  A node that declares a
+    coupler, or the removed COMBUS_PEER_<TYPE>, has its category and sides
     checked: a wrong env is refused explicitly, never ignored.
     """
     from . import links as links_module
-    from .links import COUPLER_FLAG_PREFIX, REMOVED_PEER_FLAG_PREFIX, LinkError, coupler_names, \
-        inject_coupler_channels, is_passive_coupler, node_nature
+    from .links import PLUG, PLUG_FLAG_PREFIX, REMOVED_PEER_FLAG_PREFIX, SOCKET_FLAG_PREFIX, LinkError, \
+        coupler_sides, inject_coupler_channels, is_passive_coupler, node_category
 
     defines = set(ctx.defines) | set(ctx.defines_with_value or {})
-    if not any(d.startswith((COUPLER_FLAG_PREFIX, REMOVED_PEER_FLAG_PREFIX)) for d in defines):
-        return channels, (None, {})
+    if not any(d.startswith((SOCKET_FLAG_PREFIX, PLUG_FLAG_PREFIX, REMOVED_PEER_FLAG_PREFIX)) for d in defines):
+        return channels, {}
     try:
-        nature = node_nature(defines)
+        node_category(defines)
         couplers = {}
-        for name in coupler_names(ctx):
-            couplers[name] = links_module.load_coupler_channels(ctx.buildroot, name)
-            if nature == "IS_ATTACHMENT" and is_passive_coupler(couplers[name]):
-                raise LinkError(f"coupler {name!r} is passive (no link channel): the coupler of an "
-                                f"attachment is the active one of its vehicle")
-            channels = inject_coupler_channels(channels, couplers[name], nature)
+        for name, side in coupler_sides(defines).items():
+            coupler_chs = links_module.load_coupler_channels(ctx.buildroot, name)
+            if side == PLUG and is_passive_coupler(coupler_chs, name):
+                raise LinkError(f"coupler {name!r} is passive (no link channel): it has a socket only, "
+                                f"never a plug")
+            couplers[name] = (side, coupler_chs)
+            channels = inject_coupler_channels(channels, coupler_chs, name, side)
     except LinkError as e:
         raise GeneratorError(f"link through a coupler: {e}") from e
-    return channels, (nature, couplers)
+    return channels, couplers
 
 
 def _emit_peer_links(channels: list[ChannelDefinition], couplers, ctx: BuildContext, out_dir: Path,
@@ -1092,14 +1093,13 @@ def _emit_peer_links(channels: list[ChannelDefinition], couplers, ctx: BuildCont
     from .links import LinkError, check_single_source, compute_coupler_link, is_passive_coupler, link_md5, \
         render_peer_links_header
 
-    nature, by_name = couplers
     links = []
     try:
-        for name, coupler_chs in by_name.items():
-            if is_passive_coupler(coupler_chs):     # step 3.4d: a local instance, no link
+        for name, (side, coupler_chs) in couplers.items():
+            if is_passive_coupler(coupler_chs, name):     # step 3.4d: a local instance, no link
                 print(f"[combus_builder] set COUPLER {name} (passive)")
                 continue
-            link = compute_coupler_link(name, coupler_chs, channels, nature)
+            link = compute_coupler_link(name, coupler_chs, channels, side)
             n_analog = sum(1 for c in link.channels if c.type == "analog")
             n_digital = sum(1 for c in link.channels if c.type == "digital")
             board = f"  [{filename_prefix}]" if filename_prefix else ""

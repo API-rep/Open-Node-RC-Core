@@ -117,7 +117,7 @@ compteur part de 0 (`generator.py:362-386`).
   `kCombusSystemComBusMd5` ou `kCombusComBusMd5` selon le layer).
 - **Lien entre nœuds à travers un coupleur (link rework 3.1b, 3.4a)** : quand le
   `ComDev` porte un `peer` (`ComPeerLink`, `combus_peer_link_defs.h`, généré dans
-  `combus_peer_links.h` par `-D COMBUS_COUPLER_<NOM>`), la trame est la trame
+  `combus_peer_links.h` par `-D HAS_COUPLER_SOCKET_<NOM>` ou `_PLUG_<NOM>`), la trame est la trame
   commune du lien (le coupleur complet), et non le préfixe de la vue `BASE`. Ses comptes viennent du
   lien. À l'émission, chaque position sur le fil lit le channel local que donne
   la table (`analogMap` / `digitalMap` de `combus_frame_encode`). À la réception,

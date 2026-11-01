@@ -9,7 +9,7 @@ An agent-specific file (for example `CLAUDE.md` at the repository root) holds th
 ## 1. Reading Order
 
 1. This file (rules for AI agents, sections 2 to 5).
-2. [Documentation Guide](README.md) — find the topic you work on (see "By Subject").
+2. [Documentation Guide](README.md) — the words of the project ("Glossary"), then the topic you work on ("By Subject").
 3. Before writing or changing C/C++: the conventions below.
 4. Before writing documentation: [Documentation Guidelines](documentation_guidelines.md).
 

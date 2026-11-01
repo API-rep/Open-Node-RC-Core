@@ -16,8 +16,9 @@
 # - TEST_COUPLED_FAIL: fault shared by the whole convoy (OR merge).
 #
 # Local channels (step 3.4e): BOARD (or SYSTEM when the switch sits on another
-# board of the node), they require a nature, so they exist on
-# that end only and never travel on the link; their names start with the name
+# board of the node), they require the flag of one side of the coupler
+# (HAS_COUPLER_SOCKET_TEST_COUPLER), so they exist on that side only and never
+# travel on the link; their names start with the name
 # of the coupler (TEST_COUPLER_), so that several couplers on one vehicle never
 # clash.  The coupling button is not here: an input from the remote belongs to
 # the input contract of the machine type (TEST_COUPLER_BTN, test_tractor):
@@ -77,7 +78,7 @@ channels:
   scope: BOARD
   theme: coupler
   value: low
-  requires: [IS_VEHICLE]
+  requires: [HAS_COUPLER_SOCKET_TEST_COUPLER]
 
 - id: TEST_COUPLER_ENGAGED_SW
   infoName: "Test coupler engaged switch"
@@ -85,7 +86,7 @@ channels:
   scope: BOARD
   theme: coupler
   value: low
-  requires: [IS_VEHICLE, HAS_TEST_COUPLER_ENGAGED_SW]
+  requires: [HAS_COUPLER_SOCKET_TEST_COUPLER, HAS_TEST_COUPLER_ENGAGED_SW]
 
 - id: TEST_COUPLER_COUPLED
   infoName: "Test coupler coupled"
@@ -93,4 +94,4 @@ channels:
   scope: BOARD
   theme: coupler
   value: low
-  requires: [IS_VEHICLE]
+  requires: [HAS_COUPLER_SOCKET_TEST_COUPLER]

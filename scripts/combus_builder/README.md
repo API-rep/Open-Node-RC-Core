@@ -259,29 +259,33 @@ nœud, plusieurs cartes connectées (appelé par le hook). Le drapeau
 Le contrat d'une liaison est un **coupleur**, la norme du lien, comme une prise
 normalisée : `src/core/config/couplers/<nom>/*.cb`, des channels `BASE`
 ordinaires. Le coupleur est une **brique de la machine** : il s'écrit **du
-point de vue du véhicule**, le noyau de l'étoile, comme tout `.cb` de la
-machine (`downlink_pt` : reçu et relayé vers l'attelage, `downlink` : reçu de
-l'attelage, `uplink` : sa propre valeur envoyée, `both_or` : faute partagée ;
-3.4e, 2026-11-01), `value` = la valeur sûre. Un nœud déclare ses
-coupleurs : `-D COMBUS_COUPLER_<NOM>` (`links.coupler_names()`), de 0 à n sur
-un véhicule, exactement 1 sur un attelage ; `IS_MACHINE` ou `IS_REMOTE` avec un
-coupleur est **refusé explicitement** (`node_nature()`), comme l'ancien
+point de vue de l'embase** (le côté qui porte, le noyau de l'étoile), comme
+tout `.cb` de la machine (`downlink_pt` : reçu et relayé vers la fiche,
+`downlink` : reçu de la fiche, `uplink` : sa propre valeur envoyée, `both_or` :
+faute partagée ; 3.4e, 2026-11-01), `value` = la valeur sûre. Une machine
+(`IS_MACHINE`) déclare le **côté** de chacun de ses coupleurs (3.5,
+`links.coupler_sides()`) : `-D HAS_COUPLER_SOCKET_<NOM>` (l'embase : elle
+porte, 0 à n) ou `-D HAS_COUPLER_PLUG_<NOM>` (la fiche : elle est portée, 0 ou
+1) ; le rôle d'un nœud sur un lien est ce côté, jamais une nature du nœud. Un
+coupleur des deux côtés, deux fiches, ou une télécommande (`IS_REMOTE`) avec
+un coupleur sont **refusés explicitement** (`node_category()`), comme l'ancien
 `-D COMBUS_PEER_<TYPE>` (supprimé en 3.4a).
 
 - **Coupleur passif** (3.4d) : un coupleur sans channel de lien, seulement des
   channels locaux (un outil attelé à la main) : une instance locale, sans lien
   ni `ComPeerLink` (`is_passive_coupler()`, journal `set COUPLER <nom>
-  (passive)`), sur un véhicule seulement.
-- **Channels locaux** (3.4e) : un channel du coupleur qui exige `IS_VEHICLE` ou
-  `IS_ATTACHMENT` (`requires`) appartient à ce bout seulement (`is_local_channel()`) :
+  (passive)`), en embase seulement.
+- **Channels locaux** (3.4e) : un channel du coupleur qui exige le flag d'un de
+  ses côtés (`requires: [HAS_COUPLER_SOCKET_<NOM>]` ou `[HAS_COUPLER_PLUG_<NOM>]`)
+  appartient à ce côté seulement (`is_local_channel()`) :
   injecté tel quel, filtré par `requires`, jamais sur le lien (ni trame, ni MD5
   de lien) ; il est BOARD (ou SYSTEM s'il vient d'une autre carte du nœud,
   jamais BASE), au thème `coupler`, et son nom commence par celui du coupleur
-  (`FRONT_COUPLER_CMD` : plusieurs coupleurs sur un véhicule ne se heurtent
+  (`FRONT_COUPLER_CMD` : plusieurs coupleurs sur une machine ne se heurtent
   pas). Une entrée de la télécommande (le bouton d'attelage) appartient au
   contrat d'entrées du type de machine, pas au coupleur. Le dossier du coupleur
-  peut porter sa chaîne (`<nom>_chain.cpp`, gardée par `COMBUS_COUPLER_<NOM>`
-  et la nature), branchée par `CouplingDev::chain`.
+  peut porter sa chaîne (`<nom>_chain.cpp`, gardée par le flag de son côté,
+  `HAS_COUPLER_SOCKET_<NOM>`), branchée par `CouplingDev::chain`.
 - **Lecture à part** (`load_coupler_channels()`) : la découverte des `.cb`
   n'entre jamais dans `core/config/couplers/` (`parser._is_coupler_path()`) ;
   seuls les coupleurs déclarés sont lus.

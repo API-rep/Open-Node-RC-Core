@@ -1,27 +1,33 @@
 #!/usr/bin/env python3
 """
-combus_builder/links.py — links between nodes (link rework, steps 3.1a and 3.4a).
+combus_builder/links.py — links between nodes (link rework, steps 3.1a to 3.5).
 
-Step 3.4a: the contract of a link is a COUPLER, the norm of the link, like a
-standard plug (src/core/config/couplers/<name>/*.cb), no longer computed for
-a pair of machine types.  A node declares the couplers it carries
-(`-D COMBUS_COUPLER_<NAME>`): 0 to n on a vehicle, exactly 1 on an
-attachment.  The builder reads the coupler apart (it never enters the
-ComBus by discovery) and:
+The contract of a link is a COUPLER, the norm of the link, like a standard
+plug (src/core/config/couplers/<name>/*.cb).  A node is a machine (IS_MACHINE)
+or a remote (IS_REMOTE); a machine declares, per coupler, its side
+(step 3.5):
+
+  - `-D HAS_COUPLER_SOCKET_<NAME>`: it has the socket, it carries (0 to n);
+  - `-D HAS_COUPLER_PLUG_<NAME>`: it has the plug, it is carried (0 or 1).
+
+The role of a node on a link is the side of its coupler, never a nature of
+the node (a towed trommel is carried when hitched, stand-alone otherwise).
+The builder reads the coupler apart (it never enters the ComBus by discovery)
+and:
 
   - full contract: the frame of the link is every channel of the coupler;
   - a coupler is a brick of the machine: its directions are those of the
-    vehicle, the hub of the star (machine-centric, as any .cb of the
-    machine: `downlink_pt` relayed to the attachment, `downlink` received
-    from it, `uplink` its own value sent, `both_or` shared fault);
+    socket side, the hub of the star (machine-centric, as any .cb of the
+    machine: `downlink_pt` relayed to the plug side, `downlink` received from
+    it, `uplink` its own value sent, `both_or` shared fault);
   - injection: the ComBus of the coupler merges into the ComBus of the node;
     a channel of the coupler unknown to the machine type is added at its safe
-    value (an absent function stays safe): as written on the vehicle, its
-    side of the plug on the attachment (attachment view, see _attachment_view);
-  - star "vehicle + 1" (step 3.2b): on the attachment, `downlink_pt` only
-    redistributes in its node, it receives on the link; on the vehicle,
-    `downlink_pt` receives where the attachment emits (that link is its
-    source) and emits where the attachment receives;
+    value (an absent function stays safe): as written on the socket side,
+    its side of the plug on the plug side (see _plug_view);
+  - star (step 3.2b): on the plug side, `downlink_pt` only redistributes in
+    its node, it receives on the link; on the socket side, `downlink_pt`
+    receives where the plug side emits (that link is its source) and emits
+    where the plug side receives;
   - a channel of the same name in the machine type agrees on type, value and
     zeroAt, and must flow (one side emits, the other receives): two emitters,
     or nobody emitting, is an error; one source per channel on the node
@@ -30,20 +36,20 @@ ComBus by discovery) and:
     then the name (never the theme);
   - passive coupler (step 3.4d): a coupler without link channel, only its
     local channels (a tool coupled by hand, a tiltable bucket): a local
-    instance of the coupler, no link, no ComPeerLink; on a vehicle only (the
-    single coupler of an attachment is the active one of its vehicle);
-  - local channels (step 3.4e): a channel of the coupler that requires
-    IS_VEHICLE or IS_ATTACHMENT belongs to that end only (the button, the
-    latched command, an engaged switch...): injected as written (the
-    nature filter of `requires` keeps it on its end only), never on the link
-    (neither in the frame nor in the MD5); its name starts with the name of
-    the coupler (several couplers on one vehicle never clash); it is BOARD,
-    or SYSTEM when it comes from another board of the node, never BASE (an
-    input from the remote, as the coupling button, belongs to the input
-    contract of the machine type); a link channel is BASE;
-  - the MD5 of the link carries the coupler and the role: each side announces
-    MD5(coupler + its role) and expects MD5(coupler + the other role), so two
-    vehicles (or two attachments) linked by mistake refuse each other.
+    instance of the coupler, no link, no ComPeerLink; on the socket side only;
+  - local channels (step 3.4e): a channel of the coupler that requires the
+    flag of one side of this coupler (HAS_COUPLER_SOCKET_<NAME> or
+    HAS_COUPLER_PLUG_<NAME>) belongs to that side only (the button, the
+    latched command, an engaged switch...): injected as written (the filter
+    of `requires` keeps it on its side only), never on the link (neither in
+    the frame nor in the MD5); its name starts with the name of the coupler
+    (several couplers on one machine never clash); it is BOARD, or SYSTEM
+    when it comes from another board of the node, never BASE (an input from
+    the remote belongs to the input contract of the machine type); a link
+    channel is BASE;
+  - the MD5 of the link carries the coupler and the side: each side announces
+    MD5(coupler + its side) and expects MD5(coupler + the other side), so two
+    sockets (or two plugs) linked by mistake refuse each other.
 
 Each node then has a table from its ComBus to the common frame
 (combus_peer_links.h, emitted by generator.generate()).
@@ -60,17 +66,18 @@ from .canon import canonize
 from .canon.channels import ChannelDefinition
 from .parser import parse_yaml_file
 
-COUPLER_FLAG_PREFIX = "COMBUS_COUPLER_"
-REMOVED_PEER_FLAG_PREFIX = "COMBUS_PEER_"   # step 3.4a: replaced by the couplers, refused explicitly
+SOCKET_FLAG_PREFIX = "HAS_COUPLER_SOCKET_"   # step 3.5: the side that carries (0 to n)
+PLUG_FLAG_PREFIX = "HAS_COUPLER_PLUG_"       # step 3.5: the side that is carried (0 or 1)
+REMOVED_PEER_FLAG_PREFIX = "COMBUS_PEER_"    # step 3.4a: replaced by the couplers, refused explicitly
 
-# Nature of a node (step 3.2b): exactly one structural flag per env.  The
-# vehicle is the hub of the star; an attachment has one link, to a vehicle; a
-# stand-alone machine has no link (a coupling for some machines may come
-# later); the remote is unchanged (chantier 4).
-NODE_NATURES = ("IS_VEHICLE", "IS_ATTACHMENT", "IS_MACHINE", "IS_REMOTE")
+# Category of a node (step 3.5): exactly one per env.  A machine is a compiled
+# node that is driven; a remote is a node that drives (chantier 4).  The place
+# of a machine in the star is the side of each of its couplers, not a nature.
+NODE_CATEGORIES = ("IS_MACHINE", "IS_REMOTE")
+
+SOCKET, PLUG = "socket", "plug"               # the two sides of a coupler, the role of a node on its link
 
 _UP, _DOWN = "uplink", "downlink"
-_NATURE_REQUIRES = frozenset({"IS_VEHICLE", "IS_ATTACHMENT"})   # step 3.4e: marks a local channel of a coupler
 _SWAP = {_UP: _DOWN, _DOWN: _UP}
 
 
@@ -86,7 +93,7 @@ class LinkChannel:
     candidate: bool
     value: str                # rendered default value (C++ literal), the safe value of the coupler
     flow: str                 # "to_peer" | "from_peer" | "both" | "or"
-    token: str                # surface direction in the coupler, vehicle view (for the MD5)
+    token: str                # surface direction in the coupler, socket view (for the MD5)
     zero_at_neutral: bool = False  # step S3-4: logical zero at CbusNeutral, the same on both sides
 
 
@@ -94,39 +101,57 @@ class LinkChannel:
 class LinkSet:
     """The channel set of a link through a coupler, in wire order."""
     coupler: str
-    role: str                 # "vehicle" | "attachment": the role of this node on the link
+    role: str                 # SOCKET | PLUG: the side of this node on the link
     channels: list[LinkChannel] = field(default_factory=list)
 
 
 # =============================================================================
-# Couplers, nature and second reading
+# Category, sides and second reading
 # =============================================================================
 
-def coupler_names(ctx) -> list[str]:
-    """Couplers declared by `-D COMBUS_COUPLER_<NAME>`, as directory names, sorted."""
-    names = set(ctx.defines) | set(getattr(ctx, "defines_with_value", {}) or {})
-    return sorted(n[len(COUPLER_FLAG_PREFIX):].lower() for n in names if n.startswith(COUPLER_FLAG_PREFIX))
+def _define_names(ctx_or_defines) -> set[str]:
+    if hasattr(ctx_or_defines, "defines"):
+        return set(ctx_or_defines.defines) | set(getattr(ctx_or_defines, "defines_with_value", {}) or {})
+    return set(ctx_or_defines)
 
 
-def node_nature(defines) -> str:
-    """Structural flag of the node, checked against its couplers; LinkError if the env is wrong."""
-    removed = sorted(d for d in defines if d.startswith(REMOVED_PEER_FLAG_PREFIX))
+def coupler_sides(ctx_or_defines) -> dict[str, str]:
+    """Couplers declared by the node and their side ({name: SOCKET | PLUG}), names as directory names.
+
+    LinkError when a coupler is declared on both sides (a node never carries
+    itself) or when the node has more than one plug (it is carried by one at
+    a time).
+    """
+    names = _define_names(ctx_or_defines)
+    sockets = {n[len(SOCKET_FLAG_PREFIX):].lower() for n in names if n.startswith(SOCKET_FLAG_PREFIX)}
+    plugs = {n[len(PLUG_FLAG_PREFIX):].lower() for n in names if n.startswith(PLUG_FLAG_PREFIX)}
+    both = sorted(sockets & plugs)
+    if both:
+        raise LinkError(f"coupler {both[0]!r} declared on both sides: a node never carries itself")
+    if len(plugs) > 1:
+        raise LinkError(f"several plugs ({', '.join(sorted(plugs))}): a node is carried by one coupler at a time")
+    sides = {name: SOCKET for name in sockets}
+    sides.update({name: PLUG for name in plugs})
+    return dict(sorted(sides.items()))
+
+
+def node_category(defines) -> str:
+    """Category of the node (IS_MACHINE or IS_REMOTE), checked against its couplers; LinkError if wrong."""
+    names = _define_names(defines)
+    removed = sorted(d for d in names if d.startswith(REMOVED_PEER_FLAG_PREFIX))
     if removed:
         raise LinkError(f"{', '.join(removed)}: COMBUS_PEER_<TYPE> is removed (link rework 3.4a), "
-                        f"declare the coupler of the link (-D {COUPLER_FLAG_PREFIX}<NAME>)")
-    found = sorted(n for n in NODE_NATURES if n in defines)
+                        f"declare the side of the coupler (-D {SOCKET_FLAG_PREFIX}<NAME> or {PLUG_FLAG_PREFIX}<NAME>)")
+    found = sorted(n for n in NODE_CATEGORIES if n in names)
     if not found:
-        raise LinkError(f"no structural flag set (expected exactly one of {', '.join(NODE_NATURES)})")
+        raise LinkError(f"no category set (expected exactly one of {', '.join(NODE_CATEGORIES)})")
     if len(found) > 1:
-        raise LinkError(f"several structural flags set ({', '.join(found)}): a node has exactly one nature")
-    nature = found[0]
-    couplers = sorted(d for d in defines if d.startswith(COUPLER_FLAG_PREFIX))
-    if nature in ("IS_MACHINE", "IS_REMOTE") and couplers:
-        raise LinkError(f"{nature} carries no coupler ({', '.join(couplers)}): only a vehicle or an "
-                        f"attachment is linked (a coupling for this nature is not defined)")
-    if nature == "IS_ATTACHMENT" and len(couplers) != 1:
-        raise LinkError(f"IS_ATTACHMENT needs exactly one coupler, the one of its vehicle (got {len(couplers)})")
-    return nature
+        raise LinkError(f"several categories set ({', '.join(found)}): a node is a machine or a remote")
+    category = found[0]
+    sides = coupler_sides(names)
+    if category == "IS_REMOTE" and sides:
+        raise LinkError(f"IS_REMOTE carries no coupler ({', '.join(sides)}): a remote drives, it is not coupled")
+    return category
 
 
 def load_type_base_channels(buildroot: Path, type_dir: str) -> list[ChannelDefinition]:
@@ -138,14 +163,18 @@ def load_type_base_channels(buildroot: Path, type_dir: str) -> list[ChannelDefin
     return [ch for ch in canonize(parsed).canonical_definitions if ch.scope == "BASE"]
 
 
-def is_passive_coupler(coupler_chs) -> bool:
+def _side_flags(name: str) -> frozenset[str]:
+    return frozenset({SOCKET_FLAG_PREFIX + name.upper(), PLUG_FLAG_PREFIX + name.upper()})
+
+
+def is_local_channel(ch: ChannelDefinition, name: str) -> bool:
+    """A local channel of the coupler `name`: it requires the flag of one of its sides, never on the link."""
+    return bool(ch.requires & _side_flags(name))
+
+
+def is_passive_coupler(coupler_chs, name: str) -> bool:
     """A passive coupler (step 3.4d): no link channel, only local channels."""
-    return not any(not is_local_channel(ch) for ch in coupler_chs)
-
-
-def is_local_channel(ch: ChannelDefinition) -> bool:
-    """A local channel of a coupler: it requires a nature (IS_VEHICLE or IS_ATTACHMENT), never on the link."""
-    return bool(ch.requires & _NATURE_REQUIRES)
+    return all(is_local_channel(ch, name) for ch in coupler_chs)
 
 
 def load_coupler_channels(buildroot: Path, name: str) -> list[ChannelDefinition]:
@@ -157,21 +186,22 @@ def load_coupler_channels(buildroot: Path, name: str) -> list[ChannelDefinition]
     channels = canonize(parsed).canonical_definitions
     prefix = name.upper() + "_"
     for ch in channels:
-        natures = ch.requires & _NATURE_REQUIRES
-        if len(natures) > 1:
-            raise LinkError(f"coupler {name!r}: channel {ch.id!r} requires both natures, a local channel "
-                            f"belongs to one end")
-        if natures:
+        sides = ch.requires & _side_flags(name)
+        if len(sides) > 1:
+            raise LinkError(f"coupler {name!r}: channel {ch.id!r} requires both sides, a local channel "
+                            f"belongs to one side")
+        if sides:
             if not ch.id.startswith(prefix):
                 raise LinkError(f"coupler {name!r}: local channel {ch.id!r} must start with {prefix} "
-                                f"(several couplers on one vehicle never clash)")
+                                f"(several couplers on one machine never clash)")
             if ch.scope not in ("BOARD", "SYSTEM"):
                 raise LinkError(f"coupler {name!r}: local channel {ch.id!r} is {ch.scope}, a local channel "
                                 f"is BOARD or SYSTEM (an input from the remote belongs to the machine type)")
             continue
         if ch.scope != "BASE":
             raise LinkError(f"coupler {name!r}: channel {ch.id!r} is {ch.scope}, a link channel is BASE "
-                            f"(a local channel requires IS_VEHICLE or IS_ATTACHMENT)")
+                            f"(a local channel requires {SOCKET_FLAG_PREFIX}{name.upper()} or "
+                            f"{PLUG_FLAG_PREFIX}{name.upper()})")
     return channels
 
 
@@ -189,12 +219,12 @@ def _token(ch: ChannelDefinition) -> str:
     return base + ("_pt" if ch.passthrough else "")
 
 
-def _attachment_view(ch: ChannelDefinition) -> ChannelDefinition:
-    """A channel of a coupler (written from the vehicle) seen from the attachment, its side of the plug.
+def _plug_view(ch: ChannelDefinition) -> ChannelDefinition:
+    """A channel of a coupler (written from the socket side) seen from the plug side.
 
-    The vehicle emits it (`uplink`, or `downlink_pt`: relayed): the attachment
-    receives it (`downlink`).  The vehicle receives it (`downlink`): the
-    attachment emits it (`uplink`).  `both` stays; the OR directions swap.
+    The socket side emits it (`uplink`, or `downlink_pt`: relayed): the plug
+    side receives it (`downlink`).  The socket side receives it (`downlink`):
+    the plug side emits it (`uplink`).  `both` stays; the OR directions swap.
     """
     if ch.direction_or:
         seen = replace(ch, direction_or=frozenset(_SWAP[d] for d in ch.direction_or))
@@ -211,17 +241,18 @@ def _attachment_view(ch: ChannelDefinition) -> ChannelDefinition:
     return replace(seen, raw=raw)
 
 
-def inject_coupler_channels(channels, coupler_chs, nature: str) -> list[ChannelDefinition]:
-    """The channels of the node, plus the channels of the coupler it does not declare.
+def inject_coupler_channels(channels, coupler_chs, name: str, side: str) -> list[ChannelDefinition]:
+    """The channels of the node, plus the channels of the coupler `name` it does not declare.
 
     The ComBus of the coupler merges into the ComBus of the node: a channel
     unknown to the machine type is added at its safe value, nobody writes it
-    (an absent function stays safe).  As written on the vehicle, its side of
-    the plug on the attachment.  A channel the node declares is kept as
-    declared (compute_coupler_link checks the agreement).
+    (an absent function stays safe).  As written on the socket side, its side
+    of the plug on the plug side; a local channel as written.  A channel the
+    node declares is kept as declared (compute_coupler_link checks the
+    agreement).
     """
     known = {ch.id for ch in channels}
-    added = [ch if (nature == "IS_VEHICLE" or is_local_channel(ch)) else _attachment_view(ch)
+    added = [ch if (side == SOCKET or is_local_channel(ch, name)) else _plug_view(ch)
              for ch in coupler_chs if ch.id not in known]
     return list(channels) + added
 
@@ -230,13 +261,13 @@ def inject_coupler_channels(channels, coupler_chs, nature: str) -> list[ChannelD
 # Link set
 # =============================================================================
 
-def _flow(a: ChannelDefinition, b: ChannelDefinition, local_is_vehicle: bool) -> str:
+def _flow(a: ChannelDefinition, b: ChannelDefinition, local_is_socket: bool) -> str:
     """Flow of one channel on the link a (local) <-> b (peer, in its own view); LinkError if it does not flow.
 
-    Step 3.2b, star "vehicle + 1": on the attachment, `_pt` only redistributes
-    in its node (a plain receiver on the link); on the vehicle, `_pt` receives
-    where the attachment emits (that link is its source) and emits where the
-    attachment receives.
+    Step 3.2b, star: on the plug side, `_pt` only redistributes in its node (a
+    plain receiver on the link); on the socket side, `_pt` receives where the
+    plug side emits (that link is its source) and emits where the plug side
+    receives.
     """
     cid = a.id
     if a.direction_or or b.direction_or:
@@ -245,7 +276,7 @@ def _flow(a: ChannelDefinition, b: ChannelDefinition, local_is_vehicle: bool) ->
             return "or" if ta == "both_or" else ("to_peer" if ta == "uplink_or" else "from_peer")
         raise LinkError(f"channel {cid!r}: OR directions do not match ({ta} / {tb})")
 
-    v, t = (a, b) if local_is_vehicle else (b, a)
+    v, t = (a, b) if local_is_socket else (b, a)   # v: the socket side, t: the plug side
     v_up, v_down = _UP in v.direction, _DOWN in v.direction
     t_up, t_down = _UP in t.direction, _DOWN in t.direction
 
@@ -254,34 +285,34 @@ def _flow(a: ChannelDefinition, b: ChannelDefinition, local_is_vehicle: bool) ->
             return "both"
         raise LinkError(f"channel {cid!r}: two emitters on the link ({_token(a)} / {_token(b)})")
     if t_up and v_down:
-        to_vehicle = True                       # this link is the source of the vehicle
+        to_socket = True                        # this link is the source of the socket side
     elif t_down and (v_up or (v.passthrough and v_down)):
-        to_vehicle = False                      # the vehicle emits (its own value, or relayed)
+        to_socket = False                       # the socket side emits (its own value, or relayed)
     else:
         raise LinkError(f"channel {cid!r}: nobody emits it to a receiver on this link "
                         f"({_token(a)} / {_token(b)}): every channel of a coupler must flow")
-    return "from_peer" if to_vehicle == local_is_vehicle else "to_peer"
+    return "from_peer" if to_socket == local_is_socket else "to_peer"
 
 
-def compute_coupler_link(name: str, coupler_chs, local_chs, nature: str) -> LinkSet:
+def compute_coupler_link(name: str, coupler_chs, local_chs, side: str) -> LinkSet:
     """Channel set of the link through a coupler, in wire order: the full coupler.
 
     local_chs: the BASE channels of the node, coupler channels injected
-    (inject_coupler_channels); nature: IS_VEHICLE or IS_ATTACHMENT.
+    (inject_coupler_channels); side: SOCKET or PLUG, the side of this node.
     """
     from .generator import _render_value
 
-    if nature not in ("IS_VEHICLE", "IS_ATTACHMENT"):
-        raise LinkError(f"a {nature} node has no link")
-    local_is_vehicle = nature == "IS_VEHICLE"
+    if side not in (SOCKET, PLUG):
+        raise LinkError(f"coupler {name!r}: unknown side {side!r}")
+    local_is_socket = side == SOCKET
     local = {ch.id: ch for ch in local_chs if ch.scope == "BASE"}
-    link = LinkSet(coupler=name, role="vehicle" if local_is_vehicle else "attachment")
+    link = LinkSet(coupler=name, role=side)
 
-    for c in sorted((ch for ch in coupler_chs if not is_local_channel(ch)), key=lambda ch: ch.id):
+    for c in sorted((ch for ch in coupler_chs if not is_local_channel(ch, name)), key=lambda ch: ch.id):
         a = local.get(c.id)
         if a is None:
             raise LinkError(f"coupler {name!r}: channel {c.id!r} missing from the node (not injected)")
-        b = _attachment_view(c) if local_is_vehicle else c   # the peer, in its own view
+        b = _plug_view(c) if local_is_socket else c   # the peer, in its own view
         if a.type != c.type:
             raise LinkError(f"channel {c.id!r}: {a.type} in the node, {c.type} in the coupler {name!r}")
         va, vc = _render_value(a, a.type), _render_value(c, c.type)
@@ -291,7 +322,7 @@ def compute_coupler_link(name: str, coupler_chs, local_chs, nature: str) -> Link
             raise LinkError(f"channel {c.id!r}: zeroAt differs between the node and the coupler {name!r} "
                             f"(the two ends would read the same raw value differently)")
         link.channels.append(LinkChannel(id=c.id, type=c.type, candidate=c.candidate, value=vc,
-                                         flow=_flow(a, b, local_is_vehicle), token=_token(c),
+                                         flow=_flow(a, b, local_is_socket), token=_token(c),
                                          zero_at_neutral=c.zero_at_neutral))
 
     link.channels.sort(key=lambda c: (0 if c.type == "analog" else 1, c.candidate, c.id))
@@ -312,12 +343,12 @@ def check_single_source(links: list[LinkSet]) -> None:
 
 
 def link_md5(link: LinkSet, stable: bool = False, peer: bool = False) -> str:
-    """MD5 of the link: the coupler and a role (stable: without the candidates).
+    """MD5 of the link: the coupler and a side (stable: without the candidates).
 
-    peer=False: the MD5 this node announces (its own role); peer=True: the MD5
-    it expects from the other end (the other role).
+    peer=False: the MD5 this node announces (its own side); peer=True: the MD5
+    it expects from the other end (the other side).
     """
-    role = link.role if not peer else ("attachment" if link.role == "vehicle" else "vehicle")
+    role = link.role if not peer else (PLUG if link.role == SOCKET else SOCKET)
     entries = []
     for c in link.channels:
         if stable and c.candidate:
@@ -349,7 +380,7 @@ def render_peer_links_header(links: list[LinkSet], ids_header: str = "combus_ids
         " * GENERATED FILE - DO NOT EDIT.",
         " *",
         " * Generated by scripts/combus_builder/links.py (link rework, steps 3.1 and 3.4a).",
-        " * Links between nodes: for each coupler declared by -D COMBUS_COUPLER_<NAME>,",
+        " * Links between nodes: for each coupler of the node (-D HAS_COUPLER_SOCKET_<NAME> or _PLUG_<NAME>),",
         " * the common frame of the link (the full coupler, wire order) and the table",
         " * from this node's ComBus to that frame.",
         " ******************************************************************************/",
@@ -372,9 +403,9 @@ def render_peer_links_header(links: list[LinkSet], ids_header: str = "combus_ids
         ns = _cpp_ident(link.coupler)
         analog = [c for c in link.channels if c.type == "analog"]
         digital = [c for c in link.channels if c.type == "digital"]
-        body.append(f"/// Link through the {link.coupler} coupler, this node being the {link.role}.")
+        body.append(f"/// Link through the {link.coupler} coupler, this node on the {link.role} side.")
         body.append(f"namespace {ns} {{")
-        body.append("/// MD5 announced by this node (its role), and expected from the other end (the other role).")
+        body.append("/// MD5 announced by this node (its side), and expected from the other end (the other side).")
         body.append(_md5_array("kAnnouncedMd5[16]    ", link_md5(link, stable=True)))
         body.append(_md5_array("kAnnouncedMd5Next[16]", link_md5(link)))
         body.append(_md5_array("kExpectedMd5[16]     ", link_md5(link, stable=True, peer=True)))

@@ -3,7 +3,8 @@
  * @brief Definitions of a link between two nodes through a coupler (link rework 3.1b, 3.4a).
  *
  * @details Pure type definitions, filled by the builder (combus_peer_links.h,
- *   one ComPeerLink per coupler of the node, -D COMBUS_COUPLER_<NAME>).
+ *   one ComPeerLink per coupler of the node, -D HAS_COUPLER_SOCKET_<NAME> or
+ *   HAS_COUPLER_PLUG_<NAME>).
  *******************************************************************************///
 #pragma once
 
@@ -36,16 +37,17 @@ struct NodeAddr {
 
 
 /**
- * @brief Role of this node on a link through a coupler (link rework 3.4c).
+ * @brief Role of this node on a link through a coupler: the side of its coupler (link rework 3.4c, 3.5).
  *
- * @details Written by the builder (the nature of the node: IS_VEHICLE or
- *   IS_ATTACHMENT).  The pairing depends on it: the vehicle sends the
- *   requests, the attachment answers them.
+ * @details Written by the builder from the side declared for the coupler
+ *   (HAS_COUPLER_SOCKET_<NAME> or HAS_COUPLER_PLUG_<NAME>).  The pairing
+ *   depends on it: the socket side (it carries) sends the requests, the plug
+ *   side (it is carried) answers them.
  */
 
 enum class ComLinkRole : uint8_t {
-    VEHICLE    = 0u,
-    ATTACHMENT = 1u
+    SOCKET = 0u,   ///< it carries: the hub of the link
+    PLUG   = 1u    ///< it is carried
 };
 
 
@@ -85,9 +87,9 @@ struct ComLinkTable {
  *   to a channel of this node's ComBus, and says whether this node receives it
  *   on the link or sends it.
  *
- *   The MD5 carries the coupler and a role (vehicle or attachment): this node
- *   announces its role (`announced`) and expects the other one (`expected`),
- *   so two vehicles, or two attachments, linked by mistake refuse each other.
+ *   The MD5 carries the coupler and a side (socket or plug): this node
+ *   announces its side (`announced`) and expects the other one (`expected`),
+ *   so two sockets, or two plugs, linked by mistake refuse each other.
  *
  *   A link without this descriptor carries the prefix of its scope's view,
  *   wire position = channel ID (BASE or SYSTEM).
@@ -96,8 +98,8 @@ struct ComLinkTable {
 struct ComPeerLink {
     const char*  coupler;     ///< coupler of the link (directory name)
     ComLinkRole  role;        ///< role of this node on the link (3.4c)
-    ComLinkMd5   announced;   ///< MD5 announced by this node (its role)
-    ComLinkMd5   expected;    ///< MD5 expected from the other end (the other role)
+    ComLinkMd5   announced;   ///< MD5 announced by this node (its side)
+    ComLinkMd5   expected;    ///< MD5 expected from the other end (the other side)
     ComLinkTable analog;      ///< analog half of the frame (AnalogComBusID)
     ComLinkTable digital;     ///< digital half of the frame (DigitalComBusID)
 };

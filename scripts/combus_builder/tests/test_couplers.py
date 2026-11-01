@@ -1,35 +1,37 @@
-"""Couplers: the norm of a link between nodes (link rework, step 3.4a).
+"""Couplers: the norm of a link between nodes (link rework, steps 3.4a to 3.5).
 
-Rules validated by the owner (2026-10-31; vehicle view: 2026-11-01, step 3.4e):
+Rules validated by the owner (2026-10-31; socket view: 2026-11-01, step 3.4e;
+sides: 2026-11-01, step 3.5):
   - T1 a coupler is a folder src/core/config/couplers/<name>/ of ordinary
-    BASE channels, a brick of the machine: directions are those of the
-    vehicle, the hub of the star (machine-centric: `downlink_pt` relayed to
-    the attachment, `downlink` received from it, `uplink` its own value sent,
+    BASE channels, a brick of the machine: directions are those of the socket
+    side, the hub of the star (machine-centric: `downlink_pt` relayed to the
+    plug side, `downlink` received from it, `uplink` its own value sent,
     `both_or` shared fault); `value` is the safe value;
-  - T2 a node declares its couplers with -D COMBUS_COUPLER_<NAME>: 0 to n on
-    a vehicle, exactly 1 on an attachment; IS_MACHINE / IS_REMOTE with a
-    coupler is refused explicitly, never ignored; COMBUS_PEER_<TYPE> is
-    removed (refused explicitly);
+  - T2 a machine (IS_MACHINE) declares the side of each coupler:
+    -D HAS_COUPLER_SOCKET_<NAME> (it carries, 0 to n) or
+    -D HAS_COUPLER_PLUG_<NAME> (it is carried, 0 or 1); a coupler on both
+    sides, two plugs, or a remote (IS_REMOTE) with a coupler is refused
+    explicitly, never ignored; COMBUS_PEER_<TYPE> is removed (refused);
   - T3 full contract: the frame is every channel of the coupler; the ComBus
     of the coupler merges into the ComBus of the node: a channel of the
     coupler unknown to the machine type is injected at its safe value (as
-    written on the vehicle, its side of the plug on the attachment);
+    written on the socket side, its side of the plug on the plug side);
   - T4 a channel of the same name in the machine type agrees on type, value
     and zeroAt; its direction must flow; a channel that would not flow is an
     error (no "dead channel" in a full contract);
   - T5 / T6 the MD5 of the link carries the coupler only, plus the role:
     each side announces MD5(coupler + its role) and expects MD5(coupler + the
-    other role), so two vehicles (or two attachments) linked by mistake
-    refuse each other;
+    other role), so two sockets (or two plugs) linked by mistake refuse each
+    other;
   - T7 the generated header has one namespace per coupler;
   - T8 the names of the coupler are the norm (no renaming);
   - T9 the coupler files never enter the ComBus by discovery: they are read
     apart, and only for the couplers declared by the node;
   - L (step 3.4e, 2026-11-01) local channels: a channel of the coupler that
-    requires IS_VEHICLE or IS_ATTACHMENT belongs to that end only (filtered
-    by `requires`), never on the link (frame, MD5); BOARD; its name starts
-    with the name of the coupler; an input from the remote (the coupling
-    button) belongs to the machine type, not to the coupler.
+    requires the flag of one of its sides belongs to that side only (filtered
+    by `requires`), never on the link (frame, MD5); BOARD or SYSTEM; its name
+    starts with the name of the coupler; an input from the remote (the
+    coupling button) belongs to the machine type, not to the coupler.
 """
 
 from __future__ import annotations
@@ -52,18 +54,23 @@ from scripts.combus_builder.links import (  # noqa: E402
     LinkError,
     check_single_source,
     compute_coupler_link,
-    coupler_names,
+    PLUG,
+    SOCKET,
+    coupler_sides,
     inject_coupler_channels,
     is_local_channel,
     link_md5,
     load_coupler_channels,
-    node_nature,
+    node_category,
 )
 from scripts.combus_builder.parser import discover_config_files  # noqa: E402
 
 SRC = REPO_ROOT / "src"
-V, A = "IS_VEHICLE", "IS_ATTACHMENT"
-HITCH = "COMBUS_COUPLER_TEST_COUPLER"
+V, A = SOCKET, PLUG
+M = "IS_MACHINE"
+HITCH = "HAS_COUPLER_SOCKET_TEST_COUPLER"
+HITCH_PLUG = "HAS_COUPLER_PLUG_TEST_COUPLER"
+TOOL = "HAS_COUPLER_SOCKET_TEST_TOOL"
 
 
 def _ctx(*flags):
@@ -94,7 +101,7 @@ def _flow(link, cid):
 def _link(coupler_raws, local_raws, nature=V, name="cpl"):
     """The link of a node carrying the coupler, after injection, as the generator computes it."""
     coupler = _canon(*coupler_raws)
-    local = inject_coupler_channels(_canon(*local_raws) if local_raws else [], coupler, nature)
+    local = inject_coupler_channels(_canon(*local_raws) if local_raws else [], coupler, name, nature)
     return compute_coupler_link(name, coupler, local, nature)
 
 
@@ -118,9 +125,9 @@ def trailer():
 # =============================================================================
 
 def test_t1_the_test_coupler_is_read_apart(hitch):
-    assert sorted(c.id for c in hitch if not is_local_channel(c)) == [
+    assert sorted(c.id for c in hitch if not is_local_channel(c, "test_coupler")) == [
         "TEST_AXLE_LOAD", "TEST_BRAKE_BUS", "TEST_COUPLED_FAIL", "TEST_LIGHTS", "TEST_TILT_ANGLE"]
-    assert sorted(c.id for c in hitch if is_local_channel(c)) == ["TEST_COUPLER_CMD", "TEST_COUPLER_COUPLED",
+    assert sorted(c.id for c in hitch if is_local_channel(c, "test_coupler")) == ["TEST_COUPLER_CMD", "TEST_COUPLER_COUPLED",
                                                                   "TEST_COUPLER_ENGAGED_SW"]
 
 
@@ -135,7 +142,7 @@ def _coupler_folder(tmp_path, name, body):
     return tmp_path
 
 
-def _local(id_, scope="BOARD", requires="[IS_VEHICLE]"):
+def _local(id_, scope="BOARD", requires="[HAS_COUPLER_SOCKET_FRONT_COUPLER]"):
     direction = "" if scope == "BOARD" else "  direction: uplink\n"
     return (f"- id: {id_}\n  infoName: x\n  type: digital\n  scope: {scope}\n  theme: core\n"
             f"{direction}  value: low\n  requires: {requires}\n")
@@ -143,7 +150,7 @@ def _local(id_, scope="BOARD", requires="[IS_VEHICLE]"):
 
 def test_l1_a_prefixed_board_local_channel_is_accepted(tmp_path):
     chs = load_coupler_channels(_coupler_folder(tmp_path, "front_coupler", _local("FRONT_COUPLER_CMD")), "front_coupler")
-    assert is_local_channel(chs[0])
+    assert is_local_channel(chs[0], "front_coupler")
 
 
 def test_l2_a_local_channel_without_the_prefix_is_refused(tmp_path):
@@ -152,15 +159,15 @@ def test_l2_a_local_channel_without_the_prefix_is_refused(tmp_path):
 
 
 def test_l3_a_local_channel_of_both_natures_is_refused(tmp_path):
-    root = _coupler_folder(tmp_path, "front_coupler", _local("FRONT_COUPLER_CMD", requires="[IS_VEHICLE, IS_ATTACHMENT]"))
-    with pytest.raises(LinkError, match="both natures"):
+    root = _coupler_folder(tmp_path, "front_coupler", _local("FRONT_COUPLER_CMD", requires="[HAS_COUPLER_SOCKET_FRONT_COUPLER, HAS_COUPLER_PLUG_FRONT_COUPLER]"))
+    with pytest.raises(LinkError, match="both sides"):
         load_coupler_channels(root, "front_coupler")
 
 
 def test_l4_a_local_channel_may_be_system(tmp_path):
     """The engaged switch on another board of the node: SYSTEM, still local."""
     root = _coupler_folder(tmp_path, "front_coupler", _local("FRONT_COUPLER_ENGAGED_SW", scope="SYSTEM"))
-    assert is_local_channel(load_coupler_channels(root, "front_coupler")[0])
+    assert is_local_channel(load_coupler_channels(root, "front_coupler")[0], "front_coupler")
 
 
 def test_l4b_a_local_channel_is_never_base(tmp_path):
@@ -171,25 +178,25 @@ def test_l4b_a_local_channel_is_never_base(tmp_path):
 
 
 def test_l5_local_channels_on_the_vehicle_only_and_off_the_link(tmp_path, tractor, trailer):
-    generate(tractor, _ctx(V, "MACHINE_TYPE_TEST_TRACTOR", HITCH), tmp_path / "v")
+    generate(tractor, _ctx(M, "MACHINE_TYPE_TEST_TRACTOR", HITCH), tmp_path / "v")
     ids_v = (tmp_path / "v" / "combus_ids.h").read_text(encoding="utf-8")
     assert "TEST_COUPLER_CMD" in ids_v
     assert "TEST_COUPLER_ENGAGED_SW" not in ids_v                    # its flag is not set
     links_v = (tmp_path / "v" / "combus_peer_links.h").read_text(encoding="utf-8")
     assert "TEST_COUPLER_" not in links_v                            # never on the link
 
-    generate(tractor, _ctx(V, "MACHINE_TYPE_TEST_TRACTOR", HITCH, "HAS_TEST_COUPLER_ENGAGED_SW"), tmp_path / "g")
+    generate(tractor, _ctx(M, "MACHINE_TYPE_TEST_TRACTOR", HITCH, "HAS_TEST_COUPLER_ENGAGED_SW"), tmp_path / "g")
     assert "TEST_COUPLER_ENGAGED_SW" in (tmp_path / "g" / "combus_ids.h").read_text(encoding="utf-8")
 
-    generate(trailer, _ctx(A, "MACHINE_TYPE_TEST_TRAILER", HITCH), tmp_path / "a")
+    generate(trailer, _ctx(M, "MACHINE_TYPE_TEST_TRAILER", HITCH_PLUG), tmp_path / "a")
     assert "TEST_COUPLER_CMD" not in (tmp_path / "a" / "combus_ids.h").read_text(encoding="utf-8")
 
 
 def test_p1_a_coupler_without_link_channel_is_passive(tmp_path, tractor, capsys):
     """Step 3.4d: a local instance of the coupler, no link, no ComPeerLink."""
-    assert links_module.is_passive_coupler(load_coupler_channels(SRC, "test_tool"))
-    assert not links_module.is_passive_coupler(load_coupler_channels(SRC, "test_coupler"))
-    generate(tractor, _ctx(V, "MACHINE_TYPE_TEST_TRACTOR", HITCH, "COMBUS_COUPLER_TEST_TOOL"), tmp_path)
+    assert links_module.is_passive_coupler(load_coupler_channels(SRC, "test_tool"), "test_tool")
+    assert not links_module.is_passive_coupler(load_coupler_channels(SRC, "test_coupler"), "test_coupler")
+    generate(tractor, _ctx(M, "MACHINE_TYPE_TEST_TRACTOR", HITCH, TOOL), tmp_path)
     out = capsys.readouterr().out
     assert "[combus_builder] set COUPLER test_tool (passive)" in out
     links = (tmp_path / "combus_peer_links.h").read_text(encoding="utf-8")
@@ -201,13 +208,13 @@ def test_p1_a_coupler_without_link_channel_is_passive(tmp_path, tractor, capsys)
 
 def test_p2_the_coupler_of_an_attachment_is_never_passive(tmp_path, trailer):
     with pytest.raises(GeneratorError, match="passive"):
-        generate(trailer, _ctx(A, "MACHINE_TYPE_TEST_TRAILER", "COMBUS_COUPLER_TEST_TOOL"), tmp_path)
+        generate(trailer, _ctx(M, "MACHINE_TYPE_TEST_TRAILER", "HAS_COUPLER_PLUG_TEST_TOOL"), tmp_path)
 
 
 def test_l6_local_channels_leave_the_md5_of_the_link(hitch, tractor):
-    link_only = [c for c in hitch if not is_local_channel(c)]
-    with_local = compute_coupler_link("test_coupler", hitch, inject_coupler_channels(tractor, hitch, V), V)
-    without = compute_coupler_link("test_coupler", link_only, inject_coupler_channels(tractor, link_only, V), V)
+    link_only = [c for c in hitch if not is_local_channel(c, "test_coupler")]
+    with_local = compute_coupler_link("test_coupler", hitch, inject_coupler_channels(tractor, hitch, "test_coupler", V), V)
+    without = compute_coupler_link("test_coupler", link_only, inject_coupler_channels(tractor, link_only, "test_coupler", V), V)
     assert link_md5(with_local) == link_md5(without)
 
 
@@ -244,35 +251,41 @@ def test_t9_discovery_never_loads_a_coupler(machine_type):
 
 
 # =============================================================================
-# T2: declaration and nature
+# T2: category and sides (step 3.5)
 # =============================================================================
 
-def test_t2_couplers_from_flags():
-    assert coupler_names(_ctx(HITCH, "COMBUS_COUPLER_FIFTH_WHEEL", "IS_VEHICLE")) == ["fifth_wheel", "test_coupler"]
+def test_t2_sides_from_flags():
+    """The dolly: carried by the truck (plug), it carries the semi-trailer (socket)."""
+    assert coupler_sides(_ctx(M, "HAS_COUPLER_PLUG_HITCH", "HAS_COUPLER_SOCKET_FIFTH_WHEEL")) == {
+        "fifth_wheel": SOCKET, "hitch": PLUG}
 
 
-@pytest.mark.parametrize("defines,nature", [
-    ({V}, V),
-    ({V, HITCH}, V),
-    ({V, HITCH, "COMBUS_COUPLER_FIFTH_WHEEL"}, V),
-    ({A, HITCH}, A),
-    ({"IS_MACHINE"}, "IS_MACHINE"),
-    ({"IS_REMOTE"}, "IS_REMOTE"),
+@pytest.mark.parametrize("defines", [
+    {M},
+    {M, HITCH},
+    {M, HITCH, "HAS_COUPLER_SOCKET_FIFTH_WHEEL"},
+    {M, HITCH_PLUG},
+    {M, "HAS_COUPLER_PLUG_HITCH", "HAS_COUPLER_SOCKET_FIFTH_WHEEL"},
 ])
-def test_row1_t2_accepted_natures(defines, nature):
-    assert node_nature(defines) == nature
+def test_row1_t2_a_machine_with_its_sides(defines):
+    assert node_category(defines) == M
+
+
+def test_row1_t2_a_remote_without_coupler():
+    assert node_category({"IS_REMOTE"}) == "IS_REMOTE"
 
 
 @pytest.mark.parametrize("defines,match", [
-    ({A}, "exactly one coupler"),                                        # row 2
-    ({A, HITCH, "COMBUS_COUPLER_FIFTH_WHEEL"}, "exactly one coupler"),   # row 2
-    ({"IS_MACHINE", HITCH}, "IS_MACHINE"),                               # row 3
-    ({"IS_REMOTE", HITCH}, "IS_REMOTE"),                                 # row 3
-    ({V, "COMBUS_PEER_TEST_TRAILER"}, "COMBUS_PEER_"),                   # row 14: removed, never ignored
+    (set(), "no category"),
+    ({M, "IS_REMOTE"}, "several categories"),
+    ({M, HITCH, HITCH_PLUG}, "both sides"),                              # a node never carries itself
+    ({M, HITCH_PLUG, "HAS_COUPLER_PLUG_FIFTH_WHEEL"}, "several plugs"),  # carried by one at a time
+    ({"IS_REMOTE", HITCH}, "IS_REMOTE"),                                 # a remote is never coupled
+    ({M, "COMBUS_PEER_TEST_TRAILER"}, "COMBUS_PEER_"),                   # removed, never ignored
 ])
-def test_row2_row3_row14_refused_natures(defines, match):
+def test_row2_row3_refused_categories_and_sides(defines, match):
     with pytest.raises(LinkError, match=match):
-        node_nature(defines)
+        node_category(defines)
 
 
 # =============================================================================
@@ -280,14 +293,14 @@ def test_row2_row3_row14_refused_natures(defines, match):
 # =============================================================================
 
 def test_row1_the_frame_is_the_full_coupler(hitch, tractor):
-    link = compute_coupler_link("test_coupler", hitch, inject_coupler_channels(tractor, hitch, V), V)
+    link = compute_coupler_link("test_coupler", hitch, inject_coupler_channels(tractor, hitch, "test_coupler", V), V)
     assert [c.id for c in link.channels if c.type == "analog"] == ["TEST_AXLE_LOAD", "TEST_BRAKE_BUS",
                                                                    "TEST_TILT_ANGLE"]
     assert [c.id for c in link.channels if c.type == "digital"] == ["TEST_COUPLED_FAIL", "TEST_LIGHTS"]
 
 
 def test_row4_injection_on_the_vehicle_is_as_written(hitch, tractor):
-    injected = {c.id: c for c in inject_coupler_channels(tractor, hitch, V)}
+    injected = {c.id: c for c in inject_coupler_channels(tractor, hitch, "test_coupler", V)}
     axle = injected["TEST_AXLE_LOAD"]                     # unknown to the tractor
     assert axle.direction == frozenset({"downlink"})      # as written: the vehicle receives it
     assert axle.value == "CbusNeutral"
@@ -297,7 +310,7 @@ def test_row4_injection_on_the_vehicle_is_as_written(hitch, tractor):
 
 def test_row4_injection_on_the_attachment_is_its_side_of_the_plug():
     coupler = _canon(_ch("RELAYED", "downlink_pt"), _ch("OWN", "uplink"), _ch("BACK", "downlink"))
-    injected = {c.id: c for c in inject_coupler_channels([], coupler, A)}
+    injected = {c.id: c for c in inject_coupler_channels([], coupler, "test_coupler", A)}
     assert injected["RELAYED"].direction == frozenset({"downlink"})   # the vehicle relays it: received
     assert not injected["RELAYED"].passthrough
     assert injected["OWN"].direction == frozenset({"downlink"})       # the vehicle sends it: received
@@ -306,19 +319,19 @@ def test_row4_injection_on_the_attachment_is_its_side_of_the_plug():
 
 def test_row4_injection_mirrors_or_directions():
     coupler = _canon(_ch("F", "uplink_or", type_="digital"), _ch("G", "both_or", type_="digital"))
-    injected = {c.id: c for c in inject_coupler_channels([], coupler, A)}
+    injected = {c.id: c for c in inject_coupler_channels([], coupler, "test_coupler", A)}
     assert injected["F"].direction_or == frozenset({"downlink"})
     assert injected["G"].direction_or == frozenset({"uplink", "downlink"})
 
 
 def test_row4_injected_channel_reaches_the_combus_of_the_node(tmp_path, tractor):
-    generate(tractor, _ctx(V, "MACHINE_TYPE_TEST_TRACTOR", HITCH), tmp_path)
+    generate(tractor, _ctx(M, "MACHINE_TYPE_TEST_TRACTOR", HITCH), tmp_path)
     ids = (tmp_path / "combus_ids.h").read_text(encoding="utf-8")
     assert "TEST_AXLE_LOAD" in ids
 
 
 def test_t3_without_coupler_nothing_is_injected(tmp_path, tractor):
-    generate(tractor, _ctx(V, "MACHINE_TYPE_TEST_TRACTOR"), tmp_path)
+    generate(tractor, _ctx(M, "MACHINE_TYPE_TEST_TRACTOR"), tmp_path)
     ids = (tmp_path / "combus_ids.h").read_text(encoding="utf-8")
     assert "TEST_AXLE_LOAD" not in ids
     assert (tmp_path / "combus_peer_links.h").is_file()   # always written, empty
@@ -364,7 +377,7 @@ def test_row8b_a_channel_that_does_not_flow_is_an_error():
 
 
 def test_row4_flow_of_the_test_link(hitch, tractor):
-    link = compute_coupler_link("test_coupler", hitch, inject_coupler_channels(tractor, hitch, V), V)
+    link = compute_coupler_link("test_coupler", hitch, inject_coupler_channels(tractor, hitch, "test_coupler", V), V)
     assert {c.id: c.flow for c in link.channels} == {
         "TEST_BRAKE_BUS": "to_peer", "TEST_TILT_ANGLE": "from_peer", "TEST_AXLE_LOAD": "from_peer",
         "TEST_COUPLED_FAIL": "or", "TEST_LIGHTS": "to_peer"}
@@ -377,8 +390,8 @@ def test_row4_flow_of_the_test_link(hitch, tractor):
 def test_row9_two_machines_carrying_the_coupler_get_the_same_md5(hitch, tractor):
     other_vehicle = _canon(_ch("TEST_BRAKE_BUS", "uplink"), _ch("TEST_TILT_ANGLE", "downlink"),
                            _ch("UNRELATED", "downlink"))
-    a = compute_coupler_link("test_coupler", hitch, inject_coupler_channels(tractor, hitch, V), V)
-    b = compute_coupler_link("test_coupler", hitch, inject_coupler_channels(other_vehicle, hitch, V), V)
+    a = compute_coupler_link("test_coupler", hitch, inject_coupler_channels(tractor, hitch, "test_coupler", V), V)
+    b = compute_coupler_link("test_coupler", hitch, inject_coupler_channels(other_vehicle, hitch, "test_coupler", V), V)
     assert link_md5(a) == link_md5(b)
 
 
@@ -388,8 +401,8 @@ def test_row10_a_channel_added_to_the_coupler_changes_the_md5():
 
 
 def test_row11_each_side_expects_the_md5_of_the_other_role(hitch, tractor, trailer):
-    v = compute_coupler_link("test_coupler", hitch, inject_coupler_channels(tractor, hitch, V), V)
-    a = compute_coupler_link("test_coupler", hitch, inject_coupler_channels(trailer, hitch, A), A)
+    v = compute_coupler_link("test_coupler", hitch, inject_coupler_channels(tractor, hitch, "test_coupler", V), V)
+    a = compute_coupler_link("test_coupler", hitch, inject_coupler_channels(trailer, hitch, "test_coupler", A), A)
     assert link_md5(v) != link_md5(a)                               # two vehicles would not agree
     assert link_md5(v, peer=True) == link_md5(a)                    # the vehicle expects the attachment
     assert link_md5(a, peer=True) == link_md5(v)                    # and the other way round
@@ -446,7 +459,7 @@ def test_row13_through_the_generator(tmp_path, monkeypatch):
     monkeypatch.setattr(links_module, "load_coupler_channels", lambda root, name: couplers[name])
     with pytest.raises(GeneratorError, match="TILT"):
         generate(_canon(_ch("TILT", "downlink")),
-                 _ctx(V, "MACHINE_TYPE_TEST_TRACTOR", "COMBUS_COUPLER_TEST_R", "COMBUS_COUPLER_TEST_D"),
+                 _ctx(M, "MACHINE_TYPE_TEST_TRACTOR", "HAS_COUPLER_SOCKET_TEST_R", "HAS_COUPLER_SOCKET_TEST_D"),
                  tmp_path)
 
 
@@ -455,7 +468,7 @@ def test_row13_through_the_generator(tmp_path, monkeypatch):
 # =============================================================================
 
 def test_row1_t7_generated_header_and_build_log(tmp_path, tractor, capsys):
-    generate(tractor, _ctx(V, "MACHINE_TYPE_TEST_TRACTOR", HITCH), tmp_path)
+    generate(tractor, _ctx(M, "MACHINE_TYPE_TEST_TRACTOR", HITCH), tmp_path)
     out = capsys.readouterr().out
     text = (tmp_path / "combus_peer_links.h").read_text(encoding="utf-8")
     assert "namespace TestCoupler {" in text
@@ -463,9 +476,9 @@ def test_row1_t7_generated_header_and_build_log(tmp_path, tractor, capsys):
             "static_cast<uint8_t>(AnalogComBusID::TEST_BRAKE_BUS), "
             "static_cast<uint8_t>(AnalogComBusID::TEST_TILT_ANGLE)") in text
     assert '.coupler   = "test_coupler",' in text
-    assert ".role      = ComLinkRole::VEHICLE," in text      # step 3.4c: the role of this node
+    assert ".role      = ComLinkRole::SOCKET," in text      # step 3.4c: the role of this node
     assert ".announced = { .stable = kAnnouncedMd5, .next = kAnnouncedMd5Next }," in text
     assert ".expected  = { .stable = kExpectedMd5,  .next = kExpectedMd5Next }," in text
     assert ".ids = kAnalog,  .rx = kAnalogRx }," in text
-    assert "[combus_builder] set LINK test_coupler (vehicle)  md5=" in out
+    assert "[combus_builder] set LINK test_coupler (socket)  md5=" in out
     assert "A3+D2" in out

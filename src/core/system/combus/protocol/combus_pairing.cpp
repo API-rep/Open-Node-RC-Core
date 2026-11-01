@@ -175,7 +175,7 @@ PairingState combus_pairing_update( ComLinkPairing&    p,
     }
 
         // --- 2. Vehicle: requests, listening, conclusion (P2 to P4), retries (P9) ---
-    if (role == ComLinkRole::VEHICLE) {
+    if (role == ComLinkRole::SOCKET) {
         if (p.state == PairingState::FAILED && p.retriesLeft > 0u && (int32_t)(now - p.nextMs) >= 0) {
             p.retriesLeft--;
             startPairing(p, now);
@@ -274,7 +274,7 @@ void combus_pairing_on_frame( ComLinkPairing&      p,
     const uint8_t bit = (uint8_t)(1u << (frame.round - 1u));
 
         // --- Vehicle: answers only, to a round already requested, that agree (P3) ---
-    if (role == ComLinkRole::VEHICLE) {
+    if (role == ComLinkRole::SOCKET) {
         if (frame.msg != CouplingMsg::ANSWER || frame.round > p.round) { return; }
         if (!agrees(p, dev, frame.hitchAgeMs, now)) { return; }
         const int c = candidateOf(p, frame.addr);

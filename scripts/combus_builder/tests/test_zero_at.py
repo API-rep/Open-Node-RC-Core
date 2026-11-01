@@ -110,7 +110,7 @@ def _view_bytes_view(zero_at, scope):
 def test_row5_link_md5_follows_zero_at():
     def md5(zero_at):
         coupler, t = _defs(_raw(zero_at, direction="downlink")), _defs(_raw(zero_at))
-        return link_md5(compute_coupler_link("c", coupler, t, "IS_VEHICLE"))
+        return link_md5(compute_coupler_link("c", coupler, t, "socket"))
     assert md5("neutral") != md5("start")
     assert md5(None) == md5("start")                                  # zeroAt hashed only when neutral
 
@@ -118,7 +118,7 @@ def test_row5_link_md5_follows_zero_at():
 def test_link_refuses_a_node_disagreeing_with_its_coupler_on_zero_at():
     coupler, t = _defs(_raw("neutral", direction="downlink")), _defs(_raw("start"))
     with pytest.raises(LinkError, match="zeroAt"):
-        compute_coupler_link("c", coupler, t, "IS_VEHICLE")
+        compute_coupler_link("c", coupler, t, "socket")
 
 
 # =============================================================================

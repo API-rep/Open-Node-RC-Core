@@ -44,7 +44,7 @@ Failure policy (revision 7, 2026-08-25):
   - COMBUS_BUILDER_SKIP=1: the Command is registered but its action is
     replaced by a no-op (and the build only succeeds if the artefacts
     are already present).
-  - If env["CPPDEFINES"] is empty or required structural flags are
+  - If env["CPPDEFINES"] is empty or the category of the node is
     missing at action time, the build fails loudly (no silent
     generation with an incomplete context).
 
@@ -542,7 +542,7 @@ def _generate_combus_action(target, source, env):
 
     Hard failures (returns non-zero) on:
       - env["CPPDEFINES"] empty
-      - missing structural flags (e.g. IS_MACHINE / IS_REMOTE)
+      - missing category (IS_MACHINE or IS_REMOTE), or wrong coupler sides
       - generator / parser / canon errors
       - atomic-publish failure
 
@@ -569,10 +569,9 @@ def _generate_combus_action(target, source, env):
         )
         return 1
 
-    # --- 2. Hard fail unless exactly one structural flag is set ------------
-    # Link rework 3.2b: the structural flag is the nature of the node
-    # (IS_VEHICLE, IS_ATTACHMENT, IS_MACHINE, IS_REMOTE), checked against its
-    # peers by links.node_nature().
+    # --- 2. Hard fail unless exactly one category is set --------------------
+    # Link rework 3.5: the category of the node (IS_MACHINE or IS_REMOTE),
+    # checked against the sides of its couplers by links.node_category().
     # NOTE: IS_MAINBOARD and IS_EXT_BOARD are DEPRECATED (the "board role"
     # axis no longer exists — every board is an implicit BOARD, owner of
     # the combus of the module it hosts, cf. §1.2 of board_architecture.md).
@@ -588,13 +587,13 @@ def _generate_combus_action(target, source, env):
     repo_root = env.get("COMBUS_REPO_ROOT")
     if repo_root and repo_root not in sys.path:
         sys.path.insert(0, repo_root)
-    from scripts.combus_builder.links import LinkError, node_nature
+    from scripts.combus_builder.links import LinkError, node_category
     try:
-        nature = node_nature(define_names)
+        category = node_category(define_names)
     except LinkError as e:
         sys.stderr.write(f"[combus_scons_action] FATAL: {e}. Refusing to generate.\n")
         return 1
-    print(f"[combus_scons_action] node nature: {nature}")
+    print(f"[combus_scons_action] node category: {category}")
 
     # --- 3. Late imports (so the action only imports when it runs) -------
     # SCons runs actions in a subprocess (or at least a fresh import

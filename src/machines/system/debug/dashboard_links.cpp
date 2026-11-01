@@ -35,7 +35,7 @@ static const char* scopeName(LinkScope s) {
 }
 
 static const char* roleName(ComLinkRole r) {
-	return (r == ComLinkRole::VEHICLE) ? "vehicle" : "attachment";
+	return (r == ComLinkRole::SOCKET) ? "socket" : "plug";
 }
 
 	// "infoName = 0/1" of a digital channel, or "-" when the channel is absent.

@@ -17,7 +17,7 @@
 
 #include "test_coupler_chain.h"
 
-#if defined(COMBUS_COUPLER_TEST_COUPLER) && defined(IS_VEHICLE)
+#if defined(HAS_COUPLER_SOCKET_TEST_COUPLER)
 
 #include <core/system/combus/processors/proc_chain.h>        // proc_chain_step
 #include <core/system/combus/processors/input/cb_btn.h>      // cb_btn_toggle_fn

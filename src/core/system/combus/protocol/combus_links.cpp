@@ -177,7 +177,7 @@ bool combus_link_build( const ComDevMap& map,
     runtime.scope                = map.dev->scope;
     runtime.peer                 = peer;
     runtime.coupling.dev         = (map.dev->activation == LinkActivation::ON_COUPLING) ? map.dev->coupling : nullptr;
-    runtime.coupling.role        = peer ? peer->role : ComLinkRole::VEHICLE;
+    runtime.coupling.role        = peer ? peer->role : ComLinkRole::SOCKET;
 
     link = built;
     return true;

@@ -244,31 +244,33 @@ the "Machine / Sound convergence" work in `doc/roadmap.md`.
 ```ini
 [volvo_A60H_id]
 build_flags =
-    -D IS_VEHICLE
+    -D IS_MACHINE
     -D MACHINE_VOLVO_A60_H_BRUDER
 ```
 
 (`[volvo_A60H_id]` is a shared section, referenced as
 `${volvo_A60H_id.build_flags}` by the Volvo environments.)
 
-`MACHINE_*` selects the vehicle instance (and so the family). "Machine" stays
-the generic word of the project (`src/machines/`, `MACHINE_TYPE_*`): any node
-built with a ComBus.
+`MACHINE_*` selects the machine instance (and so the family).  Words: see
+the glossary of [doc/README.md](../../../../doc/README.md#glossary).
 
-**Nature of the node** (link rework 3.2b): every env sets exactly one
-structural flag, checked by the ComBus Builder hook (`links.node_nature()`).
-It guards no C++ code; it says what the node is, and so its place in the
-star of the links between nodes:
+**Category of the node** (link rework 3.5): every env sets exactly one
+category, checked by the ComBus Builder hook (`links.node_category()`):
+`IS_MACHINE` (a node that is driven) or `IS_REMOTE` (a node that drives).
 
-| Flag | Node | Place | Couplers (`-D COMBUS_COUPLER_<NAME>`, step 3.4a) |
-|---|---|---|---|
-| `IS_VEHICLE` | the prime mover: tractor, dumper, excavator | hub: relays between its links | zero or several |
-| `IS_ATTACHMENT` | what is hitched to a vehicle: trailer, plough, dolly | one link, to its vehicle; never relays to another node | exactly one |
-| `IS_MACHINE` | a stand-alone machine | isolated | none (refused explicitly) |
-| `IS_REMOTE` | the remote | (remote work, chantier 4) | none for now (refused explicitly) |
+**Sides of the couplers** (link rework 3.5): the place of a machine in the
+star of the links is the side of each of its couplers, never a fixed nature
+(a towed trommel is carried when hitched, stand-alone otherwise):
 
-In this project a trailer is an attachment, not a vehicle. `[env:machines]`
-sets no structural flag: each machine identity declares its own.
+| Flag | Side | Per node |
+|---|---|---|
+| `HAS_COUPLER_SOCKET_<NAME>` | the socket: it carries (truck, excavator with its bucket) | 0 to n |
+| `HAS_COUPLER_PLUG_<NAME>` | the plug: it is carried (trailer, trommel, dolly) | 0 or 1 |
+
+A coupler declared on both sides of one node, two plugs, or a remote with a
+coupler is refused explicitly.  A dolly has a plug and a socket; relaying
+from its plug to its socket (series) is for later.  `[env:machines]` sets
+no category: each machine identity declares its own.
 
 ---
 

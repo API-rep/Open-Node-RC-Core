@@ -694,7 +694,7 @@ static void test_cpl_frame_row7_local_addr(void) {
 // Rules P1 to P12 validated by the owner (2026-10-31).  The board is the
 // tractor (vehicle): its requests come back on the loopback and are ignored;
 // the answers of the trailers are forged (answerRequests()).  Rows 12 to 15
-// make it an attachment (a copy of the link with role ATTACHMENT), the
+// make it the plug side (a copy of the link with role PLUG), the
 // requests of the vehicles being forged.
 // =============================================================================
 
@@ -815,7 +815,7 @@ static void test_pair_row11_coupled_ignores_coupling_frames(void) {
 
     // --- The board as an attachment (rows 12 to 15) ---
 static constexpr ComPeerLink kAttLink = {
-    kLink.coupler, ComLinkRole::ATTACHMENT, kLink.expected, kLink.announced, kLink.analog, kLink.digital
+    kLink.coupler, ComLinkRole::PLUG, kLink.expected, kLink.announced, kLink.analog, kLink.digital
 };
 static constexpr ComDev kAttachmentDev = {
     "test_as_attachment", LinkScope::INTER_NODE, LinkType::BIDIRECTIONAL,
@@ -1275,7 +1275,7 @@ static void test_view_row1_coupled_link_snapshot(void) {
     TEST_ASSERT_TRUE(v.receives);
     TEST_ASSERT_NOT_NULL(v.peer);
     TEST_ASSERT_EQUAL_STRING("test_coupler", v.peer->coupler);
-    TEST_ASSERT_TRUE(v.peer->role == ComLinkRole::VEHICLE);
+    TEST_ASSERT_TRUE(v.peer->role == ComLinkRole::SOCKET);
     TEST_ASSERT_TRUE(v.coupling == &kHitch);
     TEST_ASSERT_TRUE(v.pairing.state == PairingState::COUPLED);
     TEST_ASSERT_EQUAL_UINT8(1u, v.pairing.nCand);
