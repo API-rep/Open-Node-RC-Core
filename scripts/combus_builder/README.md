@@ -268,6 +268,10 @@ un véhicule, exactement 1 sur un attelage ; `IS_MACHINE` ou `IS_REMOTE` avec un
 coupleur est **refusé explicitement** (`node_nature()`), comme l'ancien
 `-D COMBUS_PEER_<TYPE>` (supprimé en 3.4a).
 
+- **Coupleur passif** (3.4d) : un coupleur sans channel de lien, seulement des
+  channels locaux (un outil attelé à la main) : une instance locale, sans lien
+  ni `ComPeerLink` (`is_passive_coupler()`, journal `set COUPLER <nom>
+  (passive)`), sur un véhicule seulement.
 - **Channels locaux** (3.4e) : un channel du coupleur qui exige `IS_VEHICLE` ou
   `IS_ATTACHMENT` (`requires`) appartient à ce bout seulement (`is_local_channel()`) :
   injecté tel quel, filtré par `requires`, jamais sur le lien (ni trame, ni MD5

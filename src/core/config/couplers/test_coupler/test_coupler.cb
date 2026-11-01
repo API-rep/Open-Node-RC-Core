@@ -24,6 +24,8 @@
 # - TEST_COUPLER_CMD: the latched coupling command, the trigger of the
 #   CouplingDev, written by the chain of the coupler (test_coupler_chain.cpp);
 #   low at boot: a new press is needed after a reboot;
+# - TEST_COUPLER_COUPLED: coupled (CouplingDev::coupled, step 3.4d): written by the
+#   core, COUPLED and the engaged switch settled (the detector);
 # - TEST_COUPLER_ENGAGED_SW: the engaged switch of the coupler, an optional
 #   guard ("you may couple"), present with HAS_TEST_COUPLER_ENGAGED_SW.
 
@@ -84,3 +86,11 @@ channels:
   theme: coupler
   value: low
   requires: [IS_VEHICLE, HAS_TEST_COUPLER_ENGAGED_SW]
+
+- id: TEST_COUPLER_COUPLED
+  infoName: "Test coupler coupled"
+  type: digital
+  scope: BOARD
+  theme: coupler
+  value: low
+  requires: [IS_VEHICLE]

@@ -1,0 +1,34 @@
+# test_tool.cb — the TEST passive coupler (link rework, step 3.4d)
+#
+# A fictitious passive coupler used only by the tests (pytest, and the Unity
+# test env), carried by the TEST tractor: a tool coupled by hand (a tiltable
+# bucket), without node nor ComBus link.  A passive coupler is a local
+# instance of the coupler: only local channels (they require the nature of
+# the node that carries it, never on a link), prefixed by its name.
+#
+# - TEST_TOOL_DETECT_SW: the detector of the tool (switch; an RFID reader
+#   later), the trigger of its CouplingDev;
+# - TEST_TOOL_ATTACHED: the tool is coupled (CouplingDev::coupled), written by
+#   the core once the detector has settled (engageMs / releaseMs).
+#
+# The type and the functions of the tool (CouplingId, read by
+# CouplingDev::readId or taken from CouplingDev::defaultId) get no channel
+# yet: to be implemented later.
+
+channels:
+
+- id: TEST_TOOL_DETECT_SW
+  infoName: "Test tool detector"
+  type: digital
+  scope: BOARD
+  theme: coupler
+  value: low
+  requires: [IS_VEHICLE]
+
+- id: TEST_TOOL_ATTACHED
+  infoName: "Test tool attached"
+  type: digital
+  scope: BOARD
+  theme: coupler
+  value: low
+  requires: [IS_VEHICLE]

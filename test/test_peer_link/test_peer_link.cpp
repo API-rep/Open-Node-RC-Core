@@ -1112,6 +1112,149 @@ static void test_chain_row11_uncoupling_without_the_switch(void) {
 
 
 // =============================================================================
+// PASSIVE COUPLER AND COUPLED OUTPUT (step 3.4d)
+//
+// Rules validated by the owner (2026-11-01): a passive coupler (a tool coupled
+// by hand) is a local instance of the coupler, without link; its trigger is
+// its detector, coupled once settled (engageMs / releaseMs), without pairing.
+// CouplingDev::coupled is written by the core: active, COUPLED and the
+// detector settled when there is one; passive, the detector settled.  The
+// identity of the coupled element is read by CouplingDev::readId (anchor of a
+// future RFID reader, faked here) or taken from CouplingDev::defaultId.
+// =============================================================================
+
+static constexpr uint8_t kToolDetect   = static_cast<uint8_t>(DigitalComBusID::TEST_TOOL_DETECT_SW);
+static constexpr uint8_t kToolAttached = static_cast<uint8_t>(DigitalComBusID::TEST_TOOL_ATTACHED);
+static constexpr uint8_t kCouplerCoupled = static_cast<uint8_t>(DigitalComBusID::TEST_COUPLER_COUPLED);
+
+static bool       s_fakeReadOk = false;
+static CouplingId s_fakeId     = {};
+
+    // A fake reader (the anchor of a future RFID reader).
+static bool fakeReadId(CouplingId& out) {
+    if (!s_fakeReadOk) { return false; }
+    out = s_fakeId;
+    return true;
+}
+
+static constexpr CouplingDev kToolDev = {
+    "test_tool", DigitalComBusID::TEST_TOOL_DETECT_SW, std::nullopt, 200u, 50u, 300u, nullptr,
+    DigitalComBusID::TEST_TOOL_ATTACHED, std::nullopt, CouplingId{ 1u, 0u }, nullptr
+};
+static constexpr CouplingDev kToolDevWithReader = {
+    "test_tool_reader", DigitalComBusID::TEST_TOOL_DETECT_SW, std::nullopt, 200u, 50u, 300u, nullptr,
+    DigitalComBusID::TEST_TOOL_ATTACHED, std::nullopt, CouplingId{ 1u, 0u }, &fakeReadId
+};
+static ComCouplingRuntime s_tools[1];
+
+static void startTool(const CouplingDev& dev) {
+    resetBus();
+    s_tools[0].dev = &dev;
+    combus_couplings_watch(s_tools, 1u);
+    com_rx_update(bus);
+}
+
+/** Row 3: the detector settles (beyond engageMs): attached, default identity. */
+static void test_tool_row3_detector_settles(void) {
+    startTool(kToolDev);
+    bus.digitalBus[kToolDetect].value = true;
+    runLinks(20u);
+    TEST_ASSERT_FALSE(bus.digitalBus[kToolAttached].value);            // not yet
+    runLinks(60u);
+    TEST_ASSERT_TRUE(bus.digitalBus[kToolAttached].value);
+    TEST_ASSERT_TRUE(combus_couplings_state(0u) == PairingState::COUPLED);
+    TEST_ASSERT_EQUAL_UINT16(1u, combus_couplings_id(0u).type);
+}
+
+/** Row 4: the detector bounces (shorter than engageMs): nothing. */
+static void test_tool_row4_bouncing_detector(void) {
+    startTool(kToolDev);
+    for (uint8_t i = 0u; i < 4u; ++i) {
+        bus.digitalBus[kToolDetect].value = true;
+        runLinks(25u);
+        bus.digitalBus[kToolDetect].value = false;
+        runLinks(10u);
+    }
+    TEST_ASSERT_FALSE(bus.digitalBus[kToolAttached].value);
+}
+
+/** Rows 5 and 6: a drop shorter than releaseMs keeps it; a longer one detaches it, identity cleared. */
+static void test_tool_row5_row6_release(void) {
+    startTool(kToolDev);
+    bus.digitalBus[kToolDetect].value = true;
+    runLinks(80u);
+    TEST_ASSERT_TRUE(bus.digitalBus[kToolAttached].value);
+    bus.digitalBus[kToolDetect].value = false;
+    runLinks(150u);
+    TEST_ASSERT_TRUE(bus.digitalBus[kToolAttached].value);             // row 5
+    bus.digitalBus[kToolDetect].value = true;
+    runLinks(20u);
+    bus.digitalBus[kToolDetect].value = false;
+    runLinks(350u);
+    TEST_ASSERT_FALSE(bus.digitalBus[kToolAttached].value);            // row 6
+    TEST_ASSERT_EQUAL_UINT16(0u, combus_couplings_id(0u).type);
+}
+
+/** Row 7: the reader reads an identity: it is the one kept. */
+static void test_tool_row7_reader_identity(void) {
+    s_fakeReadOk = true;
+    s_fakeId     = CouplingId{ 7u, 0x3u };
+    startTool(kToolDevWithReader);
+    bus.digitalBus[kToolDetect].value = true;
+    runLinks(80u);
+    TEST_ASSERT_EQUAL_UINT16(7u, combus_couplings_id(0u).type);
+    TEST_ASSERT_EQUAL_UINT16(0x3u, combus_couplings_id(0u).features);
+}
+
+/** Row 8: the reader reads nothing (no tag): the default identity (simple mode). */
+static void test_tool_row8_reader_fails_default(void) {
+    s_fakeReadOk = false;
+    startTool(kToolDevWithReader);
+    bus.digitalBus[kToolDetect].value = true;
+    runLinks(80u);
+    TEST_ASSERT_TRUE(bus.digitalBus[kToolAttached].value);
+    TEST_ASSERT_EQUAL_UINT16(1u, combus_couplings_id(0u).type);
+    TEST_ASSERT_EQUAL_UINT16(0u, combus_couplings_id(0u).features);
+}
+
+    // --- Row 9: the coupled output of an active coupler ---
+static constexpr CouplingDev kDetectedCoupler = {
+    "test_coupler_detected", DigitalComBusID::TEST_COUPLER_CMD, DigitalComBusID::TEST_HITCH_LINK_FAIL,
+    200u, 0u, 0u, &test_coupler_vehicle_chain,
+    DigitalComBusID::TEST_COUPLER_COUPLED, DigitalComBusID::TEST_COUPLER_ENGAGED_SW, CouplingId{}, nullptr
+};
+static constexpr ComDev kDetectedDev = {
+    "test_trailer_detected", LinkScope::INTER_NODE, LinkType::BIDIRECTIONAL,
+    &kProto, LinkActivation::ON_COUPLING, &kDetectedCoupler, &kLink
+};
+
+/** Row 9: active: coupled once COUPLED with the detector settled; the detector drops: coupled falls. */
+static void test_tool_row9_active_coupled_output(void) {
+    combus_couplings_watch(nullptr, 0u);
+    resetBus();
+    test_coupler_vehicle_chain_reset();
+    const ComDevMap map = { &kDetectedDev, &s_port, LinkEnd::TX_RX };
+    TEST_ASSERT_TRUE(combus_link_build(map, s_com, s_runtime, s_link));
+    s_link.target = &bus;
+    combus_protocol_init(kLinkIdx, &s_link);
+    combus_links_watch(&s_runtime, 1u);
+    while (s_com->available(s_com->ctx) > 0) { s_com->readByte(s_com->ctx); }
+    bus.digitalBus[kEngagedSw].value = true;
+    runLinks(kTestCouplerEngagedDelayMs + 30u);
+    buttonDown();
+    buttonUp();
+    TEST_ASSERT_FALSE(bus.digitalBus[kCouplerCoupled].value);          // pairing: not coupled yet
+    TEST_ASSERT_TRUE(answerRequests(1500u, &kTrailerA, kAllRounds) == PairingState::COUPLED);
+    com_rx_update(bus);
+    TEST_ASSERT_TRUE(bus.digitalBus[kCouplerCoupled].value);
+    bus.digitalBus[kEngagedSw].value = false;                          // the detector drops (engageMs = releaseMs = 0)
+    com_rx_update(bus);
+    TEST_ASSERT_FALSE(bus.digitalBus[kCouplerCoupled].value);
+    TEST_ASSERT_TRUE(pairing() == PairingState::COUPLED);              // the link itself is still paired
+}
+
+
+// =============================================================================
 // ACCESSORS OF THE LOGICAL VALUE (step S3-4)
 // =============================================================================
 
@@ -1259,6 +1402,13 @@ void setup() {
     RUN_TEST(test_chain_row10b_held_button_couples_on_engagement);
     RUN_TEST(test_chain_row10c_bouncing_switch_never_couples);
     RUN_TEST(test_chain_row11_uncoupling_without_the_switch);
+
+    RUN_TEST(test_tool_row3_detector_settles);
+    RUN_TEST(test_tool_row4_bouncing_detector);
+    RUN_TEST(test_tool_row5_row6_release);
+    RUN_TEST(test_tool_row7_reader_identity);
+    RUN_TEST(test_tool_row8_reader_fails_default);
+    RUN_TEST(test_tool_row9_active_coupled_output);
 
     UNITY_END();
 }

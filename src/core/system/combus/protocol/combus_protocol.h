@@ -156,6 +156,22 @@ enum class DigitalComBusID : uint8_t;   // generated (combus_ids.h)
 
 
 /**
+ * @brief Identity of a coupled element: its type and its functions (link rework 3.4d).
+ *
+ * @details Anchor for the identification (RFID or other, not implemented):
+ *   read by CouplingDev::readId at the coupling, else CouplingDev::defaultId
+ *   (the simple mode).  type 0 = unknown.  No channel carries it yet: the
+ *   type and the functions are to be implemented later.
+ */
+
+struct CouplingId {
+    uint16_t type     = 0u;   ///< logical type of the coupled element (0 = unknown, simple mode)
+    uint16_t features = 0u;   ///< mask of its functions
+};
+
+
+
+/**
  * @brief The coupling device (attache) of a link ON_COUPLING (link rework 3.3).
  *
  * @details Run-time part of an attache: what says "coupled", and where the loss
@@ -165,6 +181,9 @@ enum class DigitalComBusID : uint8_t;   // generated (combus_ids.h)
  *   `engageMs`), the two ends pair (combus_pairing.h, step 3.4c); paired, the
  *   link starts with the startup grace of its protocol; lost after it, or not
  *   paired, the link reports it through `fail` only (never NODE_LINK_FAIL).
+ *   A passive coupler (3.4d: no link, a tool coupled by hand) has no ComDev:
+ *   the machine registers it (combus_couplings_watch); its trigger is its
+ *   detector, coupled once settled, without pairing.
  *   It is detached once the trigger stays false for `releaseMs`.  The chain
  *   of the coupler (3.4e, `chain`, in the folder of the coupler) is run by
  *   combus_links before the trigger is read: on the vehicle it latches the
@@ -179,6 +198,10 @@ struct CouplingDev {
     uint16_t engageMs       = 50u;            ///< 3.4c: the trigger stays true this long before the pairing starts
     uint16_t releaseMs      = 500u;           ///< 3.4c: the trigger stays false this long before the link is detached
     void (*chain)(ComBus& bus) = nullptr;     ///< 3.4e: chain of the coupler for this end (writes the trigger), nullptr = none
+    std::optional<DigitalComBusID> coupled  = std::nullopt;  ///< 3.4d: written by the core: coupled (active: COUPLED and the detector settled; passive: the detector settled)
+    std::optional<DigitalComBusID> detector = std::nullopt;  ///< 3.4d: active coupler: presence detector, ANDed into `coupled` (a passive one: its trigger is the detector)
+    CouplingId defaultId = {};                ///< 3.4d: identity when none is read (simple mode)
+    bool (*readId)(CouplingId& out) = nullptr; ///< 3.4d: anchor of the future reader (RFID...): true and `out` when an identity is read
 };
 
 

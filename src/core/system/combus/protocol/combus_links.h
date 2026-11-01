@@ -276,6 +276,41 @@ void combus_links_update( ComBus& bus );
 PairingState combus_links_pairing_state( uint8_t linkIdx );
 
 
+/**
+ * @brief A passive coupler (link rework 3.4d): a local instance, no link, no ComDev.
+ */
+
+struct ComCouplingRuntime {
+    const CouplingDev* dev     = nullptr;
+    ComLinkPairing     pairing = {};
+};
+
+
+/**
+ * @brief Put the passive couplers of the machine under watch (stepped by combus_links_update()).
+ *
+ * @details Caller-owned, static storage.  Each cycle: the chain of the
+ *   coupler if any, then its trigger (the detector) with its debounce;
+ *   COUPLED once settled, no pairing; CouplingDev::coupled is written.
+ */
+
+void combus_couplings_watch( ComCouplingRuntime* couplings, uint8_t count );
+
+
+/**
+ * @brief State of a passive coupler (COUPLED or DETACHED).
+ */
+
+PairingState combus_couplings_state( uint8_t idx );
+
+
+/**
+ * @brief Identity of a passive coupler (read or default at the coupling, cleared at the release).
+ */
+
+CouplingId combus_couplings_id( uint8_t idx );
+
+
 
 /**
  * @brief Whether a receiving link has gone silent.

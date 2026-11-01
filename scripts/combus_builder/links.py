@@ -28,6 +28,10 @@ ComBus by discovery) and:
     (check_single_source, both_or excepted);
   - the common frame is sorted: analog then digital, stable before candidate,
     then the name (never the theme);
+  - passive coupler (step 3.4d): a coupler without link channel, only its
+    local channels (a tool coupled by hand, a tiltable bucket): a local
+    instance of the coupler, no link, no ComPeerLink; on a vehicle only (the
+    single coupler of an attachment is the active one of its vehicle);
   - local channels (step 3.4e): a channel of the coupler that requires
     IS_VEHICLE or IS_ATTACHMENT belongs to that end only (the button, the
     latched command, an engaged switch...): injected as written (the
@@ -132,6 +136,11 @@ def load_type_base_channels(buildroot: Path, type_dir: str) -> list[ChannelDefin
         raise LinkError(f"machine type {type_dir!r}: no profile folder {folder}")
     parsed = [parse_yaml_file(p) for p in sorted(folder.rglob("*.cb"))]
     return [ch for ch in canonize(parsed).canonical_definitions if ch.scope == "BASE"]
+
+
+def is_passive_coupler(coupler_chs) -> bool:
+    """A passive coupler (step 3.4d): no link channel, only local channels."""
+    return not any(not is_local_channel(ch) for ch in coupler_chs)
 
 
 def is_local_channel(ch: ChannelDefinition) -> bool:

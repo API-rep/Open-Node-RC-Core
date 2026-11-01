@@ -1062,7 +1062,8 @@ def _inject_couplers(channels: list[ChannelDefinition], ctx: BuildContext):
     checked: a wrong env is refused explicitly, never ignored.
     """
     from . import links as links_module
-    from .links import COUPLER_FLAG_PREFIX, REMOVED_PEER_FLAG_PREFIX, LinkError, coupler_names,         inject_coupler_channels, node_nature
+    from .links import COUPLER_FLAG_PREFIX, REMOVED_PEER_FLAG_PREFIX, LinkError, coupler_names, \
+        inject_coupler_channels, is_passive_coupler, node_nature
 
     defines = set(ctx.defines) | set(ctx.defines_with_value or {})
     if not any(d.startswith((COUPLER_FLAG_PREFIX, REMOVED_PEER_FLAG_PREFIX)) for d in defines):
@@ -1072,6 +1073,9 @@ def _inject_couplers(channels: list[ChannelDefinition], ctx: BuildContext):
         couplers = {}
         for name in coupler_names(ctx):
             couplers[name] = links_module.load_coupler_channels(ctx.buildroot, name)
+            if nature == "IS_ATTACHMENT" and is_passive_coupler(couplers[name]):
+                raise LinkError(f"coupler {name!r} is passive (no link channel): the coupler of an "
+                                f"attachment is the active one of its vehicle")
             channels = inject_coupler_channels(channels, couplers[name], nature)
     except LinkError as e:
         raise GeneratorError(f"link through a coupler: {e}") from e
@@ -1085,12 +1089,16 @@ def _emit_peer_links(channels: list[ChannelDefinition], couplers, ctx: BuildCont
     Always written (empty without coupler), so that the build has a fixed set
     of artefacts.  One build-log line per link: its MD5 and its size.
     """
-    from .links import LinkError, check_single_source, compute_coupler_link, link_md5,         render_peer_links_header
+    from .links import LinkError, check_single_source, compute_coupler_link, is_passive_coupler, link_md5, \
+        render_peer_links_header
 
     nature, by_name = couplers
     links = []
     try:
         for name, coupler_chs in by_name.items():
+            if is_passive_coupler(coupler_chs):     # step 3.4d: a local instance, no link
+                print(f"[combus_builder] set COUPLER {name} (passive)")
+                continue
             link = compute_coupler_link(name, coupler_chs, channels, nature)
             n_analog = sum(1 for c in link.channels if c.type == "analog")
             n_digital = sum(1 for c in link.channels if c.type == "digital")

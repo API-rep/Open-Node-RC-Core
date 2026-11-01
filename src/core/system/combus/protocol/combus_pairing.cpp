@@ -83,6 +83,48 @@ void send( NodeCom* com, CouplingMsg msg, uint8_t round, uint16_t age )
     if (len) { com->write(com->ctx, buf, len); }
 }
 
+    // Identity at the coupling (3.4d): read by the reader when there is one and it reads, else the default.
+void identify( ComLinkPairing& p, const CouplingDev& dev )
+{
+    CouplingId read;
+    p.id = (dev.readId && dev.readId(read)) ? read : dev.defaultId;
+}
+
+    // Trigger and its debounce (P9): t0 is the raw edge, not the debounced one.
+enum class TriggerStep : uint8_t {
+    IDLE,       ///< not engaged
+    ENGAGED,    ///< just engaged (the trigger has stayed true for engageMs)
+    ACTIVE,     ///< engaged, trigger true
+    HELD,       ///< engaged, trigger dropped for less than releaseMs: the link goes on
+    RELEASED    ///< just released (the trigger has stayed false for releaseMs)
+};
+
+TriggerStep stepTrigger( ComLinkPairing& p, const CouplingDev& dev, bool trigger, uint32_t now )
+{
+    if (trigger != p.rawTrigger) {
+        p.rawTrigger  = trigger;
+        p.rawChangeMs = now;
+        if (trigger && !p.engaged) { p.t0Ms = now; }
+        if (trigger && p.glitch) {
+            p.glitch = false;
+            sys_log_info("[COMBUS_PAIRING] %s: hitch glitch (trigger back within %u ms)\n",
+                         dev.name, (unsigned)dev.releaseMs);
+        }
+        if (!trigger && p.engaged) { p.glitch = true; }
+    }
+
+    if (!p.engaged) {
+        if (!trigger || (now - p.rawChangeMs) < dev.engageMs) { return TriggerStep::IDLE; }
+        p.engaged = true;
+        return TriggerStep::ENGAGED;
+    }
+    if (trigger) { return TriggerStep::ACTIVE; }
+    if ((now - p.rawChangeMs) < dev.releaseMs) { return TriggerStep::HELD; }
+    p.engaged = false;
+    p.glitch  = false;
+    return TriggerStep::RELEASED;
+}
+
 void startPairing( ComLinkPairing& p, uint32_t now )
 {
     p.state         = PairingState::PAIRING;
@@ -96,6 +138,7 @@ void conclude( ComLinkPairing& p, const CouplingDev& dev, PairingState state, co
 {
     p.state = state;
     if (state == PairingState::COUPLED) {
+        identify(p, dev);
         sys_log_info("[COMBUS_PAIRING] %s: paired\n", dev.name);
     } else {
         sys_log_warn("[COMBUS_PAIRING] %s: %s (%s)\n", dev.name, combus_pairing_state_name(state), why);
@@ -116,30 +159,19 @@ PairingState combus_pairing_update( ComLinkPairing&    p,
                                     NodeCom*           com,
                                     uint32_t           now )
 {
-        // --- 1. Trigger and its debounce (P9): t0 is the raw edge, not the debounced one ---
-    if (trigger != p.rawTrigger) {
-        p.rawTrigger  = trigger;
-        p.rawChangeMs = now;
-        if (trigger && !p.engaged) { p.t0Ms = now; }
-        if (trigger && p.glitch) {
-            p.glitch = false;
-            sys_log_info("[COMBUS_PAIRING] %s: hitch glitch (trigger back within %u ms)\n",
-                         dev.name, (unsigned)dev.releaseMs);
-        }
-        if (!trigger && p.engaged) { p.glitch = true; }
-    }
-
-    if (!p.engaged) {
-        if (!trigger || (now - p.rawChangeMs) < dev.engageMs) { return p.state; }
-        p.engaged     = true;
-        p.retriesLeft = kCouplingRetries;
-        startPairing(p, now);
-    } else if (!trigger) {
-        if ((now - p.rawChangeMs) < dev.releaseMs) { return p.state; }   // the link goes on meanwhile
-        p.engaged = false;
-        p.glitch  = false;
-        p.state   = PairingState::DETACHED;
-        return p.state;
+        // --- 1. Trigger and its debounce (P9) ---
+    switch (stepTrigger(p, dev, trigger, now)) {
+        case TriggerStep::IDLE:
+        case TriggerStep::HELD:     return p.state;                       // the link goes on meanwhile
+        case TriggerStep::RELEASED:
+            p.state = PairingState::DETACHED;
+            p.id    = {};
+            return p.state;
+        case TriggerStep::ENGAGED:
+            p.retriesLeft = kCouplingRetries;
+            startPairing(p, now);
+            break;
+        case TriggerStep::ACTIVE:   break;
     }
 
         // --- 2. Vehicle: requests, listening, conclusion (P2 to P4), retries (P9) ---
@@ -188,6 +220,42 @@ PairingState combus_pairing_update( ComLinkPairing&    p,
         p.nCand = 0u;                                                     // too few requests: listen again
     }
     return p.state;
+}
+
+
+PairingState combus_pairing_update_passive( ComLinkPairing&    p,
+                                            const CouplingDev& dev,
+                                            bool               trigger,
+                                            uint32_t           now )
+{
+    switch (stepTrigger(p, dev, trigger, now)) {
+        case TriggerStep::ENGAGED:
+            p.state = PairingState::COUPLED;
+            identify(p, dev);
+            sys_log_info("[COMBUS_PAIRING] %s: attached (passive)\n", dev.name);
+            break;
+        case TriggerStep::RELEASED:
+            p.state = PairingState::DETACHED;
+            p.id    = {};
+            sys_log_info("[COMBUS_PAIRING] %s: detached (passive)\n", dev.name);
+            break;
+        default:
+            break;
+    }
+    return p.state;
+}
+
+
+bool combus_pairing_detector( ComLinkPairing& p, const CouplingDev& dev, bool raw, uint32_t now )
+{
+    if (raw != p.detRaw) {
+        p.detRaw      = raw;
+        p.detChangeMs = now;
+    }
+    const uint32_t stable = now - p.detChangeMs;
+    if (raw && !p.detSettled && stable >= dev.engageMs)  { p.detSettled = true; }
+    if (!raw && p.detSettled && stable >= dev.releaseMs) { p.detSettled = false; }
+    return p.detSettled;
 }
 
 

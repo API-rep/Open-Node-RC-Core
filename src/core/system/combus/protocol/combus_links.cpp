@@ -236,6 +236,10 @@ bool combus_links_init( const ComDevMap*       maps,
 static ComLinkRuntime* s_watched      = nullptr;
 static uint8_t         s_watchedCount = 0u;
 
+    // Link rework 3.4d — passive couplers, caller-owned (see combus_couplings_watch()).
+static ComCouplingRuntime* s_couplings     = nullptr;
+static uint8_t             s_couplingCount = 0u;
+
 
     // Link rework 3.4c — a coupling frame received on a watched link goes to its pairing.
 static void onCouplingFrame( uint8_t linkIdx, const CouplingFrame& frame )
@@ -362,8 +366,44 @@ static void followCoupling( uint8_t i, ComBus& bus )
 }
 
 
+    // Link rework 3.4d — step the passive couplers: chain, detector (the trigger), coupled.
+static void followPassiveCouplings( ComBus& bus )
+{
+    for (uint8_t i = 0u; i < s_couplingCount; ++i) {
+        ComCouplingRuntime& c = s_couplings[i];
+        if (!c.dev) { continue; }
+        if (c.dev->chain) { c.dev->chain(bus); }
+        const bool trig = bus.digitalBus[static_cast<uint8_t>(c.dev->trigger)].value;
+        const PairingState st = combus_pairing_update_passive(c.pairing, *c.dev, trig, millis());
+        if (c.dev->coupled) { combus_set_digital(bus, *c.dev->coupled, st == PairingState::COUPLED, ChanLayer::BOARD); }
+    }
+}
+
+
+void combus_couplings_watch( ComCouplingRuntime* couplings, uint8_t count )
+{
+    s_couplings     = couplings;
+    s_couplingCount = count;
+    for (uint8_t i = 0u; i < count; ++i) { couplings[i].pairing = {}; }
+}
+
+
+PairingState combus_couplings_state( uint8_t idx )
+{
+    return (s_couplings && idx < s_couplingCount) ? s_couplings[idx].pairing.state : PairingState::DETACHED;
+}
+
+
+CouplingId combus_couplings_id( uint8_t idx )
+{
+    return (s_couplings && idx < s_couplingCount) ? s_couplings[idx].pairing.id : CouplingId{};
+}
+
+
 void combus_links_update( ComBus& bus )
 {
+    followPassiveCouplings(bus);
+
     for (uint8_t i = 0u; i < s_watchedCount; ++i) {
         ComLinkRuntime& rt = s_watched[i];
         if (rt.coupling.dev) {
@@ -375,6 +415,15 @@ void combus_links_update( ComBus& bus )
                     && (st == PairingState::CONFLICT || st == PairingState::FAILED
                         || (st == PairingState::COUPLED && rt.watch.receives && lostAfterGrace(i)));
                 combus_set_digital(bus, *rt.coupling.dev->fail, fault, ChanLayer::BOARD);
+            }
+            if (rt.coupling.dev->coupled) {
+                    // 3.4d (D3): COUPLED, and the detector settled when there is one
+                const CouplingDev& dev = *rt.coupling.dev;
+                const bool detected = !dev.detector
+                    || combus_pairing_detector(rt.coupling.pairing, dev,
+                                               bus.digitalBus[static_cast<uint8_t>(*dev.detector)].value, millis());
+                combus_set_digital(bus, *dev.coupled,
+                                   rt.coupling.pairing.state == PairingState::COUPLED && detected, ChanLayer::BOARD);
             }
             if (!rt.coupling.coupled) { continue; }
         }

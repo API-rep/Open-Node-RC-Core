@@ -103,6 +103,12 @@ struct ComLinkPairing {
     bool         answerPending = false;
     uint8_t      answerRound   = 0u;
     uint32_t     answerAtMs    = 0u;
+
+        // --- 3.4d: presence detector of an active coupler (same debounce), identity ---
+    bool         detRaw        = false;
+    uint32_t     detChangeMs   = 0u;
+    bool         detSettled    = false;
+    CouplingId   id            = {};      ///< read (readId) or default at the coupling, cleared at the release
 };
 
 
@@ -129,6 +135,25 @@ PairingState combus_pairing_update( ComLinkPairing&    p,
                                     bool               trigger,
                                     NodeCom*           com,
                                     uint32_t           now );
+
+
+/**
+ * @brief Step a passive coupler (3.4d): its trigger is its detector; COUPLED once settled, no pairing.
+ */
+
+PairingState combus_pairing_update_passive( ComLinkPairing&    p,
+                                            const CouplingDev& dev,
+                                            bool               trigger,
+                                            uint32_t           now );
+
+
+/**
+ * @brief Debounce the presence detector of an active coupler (engageMs / releaseMs).
+ *
+ * @return true once the detector has settled on.
+ */
+
+bool combus_pairing_detector( ComLinkPairing& p, const CouplingDev& dev, bool raw, uint32_t now );
 
 
 /**

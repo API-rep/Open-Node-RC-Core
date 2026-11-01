@@ -120,7 +120,8 @@ def trailer():
 def test_t1_the_test_coupler_is_read_apart(hitch):
     assert sorted(c.id for c in hitch if not is_local_channel(c)) == [
         "TEST_AXLE_LOAD", "TEST_BRAKE_BUS", "TEST_COUPLED_FAIL", "TEST_LIGHTS", "TEST_TILT_ANGLE"]
-    assert sorted(c.id for c in hitch if is_local_channel(c)) == ["TEST_COUPLER_CMD", "TEST_COUPLER_ENGAGED_SW"]
+    assert sorted(c.id for c in hitch if is_local_channel(c)) == ["TEST_COUPLER_CMD", "TEST_COUPLER_COUPLED",
+                                                                  "TEST_COUPLER_ENGAGED_SW"]
 
 
 # =============================================================================
@@ -182,6 +183,25 @@ def test_l5_local_channels_on_the_vehicle_only_and_off_the_link(tmp_path, tracto
 
     generate(trailer, _ctx(A, "MACHINE_TYPE_TEST_TRAILER", HITCH), tmp_path / "a")
     assert "TEST_COUPLER_CMD" not in (tmp_path / "a" / "combus_ids.h").read_text(encoding="utf-8")
+
+
+def test_p1_a_coupler_without_link_channel_is_passive(tmp_path, tractor, capsys):
+    """Step 3.4d: a local instance of the coupler, no link, no ComPeerLink."""
+    assert links_module.is_passive_coupler(load_coupler_channels(SRC, "test_tool"))
+    assert not links_module.is_passive_coupler(load_coupler_channels(SRC, "test_coupler"))
+    generate(tractor, _ctx(V, "MACHINE_TYPE_TEST_TRACTOR", HITCH, "COMBUS_COUPLER_TEST_TOOL"), tmp_path)
+    out = capsys.readouterr().out
+    assert "[combus_builder] set COUPLER test_tool (passive)" in out
+    links = (tmp_path / "combus_peer_links.h").read_text(encoding="utf-8")
+    assert "namespace TestCoupler {" in links
+    assert "TestTool" not in links
+    ids = (tmp_path / "combus_ids.h").read_text(encoding="utf-8")
+    assert "TEST_TOOL_DETECT_SW" in ids and "TEST_TOOL_ATTACHED" in ids
+
+
+def test_p2_the_coupler_of_an_attachment_is_never_passive(tmp_path, trailer):
+    with pytest.raises(GeneratorError, match="passive"):
+        generate(trailer, _ctx(A, "MACHINE_TYPE_TEST_TRAILER", "COMBUS_COUPLER_TEST_TOOL"), tmp_path)
 
 
 def test_l6_local_channels_leave_the_md5_of_the_link(hitch, tractor):
