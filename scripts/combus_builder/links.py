@@ -10,12 +10,14 @@ attachment.  The builder reads the coupler apart (it never enters the
 ComBus by discovery) and:
 
   - full contract: the frame of the link is every channel of the coupler;
+  - a coupler is a brick of the machine: its directions are those of the
+    vehicle, the hub of the star (machine-centric, as any .cb of the
+    machine: `downlink_pt` relayed to the attachment, `downlink` received
+    from it, `uplink` its own value sent, `both_or` shared fault);
   - injection: the ComBus of the coupler merges into the ComBus of the node;
-    a channel of the coupler unknown to the machine type is added at its
-    safe value (an absent function stays safe), with the direction of the
-    coupler on the attachment and the mirrored one on the vehicle;
-  - directions of a coupler are those of the attachment (uplink: to the
-    vehicle, downlink: from the vehicle, both_or: shared fault); no `_pt`;
+    a channel of the coupler unknown to the machine type is added at its safe
+    value (an absent function stays safe): as written on the vehicle, its
+    side of the plug on the attachment (attachment view, see _attachment_view);
   - star "vehicle + 1" (step 3.2b): on the attachment, `downlink_pt` only
     redistributes in its node, it receives on the link; on the vehicle,
     `downlink_pt` receives where the attachment emits (that link is its
@@ -70,7 +72,7 @@ class LinkChannel:
     candidate: bool
     value: str                # rendered default value (C++ literal), the safe value of the coupler
     flow: str                 # "to_peer" | "from_peer" | "both" | "or"
-    token: str                # surface direction in the coupler, attachment view (for the MD5)
+    token: str                # surface direction in the coupler, vehicle view (for the MD5)
     zero_at_neutral: bool = False  # step S3-4: logical zero at CbusNeutral, the same on both sides
 
 
@@ -123,7 +125,7 @@ def load_type_base_channels(buildroot: Path, type_dir: str) -> list[ChannelDefin
 
 
 def load_coupler_channels(buildroot: Path, name: str) -> list[ChannelDefinition]:
-    """Read the channels of a coupler apart: BASE only, no `_pt`."""
+    """Read the channels of a coupler apart: BASE only, written from the vehicle."""
     folder = Path(buildroot) / "core" / "config" / "couplers" / name
     if not folder.is_dir():
         raise LinkError(f"coupler {name!r}: no folder {folder}")
@@ -132,9 +134,6 @@ def load_coupler_channels(buildroot: Path, name: str) -> list[ChannelDefinition]
     for ch in channels:
         if ch.scope != "BASE":
             raise LinkError(f"coupler {name!r}: channel {ch.id!r} is {ch.scope}, a coupler is BASE only")
-        if ch.passthrough:
-            raise LinkError(f"coupler {name!r}: channel {ch.id!r} is {_token(ch)}: no _pt in a coupler "
-                            f"(relaying is the business of a node)")
     return channels
 
 
@@ -152,13 +151,26 @@ def _token(ch: ChannelDefinition) -> str:
     return base + ("_pt" if ch.passthrough else "")
 
 
-def _mirror(ch: ChannelDefinition) -> ChannelDefinition:
-    """A channel of a coupler seen from the vehicle: uplink and downlink swapped."""
-    mirrored = replace(ch, direction=frozenset(_SWAP[d] for d in ch.direction),
-                       direction_or=frozenset(_SWAP[d] for d in ch.direction_or))
+def _attachment_view(ch: ChannelDefinition) -> ChannelDefinition:
+    """A channel of a coupler (written from the vehicle) seen from the attachment, its side of the plug.
+
+    The vehicle emits it (`uplink`, or `downlink_pt`: relayed): the attachment
+    receives it (`downlink`).  The vehicle receives it (`downlink`): the
+    attachment emits it (`uplink`).  `both` stays; the OR directions swap.
+    """
+    if ch.direction_or:
+        seen = replace(ch, direction_or=frozenset(_SWAP[d] for d in ch.direction_or))
+    elif ch.direction == frozenset({_UP, _DOWN}):
+        seen = replace(ch, passthrough=False)
+    elif _UP in ch.direction or ch.passthrough:
+        seen = replace(ch, direction=frozenset({_DOWN}), passthrough=False)
+    elif _DOWN in ch.direction:
+        seen = replace(ch, direction=frozenset({_UP}))
+    else:
+        seen = ch
     raw = dict(ch.raw)
-    raw["direction"] = _token(mirrored)
-    return replace(mirrored, raw=raw)
+    raw["direction"] = _token(seen)
+    return replace(seen, raw=raw)
 
 
 def inject_coupler_channels(channels, coupler_chs, nature: str) -> list[ChannelDefinition]:
@@ -166,12 +178,12 @@ def inject_coupler_channels(channels, coupler_chs, nature: str) -> list[ChannelD
 
     The ComBus of the coupler merges into the ComBus of the node: a channel
     unknown to the machine type is added at its safe value, nobody writes it
-    (an absent function stays safe).  Direction of the coupler on the
-    attachment, mirrored on the vehicle.  A channel the node declares is kept
-    as declared (compute_coupler_link checks the agreement).
+    (an absent function stays safe).  As written on the vehicle, its side of
+    the plug on the attachment.  A channel the node declares is kept as
+    declared (compute_coupler_link checks the agreement).
     """
     known = {ch.id for ch in channels}
-    added = [ch if nature == "IS_ATTACHMENT" else _mirror(ch) for ch in coupler_chs if ch.id not in known]
+    added = [ch if nature == "IS_VEHICLE" else _attachment_view(ch) for ch in coupler_chs if ch.id not in known]
     return list(channels) + added
 
 
@@ -230,7 +242,7 @@ def compute_coupler_link(name: str, coupler_chs, local_chs, nature: str) -> Link
         a = local.get(c.id)
         if a is None:
             raise LinkError(f"coupler {name!r}: channel {c.id!r} missing from the node (not injected)")
-        b = c if local_is_vehicle else _mirror(c)   # the peer, in its own view
+        b = _attachment_view(c) if local_is_vehicle else c   # the peer, in its own view
         if a.type != c.type:
             raise LinkError(f"channel {c.id!r}: {a.type} in the node, {c.type} in the coupler {name!r}")
         va, vc = _render_value(a, a.type), _render_value(c, c.type)

@@ -258,9 +258,11 @@ nœud, plusieurs cartes connectées (appelé par le hook). Le drapeau
 
 Le contrat d'une liaison est un **coupleur**, la norme du lien, comme une prise
 normalisée : `src/core/config/couplers/<nom>/*.cb`, des channels `BASE`
-ordinaires, au **sens vu de l'attelage** (`uplink` : vers le véhicule,
-`downlink` : depuis le véhicule, `both_or` : faute partagée), sans `_pt` (le
-relais est l'affaire d'un nœud), `value` = la valeur sûre. Un nœud déclare ses
+ordinaires. Le coupleur est une **brique de la machine** : il s'écrit **du
+point de vue du véhicule**, le noyau de l'étoile, comme tout `.cb` de la
+machine (`downlink_pt` : reçu et relayé vers l'attelage, `downlink` : reçu de
+l'attelage, `uplink` : sa propre valeur envoyée, `both_or` : faute partagée ;
+3.4e, 2026-11-01), `value` = la valeur sûre. Un nœud déclare ses
 coupleurs : `-D COMBUS_COUPLER_<NOM>` (`links.coupler_names()`), de 0 à n sur
 un véhicule, exactement 1 sur un attelage ; `IS_MACHINE` ou `IS_REMOTE` avec un
 coupleur est **refusé explicitement** (`node_nature()`), comme l'ancien
@@ -272,8 +274,9 @@ coupleur est **refusé explicitement** (`node_nature()`), comme l'ancien
 - **Injection** (`inject_coupler_channels()`, appelée par `generate()` avant
   les vues) : le ComBus du coupleur **se fond** dans celui du nœud ; un channel
   du coupleur inconnu du type de machine est ajouté à sa valeur sûre (une
-  fonction absente reste sûre), au sens du coupleur sur l'attelage, au sens
-  miroir sur le véhicule. Ajouter un channel à un coupleur change donc le
+  fonction absente reste sûre) : tel qu'écrit sur le véhicule, et de son côté
+  de la prise sur l'attelage (`_attachment_view()` : ce que le véhicule émet,
+  l'attelage le reçoit, et l'inverse). Ajouter un channel à un coupleur change donc le
   ComBus de chaque nœud qui le porte : changement **cassant**.
 - **Ensemble de la liaison** (`compute_coupler_link()`) : **tout** le coupleur
   (contrat complet). Un channel de même nom dans le type de machine doit avoir

@@ -1,22 +1,21 @@
 """Couplers: the norm of a link between nodes (link rework, step 3.4a).
 
-Rules validated by the owner (2026-10-31):
+Rules validated by the owner (2026-10-31; vehicle view: 2026-11-01, step 3.4e):
   - T1 a coupler is a folder src/core/config/couplers/<name>/ of ordinary
-    BASE channels; directions are those of the attachment (uplink: from the
-    attachment to the vehicle, downlink: from the vehicle to the attachment,
-    both_or: shared fault); no `_pt` (relaying is the business of a node);
-    `value` is the safe value;
+    BASE channels, a brick of the machine: directions are those of the
+    vehicle, the hub of the star (machine-centric: `downlink_pt` relayed to
+    the attachment, `downlink` received from it, `uplink` its own value sent,
+    `both_or` shared fault); `value` is the safe value;
   - T2 a node declares its couplers with -D COMBUS_COUPLER_<NAME>: 0 to n on
     a vehicle, exactly 1 on an attachment; IS_MACHINE / IS_REMOTE with a
     coupler is refused explicitly, never ignored; COMBUS_PEER_<TYPE> is
     removed (refused explicitly);
   - T3 full contract: the frame is every channel of the coupler; the ComBus
     of the coupler merges into the ComBus of the node: a channel of the
-    coupler unknown to the machine type is injected at its safe value
-    (mirrored direction on the vehicle);
+    coupler unknown to the machine type is injected at its safe value (as
+    written on the vehicle, its side of the plug on the attachment);
   - T4 a channel of the same name in the machine type agrees on type, value
-    and zeroAt; its direction must flow (attachment: as in the coupler;
-    vehicle: mirrored, `_pt` allowed); a channel that would not flow is an
+    and zeroAt; its direction must flow; a channel that would not flow is an
     error (no "dead channel" in a full contract);
   - T5 / T6 the MD5 of the link carries the coupler only, plus the role:
     each side announces MD5(coupler + its role) and expects MD5(coupler + the
@@ -122,14 +121,15 @@ def test_t1_unknown_coupler_is_an_error():
         load_coupler_channels(SRC, "no_such_coupler")
 
 
-def test_row12_pt_in_a_coupler_is_an_error(tmp_path):
-    folder = tmp_path / "core" / "config" / "couplers" / "bad"
+def test_row12_pt_in_a_coupler_is_the_relay_of_the_vehicle(tmp_path):
+    """Vehicle view (3.4e): `downlink_pt` is allowed, the vehicle relays it to the attachment."""
+    folder = tmp_path / "core" / "config" / "couplers" / "relay"
     folder.mkdir(parents=True)
-    (folder / "bad.cb").write_text(
+    (folder / "relay.cb").write_text(
         "channels:\n- id: X\n  infoName: x\n  type: analog\n  scope: BASE\n  theme: core\n"
         "  direction: downlink_pt\n  value: CbusNeutral\n", encoding="utf-8")
-    with pytest.raises(LinkError, match="_pt"):
-        load_coupler_channels(tmp_path, "bad")
+    coupler = load_coupler_channels(tmp_path, "relay")
+    assert coupler[0].passthrough
 
 
 def test_t1_a_coupler_channel_is_base_only(tmp_path):
@@ -191,25 +191,27 @@ def test_row1_the_frame_is_the_full_coupler(hitch, tractor):
     assert [c.id for c in link.channels if c.type == "digital"] == ["TEST_COUPLED_FAIL", "TEST_LIGHTS"]
 
 
-def test_row4_injection_on_the_vehicle_is_mirrored(hitch, tractor):
+def test_row4_injection_on_the_vehicle_is_as_written(hitch, tractor):
     injected = {c.id: c for c in inject_coupler_channels(tractor, hitch, V)}
     axle = injected["TEST_AXLE_LOAD"]                     # unknown to the tractor
-    assert axle.direction == frozenset({"downlink"})      # the attachment emits, the vehicle receives
+    assert axle.direction == frozenset({"downlink"})      # as written: the vehicle receives it
     assert axle.value == "CbusNeutral"
     assert axle.scope == "BASE"
     assert injected["TEST_BRAKE_BUS"].passthrough         # known: the declaration of the tractor is kept
 
 
-def test_row4_injection_on_the_attachment_keeps_the_coupler_direction():
-    injected = {c.id: c for c in inject_coupler_channels([], _canon(_ch("X", "downlink"),
-                                                                    _ch("Y", "uplink")), A)}
-    assert injected["X"].direction == frozenset({"downlink"})
-    assert injected["Y"].direction == frozenset({"uplink"})
+def test_row4_injection_on_the_attachment_is_its_side_of_the_plug():
+    coupler = _canon(_ch("RELAYED", "downlink_pt"), _ch("OWN", "uplink"), _ch("BACK", "downlink"))
+    injected = {c.id: c for c in inject_coupler_channels([], coupler, A)}
+    assert injected["RELAYED"].direction == frozenset({"downlink"})   # the vehicle relays it: received
+    assert not injected["RELAYED"].passthrough
+    assert injected["OWN"].direction == frozenset({"downlink"})       # the vehicle sends it: received
+    assert injected["BACK"].direction == frozenset({"uplink"})        # the vehicle receives it: sent
 
 
 def test_row4_injection_mirrors_or_directions():
     coupler = _canon(_ch("F", "uplink_or", type_="digital"), _ch("G", "both_or", type_="digital"))
-    injected = {c.id: c for c in inject_coupler_channels([], coupler, V)}
+    injected = {c.id: c for c in inject_coupler_channels([], coupler, A)}
     assert injected["F"].direction_or == frozenset({"downlink"})
     assert injected["G"].direction_or == frozenset({"uplink", "downlink"})
 
@@ -233,36 +235,37 @@ def test_t3_without_coupler_nothing_is_injected(tmp_path, tractor):
 
 def test_row5_same_name_different_type_is_an_error():
     with pytest.raises(LinkError, match="X"):
-        _link([_ch("X", "downlink")], [_ch("X", "uplink", type_="digital")])
+        _link([_ch("X", "uplink")], [_ch("X", "uplink", type_="digital")])
 
 
 def test_row6_same_name_different_value_is_an_error():
     with pytest.raises(LinkError, match="X"):
-        _link([_ch("X", "downlink")], [_ch("X", "uplink", value="CbusMaxVal")])
+        _link([_ch("X", "uplink")], [_ch("X", "uplink", value="CbusMaxVal")])
 
 
 def test_row6_same_name_different_zero_at_is_an_error():
     with pytest.raises(LinkError, match="zeroAt"):
-        _link([_ch("X", "downlink", zero_at="neutral")], [_ch("X", "uplink")])
+        _link([_ch("X", "uplink", zero_at="neutral")], [_ch("X", "uplink")])
 
 
 def test_row7_the_vehicle_relays_a_channel_of_the_coupler():
-    assert _flow(_link([_ch("BRAKE", "downlink")], [_ch("BRAKE", "downlink_pt")]), "BRAKE") == "to_peer"
+    assert _flow(_link([_ch("BRAKE", "downlink_pt")], [_ch("BRAKE", "downlink_pt")]), "BRAKE") == "to_peer"
 
 
 def test_row7_the_attachment_receives_what_the_vehicle_relays():
-    assert _flow(_link([_ch("BRAKE", "downlink")], [_ch("BRAKE", "downlink")], nature=A), "BRAKE") == "from_peer"
+    assert _flow(_link([_ch("BRAKE", "downlink_pt")], [_ch("BRAKE", "downlink")], nature=A), "BRAKE") == "from_peer"
 
 
 def test_row8_two_emitters_is_an_error():
+    """The coupler says the attachment sends TILT; the vehicle sends it too."""
     with pytest.raises(LinkError, match="TILT"):
-        _link([_ch("TILT", "uplink")], [_ch("TILT", "uplink")])
+        _link([_ch("TILT", "downlink")], [_ch("TILT", "uplink")])
 
 
 def test_row8b_a_channel_that_does_not_flow_is_an_error():
-    """The vehicle receives BRAKE but does not relay it: nobody emits it on the link."""
+    """The coupler says the vehicle relays BRAKE; the vehicle receives it but does not relay it."""
     with pytest.raises(LinkError, match="BRAKE"):
-        _link([_ch("BRAKE", "downlink")], [_ch("BRAKE", "downlink")])
+        _link([_ch("BRAKE", "downlink_pt")], [_ch("BRAKE", "downlink")])
 
 
 def test_row4_flow_of_the_test_link(hitch, tractor):
@@ -322,16 +325,16 @@ def test_t5_candidates_leave_the_stable_md5():
 # =============================================================================
 
 def test_row13_two_couplers_sources_of_the_same_channel():
-    links = [_link([_ch("TILT", "uplink")], [_ch("TILT", "downlink")], name="r"),
-             _link([_ch("TILT", "uplink")], [_ch("TILT", "downlink")], name="d")]
+    links = [_link([_ch("TILT", "downlink")], [_ch("TILT", "downlink")], name="r"),
+             _link([_ch("TILT", "downlink")], [_ch("TILT", "downlink")], name="d")]
     with pytest.raises(LinkError, match="TILT"):
         check_single_source(links)
 
 
 def test_row13_the_vehicle_relays_from_one_attachment_to_the_other():
     """Kept from step 3.2b: one coupler is the source, the vehicle passes it on to the other."""
-    lr = _link([_ch("TILT", "uplink")], [_ch("TILT", "downlink_pt")], name="r")
-    ld = _link([_ch("TILT", "downlink")], [_ch("TILT", "downlink_pt")], name="d")
+    lr = _link([_ch("TILT", "downlink")], [_ch("TILT", "downlink_pt")], name="r")      # r sends it
+    ld = _link([_ch("TILT", "downlink_pt")], [_ch("TILT", "downlink_pt")], name="d")   # relayed to d
     check_single_source([lr, ld])
     assert (_flow(lr, "TILT"), _flow(ld, "TILT")) == ("from_peer", "to_peer")
 
@@ -344,7 +347,7 @@ def test_row13_both_or_is_the_merge_not_two_sources():
 
 
 def test_row13_through_the_generator(tmp_path, monkeypatch):
-    couplers = {"test_r": _canon(_ch("TILT", "uplink")), "test_d": _canon(_ch("TILT", "uplink"))}
+    couplers = {"test_r": _canon(_ch("TILT", "downlink")), "test_d": _canon(_ch("TILT", "downlink"))}
     monkeypatch.setattr(links_module, "load_coupler_channels", lambda root, name: couplers[name])
     with pytest.raises(GeneratorError, match="TILT"):
         generate(_canon(_ch("TILT", "downlink")),

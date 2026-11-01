@@ -7,13 +7,13 @@
 # it know.  A channel of the coupler unknown to a machine type is injected in
 # the ComBus of the node, at its safe value.
 #
-# Directions are those of the ATTACHMENT (the vehicle reads them mirrored):
-# - TEST_BRAKE_BUS, TEST_LIGHTS: sent by the vehicle (relayed from the remote);
-# - TEST_TILT_ANGLE, TEST_AXLE_LOAD: sent by the attachment (the TEST tractor
-#   does not know TEST_AXLE_LOAD: injected, an absent function);
+# A coupler is a brick of the machine: directions are those of the VEHICLE,
+# as in any .cb of the machine (the attachment gets its side of the plug):
+# - TEST_BRAKE_BUS, TEST_LIGHTS: received from the remote, relayed to the
+#   attachment (downlink_pt);
+# - TEST_TILT_ANGLE, TEST_AXLE_LOAD: received from the attachment (the TEST
+#   tractor does not know TEST_AXLE_LOAD: injected, an absent function);
 # - TEST_COUPLED_FAIL: fault shared by the whole convoy (OR merge).
-#
-# No `_pt` here: relaying is the business of a node, not of the coupler.
 
 channels:
 
@@ -22,7 +22,7 @@ channels:
   type: analog
   scope: BASE
   theme: core
-  direction: downlink
+  direction: downlink_pt
   value: CbusNeutral
 
 - id: TEST_TILT_ANGLE
@@ -30,7 +30,7 @@ channels:
   type: analog
   scope: BASE
   theme: core
-  direction: uplink
+  direction: downlink
   value: CbusNeutral
 
 - id: TEST_AXLE_LOAD
@@ -38,7 +38,7 @@ channels:
   type: analog
   scope: BASE
   theme: core
-  direction: uplink
+  direction: downlink
   value: CbusNeutral
 
 - id: TEST_LIGHTS
@@ -46,7 +46,7 @@ channels:
   type: digital
   scope: BASE
   theme: light
-  direction: downlink
+  direction: downlink_pt
   value: low
 
 - id: TEST_COUPLED_FAIL
