@@ -30,9 +30,8 @@ Sources : `frame/combus_frame.h:1-31`, `frame/combus_frame.cpp:111-195`,
 - Longueur maximale 255 octets ; l'encodage renvoie 0 au-delà (`combus_frame.cpp:143`).
 - `seq` : 1 à 255 pour une trame de contrôle. `seq == 0` est réservé au
   handshake ; `combus_frame_encode` le refuse (`combus_frame.cpp:137`).
-- `flags` : un seul bit défini, `COMBUS_FLAG_FAILSAFE` (bit 0,
-  `combus_frame.h:69`). L'encodeur écrit `flags = 0` aujourd'hui
-  (`combus_frame.cpp:148-154`) : l'état failsafe voyage par un canal.
+- `flags` : aucun bit défini sur une trame de contrôle, l'encodeur écrit
+  `flags = 0` : l'état failsafe voyage par un canal.
 
 ## 2. Le runLevel n'est pas dans l'en-tête
 
@@ -233,8 +232,7 @@ mode. Un bout **sans candidat** n'envoie que des demandes legacy. Un ACK a le
 genre de la demande à laquelle il répond (`ackPending`, `ackPendingNext`).
 
 Un bout bidirectionnel n'émet **aucune trame de données** tant que son contrat est
-`INCONNU`. Un bout qui n'émet que les émet toujours. `combus_handshake_sendOnce`
-(émission unique, pour le debug et les tests) existe aussi.
+`INCONNU`. Un bout qui n'émet que les émet toujours.
 
 ### 8.4 Contrat du lien à la réception (chantier 1.2)
 

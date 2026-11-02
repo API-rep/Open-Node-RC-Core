@@ -61,16 +61,6 @@ static constexpr uint8_t CombusFrameMinLen = CombusFrameHeaderLen + sizeof(uint8
 
 
 // =============================================================================
-// 2. FLAGS BITMASK - FRAME FLAGS BIT POSITIONS
-// =============================================================================
-
-  // Only transport-level status lives here; do not overload with application-level state.
-
-#define COMBUS_FLAG_FAILSAFE     (1u << 0)  ///< upstream failsafe active (link-loss or remote disconnect)
-
-
-
-// =============================================================================
 // 3. PUBLIC API
 // =============================================================================
 

@@ -22,98 +22,6 @@
 
 
 // =============================================================================
-// TX ENTRY POINT — manual single-shot
-// =============================================================================
-
-uint8_t combus_handshake_sendOnce( NodeCom* nodeCom )
-{
-    // Boot banner on first TX (mirrors RX path).  The TX path does not
-    // own a per-link context yet (P3 will introduce one for the burst
-    // state) — for now we use a static local context so the banner is
-    // emitted exactly once across all TX calls.  This will be replaced
-    // by a per-link context in P3 commit 4.
-    static CombusHandshakeContext s_txBootCtx = {};
-    combus_handshake_logBootWarningIfNeeded(&s_txBootCtx);
-
-
-    if (!nodeCom || !nodeCom->write) {
-        sys_log_info("[COMBUS_HANDSHAKE] TX skipped — null transport\n");
-        return 0u;
-    }
-
-    // LY4 — use the per-link expected MD5 pointer resolved at init from
-    // link->layer.  Falls back to the FULL view MD5 if the pointer is
-    // null (legacy caller that bypassed combus_protocol_init).
-    const uint8_t* md5ToSend = s_txBootCtx.expected.stable
-        ? s_txBootCtx.expected.stable
-        : combus::wire::kCombusComBusMd5;
-
-    // Frame layout (mirror of RX):
-    //   [0]                          SOF
-    //   [1..sizeof(Header)]          CombusFrameHeader (nAnalog=0,
-    //                                  nDigital=0, seq=0, flags=0)
-    //   [..+kCombusHandshakePayloadLen]  MD5 (16) + major + minor + dev
-    //   [..+1]                       CRC-8/MAXIM over header + payload
-    //
-    // nAnalog / nDigital carry no meaning on the handshake path (payload
-    // is fixed-length by contract), but the header must stay well-formed
-    // because the CRC covers it.  We zero them.
-    // RL2: runLevel removed from header — no longer written here.
-    uint8_t frame[ sizeof(CombusFrameSof)
-                 + sizeof(CombusFrameHeader)
-                 + kCombusHandshakePayloadLen
-                 + sizeof(uint8_t) ];
-    const uint8_t payloadStart = sizeof(CombusFrameSof)
-                              + sizeof(CombusFrameHeader);
-
-    // SOF
-    frame[0] = CombusFrameSof;
-
-    // Header — nAnalog=0, nDigital=0, seq=0 (RESERVED for handshake),
-    // flags=0 (kept deterministic for CRC).
-    {
-        const CombusFrameHeader hdr = {
-            .cfg = { .nAnalog = 0u, .nDigital = 0u },
-            .seq = 0u,
-            .flags = 0u,
-        };
-        frame[sizeof(CombusFrameSof) + 0u] = hdr.cfg.nAnalog;
-        frame[sizeof(CombusFrameSof) + 1u] = hdr.cfg.nDigital;
-        frame[sizeof(CombusFrameSof) + 2u] = hdr.seq;
-        frame[sizeof(CombusFrameSof) + 3u] = hdr.flags;
-    }
-
-    // Payload — MD5 then version.
-    for (uint8_t i = 0u; i < 16u; ++i) {
-        frame[payloadStart + i] = md5ToSend[i];
-    }
-    frame[payloadStart + 16u] = combus::wire::kProjectVersionMajor;
-    frame[payloadStart + 17u] = combus::wire::kProjectVersionMinor;
-    frame[payloadStart + 18u] = combus::wire::kProjectVersionDev;
-
-
-    // CRC-8/MAXIM over header + payload.
-    const uint8_t crcByteIndex = payloadStart + kCombusHandshakePayloadLen;
-    frame[crcByteIndex] = combus_frame_crc8(frame, crcByteIndex);
-
-    const uint8_t totalLen = (uint8_t)(crcByteIndex + 1u);
-
-    char md5Hex[33];
-    combus_handshake_formatMd5Hex(md5ToSend, md5Hex);
-    sys_log_info(
-        "[COMBUS_HANDSHAKE] TX oneshot  bytes=%u  md5=%s  ver=%u.%u\n",
-        (unsigned)totalLen, md5Hex,
-        (unsigned)combus::wire::kProjectVersionMajor,
-        (unsigned)combus::wire::kProjectVersionMinor);
-
-
-    nodeCom->write(nodeCom->ctx, frame, totalLen);
-    return totalLen;
-}
-
-
-
-// =============================================================================
 // TX BURST, REQUESTS AND ACK — P3, chantier 1.2
 // =============================================================================
 
@@ -121,11 +29,7 @@ uint8_t combus_handshake_sendOnce( NodeCom* nodeCom )
     // A NEXT handshake carries the next set MD5 (chantier 2.2b).
 static uint8_t sendHandshake( const CombusHandshakeContext* ctx, NodeCom* nodeCom, uint8_t flags )
 {
-        // LY4 — the per-link expected MD5 pointer resolved at init from link->layer;
-        // FULL view MD5 if null (legacy caller that bypassed combus_protocol_init).
-    const uint8_t* stableMd5 = ctx->expected.stable
-        ? ctx->expected.stable
-        : combus::wire::kCombusComBusMd5;
+    const uint8_t* stableMd5 = ctx->expected.stable;
     const uint8_t* nextMd5   = ctx->expected.next;
         // Link rework 3.4a — through a coupler, this end announces its own role.
     if (ctx->announced.stable) { stableMd5 = ctx->announced.stable; }
@@ -188,7 +92,7 @@ uint8_t combus_handshake_tx_update( CombusHandshakeContext* ctx,
                                     NodeCom*                nodeCom )
 {
         // --- 1. Guard checks ---
-    if (!ctx || !nodeCom || !nodeCom->write) { return 0u; }
+    if (!ctx || !nodeCom || !nodeCom->write || !ctx->expected.stable) { return 0u; }
 
     const uint32_t nowMs   = millis();
     uint8_t        written = 0u;

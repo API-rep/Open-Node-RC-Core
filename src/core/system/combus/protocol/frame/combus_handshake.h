@@ -66,19 +66,6 @@ struct CombusHandshakeContext;
 // =============================================================================
 
 /**
- * @brief Start-of-frame sentinel byte for a handshake frame.
- *
- * @details Currently identical to the control-frame SOF (`CombusFrameSof`)
- *   — the discrimination is done on the `seq` byte that immediately follows
- *   the fixed 3-byte `ComBusFrameCfg` (nAnalog, nDigital, seq).
- *
- *   When the handshake gets its own dedicated SOF in the future (e.g. to
- *   allow coexistence with discovery / scan traffic on a shared bus), this
- *   constant is the natural place to change.
- */
-static constexpr uint8_t CombusHandshakeSof = CombusFrameSof;  ///< placeholder
-
-/**
  * @brief Fixed payload length of the handshake frame, in bytes.
  *
  * @details Excludes SOF, header and CRC-8.
@@ -292,49 +279,38 @@ void combus_handshake_formatMd5Hex(const uint8_t md5[16], char out[33]);
  */
 
 struct CombusHandshakeContext {
-    // --- RX-side state (P2, migrated from static globals) ---
-    bool     contractValidated = false;  ///< contract STABLE (true) or UNKNOWN (false), chantier 1.2
-    bool     everReceived      = false;  ///< true after first valid handshake frame observed
-    bool     bootWarningLogged = false;  ///< one-shot guard for the boot banner
+    // --- Identity of the link (set by combus_protocol_init()) ---
+    const char*        name          = nullptr;  ///< link name, for the logs
+    bool               bidirectional = false;    ///< the end both transmits and receives
+    const ComPeerLink* peer          = nullptr;  ///< link between nodes: common frame and table; nullptr = view of the scope
+    bool               baseSet       = false;    ///< BASE link: the mode sets the size of the frames
 
-    // --- TX-side state (P3) ---
-    bool     burstActive       = false;  ///< true while the boot-time burst is in progress
-    uint8_t  burstRemaining    = 0u;     ///< frames left to emit in the current burst
-    uint32_t lastBurstMs       = 0u;     ///< millis() at the last burst emission
+    // --- MD5 of the contract (set by combus_protocol_init()) ---
+    ComLinkMd5 expected      = {};       ///< MD5 expected from the peer, compared on every handshake
+    ComLinkMd5 announced     = {};       ///< MD5 this end sends when it differs (link through a coupler: its own side); null = `expected`
+    bool       hasCandidates = false;    ///< expected.next differs from expected.stable
 
-    // --- Contract state (chantier 1.2) ---
-    const char* name           = nullptr; ///< link name, for the logs (set by combus_protocol_init())
-    bool     bidirectional     = false;  ///< the end both transmits and receives (set by combus_protocol_init())
-    bool     ackPending        = false;  ///< a request was received, the TX answers it with an ACK
-    uint32_t lastRequestMs     = 0u;     ///< millis() at the last request sent after the burst
-    uint32_t lastAckMs         = 0u;     ///< millis() at the last matching ACK (bidirectional end)
-    bool     dataSinceStable   = false;  ///< a data frame was applied since the contract became STABLE
-    bool     refusalLogged     = false;  ///< one-shot guard for the refusal log, re-armed when STABLE
+    // --- State of the contract ---
+    bool contractValidated = false;      ///< contract STABLE (true) or UNKNOWN (false)
+    bool everReceived      = false;      ///< a valid handshake frame was observed, matching or not
+    bool dataSinceStable   = false;      ///< a data frame was applied since the contract became STABLE
+    bool refusalLogged     = false;      ///< one-shot guard for the refusal log, re-armed when STABLE
+    bool bootWarningLogged = false;      ///< one-shot guard for the boot banner
 
-    // --- Next / legacy mode (chantier 2.2b) — two ends per link: the fields that
-    //    describe the peer (contract, ACK, mode) become one set per peer when a
-    //    link serves several (see the WIP, "Plusieurs pairs sur un lien").
-    bool     hasCandidates     = false;  ///< expected.next differs from expected.stable (set by combus_protocol_init())
-    const ComPeerLink* peer    = nullptr; ///< link between nodes (3.1b): common frame and table, nullptr = view of the scope
-    bool     baseSet           = false;  ///< BASE link: the mode sets the size of the frames (set by combus_protocol_init())
-    bool     nextMode          = false;  ///< STABLE in next mode (false: stable mode, or legacy without candidate)
-    uint8_t  nextTriesLeft     = 0u;     ///< NEXT requests left while UNKNOWN before legacy ones
-    bool     ackPendingNext    = false;  ///< a NEXT request was received, the TX answers it with a NEXT ACK
+    // --- Requests and ACK ---
+    bool     ackPending     = false;     ///< a request was received, the TX answers it with an ACK
+    bool     ackPendingNext = false;     ///< a NEXT request was received, the TX answers it with a NEXT ACK
+    uint32_t lastRequestMs  = 0u;        ///< millis() at the last request sent after the burst
+    uint32_t lastAckMs      = 0u;        ///< millis() at the last matching ACK (bidirectional end)
 
-    // --- LY4 — expected MD5, resolved once at init from link->layer.
-    //    `stable` points to one of combus::wire::kCombusComBusMd5 (FULL),
-    //    kCombusBaseComBusMd5 (BASE), or kCombusSystemComBusMd5 (SYSTEM);
-    //    `next` to the next set MD5 (chantier 2.2b, = `stable` when there is
-    //    no candidate).  Read by the RX (to compare against the on-wire MD5)
-    //    and by the TX unless `announced` is set.  Same pattern as LY2
-    //    wireEnd counters.
-    ComLinkMd5 expected  = {};
+    // --- Boot burst ---
+    bool     burstActive    = false;     ///< the boot burst is in progress
+    uint8_t  burstRemaining = 0u;        ///< frames left to emit in the burst
+    uint32_t lastBurstMs    = 0u;        ///< millis() at the last burst emission
 
-    // --- Link rework 3.4a — MD5 announced by this end, when it differs from the
-    //    expected one: on a link through a coupler, each end announces its role
-    //    and expects the other one.  A null pointer = the expected one (same
-    //    contract both ways: views of a scope).
-    ComLinkMd5 announced = {};
+    // --- Next / stable mode ---
+    bool    nextMode      = false;       ///< STABLE in next mode (false: stable mode, or legacy without candidate)
+    uint8_t nextTriesLeft = 0u;          ///< NEXT requests left while UNKNOWN before legacy ones
 };
 
 
@@ -342,19 +318,6 @@ struct CombusHandshakeContext {
 // =============================================================================
 // 4. PUBLIC STATUS HELPERS
 // =============================================================================
-
-/**
- * @brief True if at least one valid handshake frame has ever been observed
- *   on the given ComBus link since the last transport reset.
- *
- * @details Per-link state — see CombusHandshakeContext.  Mirrors
- *   `combus_rx_ever_received()` for control frames.  Exposed as a thin
- *   accessor so the future cache / versioning layer can poll liveness
- *   without including the full RX module.
- *
- * @param ctx  Per-link handshake context (must not be null).
- */
-bool combus_handshake_ever_received(const CombusHandshakeContext* ctx);
 
 /**
  * @brief True if the contract of the given ComBus link is STABLE, false if

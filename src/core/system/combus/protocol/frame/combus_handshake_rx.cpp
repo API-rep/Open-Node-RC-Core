@@ -126,10 +126,7 @@ uint8_t combus_handshake_tryDecode(
     // We cannot CRC-validate a ring buffer in place without unrolling the
     // modulo, so we linearise once.  Allocates sizeof(expectedLen) on the
     // stack; safe for any legal ComBus frame size (≤ 255).
-    uint8_t linear[ sizeof(CombusFrameSof)
-                  + sizeof(CombusFrameHeader)
-                  + 255u              // upper bound on handshake payload
-                  + sizeof(uint8_t) ];
+    uint8_t linear[CombusFrameHandshakeMinLen];
 
     for (uint8_t i = 0u; i < expectedLen; ++i) {
         linear[i] = ringByteAt(ringBuf, ringBufSize, ringHead, i);

@@ -115,17 +115,10 @@ void combus_handshake_formatMd5Hex(const uint8_t md5[16], char out[33])
  */
 void combus_handshake_logBootWarningIfNeeded(CombusHandshakeContext* ctx)
 {
-    if (!ctx || ctx->bootWarningLogged) { return; }
-
-    // LY4 — use the per-link expected MD5 pointer resolved at init from
-    // link->layer.  Falls back to the FULL view MD5 if the pointer is
-    // null (legacy caller that bypassed combus_protocol_init).
-    const uint8_t* md5ToShow = ctx->expected.stable
-        ? ctx->expected.stable
-        : combus::wire::kCombusComBusMd5;
+    if (!ctx || ctx->bootWarningLogged || !ctx->expected.stable) { return; }
 
     char md5Hex[33];
-    combus_handshake_formatMd5Hex(md5ToShow, md5Hex);
+    combus_handshake_formatMd5Hex(ctx->expected.stable, md5Hex);
 
     if (COMBUS_MD5_CHECK_DISABLE) {
         sys_log_info(
@@ -154,10 +147,6 @@ void combus_handshake_logBootWarningIfNeeded(CombusHandshakeContext* ctx)
 // =============================================================================
 // 3. PUBLIC STATUS HELPER
 // =============================================================================
-
-bool combus_handshake_ever_received(const CombusHandshakeContext* ctx) {
-    return ctx ? ctx->everReceived : false;
-}
 
 bool combus_handshake_is_contract_validated(const CombusHandshakeContext* ctx) {
     return ctx ? ctx->contractValidated : false;
