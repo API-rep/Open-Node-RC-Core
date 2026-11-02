@@ -183,7 +183,10 @@ def test_l5_local_channels_on_the_vehicle_only_and_off_the_link(tmp_path, tracto
     assert "TEST_COUPLER_CMD" in ids_v
     assert "TEST_COUPLER_ENGAGED_SW" not in ids_v                    # its flag is not set
     links_v = (tmp_path / "v" / "combus_peer_links.h").read_text(encoding="utf-8")
-    assert "TEST_COUPLER_" not in links_v                            # never on the link
+    coupler_block = links_v[links_v.index("namespace TestCoupler {"):links_v.index("namespace RemoteTestTractor {")]
+    assert "TEST_COUPLER_" not in coupler_block                      # never on the link of the coupler
+    assert "TEST_COUPLER_CMD" not in links_v                         # nor on the link with the remote
+    assert "TEST_COUPLER_BTN" in links_v                             # the button is a command of the remote (3.6)
 
     generate(tractor, _ctx(M, "MACHINE_TYPE_TEST_TRACTOR", HITCH, "HAS_TEST_COUPLER_ENGAGED_SW"), tmp_path / "g")
     assert "TEST_COUPLER_ENGAGED_SW" in (tmp_path / "g" / "combus_ids.h").read_text(encoding="utf-8")
@@ -457,9 +460,10 @@ def test_row13_both_or_is_the_merge_not_two_sources():
 def test_row13_through_the_generator(tmp_path, monkeypatch):
     couplers = {"test_r": _canon(_ch("TILT", "downlink")), "test_d": _canon(_ch("TILT", "downlink"))}
     monkeypatch.setattr(links_module, "load_coupler_channels", lambda root, name: couplers[name])
-    with pytest.raises(GeneratorError, match="TILT"):
-        generate(_canon(_ch("TILT", "downlink")),
-                 _ctx(M, "MACHINE_TYPE_TEST_TRACTOR", "HAS_COUPLER_SOCKET_TEST_R", "HAS_COUPLER_SOCKET_TEST_D"),
+    monkeypatch.setattr(links_module, "load_machine_type_config",
+                        lambda root, t: links_module.MachineTypeConfig(socket=("test_r", "test_d")))
+    with pytest.raises(GeneratorError, match="'TILT': received from several links"):
+        generate([], _ctx(M, "MACHINE_TYPE_TEST_TRACTOR", "HAS_COUPLER_SOCKET_TEST_R", "HAS_COUPLER_SOCKET_TEST_D"),
                  tmp_path)
 
 

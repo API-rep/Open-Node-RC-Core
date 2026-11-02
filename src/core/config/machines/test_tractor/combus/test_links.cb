@@ -9,7 +9,8 @@
 # Directions are those of the tractor (node view):
 # - TEST_BRAKE_BUS, TEST_LIGHTS: received from the remote, relayed to the trailer;
 # - TEST_THROTTLE_BUS: received from the remote, not relayed;
-# - TEST_TILT_ANGLE: received from the trailer;
+# - TEST_TILT_ANGLE, received from the trailer, is not here: the coupler brings
+#   it (a channel of this file comes from the remote, link rework 3.6);
 # - TEST_COUPLED_FAIL: fault shared by the whole convoy (OR merge);
 # - TEST_BEACON: received from the remote, not relayed (the trailer does not
 #   know it).  It comes before the digital channels of the link in the local
@@ -47,14 +48,6 @@ channels:
   direction: downlink
   value: CbusNeutral
   zeroAt: neutral
-
-- id: TEST_TILT_ANGLE
-  infoName: "Test trailer tilt angle"
-  type: analog
-  scope: BASE
-  theme: core
-  direction: downlink
-  value: CbusNeutral
 
 - id: TEST_BEACON
   infoName: "Test beacon"

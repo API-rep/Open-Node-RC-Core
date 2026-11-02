@@ -6,6 +6,8 @@
 
 #include <stdint.h>
 
+#include <core/system/combus/protocol/combus_links.h>   // ComLinkRuntime
+
 
 /**
  * @brief Open one link per driven machine (kDrivenMachines) and put them under watch.
@@ -21,5 +23,12 @@ uint8_t remote_links_init( void );
  */
 
 void remote_links_update( void );
+
+
+/**
+ * @brief Storage of a link (tests, diagnostics); nullptr out of range.
+ */
+
+ComLinkRuntime* remote_links_runtime( uint8_t idx );
 
 // EOF remote_links.h

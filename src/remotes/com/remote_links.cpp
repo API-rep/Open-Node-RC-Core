@@ -45,6 +45,12 @@ uint8_t remote_links_init( void )
 }
 
 
+ComLinkRuntime* remote_links_runtime( uint8_t idx )
+{
+    return (idx < kDrivenMachineCount) ? &s_runtime[idx] : nullptr;
+}
+
+
 void remote_links_update( void )
 {
     ComBus& bus = *kDrivenMachines[0].bus;

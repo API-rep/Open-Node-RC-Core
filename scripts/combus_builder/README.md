@@ -257,7 +257,9 @@ nœud, plusieurs cartes connectées (appelé par le hook). Le drapeau
 ### Liaisons entre nœuds : les coupleurs (link rework 3.1a, 3.4a)
 
 Le contrat d'une liaison est un **coupleur**, la norme du lien, comme une prise
-normalisée : `src/core/config/couplers/<nom>/*.cb`, des channels `BASE`
+normalisée : `src/core/config/couplers/<nom>/*.cb` (supporté par le type dans
+`machines/<type>/<type>.mtype`, condition de toute instance ; lien télécommande :
+`links.compute_remote_link()`, étape 3.6), des channels `BASE`
 ordinaires. Le coupleur est une **brique de la machine** : il s'écrit **du
 point de vue de l'embase** (le côté qui porte, le noyau de l'étoile), comme
 tout `.cb` de la machine (`downlink_pt` : reçu et relayé vers la fiche,

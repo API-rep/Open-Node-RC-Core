@@ -108,12 +108,18 @@ def test_row1_the_remote_combus_holds_the_base_of_the_type(tmp_path, dumper):
     assert "THROTTLE_STICK" not in ids and "KEY_ACTIVE" not in ids
 
 
-def test_row5_the_base_md5_of_the_remote_is_the_one_of_the_machine(tmp_path, dumper):
+def test_row5_the_remote_and_the_machine_agree_on_the_link(tmp_path, dumper):
+    """Step 3.6: the contract is the MD5 of the remote link, no longer the BASE one."""
     generate(dumper, _ctx("IS_MACHINE", TYPE), tmp_path / "machine")
     generate(dumper, _ctx("IS_REMOTE", TYPE), tmp_path / "remote")
-    machine = _md5(tmp_path / "machine", "combus_base_md5.h")
-    assert machine                                                          # the test reads a real MD5
-    assert machine == _md5(tmp_path / "remote", "combus_base_md5.h")
+    def md5s(folder):
+        text = (tmp_path / folder / "combus_peer_links.h").read_text(encoding="utf-8")
+        block = text[text.index("namespace RemoteDumperTruck {"):]
+        return tuple(re.search(rf"{name}\[16\]\s*=\s*\{{([^}}]*)\}}", block).group(1).strip()
+                     for name in ("kAnnouncedMd5", "kExpectedMd5"))
+    machine, remote = md5s("machine"), md5s("remote")
+    assert machine[0] != machine[1]                                         # the two sides differ
+    assert remote == (machine[1], machine[0])
 
 
 def test_row6_a_remote_drives_a_machine_type(tmp_path, dumper):

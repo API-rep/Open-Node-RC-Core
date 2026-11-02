@@ -331,14 +331,14 @@ def _check_staging_complete(staging_dir: Path, expected: list[str]) -> None:
 # =============================================================================
 
 def _discover_cb_sources(buildroot: Path) -> list[str]:
-    """Return the list of `*.cb` / `*.cbch` source files (strings).
+    """Return the list of `*.cb` / `*.cbch` / `*.mtype` source files (strings).
 
     Used both:
     - as the `source` list of the SCons Command (for incremental build),
     - and as the input of the action (for invalidation awareness).
     """
     sources: list[str] = []
-    for ext in ("*.cb", "*.cbch"):
+    for ext in ("*.cb", "*.cbch", "*.mtype"):
         for p in buildroot.rglob(ext):
             sources.append(str(p))
     return sorted(sources)

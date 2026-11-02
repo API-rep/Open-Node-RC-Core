@@ -1,0 +1,10 @@
+# dumper_truck.mtype — configuration of the machine type (link rework 3.6)
+#
+# The couplers this type supports: part of its contract with the remote (the
+# commands they relay travel on the remote link, with or without the coupler).
+# A machine instantiates a supported one with -D HAS_COUPLER_SOCKET_<NAME> or
+# HAS_COUPLER_PLUG_<NAME>.  Adding one here is a breaking change of the type.
+
+couplers:
+  socket: []
+  plug: []

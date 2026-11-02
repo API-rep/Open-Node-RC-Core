@@ -8,23 +8,25 @@
  *   remote sends).  Several machines (step 4.1) only fill this table, with
  *   one ComBus per machine type (generated namespaces).
  *
- *   The link to a machine is a plain link between nodes: the BASE view, no
- *   coupler, no pairing; its contract is the BASE MD5 of the machine type.
+ *   The link to a machine carries only what the remote sends (link rework
+ *   3.6): its own table and MD5 (combus::peer::kRemoteLink), the same whether
+ *   the machine has its couplers or not; no pairing.
  *******************************************************************************///
 #pragma once
 
 #include <core/system/combus/protocol/combus_protocol.h>   // ComDev, ComDevMap, ComProtocolCfg
 #include <core/system/hw/node_com.h>                        // ComPort
 #include <combus.h>                                         // GENERATED: comBus (the BASE view of the machine type, mirrored)
+#include <combus_peer_links.h>                              // GENERATED: combus::peer::kRemoteLink
 
 
 /// Protocol of the link to a machine: line rate, transmit rate, timeout, startup grace.
 inline constexpr ComProtocolCfg kComProtoMachine = { 115200u, 50u, 250u, 3000u };
 
-/// The link to a machine: between nodes, both ways, BASE view (no coupler).
+/// The link to a machine: between nodes, both ways, its own table (no pairing).
 inline constexpr ComDev kComDevMachine = {
     "machine", LinkScope::INTER_NODE, LinkType::BIDIRECTIONAL,
-    &kComProtoMachine, LinkActivation::ALWAYS, nullptr
+    &kComProtoMachine, LinkActivation::ALWAYS, nullptr, &combus::peer::kRemoteLink
 };
 
 /// The port of the remote board to the machine (UART2, GPIO 17 TX / 16 RX for now).

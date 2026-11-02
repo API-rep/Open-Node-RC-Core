@@ -47,6 +47,12 @@ and:
     when it comes from another board of the node, never BASE (an input from
     the remote belongs to the input contract of the machine type); a link
     channel is BASE;
+  - machine type (step 3.6): <type>.mtype lists the couplers the type supports;
+    an instance needs its support; the remote link carries only what the remote
+    sends (the inputs of the type, the commands the supported couplers relay),
+    with its own MD5: the same with or without the coupler; names are generic
+    and shared between couplers (one channel, no more bytes), local channels
+    are prefixed;
   - the MD5 of the link carries the coupler and the side: each side announces
     MD5(coupler + its side) and expects MD5(coupler + the other side), so two
     sockets (or two plugs) linked by mistake refuse each other.
@@ -62,6 +68,8 @@ import json
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
+import yaml
+
 from .canon import canonize
 from .canon.channels import ChannelDefinition
 from .parser import parse_yaml_file
@@ -76,6 +84,7 @@ REMOVED_PEER_FLAG_PREFIX = "COMBUS_PEER_"    # step 3.4a: replaced by the couple
 NODE_CATEGORIES = ("IS_MACHINE", "IS_REMOTE")
 
 SOCKET, PLUG = "socket", "plug"               # the two sides of a coupler, the role of a node on its link
+REMOTE_LINK_PREFIX = "remote_"                # step 3.6: the link machine <-> remote, per machine type
 
 _UP, _DOWN = "uplink", "downlink"
 _SWAP = {_UP: _DOWN, _DOWN: _UP}
@@ -290,8 +299,7 @@ def remote_channels(channels, machine_type: str) -> list[ChannelDefinition]:
     Every BASE channel (the contract of the machine type) seen from the
     remote (_remote_view); the SYSTEM and BOARD channels of the machine type
     stay inside the machine; the other channels (core, remote) are kept.
-    The BASE MD5 of the remote is hashed on the machine view (generator):
-    the contract of the link is the BASE of the machine type as written.
+    The contract of the link is its own MD5 (compute_remote_link, step 3.6).
     """
     from .machine_type import is_machine_type_path
 
@@ -302,6 +310,117 @@ def remote_channels(channels, machine_type: str) -> list[ChannelDefinition]:
         elif not is_machine_type_path(ch.source_path, [machine_type]):
             out.append(ch)
     return out
+
+
+# =============================================================================
+# Machine type configuration and contract with the remote (step 3.6)
+# =============================================================================
+
+@dataclass(frozen=True)
+class MachineTypeConfig:
+    """The couplers a machine type supports (<type>.mtype), part of its contract."""
+    socket: tuple[str, ...] = ()
+    plug: tuple[str, ...] = ()
+
+
+def load_machine_type_config(buildroot: Path, type_dir: str) -> MachineTypeConfig:
+    """Read core/config/machines/<type>/<type>.mtype; no file: no coupler supported."""
+    path = Path(buildroot) / "core" / "config" / "machines" / type_dir / f"{type_dir}.mtype"
+    if not path.is_file():
+        return MachineTypeConfig()
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    unknown = set(data) - {"couplers"}
+    if unknown:
+        raise LinkError(f"{path.name}: unknown field(s) {sorted(unknown)}")
+    couplers = data.get("couplers") or {}
+    unknown = set(couplers) - {SOCKET, PLUG}
+    if unknown:
+        raise LinkError(f"{path.name}: couplers: unknown side(s) {sorted(unknown)}")
+    return MachineTypeConfig(socket=tuple(couplers.get(SOCKET) or ()), plug=tuple(couplers.get(PLUG) or ()))
+
+
+def _plug_sourced(coupler_chs, name: str) -> list[ChannelDefinition]:
+    """Link channels the plug side sends (`downlink` written from the socket side)."""
+    return [c for c in coupler_chs if not is_local_channel(c, name) and not c.direction_or
+            and c.direction == frozenset({_DOWN}) and not c.passthrough]
+
+
+def _relayed(coupler_chs, name: str) -> list[ChannelDefinition]:
+    """Link channels the socket side relays from the remote (`downlink_pt`)."""
+    return [c for c in coupler_chs if not is_local_channel(c, name) and c.passthrough]
+
+
+def _delivered_to_plug(coupler_chs, name: str) -> list[ChannelDefinition]:
+    """Link channels a plug side receives (`downlink_pt` and `uplink` written from the socket side)."""
+    return [c for c in coupler_chs if not is_local_channel(c, name) and not c.direction_or
+            and (c.passthrough or c.direction == frozenset({_UP}))]
+
+
+def check_supported_couplers(type_base, supported: dict) -> None:
+    """Generic names, one meaning; one source: LinkError otherwise.
+
+    The same name in two couplers is one channel: same type, value and zeroAt.
+    A channel of the machine type comes from the remote: a coupler that says
+    the plug side sends it gives it two sources.
+    """
+    from .generator import _render_value
+
+    seen: dict[str, tuple[str, ChannelDefinition]] = {}
+    for name, chs in supported.items():
+        for c in chs:
+            if is_local_channel(c, name):
+                continue
+            if c.id in seen:
+                other, o = seen[c.id]
+                if (o.type, _render_value(o, o.type), o.zero_at_neutral) != \
+                        (c.type, _render_value(c, c.type), c.zero_at_neutral):
+                    raise LinkError(f"channel {c.id!r}: couplers {other!r} and {name!r} disagree "
+                                    f"(same name, one channel: same type, value and zeroAt)")
+            else:
+                seen[c.id] = (name, c)
+
+    from_remote = {c.id for c in type_base if c.scope == "BASE" and c.direction == frozenset({_DOWN})}
+    for name, chs in supported.items():
+        for c in _plug_sourced(chs, name):
+            if c.id in from_remote:
+                raise LinkError(f"channel {c.id!r}: two sources, the remote (machine type) and the plug "
+                                f"side of the coupler {name!r}")
+
+
+def remote_commands(type_base, supported: dict, plugs: dict | None = None) -> list[ChannelDefinition]:
+    """What the remote sends, machine view: the only channels of the remote link.
+
+    The inputs of the machine type, and the commands the supported couplers
+    relay (one channel per name); never what a plug side sends, nor what the
+    plug of this type receives (one source per channel; who commands a carried
+    machine left stand-alone is an open question, WIP Remote firmware).  The
+    same with or without the coupler: a supported coupler is part of the contract.
+    """
+    from_plug = {c.id for name, chs in supported.items() for c in _plug_sourced(chs, name)}
+    from_plug |= {c.id for name, chs in (plugs or {}).items() for c in _delivered_to_plug(chs, name)}
+    commands: dict[str, ChannelDefinition] = {}
+    for c in type_base:
+        if c.scope == "BASE" and c.direction == frozenset({_DOWN}) and c.id not in from_plug:
+            commands[c.id] = c
+    for name, chs in supported.items():
+        for c in _relayed(chs, name):
+            if c.id not in from_plug:
+                commands.setdefault(c.id, c)
+    return [commands[cid] for cid in sorted(commands)]
+
+
+def compute_remote_link(machine_type: str, commands, side: str) -> LinkSet:
+    """The link machine (SOCKET) <-> remote (PLUG): the commands, sent by the remote."""
+    from .generator import _render_value
+
+    link = LinkSet(coupler=REMOTE_LINK_PREFIX + machine_type, role=side)
+    for c in commands:
+        link.channels.append(LinkChannel(id=c.id, type=c.type, candidate=c.candidate,
+                                         value=_render_value(c, c.type),
+                                         flow="from_peer" if side == SOCKET else "to_peer",
+                                         token=_token(c), zero_at_neutral=c.zero_at_neutral))
+    link.channels.sort(key=lambda c: (0 if c.type == "analog" else 1, c.candidate, c.id))
+    return link
 
 
 # =============================================================================
@@ -484,5 +603,10 @@ def render_peer_links_header(links: list[LinkSet], ids_header: str = "combus_ids
         body.append("};")
         body.append(f"}} // namespace {ns}")
         body.append("")
+    for link in links:
+        if link.coupler.startswith(REMOTE_LINK_PREFIX):
+            body.append("/// The link machine <-> remote of this node, whatever the machine type.")
+            body.append(f"static constexpr const ComPeerLink& kRemoteLink = {_cpp_ident(link.coupler)}::kLink;")
+            body.append("")
     body += ["} // namespace peer", "} // namespace combus", "", "// EOF"]
     return "\n".join(body) + "\n"

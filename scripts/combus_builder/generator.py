@@ -87,7 +87,7 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 
 from .canon.channels import ChannelDefinition
@@ -1034,7 +1034,10 @@ def generate(
     Returns the ViewSelection so callers (tests, diagnostics) can
     inspect what was generated.
     """
-    machine_view = channels                 # chantier 4: the contract of a remote is the BASE of the machine
+    contract = _remote_contract(channels, ctx)
+    if contract:                            # step 3.6: the commands of the supported couplers are in the contract
+        known = {ch.id for ch in channels}
+        channels = list(channels) + [c for c in contract[1] if c.id not in known]
     channels = _remote_view(channels, ctx)
     channels, couplers = _inject_couplers(channels, ctx)
     skipped: list[tuple[str, list[str]]] = []
@@ -1048,17 +1051,35 @@ def generate(
     emit_view(sel.base, out_dir, ctx, filename_prefix=filename_prefix)
     # projectVersion: (major, minor, dev) read from project_version.h by the
     # caller; None keeps the md5.py placeholder (tests, ad-hoc calls).
-    md5_sel = sel
-    if _is_remote(ctx):
-            # Chantier 4 (R3): the BASE view of a remote is the BASE of the
-            # machine type, mirrored; its contract is that BASE as written, so
-            # its BASE MD5 is hashed on the machine view (the same on both
-            # ends).  The generated code keeps the mirrored directions.
-        md5_sel = replace(sel, base=select_views(resolve_requires(machine_view, ctx, [])).base)
-    hashes = _emit_md5_files(md5_sel, out_dir, filename_prefix, project_version)
-    _print_set_hashes(md5_sel, hashes, filename_prefix)
-    _emit_peer_links(active, couplers, ctx, out_dir, filename_prefix)
+    hashes = _emit_md5_files(sel, out_dir, filename_prefix, project_version)
+    _print_set_hashes(sel, hashes, filename_prefix)
+    _emit_peer_links(active, couplers, contract, ctx, out_dir, filename_prefix)
     return sel
+
+
+def _remote_contract(channels: list[ChannelDefinition], ctx: BuildContext):
+    """Link rework 3.6 — (machine type, commands) of the link with the remote, or None.
+
+    None for a build without category or machine type.  Checks the couplers
+    the type supports (.mtype): one meaning per name, one source per channel.
+    """
+    from . import links as links_module
+    from .links import NODE_CATEGORIES, LinkError, check_supported_couplers, remote_commands
+    from .machine_type import detect_machine_type
+
+    defines = set(ctx.defines) | set(ctx.defines_with_value or {})
+    machine_type = detect_machine_type(ctx)
+    if machine_type is None or not any(c in defines for c in NODE_CATEGORIES):
+        return None
+    try:
+        config = links_module.load_machine_type_config(ctx.buildroot, machine_type)
+        supported = {name: links_module.load_coupler_channels(ctx.buildroot, name) for name in config.socket}
+        type_base = [ch for ch in channels if ch.scope == "BASE"]
+        check_supported_couplers(type_base, supported)
+    except LinkError as e:
+        raise GeneratorError(f"contract of the machine type {machine_type!r}: {e}") from e
+    plugs = {name: links_module.load_coupler_channels(ctx.buildroot, name) for name in config.plug}
+    return machine_type, remote_commands(type_base, supported, plugs)
 
 
 def _is_remote(ctx: BuildContext) -> bool:
@@ -1092,20 +1113,29 @@ def _inject_couplers(channels: list[ChannelDefinition], ctx: BuildContext):
     checked: a wrong env is refused explicitly, never ignored.
     """
     from . import links as links_module
-    from .links import PLUG, PLUG_FLAG_PREFIX, REMOVED_PEER_FLAG_PREFIX, SOCKET_FLAG_PREFIX, LinkError, \
+    from .links import PLUG, PLUG_FLAG_PREFIX, REMOVED_PEER_FLAG_PREFIX, SOCKET, SOCKET_FLAG_PREFIX, LinkError, \
         coupler_sides, inject_coupler_channels, is_passive_coupler, node_category
+    from .machine_type import detect_machine_type
 
     defines = set(ctx.defines) | set(ctx.defines_with_value or {})
     if not any(d.startswith((SOCKET_FLAG_PREFIX, PLUG_FLAG_PREFIX, REMOVED_PEER_FLAG_PREFIX)) for d in defines):
         return channels, {}
     try:
         node_category(defines)
+        machine_type = detect_machine_type(ctx)
+        sides = coupler_sides(defines)
+        if sides and machine_type is None:
+            raise LinkError("a coupler needs a machine type that supports it: set -D MACHINE_TYPE_<TYPE>")
         couplers = {}
-        for name, side in coupler_sides(defines).items():
+        for name, side in sides.items():
             coupler_chs = links_module.load_coupler_channels(ctx.buildroot, name)
             if side == PLUG and is_passive_coupler(coupler_chs, name):
                 raise LinkError(f"coupler {name!r} is passive (no link channel): it has a socket only, "
                                 f"never a plug")
+            config = links_module.load_machine_type_config(ctx.buildroot, machine_type)
+            if name not in (config.socket if side == SOCKET else config.plug):
+                raise LinkError(f"coupler {name!r}: its {side} is not supported by the machine type "
+                                f"{machine_type!r} (declare it in {machine_type}.mtype)")
             couplers[name] = (side, coupler_chs)
             channels = inject_coupler_channels(channels, coupler_chs, name, side)
     except LinkError as e:
@@ -1113,15 +1143,15 @@ def _inject_couplers(channels: list[ChannelDefinition], ctx: BuildContext):
     return channels, couplers
 
 
-def _emit_peer_links(channels: list[ChannelDefinition], couplers, ctx: BuildContext, out_dir: Path,
+def _emit_peer_links(channels: list[ChannelDefinition], couplers, contract, ctx: BuildContext, out_dir: Path,
                      filename_prefix: str) -> None:
     """Link rework 3.1a / 3.4a — the links through the couplers of this node (combus_peer_links.h).
 
     Always written (empty without coupler), so that the build has a fixed set
     of artefacts.  One build-log line per link: its MD5 and its size.
     """
-    from .links import LinkError, check_single_source, compute_coupler_link, is_passive_coupler, link_md5, \
-        render_peer_links_header
+    from .links import PLUG, SOCKET, LinkError, check_single_source, compute_coupler_link, compute_remote_link, \
+        is_passive_coupler, link_md5, render_peer_links_header
 
     links = []
     try:
@@ -1135,6 +1165,13 @@ def _emit_peer_links(channels: list[ChannelDefinition], couplers, ctx: BuildCont
             board = f"  [{filename_prefix}]" if filename_prefix else ""
             print(f"[combus_builder] set LINK {name} ({link.role})  md5={link_md5(link)}  "
                   f"A{n_analog}+D{n_digital}{board}")
+            links.append(link)
+        if contract and contract[1]:        # step 3.6: the link with the remote, its own contract
+            machine_type, commands = contract
+            link = compute_remote_link(machine_type, commands, PLUG if _is_remote(ctx) else SOCKET)
+            print(f"[combus_builder] set LINK {link.coupler} ({link.role})  md5={link_md5(link)}  "
+                  f"A{sum(1 for c in link.channels if c.type == 'analog')}"
+                  f"+D{sum(1 for c in link.channels if c.type == 'digital')}")
             links.append(link)
         check_single_source(links)          # step 3.2b: one source per channel on the node
     except LinkError as e:
