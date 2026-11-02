@@ -1,10 +1,10 @@
 /*!****************************************************************************
  * @file  combus_peer_link_defs.h
- * @brief Definitions of a link between two nodes through a coupler (link rework 3.1b, 3.4a).
+ * @brief Definitions of a link between two nodes with its own table.
  *
- * @details Pure type definitions, filled by the builder (combus_peer_links.h,
- *   one ComPeerLink per coupler of the node, -D HAS_COUPLER_SOCKET_<NAME> or
- *   HAS_COUPLER_PLUG_<NAME>).
+ * @details Pure type definitions, filled by the builder (combus_peer_links.h): one
+ *   ComPeerLink per active coupler of the node (-D HAS_COUPLER_SOCKET_<NAME> or
+ *   HAS_COUPLER_PLUG_<NAME>), and one for the link machine <-> remote.
  *******************************************************************************///
 #pragma once
 
@@ -12,12 +12,11 @@
 #include <stdbool.h>
 
 
-
 /**
- * @brief Kind of address that identifies a node on a link (link rework 3.4b).
+ * @brief Kind of address that identifies a node on a link.
  *
- * @details Common to the project, open to other transports: MAC48 is the
- *   factory MAC of the ESP32 (the same on a wire and over the air).
+ * @details Common to the project, open to other transports: MAC48 is the factory
+ *   MAC of the ESP32 (the same on a wire and over the air).
  */
 
 enum class LinkAddrType : uint8_t {
@@ -27,7 +26,7 @@ enum class LinkAddrType : uint8_t {
 
 
 /**
- * @brief Identity of a node on a link (link rework 3.4b).
+ * @brief Identity of a node on a link.
  */
 
 struct NodeAddr {
@@ -37,12 +36,11 @@ struct NodeAddr {
 
 
 /**
- * @brief Role of this node on a link through a coupler: the side of its coupler (link rework 3.4c, 3.5).
+ * @brief Role of this node on a link: the side of its coupler.
  *
- * @details Written by the builder from the side declared for the coupler
- *   (HAS_COUPLER_SOCKET_<NAME> or HAS_COUPLER_PLUG_<NAME>).  The pairing
- *   depends on it: the socket side (it carries) sends the requests, the plug
- *   side (it is carried) answers them.
+ * @details Written by the builder.  The pairing depends on it: the socket side (it
+ *   carries) sends the requests, the plug side (it is carried) answers them.  On the
+ *   link machine <-> remote, the machine is the socket and the remote the plug.
  */
 
 enum class ComLinkRole : uint8_t {
@@ -54,8 +52,7 @@ enum class ComLinkRole : uint8_t {
 /**
  * @brief A contract of a link: the MD5 of the stable set and of the next set.
  *
- * @details The next set adds the candidates (chantier 2.2b); without
- *   candidate, both MD5 are the same.
+ * @details The next set adds the candidates; without candidate, both MD5 are the same.
  */
 
 struct ComLinkMd5 {
@@ -67,8 +64,7 @@ struct ComLinkMd5 {
 /**
  * @brief One half of the common frame of a link (analog, or digital), and its table.
  *
- * @details The stable positions are a prefix of the frame: the candidates
- *   follow them.
+ * @details The stable positions are a prefix of the frame: the candidates follow them.
  */
 
 struct ComLinkTable {
@@ -82,22 +78,21 @@ struct ComLinkTable {
 /**
  * @brief The common frame of a link between two nodes, and its table.
  *
- * @details The channel set of the link is the full coupler, in wire order
- *   (analog then digital, stable before candidate).  Each wire position maps
- *   to a channel of this node's ComBus, and says whether this node receives it
- *   on the link or sends it.
+ * @details The channels of the link are in wire order (analog then digital, stable
+ *   before candidate).  Each wire position maps to a channel of this node's ComBus, and
+ *   says whether this node receives it on the link or sends it.
  *
- *   The MD5 carries the coupler and a side (socket or plug): this node
- *   announces its side (`announced`) and expects the other one (`expected`),
- *   so two sockets, or two plugs, linked by mistake refuse each other.
+ *   The MD5 carries the link and a side (socket or plug): this node announces its side
+ *   (`announced`) and expects the other one (`expected`), so two sockets, or two plugs,
+ *   linked by mistake refuse each other.
  *
- *   A link without this descriptor carries the prefix of its scope's view,
- *   wire position = channel ID (BASE or SYSTEM).
+ *   A link without this descriptor carries the prefix of its scope's view, wire
+ *   position = channel ID (BASE or SYSTEM).
  */
 
 struct ComPeerLink {
-    const char*  coupler;     ///< coupler of the link (directory name)
-    ComLinkRole  role;        ///< role of this node on the link (3.4c)
+    const char*  coupler;     ///< name of the link: the coupler (directory name), or remote_<type>
+    ComLinkRole  role;        ///< role of this node on the link
     ComLinkMd5   announced;   ///< MD5 announced by this node (its side)
     ComLinkMd5   expected;    ///< MD5 expected from the other end (the other side)
     ComLinkTable analog;      ///< analog half of the frame (AnalogComBusID)

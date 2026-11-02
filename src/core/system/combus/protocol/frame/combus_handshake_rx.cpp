@@ -1,16 +1,7 @@
 /******************************************************************************
  * @file  combus_handshake_rx.cpp
- * @brief RX side — decode a handshake frame from the ring buffer, compare
- *        the MD5 + major version against the locally-generated copy, update
- *        the contract of the link (chantier 1.2).
- *
- * @details Format-md5 helper (`combus_handshake_formatMd5Hex`) is owned by
- *   combus_handshake.cpp.  Boot banner is also owned by the umbrella and
- *   invoked on the first decode attempt.
- *
- *   Scope EXPLICITLY out of this revision (to be added later):
- *     - friend-cache update ("amies" / sender address);
- *     - high-priority QoS routing.
+ * @brief ComBus handshake, RX side: decode a frame, compare its MD5 and major
+ *        version, update the contract of the link.
  *****************************************************************************/
 
 #include "combus_handshake_rx.h"
@@ -23,16 +14,13 @@
 #include <core/system/debug/logging/debug.h>
 
 
+
 // =============================================================================
-// 1. RX INTERNAL — RING READ HELPER
+// 1. INTERNAL HELPERS
 // =============================================================================
 
-/**
- * @brief Read the byte at logical ring index `i` (0 = oldest).
- *
- * @details Local helper duplicated from combus_rx.cpp (intentional — the
- *   handshake module owns its decoder, no dependency on RX internals).
- */
+    // Read the byte at logical ring index `i` (0 = oldest).  Local on purpose: the
+    // handshake owns its decoder, with no dependency on the internals of combus_rx.
 static uint8_t ringByteAt(const uint8_t* ringBuf,
                           uint8_t        ringBufSize,
                           uint8_t        ringHead,
@@ -42,14 +30,6 @@ static uint8_t ringByteAt(const uint8_t* ringBuf,
 }
 
 
-// =============================================================================
-// 2. RX INTERNAL — MD5 + VERSION COMPARE + LOG
-// =============================================================================
-
-/**
- * @brief Compare an on-wire MD5 + major version against the locally-generated
- *        copy.  See combus_handshake_rx.h.
- */
 bool combus_handshake_compare(
     const uint8_t* localMd5,
     const uint8_t* wireMd5,
@@ -58,8 +38,7 @@ bool combus_handshake_compare(
         // Bring-up bypass: every handshake is accepted (banner logged at boot).
     if (COMBUS_MD5_CHECK_DISABLE) { return true; }
 
-        // LY4 — a null local MD5 means the link was not initialised through
-        // combus_protocol_init(): config error, never substituted silently.
+        // Config error, never replaced silently.
     if (!localMd5) {
         sys_log_err(
             "[COMBUS_HANDSHAKE] FATAL: CombusHandshakeContext::expected.stable is null "
@@ -97,7 +76,7 @@ static void logRefusal( CombusHandshakeContext* ctx, const uint8_t* wireMd5,
 
 
 // =============================================================================
-// 3. RX ENTRY POINT — tryDecode
+// 2. DECODE
 // =============================================================================
 
 uint8_t combus_handshake_tryDecode(
@@ -110,49 +89,39 @@ uint8_t combus_handshake_tryDecode(
     if (!ctx || !ringBuf || ringBufSize == 0u) { return 0u; }
     if (ringCount == 0u)                       { return 0u; }
 
-    // Boot banner on first call (cheap flag-guarded, per-link).
     combus_handshake_logBootWarningIfNeeded(ctx);
 
-
-    // --- 1. Expected wire length for a handshake frame ---
+        // 1. A complete frame is required: otherwise retry on the next poll
     const uint8_t expectedLen = CombusFrameHandshakeMinLen;
 
     if (ringCount < expectedLen) {
-        // Not enough bytes yet — caller will retry on the next poll.
         return 0u;
     }
 
-    // --- 2. Copy candidate bytes to a linear scratch buffer ---
-    // We cannot CRC-validate a ring buffer in place without unrolling the
-    // modulo, so we linearise once.  Allocates sizeof(expectedLen) on the
-    // stack; safe for any legal ComBus frame size (≤ 255).
+        // 2. Copy the candidate to a linear buffer, for the CRC
     uint8_t linear[CombusFrameHandshakeMinLen];
 
     for (uint8_t i = 0u; i < expectedLen; ++i) {
         linear[i] = ringByteAt(ringBuf, ringBufSize, ringHead, i);
     }
 
-    // --- 3. Validate CRC-8/MAXIM over the header + payload portion ---
+        // 3. Validate the CRC: on a mismatch, drop one byte and re-synchronise
     uint8_t crcExpected = linear[expectedLen - 1u];
     uint8_t crcActual   = combus_frame_crc8(linear, (uint8_t)(expectedLen - 1u));
     if (crcActual != crcExpected) {
-        // Same semantics as combus_rx.cpp: advance by 1 byte past the SOF
-        // sentinel so we never loop forever on a corrupted candidate.
         ringHead  = (uint8_t)((ringHead + 1u) % ringBufSize);
         ringCount = (uint8_t)(ringCount - 1u);
         sys_log_info("[COMBUS_HANDSHAKE] CRC mismatch — dropped 1B, re-sync\n");
         return 0u;
     }
 
-    // --- 4. CRC OK — consume the validated frame from the ring buffer ---
+        // 4. Valid frame: consume it
     ringHead  = (uint8_t)((ringHead + expectedLen) % ringBufSize);
     ringCount = (uint8_t)(ringCount - expectedLen);
 
     combus_handshake_internal::markEverReceived(ctx);
 
-    // --- 5. Request or ACK, legacy or NEXT; MD5 + major compared on EVERY handshake.
-    //    Layout: [0..15] = MD5 (next set for a NEXT handshake), [16] = major,
-    //    [17] = minor, [18] = dev.
+        // 5. Read the frame: request or ACK, legacy or NEXT, MD5 and version
     const uint8_t  flags         = linear[sizeof(CombusFrameSof) + offsetof(CombusFrameHeader, flags)];
     const bool     isAck         = (flags & kCombusHandshakeFlagAck)  != 0u;
     const bool     isNext        = (flags & kCombusHandshakeFlagNext) != 0u;
@@ -163,15 +132,13 @@ uint8_t combus_handshake_tryDecode(
     const uint8_t  wireMinor = linear[payloadOffset + 17u];
     const uint8_t  wireDev   = linear[payloadOffset + 18u];
 
-    // --- 6. A bidirectional end answers every request with an ACK of its kind,
-    //    matching or not (never an ACK).
+        // 6. A bidirectional end answers every request with an ACK of its kind, matching or not
     if (!isAck && ctx->bidirectional) {
         if (isNext) { ctx->ackPendingNext = true; }
         else        { ctx->ackPending     = true; }
     }
 
-    // --- 7. NEXT handshake (chantier 2.2b): it only decides the mode, never the
-    //    contract.  Without candidates this end stays legacy.
+        // 7. NEXT handshake: it only decides the mode, never refuses the contract
     if (isNext) {
         const bool nextMatch = ctx->hasCandidates
                             && combus_handshake_compare(ctx->expected.next, wireMd5, wireMajor);
@@ -202,15 +169,15 @@ uint8_t combus_handshake_tryDecode(
         ctx->nextMode = true;
     } else {
 
-        // --- 8. Legacy handshake: refused, the contract is (back to) UNKNOWN, logged once.
+            // 8. Legacy handshake: refused, the contract is (back to) UNKNOWN
         if (!combus_handshake_compare(ctx->expected.stable, wireMd5, wireMajor)) {
             logRefusal(ctx, wireMd5, wireMajor, wireMinor);
             combus_handshake_internal::dropContract(ctx, "handshake refused");
             return expectedLen;
         }
 
-        // Accepted.  A bidirectional end needs the ACK of its own request (proof
-        // that the peer receives it); a receive-only end takes the request.
+            // Accepted: a bidirectional end needs the ACK of its own request (proof
+            // that the peer receives it); a receive-only end takes the request.
         if (ctx->bidirectional && !isAck) { return expectedLen; }
 
         if (isAck) { ctx->lastAckMs = millis(); }
@@ -218,7 +185,7 @@ uint8_t combus_handshake_tryDecode(
         ctx->nextMode = false;
     }
 
-    // --- 9. The contract becomes STABLE, in the mode chosen above ---
+        // 9. The contract becomes STABLE, in the mode chosen above
     combus_handshake_internal::markContractValidated(ctx);
     combus_handshake_internal::stopBurst(ctx);
     ctx->lastAckMs       = millis();     // the ACK window starts now
@@ -234,7 +201,5 @@ uint8_t combus_handshake_tryDecode(
 
     return expectedLen;
 }
-
-
 
 // EOF combus_handshake_rx.cpp

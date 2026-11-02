@@ -1,29 +1,10 @@
 /******************************************************************************
  * @file  combus_handshake.cpp
- * @brief ComBus handshake umbrella — shared helpers (boot banner + MD5 hex
- *        formatting + status flag).
+ * @brief ComBus handshake: shared helpers and changes of the per-link context.
  *
- * @details The RX and TX paths live in their own translation units
- *   (combus_handshake_rx.cpp, combus_handshake_tx.cpp) — mirror of the
- *   combus_rx.cpp / combus_tx.cpp split.  This .cpp owns only the cross-
- *   cutting state and helpers shared by both sides:
- *
- *     - s_handshakeEverReceived          (status flag)
- *     - s_bootWarningLogged              (one-shot flag for the boot banner)
- *     - combus_handshake_logBootWarningIfNeeded()
- *     - combus_handshake_ever_received()
- *     - combus_handshake_formatMd5Hex()  (32-char hex writer, used by both
- *                                          RX compare and TX build paths)
- *
- *   Payload layout and side contracts live in:
- *     - combus_handshake.h        (umbrella)
- *     - combus_handshake_rx.h/cpp (decode + CRC + compare)
- *     - combus_handshake_tx.h/cpp (frame build + sendOnce)
- *
- *   Scope EXPLICITLY out of this revision (to be added later):
- *     - friend-cache update ("amies" / sender address);
- *     - automatic burst at boot;
- *     - high-priority QoS routing.
+ * @details The RX and TX paths live in their own files (combus_handshake_rx.cpp,
+ *   combus_handshake_tx.cpp).  The state lives in CombusHandshakeContext, one
+ *   per link: this file holds none.
  *****************************************************************************/
 
 #include "combus_handshake.h"
@@ -35,61 +16,18 @@
 #include <core/system/debug/logging/debug.h>
 
 
-// =============================================================================
-// 0. COMPILE-TIME GUARDS
-// =============================================================================
-
-// Handshake payload length MUST equal what the auto-generated header
-// advertises as the wire length.  This is the SOLE guard — the previous
-// `static_assert(..., 18u)` was redundant with the one below and has been
-// removed: 18u is the wire magic that scripts/combus_builder/md5.py writes,
-// but the authoritative source of truth lives in the generated header itself.
+    // The generated header is the source of truth of the wire length.
 static_assert(kCombusHandshakePayloadLen ==
                    combus::wire::kCombusHandshakeWirePayloadLen,
                "kCombusHandshakePayloadLen disagrees with "
                "combus::wire::kCombusHandshakeWirePayloadLen.");
 
-// COMBUS_MD5_CHECK_DISABLE is defined in combus_handshake.h (umbrella) as
-// the single source of truth.
-
 
 
 // =============================================================================
-// 1. PERSISTENT STATE
-// =============================================================================
-//
-// P3 — handshake state is per ComBus link instance, NOT a static global.
-// The umbrella helpers below take a `CombusHandshakeContext*` and read /
-// write the corresponding fields.  See combus_handshake.h §5 for the
-// rationale (multiple independent ComBus interfaces per machine).
-//
-// The boot-warning helper is the only one that still uses a static guard
-// (s_bootWarningLogged) — it is a one-shot log line, not per-link state.
-// The guard is moved into the context so it is also per-link; the umbrella
-// helper takes the context as a parameter.
-
-
-
-
-// =============================================================================
-// 2. SHARED HELPERS
+// 1. SHARED HELPERS
 // =============================================================================
 
-/**
- * @brief Format a 16-byte MD5 as a 32-char lowercase hex string into `out`.
- *
- * @details `out` MUST have room for at least 33 bytes (32 hex chars + NUL).
- *   Always NUL-terminates.  Used by both the boot banner and the RX/TX
- *   log lines so a single canonical representation is produced across the
- *   whole module.
- *
- *   Kept header-only-ish (this is the .cpp definition) so the binary
- *   cost is paid once, but the helper stays callable from any side TU
- *   via combus_handshake.h.
- *
- * @param[in]  md5  Pointer to 16 bytes (the MD5).
- * @param[out] out  Caller-owned buffer, must be >= 33 bytes.
- */
 void combus_handshake_formatMd5Hex(const uint8_t md5[16], char out[33])
 {
     static constexpr char hex[] = "0123456789abcdef";
@@ -101,17 +39,11 @@ void combus_handshake_formatMd5Hex(const uint8_t md5[16], char out[33])
 }
 
 
-/**
- * @brief Emit an impossible-to-miss boot banner when MD5 check is disabled.
- *
- * @details Invoked from the first RX or TX call (cheap flag-guarded).  We
- *   do NOT rely on a global ctor (fragile init order on Arduino) — the
- *   idempotence is owned by `ctx->bootWarningLogged` (per-link).
- *
- *   The banner uses repeated markers + uppercase so a quick `grep` on a
- *   saved serial log immediately reveals the bypass is active.
- *
- * @param ctx  Per-link handshake context (must not be null).
+/*
+ * Invoked from the first decode attempt rather than from a global constructor
+ * (fragile init order on Arduino).  With the compare disabled, the banner uses
+ * repeated markers and uppercase so a `grep` on a saved serial log reveals the
+ * bypass at once.
  */
 void combus_handshake_logBootWarningIfNeeded(CombusHandshakeContext* ctx)
 {
@@ -144,8 +76,9 @@ void combus_handshake_logBootWarningIfNeeded(CombusHandshakeContext* ctx)
 }
 
 
+
 // =============================================================================
-// 3. PUBLIC STATUS HELPER
+// 2. STATUS
 // =============================================================================
 
 bool combus_handshake_is_contract_validated(const CombusHandshakeContext* ctx) {
@@ -155,12 +88,8 @@ bool combus_handshake_is_contract_validated(const CombusHandshakeContext* ctx) {
 
 
 // =============================================================================
-// 4. BRIDGE TO THE RX / TX TUs
+// 3. INTERNAL BRIDGE
 // =============================================================================
-//
-// All setters take a `CombusHandshakeContext*` and mutate the per-link
-// state.  Null pointer is a no-op (defensive — the umbrella helpers are
-// called from many places).
 
 namespace combus_handshake_internal {
     void markEverReceived(CombusHandshakeContext* ctx) {
@@ -169,7 +98,7 @@ namespace combus_handshake_internal {
     void markContractValidated(CombusHandshakeContext* ctx) {
         if (ctx) { ctx->contractValidated = true; }
     }
-        // Chantier 2.2b — NEXT requests first, when the link has candidates.
+        // NEXT requests first, when the link has candidates.
     static uint8_t nextTries(const CombusHandshakeContext* ctx) {
         return ctx->hasCandidates ? (uint8_t)(kCombusHandshakeBurstCount + kCombusHandshakeNextRetries) : 0u;
     }
@@ -194,13 +123,11 @@ namespace combus_handshake_internal {
                      ctx->name ? ctx->name : "?", reason);
     }
 
-    // P3 — burst lifecycle accessors.  Per-link state, see
-    // CombusHandshakeContext §3 in combus_handshake.h.
     void startBurst(CombusHandshakeContext* ctx) {
         if (!ctx) { return; }
         ctx->burstActive    = true;
         ctx->burstRemaining = kCombusHandshakeBurstCount;
-        ctx->lastBurstMs    = 0u;  // 0 → first emission on next tx_update()
+        ctx->lastBurstMs    = 0u;  // 0: first emission on the next update
         ctx->lastRequestMs  = 0u;  // the periodic requests count from the end of the burst
     }
     void stopBurst(CombusHandshakeContext* ctx) {
@@ -209,9 +136,5 @@ namespace combus_handshake_internal {
         ctx->burstRemaining = 0u;
     }
 }
-
-
-
-
 
 // EOF combus_handshake.cpp

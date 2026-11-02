@@ -1,53 +1,42 @@
 /******************************************************************************
  * @file  combus_handshake_tx.h
- * @brief TX side of the ComBus handshake frame dispatcher.
+ * @brief ComBus handshake, TX side: boot burst, periodic requests and ACK.
  *
- * @details Mirror of combus_tx.{h,cpp} — split to keep each side of the
- *   handshake in its own translation unit.  See combus_handshake.h for the
- *   full design contract (payload layout, scope, etc.).
+ * @details Constants and per-link context: combus_handshake.h.
  *****************************************************************************/
 #pragma once
 
 #include <stdint.h>
 
-#include <core/system/combus/protocol/frame/combus_handshake.h> // umbrella (constants, logBootWarning, formatMd5Hex)
+#include <core/system/combus/protocol/frame/combus_handshake.h> // constants, CombusHandshakeContext
 #include <core/system/hw/node_com.h>                  // NodeCom
 
 
-// =============================================================================
-// TX BURST, REQUESTS AND ACK — P3, chantier 1.2
-// =============================================================================
-
 /**
- * @brief Drive the handshake emission of the given ComBus link.
+ * @brief Drive the handshake emission of a link, on every poll of combus_tx_update().
  *
- * @details Called from `combus_tx_update()` on every poll.  In this order:
- *     1. a request received by the RX side (`ctx->ackPending`) is answered
- *        with an ACK (flags = kCombusHandshakeFlagAck, local MD5);
+ * @details In this order:
+ *     1. a request received by the RX side is answered with an ACK of its kind;
  *     2. while the boot burst is active: one request every
- *        `kCombusHandshakeBurstPeriodMs` (100 ms), `kCombusHandshakeBurstCount`
- *        times, stopped as soon as the contract is STABLE.  The first one is
- *        sent on the very first call after `startBurst()`.  Skipped when
- *        `COMBUS_HANDSHAKE_BURST_DISABLE` is non-zero;
- *     3. after the burst: one request every `kCombusHandshakePeriodMs`
- *        (250 ms), whatever the state of the contract — it establishes the
- *        contract, it asks for the periodic ACK, and on a transmit-only end
- *        it lets a receiver started later establish within one period.
+ *        kCombusHandshakeBurstPeriodMs, kCombusHandshakeBurstCount times, stopped
+ *        as soon as the contract is STABLE.  The first one leaves on the first
+ *        call after startBurst().  Skipped with COMBUS_HANDSHAKE_BURST_DISABLE;
+ *     3. after the burst: one request every kCombusHandshakePeriodMs, whatever the
+ *        state of the contract.  It establishes the contract, asks for the periodic
+ *        ACK, and on a transmit-only end lets a receiver started later establish
+ *        within one period.
  *
- *   Per-link state — see CombusHandshakeContext.  Multiple independent
- *   ComBus interfaces may coexist in the same machine; this function
- *   MUST NEVER be called with a shared context across links.
+ *   These frames are extra `write()` calls, apart from the timer of the control
+ *   frames.
  *
- *   No-op when `ctx` is null, or `nodeCom` is null or has no `write`
- *   callback.
+ * @param[in] ctx      Per-link handshake context, never shared across links.
+ * @param[in] nodeCom  Transport to write through.
  *
- * @param[in] ctx      Per-link handshake context (must not be null).
- * @param[in] nodeCom  Transport interface to write through.
- *
- * @return Number of bytes written, or 0 if no emission happened.
+ * @return Number of bytes written; 0 if nothing left, or if `ctx`, `nodeCom`, its
+ *   `write` callback or the MD5 of the link is missing (link not initialised).
  */
+
 uint8_t combus_handshake_tx_update( CombusHandshakeContext* ctx,
                                     NodeCom*                nodeCom );
 
 // EOF combus_handshake_tx.h
-
