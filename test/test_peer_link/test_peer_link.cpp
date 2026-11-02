@@ -1300,6 +1300,95 @@ static void test_view_row2_passive_coupler_snapshot(void) {
 
 
 // =============================================================================
+// PAIRED PEER (link rework 3.4, frames of another identity)
+//
+// Validated by the owner (2026-11-02): a data frame carries no sender, so the
+// filter belongs to the transport.  Once COUPLED, the identity of the peer is
+// kept and handed to the transport (NodeCom::setPeer, a fake one here), cleared
+// when detached.  A coupling frame of another identity is counted and journaled.
+// TODO(chantier 5, ESP-NOW): prove the real filtering with two nodes in radio.
+// =============================================================================
+
+static uint8_t s_setPeerAddr[6] = {};
+static uint8_t s_setPeerLen     = 0xFFu;   // 0xFF: never called
+static uint8_t s_setPeerCalls   = 0u;
+
+static void fakeSetPeer(void* ctx, const uint8_t* addr, uint8_t len) {
+    (void)ctx;
+    s_setPeerCalls++;
+    s_setPeerLen = addr ? len : 0u;
+    if (addr) { memcpy(s_setPeerAddr, addr, 6u); }
+}
+
+static void startPeerTest(void) {
+    combus_couplings_watch(nullptr, 0u);
+    s_setPeerLen   = 0xFFu;
+    s_setPeerCalls = 0u;
+    s_com->setPeer = fakeSetPeer;
+    startCoupledLink();
+}
+
+/** Row 1: paired: the peer is kept and handed to the transport. */
+static void test_peer_row1_handed_to_the_transport(void) {
+    startPeerTest();
+    hitch(true);
+    const PairingState s = answerRequests(1500u, &kTrailerA, kAllRounds);
+    s_com->setPeer = nullptr;
+    TEST_ASSERT_TRUE(s == PairingState::COUPLED);
+    TEST_ASSERT_EQUAL_UINT8(1u, s_setPeerCalls);
+    TEST_ASSERT_EQUAL_UINT8(6u, s_setPeerLen);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(kTrailerA.bytes, s_setPeerAddr, 6u);
+    ComLinkView v;
+    TEST_ASSERT_TRUE(combus_links_view(kLinkIdx, v));
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(kTrailerA.bytes, v.pairing.peer.bytes, 6u);
+}
+
+/** Row 2: detached: the transport forgets the peer. */
+static void test_peer_row2_cleared_when_detached(void) {
+    startPeerTest();
+    hitch(true);
+    const PairingState s = answerRequests(1500u, &kTrailerA, kAllRounds);
+    hitch(false);
+    s_com->setPeer = nullptr;
+    TEST_ASSERT_TRUE(s == PairingState::COUPLED);
+    TEST_ASSERT_EQUAL_UINT8(2u, s_setPeerCalls);
+    TEST_ASSERT_EQUAL_UINT8(0u, s_setPeerLen);
+    ComLinkView v;
+    TEST_ASSERT_TRUE(combus_links_view(kLinkIdx, v));
+    TEST_ASSERT_TRUE(v.pairing.peer.type == LinkAddrType::NONE);
+}
+
+/** Row 3: a failed pairing gives the transport no peer. */
+static void test_peer_row3_no_peer_when_failed(void) {
+    startPeerTest();
+    hitch(true);
+    const PairingState s = answerRequests(1500u, nullptr, 0u);
+    s_com->setPeer = nullptr;
+    TEST_ASSERT_TRUE(s == PairingState::FAILED);
+    TEST_ASSERT_EQUAL_UINT8(0u, s_setPeerCalls);
+}
+
+/** Row 4: coupled, frames of another identity are counted; those of the peer are not; still COUPLED. */
+static void test_peer_row4_foreign_frames_counted(void) {
+    startPeerTest();
+    s_com->setPeer = nullptr;
+    hitch(true);
+    TEST_ASSERT_TRUE(answerRequests(1500u, &kTrailerA, kAllRounds) == PairingState::COUPLED);
+    sendCoupling(CouplingMsg::ANSWER, kTrailerA, 1u);
+    runLinks(40u);
+    ComLinkView v;
+    TEST_ASSERT_TRUE(combus_links_view(kLinkIdx, v));
+    TEST_ASSERT_EQUAL_UINT16(0u, v.pairing.foreignFrames);
+    sendCoupling(CouplingMsg::ANSWER, kTrailerB, 1u);
+    sendCoupling(CouplingMsg::REQUEST, kTrailerB, 2u);
+    runLinks(40u);
+    TEST_ASSERT_TRUE(combus_links_view(kLinkIdx, v));
+    TEST_ASSERT_EQUAL_UINT16(2u, v.pairing.foreignFrames);
+    TEST_ASSERT_TRUE(v.pairing.state == PairingState::COUPLED);
+}
+
+
+// =============================================================================
 // ACCESSORS OF THE LOGICAL VALUE (step S3-4)
 // =============================================================================
 
@@ -1457,6 +1546,11 @@ void setup() {
 
     RUN_TEST(test_view_row1_coupled_link_snapshot);
     RUN_TEST(test_view_row2_passive_coupler_snapshot);
+
+    RUN_TEST(test_peer_row1_handed_to_the_transport);
+    RUN_TEST(test_peer_row2_cleared_when_detached);
+    RUN_TEST(test_peer_row3_no_peer_when_failed);
+    RUN_TEST(test_peer_row4_foreign_frames_counted);
 
     UNITY_END();
 }

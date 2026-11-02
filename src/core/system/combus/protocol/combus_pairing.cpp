@@ -139,6 +139,8 @@ void conclude( ComLinkPairing& p, const CouplingDev& dev, PairingState state, co
     p.state = state;
     if (state == PairingState::COUPLED) {
         identify(p, dev);
+        p.peer          = p.cand[0].addr;      // the single candidate: the peer of this coupling
+        p.foreignFrames = 0u;
         sys_log_info("[COMBUS_PAIRING] %s: paired\n", dev.name);
     } else {
         sys_log_warn("[COMBUS_PAIRING] %s: %s (%s)\n", dev.name, combus_pairing_state_name(state), why);
@@ -166,6 +168,7 @@ PairingState combus_pairing_update( ComLinkPairing&    p,
         case TriggerStep::RELEASED:
             p.state = PairingState::DETACHED;
             p.id    = {};
+            p.peer  = {};
             return p.state;
         case TriggerStep::ENGAGED:
             p.retriesLeft = kCouplingRetries;
@@ -269,7 +272,15 @@ void combus_pairing_on_frame( ComLinkPairing&      p,
                               const CouplingFrame& frame,
                               uint32_t             now )
 {
-    if (p.state != PairingState::PAIRING) { return; }                     // COUPLED: coupling frames ignored (P8)
+        // --- COUPLED: coupling frames are ignored (P8); another identity means another
+        //    node on the medium: journal the first one, keep the count ---
+    if (p.state == PairingState::COUPLED && !sameAddr(frame.addr, p.peer)) {
+        if (p.foreignFrames == 0u) {
+            sys_log_warn("[COMBUS_PAIRING] %s: coupling frame from another identity while coupled\n", dev.name);
+        }
+        if (p.foreignFrames < 0xFFFFu) { p.foreignFrames++; }
+    }
+    if (p.state != PairingState::PAIRING) { return; }
     if (frame.round == 0u || frame.round > kCouplingRounds) { return; }
     const uint8_t bit = (uint8_t)(1u << (frame.round - 1u));
 

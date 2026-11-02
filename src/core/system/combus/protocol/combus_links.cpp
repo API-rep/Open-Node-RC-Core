@@ -353,11 +353,20 @@ static void followCoupling( uint8_t i, ComBus& bus )
     if (is == PairingState::COUPLED) {
         rt.watch.watchStartMs = now;
         rt.watch.reportedLost = false;
+            // The transport may now keep the frames of the paired peer only.
+            // TODO(chantier 5, ESP-NOW): effective with the ESP-NOW adapter; a wire has no setPeer.
+        if (rt.com && rt.com->setPeer) {
+            const NodeAddr& addr = rt.coupling.pairing.peer;
+            rt.com->setPeer(rt.com->ctx, addr.bytes, sizeof(addr.bytes));
+        }
         combus_rx_set_mode(i, CombusRxMode::ON);
         combus_tx_set_active(i, true);
         return;
     }
 
+    if (was == PairingState::COUPLED && rt.com && rt.com->setPeer) {
+        rt.com->setPeer(rt.com->ctx, nullptr, 0u);
+    }
     if (was == PairingState::COUPLED && rt.watch.wasAlive && rt.peer) { takeBackSafeValues(*rt.peer, bus); }
     rt.watch.wasAlive     = false;
     rt.watch.reportedLost = false;

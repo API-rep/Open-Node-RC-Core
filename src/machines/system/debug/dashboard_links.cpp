@@ -173,6 +173,11 @@ static void renderLinkDetail(uint8_t idx) {
 		dMidLabel("pairing");
 		renderPairing(*v.coupling, v.pairing);
 		dLine("  Round :  %u / %u   |  Retries left :  %u", v.pairing.round, kCouplingRounds, v.pairing.retriesLeft);
+		if (v.pairing.peer.type != LinkAddrType::NONE) {
+			const uint8_t* m = v.pairing.peer.bytes;
+			dLine("  Peer :  %02X:%02X:%02X:%02X:%02X:%02X   |  Frames of another identity :  %u",
+			      m[0], m[1], m[2], m[3], m[4], m[5], v.pairing.foreignFrames);
+		}
 		for (uint8_t c = 0u; c < v.pairing.nCand; ++c) {
 			const PairingCandidate& k = v.pairing.cand[c];
 			dLine("  Candidate %u :  %02X:%02X:%02X:%02X:%02X:%02X   rounds 0x%02X", c,

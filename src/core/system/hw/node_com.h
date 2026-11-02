@@ -49,6 +49,13 @@ struct NodeCom {
 	int       (*readByte) (void* ctx);                        ///< read one byte (-1 = empty)
 	int       (*available)(void* ctx);                        ///< RX bytes waiting
 	const char* name;                                         ///< port id
+
+		// Link rework 3.4: the only peer this transport may deliver frames from, set
+		// once a coupled link is paired, cleared when it is detached (addr nullptr).
+		// nullptr: the transport has one possible peer by construction (a wire).
+		// TODO(chantier 5, ESP-NOW): the ESP-NOW adapter implements it and drops, at
+		// reception, every frame whose source MAC differs.
+	void      (*setPeer)  (void* ctx, const uint8_t* addr, uint8_t len) = nullptr;
 };
 
 

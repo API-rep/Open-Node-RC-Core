@@ -105,6 +105,7 @@ NodeCom* uart_com_init(
 	port->com.readByte  = uart_readByte;
 	port->com.available = uart_available;
 	port->com.name      = owner;
+	port->com.setPeer   = nullptr;      // a wire has one possible peer: nothing to filter
 
 		// --- 4. Claim pins in the registry before starting the port ---
 	if (reg != nullptr) {

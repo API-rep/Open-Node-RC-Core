@@ -109,6 +109,10 @@ struct ComLinkPairing {
     uint32_t     detChangeMs   = 0u;
     bool         detSettled    = false;
     CouplingId   id            = {};      ///< read (readId) or default at the coupling, cleared at the release
+
+        // --- the paired peer, kept while COUPLED (handed to the transport, NodeCom::setPeer) ---
+    NodeAddr     peer          = {};      ///< identity of the paired peer, type NONE otherwise
+    uint16_t     foreignFrames = 0u;      ///< coupling frames of another identity received while COUPLED
 };
 
 
