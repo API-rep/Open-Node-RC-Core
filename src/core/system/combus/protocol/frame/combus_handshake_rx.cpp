@@ -38,7 +38,7 @@ static uint8_t ringByteAt(const uint8_t* ringBuf,
                           uint8_t        ringHead,
                           uint8_t        i)
 {
-    return ringBuf[(uint8_t)(ringHead + i) % ringBufSize];
+    return ringBuf[(ringHead + i) % ringBufSize];
 }
 
 
@@ -141,14 +141,14 @@ uint8_t combus_handshake_tryDecode(
     if (crcActual != crcExpected) {
         // Same semantics as combus_rx.cpp: advance by 1 byte past the SOF
         // sentinel so we never loop forever on a corrupted candidate.
-        ringHead  = (uint8_t)(ringHead + 1u) % ringBufSize;
+        ringHead  = (uint8_t)((ringHead + 1u) % ringBufSize);
         ringCount = (uint8_t)(ringCount - 1u);
         sys_log_info("[COMBUS_HANDSHAKE] CRC mismatch — dropped 1B, re-sync\n");
         return 0u;
     }
 
     // --- 4. CRC OK — consume the validated frame from the ring buffer ---
-    ringHead  = (uint8_t)(ringHead + expectedLen) % ringBufSize;
+    ringHead  = (uint8_t)((ringHead + expectedLen) % ringBufSize);
     ringCount = (uint8_t)(ringCount - expectedLen);
 
     combus_handshake_internal::markEverReceived(ctx);

@@ -135,14 +135,14 @@ uint8_t combus_coupling_tryDecode( uint8_t  linkIdx,
         // --- 2. Refused: drop the SOF only and re-sync (as the other decoders) ---
     CouplingFrame frame;
     if (!combus_coupling_decode(linear, kCombusCouplingFrameLen, frame)) {
-        ringHead  = (uint8_t)(ringHead + 1u) % ringBufSize;
+        ringHead  = (uint8_t)((ringHead + 1u) % ringBufSize);
         ringCount = (uint8_t)(ringCount - 1u);
         sys_log_info("[COMBUS_COUPLING] invalid coupling frame — dropped 1B, re-sync\n");
         return 0u;
     }
 
         // --- 3. Accepted: consume, record, hand to the pairing (3.4c) ---
-    ringHead  = (uint8_t)(ringHead + kCombusCouplingFrameLen) % ringBufSize;
+    ringHead  = (uint8_t)((ringHead + kCombusCouplingFrameLen) % ringBufSize);
     ringCount = (uint8_t)(ringCount - kCombusCouplingFrameLen);
     if (linkIdx < kCombusCouplingMaxLinks) {
         s_rx[linkIdx].count++;

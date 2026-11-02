@@ -1999,6 +1999,55 @@ static void test_md5_compare_match_with_correct_local(void) {
 // RUNNER
 // =============================================================================
 
+// =============================================================================
+// Group R: a handshake across the end of the ring buffer
+// =============================================================================
+// No wiring: the frame is forged in a ring and decoded directly.
+
+    // Forge a valid handshake from ring position `head`, decode it, check it is taken and consumed.
+static void checkHandshakeAtRingHead(uint8_t head) {
+    static CombusHandshakeContext ctx;
+    ctx = CombusHandshakeContext{};
+    ctx.name            = "test_ring";
+    ctx.expected.stable = combus::wire::kCombusBaseComBusMd5;
+
+    uint8_t frame[CombusFrameHandshakeMinLen] = {};
+    frame[0] = CombusFrameSof;
+    memcpy(&frame[CombusFrameHeaderLen], combus::wire::kCombusBaseComBusMd5, 16u);
+    frame[CombusFrameHeaderLen + 16u] = combus::wire::kProjectVersionMajor;
+    frame[CombusFrameHeaderLen + 17u] = combus::wire::kProjectVersionMinor;
+    frame[CombusFrameHeaderLen + 18u] = combus::wire::kProjectVersionDev;
+    frame[sizeof(frame) - 1u] = combus_frame_crc8(frame, (uint8_t)(sizeof(frame) - 1u));
+
+    static uint8_t ring[CombusRxBufSize];
+    for (uint8_t i = 0u; i < sizeof(frame); ++i) {
+        ring[(head + i) % CombusRxBufSize] = frame[i];
+    }
+
+    uint8_t ringHead  = head;
+    uint8_t ringCount = sizeof(frame);
+    TEST_ASSERT_EQUAL_UINT8(sizeof(frame), combus_handshake_tryDecode(&ctx, ring, CombusRxBufSize, ringHead, ringCount));
+    TEST_ASSERT_TRUE(ctx.contractValidated);
+    TEST_ASSERT_EQUAL_UINT8((head + sizeof(frame)) % CombusRxBufSize, ringHead);
+    TEST_ASSERT_EQUAL_UINT8(0u, ringCount);
+}
+
+/** Inside the ring: the reference case. */
+static void test_ring_handshake_inside(void) {
+    checkHandshakeAtRingHead(0u);
+}
+
+/** Across the end of the ring, the read index going past 255. */
+static void test_ring_handshake_read_across_the_end(void) {
+    checkHandshakeAtRingHead(240u);
+}
+
+/** Read up to the end of the ring, only the consumed index going past 255. */
+static void test_ring_handshake_consumed_across_the_end(void) {
+    checkHandshakeAtRingHead(231u);
+}
+
+
 void setup() {
     delay(2000u);  // let the board stabilize before Unity starts
     UNITY_BEGIN();
@@ -2123,6 +2172,11 @@ void setup() {
     RUN_TEST(test_filter_intra_node_uplink_is_not_applied);
     RUN_TEST(test_filter_intra_node_none_is_not_applied);
     RUN_TEST(test_filter_generated_directions);
+
+    // --- Group R: a handshake across the end of the ring buffer ---
+    RUN_TEST(test_ring_handshake_inside);
+    RUN_TEST(test_ring_handshake_read_across_the_end);
+    RUN_TEST(test_ring_handshake_consumed_across_the_end);
 
     // Chantier 12.6: Group F (FS1 failsafe re-arm) removed — see
     // header docstring above (5 independent test groups A/B/C/D/E).

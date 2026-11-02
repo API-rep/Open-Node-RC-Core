@@ -627,6 +627,24 @@ static void test_cpl_frame_row2_corrupted_is_refused(void) {
     }
 }
 
+/** A coupling frame across the end of the ring buffer is taken and consumed exactly. */
+static void test_cpl_frame_across_the_end_of_the_ring(void) {
+    uint8_t frame[kCombusCouplingFrameLen];
+    combus_coupling_encode(frame, sizeof(frame), sampleCouplingFrame());
+
+    const uint8_t head = 240u;
+    static uint8_t ring[CombusRxBufSize];
+    for (uint8_t i = 0u; i < sizeof(frame); ++i) {
+        ring[(head + i) % CombusRxBufSize] = frame[i];
+    }
+
+    uint8_t ringHead  = head;
+    uint8_t ringCount = sizeof(frame);
+    TEST_ASSERT_EQUAL_UINT8(sizeof(frame), combus_coupling_tryDecode(kCombusCouplingMaxLinks, ring, CombusRxBufSize, ringHead, ringCount));
+    TEST_ASSERT_EQUAL_UINT8((head + sizeof(frame)) % CombusRxBufSize, ringHead);
+    TEST_ASSERT_EQUAL_UINT8(0u, ringCount);
+}
+
 /** Row 3: the age of the hitch saturates at 65535 ms. */
 static void test_cpl_frame_row3_hitch_age_saturates(void) {
     TEST_ASSERT_EQUAL_UINT16(40u, combus_coupling_hitch_age(40u));
@@ -1503,6 +1521,7 @@ void setup() {
 
     RUN_TEST(test_cpl_frame_row1_round_trip);
     RUN_TEST(test_cpl_frame_row2_corrupted_is_refused);
+    RUN_TEST(test_cpl_frame_across_the_end_of_the_ring);
     RUN_TEST(test_cpl_frame_row3_hitch_age_saturates);
     RUN_TEST(test_cpl_frame_row4_routed_to_the_coupling_module);
     RUN_TEST(test_cpl_frame_row5_handshake_after_it);
