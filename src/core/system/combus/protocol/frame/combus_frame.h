@@ -13,8 +13,8 @@
  *   last    1    crc8         CRC-8/MAXIM over bytes [0 ... last-1]
  * @endcode
  *
- *   `seq` is a rolling counter in 1..255 (wraps 255 -> 1, never 0).  `seq == 0` is
- *   reserved on every transport: the handshake (combus_handshake.h) and the
+ *   `seq` is a rolling counter in 1..255 (wraps 255 -> 1, never 0).  `seq == 0`
+ *   is reserved on every transport: the handshake (combus_handshake.h) and the
  *   coupling frame (combus_coupling.h) travel there, on their own decoder paths.
  *
  *   The identity of a machine instance is delegated to the transport layer.

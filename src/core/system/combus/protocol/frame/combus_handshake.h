@@ -225,7 +225,7 @@ struct CombusHandshakeContext {
 
 		// State of the contract
 	bool contractValidated = false;      ///< contract STABLE (true) or UNKNOWN (false)
-	bool everReceived      = false;      ///< a valid handshake frame was observed, matching or not
+	bool everReceived      = false;      ///< a valid handshake frame was observed, matching or not (witness of the tests)
 	bool dataSinceStable   = false;      ///< a data frame was applied since the contract became STABLE
 	bool refusalLogged     = false;      ///< one-shot guard for the refusal log, re-armed when STABLE
 	bool bootWarningLogged = false;      ///< one-shot guard for the boot banner
@@ -288,6 +288,9 @@ namespace combus_handshake_internal {
 
 	/**
 	 * @brief Record that a valid handshake frame was observed.
+	 *
+	 * @details The firmware never reads it: the tests do, to prove a frame reached the
+	 *   handshake decoder or stayed away from it.
 	 *
 	 * @param ctx  Per-link handshake context.
 	 */

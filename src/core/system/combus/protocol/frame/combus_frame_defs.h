@@ -27,8 +27,8 @@
  */
 
 struct ComBusFrameCfg {
-  uint8_t nAnalog;   ///< Number of analog channels in this layout.
-  uint8_t nDigital;  ///< Number of digital channels in this layout.
+	uint8_t nAnalog;   ///< Number of analog channels in this layout.
+	uint8_t nDigital;  ///< Number of digital channels in this layout.
 };
 
 
