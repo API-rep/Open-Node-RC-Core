@@ -33,17 +33,17 @@
 // 1. CONSTANTS
 // =============================================================================
 
-    /// Start-of-frame sentinel byte.
+	/// Start-of-frame sentinel byte.
 static constexpr uint8_t CombusFrameSof = 0xAAu;
 
-    /// Guard: catch any unexpected padding introduced in CombusFrameHeader.
+	/// Guard: catch any unexpected padding introduced in CombusFrameHeader.
 static_assert(sizeof(CombusFrameSof) + sizeof(CombusFrameHeader) == 5u,
               "Bad CombusFrameHeader size detected: check for unexpected padding");
 
-    /// Fixed combus header size in bytes
+	/// Fixed combus header size in bytes
 static constexpr uint8_t CombusFrameHeaderLen = sizeof(CombusFrameSof) + sizeof(CombusFrameHeader);
 
-    /// Minimum valid frame size (fixed header + CRC byte).
+	/// Minimum valid frame size (fixed header + CRC byte).
 static constexpr uint8_t CombusFrameMinLen = CombusFrameHeaderLen + sizeof(uint8_t);
 
 

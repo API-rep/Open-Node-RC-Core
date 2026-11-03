@@ -43,9 +43,9 @@ struct ComBusFrameCfg {
  */
 
 struct CombusFrameHeader {
-    ComBusFrameCfg cfg;   ///< Layout of this frame: nAnalog, nDigital (wire offsets 0-1).
-    uint8_t seq;          ///< Rolling frame counter, 1..255; 0 is reserved.
-    uint8_t flags;        ///< Handshake and coupling frames: kind of the frame; control frames: 0.
+	ComBusFrameCfg cfg;   ///< Layout of this frame: nAnalog, nDigital (wire offsets 0-1).
+	uint8_t seq;          ///< Rolling frame counter, 1..255; 0 is reserved.
+	uint8_t flags;        ///< Handshake and coupling frames: kind of the frame; control frames: 0.
 };
 
 
@@ -57,9 +57,9 @@ struct CombusFrameHeader {
  */
 
 struct ComBusFrame {
-    CombusFrameHeader header;   ///< Wire header fields (offsets 1-4 of the frame).
-    uint16_t*         analog;   ///< Caller-provided buffer (at least header.cfg.nAnalog entries)
-    bool*             digital;  ///< Caller-provided buffer (at least header.cfg.nDigital entries)
+	CombusFrameHeader header;   ///< Wire header fields (offsets 1-4 of the frame).
+	uint16_t*         analog;   ///< Caller-provided buffer (at least header.cfg.nAnalog entries)
+	bool*             digital;  ///< Caller-provided buffer (at least header.cfg.nDigital entries)
 };
 
 // EOF combus_frame_defs.h

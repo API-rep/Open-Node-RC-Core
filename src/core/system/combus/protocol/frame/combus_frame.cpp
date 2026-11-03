@@ -21,8 +21,8 @@
 // 1. CRC
 // =============================================================================
 
-    // Polynomial 0x31 (reflected 0x8C), init 0x00.  Byte by byte: no lookup table
-    // is needed at the frame sizes used here.
+	// Polynomial 0x31 (reflected 0x8C), init 0x00.  Byte by byte: no lookup table
+	// is needed at the frame sizes used here.
 uint8_t combus_frame_crc8(const uint8_t* data, uint8_t len) {
 	uint8_t crc = 0x00;
 	for (uint8_t i = 0; i < len; ++i) {

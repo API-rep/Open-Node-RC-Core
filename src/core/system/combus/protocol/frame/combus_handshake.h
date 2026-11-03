@@ -25,14 +25,14 @@
 #include <core/system/combus/protocol/frame/combus_frame.h>   // CombusFrameHeader, CombusFrameSof
 #include <core/system/hw/node_com.h>                          // NodeCom (TX path)
 
-    // Generated MD5 of each view (namespace combus::wire), resolved per link by
-    // combus_protocol_init().
+	// Generated MD5 of each view (namespace combus::wire), resolved per link by
+	// combus_protocol_init().
 #include <combus_md5.h>          // kCombusComBusMd5       (FULL view)
 #include <combus_system_md5.h>   // kCombusSystemComBusMd5 (SYSTEM view)
 #include <combus_base_md5.h>     // kCombusBaseComBusMd5   (BASE view)
 
 
-    // The helpers of section 4 take a context, defined in section 5.
+	// The helpers of section 4 take a context, defined in section 5.
 struct CombusHandshakeContext;
 
 
@@ -63,10 +63,10 @@ struct CombusHandshakeContext;
 static constexpr uint8_t kCombusHandshakePayloadLen = 19u;
 
 
-    /// Total handshake frame size on the wire (SOF + header + payload + CRC).
+	/// Total handshake frame size on the wire (SOF + header + payload + CRC).
 static constexpr uint8_t CombusFrameHandshakeMinLen =
-    sizeof(CombusFrameSof) + sizeof(CombusFrameHeader) +
-    kCombusHandshakePayloadLen + sizeof(uint8_t);
+	sizeof(CombusFrameSof) + sizeof(CombusFrameHeader) +
+	kCombusHandshakePayloadLen + sizeof(uint8_t);
 
 
 /**
@@ -105,7 +105,7 @@ static constexpr uint8_t kCombusHandshakeFlagNext = 0x02u;
 static constexpr uint8_t kCombusHandshakeBurstCount = 3u;
 
 
-    /// Interval between two frames of the boot burst, in ms.
+	/// Interval between two frames of the boot burst, in ms.
 static constexpr uint32_t kCombusHandshakeBurstPeriodMs = 100u;
 
 
@@ -154,7 +154,7 @@ static constexpr uint32_t kCombusHandshakeAckTimeoutMs = 1000u;
  */
 
 #ifndef COMBUS_MD5_CHECK_DISABLE
-  #define COMBUS_MD5_CHECK_DISABLE  0
+	#define COMBUS_MD5_CHECK_DISABLE  0
 #endif
 
 
@@ -164,7 +164,7 @@ static constexpr uint32_t kCombusHandshakeAckTimeoutMs = 1000u;
  */
 
 #ifndef COMBUS_HANDSHAKE_BURST_DISABLE
-  #define COMBUS_HANDSHAKE_BURST_DISABLE  0
+	#define COMBUS_HANDSHAKE_BURST_DISABLE  0
 #endif
 
 
@@ -212,38 +212,38 @@ void combus_handshake_formatMd5Hex(const uint8_t md5[16], char out[33]);
  */
 
 struct CombusHandshakeContext {
-        // Identity of the link (set by combus_protocol_init())
-    const char*        name          = nullptr;  ///< link name, for the logs
-    bool               bidirectional = false;    ///< the end both transmits and receives
-    const ComPeerLink* peer          = nullptr;  ///< link between nodes: common frame and table; nullptr = view of the scope
-    bool               baseSet       = false;    ///< BASE link: the mode sets the size of the frames
+		// Identity of the link (set by combus_protocol_init())
+	const char*        name          = nullptr;  ///< link name, for the logs
+	bool               bidirectional = false;    ///< the end both transmits and receives
+	const ComPeerLink* peer          = nullptr;  ///< link between nodes: common frame and table; nullptr = view of the scope
+	bool               baseSet       = false;    ///< BASE link: the mode sets the size of the frames
 
-        // MD5 of the contract (set by combus_protocol_init())
-    ComLinkMd5 expected      = {};       ///< MD5 expected from the peer, compared on every handshake
-    ComLinkMd5 announced     = {};       ///< MD5 this end sends when it differs (link through a coupler: its own side); null = `expected`
-    bool       hasCandidates = false;    ///< expected.next differs from expected.stable
+		// MD5 of the contract (set by combus_protocol_init())
+	ComLinkMd5 expected      = {};       ///< MD5 expected from the peer, compared on every handshake
+	ComLinkMd5 announced     = {};       ///< MD5 this end sends when it differs (link through a coupler: its own side); null = `expected`
+	bool       hasCandidates = false;    ///< expected.next differs from expected.stable
 
-        // State of the contract
-    bool contractValidated = false;      ///< contract STABLE (true) or UNKNOWN (false)
-    bool everReceived      = false;      ///< a valid handshake frame was observed, matching or not
-    bool dataSinceStable   = false;      ///< a data frame was applied since the contract became STABLE
-    bool refusalLogged     = false;      ///< one-shot guard for the refusal log, re-armed when STABLE
-    bool bootWarningLogged = false;      ///< one-shot guard for the boot banner
+		// State of the contract
+	bool contractValidated = false;      ///< contract STABLE (true) or UNKNOWN (false)
+	bool everReceived      = false;      ///< a valid handshake frame was observed, matching or not
+	bool dataSinceStable   = false;      ///< a data frame was applied since the contract became STABLE
+	bool refusalLogged     = false;      ///< one-shot guard for the refusal log, re-armed when STABLE
+	bool bootWarningLogged = false;      ///< one-shot guard for the boot banner
 
-        // Requests and ACK
-    bool     ackPending     = false;     ///< a request was received, the TX answers it with an ACK
-    bool     ackPendingNext = false;     ///< a NEXT request was received, the TX answers it with a NEXT ACK
-    uint32_t lastRequestMs  = 0u;        ///< millis() at the last request sent after the burst
-    uint32_t lastAckMs      = 0u;        ///< millis() at the last matching ACK (bidirectional end)
+		// Requests and ACK
+	bool     ackPending     = false;     ///< a request was received, the TX answers it with an ACK
+	bool     ackPendingNext = false;     ///< a NEXT request was received, the TX answers it with a NEXT ACK
+	uint32_t lastRequestMs  = 0u;        ///< millis() at the last request sent after the burst
+	uint32_t lastAckMs      = 0u;        ///< millis() at the last matching ACK (bidirectional end)
 
-        // Boot burst
-    bool     burstActive    = false;     ///< the boot burst is in progress
-    uint8_t  burstRemaining = 0u;        ///< frames left to emit in the burst
-    uint32_t lastBurstMs    = 0u;        ///< millis() at the last burst emission
+		// Boot burst
+	bool     burstActive    = false;     ///< the boot burst is in progress
+	uint8_t  burstRemaining = 0u;        ///< frames left to emit in the burst
+	uint32_t lastBurstMs    = 0u;        ///< millis() at the last burst emission
 
-        // Next / stable mode
-    bool    nextMode      = false;       ///< STABLE in next mode (false: stable mode, or legacy without candidate)
-    uint8_t nextTriesLeft = 0u;          ///< NEXT requests left while UNKNOWN before legacy ones
+		// Next / stable mode
+	bool    nextMode      = false;       ///< STABLE in next mode (false: stable mode, or legacy without candidate)
+	uint8_t nextTriesLeft = 0u;          ///< NEXT requests left while UNKNOWN before legacy ones
 };
 
 
@@ -286,67 +286,67 @@ bool combus_handshake_is_contract_validated(const CombusHandshakeContext* ctx);
 
 namespace combus_handshake_internal {
 
-    /**
-     * @brief Record that a valid handshake frame was observed.
-     *
-     * @param ctx  Per-link handshake context.
-     */
+	/**
+	 * @brief Record that a valid handshake frame was observed.
+	 *
+	 * @param ctx  Per-link handshake context.
+	 */
 
-    void markEverReceived(CombusHandshakeContext* ctx);
-
-
-    /**
-     * @brief Mark the contract of the link as STABLE, on an accepted handshake.
-     *
-     * @param ctx  Per-link handshake context.
-     */
-
-    void markContractValidated(CombusHandshakeContext* ctx);
+	void markEverReceived(CombusHandshakeContext* ctx);
 
 
-    /**
-     * @brief Start a fresh RX session: contract UNKNOWN, no pending ACK.
-     *
-     * @details Called by combus_rx_init().  Back to stable mode, NEXT requests
-     *   re-armed when the link has candidates.
-     *
-     * @param ctx  Per-link handshake context.
-     */
+	/**
+	 * @brief Mark the contract of the link as STABLE, on an accepted handshake.
+	 *
+	 * @param ctx  Per-link handshake context.
+	 */
 
-    void clearContractValidated(CombusHandshakeContext* ctx);
+	void markContractValidated(CombusHandshakeContext* ctx);
 
 
-    /**
-     * @brief Drop a STABLE contract back to UNKNOWN and log why.
-     *
-     * @details Called on a refused handshake, a silence longer than the link
-     *   timeout, or missed ACKs.  No-op when the contract is already UNKNOWN.
-     *
-     * @param ctx     Per-link handshake context.
-     * @param reason  Short text for the log line.
-     */
+	/**
+	 * @brief Start a fresh RX session: contract UNKNOWN, no pending ACK.
+	 *
+	 * @details Called by combus_rx_init().  Back to stable mode, NEXT requests
+	 *   re-armed when the link has candidates.
+	 *
+	 * @param ctx  Per-link handshake context.
+	 */
 
-    void dropContract(CombusHandshakeContext* ctx, const char* reason);
-
-
-    /**
-     * @brief Arm the boot burst: the first frame leaves on the next TX update.
-     *
-     * @details Called by combus_tx_init().  Calling it twice equals calling it once.
-     *
-     * @param ctx  Per-link handshake context.
-     */
-
-    void startBurst(CombusHandshakeContext* ctx);
+	void clearContractValidated(CombusHandshakeContext* ctx);
 
 
-    /**
-     * @brief Stop the boot burst, once the contract is STABLE or on a transport reinit.
-     *
-     * @param ctx  Per-link handshake context.
-     */
+	/**
+	 * @brief Drop a STABLE contract back to UNKNOWN and log why.
+	 *
+	 * @details Called on a refused handshake, a silence longer than the link
+	 *   timeout, or missed ACKs.  No-op when the contract is already UNKNOWN.
+	 *
+	 * @param ctx     Per-link handshake context.
+	 * @param reason  Short text for the log line.
+	 */
 
-    void stopBurst(CombusHandshakeContext* ctx);
+	void dropContract(CombusHandshakeContext* ctx, const char* reason);
+
+
+	/**
+	 * @brief Arm the boot burst: the first frame leaves on the next TX update.
+	 *
+	 * @details Called by combus_tx_init().  Calling it twice equals calling it once.
+	 *
+	 * @param ctx  Per-link handshake context.
+	 */
+
+	void startBurst(CombusHandshakeContext* ctx);
+
+
+	/**
+	 * @brief Stop the boot burst, once the contract is STABLE or on a transport reinit.
+	 *
+	 * @param ctx  Per-link handshake context.
+	 */
+
+	void stopBurst(CombusHandshakeContext* ctx);
 }
 
 // EOF combus_handshake.h

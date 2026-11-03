@@ -20,8 +20,8 @@
  */
 
 enum class LinkAddrType : uint8_t {
-    NONE  = 0u,   ///< no address (unknown, or not set)
-    MAC48 = 1u    ///< 48-bit MAC address
+	NONE  = 0u,   ///< no address (unknown, or not set)
+	MAC48 = 1u    ///< 48-bit MAC address
 };
 
 
@@ -30,8 +30,8 @@ enum class LinkAddrType : uint8_t {
  */
 
 struct NodeAddr {
-    LinkAddrType type     = LinkAddrType::NONE;
-    uint8_t      bytes[6] = {};   ///< MAC48: the six bytes, in transmission order
+	LinkAddrType type     = LinkAddrType::NONE;
+	uint8_t      bytes[6] = {};   ///< MAC48: the six bytes, in transmission order
 };
 
 
@@ -44,8 +44,8 @@ struct NodeAddr {
  */
 
 enum class ComLinkRole : uint8_t {
-    SOCKET = 0u,   ///< it carries: the hub of the link
-    PLUG   = 1u    ///< it is carried
+	SOCKET = 0u,   ///< it carries: the hub of the link
+	PLUG   = 1u    ///< it is carried
 };
 
 
@@ -56,8 +56,8 @@ enum class ComLinkRole : uint8_t {
  */
 
 struct ComLinkMd5 {
-    const uint8_t* stable;   ///< MD5 without the candidates (16 bytes)
-    const uint8_t* next;     ///< MD5 with the candidates (16 bytes)
+	const uint8_t* stable;   ///< MD5 without the candidates (16 bytes)
+	const uint8_t* next;     ///< MD5 with the candidates (16 bytes)
 };
 
 
@@ -68,10 +68,10 @@ struct ComLinkMd5 {
  */
 
 struct ComLinkTable {
-    uint8_t        count;         ///< positions on the wire
-    uint8_t        stableCount;   ///< positions without the candidates (a prefix)
-    const uint8_t* ids;           ///< wire position -> channel ID of this node
-    const bool*    rx;            ///< wire position -> this node receives it (true) or sends it
+	uint8_t        count;         ///< positions on the wire
+	uint8_t        stableCount;   ///< positions without the candidates (a prefix)
+	const uint8_t* ids;           ///< wire position -> channel ID of this node
+	const bool*    rx;            ///< wire position -> this node receives it (true) or sends it
 };
 
 
@@ -91,12 +91,12 @@ struct ComLinkTable {
  */
 
 struct ComPeerLink {
-    const char*  coupler;     ///< name of the link: the coupler (directory name), or remote_<type>
-    ComLinkRole  role;        ///< role of this node on the link
-    ComLinkMd5   announced;   ///< MD5 announced by this node (its side)
-    ComLinkMd5   expected;    ///< MD5 expected from the other end (the other side)
-    ComLinkTable analog;      ///< analog half of the frame (AnalogComBusID)
-    ComLinkTable digital;     ///< digital half of the frame (DigitalComBusID)
+	const char*  coupler;     ///< name of the link: the coupler (directory name), or remote_<type>
+	ComLinkRole  role;        ///< role of this node on the link
+	ComLinkMd5   announced;   ///< MD5 announced by this node (its side)
+	ComLinkMd5   expected;    ///< MD5 expected from the other end (the other side)
+	ComLinkTable analog;      ///< analog half of the frame (AnalogComBusID)
+	ComLinkTable digital;     ///< digital half of the frame (DigitalComBusID)
 };
 
 // EOF combus_peer_link_defs.h

@@ -30,11 +30,11 @@
  */
 
 uint8_t combus_handshake_tryDecode(
-    CombusHandshakeContext* ctx,
-    uint8_t*                ringBuf,
-    uint8_t                 ringBufSize,
-    uint8_t&                ringHead,
-    uint8_t&                ringCount );
+	CombusHandshakeContext* ctx,
+	uint8_t*                ringBuf,
+	uint8_t                 ringBufSize,
+	uint8_t&                ringHead,
+	uint8_t&                ringCount );
 
 
 /**
@@ -58,8 +58,8 @@ uint8_t combus_handshake_tryDecode(
  */
 
 bool combus_handshake_compare(
-    const uint8_t* localMd5,
-    const uint8_t* wireMd5,
-    uint8_t        wireMajor );
+	const uint8_t* localMd5,
+	const uint8_t* wireMd5,
+	uint8_t        wireMajor );
 
 // EOF combus_handshake_rx.h
