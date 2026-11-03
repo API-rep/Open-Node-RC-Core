@@ -9,9 +9,9 @@
 #include <Arduino.h>
 
 #include <core/system/combus/protocol/frame/combus_frame.h>
-#include <core/system/combus/protocol/frame/combus_handshake.h>
-#include <core/system/combus/protocol/frame/combus_handshake_rx.h>  // combus_handshake_tryDecode
-#include <core/system/combus/protocol/frame/combus_coupling.h>      // combus_coupling_tryDecode (3.4b)
+#include <core/system/combus/protocol/handshake/combus_handshake.h>
+#include <core/system/combus/protocol/handshake/combus_handshake_rx.h>  // combus_handshake_tryDecode
+#include <core/system/combus/protocol/coupling/combus_coupling.h>      // combus_coupling_tryDecode (3.4b)
 #include <core/system/debug/logging/debug.h>
 
 // RL5 — auto-apply support.  combus_frame_apply() takes a ChanLayer

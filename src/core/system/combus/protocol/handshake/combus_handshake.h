@@ -10,7 +10,7 @@
  *
  *   Generic to every ComBus participant: node to node (machine, remote,
  *   coupler) or board to board inside a node.  The wire layout is described in
- *   combus_frame_protocol.md.
+ *   README.md (next to this file).
  *
  *   This umbrella holds what both sides share; each side has its own entry
  *   points:

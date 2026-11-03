@@ -8,7 +8,7 @@
 
 #include <stdint.h>
 
-#include <core/system/combus/protocol/frame/combus_handshake.h> // constants, CombusHandshakeContext
+#include <core/system/combus/protocol/handshake/combus_handshake.h> // constants, CombusHandshakeContext
 
 
 /**

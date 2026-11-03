@@ -555,7 +555,7 @@ def render_peer_links_header(links: list[LinkSet], ids_header: str = "combus_ids
         "",
         "#include <stdint.h>",
         "",
-        "#include <core/system/combus/protocol/frame/combus_peer_link_defs.h>   // ComPeerLink",
+        "#include <core/system/combus/protocol/combus_peer_link_defs.h>   // ComPeerLink",
         f'#include "{ids_header}"',
         "",
         "namespace combus {",

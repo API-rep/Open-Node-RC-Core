@@ -47,7 +47,7 @@
 #include <core/system/hw/node_com.h>
 #include <core/system/combus/combus_defs.h>
 #include <core/system/combus/protocol/frame/combus_frame.h>
-#include <core/system/combus/protocol/frame/combus_handshake.h>   // CombusHandshakeContext (full def needed for CombusRxState)
+#include <core/system/combus/protocol/handshake/combus_handshake.h>   // CombusHandshakeContext (full def needed for CombusRxState)
 
 
 // =============================================================================

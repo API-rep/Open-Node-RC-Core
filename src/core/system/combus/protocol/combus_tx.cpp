@@ -8,8 +8,8 @@
 #include <Arduino.h>  // millis()
 
 #include <core/system/combus/protocol/frame/combus_frame.h>
-#include <core/system/combus/protocol/frame/combus_handshake.h>
-#include <core/system/combus/protocol/frame/combus_handshake_tx.h>
+#include <core/system/combus/protocol/handshake/combus_handshake.h>
+#include <core/system/combus/protocol/handshake/combus_handshake_tx.h>
 #include <core/system/combus/protocol/combus_rx.h>   // combus_rx_peer_or() — both_or without echo
 #include <core/system/combus/combus_access.h>        // combus_both_or_local()
 #include <core/system/debug/logging/debug.h>

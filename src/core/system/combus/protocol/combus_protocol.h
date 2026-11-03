@@ -73,7 +73,7 @@
 
 #include <core/system/hw/node_com.h>
 #include <core/system/combus/combus_defs.h>                       // ChanLayer
-#include <core/system/combus/protocol/frame/combus_handshake.h>   // CombusHandshakeContext (P3)
+#include <core/system/combus/protocol/handshake/combus_handshake.h>   // CombusHandshakeContext (P3)
 
 
 

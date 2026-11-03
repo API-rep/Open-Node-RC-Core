@@ -30,7 +30,7 @@
 #include <stdbool.h>
 
 #include <core/system/combus/protocol/combus_protocol.h>            // CouplingDev
-#include <core/system/combus/protocol/frame/combus_coupling.h>      // CouplingFrame, NodeAddr
+#include <core/system/combus/protocol/coupling/combus_coupling.h>      // CouplingFrame, NodeAddr
 #include <core/system/hw/node_com.h>                                // NodeCom
 
 

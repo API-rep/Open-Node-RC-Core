@@ -134,9 +134,9 @@
 #include <core/system/combus/protocol/combus_protocol.h> // ComBusLink, combus_protocol_init() — Group E
 #include <core/system/combus/protocol/combus_links.h>    // combus_link_check(), combus_link_build() — Group I
 #include <core/system/com/com_manager.h>                 // com_rx_update() — Group J
-#include <core/system/combus/protocol/frame/combus_handshake.h> // CombusHandshakeContext — Groups E, N
-#include <core/system/combus/protocol/frame/combus_handshake_rx.h> // combus_handshake_compare() — Group E
-#include <core/system/combus/protocol/frame/combus_handshake_tx.h> // combus_handshake_tx_update() — Groups J, N
+#include <core/system/combus/protocol/handshake/combus_handshake.h> // CombusHandshakeContext — Groups E, N
+#include <core/system/combus/protocol/handshake/combus_handshake_rx.h> // combus_handshake_compare() — Group E
+#include <core/system/combus/protocol/handshake/combus_handshake_tx.h> // combus_handshake_tx_update() — Groups J, N
 
 // Phase 3 / A13: include combus.h (declares AnalogComBusArray /
 // DigitalComBusArray) AND the 3 view-specific ids headers so the

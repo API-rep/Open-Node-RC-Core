@@ -48,9 +48,9 @@
 #include <string.h>
 
 #include <core/system/combus/protocol/frame/combus_frame.h>
-#include <core/system/combus/protocol/frame/combus_handshake.h>
-#include <core/system/combus/protocol/frame/combus_handshake_tx.h>
-#include <core/system/combus/protocol/frame/combus_coupling.h>
+#include <core/system/combus/protocol/handshake/combus_handshake.h>
+#include <core/system/combus/protocol/handshake/combus_handshake_tx.h>
+#include <core/system/combus/protocol/coupling/combus_coupling.h>
 #include <core/config/couplers/test_coupler/test_coupler_chain.h>   // test_coupler_vehicle_chain (3.4e)
 #include <core/system/hw/transport/uart_com.h>
 #include <core/system/combus/protocol/combus_tx.h>

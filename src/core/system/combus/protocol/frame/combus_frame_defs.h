@@ -10,7 +10,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "combus_peer_link_defs.h"   // ComPeerLink
+#include <core/system/combus/protocol/combus_peer_link_defs.h>   // ComPeerLink
 
 
 /**

@@ -9,8 +9,8 @@
 
 #include <core/system/combus/protocol/combus_tx.h>
 #include <core/system/combus/protocol/combus_rx.h>
-#include <core/system/combus/protocol/frame/combus_handshake.h>  // CombusHandshakeContext
-#include <core/system/combus/protocol/frame/combus_handshake_rx.h>  // (no-op, ensures include path)
+#include <core/system/combus/protocol/handshake/combus_handshake.h>  // CombusHandshakeContext
+#include <core/system/combus/protocol/handshake/combus_handshake_rx.h>  // (no-op, ensures include path)
 #include <core/system/debug/logging/debug.h>                       // sys_log_err
 
 

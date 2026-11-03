@@ -32,7 +32,7 @@
 #include <stdbool.h>
 
 #include <core/system/combus/protocol/frame/combus_frame.h>            // CombusFrameHeaderLen
-#include <core/system/combus/protocol/frame/combus_peer_link_defs.h>   // NodeAddr
+#include <core/system/combus/protocol/combus_peer_link_defs.h>   // NodeAddr
 
 
 

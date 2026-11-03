@@ -42,8 +42,8 @@
 #include <core/system/combus/protocol/combus_protocol.h>
 #include <core/system/combus/protocol/combus_tx.h>
 #include <core/system/combus/protocol/combus_rx.h>
-#include <core/system/combus/protocol/frame/combus_handshake.h>
-#include <core/system/combus/protocol/combus_pairing.h>    // ComLinkPairing (3.4c)
+#include <core/system/combus/protocol/handshake/combus_handshake.h>
+#include <core/system/combus/protocol/coupling/combus_pairing.h>    // ComLinkPairing (3.4c)
 
 
 // =============================================================================

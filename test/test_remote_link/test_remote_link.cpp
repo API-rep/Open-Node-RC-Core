@@ -20,7 +20,7 @@
 #include <unity.h>
 
 #include <core/system/combus/protocol/combus_links.h>
-#include <core/system/combus/protocol/frame/combus_handshake.h>
+#include <core/system/combus/protocol/handshake/combus_handshake.h>
 #include <remotes/com/remote_links.h>
 #include <remotes/config/driven_machines.h>
 
