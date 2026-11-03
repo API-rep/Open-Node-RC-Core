@@ -119,6 +119,25 @@ Focus on:
 
 The goal is to allow maintainers to understand the implementation quickly.
 
+Each non-trivial function opens with a Doxygen block in the `.cpp`: its role in `@brief`, then in `@details` its steps, numbered as in the body (section 6), and the reasons for its choices. A reader gets the logic of a function at a glance, before reading its body. It explains how the contract of the header is carried out, without copying it. A trivial function takes a compact `///` line.
+
+```cpp
+/**
+ * @brief Control frame reader. Validates the received bytes, then unpacks them.
+ *
+ * @details In order:
+ *   1. Minimum length and SOF.
+ *   2. Header, copied as is: its first two bytes are the layout of this frame.
+ *   3. Declared sizes, against the 255-byte limit and the capacities in `cfg`.
+ *   4. CRC over everything before it.
+ *
+ *   Nothing is written to `outputFrame` before the CRC passes: a refused frame leaves
+ *   it untouched.
+ */
+```
+
+Every statement in such a block is checked against the code when it is written: a wrong comment is worse than none.
+
 ---
 
 ## 4. `@brief` Writing Style
@@ -241,6 +260,8 @@ If removing the `@param` does not lose information beyond the function signature
 `@param` is mandatory for public APIs and non-trivial documented functions.
 
 It may be omitted for trivial helpers whose meaning is self-evident.
+
+`@param` appears once, where the contract is declared: in the `.h` for a public function, never repeated in the `.cpp`; in the `.cpp` for a `static` function, which has no header.
 
 Example:
 

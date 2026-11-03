@@ -159,6 +159,8 @@ Prefer:
 
 Avoid excessive decomposition when it does not improve understanding.
 
+Below the steps, small loops and conditions carry a one-line comment saying what they are for (`layout.md`, section 6.2).
+
 Refer to the layout guidelines for the visual representation of steps.
 
 ---
@@ -169,6 +171,7 @@ Refer to the layout guidelines for the visual representation of steps.
 * Keep functions focused on a single responsibility whenever practical.
 * Favor explicit code over implicit side effects.
 * Avoid unnecessary abstraction.
+* Group files by theme: when a folder mixes several themes, each one takes its own folder, side by side rather than nested, so that the includes show the dependencies. Definitions shared by several themes stay in their parent folder, next to their users.
 * Write code intended to be understood by both humans and tooling.
 
 ---

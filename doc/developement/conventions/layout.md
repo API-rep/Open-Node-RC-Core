@@ -23,7 +23,8 @@ The layout of a file shall prioritise:
 
 ## 2. Global Spacing
 
-* Indentation uses tabs.
+* Indentation uses tabs, displayed 4 columns wide. A file still indented with spaces moves to tabs when it is next reviewed, in a commit of its own.
+* Spaces only align, after the indentation: parameters under an opening parenthesis, trailing comments.
 * Maximum line length is 120 columns.
 
 Blank lines shall be used consistently:
@@ -32,8 +33,9 @@ Blank lines shall be used consistently:
 * Two blank lines separate major logical blocks (e.g. functions, declarations, Doxygen+code groups).
 * Three blank lines are used instead when the block that has just been closed (Doxygen block and code together) is taller than a page, about 40 lines.
 * At least one blank line shall appear before and after a section separator.
-* One blank line shall precede a code comment introducing a logical step.
+* One blank line shall precede a code comment introducing a logical step, except right after an opening brace.
 * No blank line separates such comments from the code they describe.
+* Inside a function, one blank line separates local declarations from the loop or condition that uses them, and precedes a final `return`.
 
 Example (documented declarations, each shorter than a page):
 
@@ -185,6 +187,38 @@ inline constexpr ComProtocolCfg kComProtoExt = { 115200u, 50u, 250u };
 The additional indentation level distinguishes descriptive comments from executable code while preserving their visual attachment to the block they document.
 
 Comments should be read as annotations of the following code, not as independent statements.
+
+### 6.2 Control Flow Comments
+
+Inside a step, a small loop or condition carries a one-line comment saying what it is for (`// Check ...`, `// Set ...`), so that the function reads through its comments alone. A step comment already covers the statement right below it: do not stack a second one.
+
+```cpp
+uint8_t combus_frame_crc8(const uint8_t* data, uint8_t len) {
+	uint8_t crc = 0x00;
+
+		// Mix each byte of the buffer
+	for (uint8_t i = 0; i < len; ++i) {
+		uint8_t byte = data[i];
+
+			// Each bit of the byte, LSB first
+		for (uint8_t b = 0; b < 8u; ++b) {
+				// Compare the low bit of the CRC with the data bit, then shift the CRC
+			uint8_t mix = (crc ^ byte) & 0x01u;
+			crc >>= 1u;
+
+				// Apply the polynomial when they differ
+			if (mix) {
+				crc ^= 0x8Cu;
+			}
+
+				// Next data bit
+			byte >>= 1u;
+		}
+	}
+
+	return crc;
+}
+```
 
 
 ---
