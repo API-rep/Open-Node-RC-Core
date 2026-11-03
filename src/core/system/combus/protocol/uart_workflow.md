@@ -10,7 +10,7 @@
 >
 > Les sections trame, TX et RX (§5, §7, §8) sont résumées avec des renvois ;
 > le détail de la trame et du handshake est dans
-> [`frame/combus_frame_protocol.md`](frame/combus_frame_protocol.md).
+> [`frame/README.md`](frame/README.md) et [`handshake/README.md`](handshake/README.md).
 
 ---
 
@@ -404,7 +404,7 @@ struct ComBusFrameCfg {
 
 ## 5. Format de trame binaire
 
-Voir [`frame/combus_frame_protocol.md`](frame/combus_frame_protocol.md), §1 : `SOF`
+Voir [`frame/README.md`](frame/README.md) : `SOF`
 `0xAA`, en-tête de 4 octets (`nAnalog`, `nDigital`, `seq`, `flags`), bits
 numériques puis valeurs analogiques `uint16` petit-boutistes, CRC-8/MAXIM.
 Le `runLevel` n'est pas dans l'en-tête : il voyage comme canal `RUNLEVEL`.
@@ -458,7 +458,7 @@ struct UartCtx {
 ## 7. TX — résumé
 
 Le détail de la trame (en-tête, ordre des canaux, taille selon le layer du lien)
-est dans [`frame/combus_frame_protocol.md`](frame/combus_frame_protocol.md).
+est dans [`frame/README.md`](frame/README.md).
 
 - `combus_tx_init(linkIdx, nodeCom, frameCfg, txHz, layer)`
   (`combus_tx.cpp:88-162`) : mémorise le transport et le layout, calcule la
@@ -533,13 +533,13 @@ pointeur `expected.stable` selon le layer du lien.
 Format de la trame de handshake, rafale au démarrage (3 trames, 100 ms), demande
 toutes les 250 ms, ACK, contrat du lien (`STABLE` / `INCONNU`, chantier 1.2),
 validation MD5 + version, interrupteurs de compilation :
-`src/core/system/combus/protocol/frame/combus_frame_protocol.md`, §8.
+[`handshake/README.md`](handshake/README.md).
 
 **Fichiers handshake** :
-- `src/core/system/combus/protocol/frame/combus_handshake.h`
-- `src/core/system/combus/protocol/frame/combus_handshake.cpp`
-- `src/core/system/combus/protocol/frame/combus_handshake_tx.h/.cpp`
-- `src/core/system/combus/protocol/frame/combus_handshake_rx.h/.cpp`
+- `src/core/system/combus/protocol/handshake/combus_handshake.h`
+- `src/core/system/combus/protocol/handshake/combus_handshake.cpp`
+- `src/core/system/combus/protocol/handshake/combus_handshake_tx.h/.cpp`
+- `src/core/system/combus/protocol/handshake/combus_handshake_rx.h/.cpp`
 
 ---
 
@@ -603,7 +603,7 @@ tour.
 | **RX protocole**             | `src/core/system/combus/protocol/combus_rx.cpp`                      |
 | **Codec frame**              | `src/core/system/combus/protocol/frame/combus_frame.cpp`             |
 | **Defs frame**               | `src/core/system/combus/protocol/frame/combus_frame_defs.h`          |
-| **Handshake**                | `src/core/system/combus/protocol/frame/combus_handshake.cpp`         |
+| **Handshake**                | `src/core/system/combus/protocol/handshake/combus_handshake.cpp`         |
 | **Interface transport**      | `src/core/system/hw/node_com.h`                                      |
 | **Adapter UART**             | `src/core/system/hw/transport/uart_com.cpp`                          |
 | **Port struct**              | `src/core/system/hw/node_com.h` (`ComPort`)                          |

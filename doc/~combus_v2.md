@@ -73,7 +73,7 @@ Chaque canal se doté des métadonnées inhérente à sa transission.
 
 Les informations actuellement retenues sont :
 
-- Direction (`uplink` / `downlink` / `both` / `none`, avec variantes `*_or`) -> diffusion ou non des valeurs en cas de module d'entrées/sortie (complémentaire au layering). Aujourd'hui la direction est un champ de donnée du canal : elle n'est lue ni à l'émission ni à la réception (voir `src/core/system/combus/protocol/frame/combus_frame_protocol.md` §6).
+- Direction (`uplink` / `downlink` / `both` / `none`, avec variantes `*_or`) -> diffusion ou non des valeurs en cas de module d'entrées/sortie (complémentaire au layering). Aujourd'hui la direction est un champ de donnée du canal : elle n'est lue ni à l'émission ni à la réception (voir `src/core/system/combus/protocol/frame/README.md` §6).
 - Priorité (QOS réseau) -> service minal en fonction de la charge réseau
 
 ---
@@ -100,7 +100,7 @@ et les empreintes MD5. Il s'exécute au build, par un hook SCons
 - Fonctionnement interne du builder (pipeline, modules, diffusion, MD5, sorties,
   limites) : `scripts/combus_builder/README.md`.
 - Trame binaire et ordre des canaux sur le fil :
-  `src/core/system/combus/protocol/frame/combus_frame_protocol.md`.
+  `src/core/system/combus/protocol/frame/README.md`.
 
 État : le mode mono-carte est celui utilisé par `platformio.ini`. Le mode
 multi-cartes (nœud avec plusieurs cartes) est implémenté dans le builder mais

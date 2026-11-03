@@ -2,7 +2,7 @@
 
 Document pour qui modifie le builder. Pour écrire un fichier `.cb`, voir
 `doc/configuration/cb_syntax.md`. Pour la trame sur le fil, voir
-`src/core/system/combus/protocol/frame/combus_frame_protocol.md`.
+`src/core/system/combus/protocol/frame/README.md`.
 
 Les références `fichier:ligne` portent sur la branche `main` au moment de la
 rédaction. Les points non prouvés par le code sont dans des blocs

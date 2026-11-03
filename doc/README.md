@@ -134,8 +134,10 @@ Quick index to the documents that sit next to the code. Start from the subject, 
 
 * [ComBus overview](../src/core/system/combus/README.md) — what the bus is and how modules use it
 * [ComBus v2 migration document](~combus_v2.md) — layering, directions, builder section (work in progress)
-* [Protocol layer](../src/core/system/combus/protocol/~README.md) — transport-independent services
-* [Frame and handshake format](../src/core/system/combus/protocol/frame/combus_frame_protocol.md) — wire format, handshake, MD5 contract
+* [Protocol layer](../src/core/system/combus/protocol/README.md) — how links are described, sent, received and watched
+* [Data frame](../src/core/system/combus/protocol/frame/README.md) — wire format, which channels travel, how a frame reaches the bus
+* [Handshake](../src/core/system/combus/protocol/handshake/README.md) — the contract of a link: MD5, states, stable and next modes
+* [Coupling and pairing](../src/core/system/combus/protocol/coupling/README.md) — who is hitched to whom
 * [UART workflow](../src/core/system/combus/protocol/uart_workflow.md) — how the UART link is set up
 * [both_or merge (anti ping-pong)](../src/core/system/combus/protocol/both_or.md) — how a both_or channel such as FAILSAFE_HARD is shared between boards
 * [ComBus link rework](<WIP - ComBus link rework.md>) — preliminary study for the communication rework: multi-link, multi-protocol, versioning (work in progress)
