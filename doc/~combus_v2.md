@@ -73,7 +73,7 @@ Chaque canal se doté des métadonnées inhérente à sa transission.
 
 Les informations actuellement retenues sont :
 
-- Direction (`uplink` / `downlink` / `both` / `none`, avec variantes `*_or`) -> diffusion ou non des valeurs en cas de module d'entrées/sortie (complémentaire au layering). Aujourd'hui la direction est un champ de donnée du canal : elle n'est lue ni à l'émission ni à la réception (voir `src/core/system/combus/protocol/frame/README.md` §6).
+- Direction (`uplink` / `downlink` / `both` / `none`, avec variantes `*_or`) -> diffusion ou non des valeurs en cas de module d'entrées/sortie (complémentaire au layering). Aujourd'hui, l'émission envoie tous les canaux du lien ; à la réception, le sens du canal décide de ce que le nœud écrit (voir `src/core/system/combus/protocol/frame/README.md`).
 - Priorité (QOS réseau) -> service minal en fonction de la charge réseau
 
 ---
@@ -107,6 +107,58 @@ multi-cartes (nœud avec plusieurs cartes) est implémenté dans le builder mais
 n'a pas encore été exercé en build réel. Les alias d'en-têtes par carte et
 l'inversion automatique de `direction` côté télécommande ne sont pas
 implémentés.
+
+---
+
+## Relier les nœuds
+
+Une machine vit rarement seule : une télécommande la pilote, un camion tire une remorque, une pelle porte un godet. Chaque relation de ce type est un **lien** entre deux nœuds, et l'ensemble forme une étoile autour de la machine pilotée.
+
+```text
+     Télécommande
+          │  lien permanent
+          ▼
+        Camion
+       (embase)
+          │  coupleur : le lien n'existe qu'une fois attelé
+          ▼
+       Remorque
+        (fiche)
+```
+
+### Le coupleur
+
+Un **coupleur** est la norme d'un lien entre deux éléments, comme une prise normalisée : il dit quels channels y circulent et dans quel sens. Deux machines qui respectent le même coupleur peuvent s'atteler sans se connaître à l'avance : une remorque fonctionne avec n'importe quel camion doté de la même embase.
+
+Un coupleur a deux côtés :
+
+- l'**embase** porte : le camion, ou la pelle avec son godet. Un nœud peut en avoir plusieurs ;
+- la **fiche** est portée : la remorque, le trommel. Un nœud en a une au plus.
+
+Ce n'est pas la nature d'une machine, mais son rôle du moment : un trommel est porté quand il est attelé, et autonome sinon.
+
+Un **outil**, comme un godet, n'a pas de nœud : il n'y a personne à qui parler. Détecter sa présence suffit.
+
+### Ce qui se passe à l'attelage
+
+1. **La détection.** Un déclencheur signale l'attelage des deux côtés : un capteur, ou une commande du pilote.
+2. **La reconnaissance.** Plusieurs engins peuvent être à portée, surtout en radio. Il faut donc savoir qui est attelé à qui. Comme le déclencheur monte au même moment des deux côtés, les deux engins mesurent le même temps depuis l'attelage. L'embase pose la question plusieurs fois, et seul celui qui donne le bon âge, de façon répétée, est retenu. S'ils sont deux à répondre, rien n'est décidé : le lien reste coupé.
+3. **L'accord.** Les deux bouts vérifient qu'ils respectent bien le même coupleur et que chacun est du bon côté. C'est le **handshake** : deux embases reliées par erreur se refusent.
+4. **Les échanges.** Les channels du coupleur circulent : commandes vers la remorque, mesures vers le camion.
+
+### Au dételage
+
+Le lien se coupe, et ce que le nœud recevait par ce lien reprend sa **valeur sûre**. Il en va de même si le lien est perdu : une machine ne continue jamais d'obéir à une commande qui n'arrive plus. Un faux contact bref ne suffit pas à dételer.
+
+### Et la télécommande ?
+
+Son lien avec la machine est permanent : pas d'attelage, donc pas d'appairage. Il suit les mêmes principes pour le reste : ses propres channels, le même accord avant le moindre échange, et la même valeur sûre en cas de perte.
+
+### Aller plus loin
+
+- [Le couplage et l'appairage](../src/core/system/combus/protocol/coupling/README.md) : la trame, la machine à états, les délais
+- [Le handshake](../src/core/system/combus/protocol/handshake/README.md) : le contrat d'un lien
+- [Le protocole ComBus](../src/core/system/combus/protocol/README.md) : comment les liens sont décrits et surveillés
 
 ---
 

@@ -1,91 +1,91 @@
-# Protocole ComBus
+# ComBus Protocol
 
-Ce dossier fait voyager les channels du ComBus entre deux cartes ou deux nœuds, sans rien savoir du support physique. Il répond à trois questions : que met-on sur le fil, les deux bouts parlent-ils la même langue, et le lien est-il vivant ?
+This folder carries the ComBus channels between two boards or two nodes, without knowing anything about the physical medium. It answers three questions: what goes on the wire, do both ends speak the same language, and is the link alive?
 
-## Vue d'ensemble
+## Overview
 
 ```text
-Modules de la machine
-        │  lisent et écrivent les channels
+Machine modules
+        │  read and write the channels
         ▼
       ComBus
         │
         ▼
-    protocol/        décrit les liens, émet, reçoit, surveille
+    protocol/        describes the links, sends, receives, watches
         │
         ▼
-     NodeCom         interface d'écriture et de lecture
+     NodeCom         write and read interface
         │
         ├── UART
-        └── ESP-NOW (à venir)
+        └── ESP-NOW (to come)
 ```
 
-## Qui fait quoi
+## Who Does What
 
-| Élément | Rôle |
+| Element | Role |
 |---|---|
-| [`frame/`](frame/README.md) | La trame de données : encoder, décoder, appliquer au bus |
-| [`handshake/`](handshake/README.md) | Le contrat du lien : les deux bouts ont-ils le même MD5 ? |
-| [`coupling/`](coupling/README.md) | L'appairage : qui est attelé à qui ? |
-| `combus_tx.*` | L'émission de chaque lien, à son rythme |
-| `combus_rx.*` | La réception de chaque lien : aiguille les octets vers le bon décodeur |
-| `combus_links.*` | Construit les liens à partir de leur description, puis les surveille |
-| `combus_protocol.*` | Les structures qui décrivent un lien, et son initialisation |
-| `combus_peer_link_defs.h` | Les types d'un lien entre nœuds : table et contrat, remplis par le builder |
+| [`frame/`](frame/README.md) | The data frame: encode, decode, apply to the bus |
+| [`handshake/`](handshake/README.md) | The contract of the link: do both ends have the same MD5? |
+| [`coupling/`](coupling/README.md) | The pairing: who is hitched to whom? |
+| `combus_tx.*` | The transmission of each link, at its own rate |
+| `combus_rx.*` | The reception of each link: routes the bytes to the right decoder |
+| `combus_links.*` | Builds the links from their description, then watches them |
+| `combus_protocol.*` | The structures that describe a link, and its initialisation |
+| `combus_peer_link_defs.h` | The types of a link between nodes: table and contract, filled by the builder |
 
-## Décrire un lien
+## Describing a Link
 
-Un lien se déclare, il ne se programme pas :
+A link is declared, not programmed:
 
-- `ComDev` décrit le lien : sa portée, son sens, son activation, son rythme.
-- `ComPort` décrit le port physique de la carte.
-- `ComDevMap` branche un `ComDev` sur un `ComPort`, et dit le rôle de ce bout (`TX`, `RX` ou `TX_RX`).
+- `ComDev` describes the link: its scope, direction, activation and rate.
+- `ComPort` describes the physical port of the board.
+- `ComDevMap` wires a `ComDev` on a `ComPort`, and gives the role of this end (`TX`, `RX` or `TX_RX`).
 
-Au démarrage, `combus_links_init()` valide chaque `ComDevMap`, ouvre le port, qui donne un `NodeCom`, puis démarre le lien. Tout le stockage appartient à l'appelant et reste statique : rien n'est alloué.
+At startup, `combus_links_init()` validates each `ComDevMap`, opens the port, which gives a `NodeCom`, then starts the link. All storage belongs to the caller and stays static: nothing is allocated.
 
-## Les deux portées
+## The Two Scopes
 
-| Portée du lien | Relie | Channels transportés |
+| Scope of the link | Connects | Channels carried |
 |---|---|---|
-| `INTER_NODE` | deux nœuds (télécommande, remorque…) | `BASE` |
-| `INTRA_NODE` | les cartes d'un même nœud | `SYSTEM`, qui inclut `BASE` |
+| `INTER_NODE` | two nodes (remote, trailer...) | `BASE` |
+| `INTRA_NODE` | the boards of one node | `SYSTEM`, which includes `BASE` |
 
-Les channels `BOARD` restent sur leur carte, ils ne voyagent jamais.
+`BOARD` channels stay on their board: they never travel.
 
-Un lien entre nœuds peut aussi avoir **sa propre table** (`ComPeerLink`) : c'est le cas d'un lien à travers un coupleur et du lien avec la télécommande. Il transporte alors exactement les channels de cette table.
+A link between nodes may also have **its own table** (`ComPeerLink`): this is the case of a link through a coupler and of the link with the remote. It then carries exactly the channels of that table.
 
-## Un tour de boucle
+## One Loop Cycle
 
-1. **Réception** : `combus_rx_update()` lit les octets et les aiguille vers le bon décodeur.
-2. **Surveillance** : `combus_links_update()` suit le couplage et détecte la perte des liens. Une perte est publiée dans `NODE_LINK_FAIL` ou `BOARD_LINK_FAIL`, selon la portée.
-3. **Traitements** de la machine.
-4. **Émission** : `combus_tx_update()` envoie les handshakes dus, puis une trame de données si c'est l'heure.
+1. **Reception**: `combus_rx_update()` reads the bytes and routes them to the right decoder.
+2. **Watch**: `combus_links_update()` follows the coupling and detects the loss of a link. A loss is published in `NODE_LINK_FAIL` or `BOARD_LINK_FAIL`, depending on the scope.
+3. **Processing** of the machine.
+4. **Transmission**: `combus_tx_update()` sends the handshakes due, then a data frame when its time has come.
 
-## Reconnaître une trame
+## Telling Frames Apart
 
-Toutes les trames commencent par le même en-tête. Deux octets suffisent à les distinguer :
+All frames start with the same header. Two bytes are enough to tell them apart:
 
-| `seq` | `flags` | Trame | Traitée par |
+| `seq` | `flags` | Frame | Handled by |
 |---|---|---|---|
-| 1 à 255 | 0 | données | `frame/` |
-| 0 | bit de couplage levé | couplage | `coupling/` |
-| 0 | autre | handshake | `handshake/` |
+| 1 to 255 | 0 | data | `frame/` |
+| 0 | coupling bit set | coupling | `coupling/` |
+| 0 | other | handshake | `handshake/` |
 
-## Les règles
+## The Rules
 
-- **Indépendance du transport** : le protocole ne parle qu'à `NodeCom`, jamais à `Serial` ou à un autre périphérique.
-- **Un port, un propriétaire** : ouvrir un port déjà pris est une erreur de configuration, signalée et refusée.
-- **Une trame invalide ne coûte qu'un octet** : le récepteur jette ce premier octet et cherche le début de la trame suivante, sans en avaler une bonne.
+- **Transport independence**: the protocol only talks to `NodeCom`, never to `Serial` or another peripheral.
+- **One port, one owner**: opening a port already taken is a configuration error, reported and refused.
+- **An invalid frame costs only one byte**: the receiver drops that first byte and looks for the start of the next frame, without swallowing a good one.
 
-## Ajouter un transport
+## Adding a Transport
 
-Il suffit d'un adaptateur qui fournit un `NodeCom` : `write()`, `readByte()`, `available()`. Le reste du protocole ne change pas.
+An adapter that provides a `NodeCom` is enough: `write()`, `readByte()`, `available()`. The rest of the protocol does not change.
 
-## Aller plus loin
+## Going Further
 
-- [La trame de données](frame/README.md)
-- [Le handshake](handshake/README.md)
-- [Le couplage et l'appairage](coupling/README.md)
-- [La fusion `both_or`](both_or.md) : l'anti ping-pong entre cartes
-- [Le workflow UART](uart_workflow.md) : la chaîne d'initialisation, du flag de build à `loop()`
-- [Le builder](../../../../../scripts/combus_builder/README.md) : comment les identifiants et les tables sont générés
+- [The data frame](frame/README.md)
+- [The handshake](handshake/README.md)
+- [Coupling and pairing](coupling/README.md)
+- [The `both_or` merge](both_or.md): the anti ping-pong between boards
+- [The UART workflow](uart_workflow.md): the init chain, from the build flag to `loop()`
+- [The builder](../../../../../scripts/combus_builder/README.md): how the IDs and tables are generated

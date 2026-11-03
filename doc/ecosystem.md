@@ -108,3 +108,11 @@ The foundations are established and the overall direction is clear, but experime
 This document describes the intended architecture rather than a frozen specification.
 
 As the community, ideas and technologies evolve, the architecture is expected to evolve alongside them.
+
+---
+
+## Going Further
+
+* [ComBus](../src/core/system/combus/README.md): what the bus is and how modules use it.
+* [ComBus protocol](../src/core/system/combus/protocol/README.md): how links are described, sent, received and watched.
+* [Coupling and pairing](../src/core/system/combus/protocol/coupling/README.md): how two nodes find out they are hitched.

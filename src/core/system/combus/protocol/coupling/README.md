@@ -2,6 +2,8 @@
 
 Un lien qui passe par un coupleur n'existe que lorsque deux éléments sont attelés (`LinkActivation::ON_COUPLING`). Quand plusieurs engins sont à portée, reste à savoir **qui est attelé à qui**. Ce dossier répond à cette question avant d'ouvrir le lien.
 
+Ce document décrit la mécanique. Pour le principe (coupleur, embase, fiche, ce qui se passe à l'attelage), commencer par [Relier les nœuds](../../../../../../doc/~combus_v2.md#relier-les-nœuds).
+
 Vocabulaire : l'**embase** (`SOCKET`) est le côté qui porte, la **fiche** (`PLUG`) le côté porté.
 
 ## L'idée

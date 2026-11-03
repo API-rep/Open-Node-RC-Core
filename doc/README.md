@@ -133,7 +133,7 @@ Quick index to the documents that sit next to the code. Start from the subject, 
 **ComBus (communication bus)**
 
 * [ComBus overview](../src/core/system/combus/README.md) — what the bus is and how modules use it
-* [ComBus v2 migration document](~combus_v2.md) — layering, directions, builder section (work in progress)
+* [ComBus v2 migration document](~combus_v2.md) — layering, directions, builder section, linking nodes (work in progress)
 * [Protocol layer](../src/core/system/combus/protocol/README.md) — how links are described, sent, received and watched
 * [Data frame](../src/core/system/combus/protocol/frame/README.md) — wire format, which channels travel, how a frame reaches the bus
 * [Handshake](../src/core/system/combus/protocol/handshake/README.md) — the contract of a link: MD5, states, stable and next modes
