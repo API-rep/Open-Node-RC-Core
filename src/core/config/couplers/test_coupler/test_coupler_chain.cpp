@@ -1,29 +1,32 @@
 /******************************************************************************
  * @file  test_coupler_chain.cpp
- * @brief Chain of the TEST coupler, vehicle end (link rework, step 3.4e).
+ * @brief Chain of the TEST coupler, socket end.
  *
- * @details See test_coupler_chain.h.  The pipeline is seeded with
- *   TEST_COUPLER_CMD and committed to it:
- *     0. engaged_delay (guard only) — cb_delay_fn: while uncoupled, the
- *                                     chain stops until the engaged switch
- *                                     has stayed on for its delay;
- *     1. toggle                     — TEST_COUPLER_BTN, ON_PRESS, no hold.
- *   The guard runs first because the toggle claims the chain when it fires.
- *   A button held while approaching couples once the switch has been on for the delay (the
- *   toggle then sees a new press); a short press without the switch does
- *   nothing; a switch that bounces never couples.  Uncoupling never needs the
- *   switch.
+ * @details The pipeline is seeded with TEST_COUPLER_CMD and committed to it:
+ *     0. engaged_delay (guard only), cb_delay_fn: while uncoupled, the chain stops
+ *        until the engaged switch has stayed on for its delay;
+ *     1. toggle, cb_btn_toggle_fn: TEST_COUPLER_BTN, ON_PRESS, no hold.
+ *
+ *   The guard runs first, because the toggle claims the chain when it fires.  A button
+ *   held while approaching couples once the switch has been on for the delay: the
+ *   toggle then sees a new press.  A short press without the switch does nothing; a
+ *   switch that bounces never couples.  Uncoupling never needs the switch.
  *****************************************************************************/
 
 #include "test_coupler_chain.h"
 
 #if defined(HAS_COUPLER_SOCKET_TEST_COUPLER)
 
-#include <core/system/combus/processors/proc_chain.h>        // proc_chain_step
-#include <core/system/combus/processors/input/cb_btn.h>      // cb_btn_toggle_fn
-#include <core/system/combus/processors/logic/cb_delay.h>    // cb_delay_fn
-#include <core/config/machines/combus_types.h>               // DigitalComBusID
+#include <core/system/combus/processors/proc_chain.h>       // proc_chain_step
+#include <core/system/combus/processors/input/cb_btn.h>     // cb_btn_toggle_fn
+#include <core/system/combus/processors/logic/cb_delay.h>   // cb_delay_fn
+#include <core/config/machines/combus_types.h>              // DigitalComBusID
 
+
+
+// =============================================================================
+// 1. THE CHAIN
+// =============================================================================
 
 namespace {
 
@@ -61,15 +64,23 @@ CbChain s_chain = {
 } // namespace
 
 
+
+// =============================================================================
+// 2. API
+// =============================================================================
+
+	/// One step of the pipeline, committed to TEST_COUPLER_CMD.
 void test_coupler_socket_chain( ComBus& bus )
 {
 	proc_chain_step(s_chain, bus);
 }
 
 
+	/// The states only: the configurations are const.
 void test_coupler_socket_chain_reset( void )
 {
 	s_toggle = CbBtnState{};
+
 #if defined(HAS_TEST_COUPLER_ENGAGED_SW)
 	s_engagedDelay = CbDelayState{};
 #endif

@@ -1,18 +1,17 @@
 /*!****************************************************************************
  * @file  combus_coupling.h
- * @brief ComBus coupling frame: who is hitched to whom (link rework 3.4b).
+ * @brief ComBus coupling frame: the frame the pairing speaks.
  *
- * @details The coupling frame is apart from the handshake: it carries the
- *   identity of a node, the age of its hitch and its functions, and serves
- *   only the pairing of a coupled link (ON_COUPLING).  It neither makes a link
- *   alive nor validates a contract: the handshake, the data frames and the
- *   link watch are unchanged.
+ * @details The coupling frame is apart from the handshake: it carries the identity of
+ *   a node, the age of its hitch and its functions, and serves only the pairing of a
+ *   coupled link (ON_COUPLING).  It neither makes a link alive nor validates a
+ *   contract.
  *
- *   Wire slot: `seq == 0` (as the handshake) with the header flag
- *   `kCombusFrameFlagCoupling`; combus_rx routes it here, every other
- *   `seq == 0` frame to the handshake.  A firmware that does not know it
- *   reads it as a handshake of the wrong length: the CRC fails, the frame is
- *   dropped and the stream re-syncs.
+ *   Wire slot: `seq == 0`, as the handshake, with the header flag
+ *   kCombusFrameFlagCoupling.  combus_rx routes it here, and every other `seq == 0`
+ *   frame to the handshake.  A firmware without the coupling frame would read it as a
+ *   handshake of the wrong length: its CRC check fails, the frame is dropped and the
+ *   stream re-syncs.
  *
  *   Payload layout (kCombusCouplingPayloadLen = 13), integers little-endian:
  *     [0]       msg           CouplingMsg (request or answer)
@@ -22,16 +21,17 @@
  *     [9..10]   hitchAgeMs    ms since the hitch trigger rose, saturated at 65535
  *     [11..12]  features      mask of the functions (reserved: 0 until defined)
  *
- *   A received frame is recorded (diagnostics, tests) and handed to the
- *   handler registered by the pairing (combus_pairing.h, step 3.4c), so that
- *   this module does not depend on the layer above it.
+ *   A received frame is handed to the handler registered by the watch of the links,
+ *   which passes it to the pairing: this module does not depend on the layers above
+ *   it.  The last frame of the first kCombusCouplingMaxLinks links is also recorded,
+ *   for the tests and the diagnostics.
  *******************************************************************************///
 #pragma once
 
 #include <stdint.h>
 #include <stdbool.h>
 
-#include <core/system/combus/protocol/frame/combus_frame.h>            // CombusFrameHeaderLen
+#include <core/system/combus/protocol/frame/combus_frame.h>           // CombusFrameHeaderLen
 #include <core/system/combus/protocol/link/combus_peer_link_defs.h>   // NodeAddr
 
 
@@ -50,7 +50,7 @@ static constexpr uint8_t kCombusCouplingPayloadLen = 13u;
 static constexpr uint8_t kCombusCouplingFrameLen =
 	CombusFrameHeaderLen + kCombusCouplingPayloadLen + sizeof(uint8_t);
 
-/// Links whose last received coupling frame is recorded (step 3.4b).
+/// Links whose last received coupling frame is recorded.
 static constexpr uint8_t kCombusCouplingMaxLinks = 4u;
 
 
@@ -64,8 +64,8 @@ static constexpr uint8_t kCombusCouplingMaxLinks = 4u;
  */
 
 enum class CouplingMsg : uint8_t {
-	REQUEST = 1u,   ///< sent by the vehicle, one per round
-	ANSWER  = 2u    ///< sent by a hitched, unpaired attachment
+	REQUEST = 1u,   ///< sent by the socket, one per round
+	ANSWER  = 2u    ///< sent by a hitched plug, not yet paired
 };
 
 
@@ -84,18 +84,19 @@ struct CouplingFrame {
 
 
 // =============================================================================
-// 3. API
+// 3. ENCODE AND DECODE
 // =============================================================================
 
-/**
- * @brief Age of a hitch on the wire: @p ms saturated at 65535.
- */
-
+/// Age of a hitch on the wire: @p ms saturated at 65535.
 uint16_t combus_coupling_hitch_age( uint32_t ms );
 
 
 /**
  * @brief Encode a coupling frame.
+ *
+ * @param buf     Output buffer.
+ * @param bufLen  Its size.
+ * @param frame   Content to encode.
  *
  * @return Bytes written (kCombusCouplingFrameLen), or 0 if @p buf is null or too small.
  */
@@ -106,20 +107,32 @@ uint8_t combus_coupling_encode( uint8_t* buf, uint8_t bufLen, const CouplingFram
 /**
  * @brief Decode a coupling frame from a linear buffer.
  *
- * @return true if @p len is kCombusCouplingFrameLen, the header is the one of a
- *         coupling frame, the CRC matches and the message is known.
+ * @param buf  Bytes of the frame, SOF first.
+ * @param len  Their number.
+ * @param out  Content decoded; written on success only.
+ *
+ * @return true if @p len is kCombusCouplingFrameLen, the CRC matches, the header is
+ *         the one of a coupling frame and the message is known.
  */
 
 bool combus_coupling_decode( const uint8_t* buf, uint8_t len, CouplingFrame& out );
 
 
 /**
- * @brief Try to decode a coupling frame at the head of a ring buffer (called by combus_rx).
+ * @brief Try to decode a coupling frame at the head of a ring buffer, for combus_rx.
  *
  * @details Same contract as combus_handshake_tryDecode(): 0 while the frame is
- *   incomplete; on a CRC failure, the SOF is dropped (1 byte) and 0 returned;
- *   on success, the frame is consumed, recorded for @p linkIdx and its length
+ *   incomplete; on a refused frame, the SOF is dropped (1 byte) and 0 returned; on
+ *   success, the frame is consumed, recorded, handed to the handler, and its length
  *   returned.
+ *
+ * @param linkIdx      Index of the link the bytes come from.
+ * @param ringBuf      Ring buffer base pointer.
+ * @param ringBufSize  Ring buffer capacity.
+ * @param ringHead     Index of the oldest byte; moved by what is consumed.
+ * @param ringCount    Number of bytes held; lowered by what is consumed.
+ *
+ * @return Length of the frame consumed, or 0.
  */
 
 uint8_t combus_coupling_tryDecode( uint8_t  linkIdx,
@@ -129,44 +142,40 @@ uint8_t combus_coupling_tryDecode( uint8_t  linkIdx,
                                    uint8_t& ringCount );
 
 
-/**
- * @brief Identity of this node: the factory MAC of the ESP32.
- */
 
+// =============================================================================
+// 4. IDENTITY, RECORDS AND HANDLER
+// =============================================================================
+
+/// Identity of this node: the factory MAC of the ESP32, type NONE if it cannot be read.
 NodeAddr combus_coupling_local_addr( void );
 
 
-/**
- * @brief Number of coupling frames received on @p linkIdx since the last reset.
- */
-
+/// Number of coupling frames received on @p linkIdx since the last reset; 0 beyond the recorded links.
 uint32_t combus_coupling_rx_count( uint8_t linkIdx );
 
 
 /**
- * @brief Last coupling frame received on @p linkIdx.
+ * @brief Last coupling frame received on a link.
  *
- * @return false if none was received since the last reset.
+ * @param linkIdx  Index of the link.
+ * @param out      The frame; written when there is one.
+ *
+ * @return false if none was received since the last reset, or beyond the recorded links.
  */
 
 bool combus_coupling_last_rx( uint8_t linkIdx, CouplingFrame& out );
 
 
-/**
- * @brief Forget the received coupling frames (tests, re-init).
- */
-
+/// Forget the received coupling frames (tests, re-init).
 void combus_coupling_reset( void );
 
 
-/// Handler of a received coupling frame (link rework 3.4c).
+/// Handler of a received coupling frame.
 using CouplingRxHandler = void (*)( uint8_t linkIdx, const CouplingFrame& frame );
 
 
-/**
- * @brief Register the handler of the received coupling frames (nullptr: none).
- */
-
+/// Register the handler of the received coupling frames (nullptr: none).
 void combus_coupling_set_rx_handler( CouplingRxHandler handler );
 
 // EOF combus_coupling.h
