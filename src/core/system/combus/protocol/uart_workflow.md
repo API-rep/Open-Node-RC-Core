@@ -484,7 +484,7 @@ est dans [`frame/README.md`](frame/README.md).
   `layer` du lien l'identité d'écriture des trames appliquées (un lien BOARD
   reçoit l'identité SYSTEM), remet à zéro l'état du lien et invalide le contrat
   de handshake.
-- `combus_rx_update(bus)` : pour chaque lien, vide le transport dans un tampon
+- `combus_rx_update()` : pour chaque lien, vide le transport dans un tampon
   circulaire puis décode tant que possible. `bus` n'est plus lu : la réaction P4,
   qui invalidait le contrat de handshake pendant un failsafe actif, a été retirée
   au chantier 1.2 (elle aurait bloqué le failsafe des autres cartes).

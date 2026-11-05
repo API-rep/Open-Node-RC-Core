@@ -22,7 +22,7 @@
 void com_rx_update(ComBus& bus) {
 
 	// --- ComBus receiving links: decode and apply the frames ---
-  combus_rx_update(&bus);
+  combus_rx_update();
 
 	// --- both_or channels: value = this board's value OR the live links (anti ping-pong, both_or.md) ---
   for (uint8_t ch = 0u; ch < static_cast<uint8_t>(DigitalComBusID::CH_COUNT); ++ch) {

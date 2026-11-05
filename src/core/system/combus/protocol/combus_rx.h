@@ -135,12 +135,8 @@ struct CombusRxState {
     // combus_frame_apply() manually (legacy behaviour, used by tests).
     ComBus*                target            = nullptr;
 
-    // Layer of the link, as given to combus_rx_init(), and the write
-    // identity derived from it: the caller layer passed to
-    // combus_frame_apply() for every applied frame.  They differ only for
-    // a BOARD link, whose frames get the SYSTEM identity (a frame never
-    // writes a BOARD channel).
-    ChanLayer              layer             = ChanLayer::UNDEFINED;
+    // Layer of the link: the caller layer passed to combus_frame_apply() for
+    // every applied frame.
     ChanLayer              writeLayer        = ChanLayer::UNDEFINED;
 
     // Silence after which the link counts as lost (ms), set by
@@ -243,7 +239,7 @@ void combus_rx_init( uint8_t            linkIdx,
  *             is set, HAS_FAILSAFE only).  May be nullptr: the reaction is
  *             then skipped.  Same convention as combus_tx_update().
  */
-void combus_rx_update( const ComBus* bus );
+void combus_rx_update( void );
 
 
 

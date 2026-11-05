@@ -148,7 +148,7 @@ static void ensureStable(void) {
     for (uint32_t t0 = millis(); !combus_handshake_is_contract_validated(ctx) && (millis() - t0) < 1500u; ) {
         combus_handshake_tx_update(ctx, s_com);
         delay(10u);
-        combus_rx_update(&bus);
+        combus_rx_update();
     }
     TEST_ASSERT_TRUE_MESSAGE(combus_handshake_is_contract_validated(ctx), "link not established - check TX<->RX jumper");
 }
@@ -237,7 +237,7 @@ static void test_row5b_two_vehicles_refuse_each_other(void) {
     for (uint32_t t0 = millis(); (millis() - t0) < 1000u; ) {
         combus_handshake_tx_update(ctx, s_com);
         delay(10u);
-        combus_rx_update(&bus);
+        combus_rx_update();
     }
     TEST_ASSERT_FALSE_MESSAGE(combus_handshake_is_contract_validated(ctx), "two vehicles agreed on a contract");
     ensureStable();                     // control: same jumper, the attachment role is accepted
@@ -258,7 +258,7 @@ static void test_row6_both_or_through_the_table(void) {
     delay(30u);
     combus_tx_update(&bus);                                         // loops back on the same link
     delay(kRxPollMs);
-    combus_rx_update(&bus);
+    combus_rx_update();
     const ComBusFrame* snap = combus_rx_snapshot(kLinkIdx);
     TEST_ASSERT_NOT_NULL(snap);
     TEST_ASSERT_FALSE_MESSAGE(snap->digital[0], "the trailer's fault was echoed back to it");
@@ -274,7 +274,7 @@ static void test_row7_end_to_end(void) {
     delay(30u);
     combus_tx_update(&bus);
     delay(kRxPollMs);
-    combus_rx_update(&bus);
+    combus_rx_update();
 
     const ComBusFrame* snap = combus_rx_snapshot(kLinkIdx);
     TEST_ASSERT_NOT_NULL(snap);
@@ -593,7 +593,7 @@ static void sendCouplingFrame(const CouplingFrame& f) {
     TEST_ASSERT_EQUAL_UINT8(kCombusCouplingFrameLen, combus_coupling_encode(buf, sizeof(buf), f));
     s_com->write(s_com->ctx, buf, kCombusCouplingFrameLen);
     delay(kRxPollMs);
-    combus_rx_update(&bus);
+    combus_rx_update();
 }
 
 /** Row 1: encode then decode: the same fields, 19 bytes. */

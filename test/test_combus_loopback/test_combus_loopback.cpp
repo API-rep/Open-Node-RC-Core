@@ -337,7 +337,7 @@ static void test_loopback_single_frame(void) {
     delay(30u);
     combus_tx_update(&txComBus);
     delay(kRxPollMs);
-    combus_rx_update(&txComBus);
+    combus_rx_update();
 
     const ComBusFrame* snap = combus_rx_snapshot(kLinkIdx);
     TEST_ASSERT_NOT_NULL_MESSAGE(snap, "No snapshot after loopback — check TX↔RX jumper");
@@ -355,7 +355,7 @@ static void test_loopback_resync_after_garbage(void) {
     delay(30u);
     combus_tx_update(&txComBus);
     delay(kRxPollMs);
-    combus_rx_update(&txComBus);
+    combus_rx_update();
 
     const ComBusFrame* snap = combus_rx_snapshot(kLinkIdx);
     TEST_ASSERT_NOT_NULL_MESSAGE(snap, "No snapshot after re-sync — SOF scan may be broken");
@@ -370,7 +370,7 @@ static void test_loopback_monkey(void) {
         delay(30u);
         combus_tx_update(&txComBus);
         delay(kRxPollMs);
-        combus_rx_update(&txComBus);
+        combus_rx_update();
 
         const ComBusFrame* snap = combus_rx_snapshot(kLinkIdx);
         TEST_ASSERT_NOT_NULL_MESSAGE(snap, "Monkey loopback: no snapshot");
@@ -385,9 +385,7 @@ static void test_loopback_monkey(void) {
 // A frame received on a link is applied onto the target ComBus with the layer
 // of that link as write identity (combus_rx_init() `layer` parameter):
 //   - BASE link   -> writes BASE channels only;
-//   - SYSTEM link -> writes BASE and SYSTEM channels;
-//   - BOARD link  -> gets the SYSTEM identity (a frame never writes a BOARD
-//                    channel).
+//   - SYSTEM link -> writes BASE and SYSTEM channels.
 //
 // The target is a copy of the generated channel layout (layers, directions)
 // with every value cleared. The TX side always sends the SYSTEM prefix, so the
@@ -442,7 +440,7 @@ static void sendAndApply(ChanLayer rxLayer) {
     delay(30u);
     combus_tx_update(&txComBus);
     delay(kRxPollMs);
-    combus_rx_update(&txComBus);
+    combus_rx_update();
 
     TEST_ASSERT_NOT_NULL_MESSAGE(combus_rx_snapshot(kLinkIdx), "No snapshot — check TX↔RX jumper");
     TEST_ASSERT_TRUE_MESSAGE(combus_rx_snapshot(kLinkIdx)->analog[kThrottleIdx] == kThrottleVal,
@@ -463,14 +461,6 @@ static void test_rx_base_link_refuses_system_channels(void) {
 
     TEST_ASSERT_EQUAL_UINT16(kThrottleVal, rxTargetBus.analogBus[kThrottleIdx].value);
     TEST_ASSERT_EQUAL_UINT16(0u, rxTargetBus.analogBus[kRunLevelIdx].value);
-}
-
-/** BOARD link: gets the SYSTEM identity, so both channels are applied. */
-static void test_rx_board_link_gets_system_identity(void) {
-    sendAndApply(ChanLayer::BOARD);
-
-    TEST_ASSERT_EQUAL_UINT16(kThrottleVal, rxTargetBus.analogBus[kThrottleIdx].value);
-    TEST_ASSERT_EQUAL_UINT16((uint16_t)RunLevel::RUNNING, rxTargetBus.analogBus[kRunLevelIdx].value);
 }
 
 
@@ -794,24 +784,6 @@ static void test_md5_resolution_system(void) {
     TEST_ASSERT_EQUAL_UINT8_ARRAY(combus::wire::kCombusSystemComBusMd5, ctx.expected.stable, 16u);
 }
 
-/** combus_protocol_init() with BOARD layer must resolve to kCombusComBusMd5 (FULL). */
-static void test_md5_resolution_board(void) {
-    static CombusHandshakeContext ctx = {};
-    static ComBusLink link = {};
-
-    link.name        = "test_system";
-    link.com         = &s_unusedCom;
-    link.txCfg       = std::nullopt;
-    link.rxCfg       = std::nullopt;
-    link.handshakeCtx = &ctx;
-    link.layer       = ChanLayer::BOARD;
-
-    combus_protocol_init(kLinkIdx, &link);
-
-    TEST_ASSERT_NOT_NULL(ctx.expected.stable);
-    TEST_ASSERT_EQUAL_UINT8_ARRAY(combus::wire::kCombusComBusMd5, ctx.expected.stable, 16u);
-}
-
 // =============================================================================
 // GROUP I — LINKS FROM THEIR DESCRIPTION (chantier 0.4)
 //
@@ -996,7 +968,7 @@ static void ensureStable(void) {
     while (!combus_handshake_is_contract_validated(ctx) && (millis() - t0) < 1500u) {
         combus_handshake_tx_update(ctx, s_com);
         delay(10u);
-        combus_rx_update(&rxTargetBus);
+        combus_rx_update();
     }
     TEST_ASSERT_TRUE_MESSAGE(combus_handshake_is_contract_validated(ctx), "link not established — check TX↔RX jumper");
 }
@@ -1176,7 +1148,7 @@ static void test_both_or_sends_no_echo(void) {
     delay(30u);
     combus_tx_update(&rxTargetBus);                     // loops back on the same link
     delay(kRxPollMs);
-    combus_rx_update(&rxTargetBus);
+    combus_rx_update();
 
     const ComBusFrame* snap = combus_rx_snapshot(kLinkIdx);
     TEST_ASSERT_NOT_NULL(snap);
@@ -1376,7 +1348,7 @@ static void sendGoodAck(void) {
 }
 
 /** Let the RX module read what is on the wire. */
-static void pumpRx(void) { combus_rx_update(&rxTargetBus); }
+static void pumpRx(void) { combus_rx_update(); }
 
 /** Row 1: both ends start together: request, ACK, STABLE; the periodic ACK keeps it STABLE. */
 static void test_contract_row1_request_ack_stable(void) {
@@ -2085,7 +2057,6 @@ void setup() {
     // --- Group H: RX write identity by link layer (chantier 0.1) ---
     RUN_TEST(test_rx_system_link_applies_system_channels);
     RUN_TEST(test_rx_base_link_refuses_system_channels);
-    RUN_TEST(test_rx_board_link_gets_system_identity);
 
     // --- Group C: view identity (Phase 3 / A13) ---
     // Memory identity (pointer equality) + prefix alignment (numeric).
@@ -2113,7 +2084,6 @@ void setup() {
     RUN_TEST(test_md5_arrays_are_distinct);
     RUN_TEST(test_md5_resolution_base);
     RUN_TEST(test_md5_resolution_system);
-    RUN_TEST(test_md5_resolution_board);
     RUN_TEST(test_md5_compare_match_with_correct_local);
 
     // --- Group I: links from their description (chantier 0.4) ---

@@ -54,7 +54,7 @@ ComLinkRuntime* remote_links_runtime( uint8_t idx )
 void remote_links_update( void )
 {
     ComBus& bus = *kDrivenMachines[0].bus;
-    combus_rx_update(&bus);
+    combus_rx_update();
     combus_links_update(bus);
     combus_tx_update(&bus);
 }

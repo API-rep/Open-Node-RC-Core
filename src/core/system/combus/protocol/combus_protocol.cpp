@@ -60,12 +60,7 @@ void combus_protocol_init( uint8_t linkIdx, ComBusLink* link )
         //    (to embed in the magic frame) and RX (to compare against
         //    the on-wire MD5).  No switch repeated at every frame.
         //
-        //    Only BASE, SYSTEM and BOARD are valid for a handshake link.
-        //    UNDEFINED is a config error (forgotten / missing layer) and
-        //    triggers a FATAL halt — a silent rejection would mask the
-        //    bug instead of revealing it (same pattern as the
-        //    "no pool registered" FATAL in uart_com.cpp and the
-        //    UNDEFINED FATAL in combus_tx_init()).
+        //    Only BASE and SYSTEM travel on a link.
     switch (link->layer) {
         case ChanLayer::BASE:
             link->handshakeCtx->expected.stable = combus::wire::kCombusBaseComBusMd5;
@@ -73,20 +68,11 @@ void combus_protocol_init( uint8_t linkIdx, ComBusLink* link )
         case ChanLayer::SYSTEM:
             link->handshakeCtx->expected.stable = combus::wire::kCombusSystemComBusMd5;
             break;
-        case ChanLayer::BOARD:
-            // BOARD — reserved for a future intra-device loopback.
-            // Falls back to the FULL view (machine node default).
-            link->handshakeCtx->expected.stable = combus::wire::kCombusComBusMd5;
-            break;
-        case ChanLayer::UNDEFINED:
         default:
-            // UNDEFINED — config error (forgotten / missing layer).
-            // FATAL halt: a silent rejection would mask the bug instead
-            // of revealing it.
-            sys_log_err("[COMBUS_PROTOCOL] FATAL: ChanLayer::UNDEFINED is not a valid layer for link '%s' — system halted\n",
+            // Config error: a silent rejection would mask the bug instead of revealing it.
+            sys_log_err("[COMBUS_PROTOCOL] FATAL: only BASE and SYSTEM travel on a link ('%s') — system halted\n",
                         link->name);
             while (1) { /* halt */ }
-            break;
     }
 
         // --- 3. Wire the per-link handshake context BEFORE init so the

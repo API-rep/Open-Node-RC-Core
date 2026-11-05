@@ -346,11 +346,8 @@ void combus_protocol_init_all( ComBusLink* links, uint8_t count );
  *
  *   Failure modes:
  *     - link == nullptr or link->com == nullptr  → return immediately
- *     - link->layer == ChanLayer::UNDEFINED      → FATAL: logged via
+ *     - link->layer neither BASE nor SYSTEM      → FATAL: logged via
  *                                                  sys_log_err, system halted
- *     - link->layer == ChanLayer::BOARD         → accepted: the handshake
- *                                                  uses the FULL view MD5
- *                                                  (reserved for a loopback)
  *
  * @param linkIdx  Index of this link in the per-link state array
  *                 (allocated by combus_protocol_init_all()).

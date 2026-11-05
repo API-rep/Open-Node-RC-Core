@@ -52,20 +52,6 @@ void combus_rx_register_pool( CombusRxState* buffer, uint8_t capacity )
 
 
 // =============================================================================
-// 2. PER-LINK HANDSHAKE CONTEXT WIRING (P3)
-// =============================================================================
-
-void combus_rx_set_handshake_ctx( uint8_t                linkIdx,
-                                  CombusHandshakeContext* ctx )
-{
-    if (!s_rxStates || linkIdx >= s_capacity) { return; }
-    s_rxStates[linkIdx].handshakeCtx = ctx;
-}
-
-
-
-
-// =============================================================================
 // 3. PRIVATE HELPERS  (per-link — take CombusRxState&)
 // =============================================================================
 
@@ -108,75 +94,24 @@ static void rxBufConsume( CombusRxState& st, uint8_t n )
 
 
 
-/**
- * @brief Attempt to decode a valid frame from the head of the ring buffer.
- *
- * @details Decoding sequence:
- *   1. Scan for SOF — discards leading bytes until `CombusFrameSof` is found
- *      or the buffer is exhausted.
- *   2. Peek the `seq` byte at wire offset 3 (right after the 2-byte
- *      `ComBusFrameCfg` nAnalog/nDigital) to discriminate between a
- *      control frame (`seq` in 1..255) and a handshake frame (`seq == 0`).
- *      The two paths are STRUCTURALLY SEPARATE — the control-frame decoder
- *      is only ever called for non-zero seq, and the handshake stub in
- *      `combus_handshake.cpp` is only ever called for seq == 0.  This keeps
- *      the future versioning logic free to grow inside `combus_handshake.*`
- *      without any refactor of the control-frame path.  Link rework 3.4b: a
- *      seq == 0 frame with the coupling flag goes to `combus_coupling.*`
- *      instead, never to the handshake.
- *   3. Control-frame path — reads `nAnalog` / `nDigital` from the wire
- *      header, computes the expected frame length, discards SOF and
- *      re-syncs if the size would exceed `CombusRxBufSize`, copies the frame
- *      into a linear buffer and calls `combus_frame_decode()`.  On CRC
- *      success, updates the snapshot and consumes the frame bytes.  On
- *      CRC failure, discards only the SOF and re-syncs.
- *
- * @return Number of bytes consumed, or 0 if no complete valid frame was found.
- */
-static uint8_t tryDecode( uint8_t linkIdx, CombusRxState& st )
+static void applyToBus( CombusRxState& st )
 {
-    // --- 1. Scan for SOF ---
-    while (st.rxCount > 0u && rxBufAt(st, 0u) != CombusFrameSof) {
-        rxBufConsume(st, 1u);
+    if (st.target == nullptr) { return; }
+
+    const ComPeerLink* peer = st.handshakeCtx ? st.handshakeCtx->peer : nullptr;
+    ComBusFrameCfg applyCfg = st.frameCfg;
+
+    if (st.handshakeCtx && st.handshakeCtx->baseSet && !st.handshakeCtx->nextMode) {
+        applyCfg.nAnalog  = peer ? peer->analog.stableCount  : combus::wire::kCombusBaseStableAnalogCount;
+        applyCfg.nDigital = peer ? peer->digital.stableCount : combus::wire::kCombusBaseStableDigitalCount;
     }
 
-    if (st.rxCount < CombusFrameHeaderLen) {
-        // Not enough bytes yet even to peek the seq byte — wait for more.
-        return 0u;
-    }
-
-    // --- 2. Peek `seq` byte (wire offset 3) to discriminate frame kind ---
-    uint8_t seqByte = rxBufAt(st, 1u + offsetof(CombusFrameHeader, cfg) +
-                                    offsetof(ComBusFrameCfg, nDigital) + 1u);
-
-    if (seqByte == 0u) {
-        // --- 2a. Link rework 3.4b — COUPLING PATH: seq == 0 with the coupling flag ---
-        const uint8_t flagsByte = rxBufAt(st, 1u + offsetof(CombusFrameHeader, flags));
-        if (flagsByte & kCombusFrameFlagCoupling) {
-            return combus_coupling_tryDecode(linkIdx, st.rxBuf, CombusRxBufSize, st.rxHead, st.rxCount);
-        }
-    }
-
-    // --- 2b. Link rework 3.4c — PAIRING: coupling frames only, any other byte is dropped ---
-    if (st.mode == CombusRxMode::PAIRING) {
-        rxBufConsume(st, 1u);
-        return 1u;
-    }
-
-    if (seqByte == 0u) {
-        // --- 2c. HANDSHAKE PATH — structurally separate from control ---
-        // Handshake decoder owns its ring-buffer consumption and CRC check.
-        // Returning 0 here means "try again next poll" or "no handshake
-        // available yet" — the SOF stays in place until either a full
-        // handshake frame arrives or the stub decides to drop it.
-        return combus_handshake_tryDecode(st.handshakeCtx,
-                                          st.rxBuf, CombusRxBufSize,
-                                          st.rxHead, st.rxCount);
-    }
+    combus_frame_apply(applyCfg, st.target, &st.snap, st.writeLayer, peer);
+}
 
 
-    // --- 3. CONTROL-FRAME PATH ---
-    // From here on, `seq` is guaranteed in 1..255 — no handshake leak possible.
+static uint8_t decodeDataFrame( CombusRxState& st )
+{
     if (st.rxCount < CombusFrameMinLen) {
         return 0u;
     }
@@ -189,79 +124,78 @@ static uint8_t tryDecode( uint8_t linkIdx, CombusRxState& st )
                           + (uint16_t)nDigBytes
                           + (uint16_t)nAnalog * 2u
                           + 1u;
+
     if (expectedLenW > CombusRxBufSize) {
-        // Impossible frame size — discard SOF and re-sync
         rxBufConsume(st, 1u);
         return 0u;
     }
+
     uint8_t expectedLen = (uint8_t)expectedLenW;
+
     if (st.rxCount < expectedLen) {
         return 0u;
     }
 
-    // --- 4. Copy frame into a linear buffer and decode ---
     uint8_t linear[CombusRxBufSize];
+
     for (uint8_t i = 0u; i < expectedLen; ++i) {
         linear[i] = rxBufAt(st, i);
     }
 
-    // CRC validated before any write — failed decode leaves st.snap untouched.
-    // LY2 — decode is layer-agnostic.  It writes by index into the
-    // caller-provided buffers without any notion of layer.
-    if (combus_frame_decode(st.frameCfg, &st.snap, linear, expectedLen)) {
-
-            // --- 4b. Chantier 1.2 — contract UNKNOWN: a valid frame is dropped.
-            //    Not applied, snapshot invalidated, and it does not make the link
-            //    alive: a peer with another contract counts as never seen.  A link
-            //    without handshake context (codec tests, legacy callers) has no
-            //    contract.
-        if (st.handshakeCtx && !st.handshakeCtx->contractValidated) {
-            st.snapValid = false;
-            rxBufConsume(st, expectedLen);
-            return expectedLen;
-        }
-
-        st.snapValid    = true;
-        st.lastRxMs     = millis();
-        st.everReceived = true;
-        if (st.handshakeCtx) { st.handshakeCtx->dataSinceStable = true; }
-
-        // RL5 — auto-apply: if the caller wired a target ComBus at init
-        // time, push the decoded channels into it now.  This makes
-        // combus_frame_apply() a generic capability of the core, triggered
-        // automatically by the mere presence of rxCfg + buffers + target.
-        // When target == nullptr (test env, legacy callers), no apply is
-        // performed — the caller is responsible for calling
-        // combus_frame_apply() manually.
-        //
-        // combus_frame_apply() takes a ChanLayer caller identity (see
-        // combus_frame.h).  The identity is the layer of the link that
-        // received the frame (st.writeLayer): the layer check inside
-        // combus_set_*() lets a BASE link write BASE channels only, and a
-        // SYSTEM link write BASE and SYSTEM channels.  A frame can never
-        // write a BOARD channel (see combus_rx_init()).
-        if (st.target != nullptr) {
-                // Chantier 2.2b — a BASE link out of next mode applies the stable
-                // channels only: the candidates keep their default value.
-                // Link rework 3.1b — a link between nodes: its own stable counts,
-                // and its table from the wire positions to this node's channels.
-            const ComPeerLink* peer = st.handshakeCtx ? st.handshakeCtx->peer : nullptr;
-            ComBusFrameCfg applyCfg = st.frameCfg;
-            if (st.handshakeCtx && st.handshakeCtx->baseSet && !st.handshakeCtx->nextMode) {
-                applyCfg.nAnalog  = peer ? peer->analog.stableCount  : combus::wire::kCombusBaseStableAnalogCount;
-                applyCfg.nDigital = peer ? peer->digital.stableCount : combus::wire::kCombusBaseStableDigitalCount;
-            }
-            combus_frame_apply(applyCfg, st.target, &st.snap,
-                               st.writeLayer, peer);
-        }
-
-        rxBufConsume(st, expectedLen);
-        return expectedLen;
-    } else {
-        // CRC mismatch — discard SOF and re-sync
+    if (!combus_frame_decode(st.frameCfg, &st.snap, linear, expectedLen)) {
         rxBufConsume(st, 1u);
         return 0u;
     }
+
+    if (st.handshakeCtx && !st.handshakeCtx->contractValidated) {
+        st.snapValid = false;
+        rxBufConsume(st, expectedLen);
+        return expectedLen;
+    }
+
+    st.snapValid    = true;
+    st.lastRxMs     = millis();
+    st.everReceived = true;
+
+    if (st.handshakeCtx) { st.handshakeCtx->dataSinceStable = true; }
+
+    applyToBus(st);
+    rxBufConsume(st, expectedLen);
+
+    return expectedLen;
+}
+
+
+static uint8_t tryDecode( uint8_t linkIdx, CombusRxState& st )
+{
+    while (st.rxCount > 0u && rxBufAt(st, 0u) != CombusFrameSof) {
+        rxBufConsume(st, 1u);
+    }
+
+    if (st.rxCount < CombusFrameHeaderLen) {
+        return 0u;
+    }
+
+    uint8_t seqByte = rxBufAt(st, 1u + offsetof(CombusFrameHeader, seq));
+
+    if (seqByte == 0u) {
+        const uint8_t flagsByte = rxBufAt(st, 1u + offsetof(CombusFrameHeader, flags));
+
+        if (flagsByte & kCombusFrameFlagCoupling) {
+            return combus_coupling_tryDecode(linkIdx, st.rxBuf, CombusRxBufSize, st.rxHead, st.rxCount);
+        }
+    }
+
+    if (st.mode == CombusRxMode::PAIRING) {
+        rxBufConsume(st, 1u);
+        return 1u;
+    }
+
+    if (seqByte == 0u) {
+        return combus_handshake_tryDecode(st.handshakeCtx, st.rxBuf, CombusRxBufSize, st.rxHead, st.rxCount);
+    }
+
+    return decodeDataFrame(st);
 }
 
 
@@ -313,10 +247,9 @@ void combus_rx_init(
     //    UNDEFINED is then a config error (forgotten / missing layer) and
     //    triggers a FATAL halt — a silent fallback would mask the bug
     //    (same pattern as combus_tx_init()).
-    st.layer      = layer;
-    st.writeLayer = (layer == ChanLayer::BOARD) ? ChanLayer::SYSTEM : layer;
-    if (target != nullptr && layer == ChanLayer::UNDEFINED) {
-        sys_log_err("[COMBUS_RX] FATAL: ChanLayer::UNDEFINED is not a valid layer for a link applying frames — system halted\n");
+    st.writeLayer = layer;
+    if (target != nullptr && layer != ChanLayer::BASE && layer != ChanLayer::SYSTEM) {
+        sys_log_err("[COMBUS_RX] FATAL: only BASE and SYSTEM travel on a link — system halted\n");
         while (1) { /* halt */ }
     }
 
@@ -363,11 +296,10 @@ void combus_rx_init(
  *   contract while FAILSAFE was active, is removed (chantier 1.2) — with the
  *   contract blocking the frames, it would block the FAILSAFE_HARD of the peers.
  */
-void combus_rx_update(const ComBus* bus)
+void combus_rx_update( void )
 {
     // --- 1. Guard check ---
     if (!s_rxStates) { return; }
-    (void)bus;
 
     // --- Iterate over every registered link ---
     for (uint8_t i = 0u; i < s_capacity; ++i) {
@@ -498,6 +430,17 @@ bool combus_rx_peer_or( uint8_t ch, uint8_t excludeLink )
         if (st.snap.digital[pos]) { return true; }
     }
     return false;
+}
+
+// =============================================================================
+// 2. PER-LINK HANDSHAKE CONTEXT WIRING (P3)
+// =============================================================================
+
+void combus_rx_set_handshake_ctx( uint8_t                linkIdx,
+                                  CombusHandshakeContext* ctx )
+{
+    if (!s_rxStates || linkIdx >= s_capacity) { return; }
+    s_rxStates[linkIdx].handshakeCtx = ctx;
 }
 
 // EOF combus_rx.cpp
