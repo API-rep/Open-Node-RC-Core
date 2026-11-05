@@ -158,7 +158,7 @@ static_assert(sizeof(BothOrMerge) == 4u * sizeof(bool),      "BothOrMerge must h
 /**
  * @brief Analog ComBus channel descriptor.
  */
-typedef struct {
+struct AnalogComBus {
   const char* infoName;                            ///< Short description for debugging and dashboards
   uint16_t    value;                               ///< Current channel value (0-65535)
   ChanLayer   layer = ChanLayer::BOARD;            ///< Scope: who may write it (see ChanLayer)
@@ -167,7 +167,7 @@ typedef struct {
                                                    ///< Place of the LOGICAL zero in the raw range, not a type choice:
                                                    ///< `value` stays a raw uint16_t, the frame is unchanged; only the
                                                    ///< application accessors apply the offset (link rework S3-4).
-} AnalogComBus;
+};
 
     // zeroAtNeutral sits in the padding that already existed: an analog channel
     // still takes 12 bytes on the ESP32 (32-bit pointer).
@@ -178,13 +178,13 @@ static_assert(sizeof(AnalogComBus) == 12u, "AnalogComBus must stay 12 bytes on a
 /**
  * @brief Digital ComBus channel descriptor.
  */
-typedef struct {
+struct DigitalComBus {
   const char* infoName;                            ///< Short description for debugging and dashboards
   bool        value;                               ///< Current channel state (true/false)
   ChanLayer   layer  = ChanLayer::BOARD;           ///< Scope: who may write it (see ChanLayer)
   ChanFlow    flow   = {};                         ///< Which way it travels, per kind of link
   BothOrMerge bothOr = {};                         ///< OR merge, used when bothOr.enabled
-} DigitalComBus;
+};
 
 /**
  * @brief Main ComBus structure.
@@ -193,7 +193,7 @@ typedef struct {
  *   All modules read from and write to this structure to collaborate without
  *   direct dependencies.
  */
-typedef struct {
+struct ComBus {
     // --- Core state ---
   // RL3: runLevel + runLevelLayer removed — runLevel is now a plain analog channel
   //       (RUNLEVEL, scope SYSTEM, see runlevel.cb). Read/write it directly via the
@@ -211,6 +211,6 @@ typedef struct {
   AnalogComBus*  analogBus;                ///< Analog channel array
   DigitalComBus* digitalBus;               ///< Digital channel array
   uint32_t       analogBusMaxVal;          ///< Maximum analog channel value (2¹⁶‑1 = 65535)
-} ComBus;
+};
 
 // EOF combus_struct.h

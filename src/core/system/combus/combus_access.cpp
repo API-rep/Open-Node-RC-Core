@@ -27,12 +27,9 @@
  *   3. SYSTEM    → local firmware caller + extension boards caller of same node
  *   4. BASE      → any source (local + extensions + remote nodes caller)
  */
-static inline bool _layer_ok(ChanLayer slot_layer, ChanLayer caller_layer) {
-    const uint8_t raw_slot = static_cast<uint8_t>(slot_layer);
-    const uint8_t raw_caller = static_cast<uint8_t>(caller_layer);
-    
+static inline bool layerOk(ChanLayer slot_layer, ChanLayer caller_layer) {
       // UNDEFINED → deny all writes (safety)
-    if (raw_slot == static_cast<uint8_t>(ChanLayer::UNDEFINED)) {
+    if (slot_layer == ChanLayer::UNDEFINED) {
         return false;
     }
     
@@ -70,7 +67,7 @@ static uint8_t  s_reportedDigital[32] = {};
  *   print, so a wrong caller layer shows up without flooding the log.
  */
 
-static void _note_denied(const char* label, bool isAnalog, uint8_t ch,
+static void noteDenied(const char* label, bool isAnalog, uint8_t ch,
                          ChanLayer caller, ChanLayer slot_layer) {
     ++s_deniedCount;
 
@@ -94,9 +91,9 @@ static void _note_denied(const char* label, bool isAnalog, uint8_t ch,
 bool combus_set_raw_analog(ComBus& bus, AnalogComBusID ch, uint16_t val, ChanLayer caller) {
     auto& slot = bus.analogBus[static_cast<uint8_t>(ch)];
 
-    if (!_layer_ok(slot.layer, caller)) {
+    if (!layerOk(slot.layer, caller)) {
           // --- Write denied ---
-        _note_denied("analog", true, static_cast<uint8_t>(ch), caller, slot.layer);
+        noteDenied("analog", true, static_cast<uint8_t>(ch), caller, slot.layer);
         return false;
     }
 
@@ -133,9 +130,9 @@ int32_t combus_get_analog(const ComBus& bus, AnalogComBusID ch) {
 bool combus_set_digital(ComBus& bus, DigitalComBusID ch, bool val, ChanLayer caller) {
     auto& slot = bus.digitalBus[static_cast<uint8_t>(ch)];
 
-    if (!_layer_ok(slot.layer, caller)) {
+    if (!layerOk(slot.layer, caller)) {
           // --- Write denied ---
-        _note_denied("digital", false, static_cast<uint8_t>(ch), caller, slot.layer);
+        noteDenied("digital", false, static_cast<uint8_t>(ch), caller, slot.layer);
         return false;
     }
 

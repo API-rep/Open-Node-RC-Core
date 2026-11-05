@@ -1369,7 +1369,7 @@ def test_runtime_struct_field_order_matches_python_emission():
     h = (REPO_ROOT / "src" / "core" / "system" / "combus" / "combus_defs.h").read_text(encoding="utf-8")
     for struct_name in ("AnalogComBus", "DigitalComBus"):
         # Find the struct definition body.
-        m = re.search(rf"typedef\s+struct\s+\{{(.*?)\}}\s*{struct_name};", h, re.DOTALL)
+        m = re.search(rf"struct\s+{struct_name}\s*\{{(.*?)\n\}};", h, re.DOTALL)
         assert m, f"{struct_name} struct not found"
         body = m.group(1)
         pos_info = body.find("infoName")
