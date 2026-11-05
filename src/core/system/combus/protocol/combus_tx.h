@@ -123,7 +123,7 @@ void combus_tx_update( const ComBus* bus );
 /**
  * @brief Attach the handshake context of one link to its transmission.
  *
- * @details Called by combus_protocol_init(), before combus_tx_init(), with the same
+ * @details Called by combus_link_start(), before combus_tx_init(), with the same
  *   context as combus_rx_set_handshake_ctx().
  *
  * @param linkIdx  Slot of this link in the pool.

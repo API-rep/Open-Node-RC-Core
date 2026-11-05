@@ -6,7 +6,7 @@
 
 #include <stdint.h>
 
-#include <core/system/combus/protocol/combus_links.h>   // ComLinkRuntime
+#include <core/system/combus/protocol/link/combus_links.h>   // ComLinkRuntime
 
 
 /**

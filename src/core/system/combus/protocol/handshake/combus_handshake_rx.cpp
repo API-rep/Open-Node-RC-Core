@@ -66,7 +66,7 @@ bool combus_handshake_compare(
 	if (!localMd5) {
 		sys_log_err(
 			"[COMBUS_HANDSHAKE] FATAL: CombusHandshakeContext::expected.stable is null "
-			"— link was not properly initialized via combus_protocol_init() "
+			"— link was not properly initialized via combus_link_start() "
 			"— system halted\n");
 		while (1) { /* halt */ }
 	}

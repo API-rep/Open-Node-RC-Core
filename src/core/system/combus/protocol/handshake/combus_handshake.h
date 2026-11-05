@@ -26,7 +26,7 @@
 #include <core/system/hw/node_com.h>                          // NodeCom (TX path)
 
 	// Generated MD5 of each view (namespace combus::wire), resolved per link by
-	// combus_protocol_init().
+	// combus_link_start().
 #include <combus_md5.h>          // kCombusComBusMd5       (FULL view)
 #include <combus_system_md5.h>   // kCombusSystemComBusMd5 (SYSTEM view)
 #include <combus_base_md5.h>     // kCombusBaseComBusMd5   (BASE view)
@@ -177,7 +177,7 @@ static constexpr uint32_t kCombusHandshakeAckTimeoutMs = 1000u;
  * @brief Log the boot banner of a link once: MD5 compare state, local MD5, version.
  *
  * @details Idempotent, guarded by `ctx->bootWarningLogged`.  Nothing is logged
- *   on a link not initialised through combus_protocol_init().
+ *   on a link not initialised through combus_link_start().
  *
  * @param ctx  Per-link handshake context.
  */
@@ -212,13 +212,13 @@ void combus_handshake_formatMd5Hex(const uint8_t md5[16], char out[33]);
  */
 
 struct CombusHandshakeContext {
-		// Identity of the link (set by combus_protocol_init())
+		// Identity of the link (set by combus_link_start())
 	const char*        name          = nullptr;  ///< link name, for the logs
 	bool               bidirectional = false;    ///< the end both transmits and receives
 	const ComPeerLink* peer          = nullptr;  ///< link between nodes: common frame and table; nullptr = view of the scope
 	bool               baseSet       = false;    ///< BASE link: the mode sets the size of the frames
 
-		// MD5 of the contract (set by combus_protocol_init())
+		// MD5 of the contract (set by combus_link_start())
 	ComLinkMd5 expected      = {};       ///< MD5 expected from the peer, compared on every handshake
 	ComLinkMd5 announced     = {};       ///< MD5 this end sends when it differs (link through a coupler: its own side); null = `expected`
 	bool       hasCandidates = false;    ///< expected.next differs from expected.stable

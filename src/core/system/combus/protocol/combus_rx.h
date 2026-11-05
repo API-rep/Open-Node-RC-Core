@@ -254,7 +254,7 @@ bool combus_rx_peer_or( uint8_t ch, uint8_t excludeLink );
 /**
  * @brief Attach the handshake context of one link to its reception.
  *
- * @details Called by combus_protocol_init(), before combus_rx_init(), with the same
+ * @details Called by combus_link_start(), before combus_rx_init(), with the same
  *   context as combus_tx_set_handshake_ctx().
  *
  * @param linkIdx  Slot of this link in the pool.

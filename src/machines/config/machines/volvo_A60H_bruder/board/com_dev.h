@@ -18,7 +18,7 @@
  */
 #pragma once
 
-#include <core/system/combus/protocol/combus_protocol.h>   // ComDev, ComProtocolCfg
+#include <core/system/combus/protocol/link/combus_link_defs.h>   // ComDev, ComProtocolCfg
 
 
 // =============================================================================

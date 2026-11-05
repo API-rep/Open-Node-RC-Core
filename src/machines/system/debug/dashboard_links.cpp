@@ -7,7 +7,8 @@
 
 #include "dashboard_links.h"
 #include <core/system/debug/dashboard/dashboard.h>
-#include <core/system/combus/protocol/combus_links.h>
+#include <core/system/combus/protocol/link/combus_link_watch.h>
+#include <core/system/combus/protocol/coupling/combus_coupling_watch.h>
 
 #include <Arduino.h>
 #include <stdio.h>

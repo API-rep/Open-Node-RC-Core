@@ -23,7 +23,7 @@
  *   uart_com_register_pool(pool, UartComMaxPorts); // machine: register once
  *   combus_uart_init();                            // env: opens one NodeCom per ComBusLink[]
  *   hw_init();                                     // hardware peripherals
- *   combus_protocol_init(...);                     // protocol layers wired to transport
+ *   combus_link_start(...);                     // protocol layers wired to transport
  * @endcode
  *
  * Each ComBusLink entry resolves its own UART channel + pins from the

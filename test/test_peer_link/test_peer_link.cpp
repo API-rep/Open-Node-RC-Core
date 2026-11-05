@@ -55,7 +55,8 @@
 #include <core/system/hw/transport/uart_com.h>
 #include <core/system/combus/protocol/combus_tx.h>
 #include <core/system/combus/protocol/combus_rx.h>
-#include <core/system/combus/protocol/combus_links.h>
+#include <core/system/combus/protocol/link/combus_link_watch.h>
+#include <core/system/combus/protocol/coupling/combus_coupling_watch.h>
 #include <core/system/combus/combus_access.h>
 #include <core/system/combus/combus_res.h>     // CbusNeutral (safe value of an analog channel, 3.2c)
 #include <core/system/com/com_manager.h>
@@ -132,7 +133,7 @@ static void startLink(void) {
     const ComDevMap map = { &kTrailerDev, &s_port, LinkEnd::TX_RX };
     TEST_ASSERT_TRUE(combus_link_build(map, s_com, s_runtime, s_link));
     s_link.target = &bus;
-    combus_protocol_init(kLinkIdx, &s_link);
+    combus_link_start(kLinkIdx, &s_link);
     combus_links_watch(&s_runtime, 1u);
 }
 
@@ -389,7 +390,7 @@ static void startCoupledLink(void) {
     const ComDevMap map = { &kHitchedTrailerDev, &s_port, LinkEnd::TX_RX };
     TEST_ASSERT_TRUE(combus_link_build(map, s_com, s_runtime, s_link));
     s_link.target = &bus;
-    combus_protocol_init(kLinkIdx, &s_link);
+    combus_link_start(kLinkIdx, &s_link);
     combus_links_watch(&s_runtime, 1u);
     while (s_com->available(s_com->ctx) > 0) { s_com->readByte(s_com->ctx); }   // nothing left from the last test
 }
@@ -866,7 +867,7 @@ static void startAttachmentLink(void) {
     const ComDevMap map = { &kAttachmentDev, &s_port, LinkEnd::TX_RX };
     TEST_ASSERT_TRUE(combus_link_build(map, s_com, s_runtime, s_link));
     s_link.target = &bus;
-    combus_protocol_init(kLinkIdx, &s_link);
+    combus_link_start(kLinkIdx, &s_link);
     combus_links_watch(&s_runtime, 1u);
     while (s_com->available(s_com->ctx) > 0) { s_com->readByte(s_com->ctx); }
     combus_coupling_reset();
@@ -941,7 +942,7 @@ static void startDebouncedLink(void) {
     const ComDevMap map = { &kDebouncedDev, &s_port, LinkEnd::TX_RX };
     TEST_ASSERT_TRUE(combus_link_build(map, s_com, s_runtime, s_link));
     s_link.target = &bus;
-    combus_protocol_init(kLinkIdx, &s_link);
+    combus_link_start(kLinkIdx, &s_link);
     combus_links_watch(&s_runtime, 1u);
     while (s_com->available(s_com->ctx) > 0) { s_com->readByte(s_com->ctx); }
 }
@@ -1033,7 +1034,7 @@ static void startChainedLink(bool engaged) {
     const ComDevMap map = { &kChainedDev, &s_port, LinkEnd::TX_RX };
     TEST_ASSERT_TRUE(combus_link_build(map, s_com, s_runtime, s_link));
     s_link.target = &bus;
-    combus_protocol_init(kLinkIdx, &s_link);
+    combus_link_start(kLinkIdx, &s_link);
     combus_links_watch(&s_runtime, 1u);
     while (s_com->available(s_com->ctx) > 0) { s_com->readByte(s_com->ctx); }
     bus.digitalBus[kEngagedSw].value = engaged;
@@ -1273,7 +1274,7 @@ static void test_tool_row9_active_coupled_output(void) {
     const ComDevMap map = { &kDetectedDev, &s_port, LinkEnd::TX_RX };
     TEST_ASSERT_TRUE(combus_link_build(map, s_com, s_runtime, s_link));
     s_link.target = &bus;
-    combus_protocol_init(kLinkIdx, &s_link);
+    combus_link_start(kLinkIdx, &s_link);
     combus_links_watch(&s_runtime, 1u);
     while (s_com->available(s_com->ctx) > 0) { s_com->readByte(s_com->ctx); }
     bus.digitalBus[kEngagedSw].value = true;

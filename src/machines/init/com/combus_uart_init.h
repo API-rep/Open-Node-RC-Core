@@ -9,7 +9,7 @@
  *   Degrades to an inline no-op when none of these flags are set.
  *
  *   Delegates protocol layer wiring to the core entry point:
- *   combus_protocol_init() in <core/system/combus/protocol/combus_protocol.h>.
+ *   combus_link_start() in <core/system/combus/protocol/link/combus_link_defs.h>.
  *****************************************************************************/
 #pragma once
 

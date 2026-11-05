@@ -45,7 +45,7 @@ uint8_t combus_handshake_tryDecode(
  *   without a ring buffer.
  *
  * @warning A null `localMd5` is a configuration error (link not initialised
- *   through combus_protocol_init()): the system halts, it is never replaced
+ *   through combus_link_start()): the system halts, it is never replaced
  *   silently.
  *
  * @param[in] localMd5   The MD5 this link expects (16 bytes), typically

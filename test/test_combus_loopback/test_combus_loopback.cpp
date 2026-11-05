@@ -101,7 +101,7 @@
  *   Group G — RUNLEVEL round-trip (RL3).
  *
  *   Group E — MD5 pointer resolution by layer (LY4):
- *     Verifies that combus_protocol_init() resolves the per-link
+ *     Verifies that combus_link_start() resolves the per-link
  *     expected.stable pointer from link->layer (BASE / SYSTEM / BOARD),
  *     and that combus_handshake_compare() matches correctly when
  *     given the right local MD5 pointer.  Same pattern as Group D —
@@ -131,8 +131,8 @@
 #include <core/system/combus/combus_defs.h>
 #include <core/system/combus/protocol/frame/combus_frame_defs.h>
 #include <core/system/combus/combus_access.h>          // combus_set_digital() — generic accessor
-#include <core/system/combus/protocol/combus_protocol.h> // ComBusLink, combus_protocol_init() — Group E
-#include <core/system/combus/protocol/combus_links.h>    // combus_link_check(), combus_link_build() — Group I
+#include <core/system/combus/protocol/link/combus_link_defs.h> // ComBusLink, combus_link_start() — Group E
+#include <core/system/combus/protocol/link/combus_link_watch.h>    // combus_link_check(), combus_link_build() — Group I
 #include <core/system/com/com_manager.h>                 // com_rx_update() — Group J
 #include <core/system/combus/protocol/handshake/combus_handshake.h> // CombusHandshakeContext — Groups E, N
 #include <core/system/combus/protocol/handshake/combus_handshake_rx.h> // combus_handshake_compare() — Group E
@@ -690,7 +690,7 @@ static void test_runlevel_roundtrip_via_channel(void) {
 // =============================================================================
 // GROUP E — MD5 POINTER RESOLUTION BY LAYER (LY4)
 //
-// Verifies that combus_protocol_init() resolves the per-link
+// Verifies that combus_link_start() resolves the per-link
 // expected.stable pointer from link->layer (BASE / SYSTEM / BOARD), and
 // that combus_handshake_compareAndLog() matches correctly when given
 // the right local MD5 pointer.  Same pattern as Group D — verify the
@@ -738,19 +738,19 @@ static void test_md5_arrays_are_distinct(void) {
 /**
  * Placeholder transport for the MD5 resolution tests.
  *
- * combus_protocol_init() returns at once on a null `com`, before it resolves
+ * combus_link_start() returns at once on a null `com`, before it resolves
  * the MD5 pointer, so the link needs a non-null transport. It is never called:
  * these links have neither TX nor RX configuration.
  */
 static NodeCom s_unusedCom = { nullptr, nullptr, nullptr, nullptr, "test_unused" };
 
-/** combus_protocol_init() with BASE layer must resolve to kCombusBaseComBusMd5. */
+/** combus_link_start() with BASE layer must resolve to kCombusBaseComBusMd5. */
 static void test_md5_resolution_base(void) {
     static CombusHandshakeContext ctx = {};
     static ComBusLink link = {};
 
     link.name        = "test_remote";
-    link.com         = &s_unusedCom;  // non-null: combus_protocol_init() rejects a null transport
+    link.com         = &s_unusedCom;  // non-null: combus_link_start() rejects a null transport
     link.txCfg       = std::nullopt;  // skip TX init
     link.rxCfg       = std::nullopt;  // skip RX init
     link.handshakeCtx = &ctx;
@@ -758,7 +758,7 @@ static void test_md5_resolution_base(void) {
 
     // The MD5 resolution happens BEFORE the TX/RX init, so the transport
     // is never used — the switch on link->layer runs first.
-    combus_protocol_init(kLinkIdx, &link);
+    combus_link_start(kLinkIdx, &link);
 
     // Content, not address: the generated MD5 arrays are `static constexpr`, so each
     // translation unit has its own copy at a different address.
@@ -766,7 +766,7 @@ static void test_md5_resolution_base(void) {
     TEST_ASSERT_EQUAL_UINT8_ARRAY(combus::wire::kCombusBaseComBusMd5, ctx.expected.stable, 16u);
 }
 
-/** combus_protocol_init() with SYSTEM layer must resolve to kCombusSystemComBusMd5. */
+/** combus_link_start() with SYSTEM layer must resolve to kCombusSystemComBusMd5. */
 static void test_md5_resolution_system(void) {
     static CombusHandshakeContext ctx = {};
     static ComBusLink link = {};
@@ -778,7 +778,7 @@ static void test_md5_resolution_system(void) {
     link.handshakeCtx = &ctx;
     link.layer       = ChanLayer::SYSTEM;
 
-    combus_protocol_init(kLinkIdx, &link);
+    combus_link_start(kLinkIdx, &link);
 
     TEST_ASSERT_NOT_NULL(ctx.expected.stable);
     TEST_ASSERT_EQUAL_UINT8_ARRAY(combus::wire::kCombusSystemComBusMd5, ctx.expected.stable, 16u);
@@ -948,6 +948,13 @@ static constexpr ComDev kHealthDev = {
 static ComLinkRuntime s_healthRuntime;
 static ComBusLink     s_healthLink;
 
+/** A link that receives and is not alive: a link that only transmits cannot be lost. */
+static bool healthLinkLost(void) {
+    ComLinkView view;
+    TEST_ASSERT_TRUE(combus_links_view(0u, view));
+    return view.receives && view.state != ComLinkState::ALIVE;
+}
+
 /** Build the health link on the loopback port, apply its frames to rxTargetBus and put it under watch. */
 static void startHealthLink(LinkEnd end, const ComDev& dev) {
     TEST_ASSERT_NOT_NULL_MESSAGE(s_com, "Run test_loopback_init first");
@@ -957,7 +964,7 @@ static void startHealthLink(LinkEnd end, const ComDev& dev) {
     TEST_ASSERT_TRUE(combus_link_build(map, s_com, s_healthRuntime, s_healthLink));
     if (s_healthLink.rxCfg.has_value()) { s_healthLink.target = &rxTargetBus; }
 
-    combus_protocol_init(kLinkIdx, &s_healthLink);
+    combus_link_start(kLinkIdx, &s_healthLink);
     combus_links_watch(&s_healthRuntime, 1u);
 }
 
@@ -989,7 +996,7 @@ static void test_link_health_lost_until_first_frame(void) {
 
     com_rx_update(rxTargetBus);
 
-    TEST_ASSERT_TRUE(combus_links_rx_lost());
+    TEST_ASSERT_TRUE(healthLinkLost());
 }
 
 /** A frame arrives: the link is alive and its channels are applied. */
@@ -998,7 +1005,7 @@ static void test_link_health_alive_after_frame(void) {
 
     sendOneFrameAndReceive();
 
-    TEST_ASSERT_FALSE(combus_links_rx_lost());
+    TEST_ASSERT_FALSE(healthLinkLost());
     TEST_ASSERT_EQUAL_UINT16(txComBus.analogBus[kThrottleIdx].value, rxTargetBus.analogBus[kThrottleIdx].value);
 }
 
@@ -1006,12 +1013,12 @@ static void test_link_health_alive_after_frame(void) {
 static void test_link_health_lost_after_silence(void) {
     startHealthLink(LinkEnd::TX_RX, kHealthDev);
     sendOneFrameAndReceive();
-    TEST_ASSERT_FALSE(combus_links_rx_lost());
+    TEST_ASSERT_FALSE(healthLinkLost());
 
     delay(kHealthProtocol.linkTimeoutMs + 60u);
     com_rx_update(rxTargetBus);
 
-    TEST_ASSERT_TRUE(combus_links_rx_lost());
+    TEST_ASSERT_TRUE(healthLinkLost());
 }
 
 /** A TX-only link cannot know its peer: it never counts as lost. */
@@ -1020,7 +1027,7 @@ static void test_link_health_ignores_tx_only_link(void) {
 
     com_rx_update(rxTargetBus);
 
-    TEST_ASSERT_FALSE(combus_links_rx_lost());
+    TEST_ASSERT_FALSE(healthLinkLost());
 
     combus_links_watch(nullptr, 0u);
 }

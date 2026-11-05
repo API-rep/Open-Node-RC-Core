@@ -1,19 +1,19 @@
 /******************************************************************************
- * @file com_manager.h
- * @brief Communication update dispatcher.
+ * @file  com_manager.h
+ * @brief Communication update dispatcher: reception and emission in the main loop.
  *
- * @details Two call points for the communication modules in the main loop:
- *   - com_rx_update(): reception, BEFORE the application logic — received
- *     frames are applied to the ComBus and the link health is published;
- *   - com_update(): emission, AFTER the application logic — called by
- *     output_update().
- *   Each communication module (ComBus UART, future transports) is dispatched
- *   from here, conditioned on its build flag. Both degrade gracefully to a
- *   no-op when no communication module is enabled.
+ * @details Two call points for the communication modules:
+ *   - com_rx_update(): reception, BEFORE the application logic: the frames received
+ *     are applied to the ComBus and the health of the links is published;
+ *   - com_update(): emission, AFTER the application logic, called by output_update().
+ *
+ *   Each communication module is dispatched from here, conditioned on its build flag.
+ *   Both are no-ops when no module is enabled.
  *****************************************************************************/
 #pragma once
 
 #include <core/system/combus/combus_defs.h>
+
 
 
 // =============================================================================
@@ -21,30 +21,29 @@
 // =============================================================================
 
 /**
- * @brief Receive on every receiving link and report the loss of each link.
+ * @brief Receive on every receiving link, and report the loss of each link.
  *
- * @details Non-blocking. Drains the receiving links, which apply the frames
- * they decode to @p bus, merges the both_or channels, logs the loss and the
- * recovery of each link, then writes (BOARD scope) `NODE_LINK_FAIL` from the
- * links to another node and `BOARD_LINK_FAIL` from the links between boards
- * (combus_links_lost(scope), link rework S2; false when there is no such link). Call once
- * per main loop iteration, BEFORE the hard and soft failsafe chains and
- * the application logic.
+ * @details Non-blocking.  Reads the receiving links, which apply the frames they decode
+ *   to @p bus, merges the both_or channels and logs the loss and the recovery of each
+ *   link.  Then writes NODE_LINK_FAIL from the links to another node, and BOARD_LINK_FAIL
+ *   from the links between boards; false when there is no such link.
  *
- * @param bus           Node ComBus, written by the received frames.
+ *   Call once per main loop iteration, BEFORE the failsafe chains and the application
+ *   logic.
+ *
+ * @param bus  ComBus of the node, written by the frames received.
  */
 
 void com_rx_update(ComBus& bus);
 
 
-
 /**
- * @brief Dispatch all active communication module updates (emission).
+ * @brief Dispatch the emission of every active communication module.
  *
- * @details Non-blocking — each sub-module manages its own timing internally.
- * Call once per main loop iteration, from output_update().
+ * @details Non-blocking: each module manages its own timing.  Call once per main loop
+ *   iteration, from output_update().
  *
- * @param bus           Current ComBus snapshot (read-only).
+ * @param bus  ComBus of the node, read only.
  */
 
 void com_update(const ComBus& bus);

@@ -78,7 +78,7 @@ void combus_tx_register_pool( CombusTxState* buffer, uint8_t capacity )
  *      each other, so a count is enough, with no table to build.  Any other layer
  *      halts: a silent fallback would hide a forgotten layer.
  *   5. A link between nodes carries the frame of its table instead.  The context was
- *      attached by combus_protocol_init() before this call.
+ *      attached by combus_link_start() before this call.
  *   6. Handshake burst, as at boot.
  *   7. Log.
  */

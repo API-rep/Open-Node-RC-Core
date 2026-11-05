@@ -10,7 +10,7 @@
 
 #include "remote_links.h"
 
-#include <core/system/combus/protocol/combus_links.h>
+#include <core/system/combus/protocol/link/combus_link_watch.h>
 #include <core/system/combus/protocol/combus_tx.h>
 #include <core/system/combus/protocol/combus_rx.h>
 #include <core/system/hw/transport/uart_com.h>       // uart_com_register_pool, UartCtx
