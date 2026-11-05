@@ -59,31 +59,31 @@
  *   Lifetime: static — valid for the entire program run after init.
  */
 struct CombusTxState {
-    NodeCom*               nodeCom  = nullptr;  ///< active transport interface
-    ComBusFrameCfg         frameCfg = {};       ///< static layout descriptor (nAnalog, nDigital)
+	NodeCom*               nodeCom  = nullptr;  ///< active transport interface
+	ComBusFrameCfg         frameCfg = {};       ///< static layout descriptor (nAnalog, nDigital)
 
-    uint8_t                seq      = 1u;       ///< rolling frame sequence counter (1..255). Value 0 is RESERVED for future handshake frames.
-    uint32_t               lastTxMs = 0u;       ///< timestamp of last transmitted frame (ms)
-    uint32_t               periodMs = 0u;       ///< transmit period derived from txHz (0 = uninit)
+	uint8_t                seq      = 1u;       ///< rolling frame sequence counter (1..255). Value 0 is RESERVED for future handshake frames.
+	uint32_t               lastTxMs = 0u;       ///< timestamp of last transmitted frame (ms)
+	uint32_t               periodMs = 0u;       ///< transmit period derived from txHz (0 = uninit)
 
-    // LY2 — wire-end counters resolved at TX init from link->layer.
-    // The codec iterates only over comBus.analogBus[0..analogWireEnd)
-    // and comBus.digitalBus[0..digitalWireEnd) — this is the ONLY
-    // behavioural change vs. the pre-LY2 codec.  See combus_tx_init()
-    // for the resolution rules.
-    uint8_t                analogWireEnd  = 0u; ///< number of analog channels to encode (layer's CH_COUNT)
-    uint8_t                digitalWireEnd = 0u; ///< number of digital channels to encode (layer's CH_COUNT)
+	// LY2 — wire-end counters resolved at TX init from link->layer.
+	// The codec iterates only over comBus.analogBus[0..analogWireEnd)
+	// and comBus.digitalBus[0..digitalWireEnd) — this is the ONLY
+	// behavioural change vs. the pre-LY2 codec.  See combus_tx_init()
+	// for the resolution rules.
+	uint8_t                analogWireEnd  = 0u; ///< number of analog channels to encode (layer's CH_COUNT)
+	uint8_t                digitalWireEnd = 0u; ///< number of digital channels to encode (layer's CH_COUNT)
 
-    // P3 — per-link handshake context.  Points to the same context as
-    // CombusRxState::handshakeCtx (shared between TX and RX of the same
-    // link).  Wired by combus_protocol_init() — see combus_protocol.cpp.
-    // Multiple independent ComBus interfaces may coexist; each link has
-    // its own context.  See CombusHandshakeContext in combus_handshake.h.
-    CombusHandshakeContext* handshakeCtx = nullptr;
+	// P3 — per-link handshake context.  Points to the same context as
+	// CombusRxState::handshakeCtx (shared between TX and RX of the same
+	// link).  Wired by combus_protocol_init() — see combus_protocol.cpp.
+	// Multiple independent ComBus interfaces may coexist; each link has
+	// its own context.  See CombusHandshakeContext in combus_handshake.h.
+	CombusHandshakeContext* handshakeCtx = nullptr;
 
-    // Link rework 3.3 — false while a coupled link is unhitched: neither
-    // handshake nor data is sent.
-    bool                   active       = true;
+	// Link rework 3.3 — false while a coupled link is unhitched: neither
+	// handshake nor data is sent.
+	bool                   active       = true;
 };
 
 

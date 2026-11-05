@@ -77,9 +77,9 @@ static constexpr uint8_t CombusRxBufSize = UINT8_MAX;  ///< max encodable frame 
  */
 
 enum class CombusRxMode : uint8_t {
-    OFF,       ///< coupled link detached: the bytes received are dropped
-    PAIRING,   ///< coupled link pairing: coupling frames only
-    ON         ///< every frame
+	OFF,       ///< coupled link detached: the bytes received are dropped
+	PAIRING,   ///< coupled link pairing: coupling frames only
+	ON         ///< every frame
 };
 
 
@@ -103,50 +103,50 @@ enum class CombusRxMode : uint8_t {
  *   Lifetime: static — valid for the entire program run after init.
  */
 struct CombusRxState {
-    NodeCom*                nodeCom          = nullptr; ///< active transport interface
-    ComBusFrameCfg          frameCfg         = {};      ///< static layout descriptor (nAnalog, nDigital)
+	NodeCom*                nodeCom          = nullptr; ///< active transport interface
+	ComBusFrameCfg          frameCfg         = {};      ///< static layout descriptor (nAnalog, nDigital)
 
-    // Per-link ring buffer — raw byte accumulator between the transport
-    // ISR and the frame decoder.  Sized to CombusRxBufSize (UINT8_MAX)
-    // because the protocol length field is uint8_t.
-    uint8_t                 rxBuf[CombusRxBufSize] = {};
-    uint8_t                 rxHead           = 0u;      ///< write index (ISR side)
-    uint8_t                 rxCount          = 0u;      ///< number of valid bytes in the ring buffer
+	// Per-link ring buffer — raw byte accumulator between the transport
+	// ISR and the frame decoder.  Sized to CombusRxBufSize (UINT8_MAX)
+	// because the protocol length field is uint8_t.
+	uint8_t                 rxBuf[CombusRxBufSize] = {};
+	uint8_t                 rxHead           = 0u;      ///< write index (ISR side)
+	uint8_t                 rxCount          = 0u;      ///< number of valid bytes in the ring buffer
 
-    // Decoded snapshot — updated on each valid frame, read by the
-    // application via combus_rx_snapshot().  The analog/digital pointers
-    // are wired to caller-provided buffers at init time.
-    ComBusFrame             snap             = {};
-    bool                    snapValid        = false;   ///< true if snap holds a freshly-decoded frame
-    uint32_t                lastRxMs         = 0u;      ///< timestamp of last successfully decoded frame (ms)
-    bool                    everReceived     = false;   ///< true once at least one valid frame has been decoded
+	// Decoded snapshot — updated on each valid frame, read by the
+	// application via combus_rx_snapshot().  The analog/digital pointers
+	// are wired to caller-provided buffers at init time.
+	ComBusFrame             snap             = {};
+	bool                    snapValid        = false;   ///< true if snap holds a freshly-decoded frame
+	uint32_t                lastRxMs         = 0u;      ///< timestamp of last successfully decoded frame (ms)
+	bool                    everReceived     = false;   ///< true once at least one valid frame has been decoded
 
-    // P3 — per-link handshake context.  Points to the same context as
-    // CombusTxState::handshakeCtx (shared between TX and RX of the same
-    // link).  Wired by combus_protocol_init() — see combus_protocol.cpp.
-    // Multiple independent ComBus interfaces may coexist; each link has
-    // its own context.  See CombusHandshakeContext in combus_handshake.h.
-    CombusHandshakeContext* handshakeCtx     = nullptr;
+	// P3 — per-link handshake context.  Points to the same context as
+	// CombusTxState::handshakeCtx (shared between TX and RX of the same
+	// link).  Wired by combus_protocol_init() — see combus_protocol.cpp.
+	// Multiple independent ComBus interfaces may coexist; each link has
+	// its own context.  See CombusHandshakeContext in combus_handshake.h.
+	CombusHandshakeContext* handshakeCtx     = nullptr;
 
-    // RL5 — optional apply target.  When non-null, combus_rx_update()
-    // calls combus_frame_apply() automatically after each successful
-    // decode, writing the decoded channels into this ComBus instance.
-    // When null (default), the caller is responsible for calling
-    // combus_frame_apply() manually (legacy behaviour, used by tests).
-    ComBus*                target            = nullptr;
+	// RL5 — optional apply target.  When non-null, combus_rx_update()
+	// calls combus_frame_apply() automatically after each successful
+	// decode, writing the decoded channels into this ComBus instance.
+	// When null (default), the caller is responsible for calling
+	// combus_frame_apply() manually (legacy behaviour, used by tests).
+	ComBus*                target            = nullptr;
 
-    // Layer of the link: the caller layer passed to combus_frame_apply() for
-    // every applied frame.
-    ChanLayer              writeLayer        = ChanLayer::UNDEFINED;
+	// Layer of the link: the caller layer passed to combus_frame_apply() for
+	// every applied frame.
+	ChanLayer              writeLayer        = ChanLayer::UNDEFINED;
 
-    // Silence after which the link counts as lost (ms), set by
-    // combus_rx_set_link_timeout().  0 = never alive for combus_rx_peer_or().
-    uint32_t               linkTimeoutMs     = 0u;
+	// Silence after which the link counts as lost (ms), set by
+	// combus_rx_set_link_timeout().  0 = never alive for combus_rx_peer_or().
+	uint32_t               linkTimeoutMs     = 0u;
 
-    // Link rework 3.3 / 3.4c — mode of the reception: OFF while a coupled link
-    // is detached (the bytes received are drained and dropped), PAIRING while
-    // it pairs (coupling frames only), ON otherwise.
-    CombusRxMode           mode              = CombusRxMode::ON;
+	// Link rework 3.3 / 3.4c — mode of the reception: OFF while a coupled link
+	// is detached (the bytes received are drained and dropped), PAIRING while
+	// it pairs (coupling frames only), ON otherwise.
+	CombusRxMode           mode              = CombusRxMode::ON;
 };
 
 /// "No link" value for the excluded link of combus_rx_peer_or().

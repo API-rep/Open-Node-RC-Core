@@ -37,16 +37,16 @@ static uint8_t        s_capacity = 0u;
 
 void combus_tx_register_pool( CombusTxState* buffer, uint8_t capacity )
 {
-    if (s_txStates != nullptr) {
-        sys_log_err("[COMBUS_TX] pool already registered — ignoring second call\n");
-        return;
-    }
-    if (buffer == nullptr || capacity == 0u) {
-        sys_log_err("[COMBUS_TX] register_pool called with null buffer or zero capacity\n");
-        return;
-    }
-    s_txStates = buffer;
-    s_capacity = capacity;
+	if (s_txStates != nullptr) {
+		sys_log_err("[COMBUS_TX] pool already registered — ignoring second call\n");
+		return;
+	}
+	if (buffer == nullptr || capacity == 0u) {
+		sys_log_err("[COMBUS_TX] register_pool called with null buffer or zero capacity\n");
+		return;
+	}
+	s_txStates = buffer;
+	s_capacity = capacity;
 }
 
 
@@ -74,11 +74,11 @@ void combus_tx_register_pool( CombusTxState* buffer, uint8_t capacity )
  */
 
 void combus_tx_init(
-    uint8_t        linkIdx,  // index of this link in the per-link state array
-    NodeCom*       nodeCom,  // claimed transport interface (from uart_com_init or similar)
-    ComBusFrameCfg frameCfg, // static frame layout descriptor (nAnalog, nDigital)
-    uint32_t       txHz,     // frame transmit rate in Hz
-    ChanLayer      layer )   // LY2 — selects the wire-end counters
+	uint8_t        linkIdx,  // index of this link in the per-link state array
+	NodeCom*       nodeCom,  // claimed transport interface (from uart_com_init or similar)
+	ComBusFrameCfg frameCfg, // static frame layout descriptor (nAnalog, nDigital)
+	uint32_t       txHz,     // frame transmit rate in Hz
+	ChanLayer      layer )   // LY2 — selects the wire-end counters
 
 {
 		// --- 1. Guard check ---
@@ -154,99 +154,99 @@ void combus_tx_init(
 
 static const bool* prepareDigital( const CombusTxState& st, uint8_t linkIdx, const ComBus* bus )
 {
-    static bool txDigital[255u];
+	static bool txDigital[255u];
 
-    if (!bus->digitalBus) { return nullptr; }
+	if (!bus->digitalBus) { return nullptr; }
 
-    const ComPeerLink* peer = st.handshakeCtx ? st.handshakeCtx->peer : nullptr;
-    bool anyBothOr = false;
+	const ComPeerLink* peer = st.handshakeCtx ? st.handshakeCtx->peer : nullptr;
+	bool anyBothOr = false;
 
-    for (uint8_t ch = 0u; ch < st.digitalWireEnd && ch < st.frameCfg.nDigital; ++ch) {
-        const uint8_t id = peer ? peer->digital.ids[ch] : ch;
-        const DigitalComBus& slot = bus->digitalBus[id];
+	for (uint8_t ch = 0u; ch < st.digitalWireEnd && ch < st.frameCfg.nDigital; ++ch) {
+		const uint8_t id = peer ? peer->digital.ids[ch] : ch;
+		const DigitalComBus& slot = bus->digitalBus[id];
 
-        txDigital[ch] = slot.bothOr.enabled ? (combus_both_or_local(slot) || combus_rx_peer_or(id, linkIdx))
-                                            : slot.value;
-        anyBothOr = anyBothOr || slot.bothOr.enabled;
-    }
+		txDigital[ch] = slot.bothOr.enabled ? (combus_both_or_local(slot) || combus_rx_peer_or(id, linkIdx))
+		                                    : slot.value;
+		anyBothOr = anyBothOr || slot.bothOr.enabled;
+	}
 
-    return anyBothOr ? txDigital : nullptr;
+	return anyBothOr ? txDigital : nullptr;
 }
 
 
 static void logFrameSent( uint8_t linkIdx, uint8_t seq, uint8_t frameLen, const ComBus* bus )
 {
 #if defined(HAS_RUNLEVEL_MANAGER)
-    output_log_dbg("[COMBUS_TX] link=%u  seq=%u  len=%u  rl=%d\n",
-                   (unsigned)linkIdx,
-                   (unsigned)seq,
-                   (unsigned)frameLen,
-                   (int)bus->analogBus[static_cast<uint8_t>(AnalogComBusID::RUNLEVEL)].value);
+	output_log_dbg("[COMBUS_TX] link=%u  seq=%u  len=%u  rl=%d\n",
+	               (unsigned)linkIdx,
+	               (unsigned)seq,
+	               (unsigned)frameLen,
+	               (int)bus->analogBus[static_cast<uint8_t>(AnalogComBusID::RUNLEVEL)].value);
 #else
-    (void)bus;
-    output_log_dbg("[COMBUS_TX] link=%u  seq=%u  len=%u\n",
-                   (unsigned)linkIdx, (unsigned)seq, (unsigned)frameLen);
+	(void)bus;
+	output_log_dbg("[COMBUS_TX] link=%u  seq=%u  len=%u\n",
+	               (unsigned)linkIdx, (unsigned)seq, (unsigned)frameLen);
 #endif
 }
 
 
 void combus_tx_update( const ComBus* bus )
 {
-    if (!s_txStates || !bus) { return; }
+	if (!s_txStates || !bus) { return; }
 
-    static uint8_t frame[255u];
+	static uint8_t frame[255u];
 
-    for (uint8_t i = 0u; i < s_capacity; ++i) {
-        CombusTxState& st = s_txStates[i];
+	for (uint8_t i = 0u; i < s_capacity; ++i) {
+		CombusTxState& st = s_txStates[i];
 
-        if (!st.nodeCom || st.periodMs == 0u || !st.active) { continue; }
+		if (!st.nodeCom || st.periodMs == 0u || !st.active) { continue; }
 
-        if (st.handshakeCtx) {
-            combus_handshake_tx_update(st.handshakeCtx, st.nodeCom);
-        }
+		if (st.handshakeCtx) {
+			combus_handshake_tx_update(st.handshakeCtx, st.nodeCom);
+		}
 
-        if (st.handshakeCtx && st.handshakeCtx->bidirectional && !st.handshakeCtx->contractValidated) {
-            continue;
-        }
+		if (st.handshakeCtx && st.handshakeCtx->bidirectional && !st.handshakeCtx->contractValidated) {
+			continue;
+		}
 
-        uint32_t now = millis();
+		uint32_t now = millis();
 
-        if ((now - st.lastTxMs) < st.periodMs) { continue; }
+		if ((now - st.lastTxMs) < st.periodMs) { continue; }
 
-        st.lastTxMs = now;
+		st.lastTxMs = now;
 
-        const bool* digitalValues = prepareDigital(st, i, bus);
+		const bool* digitalValues = prepareDigital(st, i, bus);
 
-        const ComPeerLink* peer = st.handshakeCtx ? st.handshakeCtx->peer : nullptr;
-        uint8_t analogEnd  = st.analogWireEnd;
-        uint8_t digitalEnd = st.digitalWireEnd;
+		const ComPeerLink* peer = st.handshakeCtx ? st.handshakeCtx->peer : nullptr;
+		uint8_t analogEnd  = st.analogWireEnd;
+		uint8_t digitalEnd = st.digitalWireEnd;
 
-        if (st.handshakeCtx && st.handshakeCtx->baseSet && !st.handshakeCtx->nextMode) {
-            analogEnd  = peer ? peer->analog.stableCount  : combus::wire::kCombusBaseStableAnalogCount;
-            digitalEnd = peer ? peer->digital.stableCount : combus::wire::kCombusBaseStableDigitalCount;
-        }
+		if (st.handshakeCtx && st.handshakeCtx->baseSet && !st.handshakeCtx->nextMode) {
+			analogEnd  = peer ? peer->analog.stableCount  : combus::wire::kCombusBaseStableAnalogCount;
+			digitalEnd = peer ? peer->digital.stableCount : combus::wire::kCombusBaseStableDigitalCount;
+		}
 
-        uint8_t frameLen = combus_frame_encode(
-            st.frameCfg,
-            frame,
-            bus,
-            st.seq,
-            analogEnd,
-            digitalEnd,
-            digitalValues,
-            peer ? peer->analog.ids  : nullptr,
-            peer ? peer->digital.ids : nullptr
-        );
+		uint8_t frameLen = combus_frame_encode(
+			st.frameCfg,
+			frame,
+			bus,
+			st.seq,
+			analogEnd,
+			digitalEnd,
+			digitalValues,
+			peer ? peer->analog.ids  : nullptr,
+			peer ? peer->digital.ids : nullptr
+		);
 
-        if (frameLen == 0u) { continue; }
+		if (frameLen == 0u) { continue; }
 
-        st.nodeCom->write(st.nodeCom->ctx, frame, frameLen);
-        logFrameSent(i, st.seq, frameLen, bus);
+		st.nodeCom->write(st.nodeCom->ctx, frame, frameLen);
+		logFrameSent(i, st.seq, frameLen, bus);
 
-        st.seq++;
+		st.seq++;
 
-        if (st.seq == 0u) { st.seq = 1u; }
-    }
+		if (st.seq == 0u) { st.seq = 1u; }
+	}
 }
 
 
@@ -258,17 +258,17 @@ void combus_tx_update( const ComBus* bus )
 void combus_tx_set_handshake_ctx( uint8_t                linkIdx,
                                   CombusHandshakeContext* ctx )
 {
-    if (!s_txStates || linkIdx >= s_capacity) { return; }
-    s_txStates[linkIdx].handshakeCtx = ctx;
+	if (!s_txStates || linkIdx >= s_capacity) { return; }
+	s_txStates[linkIdx].handshakeCtx = ctx;
 }
 
 
 void combus_tx_set_active( uint8_t linkIdx, bool active )
 {
-    if (!s_txStates || linkIdx >= s_capacity) { return; }
-    CombusTxState& st = s_txStates[linkIdx];
-    if (active && !st.active) { combus_handshake_internal::startBurst(st.handshakeCtx); }   // a new handshake, as at boot
-    st.active = active;
+	if (!s_txStates || linkIdx >= s_capacity) { return; }
+	CombusTxState& st = s_txStates[linkIdx];
+	if (active && !st.active) { combus_handshake_internal::startBurst(st.handshakeCtx); }   // a new handshake, as at boot
+	st.active = active;
 }
 
 // EOF combus_tx.cpp
