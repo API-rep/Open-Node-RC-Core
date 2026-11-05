@@ -121,6 +121,16 @@ bool combus_link_check( const ComDevMap& map )
                     map.port->name, (unsigned long)map.port->uart.maxBaud);
         return false;
     }
+    if (dev.peer && dev.scope != LinkScope::INTER_NODE) {
+        sys_log_err("[COMBUS_LINKS] link '%s': a coupler is for a link between nodes only\n", dev.name);
+        return false;
+    }
+    if (dev.peer && (dev.peer->analog.count > sizeof(ComLinkRuntime::analogRx) / sizeof(uint16_t)
+                     || dev.peer->digital.count > sizeof(ComLinkRuntime::digitalRx) / sizeof(bool))) {
+        sys_log_err("[COMBUS_LINKS] link '%s': the link through '%s' exceeds the RX buffers\n",
+                    dev.name, dev.peer->coupler);
+        return false;
+    }
     return true;
 }
 
@@ -139,16 +149,6 @@ bool combus_link_build( const ComDevMap& map,
     uint8_t nDigital = 0u;
     wireCounts(map.dev->scope, nAnalog, nDigital);
     if (peer) {
-        if (map.dev->scope != LinkScope::INTER_NODE) {
-            sys_log_err("[COMBUS_LINKS] link '%s': a coupler is for a link between nodes only\n", map.dev->name);
-            return false;
-        }
-        if (peer->analog.count > sizeof(runtime.analogRx) / sizeof(runtime.analogRx[0])
-            || peer->digital.count > sizeof(runtime.digitalRx) / sizeof(runtime.digitalRx[0])) {
-            sys_log_err("[COMBUS_LINKS] link '%s': the link through '%s' exceeds the RX buffers\n",
-                        map.dev->name, peer->coupler);
-            return false;
-        }
         nAnalog  = peer->analog.count;
         nDigital = peer->digital.count;
     }

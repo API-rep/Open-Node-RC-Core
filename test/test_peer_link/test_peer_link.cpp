@@ -565,6 +565,25 @@ static void test_coupling_row9_on_coupling_needs_its_coupling_dev(void) {
     TEST_ASSERT_TRUE(combus_link_check({ &kHitchedTrailerDev, &s_port, LinkEnd::TX_RX }));
 }
 
+/** A table on a link between boards, or too large for the RX buffers, is refused before the port is opened. */
+static void test_link_check_refuses_a_bad_table(void) {
+    static constexpr ComDev kBetweenBoards = {
+        "table_between_boards", LinkScope::INTRA_NODE, LinkType::BIDIRECTIONAL,
+        &kProto, LinkActivation::ALWAYS, nullptr, &kLink
+    };
+    TEST_ASSERT_FALSE_MESSAGE(combus_link_check({ &kBetweenBoards, &s_port, LinkEnd::TX_RX }),
+                              "a table between boards reaches the opening of the port");
+
+    static ComPeerLink tooLarge = kLink;
+    tooLarge.analog.count = 255u;
+    static const ComDev kTooLarge = {
+        "table_too_large", LinkScope::INTER_NODE, LinkType::BIDIRECTIONAL,
+        &kProto, LinkActivation::ALWAYS, nullptr, &tooLarge
+    };
+    TEST_ASSERT_FALSE_MESSAGE(combus_link_check({ &kTooLarge, &s_port, LinkEnd::TX_RX }),
+                              "a table too large reaches the opening of the port");
+}
+
 
 // =============================================================================
 // COUPLING FRAME (step 3.4b)
@@ -1518,6 +1537,7 @@ void setup() {
     RUN_TEST(test_coupling_row6_unhitch_live_link);
     RUN_TEST(test_coupling_row7_rehitch_new_grace);
     RUN_TEST(test_coupling_row9_on_coupling_needs_its_coupling_dev);
+    RUN_TEST(test_link_check_refuses_a_bad_table);
 
     RUN_TEST(test_cpl_frame_row1_round_trip);
     RUN_TEST(test_cpl_frame_row2_corrupted_is_refused);
