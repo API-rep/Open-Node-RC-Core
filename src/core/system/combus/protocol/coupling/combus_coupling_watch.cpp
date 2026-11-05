@@ -46,7 +46,7 @@ void combus_coupling_follow( ComLinkRuntime& rt, uint8_t linkIdx, ComBus& bus )
 		// 2. No change
 	if (is == was) { return; }
 
-	sys_log_info("[COMBUS_LINKS] link '%s' %s -> %s (%s)\n", rt.name ? rt.name : "?",
+	sys_log_info("[COMBUS_LINKS] link '%s' %s -> %s (%s)\n", rt.dev->name ? rt.dev->name : "?",
 	             combus_pairing_state_name(was), combus_pairing_state_name(is), rt.coupling.dev->name);
 
 	rt.coupling.coupled = (is == PairingState::COUPLED);
@@ -76,8 +76,8 @@ void combus_coupling_follow( ComLinkRuntime& rt, uint8_t linkIdx, ComBus& bus )
 	}
 
 		// Check for a link that was alive: its received values are no longer valid
-	if (was == PairingState::COUPLED && rt.watch.wasAlive && rt.peer) {
-		combus_link_take_back_safe_values(*rt.peer, bus);
+	if (was == PairingState::COUPLED && rt.watch.wasAlive && rt.dev->peer) {
+		combus_link_take_back_safe_values(*rt.dev->peer, bus);
 	}
 
 	rt.watch.wasAlive     = false;

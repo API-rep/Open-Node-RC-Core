@@ -143,11 +143,11 @@ void combus_links_update( ComBus& bus )
 			// 3. Safe values on the loss
 		const bool alive = (combus_link_state(i) == ComLinkState::ALIVE);
 
-		if (rt.watch.wasAlive && !alive && rt.peer) {
-			combus_link_take_back_safe_values(*rt.peer, bus);
+		if (rt.watch.wasAlive && !alive && rt.dev->peer) {
+			combus_link_take_back_safe_values(*rt.dev->peer, bus);
 
 			sys_log_warn("[COMBUS_LINKS] link '%s': received channels back to their safe value\n",
-			             rt.name ? rt.name : "?");
+			             rt.dev->name ? rt.dev->name : "?");
 		}
 
 		rt.watch.wasAlive = alive;
@@ -160,10 +160,10 @@ void combus_links_update( ComBus& bus )
 		rt.watch.reportedLost = lost;
 
 		if (lost) {
-			sys_log_warn("[COMBUS_LINKS] link '%s' lost (%s)\n", rt.name ? rt.name : "?",
-			             rt.scope == LinkScope::INTRA_NODE ? "between boards" : "to another node");
+			sys_log_warn("[COMBUS_LINKS] link '%s' lost (%s)\n", rt.dev->name ? rt.dev->name : "?",
+			             rt.dev->scope == LinkScope::INTRA_NODE ? "between boards" : "to another node");
 		} else {
-			sys_log_info("[COMBUS_LINKS] link '%s' back\n", rt.name ? rt.name : "?");
+			sys_log_info("[COMBUS_LINKS] link '%s' back\n", rt.dev->name ? rt.dev->name : "?");
 		}
 	}
 }
@@ -196,7 +196,7 @@ bool combus_links_lost( LinkScope scope )
 		const ComLinkRuntime& rt = s_watched[i];
 
 			// Check that this link counts: a coupled link has its own contributor
-		if (!rt.watch.receives || rt.scope != scope || rt.coupling.dev) { continue; }
+		if (!rt.watch.receives || rt.dev->scope != scope || rt.coupling.dev) { continue; }
 
 		if (scope == LinkScope::INTER_NODE && combus_link_state(i) != ComLinkState::ALIVE) { return true; }
 		if (scope == LinkScope::INTRA_NODE && lostAfterGrace(i))                           { return true; }
@@ -260,8 +260,14 @@ bool combus_links_view( uint8_t linkIdx, ComLinkView& out )
 	const ComLinkRuntime& rt = s_watched[linkIdx];
 
 	out                = ComLinkView{};
-	out.name           = rt.name;
-	out.scope          = rt.scope;
+
+		// Check for a description: an empty slot keeps the defaults of the view
+	if (rt.dev) {
+		out.name  = rt.dev->name;
+		out.scope = rt.dev->scope;
+		out.peer  = rt.dev->peer;
+	}
+
 	out.receives       = rt.watch.receives;
 	out.linkTimeoutMs  = rt.watch.linkTimeoutMs;
 	out.startupGraceMs = rt.watch.startupGraceMs;
@@ -269,7 +275,6 @@ bool combus_links_view( uint8_t linkIdx, ComLinkView& out )
 	out.contractStable = rt.handshake.contractValidated;
 	out.nextMode       = rt.handshake.nextMode;
 	out.rxAgeMs        = combus_rx_age_ms(linkIdx);
-	out.peer           = rt.peer;
 	out.coupling       = rt.coupling.dev;
 	out.pairing        = rt.coupling.pairing;
 

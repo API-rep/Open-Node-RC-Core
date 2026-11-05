@@ -244,13 +244,11 @@ bool combus_link_build( const ComDevMap& map,
 	}
 
 		// 4. What the watch needs
-	runtime.name                 = map.dev->name;
+	runtime.dev                  = map.dev;
 	runtime.com                  = com;
 	runtime.watch.receives       = endReceives(map.end);
 	runtime.watch.linkTimeoutMs  = map.dev->protocol->linkTimeoutMs;
 	runtime.watch.startupGraceMs = map.dev->protocol->startupGraceMs;
-	runtime.scope                = map.dev->scope;
-	runtime.peer                 = peer;
 	runtime.coupling.dev         = (map.dev->activation == LinkActivation::ON_COUPLING) ? map.dev->coupling : nullptr;
 	runtime.coupling.role        = peer ? peer->role : ComLinkRole::SOCKET;
 

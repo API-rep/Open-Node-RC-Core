@@ -79,14 +79,15 @@ struct ComLinkCoupling {
  *   they fit any link, BASE being a prefix of it.  BOARD channels never travel and get
  *   no room.  The limit accepted on a link is the set of that link (its rxCfg), not
  *   the buffer size.
+ *
+ *   The name, the scope and the table of the link are read from its ComDev, never
+ *   copied: the description stays const, in Flash.
  */
 
 struct ComLinkRuntime {
 		// The link
-	const char*        name  = nullptr;                 ///< ComDev name, for the logs
-	NodeCom*           com   = nullptr;                 ///< transport: the pairing writes its coupling frames to it
-	LinkScope          scope = LinkScope::INTRA_NODE;   ///< scope of the ComDev: which contributor its loss feeds
-	const ComPeerLink* peer  = nullptr;                 ///< table of a link between nodes; nullptr = view of the scope
+	const ComDev* dev = nullptr;   ///< description of the link; nullptr = never built
+	NodeCom*      com = nullptr;   ///< transport: the pairing writes its coupling frames to it
 
 		// State: contract, watch, coupling
 	CombusHandshakeContext handshake = {};
