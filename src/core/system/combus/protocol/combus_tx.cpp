@@ -1,6 +1,9 @@
 /******************************************************************************
- * @file combus_tx.cpp
- * @brief ComBus transmitter — transport-agnostic implementation.
+ * @file  combus_tx.cpp
+ * @brief ComBus transmitter: the bus to data frames and handshakes, for every link.
+ *
+ * @details This file decides what leaves and when.  The formats belong to the
+ *   encoders: combus_frame, combus_handshake_tx.
  *****************************************************************************/
 
 #include "combus_tx.h"
@@ -14,37 +17,45 @@
 #include <core/system/combus/combus_access.h>        // combus_both_or_local()
 #include <core/system/debug/logging/debug.h>
 
-// LY2 — include the 3 view-specific ID headers so combus_tx_init()
-// can resolve analogWireEnd / digitalWireEnd from the link's
-// ChanLayer.  combus.h transitively includes combus_ids.h (FULL view).
-#include "combus.h"
-#include "combus_system_ids.h"
-#include "combus_base_ids.h"
+#include "combus.h"             // AnalogComBusID, DigitalComBusID
+#include "combus_system_ids.h"  // size of the SYSTEM view
+#include "combus_base_ids.h"    // size of the BASE view
 
 
 
 // =============================================================================
-// 1. POOL REGISTRY  (externally-owned storage — see combus_tx_register_pool)
+// 1. POOL REGISTRY
 // =============================================================================
 
-// Per-link state array — caller-owned static storage, registered at boot
-// via combus_tx_register_pool().  Core never allocates this.  The number
-// of links is decided by the caller (typically the size of the
-// ComBusLink[] array passed to combus_protocol_init_all()); this module
-// never imposes a hard cap.
+	// The pool of per-link states, owned by the caller.
 static CombusTxState* s_txStates = nullptr;
 static uint8_t        s_capacity = 0u;
 
+
+/**
+ * @brief Pool registration. Links the module to the storage of the caller, once.
+ *
+ * @details In order:
+ *   1. A second call is refused: the running links keep their storage.
+ *   2. An empty pool is refused.
+ *   3. The pool is kept for the whole run.
+ */
+
 void combus_tx_register_pool( CombusTxState* buffer, uint8_t capacity )
 {
+		// 1. Second call
 	if (s_txStates != nullptr) {
 		sys_log_err("[COMBUS_TX] pool already registered — ignoring second call\n");
 		return;
 	}
+
+		// 2. Empty pool
 	if (buffer == nullptr || capacity == 0u) {
 		sys_log_err("[COMBUS_TX] register_pool called with null buffer or zero capacity\n");
 		return;
 	}
+
+		// 3. Keep the pool
 	s_txStates = buffer;
 	s_capacity = capacity;
 }
@@ -52,60 +63,47 @@ void combus_tx_register_pool( CombusTxState* buffer, uint8_t capacity )
 
 
 // =============================================================================
-// 3. INITIALIZATION
+// 2. INITIALIZATION
 // =============================================================================
 
 /**
- * @brief Initialize the ComBus transmitter for one link.
+ * @brief Transmission start. Prepares the slot of one link and arms its handshake.
  *
- * @details Initialization sequence:
- *   1. Guard check — null transport pointer, zero rate, or out-of-range
- *      linkIdx; returns immediately.
- *   2. Store the transport interface and frame layout descriptor.
- *   3. Derive the transmit period from txHz (integer division, ms).
- *   4. LY2 — resolve analogWireEnd / digitalWireEnd from the link's
- *      ChanLayer (BASE → CH_COUNT of the Base view, SYSTEM → CH_COUNT
- *      of the System view, FULL → CH_COUNT of the Full view).  The codec
- *      iterates only over comBus.analogBus[0..analogWireEnd) and
- *      comBus.digitalBus[0..digitalWireEnd) — this is the ONLY
- *      behavioural change vs. the pre-LY2 codec.
- *   5. Reset handshake burst state on the linked context (P3).
- *   6. Log init confirmation.
+ * @details In order:
+ *   1. Guards: pool, slot, transport and rate.
+ *   2. Transport and layout.  A link starts active; combus_links_watch() suspends a
+ *      detached one.
+ *   3. Period, by integer division.
+ *   4. Channels carried: the size of the view of the layer.  The views are prefixes of
+ *      each other, so a count is enough, with no table to build.  Any other layer
+ *      halts: a silent fallback would hide a forgotten layer.
+ *   5. A link between nodes carries the frame of its table instead.  The context was
+ *      attached by combus_protocol_init() before this call.
+ *   6. Handshake burst, as at boot.
+ *   7. Log.
  */
 
-void combus_tx_init(
-	uint8_t        linkIdx,  // index of this link in the per-link state array
-	NodeCom*       nodeCom,  // claimed transport interface (from uart_com_init or similar)
-	ComBusFrameCfg frameCfg, // static frame layout descriptor (nAnalog, nDigital)
-	uint32_t       txHz,     // frame transmit rate in Hz
-	ChanLayer      layer )   // LY2 — selects the wire-end counters
-
+void combus_tx_init( uint8_t        linkIdx,
+                     NodeCom*       nodeCom,
+                     ComBusFrameCfg frameCfg,
+                     uint32_t       txHz,
+                     ChanLayer      layer )
 {
-		// --- 1. Guard check ---
+		// 1. Guards
 	if (!s_txStates || linkIdx >= s_capacity) { return; }
 	if (!nodeCom || txHz == 0u) { return; }
 
 	CombusTxState& st = s_txStates[linkIdx];
 
-		// --- 2. Store transport interface and frame layout ---
+		// 2. Transport and layout
 	st.nodeCom  = nodeCom;
 	st.frameCfg = frameCfg;
-	st.active   = true;     // 3.3: a link starts active; combus_links_watch() suspends an unhitched one
+	st.active   = true;
 
-		// --- 3. Derive transmit period ---
+		// 3. Period
 	st.periodMs = 1000u / txHz;
 
-		// --- 4. LY2 — resolve wire-end counters from the link's ChanLayer.
-	//    The 3 view-specific ID enums share the same backing storage
-	//    (see Group C in test_combus_loopback.cpp) and form a contiguous
-	//    prefix — so the wire-end counter is simply the CH_COUNT of the
-	//    matching view.  No table to build, just two counters.
-	//
-	//    Only BASE, SYSTEM and BOARD are valid for a TX/RX link.
-	//    UNDEFINED is a config error (forgotten / missing layer) and
-	//    triggers a FATAL halt — a silent fallback to FULL would mask
-	//    the bug instead of revealing it (same pattern as the
-	//    "no pool registered" FATAL in uart_com.cpp).
+		// 4. Channels carried by the view of the layer
 	switch (layer) {
 		case ChanLayer::BASE:
 			st.analogWireEnd  = static_cast<uint8_t>(AnalogComBusBaseID::CH_COUNT);
@@ -120,23 +118,18 @@ void combus_tx_init(
 			while (1) { /* halt */ }
 	}
 
-		// --- 4b. Link rework 3.1b — a link between nodes carries the common frame
-		//    of the link (wired by combus_protocol_init() before this call).
+		// 5. Link between nodes: the frame of its table
 	if (st.handshakeCtx && st.handshakeCtx->peer) {
 		st.analogWireEnd  = st.handshakeCtx->peer->analog.count;
 		st.digitalWireEnd = st.handshakeCtx->peer->digital.count;
 	}
 
-		// --- 5. Reset handshake burst state on the linked context (P3).
-	//    combus_protocol_init() wires st.handshakeCtx to the same
-	//    context as the RX side BEFORE calling combus_tx_init().
-	//    If the wiring is missing (legacy caller), the burst is simply
-	//    not armed — no crash, no UB.
+		// 6. Handshake burst
 	if (st.handshakeCtx) {
 		combus_handshake_internal::startBurst(st.handshakeCtx);
 	}
 
-		// --- 6. Log init confirmation ---
+		// 7. Log
 	sys_log_info("[COMBUS_TX] init — link=%u  transport='%s'  rate=%uHz  A%u+D%u  wireEnd=A%u+D%u  layer=%u\n",
 	             (unsigned)linkIdx,
 	             nodeCom->name, (unsigned)txHz,
@@ -147,10 +140,26 @@ void combus_tx_init(
 
 
 
+// =============================================================================
+// 3. TRANSMIT UPDATE
+// =============================================================================
 
-// =============================================================================
-// 4. TRANSMIT UPDATE
-// =============================================================================
+/**
+ * @brief both_or without echo. Prepares the digital values to send on one link.
+ *
+ * @details A both_or channel carries the own value of this board OR what the OTHER links
+ *   received, never what this link sent: otherwise two boards would keep each other's
+ *   `true` alive (anti ping-pong, see both_or.md).  The other channels are sent as they
+ *   are.  On a link between nodes, positions go through the table of the link.
+ *
+ *   The values live in a static buffer, consumed by the frame sent just after.
+ *
+ * @param st       State of the link.
+ * @param linkIdx  Slot of this link in the pool.
+ * @param bus      The ComBus to send.
+ *
+ * @return The values to send; nullptr if no channel is both_or: the encoder reads the bus.
+ */
 
 static const bool* prepareDigital( const CombusTxState& st, uint8_t linkIdx, const ComBus* bus )
 {
@@ -161,6 +170,7 @@ static const bool* prepareDigital( const CombusTxState& st, uint8_t linkIdx, con
 	const ComPeerLink* peer = st.handshakeCtx ? st.handshakeCtx->peer : nullptr;
 	bool anyBothOr = false;
 
+		// Each position of the frame
 	for (uint8_t ch = 0u; ch < st.digitalWireEnd && ch < st.frameCfg.nDigital; ++ch) {
 		const uint8_t id = peer ? peer->digital.ids[ch] : ch;
 		const DigitalComBus& slot = bus->digitalBus[id];
@@ -173,6 +183,15 @@ static const bool* prepareDigital( const CombusTxState& st, uint8_t linkIdx, con
 	return anyBothOr ? txDigital : nullptr;
 }
 
+
+/**
+ * @brief Trace of a frame sent, with the run level on a board that holds it.
+ *
+ * @param linkIdx   Slot of this link in the pool.
+ * @param seq       Sequence counter of the frame sent.
+ * @param frameLen  Length of the frame.
+ * @param bus       The ComBus sent.
+ */
 
 static void logFrameSent( uint8_t linkIdx, uint8_t seq, uint8_t frameLen, const ComBus* bus )
 {
@@ -190,33 +209,60 @@ static void logFrameSent( uint8_t linkIdx, uint8_t seq, uint8_t frameLen, const 
 }
 
 
+/**
+ * @brief Transmission pass. Decides what leaves on each link in turn.
+ *
+ * @details For each link, in order:
+ *   1. Guard: a slot never started, or suspended, sends nothing.
+ *   2. Handshake: pending ACK, boot burst, periodic request.  Independent of the timer
+ *      of the data frames: both may write in the same pass.
+ *   3. A bidirectional end sends no data while its contract is UNKNOWN.  A transmit-only
+ *      end always sends: its receivers wait for the contract on their side.
+ *   4. Timer of the data frames.
+ *   5. Digital values, with both_or without echo.
+ *   6. Counts: a BASE link out of next mode sends the stable channels only.  The
+ *      candidates follow them on the wire.
+ *   7. Encode and send.
+ *   8. Next `seq`: wraps from 255 to 1, since 0 is reserved.
+ *
+ *   The frame lives in a static buffer shared between links: it is written then sent
+ *   within the same iteration.
+ */
+
 void combus_tx_update( const ComBus* bus )
 {
 	if (!s_txStates || !bus) { return; }
 
 	static uint8_t frame[255u];
 
+		// Each registered link
 	for (uint8_t i = 0u; i < s_capacity; ++i) {
 		CombusTxState& st = s_txStates[i];
 
+			// 1. Slot never started, or suspended
 		if (!st.nodeCom || st.periodMs == 0u || !st.active) { continue; }
 
+			// 2. Handshake
 		if (st.handshakeCtx) {
 			combus_handshake_tx_update(st.handshakeCtx, st.nodeCom);
 		}
 
+			// 3. No data while the contract of a bidirectional end is UNKNOWN
 		if (st.handshakeCtx && st.handshakeCtx->bidirectional && !st.handshakeCtx->contractValidated) {
 			continue;
 		}
 
+			// 4. Timer of the data frames
 		uint32_t now = millis();
 
 		if ((now - st.lastTxMs) < st.periodMs) { continue; }
 
 		st.lastTxMs = now;
 
+			// 5. Digital values
 		const bool* digitalValues = prepareDigital(st, i, bus);
 
+			// 6. Counts of this frame
 		const ComPeerLink* peer = st.handshakeCtx ? st.handshakeCtx->peer : nullptr;
 		uint8_t analogEnd  = st.analogWireEnd;
 		uint8_t digitalEnd = st.digitalWireEnd;
@@ -226,6 +272,7 @@ void combus_tx_update( const ComBus* bus )
 			digitalEnd = peer ? peer->digital.stableCount : combus::wire::kCombusBaseStableDigitalCount;
 		}
 
+			// 7. Encode and send
 		uint8_t frameLen = combus_frame_encode(
 			st.frameCfg,
 			frame,
@@ -243,6 +290,7 @@ void combus_tx_update( const ComBus* bus )
 		st.nodeCom->write(st.nodeCom->ctx, frame, frameLen);
 		logFrameSent(i, st.seq, frameLen, bus);
 
+			// 8. Next seq
 		st.seq++;
 
 		if (st.seq == 0u) { st.seq = 1u; }
@@ -252,22 +300,28 @@ void combus_tx_update( const ComBus* bus )
 
 
 // =============================================================================
-// 2. PER-LINK HANDSHAKE CONTEXT WIRING (P3)
+// 4. CONTROL OF A LINK
 // =============================================================================
 
-void combus_tx_set_handshake_ctx( uint8_t                linkIdx,
-                                  CombusHandshakeContext* ctx )
+	/// Set before combus_tx_init(), which arms the burst of this context.
+void combus_tx_set_handshake_ctx( uint8_t linkIdx, CombusHandshakeContext* ctx )
 {
 	if (!s_txStates || linkIdx >= s_capacity) { return; }
+
 	s_txStates[linkIdx].handshakeCtx = ctx;
 }
 
 
+	/// Activated again after a suspension: a new handshake, as at boot.
 void combus_tx_set_active( uint8_t linkIdx, bool active )
 {
 	if (!s_txStates || linkIdx >= s_capacity) { return; }
+
 	CombusTxState& st = s_txStates[linkIdx];
-	if (active && !st.active) { combus_handshake_internal::startBurst(st.handshakeCtx); }   // a new handshake, as at boot
+
+		// Check for a suspended link coming back
+	if (active && !st.active) { combus_handshake_internal::startBurst(st.handshakeCtx); }
+
 	st.active = active;
 }
 
