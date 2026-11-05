@@ -925,6 +925,23 @@ static void test_link_build_refuses_bad_wiring(void) {
     const ComDevMap noTxHz = { &silent, &s_testPort, LinkEnd::TX };
     TEST_ASSERT_FALSE(combus_link_check(noTxHz));
 
+    // Transmit rate whose period in ms would be 0: the link would stay silent.  1000 Hz is the limit.
+    static constexpr ComProtocolCfg hz1000 = { 115200u, 1000u, 250u };
+    static constexpr ComDev fastestDev = {
+        "test_1000hz", LinkScope::INTER_NODE, LinkType::UNIDIRECTIONAL,
+        &hz1000, LinkActivation::ALWAYS, nullptr
+    };
+    const ComDevMap atLimit = { &fastestDev, &s_testPort, LinkEnd::TX };
+    TEST_ASSERT_TRUE(combus_link_check(atLimit));
+
+    static constexpr ComProtocolCfg hz1001 = { 115200u, 1001u, 250u };
+    static constexpr ComDev tooFastDev = {
+        "test_1001hz", LinkScope::INTER_NODE, LinkType::UNIDIRECTIONAL,
+        &hz1001, LinkActivation::ALWAYS, nullptr
+    };
+    const ComDevMap overHz = { &tooFastDev, &s_testPort, LinkEnd::TX };
+    TEST_ASSERT_FALSE_MESSAGE(combus_link_check(overHz), "a rate above 1000 Hz leaves the link silent");
+
     // Receiving end without a link timeout.
     static constexpr ComProtocolCfg noTimeout = { 115200u, 50u, 0u };
     static constexpr ComDev deaf = {

@@ -107,6 +107,10 @@ bool combus_link_check( const ComDevMap& map )
         sys_log_err("[COMBUS_LINKS] link '%s': a transmitting end needs a non-zero txHz\n", dev.name);
         return false;
     }
+    if (endTransmits(map.end) && dev.protocol->txHz > 1000u) {
+        sys_log_err("[COMBUS_LINKS] link '%s': above 1000 Hz, the period is 0 ms and the link stays silent\n", dev.name);
+        return false;
+    }
     if (endReceives(map.end) && dev.protocol->linkTimeoutMs == 0u) {
         sys_log_err("[COMBUS_LINKS] link '%s': a receiving end needs a non-zero linkTimeoutMs\n", dev.name);
         return false;
