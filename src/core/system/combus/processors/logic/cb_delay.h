@@ -31,16 +31,16 @@
  * @brief Configuration of a delay.
  */
 struct CbDelayCfg {
-    uint16_t delayMs;        ///< the input stays true this long before the chain goes on (0 = at once)
-    bool     whileZeroOnly;  ///< act only while the pipeline value is 0 (an engagement, not a release)
+	uint16_t delayMs;        ///< the input stays true this long before the chain goes on (0 = at once)
+	bool     whileZeroOnly;  ///< act only while the pipeline value is 0 (an engagement, not a release)
 };
 
 /**
  * @brief Runtime state of a delay — zero-initialise (`{}`).
  */
 struct CbDelayState {
-    bool     wasOn;        ///< input at the previous call
-    uint32_t onSinceMs;    ///< millis() when the input last rose
+	bool     wasOn;        ///< input at the previous call
+	uint32_t onSinceMs;    ///< millis() when the input last rose
 };
 
 /**

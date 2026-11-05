@@ -60,11 +60,11 @@ static_assert(kCouplingRounds <= 8u, "the answered rounds are a bitmask of uint8
  */
 
 enum class PairingState : uint8_t {
-    DETACHED,   ///< trigger false: the link is off
-    PAIRING,    ///< coupling frames only
-    COUPLED,    ///< paired: the link of today
-    CONFLICT,   ///< two candidates: no link until the trigger goes off then on
-    FAILED      ///< too few answers: no link, retried while the trigger stays true
+	DETACHED,   ///< trigger false: the link is off
+	PAIRING,    ///< coupling frames only
+	COUPLED,    ///< paired: the link of today
+	CONFLICT,   ///< two candidates: no link until the trigger goes off then on
+	FAILED      ///< too few answers: no link, retried while the trigger stays true
 };
 
 
@@ -73,8 +73,8 @@ enum class PairingState : uint8_t {
  */
 
 struct PairingCandidate {
-    NodeAddr addr   = {};
-    uint8_t  rounds = 0u;   ///< bit r-1 set: round r answered (vehicle) or requested (attachment)
+	NodeAddr addr   = {};
+	uint8_t  rounds = 0u;   ///< bit r-1 set: round r answered (vehicle) or requested (attachment)
 };
 
 
@@ -83,36 +83,36 @@ struct PairingCandidate {
  */
 
 struct ComLinkPairing {
-    PairingState state         = PairingState::DETACHED;
+	PairingState state         = PairingState::DETACHED;
 
-        // --- trigger and its debounce (P9) ---
-    bool         rawTrigger    = false;   ///< last value read on the bus
-    uint32_t     rawChangeMs   = 0u;      ///< millis() at the last change of rawTrigger
-    bool         engaged       = false;   ///< debounced trigger
-    bool         glitch        = false;   ///< dropped while engaged, not yet for releaseMs
-    uint32_t     t0Ms          = 0u;      ///< raw rising edge of the trigger: origin of the age of the hitch
+		// --- trigger and its debounce (P9) ---
+	bool         rawTrigger    = false;   ///< last value read on the bus
+	uint32_t     rawChangeMs   = 0u;      ///< millis() at the last change of rawTrigger
+	bool         engaged       = false;   ///< debounced trigger
+	bool         glitch        = false;   ///< dropped while engaged, not yet for releaseMs
+	uint32_t     t0Ms          = 0u;      ///< raw rising edge of the trigger: origin of the age of the hitch
 
-        // --- rounds ---
-    uint8_t      round         = 0u;      ///< vehicle: last request sent
-    uint32_t     nextMs        = 0u;      ///< vehicle: next request; attachment: end of the window
-    uint8_t      retriesLeft   = 0u;      ///< vehicle: new pairings left after a FAILED one
-    PairingCandidate cand[kCouplingMaxCandidates] = {};
-    uint8_t      nCand         = 0u;
+		// --- rounds ---
+	uint8_t      round         = 0u;      ///< vehicle: last request sent
+	uint32_t     nextMs        = 0u;      ///< vehicle: next request; attachment: end of the window
+	uint8_t      retriesLeft   = 0u;      ///< vehicle: new pairings left after a FAILED one
+	PairingCandidate cand[kCouplingMaxCandidates] = {};
+	uint8_t      nCand         = 0u;
 
-        // --- attachment: the answer to send ---
-    bool         answerPending = false;
-    uint8_t      answerRound   = 0u;
-    uint32_t     answerAtMs    = 0u;
+		// --- attachment: the answer to send ---
+	bool         answerPending = false;
+	uint8_t      answerRound   = 0u;
+	uint32_t     answerAtMs    = 0u;
 
-        // --- 3.4d: presence detector of an active coupler (same debounce), identity ---
-    bool         detRaw        = false;
-    uint32_t     detChangeMs   = 0u;
-    bool         detSettled    = false;
-    CouplingId   id            = {};      ///< read (readId) or default at the coupling, cleared at the release
+		// --- 3.4d: presence detector of an active coupler (same debounce), identity ---
+	bool         detRaw        = false;
+	uint32_t     detChangeMs   = 0u;
+	bool         detSettled    = false;
+	CouplingId   id            = {};      ///< read (readId) or default at the coupling, cleared at the release
 
-        // --- the paired peer, kept while COUPLED (handed to the transport, NodeCom::setPeer) ---
-    NodeAddr     peer          = {};      ///< identity of the paired peer, type NONE otherwise
-    uint16_t     foreignFrames = 0u;      ///< coupling frames of another identity received while COUPLED
+		// --- the paired peer, kept while COUPLED (handed to the transport, NodeCom::setPeer) ---
+	NodeAddr     peer          = {};      ///< identity of the paired peer, type NONE otherwise
+	uint16_t     foreignFrames = 0u;      ///< coupling frames of another identity received while COUPLED
 };
 
 

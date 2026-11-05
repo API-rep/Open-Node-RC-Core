@@ -48,7 +48,7 @@ static constexpr uint8_t kCombusCouplingPayloadLen = 13u;
 
 /// Total coupling frame size on the wire (SOF + header + payload + CRC).
 static constexpr uint8_t kCombusCouplingFrameLen =
-    CombusFrameHeaderLen + kCombusCouplingPayloadLen + sizeof(uint8_t);
+	CombusFrameHeaderLen + kCombusCouplingPayloadLen + sizeof(uint8_t);
 
 /// Links whose last received coupling frame is recorded (step 3.4b).
 static constexpr uint8_t kCombusCouplingMaxLinks = 4u;
@@ -64,8 +64,8 @@ static constexpr uint8_t kCombusCouplingMaxLinks = 4u;
  */
 
 enum class CouplingMsg : uint8_t {
-    REQUEST = 1u,   ///< sent by the vehicle, one per round
-    ANSWER  = 2u    ///< sent by a hitched, unpaired attachment
+	REQUEST = 1u,   ///< sent by the vehicle, one per round
+	ANSWER  = 2u    ///< sent by a hitched, unpaired attachment
 };
 
 
@@ -74,11 +74,11 @@ enum class CouplingMsg : uint8_t {
  */
 
 struct CouplingFrame {
-    CouplingMsg msg        = CouplingMsg::REQUEST;
-    uint8_t     round      = 0u;    ///< round of the pairing (1..N)
-    NodeAddr    addr       = {};    ///< identity of the sender
-    uint16_t    hitchAgeMs = 0u;    ///< ms since the hitch trigger rose, saturated at 65535
-    uint16_t    features   = 0u;    ///< mask of the functions (reserved: 0 until defined)
+	CouplingMsg msg        = CouplingMsg::REQUEST;
+	uint8_t     round      = 0u;    ///< round of the pairing (1..N)
+	NodeAddr    addr       = {};    ///< identity of the sender
+	uint16_t    hitchAgeMs = 0u;    ///< ms since the hitch trigger rose, saturated at 65535
+	uint16_t    features   = 0u;    ///< mask of the functions (reserved: 0 until defined)
 };
 
 

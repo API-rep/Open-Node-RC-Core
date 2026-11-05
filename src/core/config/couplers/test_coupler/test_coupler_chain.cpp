@@ -37,25 +37,25 @@ CbDelayState     s_engagedDelay   = {};
 
 CbProc s_procs[] = {
 #if defined(HAS_TEST_COUPLER_ENGAGED_SW)
-    { .name  = "engaged_delay",
-      .inCh  = DigitalComBusID::TEST_COUPLER_ENGAGED_SW,
-      .fn    = cb_delay_fn,
-      .cfg   = &kEngagedDelayCfg,
-      .state = &s_engagedDelay },
+	{ .name  = "engaged_delay",
+	  .inCh  = DigitalComBusID::TEST_COUPLER_ENGAGED_SW,
+	  .fn    = cb_delay_fn,
+	  .cfg   = &kEngagedDelayCfg,
+	  .state = &s_engagedDelay },
 #endif
-    { .name  = "toggle",
-      .inCh  = DigitalComBusID::TEST_COUPLER_BTN,
-      .fn    = cb_btn_toggle_fn,
-      .cfg   = &kToggleCfg,
-      .state = &s_toggle },
+	{ .name  = "toggle",
+	  .inCh  = DigitalComBusID::TEST_COUPLER_BTN,
+	  .fn    = cb_btn_toggle_fn,
+	  .cfg   = &kToggleCfg,
+	  .state = &s_toggle },
 };
 
 CbChain s_chain = {
-    "test_coupler_socket",
-    DigitalComBusID::TEST_COUPLER_CMD,
-    DigitalComBusID::TEST_COUPLER_CMD,
-    s_procs,
-    static_cast<uint8_t>(sizeof(s_procs) / sizeof(s_procs[0]))
+	"test_coupler_socket",
+	DigitalComBusID::TEST_COUPLER_CMD,
+	DigitalComBusID::TEST_COUPLER_CMD,
+	s_procs,
+	static_cast<uint8_t>(sizeof(s_procs) / sizeof(s_procs[0]))
 };
 
 } // namespace
@@ -63,15 +63,15 @@ CbChain s_chain = {
 
 void test_coupler_socket_chain( ComBus& bus )
 {
-    proc_chain_step(s_chain, bus);
+	proc_chain_step(s_chain, bus);
 }
 
 
 void test_coupler_socket_chain_reset( void )
 {
-    s_toggle = CbBtnState{};
+	s_toggle = CbBtnState{};
 #if defined(HAS_TEST_COUPLER_ENGAGED_SW)
-    s_engagedDelay = CbDelayState{};
+	s_engagedDelay = CbDelayState{};
 #endif
 }
 
