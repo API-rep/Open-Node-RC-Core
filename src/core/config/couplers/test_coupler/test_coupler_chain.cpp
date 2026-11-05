@@ -51,7 +51,7 @@ CbProc s_procs[] = {
 };
 
 CbChain s_chain = {
-    "test_coupler_vehicle",
+    "test_coupler_socket",
     DigitalComBusID::TEST_COUPLER_CMD,
     DigitalComBusID::TEST_COUPLER_CMD,
     s_procs,
@@ -61,13 +61,13 @@ CbChain s_chain = {
 } // namespace
 
 
-void test_coupler_vehicle_chain( ComBus& bus )
+void test_coupler_socket_chain( ComBus& bus )
 {
     proc_chain_step(s_chain, bus);
 }
 
 
-void test_coupler_vehicle_chain_reset( void )
+void test_coupler_socket_chain_reset( void )
 {
     s_toggle = CbBtnState{};
 #if defined(HAS_TEST_COUPLER_ENGAGED_SW)

@@ -51,7 +51,7 @@
 #include <core/system/combus/protocol/handshake/combus_handshake.h>
 #include <core/system/combus/protocol/handshake/combus_handshake_tx.h>
 #include <core/system/combus/protocol/coupling/combus_coupling.h>
-#include <core/config/couplers/test_coupler/test_coupler_chain.h>   // test_coupler_vehicle_chain (3.4e)
+#include <core/config/couplers/test_coupler/test_coupler_chain.h>   // test_coupler_socket_chain (3.4e)
 #include <core/system/hw/transport/uart_com.h>
 #include <core/system/combus/protocol/combus_tx.h>
 #include <core/system/combus/protocol/combus_rx.h>
@@ -1021,7 +1021,7 @@ static constexpr uint8_t kEngagedSw  = static_cast<uint8_t>(DigitalComBusID::TES
 
 static constexpr CouplingDev kChainedCoupler = {
     "test_coupler_chained", DigitalComBusID::TEST_COUPLER_CMD, DigitalComBusID::TEST_HITCH_LINK_FAIL,
-    200u, 0u, 0u, &test_coupler_vehicle_chain
+    200u, 0u, 0u, &test_coupler_socket_chain
 };
 static constexpr ComDev kChainedDev = {
     "test_trailer_chained", LinkScope::INTER_NODE, LinkType::BIDIRECTIONAL,
@@ -1030,7 +1030,7 @@ static constexpr ComDev kChainedDev = {
 
 static void startChainedLink(bool engaged) {
     resetBus();
-    test_coupler_vehicle_chain_reset();                 // no history from the previous test
+    test_coupler_socket_chain_reset();                 // no history from the previous test
     const ComDevMap map = { &kChainedDev, &s_port, LinkEnd::TX_RX };
     TEST_ASSERT_TRUE(combus_link_build(map, s_com, s_runtime, s_link));
     s_link.target = &bus;
@@ -1258,7 +1258,7 @@ static void test_tool_row8_reader_fails_default(void) {
     // --- Row 9: the coupled output of an active coupler ---
 static constexpr CouplingDev kDetectedCoupler = {
     "test_coupler_detected", DigitalComBusID::TEST_COUPLER_CMD, DigitalComBusID::TEST_HITCH_LINK_FAIL,
-    200u, 0u, 0u, &test_coupler_vehicle_chain,
+    200u, 0u, 0u, &test_coupler_socket_chain,
     DigitalComBusID::TEST_COUPLER_COUPLED, DigitalComBusID::TEST_COUPLER_ENGAGED_SW, CouplingId{}, nullptr
 };
 static constexpr ComDev kDetectedDev = {
@@ -1270,7 +1270,7 @@ static constexpr ComDev kDetectedDev = {
 static void test_tool_row9_active_coupled_output(void) {
     combus_couplings_watch(nullptr, 0u);
     resetBus();
-    test_coupler_vehicle_chain_reset();
+    test_coupler_socket_chain_reset();
     const ComDevMap map = { &kDetectedDev, &s_port, LinkEnd::TX_RX };
     TEST_ASSERT_TRUE(combus_link_build(map, s_com, s_runtime, s_link));
     s_link.target = &bus;

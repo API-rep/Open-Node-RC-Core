@@ -25,14 +25,14 @@
  *   switch, on for kTestCouplerEngagedDelayMs; uncoupling never does.
  */
 
-void test_coupler_vehicle_chain( ComBus& bus );
+void test_coupler_socket_chain( ComBus& bus );
 
 
 /**
  * @brief Forget the state of the chain (button and delay history): tests, re-init.
  */
 
-void test_coupler_vehicle_chain_reset( void );
+void test_coupler_socket_chain_reset( void );
 
 
 /// The engaged switch stays on this long before a coupling is accepted (cb_delay_fn).
