@@ -138,7 +138,8 @@ Quick index to the documents that sit next to the code. Start from the subject, 
 * [Data frame](../src/core/system/combus/protocol/frame/README.md) — wire format, which channels travel, how a frame reaches the bus
 * [Handshake](../src/core/system/combus/protocol/handshake/README.md) — the contract of a link: MD5, states, stable and next modes
 * [Coupling and pairing](../src/core/system/combus/protocol/coupling/README.md) — who is hitched to whom
-* [UART workflow](../src/core/system/combus/protocol/uart_workflow.md) — how the UART link is set up
+* [Links](../src/core/system/combus/protocol/link/README.md) — how a link is declared, started and watched
+* [UART workflow](../src/core/system/combus/protocol/link/uart_workflow.md) — how the UART link is set up
 * [both_or merge (anti ping-pong)](../src/core/system/combus/protocol/both_or.md) — how a both_or channel such as FAILSAFE_HARD is shared between boards
 * [ComBus link rework](<WIP - ComBus link rework.md>) — preliminary study for the communication rework: multi-link, multi-protocol, versioning (work in progress)
 * [Remote firmware](<WIP - Remote firmware.md>) — the firmware of the remote, out of the link rework: what the embryo holds, the known blocking point, what remains to build (work in progress)

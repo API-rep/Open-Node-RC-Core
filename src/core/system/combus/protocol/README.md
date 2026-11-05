@@ -27,11 +27,9 @@ Machine modules
 | [`frame/`](frame/README.md) | The data frame: encode, decode, apply to the bus |
 | [`handshake/`](handshake/README.md) | The contract of the link: do both ends have the same MD5? |
 | [`coupling/`](coupling/README.md) | The pairing: who is hitched to whom? |
+| [`link/`](link/README.md) | The links: describe them, start them, watch them |
 | `combus_tx.*` | The transmission of each link, at its own rate |
 | `combus_rx.*` | The reception of each link: routes the bytes to the right decoder |
-| `combus_links.*` | Builds the links from their description, then watches them |
-| `combus_protocol.*` | The structures that describe a link, and its initialisation |
-| `combus_peer_link_defs.h` | The types of a link between nodes: table and contract, filled by the builder |
 
 ## Describing a Link
 
@@ -83,9 +81,10 @@ An adapter that provides a `NodeCom` is enough: `write()`, `readByte()`, `availa
 
 ## Going Further
 
+- [The links](link/README.md)
 - [The data frame](frame/README.md)
 - [The handshake](handshake/README.md)
 - [Coupling and pairing](coupling/README.md)
 - [The `both_or` merge](both_or.md): the anti ping-pong between boards
-- [The UART workflow](uart_workflow.md): the init chain, from the build flag to `loop()`
+- [The UART workflow](link/uart_workflow.md): the init chain, from the build flag to `loop()`
 - [The builder](../../../../../scripts/combus_builder/README.md): how the IDs and tables are generated

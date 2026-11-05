@@ -1,24 +1,13 @@
 /******************************************************************************
- * @file node_com.h
- * @brief Generic inter-node communication interface.
+ * @file  node_com.h
+ * @brief Transport interface and physical ports: what the protocol sees of the hardware.
  *
- * @details NodeCom is a lightweight structure of functions that acts as a bridge
- * between the communication modules (combus_tx/rx, ...) and the physical transport
- * layer (UART, ESP-Now, …). In this way, communication modules do not need to
- * know the details of the underlying transport implementation.
+ * @details NodeCom is a small structure of functions, the bridge between the
+ *   communication modules (combus_tx, combus_rx...) and the physical transport (UART,
+ *   ESP-NOW...).  These modules do not need to know the details of the transport.
  *
- * At communication init, a transport adapter (e.g. uart_com_init) is called to
- * initialize the physical port. The adapter init returns a NodeCom* pointer 
- * that is passed to the protocol layer init (ex: `combus_tx_init()`) to interact
- * with the transport layer.
- * 
- * @code
- *   com->write()     — send bytes
- *   com->readByte()  — receive one byte (-1 if none)
- *   com->available() — bytes waiting in the RX buffer
- * @endcode
- *
- * The protocol module retains that pointer for the lifetime of the program.
+ *   At init, a transport adapter (uart_com_init()) opens the physical port and returns a
+ *   NodeCom, which the protocol keeps for the whole run.
  *****************************************************************************/
 #pragma once
 
@@ -26,37 +15,30 @@
 #include <stddef.h>
 
 
+
 // =============================================================================
 // 1. TRANSPORT INTERFACE
 // =============================================================================
 
 /**
- * @brief Generic transport structure of NodeCom function pointers.
- *
- * @details Filled by each physical transport layer adapter (uart_transport_init, …)
- * during initialization and passed to the communication modules (combus_tx/rx, …).
- *
- * @var NodeCom::ctx        Opaque pointer passed through every function pointer below.
- * @var NodeCom::write      Send @p len bytes from @p data via the physical transport.
- * @var NodeCom::readByte   Read one byte from the RX buffer; returns -1 if none available.
- * @var NodeCom::available  Number of bytes currently waiting in the RX buffer.
- * @var NodeCom::name       Human-readable port identifier.
+ * @brief The functions of a transport, filled by its adapter.
  */
 
 struct NodeCom {
-	void*       ctx;                                          ///< adapter private context
+	void*       ctx;                                                ///< private context of the adapter, passed to every function
 	void      (*write)    (void* ctx, const uint8_t* data, size_t len); ///< send bytes
-	int       (*readByte) (void* ctx);                        ///< read one byte (-1 = empty)
-	int       (*available)(void* ctx);                        ///< RX bytes waiting
-	const char* name;                                         ///< port id
+	int       (*readByte) (void* ctx);                              ///< read one byte (-1 = empty)
+	int       (*available)(void* ctx);                              ///< number of RX bytes waiting
+	const char* name;                                               ///< port identifier
 
-		// Link rework 3.4: the only peer this transport may deliver frames from, set
-		// once a coupled link is paired, cleared when it is detached (addr nullptr).
+		// The only peer this transport may deliver frames from, set once a coupled link is
+		// paired, cleared when it is detached (addr nullptr).
 		// nullptr: the transport has one possible peer by construction (a wire).
 		// TODO(chantier 5, ESP-NOW): the ESP-NOW adapter implements it and drops, at
 		// reception, every frame whose source MAC differs.
 	void      (*setPeer)  (void* ctx, const uint8_t* addr, uint8_t len) = nullptr;
 };
+
 
 
 // =============================================================================
@@ -66,9 +48,9 @@ struct NodeCom {
 /**
  * @brief Kind of communication hardware described by a ComPort.
  *
- * @details Only UART is implemented. Each further kind (I2C, CAN, internal
- *   ESP-NOW controller) adds one value here, one configuration struct, one
- *   member in the ComPort union and one case where the port is opened.
+ * @details Only UART is implemented.  Each further kind (I2C, CAN, internal ESP-NOW
+ *   controller) adds one value here, one configuration struct, one member in the ComPort
+ *   union and one case where the port is opened.
  */
 
 enum class ComPortType : uint8_t {
@@ -90,12 +72,11 @@ struct UartPortCfg {
 
 
 /**
- * @brief One communication port of a board (hardware, with or without pins).
+ * @brief One communication port of a board.
  *
- * @details Purely descriptive and Flash-resident. The active member of the
- *   union is given by `type`. Created with the static factories, so a board
- *   table reads as a list of ports:
- *
+ * @details Purely descriptive, it lives in Flash.  The active member of the union is
+ *   given by `type`.  Created with the static factories, so a board table reads as a
+ *   list of ports:
  * @code
  *   const ComPort comPorts[] = {
  *       ComPort::makeUart("COM/GPIO", { 2, TxdExtPin, RxdExtPin, UartMaxBaud }),
@@ -104,10 +85,10 @@ struct UartPortCfg {
  */
 
 struct ComPort {
-	const char*  name;      ///< port name, as printed on the board silkscreen
-	ComPortType  type;      ///< selects the active member of the union below
+	const char* name;      ///< port name, as printed on the board silkscreen
+	ComPortType type;      ///< selects the active member of the union below
 	union {
-		UartPortCfg uart;   ///< valid when type == ComPortType::UART
+		UartPortCfg uart;  ///< valid when type == ComPortType::UART
 	};
 
 	constexpr ComPort() : name(""), type(ComPortType::NONE), uart() {}
@@ -119,5 +100,4 @@ struct ComPort {
 	}
 };
 
-// EOF transport.h
-
+// EOF node_com.h

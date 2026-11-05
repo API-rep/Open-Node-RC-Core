@@ -5,7 +5,7 @@ Ce fichier ne garde que ce qui reste à faire ou à décider. L'architecture, le
 ## Où lire
 
 - Architecture, diffusion, IDs, MD5, hook, tests, limites : `scripts/combus_builder/README.md`.
-- Trame, handshake, lien UART : `src/core/system/combus/protocol/frame/README.md` et `src/core/system/combus/protocol/uart_workflow.md`.
+- Trame, handshake, lien UART : `src/core/system/combus/protocol/frame/README.md` et `src/core/system/combus/protocol/link/uart_workflow.md`.
 - Écrire des fichiers `.cb` : `doc/configuration/cb_syntax.md`.
 - Vue d'ensemble ComBus v2 : `doc/~combus_v2.md` (section « ComBus Builder »).
 - Chantiers futurs : `doc/roadmap.md`. Règles de travail : `CLAUDE.md`.

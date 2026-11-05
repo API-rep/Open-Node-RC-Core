@@ -80,11 +80,13 @@ Un coupleur sans nœud de l'autre côté, comme un outil, n'a personne à qui pa
 | Fichier | Contenu |
 |---|---|
 | `combus_coupling.h`, `.cpp` | La trame de couplage : encoder, décoder, transmettre à l'appairage |
-| `combus_pairing.h`, `.cpp` | La machine à états de chaque bout, pilotée par `combus_links` |
+| `combus_pairing.h`, `.cpp` | La machine à états de chaque bout |
+| `combus_coupling_watch.h`, `.cpp` | Applique l'état de l'appairage au lien, écrit les contributeurs du coupleur, suit les coupleurs passifs |
 
 La trame ne dépend pas de l'appairage : celui-ci s'enregistre auprès d'elle pour recevoir les trames.
 
 ## Aller plus loin
 
 - [Le protocole ComBus](../README.md) : la vue d'ensemble
+- [Les liens](../link/README.md) : comment un lien est décrit et surveillé
 - [Le handshake](../handshake/README.md) : ce qui suit l'appairage

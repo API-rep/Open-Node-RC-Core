@@ -213,6 +213,6 @@ Keep in mind:
 
 ## 5. Where a Structure Lives
 
-`include/struct/` is deprecated. A new structure goes at the top of the **master header of its theme**, the one that already defines the neighbouring type (for example `ComDev` in `core/system/combus/protocol/combus_protocol.h`).
+`include/struct/` is deprecated. A new structure goes at the top of the **master header of its theme**, the one that already defines the neighbouring type (for example `ComDev` in `core/system/combus/protocol/link/combus_link_defs.h`).
 
 When several related types form a theme of their own (pure definitions, used by several modules, without code), they move to a `<theme>_defs.h` file next to the master header, which includes it. Such a file holds type definitions only: no feature flag, no function. Examples: `combus_frame_defs.h` (the frame), `combus_peer_link_defs.h` (a link between two nodes: `ComLinkMd5`, `ComLinkTable`, `ComPeerLink`).

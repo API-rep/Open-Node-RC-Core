@@ -221,7 +221,7 @@ IDs de leur type, puis SYSTEM, puis BOARD. Un canal garde le même ID dans toute
 les vues où il apparaît. Les vues `combus_system` et `combus_base` sont ainsi
 des préfixes de `combus`.
 
-À quoi sert chaque vue (`md5.py:3-9`, `combus_protocol.cpp:55-88`) :
+À quoi sert chaque vue (`md5.py:3-9`, `combus_link_start()`) :
 
 - `combus_base` : le profil de base du type de machine (ce qui est validé entre nœuds par le handshake) ;
 - `combus_system` : base d'alignement entre cartes d'un même nœud. Deux cartes

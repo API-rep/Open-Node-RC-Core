@@ -10,7 +10,7 @@
 >
 > Les sections trame, TX et RX (§5, §7, §8) sont résumées avec des renvois ;
 > le détail de la trame et du handshake est dans
-> [`frame/README.md`](frame/README.md) et [`handshake/README.md`](handshake/README.md).
+> [`../frame/README.md`](../frame/README.md) et [`../handshake/README.md`](../handshake/README.md).
 
 ---
 
@@ -125,7 +125,7 @@ void machine_init() {
   sys_init();        // 1. pinReg + pool de ports UART + Serial0 claim + combus_init()
   hw_init();         // 2. drivers/servos/sig/battery
   input_init();      // 3. sources d'entrée physiques
-  output_init();     // 4. com_init() -> combus_uart_init() -> combus_protocol_init_all()
+  output_init();     // 4. com_init() -> combus_uart_init() -> combus_links_start_all()
 
   // --- 5. Boot-safe runlevel ---
   combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)DEF_RUNLEVEL, ChanLayer::SYSTEM);
@@ -239,12 +239,12 @@ void com_init() {
     combus_links_init(maps, kLinkCount, storage, &pinReg);
 ```
 
-**Fichier** : `src/core/system/combus/protocol/combus_links.cpp` (`combus_links_init`).
+**Fichier** : `src/core/system/combus/protocol/link/combus_links.cpp` (`combus_links_init`).
 Pour chaque `ComDevMap` : `combus_link_check` (câblage valide), ouverture du port
 (`openPort`), puis `combus_link_build`, qui remplit le `ComBusLink` : couche et
 taille de trame d'après la portée, TX et/ou RX d'après le rôle du bout, contexte
 de handshake et tampons RX pris dans `ComLinkRuntime`. Les pools TX et RX sont
-ensuite enregistrés et `combus_protocol_init_all()` démarre les liens. Un câblage
+ensuite enregistrés et `combus_links_start_all()` démarre les liens. Un câblage
 refusé est journalisé et laissé inactif.
 
 Points à retenir (lus dans ces fichiers) :
@@ -260,19 +260,19 @@ Points à retenir (lus dans ces fichiers) :
   lien ; la limite acceptée est l'ensemble du lien (`rxCfg`) : une trame plus
   grande est refusée.
 
-### 3.7. `combus_protocol_init_all()` / `combus_protocol_init()` — wire TX/RX au transport
+### 3.7. `combus_links_start_all()` / `combus_link_start()` — wire TX/RX au transport
 
-**Fichier** : `src/core/system/combus/protocol/combus_protocol.cpp` (lignes 31-108, extrait).
+**Fichier** : `src/core/system/combus/protocol/link/combus_links.cpp` (lignes 31-108, extrait).
 
 ```cpp
-void combus_protocol_init_all( ComBusLink* links, uint8_t count )
+void combus_links_start_all( ComBusLink* links, uint8_t count )
 {
     for (uint8_t i = 0u; i < count; ++i) {
-        combus_protocol_init(i, &links[i]);
+        combus_link_start(i, &links[i]);
     }
 }
 
-void combus_protocol_init( uint8_t linkIdx, ComBusLink* link )
+void combus_link_start( uint8_t linkIdx, ComBusLink* link )
 {
     // 1. Garde : link et link->com non nuls ; handshakeCtx obligatoire (sinon erreur loguée, return)
     // 2. LY4 : switch (link->layer) -> ctx->expected.stable = kCombus{Base|System|}ComBusMd5
@@ -293,7 +293,7 @@ void combus_protocol_init( uint8_t linkIdx, ComBusLink* link )
 }
 ```
 
-Structure `ComBusLink` : `src/core/system/combus/protocol/combus_protocol.h` (section 2)
+Structure `ComBusLink` : `src/core/system/combus/protocol/link/combus_link_defs.h` (section 2)
 (champs `com`, `txCfg`, `txHz`, `rxCfg`, `analogBuf`, `digitalBuf`,
 `handshakeCtx`, `layer`, `name`, `target`). `txCfg` et `rxCfg` sont des
 `std::optional` : leur absence désactive le sens correspondant.
@@ -404,7 +404,7 @@ struct ComBusFrameCfg {
 
 ## 5. Format de trame binaire
 
-Voir [`frame/README.md`](frame/README.md) : `SOF`
+Voir [`../frame/README.md`](../frame/README.md) : `SOF`
 `0xAA`, en-tête de 4 octets (`nAnalog`, `nDigital`, `seq`, `flags`), bits
 numériques puis valeurs analogiques `uint16` petit-boutistes, CRC-8/MAXIM.
 Le `runLevel` n'est pas dans l'en-tête : il voyage comme canal `RUNLEVEL`.
@@ -458,7 +458,7 @@ struct UartCtx {
 ## 7. TX — résumé
 
 Le détail de la trame (en-tête, ordre des canaux, taille selon le layer du lien)
-est dans [`frame/README.md`](frame/README.md).
+est dans [`../frame/README.md`](../frame/README.md).
 
 - `combus_tx_init(linkIdx, nodeCom, frameCfg, txHz, layer)`
   (`combus_tx.cpp:88-162`) : mémorise le transport et le layout, calcule la
@@ -513,7 +513,7 @@ est dans [`frame/README.md`](frame/README.md).
 
 Chaque lien ComBus indépendant possède son propre `CombusHandshakeContext` :
 
-**Fichier** : `src/core/system/combus/protocol/combus_links.h` (`ComLinkRuntime`).
+**Fichier** : `src/core/system/combus/protocol/link/combus_links.h` (`ComLinkRuntime`).
 
 ```cpp
 struct ComLinkRuntime {
@@ -525,7 +525,7 @@ struct ComLinkRuntime {
 Un `ComLinkRuntime` est fourni par lien (tableau statique de l'appelant) ;
 `combus_link_build` y prend le contexte de handshake.
 
-Le contexte est partagé entre TX et RX du même lien. `combus_protocol_init()`
+Le contexte est partagé entre TX et RX du même lien. `combus_link_start()`
 le câble avant les init (`combus_tx_set_handshake_ctx(linkIdx, ctx)`,
 `combus_rx_set_handshake_ctx(linkIdx, ctx)`, voir §3.7) et y résout le
 pointeur `expected.stable` selon le layer du lien.
@@ -533,7 +533,7 @@ pointeur `expected.stable` selon le layer du lien.
 Format de la trame de handshake, rafale au démarrage (3 trames, 100 ms), demande
 toutes les 250 ms, ACK, contrat du lien (`STABLE` / `INCONNU`, chantier 1.2),
 validation MD5 + version, interrupteurs de compilation :
-[`handshake/README.md`](handshake/README.md).
+[`../handshake/README.md`](../handshake/README.md).
 
 **Fichiers handshake** :
 - `src/core/system/combus/protocol/handshake/combus_handshake.h`
@@ -597,8 +597,8 @@ tour.
 | **Output init**              | `src/machines/init/output/output_init.cpp`                           |
 | **Com orchestrateur**        | `src/machines/init/com/com_init.cpp`                                 |
 | **Wrapper env machine**      | `src/machines/init/com/combus_uart_init.cpp`                         |
-| **Liens depuis ComDev**      | `src/core/system/combus/protocol/combus_links.cpp`                   |
-| **Protocole orchestrateur**  | `src/core/system/combus/protocol/combus_protocol.cpp` (`combus_protocol_init_all`) |
+| **Liens depuis ComDev**      | `src/core/system/combus/protocol/link/combus_links.cpp`                   |
+| **Protocole orchestrateur**  | `src/core/system/combus/protocol/link/combus_links.cpp` (`combus_links_start_all`) |
 | **TX protocole**             | `src/core/system/combus/protocol/combus_tx.cpp`                      |
 | **RX protocole**             | `src/core/system/combus/protocol/combus_rx.cpp`                      |
 | **Codec frame**              | `src/core/system/combus/protocol/frame/combus_frame.cpp`             |
