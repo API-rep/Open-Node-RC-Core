@@ -82,15 +82,20 @@ struct ComLinkCoupling {
  */
 
 struct ComLinkRuntime {
+		// The link
+	const char*        name  = nullptr;                 ///< ComDev name, for the logs
+	NodeCom*           com   = nullptr;                 ///< transport: the pairing writes its coupling frames to it
+	LinkScope          scope = LinkScope::INTRA_NODE;   ///< scope of the ComDev: which contributor its loss feeds
+	const ComPeerLink* peer  = nullptr;                 ///< table of a link between nodes; nullptr = view of the scope
+
+		// State: contract, watch, coupling
 	CombusHandshakeContext handshake = {};
-	const char*        name     = nullptr;                 ///< ComDev name, for the logs
-	NodeCom*           com      = nullptr;                 ///< transport of the link: the pairing writes its coupling frames to it
-	LinkScope          scope    = LinkScope::INTRA_NODE;   ///< scope of the ComDev: which contributor its loss feeds
-	const ComPeerLink* peer     = nullptr;                 ///< table of a link between nodes; nullptr = view of the scope
-	ComLinkWatch       watch    = {};                      ///< what the watch needs
-	ComLinkCoupling    coupling = {};                      ///< coupling of the link
-	uint16_t analogRx[static_cast<uint8_t>(AnalogComBusSystemID::CH_COUNT)]   = {};   ///< SYSTEM next set
-	bool     digitalRx[static_cast<uint8_t>(DigitalComBusSystemID::CH_COUNT)] = {};   ///< SYSTEM next set
+	ComLinkWatch           watch     = {};
+	ComLinkCoupling        coupling  = {};
+
+		// RX decode buffers, sized to the SYSTEM next set
+	uint16_t analogRx[static_cast<uint8_t>(AnalogComBusSystemID::CH_COUNT)]   = {};
+	bool     digitalRx[static_cast<uint8_t>(DigitalComBusSystemID::CH_COUNT)] = {};
 };
 
 

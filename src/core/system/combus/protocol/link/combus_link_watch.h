@@ -38,18 +38,25 @@ enum class ComLinkState : uint8_t {
  */
 
 struct ComLinkView {
-	const char*        name           = nullptr;
-	LinkScope          scope          = LinkScope::INTRA_NODE;
-	bool               receives       = false;   ///< the link has an RX side
-	uint32_t           linkTimeoutMs  = 0u;
-	uint32_t           startupGraceMs = 0u;
-	ComLinkState       state          = ComLinkState::NEVER_SEEN;
-	bool               contractStable = false;   ///< handshake contract STABLE
-	bool               nextMode       = false;   ///< STABLE in next mode (candidates)
-	uint32_t           rxAgeMs        = 0u;      ///< ms since the last frame accepted (meaningful once seen)
-	const ComPeerLink* peer           = nullptr; ///< link through a coupler: coupler, side, MD5, tables
-	const CouplingDev* coupling       = nullptr; ///< coupled link (ON_COUPLING), nullptr otherwise
-	ComLinkPairing     pairing        = {};      ///< copy of its pairing state (coupled link)
+		// The link
+	const char*        name     = nullptr;
+	LinkScope          scope    = LinkScope::INTRA_NODE;
+	const ComPeerLink* peer     = nullptr;   ///< link with a table: coupler, side, MD5, tables
+	const CouplingDev* coupling = nullptr;   ///< coupled link (ON_COUPLING); nullptr otherwise
+
+		// Watch
+	bool         receives       = false;                     ///< the link has an RX side
+	uint32_t     linkTimeoutMs  = 0u;
+	uint32_t     startupGraceMs = 0u;
+	ComLinkState state          = ComLinkState::NEVER_SEEN;
+	uint32_t     rxAgeMs        = 0u;                        ///< ms since the last frame accepted, once seen
+
+		// Contract
+	bool contractStable = false;   ///< handshake contract STABLE
+	bool nextMode       = false;   ///< STABLE in next mode (candidates)
+
+		// Copy of the pairing state (coupled link)
+	ComLinkPairing pairing = {};
 };
 
 

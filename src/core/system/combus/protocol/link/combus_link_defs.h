@@ -84,7 +84,7 @@ struct ComProtocolCfg {
 	uint32_t rate;                    ///< line rate (baud for a UART), identical at both ends
 	uint32_t txHz;                    ///< transmitting end: rate of the data frames, 1 to 1000 Hz
 	uint32_t linkTimeoutMs;           ///< receiving end: silence after which the link is lost (ms)
-	uint32_t startupGraceMs = 3000u;  ///< receiving end of a link between boards: wait for a first frame before it counts as lost (ms)
+	uint32_t startupGraceMs = 3000u;  ///< receiving end, between boards: wait for a first frame before the loss (ms)
 };
 
 
@@ -125,20 +125,35 @@ struct CouplingId {
  *
  *   The chain of the coupler runs before the trigger is read: on the socket side, it
  *   latches the coupling button into the command that serves as the trigger.
+ *
+ *   `coupled` is written by the core.  For an active coupler: COUPLED, and the detector
+ *   settled when there is one.  For a passive coupler: the detector settled.
+ *
+ *   The first six members come first, in this order: the tables are written in
+ *   positional form, `{ name, trigger, fail, ageToleranceMs, engageMs, releaseMs }`.
  */
 
 struct CouplingDev {
+		// Identity and contributor
 	const char*                    name;      ///< type of coupling, for the logs (ex. "fifth_wheel")
 	DigitalComBusID                trigger;   ///< true = coupled (hardware or software, computed by the machine)
-	std::optional<DigitalComBusID> fail;      ///< failsafe contributor of the coupled link (true = fault), absent = none
-	uint16_t ageToleranceMs = 200u;           ///< the two ages of the hitch agree within this (depends on the actuator)
-	uint16_t engageMs       = 50u;            ///< the trigger stays true this long before the pairing starts
-	uint16_t releaseMs      = 500u;           ///< the trigger stays false this long before the link is detached
-	void (*chain)(ComBus& bus) = nullptr;     ///< chain of the coupler for this end (writes the trigger), nullptr = none
-	std::optional<DigitalComBusID> coupled  = std::nullopt;  ///< written by the core: active coupler, COUPLED and the detector settled; passive one, the detector settled
-	std::optional<DigitalComBusID> detector = std::nullopt;  ///< active coupler: presence detector, ANDed into `coupled`
-	CouplingId defaultId = {};                ///< identity when none is read (simple mode)
-	bool (*readId)(CouplingId& out) = nullptr; ///< anchor of a future reader (RFID...): true and `out` when an identity is read
+	std::optional<DigitalComBusID> fail;      ///< contributor of the coupled link (true = fault); absent = none
+
+		// Timings
+	uint16_t ageToleranceMs = 200u;   ///< the two ages of the hitch agree within this (depends on the actuator)
+	uint16_t engageMs       = 50u;    ///< the trigger stays true this long before the pairing starts
+	uint16_t releaseMs      = 500u;   ///< the trigger stays false this long before the link is detached
+
+		// Chain of the coupler for this end, which writes the trigger; nullptr = none
+	void (*chain)(ComBus& bus) = nullptr;
+
+		// Channels of the state; absent = none
+	std::optional<DigitalComBusID> coupled  = std::nullopt;   ///< coupled and settled, written by the core
+	std::optional<DigitalComBusID> detector = std::nullopt;   ///< active coupler: presence detector, ANDed into `coupled`
+
+		// Identity of the coupled element
+	CouplingId defaultId                 = {};        ///< when none is read (simple mode)
+	bool     (*readId)(CouplingId& out)  = nullptr;   ///< future reader (RFID...): true and `out` when read
 };
 
 
@@ -159,7 +174,7 @@ struct ComDev {
 	const ComProtocolCfg* protocol;
 	LinkActivation        activation;
 	const CouplingDev*    coupling;       ///< required when activation == ON_COUPLING, else nullptr
-	const ComPeerLink*    peer = nullptr; ///< INTER_NODE only: the table of the link (combus_peer_links.h), nullptr = BASE view
+	const ComPeerLink*    peer = nullptr; ///< INTER_NODE only: table of the link (combus_peer_links.h); nullptr = BASE view
 };
 
 
@@ -189,17 +204,24 @@ struct ComDevMap {
  */
 
 struct ComBusLink {
-	NodeCom*                      com          = nullptr;              ///< transport, shared by TX and RX of this link
-	std::optional<ComBusFrameCfg> txCfg        = std::nullopt;         ///< capacity on transmission; absent = this end does not transmit
-	uint32_t                      txHz         = 0u;                   ///< rate of the data frames; ignored without txCfg
-	std::optional<ComBusFrameCfg> rxCfg        = std::nullopt;         ///< capacity on reception; absent = this end does not receive
-	uint16_t*                     analogBuf    = nullptr;              ///< RX analog buffer, owned by the caller; ignored without rxCfg
-	bool*                         digitalBuf   = nullptr;              ///< RX digital buffer, owned by the caller; ignored without rxCfg
-	CombusHandshakeContext*       handshakeCtx = nullptr;              ///< handshake state, shared by TX and RX of this link
-	ChanLayer                     layer        = ChanLayer::UNDEFINED; ///< BASE or SYSTEM: selects the channels carried and the MD5
-	const char*                   name         = "combus";             ///< tag for logs and debug output
-	ComBus*                       target       = nullptr;              ///< ComBus that receives the frames accepted; nullptr = none (tests of the codec)
-	const ComPeerLink*            peer         = nullptr;              ///< link between nodes: its table and MD5; nullptr = view of the layer
+		// Identity of the link
+	const char*        name  = "combus";               ///< tag for logs and debug output
+	ChanLayer          layer = ChanLayer::UNDEFINED;   ///< BASE or SYSTEM: the channels carried, and the MD5
+	const ComPeerLink* peer  = nullptr;                ///< link between nodes: table and MD5; nullptr = view of the layer
+
+		// Transport and contract, shared by TX and RX of this link
+	NodeCom*                com          = nullptr;
+	CombusHandshakeContext* handshakeCtx = nullptr;
+
+		// Transmission; txCfg absent = this end does not transmit
+	std::optional<ComBusFrameCfg> txCfg = std::nullopt;   ///< capacity on transmission
+	uint32_t                      txHz  = 0u;             ///< rate of the data frames
+
+		// Reception; rxCfg absent = this end does not receive.  Buffers owned by the caller
+	std::optional<ComBusFrameCfg> rxCfg      = std::nullopt;   ///< capacity on reception
+	uint16_t*                     analogBuf  = nullptr;
+	bool*                         digitalBuf = nullptr;
+	ComBus*                       target     = nullptr;        ///< receives the accepted frames; nullptr = none (tests)
 };
 
 // EOF combus_link_defs.h
