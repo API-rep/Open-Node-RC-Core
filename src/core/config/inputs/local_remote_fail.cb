@@ -1,26 +1,21 @@
-# local_remote_fail.cb — health of the local remote (contributor)
+# local_remote_fail.cb — loss of the local remote (contributor)
 #
-# This file declares the LOCAL_REMOTE_FAIL ComBus channel: the "local remote
-# alive" signal of the active local input backend (today the PS4 DualShock
-# Bluetooth backend, src/core/config/inputs/PS4_dualshock.*; tomorrow a PPM /
-# SBUS receiver).  It is a contributor: a chain of the failsafe module reads it
-# (today the soft chain, failsafe_soft_chain.cpp, FAILSAFE_SOFT).
+# LOCAL_REMOTE_FAIL is true when the active local input backend no longer
+# answers (today the PS4 DualShock Bluetooth backend,
+# src/core/config/inputs/PS4_dualshock.*; tomorrow a PPM or SBUS receiver).  It
+# is a contributor of the soft chain (failsafe_soft_chain.cpp, FAILSAFE_SOFT).
 #
 # Notes:
-# - BOARD scope: private to the board owning the input backend (not shared and
-#   not on the wire).  Only a BOARD caller may write it: the backend writes it
-#   from src/machines/system/input/input_update.cpp.
-# - value: fault = local remote lost (failsafe-by-default).  The backend
-#   re-arms it to false (= healthy) each cycle while the remote is connected;
-#   the consumer chain puts it back to true after reading it (cb_or_fn: consume
-#   + guard), so its instantaneous value on the bus is not the link state: read
-#   the aggregator instead.  A contributor is read by ONE chain only.
-# - requires: [HAS_FAILSAFE, HAS_LOCAL_REMOTE_FAILSAFE] — the failsafe module,
-#   and this contributor (link rework S1b).  The backend writes it only when
-#   its own INPUT_* flag is set too.
-# - theme: failsafe — the failsafe group (link rework S3a: `com` merged).
-# - type: digital (bool).
-
+# - BOARD scope: private to the board owning the input backend.  Only a BOARD
+#   writer may write it: the backend, from src/machines/system/input/input_update.cpp.
+# - value: fault (true) = local remote lost.  The backend writes false every cycle
+#   while the remote is connected; the chain puts it back to true after reading
+#   it (cb_or_fn, consume and guard).  Its value on the bus is therefore not the
+#   link state: read FAILSAFE_SOFT instead.  A contributor is read by one chain
+#   only.
+# - requires: [HAS_FAILSAFE, HAS_LOCAL_REMOTE_FAILSAFE], the failsafe module and
+#   this contributor.  The backend writes it only when its own INPUT_* flag is
+#   set too.
 
 channels:
   - id: LOCAL_REMOTE_FAIL

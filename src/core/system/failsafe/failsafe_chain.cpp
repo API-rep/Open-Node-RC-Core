@@ -1,62 +1,38 @@
 /******************************************************************************
- * @file failsafe_chain.cpp
- * @brief Failsafe main chain — registry definitions.
+ * @file  failsafe_chain.cpp
+ * @brief The hard failsafe chain: its processors, and the chain that runs them.
  *
- * @details At A16.3, the Failsafe main chain uses two GENERIC CbProcFn
- *   (no Failsafe-specific processor in this module):
- *   - `cb_reset_fn`  (always)        — forces pipeline `value = 0`
- *                                       at cycle start (WIP §7 latch).
- *   - `cb_or_fn`     (HAS_VBAT_*)    — OR-guard on a sub-combus
- *                                       (consume + guard pattern,
- *                                       WIP §5 / §6).
+ * @details Two generic processors, nothing specific to the failsafe:
+ *   - cb_reset_fn, always first: every contributor sees a value reset this cycle;
+ *   - cb_or_fn, one per contributor, inCh == outCh: it reads the contributor, sets
+ *     the value to 1 if it is in fault, and puts the contributor back to fault
+ *     (consume and guard).
  *
- *   The chain has a primary `outCh` = `DigitalComBusID::FAILSAFE_HARD` so
- *   the runner commits the latched `value` to the top-level ComBus
- *   channel. Consumers (e.g. `main.cpp`) then read `FAILSAFE_HARD` directly
- *   on the bus to trigger their reaction.
- *
- *   Future contributors (temperature, …) will be appended to
- *   `kFailsafeProcs[]` after the reset, each under its own
- *   `#if defined(HAS_XXX_FAILSAFE)` block — always with `cb_or_fn`.
- *
- *   The reset entry is always the FIRST one in the table so that every
- *   contributor sees a freshly-reset pipeline value (WIP §6 / §7).
+ *   A new contributor (temperature...) is added after the others, under its own
+ *   HAS_*_FAILSAFE flag, always with cb_or_fn.
  *****************************************************************************/
 
 #include "failsafe_chain.h"
 
 #include <core/system/combus/processors/base/cb_reset.h>   // cb_reset_fn
 #include <core/system/combus/processors/logic/cb_or.h>      // cb_or_fn
-#include <core/config/machines/combus_types.h>              // DigitalComBusID::FAILSAFE_HARD / VBAT_FAIL / BOARD_LINK_FAIL
+#include <core/config/machines/combus_types.h>              // DigitalComBusID
+
 
 
 // =============================================================================
-// 1. PROC REGISTRY — DEFINITION
+// 1. PROCESSORS
 // =============================================================================
 
-/**
- * @brief Static CbProc table — reset + conditional OR-guard contributors.
- *
- * @details Reset is the first entry (always). VBAT contributor is
- *   appended when HAS_VBAT_FAILSAFE is defined. New contributors
- *   follow the same pattern (use `cb_or_fn` with inCh == outCh).
- */
 CbProc kFailsafeProcs[] = {
-	// --- 0. Reset (always present) -----------------------------------------
-	// No inCh / outCh — forces pipeline value = 0 at cycle start.
+		// 0. Reset, always first: no channel, the value back to 0
 	{
 		.name    = "failsafe_reset",
 		.fn      = cb_reset_fn,
-		// inCh, inValue, outCh, outValue, cfg, dynCfg, state default to
-		// nullopt / 0 / nullptr — none are needed by the reset processor.
 	},
 
 #if defined(HAS_VBAT_FAILSAFE)
-	// --- 1. VBAT OR-guard contributor (optional) ---------------------------
-	// Reads VBAT_FAIL (proof-of-life from vbat_update). If the cell
-	// voltage is below cutoff, VBAT_FAIL is true; this OR-guard
-	// latches the pipeline value to 1 (= DigitalComBusID::FAILSAFE_HARD fault)
-	// and resets VBAT_FAIL back to fault (consume + guard).
+		// 1. Low battery, written every cycle by vbat_update()
 	{
 		.name    = "failsafe_or_vbat",
 		.inCh    = DigitalComBusID::VBAT_FAIL,
@@ -66,11 +42,8 @@ CbProc kFailsafeProcs[] = {
 #endif
 
 #if defined(HAS_BOARD_LINK_FAILSAFE)
-	// --- 2. ComBus link contributor (optional) ----------------------------
-	// Reads BOARD_LINK_FAIL, written each cycle by com_rx_update() from the
-	// receiving links between boards (combus_links_lost(INTRA_NODE)):
-	// true while one of them is lost, or never seen after its startup grace.
-	// A board without such a link gets false each cycle.
+		// 2. Link between boards lost, or never seen after its startup grace;
+		//    written every cycle by com_rx_update(), false without such a link
 	{
 		.name    = "failsafe_or_com_link",
 		.inCh    = DigitalComBusID::BOARD_LINK_FAIL,
@@ -78,39 +51,26 @@ CbProc kFailsafeProcs[] = {
 		.fn      = cb_or_fn,
 	},
 #endif
-
-	// Add new contributors here with their own #if defined(HAS_XXX_FAILSAFE)
-	// blocks.  Each must follow the same shape: inCh == outCh, fn = cb_or_fn,
-	// never claims the chain.
 };
 
-/// @brief Static proc count — equals the array length.
 const uint8_t kFailsafeProcsCount = sizeof(kFailsafeProcs) / sizeof(kFailsafeProcs[0]);
 
 
+
 // =============================================================================
-// 2. CHAIN REGISTRY — DEFINITION
+// 2. CHAIN
 // =============================================================================
 
-/**
- * @brief Failsafe CbChain table — single chain wrapping the proc array.
- *
- * @details The chain has no primary `inCh` (the reset proc seeds the
- *   pipeline value to 0).  The primary `outCh` is
- *   `DigitalComBusID::FAILSAFE_HARD` — the runner commits the latched
- *   pipeline value to the top-level channel after all procs.
- */
 CbChain kFailsafeChain[] = {
 	{
 		.name      = "failsafe_main",
-		.inCh      = std::nullopt,                          // no seed
-		.outCh     = DigitalComBusID::FAILSAFE_HARD,             // top-level latch
+		.inCh      = std::nullopt,                      // no seed: the reset sets the value
+		.outCh     = DigitalComBusID::FAILSAFE_HARD,
 		.procs     = kFailsafeProcs,
 		.procCount = kFailsafeProcsCount,
 	},
 };
 
-/// @brief Static chain count — equals the array length.
 const uint8_t kFailsafeChainCount = sizeof(kFailsafeChain) / sizeof(kFailsafeChain[0]);
 
 // EOF failsafe_chain.cpp

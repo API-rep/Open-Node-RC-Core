@@ -1,28 +1,24 @@
 # failsafe_soft.cb — aggregator of the soft failsafe chain
 #
-# This file declares the FAILSAFE_SOFT ComBus channel: the OR-merge of the
-# contributors branched into the soft chain (today LOCAL_REMOTE_FAIL and
-# NODE_LINK_FAIL).  Its reaction is the runlevel IDLE (the hard chain,
-# FAILSAFE_HARD, leads to HALT).
+# FAILSAFE_SOFT is true when at least one contributor of the soft chain reports a
+# fault (today LOCAL_REMOTE_FAIL and NODE_LINK_FAIL).  Its reaction is the run
+# level IDLE (the hard chain, FAILSAFE_HARD, leads to HALT).
 #
-# FAILSAFE_SOFT is COMPUTED, not directly written by the sources:
-#   - each source writes its own *_FAIL contributor each cycle
-#     (false = healthy, true = fault — failsafe-by-default);
-#   - the soft chain (src/core/system/failsafe/failsafe_soft_chain.cpp)
-#     resets its value, ORs the contributors it lists, and writes the result to
-#     FAILSAFE_SOFT;
-#   - downstream consumers (runlevel chain, dashboards) only read FAILSAFE_SOFT.
+# It is computed, never written by a source:
+#   - each source writes its own contributor every cycle (false = healthy,
+#     true = fault);
+#   - the soft chain (failsafe_soft_chain.cpp) resets its value, ORs the
+#     contributors it lists, and writes the result here;
+#   - the consumers (runlevel chain, dashboards) only read FAILSAFE_SOFT.
 #
 # Notes:
-# - SYSTEM scope: shared by all boards of the local node.  Only the soft chain
+# - SYSTEM scope: shared by all the boards of the node.  Only the soft chain
 #   writes it.
-# - Direction [both_or]: any fault wins on import.
-# - value: fault (true), a fault (failsafe-by-default) until the chain writes it.
-# - requires: [HAS_FAILSAFE] — the failsafe module as a whole (link rework
-#   S1b).  The contributors are optional, each under its own HAS_*_FAILSAFE
-#   flag; without any, the chain writes false each cycle.
-# - type: digital (bool).
-
+# - Direction both_or: a fault of any board wins.
+# - value: fault (true) until the chain first writes it.
+# - requires: [HAS_FAILSAFE], the failsafe module.  The contributors are
+#   optional, each under its own HAS_*_FAILSAFE flag; without any, the chain
+#   writes false every cycle.
 
 channels:
   - id: FAILSAFE_SOFT
@@ -30,7 +26,7 @@ channels:
     type: digital
     scope: SYSTEM
     theme: failsafe            # failsafe group (link health)
-    direction: both_or   # aggregator writes via the consumer chain; readers consume
+    direction: both_or
     value: fault         # default to fault (failsafe-by-default — see chain reset)
     requires:
       - HAS_FAILSAFE

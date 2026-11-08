@@ -1,91 +1,43 @@
 /******************************************************************************
- * @file failsafe_soft_chain.cpp
- * @brief FAILSAFE_SOFT aggregator chain — mirrors failsafe_chain.cpp.
+ * @file  failsafe_soft_chain.cpp
+ * @brief The soft failsafe chain: publishes FAILSAFE_SOFT, which leads to IDLE.
  *
- * @details This chain implements the "any remote input source alive"
- *   aggregator (chantier 12.5 new design).  It mirrors the
- *   failsafe_chain.cpp structure exactly:
+ * @details The same two generic processors as the hard chain:
+ *   - cb_reset_fn, always first: the value back to 0 (healthy) every cycle;
+ *   - cb_or_fn, one per contributor, inCh == outCh: consume and guard.
  *
- *   1. `cb_reset_fn`  (always)        — forces pipeline `value = 0`
- *                                       at cycle start.  Guarantees that
- *                                       FAILSAFE_SOFT output starts
- *                                       each cycle in a known state
- *                                       (= healthy).
+ *   Each contributor is independent and fails safe by default: it stays true (fault)
+ *   until its source writes false this cycle, and the chain puts it back to true
+ *   after reading it.
  *
- *   2. `cb_or_fn` for each contributor  — OR-guard on a contributor
- *                                       channel.  If the contributor
- *                                       reports fault (true), the pipeline
- *                                       latches to 1; the contributor
- *                                       channel is then consumed (reset
- *                                       back to its failsafe default).
- *
- *   Contributors (optional, gated by build flags):
- *     - LOCAL_REMOTE_FAIL — PS4 DualShock Bluetooth link health
- *       (active when INPUT_PS4_DS4_BT is defined).
- *     - NODE_LINK_FAIL        — loss of a receiving ComBus link whose loss
- *       policy is IDLE (always present: false when there is no such link;
- *       a TX-only link cannot know the state of its peer and never counts).
- *
- *   The chain has primary `outCh` = DigitalComBusID::FAILSAFE_SOFT so
- *   the runner commits the latched `value` to the top-level ComBus
- *   channel.  Consumers (FSM, runlevel handler, dashboards) then read
- *   FAILSAFE_SOFT directly on the bus to trigger their reaction.
- *
- *   The IDLE-on-loss reaction (cb_runlevel_once_fn watching
- *   FAILSAFE_SOFT) is mounted in the RUNLEVEL chain, not here.
- *
- *   This whole module is gated by `-D HAS_FAILSAFE`
- *   (mirroring the umbrella pattern of failsafe.cb / failsafe_chain.cpp).
- *   Without the flag, the chain is empty (count == 0) and the
- *   `failsafe_soft_update()` façade is a no-op.
- *
- *   Reference: failsafe_module.md §12.5 (new design — chantier 12.5).
+ *   The whole module needs HAS_FAILSAFE; without it, only a no-op update and a count
+ *   of 0 remain.
  *****************************************************************************/
 
 #include "failsafe_soft_chain.h"
 
-#if defined(HAS_FAILSAFE)   // link rework S1b: the soft chain is part of the failsafe module
+#if defined(HAS_FAILSAFE)
 
 #include <core/system/combus/processors/base/cb_reset.h>   // cb_reset_fn
 #include <core/system/combus/processors/logic/cb_or.h>      // cb_or_fn
-#include <core/config/machines/combus_types.h>              // DigitalComBusID::LOCAL_REMOTE_FAIL, NODE_LINK_FAIL, FAILSAFE_SOFT
+#include <core/config/machines/combus_types.h>              // DigitalComBusID
+
 
 
 // =============================================================================
-// 1. PROC REGISTRY — DEFINITION
+// 1. PROCESSORS
 // =============================================================================
 
-/**
- * @brief Static CbProc table — reset + OR-guard contributors.
- *
- * @details Reset is the first entry (always). Contributors are appended
- *   when their respective build flag is set.  Each contributor uses
- *   `cb_or_fn` with inCh == outCh (consume + guard pattern, same as
- *   failsafe_chain.cpp).
- *
- *   Important: the OR-guard pattern REPLACES the open-drain `isNotDrived`
- *   flag.  Each contributor is now independent (no shared state), with
- *   its own failsafe-by-default contract: it stays at `true` (fault)
- *   until its owner writes `false` (healthy) this cycle, then the chain
- *   consumes it via the OR-guard reset.
- */
 static CbProc kFailsafeSoftProcs[] = {
-	// --- 0. Reset (always present) -----------------------------------------
-	// Forces pipeline value = 0 (= healthy) at cycle start.  This is the
-	// foundation of the failsafe-by-default contract: the aggregator
-	// starts healthy, contributors OR-fault back to 1 if needed.
+		// 0. Reset, always first: no channel, the value back to 0
 	{
 		.name    = "failsafe_soft_reset",
 		.fn      = cb_reset_fn,
 	},
 
 #if defined(HAS_LOCAL_REMOTE_FAILSAFE)
-	// --- 1. Local remote contributor (optional) --------------------------
-	// Reads LOCAL_REMOTE_FAIL (proof-of-life from the PS4_BT input
-	// backend, written each cycle by input_update.cpp).  If the PS4
-	// controller is not connected / not refreshing the bus, the channel
-	// stays at its failsafe default (true = lost); this OR-guard latches
-	// the pipeline value to 1 and consumes the channel back to true.
+		// 1. Local remote lost, written every cycle by input_update() while the
+		//    input backend (PS4 Bluetooth today) is connected
 	{
 		.name    = "failsafe_soft_or_local_remote",
 		.inCh    = DigitalComBusID::LOCAL_REMOTE_FAIL,
@@ -95,14 +47,8 @@ static CbProc kFailsafeSoftProcs[] = {
 #endif
 
 #if defined(HAS_NODE_LINK_FAILSAFE)
-	// --- 2. ComBus link contributor (optional) ---------------------------
-	// Reads NODE_LINK_FAIL, written each cycle by com_rx_update() from the
-	// receiving links to another node (combus_links_lost(INTER_NODE)):
-	// true while one of them is not alive, never seen included.  This
-	// OR-guard latches the pipeline value to 1 and consumes the channel.
-	//
-	// A board without such a link gets false each cycle; a TX-only link never
-	// counts (it knows nothing of its peer).
+		// 2. Link to another node not alive, never seen included; written every
+		//    cycle by com_rx_update(), false without such a link
 	{
 		.name    = "failsafe_soft_or_node_link",
 		.inCh    = DigitalComBusID::NODE_LINK_FAIL,
@@ -110,63 +56,49 @@ static CbProc kFailsafeSoftProcs[] = {
 		.fn      = cb_or_fn,
 	},
 #endif
-
-	// Add new contributors here with their own #if defined(...) blocks.
-	// Each must follow the same shape: inCh == outCh, fn = cb_or_fn,
-	// never claims the chain (the per-proc write-back is enough).
 };
 
-/// @brief Static proc count — equals the array length.
 static const uint8_t kFailsafeSoftProcsCount =
 	sizeof(kFailsafeSoftProcs) / sizeof(kFailsafeSoftProcs[0]);
 
 
+
 // =============================================================================
-// 2. CHAIN REGISTRY — DEFINITION
+// 2. CHAIN
 // =============================================================================
 
-/**
- * @brief FAILSAFE_SOFT aggregator chain table — single chain.
- *
- * @details The chain has no primary `inCh` (the reset proc seeds the
- *   pipeline value to 0).  The primary `outCh` is
- *   `DigitalComBusID::FAILSAFE_SOFT` — the runner commits the latched
- *   pipeline value to the top-level channel after all procs.
- */
 CbChain kFailsafeSoftChain[] = {
 	{
 		.name      = "failsafe_soft_main",
-		.inCh      = std::nullopt,                          // no seed (reset proc)
-		.outCh     = DigitalComBusID::FAILSAFE_SOFT,     // top-level latch
+		.inCh      = std::nullopt,                      // no seed: the reset sets the value
+		.outCh     = DigitalComBusID::FAILSAFE_SOFT,
 		.procs     = kFailsafeSoftProcs,
 		.procCount = kFailsafeSoftProcsCount,
 	},
 };
 
-/// @brief Static chain count — equals the array length.
 const uint8_t kFailsafeSoftChainCount =
 	sizeof(kFailsafeSoftChain) / sizeof(kFailsafeSoftChain[0]);
 
 
+
 // =============================================================================
-// 3. FAÇADE — single-chain update
+// 3. API
 // =============================================================================
 
 #include <core/system/combus/processors/proc_chain.h>   // proc_chain_update()
 
+	/// The standard runner: reset, contributors, then FAILSAFE_SOFT.
 void failsafe_soft_update(ComBus& bus) {
 	proc_chain_update(kFailsafeSoftChain, kFailsafeSoftChainCount, bus);
 }
 
 #else  // HAS_FAILSAFE
 
-// Failsafe module disabled: expose a no-op façade + empty chain table.
-// Callers can still invoke failsafe_soft_update() — it just returns
-// immediately without touching the bus.  The FAILSAFE_SOFT channel does not
-// exist either (its .cb requires HAS_FAILSAFE).
+	// No failsafe module: nothing to run, and no FAILSAFE_SOFT channel either.
 void failsafe_soft_update(ComBus& /*bus*/) {
-	// no-op
 }
+
 const uint8_t kFailsafeSoftChainCount = 0u;
 
 #endif  // HAS_FAILSAFE

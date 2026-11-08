@@ -1,22 +1,22 @@
-# node_link_fail.cb — loss of a ComBus link (contributor)
+# node_link_fail.cb — loss of a ComBus link to another node (contributor)
 #
-# This file declares the NODE_LINK_FAIL ComBus channel: true when at least one
-# receiving ComBus link of the board to another node (scope INTER_NODE, link
-# rework S2) is not alive, never seen included (no grace).  It is a
-# contributor: a chain of the failsafe module reads it (today the soft chain,
-# failsafe_soft_chain.cpp, FAILSAFE_SOFT).
+# NODE_LINK_FAIL is true when at least one receiving link of this board to
+# another node (scope INTER_NODE) is not alive, never seen included: there is no
+# grace, the other node may not be there.  It is a contributor of the soft chain
+# (failsafe_soft_chain.cpp, FAILSAFE_SOFT).
 #
 # Notes:
 # - BOARD scope: only the board that owns the links knows their state.  The
-#   whole node learns of it through the aggregator and RUNLEVEL.
-# - Written each cycle by com_rx_update() from combus_links_lost(IDLE);
-#   false when no such link exists.  A link that only transmits never counts.
-# - value: fault = lost until com_rx_update() writes it (failsafe-by-default);
-#   the chain consumes it each cycle (cb_or_fn, inCh == outCh).  A contributor
-#   is read by ONE chain only.
-# - requires: [HAS_FAILSAFE, HAS_NODE_LINK_FAILSAFE] — the failsafe module,
-#   and this contributor (link rework S1b).
-
+#   whole node learns of it through FAILSAFE_SOFT and RUNLEVEL.
+# - Written every cycle by com_rx_update(), from
+#   combus_links_lost(LinkScope::INTER_NODE); false when there is no such link.
+#   A link that only transmits never counts, and a coupled link reports through
+#   its own coupler instead.
+# - value: fault (true) until com_rx_update() writes it.  The chain consumes it
+#   every cycle (cb_or_fn, inCh == outCh): a contributor is read by one chain
+#   only.
+# - requires: [HAS_FAILSAFE, HAS_NODE_LINK_FAILSAFE], the failsafe module and
+#   this contributor.
 
 channels:
   - id: NODE_LINK_FAIL

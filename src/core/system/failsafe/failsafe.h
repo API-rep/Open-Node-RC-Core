@@ -1,59 +1,42 @@
 /******************************************************************************
- * @file failsafe.h
- * @brief Failsafe module — central orchestration (A16.3 transitional).
+ * @file  failsafe.h
+ * @brief Failsafe module: the hard chain, which leads to HALT.
  *
- * @details The Failsafe module is **unconditional**: it exists in
- *   every build and does not depend on any `#ifdef`.
+ * @details The module has two chains of the same shape: a reset, then one OR per
+ *   contributor.
+ *   - the hard chain (here, failsafe_chain.h) publishes FAILSAFE_HARD, which leads
+ *     to HALT, held until a reboot;
+ *   - the soft chain (failsafe_soft_chain.h) publishes FAILSAFE_SOFT, which leads
+ *     to IDLE.
  *
- *   At A16.3 the module is in a transitional state:
- *     - `failsafe_init()` is a **no-op** (the per-cycle reset is now
- *       performed by the `cb_reset_fn` processor in the chain itself,
- *       so there is no global pivot to clear at boot).
- *     - `failsafe_update(ComBus& bus)` runs the `kFailsafeChain[]`
- *       via the standard `proc_chain_update()` runner.
+ *   The module only publishes these two channels.  The reaction belongs to the
+ *   machine: its runlevel chain turns them into a run level, and main.cpp stops the
+ *   drivers in HALT.  See failsafe_module.md.
  *
- *   This signature is kept stable while the chain is reworked; once
- *   the Failsafe module is fully refactored, `failsafe_init()` will
- *   be removed and `failsafe_update()` will move to its final location.
- *
- *   The Failsafe module is fully **decoupled from RunLevels**: it
- *   does not decide to switch to `IDLE`, `SLEEP`, etc. — it only
- *   publishes the aggregated `DigitalComBusID::FAILSAFE_HARD` channel.
- *   Environment-specific reactions (e.g. `main.cpp` reading `FAILSAFE_HARD`
- *   to force `RunLevel::SLEEPING`) are handled separately.
+ *   The module needs HAS_FAILSAFE, which declares FAILSAFE_HARD.
  *****************************************************************************/
 #pragma once
 
-#include <core/system/combus/combus_defs.h>  // ComBus (failsafe_update takes ComBus&)
+#include <core/system/combus/combus_defs.h>   // ComBus
+
 
 
 // =============================================================================
-// 1. PUBLIC API (A16.3 transitional)
+// 1. API
 // =============================================================================
 
 /**
- * @brief Failsafe orchestrator — runs `kFailsafeChain[]` via the
- *   standard `proc_chain_update()` runner.
+ * @brief Run the hard chain once: publishes FAILSAFE_HARD.
  *
- * @details Delegates to the shared ComBus chain runner, which
- *   implements the full contract:
- *     - seed `value` from `ch.inCh` (none here → 0);
- *     - for each proc: read `proc->inCh` into `proc->inValue`,
- *       call `proc.fn(&proc, value, claimed)`, commit `proc->outValue`
- *       to `proc->outCh` (using `combus_set_digital()` layer-checked);
- *     - commit final `value` to `ch.outCh` (here = `DigitalComBusID::FAILSAFE_HARD`).
+ * @details Two rules, both kept by the caller and the chain:
+ *   - every source writes its contributor before this call: sys_manager_update()
+ *     calls it after the inputs and vbat_update();
+ *   - every contributor runs every cycle: the runner skips the processors after a
+ *     claim, so no processor of this chain ever claims it (see cb_or.h).
  *
- *   WIP §6 invariant: every contributor must run every cycle
- *   (the standard runner skips procs when `claimed = true`; Failsafe
- *   procs MUST therefore never claim — see `cb_or.h`).
- *
- *   WIP §6 invariant (timing): every source module update must be
- *   finished **before** `failsafe_update()` is called.  This ordering
- *   is enforced by `sys_manager_update()` and does not depend on the
- *   Failsafe module itself.
- *
- * @param bus  Shared ComBus — forwarded to the standard chain runner.
+ * @param bus  ComBus of the node.
  */
+
 void failsafe_update(ComBus& bus);
 
 // EOF failsafe.h

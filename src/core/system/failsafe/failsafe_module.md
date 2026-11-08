@@ -2,8 +2,6 @@
 
 Ce document est la référence du module failsafe : ses deux chaînes (dure et douce), ses conventions de nom et ses règles. La chaîne douce a son propre document, `src/core/system/failsafe/failsafe_soft.md`.
 
-Mis à jour le 2026-10-27 (link rework, lot « sécurité », étapes S1 à S3a). Les noms d'avant (`FAILSAFE`, `REMOTE_LINK_LOST`, `FAILSAFE_VBAT`…) se retrouvent dans l'historique git.
-
 ---
 
 ## 1. Deux sévérités, deux chaînes
@@ -49,9 +47,9 @@ Un contributeur exige `HAS_FAILSAFE` et **son propre flag**, jamais celui d'une 
 
 **Rebranchable veut dire déplaçable, jamais dupliqué.** Un contributeur est lu par **une seule chaîne** : la chaîne le réarme à `true` après lecture (§4), si bien qu'une seconde chaîne lirait une fausse faute. Pour changer la sévérité d'un contributeur, on déplace sa ligne d'une chaîne à l'autre.
 
-**Un lien couplé** (`ON_COUPLING`, link rework 3.3 et 3.4c) a son propre contributeur, désigné par son `CouplingDev` (`fail`, par exemple `TRAILER_LINK_FAIL`) : sain tant que l'attelage est dételé et pendant l'appairage ; en faute s'il est attelé sans lien sain : appairage en conflit (deux candidats) ou en échec (trop peu de réponses), ou lien appairé puis perdu après le délai de grâce compté depuis l'appairage. Un lien couplé ne compte jamais dans `NODE_LINK_FAIL` : la machine range ce contributeur dans la chaîne de son choix.
+**Un lien couplé** (`ON_COUPLING`) a son propre contributeur, désigné par son `CouplingDev` (`fail`, par exemple `TRAILER_LINK_FAIL`) : sain tant que l'attelage est dételé et pendant l'appairage ; en faute s'il est attelé sans lien sain : appairage en conflit (deux candidats) ou en échec (trop peu de réponses), ou lien appairé puis perdu après le délai de grâce compté depuis l'appairage. Un lien couplé ne compte jamais dans `NODE_LINK_FAIL` : la machine range ce contributeur dans la chaîne de son choix.
 
-`BOARD_LINK_FAIL` et `NODE_LINK_FAIL` sont alimentés par la **portée** du lien (link rework S2) : un lien entre cartes compte comme perdu s'il est silencieux, ou jamais vu une fois son délai de grâce (`startupGraceMs`) écoulé ; un lien vers un autre nœud compte dès qu'il n'est pas vivant, jamais vu compris. Il n'y a plus de politique de perte par lien (`onLoss`, supprimé) : la sévérité se décide en plaçant le contributeur dans une chaîne.
+`BOARD_LINK_FAIL` et `NODE_LINK_FAIL` sont alimentés par la **portée** du lien : un lien entre cartes compte comme perdu s'il est silencieux, ou jamais vu une fois son délai de grâce (`startupGraceMs`) écoulé ; un lien vers un autre nœud compte dès qu'il n'est pas vivant, jamais vu compris. Il n'y a plus de politique de perte par lien (`onLoss`, supprimé) : la sévérité se décide en plaçant le contributeur dans une chaîne.
 
 ---
 
@@ -98,7 +96,7 @@ Le module ne connaît ni les runlevels, ni les machines. La réaction est dans l
 
 `main.cpp` réagit au runlevel : `case RunLevel::HALT` arrête, endort et désactive les moteurs à l'entrée.
 
-**`HALT` ne se quitte que par un redémarrage** (link rework S3) : une fois la faute dure retombée, ni la clé ni la faute douce n'en sortent. Au redémarrage, `init.cpp` écrit `IDLE`. Le maintien ne garde aucun état : il lit seulement la valeur de `RUNLEVEL`.
+**`HALT` ne se quitte que par un redémarrage** : une fois la faute dure retombée, ni la clé ni la faute douce n'en sortent. Au redémarrage, `init.cpp` écrit `IDLE`. Le maintien ne garde aucun état : il lit seulement la valeur de `RUNLEVEL`.
 
 **Valeur inconnue** : le `default` du `switch` de `main.cpp` traite toute valeur hors de `RunLevel` (bug, valeur corrompue) comme une faute dure. Il écrit `HALT`, qui est ensuite maintenu.
 

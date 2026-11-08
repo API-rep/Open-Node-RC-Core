@@ -1,99 +1,86 @@
 /******************************************************************************
- * @file vbat.cpp
- * @brief Battery management — top-level implementation.
+ * @file  vbat.cpp
+ * @brief Battery management: the entry point of the battery modules.
  *
- * @details Sequences `vbat_sense` (hardware ADC init + runtime tick) and
- *   `vbat_alert` (alert hardware init + runtime reactions), each gated by
- *   their respective compile flags.
+ * @details Sequences vbat_sense and vbat_alert, each under its own flag.  Without
+ *   HAS_VBAT_SENSING, the sensing steps are skipped and `sense` may be nullptr.
  *
- *   When only VBAT_ALERT_* flags are set (no HAS_VBAT_SENSING), the sensing
- *   steps are skipped and `sense` may be nullptr.  `VBAT_FAIL`
- *   is then populated externally (ComBus RX) before each `vbat_update()`.
- *
- *   Since the BATTERY_LOW channel and comBus.batteryIsLow field have been
- *   removed (A16.1), the vbat module now writes VBAT_FAIL directly:
- *     - low  (=false) when the cell voltage drops below threshold
- *     - high (=true)  when the cell is healthy
- *   The FAILSAFE_HARD aggregator consumes VBAT_FAIL each cycle.
+ *   VBAT_FAIL = vbat_is_low(): true when the battery is low, false when it is
+ *   healthy.  The hard chain reads it, then puts it back to fault until the next
+ *   cycle.
  *****************************************************************************/
 
 #include "vbat.h"
 
-// Include config.h first so HAS_VBAT_SENSING is defined before we test it
+	// config.h first: it defines HAS_VBAT_SENSING, tested below
 #include <core/config/vbat/config.h>
 
 #if defined(HAS_VBAT_SENSING) || defined(HAS_VBAT_FAILSAFE)
-#include <core/config/machines/combus_types.h>     // DigitalComBusID::VBAT_FAIL (machine family dispatch)
-#include <core/system/combus/combus_access.h>      // combus_set_digital()
+#include <core/config/machines/combus_types.h>   // DigitalComBusID::VBAT_FAIL
+#include <core/system/combus/combus_access.h>    // combus_set_digital()
 #endif
 
 #if defined(HAS_VBAT_SENSING) || defined(VBAT_ALERT)
 
+
+
 // =============================================================================
-// 1. INITIALIZATION
+// 1. INIT
 // =============================================================================
 
 /**
- * @brief Battery monitoring init — hardware sensing + alert hardware setup.
+ * @brief Battery init. The sensing, then the alert hardware.
  *
- * @details Initialization sequences two optional sub-modules in order:
- *   1. `vbat_sense_init()` : ADC setup, sliding-average seed, cell auto-detection,
- *      low-bat evaluation.  Activated when @p sense is non-null and HAS_VBAT_SENSING is set.
- *   2. `vbat_alert_init()` : initializes alert hardware (buzzer channel, etc.).
- *      Activated when any VBAT_ALERT_* flag is set.
- *
- * @param sense  Board-defined VBatSense container. nullptr disables battery sensing.
+ * @details In order:
+ *   1. Sensing, when the board has it (@p sense non-null and HAS_VBAT_SENSING): ADC
+ *      setup, sliding average seed, cell count detection, first low battery state.
+ *   2. Alert hardware (buzzer channel...).
  */
 
 void vbat_init(VBatSense* sense)
 {
-		// --- 1. Hardware sensing (if available) ---
+		// 1. Sensing
 #ifdef HAS_VBAT_SENSING
 	if (sense) {
 		vbat_sense_init(*sense);
 	}
 #endif
 
-		// --- 2. Alert hardware init ---
+		// 2. Alert hardware
 	vbat_alert_init();
 }
 
 
+
 // =============================================================================
-// 2. RUNTIME UPDATE
+// 2. STEP
 // =============================================================================
 
 /**
- * @brief Main-loop battery monitoring routine.
+ * @brief Battery step. Sensing, then the contributor, then the alert.
  *
- * @details Single entry point for runtime battery monitoring. Sequences:
- *   1. vbat_sense_tick() : battery sensing
- *   2.  (future)            — ComBus runlevel sleeping / re-arm.
- *   3. vbat_alert_tick() : alert reactions
- *
- * @param bus  Node ComBus receiving the VBAT_FAIL contributor (HAS_VBAT_FAILSAFE).
+ * @details In order:
+ *   1. Sensing: ADC read, sliding average, low battery detection.
+ *   2. VBAT_FAIL from vbat_is_low(0), with HAS_VBAT_FAILSAFE: written every cycle,
+ *      so that the contributor is fresh when the hard chain reads it.
+ *   3. Alert reactions.
  */
 
 void vbat_update(ComBus& bus)
 {
-		// --- 1. Sensing (if available) ---
+		// 1. Sensing
 #ifdef HAS_VBAT_SENSING
 	vbat_sense_tick();
 #endif
 
+		// 2. Contributor
 #ifdef HAS_VBAT_FAILSAFE
-	// --- 2. Re-arm VBAT_FAIL (proof-of-life for the Failsafe aggregator) ---
-	// low voltage => VBAT_FAIL = true (HIGH = fault per failsafe-by-default).
-	// healthy    => VBAT_FAIL = false (LOW = healthy).
-	// The aggregator consumes this each cycle (see failsafe.cb + WIP §5).
 	combus_set_digital(bus, DigitalComBusID::VBAT_FAIL, vbat_is_low(0));
 #else
 	(void)bus;
 #endif
 
-		// --- 3. (future: ComBus runlevel) ---
-
-		// --- 4. Alert reactions ---
+		// 3. Alert
 	vbat_alert_tick();
 }
 

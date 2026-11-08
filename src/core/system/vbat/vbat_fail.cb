@@ -1,24 +1,17 @@
-# vbat_fail.cb — VBAT-as-Failsafe-contributor
+# vbat_fail.cb — low battery (contributor)
 #
-# This file declares the VBAT Failsafe contributor channel. It is the
-# single, authoritative battery-failure signal consumed by the
-# FAILSAFE_HARD aggregator (declared in src/core/system/failsafe/failsafe_hard.cb).
+# VBAT_FAIL is true when the battery is low.  It is a contributor of the hard
+# chain (failsafe_chain.cpp, FAILSAFE_HARD).
 #
 # Notes:
-# - SYSTEM scope: the contributor is shared by all boards composing the
-#   local node. Any board performing battery sensing (sensing-board,
-#   mainboard, …) may publish the local "battery healthy" state. Other
-#   boards (sound node, dashboard) consume it through the same SYSTEM bus.
-# - Direction [both]: uplink + downlink — any board may write (re-arm
-#   each cycle) or read (react) the channel.
-# - value: fault = fail-safe by default. The contributor reports fault
-#   until proven healthy each cycle (see failsafe_module.md).
-# - requires: [HAS_FAILSAFE, HAS_VBAT_FAILSAFE] — the contributor is
-#   only emitted when both flags are set (no aggregator → no contributor).
-# - The legacy BATTERY_LOW channel and comBus.batteryIsLow struct field
-#   have been removed. Consumers must migrate to VBAT_FAIL (or its
-#   derived local signal) directly.
-
+# - SYSTEM scope: the board that senses the battery publishes it, and the other
+#   boards of the node receive it.
+# - Direction uplink_or: the declaring board sends it, the others receive it.
+# - Written every cycle by vbat_update(), from vbat_is_low().
+# - value: fault (true) until vbat_update() writes it.  The chain consumes it
+#   every cycle (cb_or_fn, inCh == outCh): a contributor is read by one chain
+#   only.
+# - requires: [HAS_FAILSAFE, HAS_VBAT_FAILSAFE]: no aggregator, no contributor.
 
 channels:
   - id: VBAT_FAIL

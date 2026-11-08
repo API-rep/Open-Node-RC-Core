@@ -2,8 +2,6 @@
 
 Ce document décrit la chaîne douce. La référence du module (les deux chaînes, les noms, les règles) est `src/core/system/failsafe/failsafe_module.md`.
 
-Mis à jour le 2026-10-27 (link rework, lot « sécurité »). Avant S1, ce document s'appelait `remote_link_lost.md` et l'agrégat `REMOTE_LINK_LOST`.
-
 ---
 
 ## 1. Rôle
@@ -42,7 +40,7 @@ La chaîne dure passe toujours avant (voir `failsafe_module.md` §6).
 
 Les deux sont des channels `BOARD` (privés à la carte qui porte la source), du groupe failsafe, `value: fault`. Ils sont réarmés à `true` par la chaîne après lecture : leur valeur instantanée n'est pas l'état du lien, il faut lire `FAILSAFE_SOFT`.
 
-`NODE_LINK_FAIL` est alimenté par les liens vers un autre nœud (portée `INTER_NODE`, link rework S2). Un lien jamais vu compte tout de suite : pas de délai de grâce, contrairement à `BOARD_LINK_FAIL`.
+`NODE_LINK_FAIL` est alimenté par les liens vers un autre nœud (portée `INTER_NODE`). Un lien jamais vu compte tout de suite : pas de délai de grâce, contrairement à `BOARD_LINK_FAIL`.
 
 ---
 
@@ -67,7 +65,7 @@ static constexpr CbRunlevelCfg kRemoteLinkRunlevelCfg {
 };
 ```
 
-Si la machine est déjà en `HALT`, cette étape ne s'exécute pas : le maintien de `HALT`, en tête de chaîne, a fait un *claim*. Seul un redémarrage sort de `HALT` (link rework S3).
+Si la machine est déjà en `HALT`, cette étape ne s'exécute pas : le maintien de `HALT`, en tête de chaîne, a fait un *claim*. Seul un redémarrage sort de `HALT`.
 
 Le processor est `cb_runlevel_once_fn` : il n'agit que sur le **front montant**. La faute douce ne « tient » pas le runlevel, contrairement à la chaîne dure. Comme les commandes de clé viennent de la télécommande, elles ne peuvent de toute façon pas arriver tant que la télécommande est perdue.
 

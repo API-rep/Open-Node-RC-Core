@@ -1,23 +1,21 @@
 # board_link_fail.cb — loss of a ComBus link between boards (contributor)
 #
-# This file declares the BOARD_LINK_FAIL ComBus channel: true when at least
-# one receiving ComBus link of the board between the boards of the node
-# (scope INTRA_NODE, link rework S2) is lost, or still never seen once its
-# startup grace (startupGraceMs) has elapsed.  It is a contributor: a chain
-# of the failsafe module reads it (today the hard chain, failsafe_chain.cpp,
-# FAILSAFE_HARD).
+# BOARD_LINK_FAIL is true when at least one receiving link of this board to
+# another board of the node (scope INTRA_NODE) is lost, or still never seen once
+# its startup grace (startupGraceMs) has elapsed.  It is a contributor of the
+# hard chain (failsafe_chain.cpp, FAILSAFE_HARD).
 #
 # Notes:
 # - BOARD scope: only the board that owns the links knows their state.  The
-#   whole node learns of it through the aggregator (both_or) and RUNLEVEL.
-# - Written each cycle by com_rx_update() from combus_links_lost(FAILSAFE);
-#   false when no such link exists.  A link that only transmits never counts.
-# - value: fault (true), a fault until com_rx_update() writes it (failsafe-by-default);
-#   the chain consumes it each cycle (cb_or_fn, inCh == outCh).  A contributor
-#   is read by ONE chain only.
-# - requires: [HAS_FAILSAFE, HAS_BOARD_LINK_FAILSAFE] — the failsafe module,
-#   and this contributor (link rework S1b).
-
+#   whole node learns of it through FAILSAFE_HARD (both_or) and RUNLEVEL.
+# - Written every cycle by com_rx_update(), from
+#   combus_links_lost(LinkScope::INTRA_NODE); false when there is no such link.
+#   A link that only transmits never counts.
+# - value: fault (true) until com_rx_update() writes it.  The chain consumes it
+#   every cycle (cb_or_fn, inCh == outCh): a contributor is read by one chain
+#   only.
+# - requires: [HAS_FAILSAFE, HAS_BOARD_LINK_FAILSAFE], the failsafe module and
+#   this contributor.
 
 channels:
   - id: BOARD_LINK_FAIL

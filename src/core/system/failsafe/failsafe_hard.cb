@@ -1,31 +1,23 @@
 # failsafe_hard.cb — aggregator of the hard failsafe chain
 #
-# This file declares the ComBus channel FAILSAFE_HARD, the Failsafe system
-# aggregator. It is set to 1 (fault) if at least one FAILSAFE_X
-# contributor reports a fault.
+# FAILSAFE_HARD is true when at least one contributor of the hard chain reports a
+# fault.  Its reaction is the run level HALT, held until a reboot (the soft
+# chain, FAILSAFE_SOFT, leads to IDLE).
 #
-# This .cb is the source of truth: the ComBus Builder generates the FAILSAFE_HARD
-# enum entry (the legacy hand-written .inc files no longer exist).
-# FAILSAFE_END,       ///< Range marker — first index after Failsafe group.
-# #endif
+# It is computed, never written by a source:
+#   - each source writes its own contributor every cycle (false = healthy,
+#     true = fault);
+#   - the hard chain (failsafe_chain.cpp) resets its value, ORs the contributors
+#     it lists, and writes the result here;
+#   - the consumers (runlevel chain, dashboards) only read FAILSAFE_HARD.
 #
 # Notes:
-# - FAILSAFE_HARD is the aggregator, not a contributor.
-# - Contributors (VBAT_FAIL, etc.) are declared in their own .cb
-#   files (e.g. src/core/system/vbat/vbat_fail.cb).
-# - FAILSAFE_END is a legacy range marker. The generator deduces it
-#   automatically from the list of channels in the group.
-# - SYSTEM scope is required because FAILSAFE_HARD is shared by all boards
-#   composing the local node. It allows the Failsafe state to be
-#   propagated to, and collected from, the different boards of that node.
-# - Direction is both uplink and downlink: any board may publish or
-#   consume the local Failsafe state as required by its role.
-# - Remote propagation, if required, is handled separately through a
-#   BASE ComBus definition(FAILSAFE_TELEMETRY ...).
-#
-# A6.1 — `direction: [both]` shorthand added (TEMPORARY): the runtime
-# writes/reads both ways. To be re-evaluated; the .inc migration is complete.
-
+# - SYSTEM scope: shared by all the boards of the node.  A remote telemetry of the
+#   failsafe state, if needed one day, would be a BASE channel of its own.
+# - Direction both_or: a fault of any board wins.
+# - value: fault (true) until the chain first writes it.
+# - The contributors are declared next to the module that writes them (for
+#   example src/core/system/vbat/vbat_fail.cb); see failsafe_module.md.
 
 channels:
   - id: FAILSAFE_HARD

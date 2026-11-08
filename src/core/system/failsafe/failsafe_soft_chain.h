@@ -1,15 +1,16 @@
 /******************************************************************************
- * @file failsafe_soft_chain.h
- * @brief FAILSAFE_SOFT → IDLE fallback chain — registry declarations.
+ * @file  failsafe_soft_chain.h
+ * @brief The soft failsafe chain: publishes FAILSAFE_SOFT, which leads to IDLE.
  *
- * @details Companion header to failsafe_soft_chain.cpp.  Exposes the
- *   static chain table and count for the runner to iterate over.  When
- *   HAS_FAILSAFE is NOT defined, the chain table is a
- *   placeholder and the count is 0 — callers can always iterate without
- *   a separate `#if` guard.
+ * @details Same shape as the hard chain (failsafe_chain.h): a reset, then one
+ *   cb_or_fn per contributor, each under its own HAS_*_FAILSAFE flag.  Its faults are
+ *   light, today losses of command: the local remote no longer answers, or a link to
+ *   another node is down.  The reaction, IDLE on the rising edge, is in the runlevel
+ *   chain of the machine.  See failsafe_soft.md.
  *
- *   The chain is OPTIONAL: only emitted when the project defines
- *   `-D HAS_FAILSAFE` (autonomous machines do not need it).
+ *   Without HAS_FAILSAFE, failsafe_soft_update() is a no-op and
+ *   kFailsafeSoftChainCount is 0; kFailsafeSoftChain is not defined, so nothing may
+ *   read it.
  *****************************************************************************/
 #pragma once
 
@@ -17,42 +18,32 @@
 #include <struct/combus_proc_struct.h>   // CbChain
 
 
+
 // =============================================================================
-// 1. PUBLIC API
+// 1. TABLES
 // =============================================================================
 
-/**
- * @brief Static chain table (single chain: failsafe_soft_main).
- *
- * @details Defined in failsafe_soft_chain.cpp.  When the fallback is
- *   disabled (HAS_FAILSAFE not defined), this table is a
- *   placeholder of size 1 with an empty entry; kFailsafeSoftChainCount
- *   is 0 so the runner's loop is a no-op.
- */
+	/// The chain: no input, the reset seeds the value; FAILSAFE_SOFT as output.
 extern CbChain kFailsafeSoftChain[];
 
-/**
- * @brief Static chain count — equals the array length.
- *
- * @details 0 when HAS_FAILSAFE is not defined.
- */
+	/// Number of chains in kFailsafeSoftChain[]: 1, or 0 without HAS_FAILSAFE.
 extern const uint8_t kFailsafeSoftChainCount;
 
 
+
 // =============================================================================
-// 2. CONVENIENCE — single-chain façade
+// 2. API
 // =============================================================================
 
 /**
- * @brief Run the FAILSAFE_SOFT → IDLE fallback chain once.
+ * @brief Run the soft chain once: publishes FAILSAFE_SOFT.
  *
- * @details Convenience façade equivalent to
- *   `proc_chain_update(kFailsafeSoftChain, kFailsafeSoftChainCount, bus)`.
- *   No-op when the fallback is disabled (count == 0).
+ * @details Called by sys_manager_update() after the hard chain and before the state
+ *   machine.  No-op without HAS_FAILSAFE.
  *
- * @param bus  Live ComBus instance (passed to the chain runner).
+ * @param bus  ComBus of the node.
  */
-void failsafe_soft_update(ComBus& bus);
 
+void failsafe_soft_update(ComBus& bus);
 
 // EOF failsafe_soft_chain.h
