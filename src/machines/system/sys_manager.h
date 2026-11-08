@@ -73,15 +73,4 @@
  */
 void sys_manager_update(ComBus& bus);
 
-
-/**
- * @brief Pre-clear only — NO-OP since Chantier 12.6.
- *
- * @details Kept for source-level compatibility with out-of-tree callers
- *   (sound node, etc.).  The historical `bus.isDrived = false;` is gone —
- *   link health is now monitored per-link by the contributors (each
- *   backend re-arms its own *_LINK_LOST channel every cycle).
- */
-void sys_manager_reset(ComBus& bus);
-
 // EOF sys_manager.h

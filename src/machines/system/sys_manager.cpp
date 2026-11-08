@@ -47,22 +47,7 @@ void sys_manager_update(ComBus& bus) {
       // chain turns into RUNLEVEL = IDLE on the rising edge.  Part of the
       // failsafe module (link rework S1b: HAS_FAILSAFE).  See
       // failsafe_module.md §12.5 (new design).
-#if defined(HAS_FAILSAFE)
     failsafe_soft_update(bus);
-#endif
-}
-
-
-// Chantier 12.6: `sys_manager_reset(ComBus&)` REMOVED — its only job was
-// to re-arm the open-drain `isNotDrived` flag, which no longer exists.
-// Link-health reset is now handled per-link by the contributors (each
-// backend re-arms its own *_LINK_LOST channel every cycle). See
-// failsafe_module.md §12.5 (new design).
-
-// Keep a placeholder for source-level compatibility with out-of-tree
-// callers (sound node, etc.). The function is a no-op now.
-void sys_manager_reset(ComBus& /*bus*/) {
-    // Intentionally empty — see comment above.
 }
 
 // EOF sys_manager.cpp

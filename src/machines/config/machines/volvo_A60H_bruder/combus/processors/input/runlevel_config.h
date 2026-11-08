@@ -8,7 +8,7 @@
  *     cb_runlevel_fn, cb_runlevel_once_fn, cb_runlevel_hold_fn,
  *     AnalogComBusID, DigitalComBusID, RunLevel, comBus.
  *
- *   Chain function: RUNLEVEL → [halt_hold, failsafe, remote_link, runlevel] → RUNLEVEL.
+ *   Chain function: RUNLEVEL → [halt_hold, failsafe, failsafe_soft, runlevel] → RUNLEVEL.
  *   In:  RUNLEVEL (current RunLevel value, seeded into pipeline value).
  *   Out: RUNLEVEL (committed after pipeline).
  *
@@ -25,7 +25,7 @@
  *                 hardware safety reaction (stop/sleep/disable drivers)
  *                 in main.cpp's switch(curRunLevel).
  *
- *   1b remote_link: inCh = FAILSAFE_SOFT.  EDGE-TRIGGERED (cb_runlevel_once_fn).
+ *   1b failsafe_soft: inCh = FAILSAFE_SOFT.  EDGE-TRIGGERED (cb_runlevel_once_fn).
  *                 chantier 12.5: FAILSAFE_SOFT is the OR-aggregated health of all
  *                 remote input sources (PS4_BT, UART, …) computed by the
  *                 failsafe_soft_chain.  On its rising edge (0→1, link
@@ -78,10 +78,10 @@ static constexpr CbRunlevelCfg kRunlevelCfg {
 };
 
 #if defined(HAS_FAILSAFE)
-  ///  remote_link — chantier 12.5: FAILSAFE_SOFT 0→1 → force RUNLEVEL=IDLE + claim.
+  ///  failsafe_soft — chantier 12.5: FAILSAFE_SOFT 0→1 → force RUNLEVEL=IDLE + claim.
   ///  Rising edge only (edge-triggered).  Falling edge = manual recovery via KEY.
   ///  Sits AFTER failsafe so a hard failsafe condition always wins.
-static constexpr CbRunlevelCfg kRemoteLinkRunlevelCfg {
+static constexpr CbRunlevelCfg kFailsafeSoftRunlevelCfg {
     .high  = RunLevel::IDLE,        ///< FAILSAFE_SOFT 0→1 → write IDLE.
     .low   = std::nullopt,          ///< FAILSAFE_SOFT 1→0 → no write: the machine stays IDLE until the operator presses KEY.
     .claim = true,                  ///< Block KEY_ACTIVE proc on link loss.
@@ -97,8 +97,8 @@ static constexpr CbRunlevelCfg kRemoteLinkRunlevelCfg {
 static CbRunlevelOnceState gRunlevelOnceState {};
 
 #if defined(HAS_FAILSAFE)
-  //  remote_link edge-triggered state — separate instance (one per proc).
-static CbRunlevelOnceState gRemoteLinkOnceState {};
+  //  failsafe_soft edge-triggered state — separate instance (one per proc).
+static CbRunlevelOnceState gFailsafeSoftOnceState {};
 #endif
 
 
@@ -111,12 +111,12 @@ static CbRunlevelOnceState gRemoteLinkOnceState {};
  * @details Steps (chantier 12.5 new design):
  *   0  halt_hold   : HOLD — RUNLEVEL already HALT → claim (nothing behind runs, until a reboot).
  *   1  failsafe    : CONTINUOUS — FAILSAFE_HARD=true → RUNLEVEL=HALT + claim (highest priority).
- *   1b remote_link : EDGE-TRIGGERED — FAILSAFE_SOFT 0→1 → RUNLEVEL=IDLE + claim.
+ *   1b failsafe_soft : EDGE-TRIGGERED — FAILSAFE_SOFT 0→1 → RUNLEVEL=IDLE + claim.
  *   2  runlevel    : EDGE-TRIGGERED — KEY_ACTIVE transition → RUNLEVEL=STARTING or TURNING_OFF.
  *
- *   Priority: halt_hold > failsafe > remote_link > runlevel.  Failsafe always
+ *   Priority: halt_hold > failsafe > failsafe_soft > runlevel.  Failsafe always
  *   wins (the safety condition overrides everything), and the HALT it writes
- *   is held by halt_hold.  remote_link claims when active so KEY_ACTIVE
+ *   is held by halt_hold.  failsafe_soft claims when active so KEY_ACTIVE
  *   cannot immediately recover — the operator must explicitly reset
  *   (KEY → STARTING) once the link is back.
  */
@@ -135,16 +135,16 @@ static CbProc kRunlevelProcs[] = {
       .state = nullptr,
     },
 #if defined(HAS_FAILSAFE)
-      // 1b. remote_link — EDGE-TRIGGERED: FAILSAFE_SOFT 0→1 → RUNLEVEL=IDLE + claim.
+      // 1b. failsafe_soft — EDGE-TRIGGERED: FAILSAFE_SOFT 0→1 → RUNLEVEL=IDLE + claim.
       //     Sits right after failsafe so it benefits from failsafe's claim
       //     (no need to check FAILSAFE_HARD here — chain is already claimed).
       //     Gated by HAS_FAILSAFE — without the aggregator
       //     chain, the proc is meaningless (FAILSAFE_SOFT is never latched).
-    { .name  = "remote_link",
+    { .name  = "failsafe_soft",
       .inCh  = DigitalComBusID::FAILSAFE_SOFT,
       .fn    = cb_runlevel_once_fn,
-      .cfg   = &kRemoteLinkRunlevelCfg,
-      .state = &gRemoteLinkOnceState,
+      .cfg   = &kFailsafeSoftRunlevelCfg,
+      .state = &gFailsafeSoftOnceState,
     },
 #endif
       // 2. runlevel — EDGE-TRIGGERED: KEY_ACTIVE transition → STARTING/TURNING_OFF.

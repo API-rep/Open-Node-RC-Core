@@ -18,11 +18,11 @@
  *                                         -> out(KEY_ACTIVE)
  *                          key_on fires on press-down; key_off fires WHILE held >= 3 s.
  *     INPUT_RUNLEVEL     : in(RUNLEVEL) -> halt_hold -> failsafe(FAILSAFE_HARD)
- *                                         -> remote_link(FAILSAFE_SOFT) -> runlevel(KEY_ACTIVE)
+ *                                         -> failsafe_soft(FAILSAFE_SOFT) -> runlevel(KEY_ACTIVE)
  *                                         -> out(RUNLEVEL)
  *                          halt_hold keeps HALT until a reboot (claims chain).
  *                          failsafe forces RUNLEVEL=HALT when FAILSAFE_HARD=true (claims chain).
- *                          remote_link forces RUNLEVEL=IDLE on FAILSAFE_SOFT rising edge.
+ *                          failsafe_soft forces RUNLEVEL=IDLE on FAILSAFE_SOFT rising edge.
  *                          runlevel drives STARTING/TURNING_OFF from KEY_ACTIVE.
  *     INPUT_CRUISE_NORMAL : in(CRUISE_ACTIVE) -> gate(SUBGEAR_BUS != 0 → force 0)
  *                                              -> toggle(CRUISE_TOGGLE_BTN)
@@ -50,7 +50,7 @@
 #include "subgear_config.h"        // kSubGearProcs — neutral-gate + toggle + inc + dec
 #include "direct_drive_config.h"   // kDirectDriveProcs — toggle
 #include "key_runlevel_config.h"   // kKeyRunlevelProcs — key_on + key_off
-#include "runlevel_config.h"       // kRunlevelProcs — halt_hold + failsafe + remote_link + runlevel
+#include "runlevel_config.h"       // kRunlevelProcs — halt_hold + failsafe + failsafe_soft + runlevel
 #include "cruise_input_config.h"   // kCruiseInputProcs — gate(SUBGEAR) + toggle(□)
 
 

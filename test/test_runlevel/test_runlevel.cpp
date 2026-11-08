@@ -62,7 +62,7 @@ void setUp(void) {
     setSoft(false);
     setKey(false);
     gRunlevelOnceState   = {};
-    gRemoteLinkOnceState = {};
+    gFailsafeSoftOnceState = {};
     setRunLevel(RunLevel::IDLE);
 }
 

@@ -58,7 +58,7 @@ Les deux sont des channels `BOARD` (privés à la carte qui porte la source), du
 Dans la chaîne runlevel (`kRunlevelProcs[]`, `src/machines/config/machines/volvo_A60H_bruder/combus/processors/input/runlevel_config.h`), après la chaîne dure :
 
 ```cpp
-static constexpr CbRunlevelCfg kRemoteLinkRunlevelCfg {
+static constexpr CbRunlevelCfg kFailsafeSoftRunlevelCfg {
     .high  = RunLevel::IDLE,        // FAILSAFE_SOFT 0→1 : IDLE
     .low   = std::nullopt,          // FAILSAFE_SOFT 1→0 : rien, la reprise passe par la clé
     .claim = true,                  // bloque la clé pendant ce cycle
