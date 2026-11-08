@@ -72,10 +72,10 @@ enum class DigitalComBusID : uint8_t;
  *   - BASE represents the minimal universal service set
  */
 enum class ChanLayer : uint8_t {
-    UNDEFINED = 0x00,   ///< Layer not yet assigned (uninitialized)
-    BOARD     = 0x01,   ///< Intra-device: private to a single board's firmware
-    SYSTEM    = 0x02,   ///< Intra-node: shared between all boards of the same system
-    BASE      = 0x03    ///< Inter-node: exchanged between distinct nodes
+	UNDEFINED = 0x00,   ///< Layer not yet assigned (uninitialized)
+	BOARD     = 0x01,   ///< Intra-device: private to a single board's firmware
+	SYSTEM    = 0x02,   ///< Intra-node: shared between all boards of the same system
+	BASE      = 0x03    ///< Inter-node: exchanged between distinct nodes
 };
 
 
@@ -100,10 +100,10 @@ enum class ChanLayer : uint8_t {
  *   kind of link, see ChanFlow.
  */
 enum class Direction : uint8_t {
-    None     = 0,
-    Uplink   = 1,
-    Downlink = 2,
-    Both     = 3
+	None     = 0,
+	Uplink   = 1,
+	Downlink = 2,
+	Both     = 3
 };
 
 
@@ -129,8 +129,8 @@ enum class Direction : uint8_t {
  */
 
 struct ChanFlow {
-  Direction betweenNodes  = Direction::None;    ///< on an inter-node link (the .cb direction)
-  Direction betweenBoards = Direction::None;    ///< on an intra-node link (computed for this board)
+	Direction betweenNodes  = Direction::None;    ///< on an inter-node link (the .cb direction)
+	Direction betweenBoards = Direction::None;    ///< on an intra-node link (computed for this board)
 };
 
 
@@ -144,13 +144,13 @@ struct ChanFlow {
  */
 
 struct BothOrMerge {
-  bool enabled = false;   ///< the channel is declared both_or
-  bool local   = false;   ///< last value written by this board's own code
-  bool written = false;   ///< this board wrote it at least once (otherwise it does not contribute)
-  bool remote  = false;   ///< OR of the values received from the live links
+	bool enabled = false;   ///< the channel is declared both_or
+	bool local   = false;   ///< last value written by this board's own code
+	bool written = false;   ///< this board wrote it at least once (otherwise it does not contribute)
+	bool remote  = false;   ///< OR of the values received from the live links
 };
 
-    // Same layout as the former flat fields: no padding inside the sub-structs.
+	// Same layout as the former flat fields: no padding inside the sub-structs.
 static_assert(sizeof(ChanFlow)    == 2u * sizeof(Direction), "ChanFlow must hold two Direction, no padding");
 static_assert(sizeof(BothOrMerge) == 4u * sizeof(bool),      "BothOrMerge must hold four bool, no padding");
 
@@ -159,18 +159,18 @@ static_assert(sizeof(BothOrMerge) == 4u * sizeof(bool),      "BothOrMerge must h
  * @brief Analog ComBus channel descriptor.
  */
 struct AnalogComBus {
-  const char* infoName;                            ///< Short description for debugging and dashboards
-  uint16_t    value;                               ///< Current channel value (0-65535)
-  ChanLayer   layer = ChanLayer::BOARD;            ///< Scope: who may write it (see ChanLayer)
-  ChanFlow    flow  = {};                          ///< Which way it travels, per kind of link
-  bool        zeroAtNeutral = false;               ///< Logical zero at CbusNeutral (`.cb` `zeroAt: neutral`), else at 0.
-                                                   ///< Place of the LOGICAL zero in the raw range, not a type choice:
-                                                   ///< `value` stays a raw uint16_t, the frame is unchanged; only the
-                                                   ///< application accessors apply the offset (link rework S3-4).
+	const char* infoName;                            ///< Short description for debugging and dashboards
+	uint16_t    value;                               ///< Current channel value (0-65535)
+	ChanLayer   layer = ChanLayer::BOARD;            ///< Scope: who may write it (see ChanLayer)
+	ChanFlow    flow  = {};                          ///< Which way it travels, per kind of link
+	bool        zeroAtNeutral = false;               ///< Logical zero at CbusNeutral (`.cb` `zeroAt: neutral`), else at 0.
+		                                           ///< Place of the LOGICAL zero in the raw range, not a type choice:
+		                                           ///< `value` stays a raw uint16_t, the frame is unchanged; only the
+		                                           ///< application accessors apply the offset (link rework S3-4).
 };
 
-    // zeroAtNeutral sits in the padding that already existed: an analog channel
-    // still takes 12 bytes on the ESP32 (32-bit pointer).
+	// zeroAtNeutral sits in the padding that already existed: an analog channel
+	// still takes 12 bytes on the ESP32 (32-bit pointer).
 #if UINTPTR_MAX == 0xFFFFFFFFu
 static_assert(sizeof(AnalogComBus) == 12u, "AnalogComBus must stay 12 bytes on a 32-bit target");
 #endif
@@ -179,11 +179,11 @@ static_assert(sizeof(AnalogComBus) == 12u, "AnalogComBus must stay 12 bytes on a
  * @brief Digital ComBus channel descriptor.
  */
 struct DigitalComBus {
-  const char* infoName;                            ///< Short description for debugging and dashboards
-  bool        value;                               ///< Current channel state (true/false)
-  ChanLayer   layer  = ChanLayer::BOARD;           ///< Scope: who may write it (see ChanLayer)
-  ChanFlow    flow   = {};                         ///< Which way it travels, per kind of link
-  BothOrMerge bothOr = {};                         ///< OR merge, used when bothOr.enabled
+	const char* infoName;                            ///< Short description for debugging and dashboards
+	bool        value;                               ///< Current channel state (true/false)
+	ChanLayer   layer  = ChanLayer::BOARD;           ///< Scope: who may write it (see ChanLayer)
+	ChanFlow    flow   = {};                         ///< Which way it travels, per kind of link
+	BothOrMerge bothOr = {};                         ///< OR merge, used when bothOr.enabled
 };
 
 /**
@@ -194,23 +194,23 @@ struct DigitalComBus {
  *   direct dependencies.
  */
 struct ComBus {
-    // --- Core state ---
-  // RL3: runLevel + runLevelLayer removed — runLevel is now a plain analog channel
-  //       (RUNLEVEL, scope SYSTEM, see runlevel.cb). Read/write it directly via the
-  //       generic analog accessor (combus_set_analog / analogBus[RUNLEVEL].value).
-  //       This is the same pattern as any other SYSTEM analog channel (e.g. THROTTLE_STICK).
+	// --- Core state ---
+	// RL3: runLevel + runLevelLayer removed — runLevel is now a plain analog channel
+	//       (RUNLEVEL, scope SYSTEM, see runlevel.cb). Read/write it directly via the
+	//       generic analog accessor (combus_set_analog / analogBus[RUNLEVEL].value).
+	//       This is the same pattern as any other SYSTEM analog channel (e.g. THROTTLE_STICK).
 
-    // Chantier 12.6: `isNotDrived` (FS1 open-drain flag) REMOVED. Link
-    // health is now monitored by per-link contributors aggregated into
-    // FAILSAFE_SOFT — see failsafe_module.md §12.5.
+	// Chantier 12.6: `isNotDrived` (FS1 open-drain flag) REMOVED. Link
+	// health is now monitored by per-link contributors aggregated into
+	// FAILSAFE_SOFT — see failsafe_module.md §12.5.
 
-    // --- Transport ---
-  uint32_t    lastFrameMs = 0;             ///< millis() timestamp of the last successful combus_frame_apply
+	// --- Transport ---
+	uint32_t    lastFrameMs = 0;             ///< millis() timestamp of the last successful combus_frame_apply
 
-    // --- Channel arrays ---
-  AnalogComBus*  analogBus;                ///< Analog channel array
-  DigitalComBus* digitalBus;               ///< Digital channel array
-  uint32_t       analogBusMaxVal;          ///< Maximum analog channel value (2¹⁶‑1 = 65535)
+	// --- Channel arrays ---
+	AnalogComBus*  analogBus;                ///< Analog channel array
+	DigitalComBus* digitalBus;               ///< Digital channel array
+	uint32_t       analogBusMaxVal;          ///< Maximum analog channel value (2¹⁶‑1 = 65535)
 };
 
 // EOF combus_struct.h

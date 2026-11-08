@@ -55,9 +55,9 @@ bool combus_set_raw_analog(ComBus& bus, AnalogComBusID ch, uint16_t val, ChanLay
 inline bool combus_set_raw_analog(ComBus& bus, const std::optional<AnalogComBusID>& ch,
                                   uint16_t val, ChanLayer caller)
 {
-    if (!ch.has_value()) return false;
+	if (!ch.has_value()) return false;
 
-    return combus_set_raw_analog(bus, ch.value(), val, caller);
+	return combus_set_raw_analog(bus, ch.value(), val, caller);
 }
 
 
@@ -117,9 +117,9 @@ bool combus_set_digital(ComBus& bus, DigitalComBusID ch, bool val, ChanLayer cal
 inline bool combus_set_digital(ComBus& bus, const std::optional<DigitalComBusID>& ch,
                                bool val, ChanLayer caller)
 {
-    if (!ch.has_value()) return false;
+	if (!ch.has_value()) return false;
 
-    return combus_set_digital(bus, ch.value(), val, caller);
+	return combus_set_digital(bus, ch.value(), val, caller);
 }
 
 /**
@@ -127,7 +127,7 @@ inline bool combus_set_digital(ComBus& bus, const std::optional<DigitalComBusID>
  * @details Used by CbProcFn implementations (local firmware).
  */
 inline bool combus_set_digital(ComBus& bus, DigitalComBusID ch, bool val) {
-    return combus_set_digital(bus, ch, val, ChanLayer::BOARD);
+	return combus_set_digital(bus, ch, val, ChanLayer::BOARD);
 }
 
 
@@ -144,7 +144,7 @@ inline bool combus_set_digital(ComBus& bus, DigitalComBusID ch, bool val) {
  */
 
 inline bool combus_both_or_local(const DigitalComBus& slot) {
-    return slot.bothOr.written && slot.bothOr.local;
+	return slot.bothOr.written && slot.bothOr.local;
 }
 
 
