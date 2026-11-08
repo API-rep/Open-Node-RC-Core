@@ -86,7 +86,7 @@ The ComBus organizes channels into three distinct layers, each with a specific p
 
 | Layer | Scope | Description |
 |---|---|---|
-| **BASE** | Inter-node | Standard profile of the machine type, shared by every compatible node (remote↔machine, machine↔sound), even without a network link |
+| **BASE** | Inter-node | Standard profile of the machine type, shared by every compatible node (remote↔machine, machine↔trailer), even without a network link |
 | **SYSTEM** | Intra-node | Data shared between all boards of the same system |
 | **BOARD** | Intra-device | Private data within a single board's firmware |
 

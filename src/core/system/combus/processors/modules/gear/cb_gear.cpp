@@ -65,7 +65,7 @@ void gear_fsm_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/)
  *   same as gear_dyn_ramp_fn.  Gear 0 (uninitialised) ? passthrough.
  *
  *   Side-effect: writes engine_rpm to `proc->outValue` so the chain runner
- *   commits it to `proc->outCh` (= ESC_RPM_BUS) — the sound node reads RPM from there.
+ *   commits it to `proc->outCh` (= ESC_RPM_BUS), where the RPM is published.
  *
  *   Also passes engine_rpm downstream in `value` for gear_fsm_fn so RPM
  *   thresholds work in engine-RPM domain (unchanged from old model).
@@ -102,7 +102,7 @@ void gear_ratio_inv_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/)
                                ? uint16_t(0xFFFFu)
                                : static_cast<uint16_t>(engineRpm);
 
-    // Commit engine_rpm to outCh (ESC_RPM_BUS) — sound node reads RPM from there.
+    // Commit engine_rpm to outCh (ESC_RPM_BUS) — where the RPM is published.
     proc->outValue = result;
 
     // Pass engine_rpm downstream so gear_fsm_fn compares against engine-RPM thresholds.
@@ -241,13 +241,13 @@ void gear_dyn_ramp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/)
 // =============================================================================
 
 /**
- * @brief Detect upshift; freeze traction ramp for upshiftDampMs + signal GEAR_SHIFTING.
+ * @brief Detect upshift; freeze traction ramp for upshiftDampMs, signal it in outValue.
  *
  * @details Placed in GEAR chain (after gear_dyn_ramp_fn, before out).
  *   Reads current gear from `value` (= gear computed in this GEAR-chain pass).
  *   On upshift (curGear > prevGear, excluding first-init): arms a timer and
  *   sets dynCfg->extAccelSteps = INT16_MIN — effective accel step is
- *   max(1, accelSteps + INT16_MIN) ˜ 1 unit/tick, negligible over the window.
+ *   max(1, accelSteps + INT16_MIN) ≈ 1 unit/tick, negligible over the window.
  *   Only the acceleration direction is damped; extBrakeSteps is never touched,
  *   so braking (L2) remains fully functional during the freeze.
  *   rampTimeMs is not modified (gear_dyn_ramp_fn keeps the per-gear value).
@@ -264,7 +264,6 @@ void gear_dyn_ramp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/)
  *   dynCfg = CbRampCfg*      (traction ramp — rampTimeMs frozen here).
  *   state  = GearDampState*  (prevGear + dampEndMs).
  *   outCh  = none (GEAR_SHIFTING removed: no reader).
- *   @todo winter 2026: promote GEAR_SHIFTING to WIRE region so sound node reads directly.
  */
 void gear_upshift_damp_fn(CbProc* proc, uint16_t& value, bool& /*claimed*/)
 {

@@ -1,57 +1,52 @@
 /******************************************************************************
- * @file combus_access.h
- * @brief Layer-checked write accessors for ComBus channels.
+ * @file  combus_access.h
+ * @brief ComBus accessors: every write checked against the layer of the channel.
  *
- * @details Each write function compares the caller's `ChanLayer` against the
- *   channel's declared `layer` before writing. If the caller's layer does not
- *   have sufficient privileges, the write is skipped and returns `false`.
- *   Every denied write is counted (combus_denied_writes()) and reported once per
- *   channel through sys_log_warn() (DEBUG_SYSTEM builds).
+ * @details Every write to a channel goes through here.  The writer gives its layer
+ *   (ChanLayer), compared with the layer of the channel (rules in combus_defs.h): a
+ *   write that is not allowed is skipped and returns false.  Every denied write is
+ *   counted (combus_denied_writes()) and logged once per channel by sys_log_warn()
+ *   (DEBUG_SYSTEM builds).
  *
- *   This layer is optional — existing direct field writes remain valid during
- *   the migration. New code should use these accessors so layer violations
- *   are visible at runtime.
+ *   Analog channels have two families of accessors:
+ *   - application, combus_get_analog() and combus_set_analog(): the logical value
+ *     (int32_t).  For a channel declared `zeroAt: neutral` (AnalogComBus::zeroAtNeutral)
+ *     the logical zero is CbusNeutral, so the value may be negative; for any other
+ *     channel, logical = raw.  The family of the application code (main loop,
+ *     dashboards...);
+ *   - system, combus_get_raw_analog() and combus_set_raw_analog(): the raw uint16_t,
+ *     as stored and sent on the wire, never offset.  The family of the transport
+ *     (codec, reception, links), of the input drivers (sticks) and of the chain runner.
  *
- *   Rules:
- *   - UNDEFINED → write denied for all callers (safety)
- *   - BOARD     → only local firmware caller may write
- *   - SYSTEM    → local firmware caller + extension boards caller of same node)
- *   - BASE      → any source (local + extensions + remote nodes caller)
+ *   TODO(Simulation chain): whether the processors work on the logical value is
+ *   decided there; the chain runner stays raw until then.
  *****************************************************************************/
 #pragma once
 
 #include <optional>
 #include <core/system/combus/combus_defs.h>
 
-// =============================================================================
-// 1. CHANNEL WRITE ACCESSORS
-// =============================================================================
 
-/*
- *   Analog channels have two families of accessors (link rework S3-4):
- *   - application: combus_get_analog() / combus_set_analog() — the LOGICAL
- *     value (int32_t).  For a channel declared `zeroAt: neutral`
- *     (AnalogComBus::zeroAtNeutral) the logical zero is CbusNeutral, so the
- *     value may be negative; for any other channel logical = raw.  This is
- *     the family to use in application code (main loop, dashboards…).
- *   - system: combus_get_raw_analog() / combus_set_raw_analog() — the RAW
- *     uint16_t, as stored and sent on the wire, never offset.  Reserved to
- *     the transport (codec, RX, links), the input drivers (sticks) and the
- *     chain runner (until the processors are decided, simulation WIP).
- */
+
+// =============================================================================
+// 1. ANALOG CHANNELS
+// =============================================================================
 
 /**
- * @brief Write the raw value of an analog ComBus channel (system side, no offset).
- * @param bus     Target ComBus instance.
- * @param ch      Channel index (typed enum, machine-specific).
+ * @brief Write the raw value of an analog channel, with no offset (system side).
+ *
+ * @param bus     Target ComBus.
+ * @param ch      Channel.
  * @param val     New raw value.
- * @param caller  Layer of the calling module — checked against ch.layer.
- * @return true if the write was accepted, false if layer mismatch.
+ * @param caller  Layer of the writer, checked against the layer of the channel.
+ *
+ * @return true if the write was accepted, false if the layer refused it.
  */
 
 bool combus_set_raw_analog(ComBus& bus, AnalogComBusID ch, uint16_t val, ChanLayer caller);
 
-  /// Write the raw value of an optional analog channel — no-op (returns false) if absent.
+
+	/// Optional channel: no write, and false, when it is absent.
 inline bool combus_set_raw_analog(ComBus& bus, const std::optional<AnalogComBusID>& ch,
                                   uint16_t val, ChanLayer caller)
 {
@@ -62,58 +57,73 @@ inline bool combus_set_raw_analog(ComBus& bus, const std::optional<AnalogComBusI
 
 
 /**
- * @brief Read the raw value of an analog ComBus channel (system side, no offset).
- * @param bus  ComBus instance.
- * @param ch   Channel index.
- * @return     The raw uint16_t value.
+ * @brief Read the raw value of an analog channel, with no offset (system side).
+ *
+ * @param bus  ComBus.
+ * @param ch   Channel.
+ *
+ * @return The raw uint16_t value.
  */
 
 uint16_t combus_get_raw_analog(const ComBus& bus, AnalogComBusID ch);
 
 
 /**
- * @brief Write the logical value of an analog ComBus channel (application side).
+ * @brief Write the logical value of an analog channel (application side).
  *
- * @details raw = val, plus CbusNeutral when the channel is `zeroAtNeutral`,
- *   bounded to the raw range [0, CbusMaxVal].  Without `zeroAt: neutral` a
- *   negative value is bounded to 0.
+ * @details raw = val, plus CbusNeutral when the channel is `zeroAtNeutral`, bounded to
+ *   the raw range [0, CbusMaxVal].  Without `zeroAt: neutral`, a negative value is
+ *   bounded to 0.
  *
- * @param bus     Target ComBus instance.
- * @param ch      Channel index.
+ * @param bus     Target ComBus.
+ * @param ch      Channel.
  * @param val     New logical value.
- * @param caller  Layer of the calling module — checked against ch.layer.
- * @return true if the write was accepted, false if layer mismatch.
+ * @param caller  Layer of the writer, checked against the layer of the channel.
+ *
+ * @return true if the write was accepted, false if the layer refused it.
  */
 
 bool combus_set_analog(ComBus& bus, AnalogComBusID ch, int32_t val, ChanLayer caller);
 
 
 /**
- * @brief Read the logical value of an analog ComBus channel (application side).
+ * @brief Read the logical value of an analog channel (application side).
  *
- * @details raw, minus CbusNeutral when the channel is `zeroAtNeutral`
- *   (range -CbusNeutral..CbusMaxVal-CbusNeutral), else raw (0..CbusMaxVal).
+ * @details raw minus CbusNeutral when the channel is `zeroAtNeutral` (range
+ *   -CbusNeutral..CbusMaxVal-CbusNeutral), else raw (0..CbusMaxVal).
  *
- * @param bus  ComBus instance.
- * @param ch   Channel index.
- * @return     The logical value.
+ * @param bus  ComBus.
+ * @param ch   Channel.
+ *
+ * @return The logical value.
  */
 
 int32_t combus_get_analog(const ComBus& bus, AnalogComBusID ch);
 
 
+
+// =============================================================================
+// 2. DIGITAL CHANNELS
+// =============================================================================
+
 /**
- * @brief Write a value to a digital ComBus channel.
- * @param bus     Target ComBus instance.
- * @param ch      Channel index (typed enum, machine-specific).
- * @param val     New value to write.
- * @param caller  Layer of the calling module — checked against ch.layer.
- * @return true if the write was accepted, false if layer mismatch.
+ * @brief Write a digital channel.
+ *
+ * @details For a both_or channel, the value written is this board's own term: the
+ *   channel reads it OR the values received from the live links.
+ *
+ * @param bus     Target ComBus.
+ * @param ch      Channel.
+ * @param val     New value.
+ * @param caller  Layer of the writer, checked against the layer of the channel.
+ *
+ * @return true if the write was accepted, false if the layer refused it.
  */
 
 bool combus_set_digital(ComBus& bus, DigitalComBusID ch, bool val, ChanLayer caller);
 
-  /// Write an optional digital channel — no-op (returns false) if absent.
+
+	/// Optional channel: no write, and false, when it is absent.
 inline bool combus_set_digital(ComBus& bus, const std::optional<DigitalComBusID>& ch,
                                bool val, ChanLayer caller)
 {
@@ -122,25 +132,23 @@ inline bool combus_set_digital(ComBus& bus, const std::optional<DigitalComBusID>
 	return combus_set_digital(bus, ch.value(), val, caller);
 }
 
-/**
- * @brief Internal overload for processors running with BOARD-level access.
- * @details Used by CbProcFn implementations (local firmware).
- */
+
+	/// The code of this board writes with the layer BOARD: processors, contributors.
 inline bool combus_set_digital(ComBus& bus, DigitalComBusID ch, bool val) {
 	return combus_set_digital(bus, ch, val, ChanLayer::BOARD);
 }
 
 
-
 /**
- * @brief This board's own contribution to a both_or channel.
+ * @brief This board's own term of a both_or channel.
  *
- * @details false while this board has never written the channel itself: a
- *   board that only receives a both_or channel (diffused copy, default value)
- *   relays the values of the other boards but adds nothing of its own.
+ * @details false while this board has never written the channel itself: a board that
+ *   only receives a both_or channel (diffused copy, default value) relays the values
+ *   of the other boards but adds nothing of its own.
  *
- * @param slot  Digital channel slot.
- * @return      The last locally written value, or false if never written.
+ * @param slot  The digital channel.
+ *
+ * @return The last value written by this board, or false if it never wrote it.
  */
 
 inline bool combus_both_or_local(const DigitalComBus& slot) {
@@ -149,13 +157,13 @@ inline bool combus_both_or_local(const DigitalComBus& slot) {
 
 
 /**
- * @brief Refresh the received term of a both_or channel and recompute its value.
+ * @brief Refresh the received term of a both_or channel, and recompute its value.
  *
- * @details value = (this board's own value) OR @p remote. Called once per cycle
- *   by com_rx_update() with the OR of the values received from the live links
- *   (see protocol/both_or.md, anti ping-pong).
+ * @details value = (this board's own term) OR @p remote.  Called once per cycle by
+ *   com_rx_update(), with the OR of the values received from the live links (see
+ *   protocol/both_or.md, anti ping-pong).
  *
- * @param bus     Node ComBus.
+ * @param bus     ComBus of the node.
  * @param ch      A both_or digital channel.
  * @param remote  OR of the values received from the live links.
  */
@@ -163,18 +171,20 @@ inline bool combus_both_or_local(const DigitalComBus& slot) {
 void combus_both_or_set_remote(ComBus& bus, DigitalComBusID ch, bool remote);
 
 
+
+// =============================================================================
+// 3. DENIED WRITES
+// =============================================================================
+
 /**
  * @brief Number of writes denied by the layer check since boot.
  *
- * @details A non-zero count means some caller writes a channel with the wrong
- *   layer: the value never reaches the bus. The first denial of each channel
- *   is also logged by sys_log_warn() (DEBUG_SYSTEM builds).
+ * @details A non-zero count means that some writer gives the wrong layer: its value
+ *   never reaches the bus.  The first denial of each channel is also logged.
  *
- * @return  Denied writes since boot (all channels, analog and digital).
+ * @return Denied writes since boot, analog and digital.
  */
 
 uint32_t combus_denied_writes();
-
-
 
 // EOF combus_access.h

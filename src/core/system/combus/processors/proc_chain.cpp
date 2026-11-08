@@ -28,9 +28,8 @@ static uint16_t cbRead(const ComBus& bus, const ChanOpt& ch)
 
 /** @brief Write a uint16_t value to a channel variant on the bus.
  *
- *  @note  Proc-chain outputs are internal computed values, not physical inputs.
- *         Chantier 12.6: the legacy `bus.isDrived` flag is gone — proc-chain
- *         outputs no longer touch link-health state.  Each input backend
+ *  @note  Proc-chain outputs are internal computed values, not physical inputs:
+ *         they never touch link-health state.  Each input backend
  *         (PS4_BT, UART, ...) writes its own *_LINK_LOST contributor channel,
  *         and the aggregator chain (`remote_link_fallback_chain.cpp`) handles
  *         the OR-aggregation into `FAILSAFE_SOFT`.
@@ -39,8 +38,8 @@ static void cbWrite(ComBus& bus, const ChanOpt& ch, uint16_t value)
 {
     if (!ch.has_value()) return;
     if (std::holds_alternative<AnalogComBusID>(*ch)) {
-          // Raw, no offset of the logical zero (link rework S3-4): whether the
-          // processors work on the logical value is decided with the simulation WIP.
+          // Raw, no offset of the logical zero.
+          // TODO(Simulation chain): whether the processors work on the logical value.
         combus_set_raw_analog(bus, std::get<AnalogComBusID>(*ch), value, ChanLayer::BOARD);
     } else {
         combus_set_digital(bus, std::get<DigitalComBusID>(*ch), value != 0u);
