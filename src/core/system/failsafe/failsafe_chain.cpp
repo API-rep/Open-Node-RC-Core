@@ -42,46 +42,46 @@
  *   follow the same pattern (use `cb_or_fn` with inCh == outCh).
  */
 CbProc kFailsafeProcs[] = {
-    // --- 0. Reset (always present) -----------------------------------------
-    // No inCh / outCh — forces pipeline value = 0 at cycle start.
-    {
-        .name    = "failsafe_reset",
-        .fn      = cb_reset_fn,
-        // inCh, inValue, outCh, outValue, cfg, dynCfg, state default to
-        // nullopt / 0 / nullptr — none are needed by the reset processor.
-    },
+	// --- 0. Reset (always present) -----------------------------------------
+	// No inCh / outCh — forces pipeline value = 0 at cycle start.
+	{
+		.name    = "failsafe_reset",
+		.fn      = cb_reset_fn,
+		// inCh, inValue, outCh, outValue, cfg, dynCfg, state default to
+		// nullopt / 0 / nullptr — none are needed by the reset processor.
+	},
 
 #if defined(HAS_VBAT_FAILSAFE)
-    // --- 1. VBAT OR-guard contributor (optional) ---------------------------
-    // Reads VBAT_FAIL (proof-of-life from vbat_update). If the cell
-    // voltage is below cutoff, VBAT_FAIL is true; this OR-guard
-    // latches the pipeline value to 1 (= DigitalComBusID::FAILSAFE_HARD fault)
-    // and resets VBAT_FAIL back to fault (consume + guard).
-    {
-        .name    = "failsafe_or_vbat",
-        .inCh    = DigitalComBusID::VBAT_FAIL,
-        .outCh   = DigitalComBusID::VBAT_FAIL,
-        .fn      = cb_or_fn,
-    },
+	// --- 1. VBAT OR-guard contributor (optional) ---------------------------
+	// Reads VBAT_FAIL (proof-of-life from vbat_update). If the cell
+	// voltage is below cutoff, VBAT_FAIL is true; this OR-guard
+	// latches the pipeline value to 1 (= DigitalComBusID::FAILSAFE_HARD fault)
+	// and resets VBAT_FAIL back to fault (consume + guard).
+	{
+		.name    = "failsafe_or_vbat",
+		.inCh    = DigitalComBusID::VBAT_FAIL,
+		.outCh   = DigitalComBusID::VBAT_FAIL,
+		.fn      = cb_or_fn,
+	},
 #endif
 
 #if defined(HAS_BOARD_LINK_FAILSAFE)
-    // --- 2. ComBus link contributor (optional) ----------------------------
-    // Reads BOARD_LINK_FAIL, written each cycle by com_rx_update() from the
-    // receiving links between boards (combus_links_lost(INTRA_NODE)):
-    // true while one of them is lost, or never seen after its startup grace.
-    // A board without such a link gets false each cycle.
-    {
-        .name    = "failsafe_or_com_link",
-        .inCh    = DigitalComBusID::BOARD_LINK_FAIL,
-        .outCh   = DigitalComBusID::BOARD_LINK_FAIL,
-        .fn      = cb_or_fn,
-    },
+	// --- 2. ComBus link contributor (optional) ----------------------------
+	// Reads BOARD_LINK_FAIL, written each cycle by com_rx_update() from the
+	// receiving links between boards (combus_links_lost(INTRA_NODE)):
+	// true while one of them is lost, or never seen after its startup grace.
+	// A board without such a link gets false each cycle.
+	{
+		.name    = "failsafe_or_com_link",
+		.inCh    = DigitalComBusID::BOARD_LINK_FAIL,
+		.outCh   = DigitalComBusID::BOARD_LINK_FAIL,
+		.fn      = cb_or_fn,
+	},
 #endif
 
-    // Add new contributors here with their own #if defined(HAS_XXX_FAILSAFE)
-    // blocks.  Each must follow the same shape: inCh == outCh, fn = cb_or_fn,
-    // never claims the chain.
+	// Add new contributors here with their own #if defined(HAS_XXX_FAILSAFE)
+	// blocks.  Each must follow the same shape: inCh == outCh, fn = cb_or_fn,
+	// never claims the chain.
 };
 
 /// @brief Static proc count — equals the array length.
@@ -101,13 +101,13 @@ const uint8_t kFailsafeProcsCount = sizeof(kFailsafeProcs) / sizeof(kFailsafePro
  *   pipeline value to the top-level channel after all procs.
  */
 CbChain kFailsafeChain[] = {
-    {
-        .name      = "failsafe_main",
-        .inCh      = std::nullopt,                          // no seed
-        .outCh     = DigitalComBusID::FAILSAFE_HARD,             // top-level latch
-        .procs     = kFailsafeProcs,
-        .procCount = kFailsafeProcsCount,
-    },
+	{
+		.name      = "failsafe_main",
+		.inCh      = std::nullopt,                          // no seed
+		.outCh     = DigitalComBusID::FAILSAFE_HARD,             // top-level latch
+		.procs     = kFailsafeProcs,
+		.procCount = kFailsafeProcsCount,
+	},
 };
 
 /// @brief Static chain count — equals the array length.

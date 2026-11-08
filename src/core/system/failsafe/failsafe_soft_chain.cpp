@@ -70,55 +70,55 @@
  *   consumes it via the OR-guard reset.
  */
 static CbProc kFailsafeSoftProcs[] = {
-    // --- 0. Reset (always present) -----------------------------------------
-    // Forces pipeline value = 0 (= healthy) at cycle start.  This is the
-    // foundation of the failsafe-by-default contract: the aggregator
-    // starts healthy, contributors OR-fault back to 1 if needed.
-    {
-        .name    = "failsafe_soft_reset",
-        .fn      = cb_reset_fn,
-    },
+	// --- 0. Reset (always present) -----------------------------------------
+	// Forces pipeline value = 0 (= healthy) at cycle start.  This is the
+	// foundation of the failsafe-by-default contract: the aggregator
+	// starts healthy, contributors OR-fault back to 1 if needed.
+	{
+		.name    = "failsafe_soft_reset",
+		.fn      = cb_reset_fn,
+	},
 
 #if defined(HAS_LOCAL_REMOTE_FAILSAFE)
-    // --- 1. Local remote contributor (optional) --------------------------
-    // Reads LOCAL_REMOTE_FAIL (proof-of-life from the PS4_BT input
-    // backend, written each cycle by input_update.cpp).  If the PS4
-    // controller is not connected / not refreshing the bus, the channel
-    // stays at its failsafe default (true = lost); this OR-guard latches
-    // the pipeline value to 1 and consumes the channel back to true.
-    {
-        .name    = "failsafe_soft_or_local_remote",
-        .inCh    = DigitalComBusID::LOCAL_REMOTE_FAIL,
-        .outCh   = DigitalComBusID::LOCAL_REMOTE_FAIL,
-        .fn      = cb_or_fn,
-    },
+	// --- 1. Local remote contributor (optional) --------------------------
+	// Reads LOCAL_REMOTE_FAIL (proof-of-life from the PS4_BT input
+	// backend, written each cycle by input_update.cpp).  If the PS4
+	// controller is not connected / not refreshing the bus, the channel
+	// stays at its failsafe default (true = lost); this OR-guard latches
+	// the pipeline value to 1 and consumes the channel back to true.
+	{
+		.name    = "failsafe_soft_or_local_remote",
+		.inCh    = DigitalComBusID::LOCAL_REMOTE_FAIL,
+		.outCh   = DigitalComBusID::LOCAL_REMOTE_FAIL,
+		.fn      = cb_or_fn,
+	},
 #endif
 
 #if defined(HAS_NODE_LINK_FAILSAFE)
-    // --- 2. ComBus link contributor (optional) ---------------------------
-    // Reads NODE_LINK_FAIL, written each cycle by com_rx_update() from the
-    // receiving links to another node (combus_links_lost(INTER_NODE)):
-    // true while one of them is not alive, never seen included.  This
-    // OR-guard latches the pipeline value to 1 and consumes the channel.
-    //
-    // A board without such a link gets false each cycle; a TX-only link never
-    // counts (it knows nothing of its peer).
-    {
-        .name    = "failsafe_soft_or_node_link",
-        .inCh    = DigitalComBusID::NODE_LINK_FAIL,
-        .outCh   = DigitalComBusID::NODE_LINK_FAIL,
-        .fn      = cb_or_fn,
-    },
+	// --- 2. ComBus link contributor (optional) ---------------------------
+	// Reads NODE_LINK_FAIL, written each cycle by com_rx_update() from the
+	// receiving links to another node (combus_links_lost(INTER_NODE)):
+	// true while one of them is not alive, never seen included.  This
+	// OR-guard latches the pipeline value to 1 and consumes the channel.
+	//
+	// A board without such a link gets false each cycle; a TX-only link never
+	// counts (it knows nothing of its peer).
+	{
+		.name    = "failsafe_soft_or_node_link",
+		.inCh    = DigitalComBusID::NODE_LINK_FAIL,
+		.outCh   = DigitalComBusID::NODE_LINK_FAIL,
+		.fn      = cb_or_fn,
+	},
 #endif
 
-    // Add new contributors here with their own #if defined(...) blocks.
-    // Each must follow the same shape: inCh == outCh, fn = cb_or_fn,
-    // never claims the chain (the per-proc write-back is enough).
+	// Add new contributors here with their own #if defined(...) blocks.
+	// Each must follow the same shape: inCh == outCh, fn = cb_or_fn,
+	// never claims the chain (the per-proc write-back is enough).
 };
 
 /// @brief Static proc count — equals the array length.
 static const uint8_t kFailsafeSoftProcsCount =
-    sizeof(kFailsafeSoftProcs) / sizeof(kFailsafeSoftProcs[0]);
+	sizeof(kFailsafeSoftProcs) / sizeof(kFailsafeSoftProcs[0]);
 
 
 // =============================================================================
@@ -134,18 +134,18 @@ static const uint8_t kFailsafeSoftProcsCount =
  *   pipeline value to the top-level channel after all procs.
  */
 CbChain kFailsafeSoftChain[] = {
-    {
-        .name      = "failsafe_soft_main",
-        .inCh      = std::nullopt,                          // no seed (reset proc)
-        .outCh     = DigitalComBusID::FAILSAFE_SOFT,     // top-level latch
-        .procs     = kFailsafeSoftProcs,
-        .procCount = kFailsafeSoftProcsCount,
-    },
+	{
+		.name      = "failsafe_soft_main",
+		.inCh      = std::nullopt,                          // no seed (reset proc)
+		.outCh     = DigitalComBusID::FAILSAFE_SOFT,     // top-level latch
+		.procs     = kFailsafeSoftProcs,
+		.procCount = kFailsafeSoftProcsCount,
+	},
 };
 
 /// @brief Static chain count — equals the array length.
 const uint8_t kFailsafeSoftChainCount =
-    sizeof(kFailsafeSoftChain) / sizeof(kFailsafeSoftChain[0]);
+	sizeof(kFailsafeSoftChain) / sizeof(kFailsafeSoftChain[0]);
 
 
 // =============================================================================
@@ -155,7 +155,7 @@ const uint8_t kFailsafeSoftChainCount =
 #include <core/system/combus/processors/proc_chain.h>   // proc_chain_update()
 
 void failsafe_soft_update(ComBus& bus) {
-    proc_chain_update(kFailsafeSoftChain, kFailsafeSoftChainCount, bus);
+	proc_chain_update(kFailsafeSoftChain, kFailsafeSoftChainCount, bus);
 }
 
 #else  // HAS_FAILSAFE
@@ -165,7 +165,7 @@ void failsafe_soft_update(ComBus& bus) {
 // immediately without touching the bus.  The FAILSAFE_SOFT channel does not
 // exist either (its .cb requires HAS_FAILSAFE).
 void failsafe_soft_update(ComBus& /*bus*/) {
-    // no-op
+	// no-op
 }
 const uint8_t kFailsafeSoftChainCount = 0u;
 

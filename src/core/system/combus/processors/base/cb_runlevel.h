@@ -61,16 +61,16 @@
  *   nullopt, the proc performs no write and does not claim the chain.
  */
 struct CbRunlevelCfg {
-    std::optional<RunLevel> high;   ///< Value to write when lever == true.  nullopt = no write.
-    std::optional<RunLevel> low;    ///< Value to write when lever == false. nullopt = no write.
-    bool                     claim; ///< Claim the chain when a write actually occurred.
+	std::optional<RunLevel> high;   ///< Value to write when lever == true.  nullopt = no write.
+	std::optional<RunLevel> low;    ///< Value to write when lever == false. nullopt = no write.
+	bool                     claim; ///< Claim the chain when a write actually occurred.
 };
 
 /**
  * @brief Static configuration for the RunLevel hold processor.
  */
 struct CbRunlevelHoldCfg {
-    RunLevel hold;   ///< Run level held: once reached, the chain is claimed every cycle.
+	RunLevel hold;   ///< Run level held: once reached, the chain is claimed every cycle.
 };
 
 
@@ -85,7 +85,7 @@ struct CbRunlevelHoldCfg {
  *   Assign one instance per CbProc that uses `cb_runlevel_once_fn`.
  */
 struct CbRunlevelOnceState {
-    uint16_t prevValue = 0u;   ///< Previous lever reading (0 or non-zero).
+	uint16_t prevValue = 0u;   ///< Previous lever reading (0 or non-zero).
 };
 
 

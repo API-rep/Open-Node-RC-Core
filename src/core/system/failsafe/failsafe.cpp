@@ -36,7 +36,7 @@
  */
 void failsafe_update(ComBus& bus)
 {
-    proc_chain_update(kFailsafeChain, kFailsafeChainCount, bus);
+	proc_chain_update(kFailsafeChain, kFailsafeChainCount, bus);
 }
 
 // EOF failsafe.cpp
