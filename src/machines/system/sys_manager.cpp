@@ -10,7 +10,7 @@
 #include <machines/system/input/input_update.h> // input_update(bus) — machine mapping
 #include <core/system/vbat/vbat.h>              // vbat_update() — orchestrates vbat_sense + VBAT_FAIL
 #include <core/system/failsafe/failsafe.h>      // failsafe_update() — publishes DigitalComBusID::FAILSAFE_HARD
-#include <core/system/com/link_health/failsafe_soft_chain.h>  // chantier 12.5: FAILSAFE_SOFT → IDLE fallback
+#include <core/system/failsafe/failsafe_soft_chain.h>  // chantier 12.5: FAILSAFE_SOFT → IDLE fallback
 
 
 // =============================================================================

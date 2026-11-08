@@ -160,7 +160,7 @@ Quick index to the documents that sit next to the code. Start from the subject, 
 
 * [Failsafe module](../src/core/system/failsafe/failsafe_module.md)
 * [Failsafe module (hard and soft chains)](../src/core/system/failsafe/failsafe_module.md)
-* [Soft failsafe chain](../src/core/system/com/link_health/failsafe_soft.md)
+* [Soft failsafe chain](../src/core/system/failsafe/failsafe_soft.md)
 
 **Machines and configuration**
 

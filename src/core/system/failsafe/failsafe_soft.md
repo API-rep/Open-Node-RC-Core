@@ -48,7 +48,7 @@ Les deux sont des channels `BOARD` (privés à la carte qui porte la source), du
 
 ## 4. Chaîne et agrégat
 
-- **Code** : `src/core/system/com/link_health/failsafe_soft_chain.cpp`, `kFailsafeSoftChain[]`, lancée par `failsafe_soft_update()` dans `sys_manager_update()`, après la chaîne dure et avant la machine à états.
+- **Code** : `src/core/system/failsafe/failsafe_soft_chain.cpp`, `kFailsafeSoftChain[]`, lancée par `failsafe_soft_update()` dans `sys_manager_update()`, après la chaîne dure et avant la machine à états.
 - **Forme** : comme la chaîne dure. Un reset (agrégat à 0), puis un `cb_or_fn` par contributeur, chacun sous son flag.
 - **Agrégat** : `FAILSAFE_SOFT` (`failsafe_soft.cb`), `SYSTEM`, `both_or`, partagé par toutes les cartes du nœud.
 - **Activation** : `HAS_FAILSAFE`, comme tout le module. Sans contributeur, l'agrégat vaut `false` à chaque cycle.
@@ -87,8 +87,8 @@ Le processor est `cb_runlevel_once_fn` : il n'agit que sur le **front montant**.
 
 | Concept | Où |
 |---|---|
-| Agrégat | `src/core/system/com/link_health/failsafe_soft.cb` |
-| Chaîne | `src/core/system/com/link_health/failsafe_soft_chain.cpp` |
-| Contributeurs | `src/core/config/inputs/local_remote_fail.cb`, `src/core/system/com/link_health/node_link_fail.cb` |
+| Agrégat | `src/core/system/failsafe/failsafe_soft.cb` |
+| Chaîne | `src/core/system/failsafe/failsafe_soft_chain.cpp` |
+| Contributeurs | `src/core/config/inputs/local_remote_fail.cb`, `src/core/system/com/node_link_fail.cb` |
 | Réaction | `.../processors/input/runlevel_config.h` |
 | Ordre d'exécution | `src/machines/system/sys_manager.cpp` |

@@ -8,7 +8,7 @@
 # FAILSAFE_SOFT is COMPUTED, not directly written by the sources:
 #   - each source writes its own *_FAIL contributor each cycle
 #     (false = healthy, true = fault — failsafe-by-default);
-#   - the soft chain (src/core/system/com/link_health/failsafe_soft_chain.cpp)
+#   - the soft chain (src/core/system/failsafe/failsafe_soft_chain.cpp)
 #     resets its value, ORs the contributors it lists, and writes the result to
 #     FAILSAFE_SOFT;
 #   - downstream consumers (runlevel chain, dashboards) only read FAILSAFE_SOFT.

@@ -1,6 +1,6 @@
 # Module failsafe
 
-Ce document est la référence du module failsafe : ses deux chaînes (dure et douce), ses conventions de nom et ses règles. La chaîne douce a son propre document, `src/core/system/com/link_health/failsafe_soft.md`.
+Ce document est la référence du module failsafe : ses deux chaînes (dure et douce), ses conventions de nom et ses règles. La chaîne douce a son propre document, `src/core/system/failsafe/failsafe_soft.md`.
 
 Mis à jour le 2026-10-27 (link rework, lot « sécurité », étapes S1 à S3a). Les noms d'avant (`FAILSAFE`, `REMOTE_LINK_LOST`, `FAILSAFE_VBAT`…) se retrouvent dans l'historique git.
 
@@ -77,7 +77,7 @@ Les deux chaînes ont la même forme : un reset en tête (`cb_reset_fn`, agréga
 
 | | Chaîne dure | Chaîne douce |
 |---|---|---|
-| code | `src/core/system/failsafe/failsafe_chain.cpp` (`kFailsafeChain[]`) | `src/core/system/com/link_health/failsafe_soft_chain.cpp` (`kFailsafeSoftChain[]`) |
+| code | `src/core/system/failsafe/failsafe_chain.cpp` (`kFailsafeChain[]`) | `src/core/system/failsafe/failsafe_soft_chain.cpp` (`kFailsafeSoftChain[]`) |
 | lancée par | `failsafe_update()` | `failsafe_soft_update()` |
 | contributeurs | `VBAT_FAIL`, `BOARD_LINK_FAIL` | `LOCAL_REMOTE_FAIL`, `NODE_LINK_FAIL` |
 
@@ -117,19 +117,19 @@ Le module ne connaît ni les runlevels, ni les machines. La réaction est dans l
 
 ```text
 src/core/system/failsafe/
-├── failsafe.h / .cpp         // failsafe_update() : lance la chaîne dure
-├── failsafe_chain.h / .cpp   // kFailsafeChain[] : reset + contributeurs de la chaîne dure
-└── failsafe_hard.cb          // FAILSAFE_HARD (SYSTEM, both_or)
-
-src/core/system/com/link_health/
-├── failsafe_soft.cb          // FAILSAFE_SOFT (SYSTEM, both_or)
+├── failsafe.h / .cpp              // failsafe_update() : lance la chaîne dure
+├── failsafe_chain.h / .cpp        // kFailsafeChain[] : reset + contributeurs de la chaîne dure
+├── failsafe_hard.cb               // FAILSAFE_HARD (SYSTEM, both_or)
 ├── failsafe_soft_chain.h / .cpp   // kFailsafeSoftChain[] : chaîne douce
-├── board_link_fail.cb        // BOARD_LINK_FAIL (BOARD)
-├── node_link_fail.cb         // NODE_LINK_FAIL (BOARD)
-└── failsafe_soft.md          // la chaîne douce
+├── failsafe_soft.cb               // FAILSAFE_SOFT (SYSTEM, both_or)
+└── failsafe_soft.md               // la chaîne douce
 
-src/core/system/vbat/vbat_fail.cb          // VBAT_FAIL (SYSTEM, uplink_or)
-src/core/config/inputs/local_remote_fail.cb // LOCAL_REMOTE_FAIL (BOARD)
+Les contributeurs restent à côté du module qui les écrit :
+
+src/core/system/com/board_link_fail.cb      // BOARD_LINK_FAIL (BOARD), écrit par com_rx_update()
+src/core/system/com/node_link_fail.cb       // NODE_LINK_FAIL (BOARD), écrit par com_rx_update()
+src/core/system/vbat/vbat_fail.cb           // VBAT_FAIL (SYSTEM, uplink_or)
+src/core/config/inputs/local_remote_fail.cb // LOCAL_REMOTE_FAIL (BOARD), écrit par input_update()
 src/core/system/combus/processors/logic/cb_or.h   // cb_or_fn
 ```
 
