@@ -1,8 +1,8 @@
 /******************************************************************************
- * @file remote_link_fallback_chain.h
+ * @file failsafe_soft_chain.h
  * @brief FAILSAFE_SOFT → IDLE fallback chain — registry declarations.
  *
- * @details Companion header to remote_link_fallback_chain.cpp.  Exposes the
+ * @details Companion header to failsafe_soft_chain.cpp.  Exposes the
  *   static chain table and count for the runner to iterate over.  When
  *   HAS_FAILSAFE is NOT defined, the chain table is a
  *   placeholder and the count is 0 — callers can always iterate without
@@ -22,21 +22,21 @@
 // =============================================================================
 
 /**
- * @brief Static chain table (single chain: remote_link_fallback_main).
+ * @brief Static chain table (single chain: failsafe_soft_main).
  *
- * @details Defined in remote_link_fallback_chain.cpp.  When the fallback is
+ * @details Defined in failsafe_soft_chain.cpp.  When the fallback is
  *   disabled (HAS_FAILSAFE not defined), this table is a
- *   placeholder of size 1 with an empty entry; kRemoteLinkFallbackChainCount
+ *   placeholder of size 1 with an empty entry; kFailsafeSoftChainCount
  *   is 0 so the runner's loop is a no-op.
  */
-extern CbChain kRemoteLinkFallbackChain[];
+extern CbChain kFailsafeSoftChain[];
 
 /**
  * @brief Static chain count — equals the array length.
  *
  * @details 0 when HAS_FAILSAFE is not defined.
  */
-extern const uint8_t kRemoteLinkFallbackChainCount;
+extern const uint8_t kFailsafeSoftChainCount;
 
 
 // =============================================================================
@@ -47,12 +47,12 @@ extern const uint8_t kRemoteLinkFallbackChainCount;
  * @brief Run the FAILSAFE_SOFT → IDLE fallback chain once.
  *
  * @details Convenience façade equivalent to
- *   `proc_chain_update(kRemoteLinkFallbackChain, kRemoteLinkFallbackChainCount, bus)`.
+ *   `proc_chain_update(kFailsafeSoftChain, kFailsafeSoftChainCount, bus)`.
  *   No-op when the fallback is disabled (count == 0).
  *
  * @param bus  Live ComBus instance (passed to the chain runner).
  */
-void remote_link_fallback_update(ComBus& bus);
+void failsafe_soft_update(ComBus& bus);
 
 
-// EOF remote_link_fallback_chain.h
+// EOF failsafe_soft_chain.h

@@ -28,7 +28,7 @@
  *   1b remote_link: inCh = FAILSAFE_SOFT.  EDGE-TRIGGERED (cb_runlevel_once_fn).
  *                 chantier 12.5: FAILSAFE_SOFT is the OR-aggregated health of all
  *                 remote input sources (PS4_BT, UART, …) computed by the
- *                 remote_link_fallback_chain.  On its rising edge (0→1, link
+ *                 failsafe_soft_chain.  On its rising edge (0→1, link
  *                 just dropped), force RUNLEVEL=IDLE and claim the chain (so
  *                 the KEY_ACTIVE proc cannot immediately override).  On the
  *                 falling edge (1→0, link recovered), no write — recovery is

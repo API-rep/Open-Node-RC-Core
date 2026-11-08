@@ -24,18 +24,6 @@
 // =============================================================================
 
 /**
- * @brief No-op init.
- *
- * @details Kept for API compatibility.  Will be removed when the chain
- *   refactor is complete.
- */
-void failsafe_init()
-{
-    // No-op — the per-cycle reset is performed by cb_reset_fn in the
-    // chain, so there is no global pivot to clear at boot.
-}
-
-/**
  * @brief Failsafe orchestrator — runs every CbChain registered in
  *   `kFailsafeChain[]` via the standard `proc_chain_update()` runner.
  *

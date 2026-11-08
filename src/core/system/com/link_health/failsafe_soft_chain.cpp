@@ -1,5 +1,5 @@
 /******************************************************************************
- * @file remote_link_fallback_chain.cpp
+ * @file failsafe_soft_chain.cpp
  * @brief FAILSAFE_SOFT aggregator chain — mirrors failsafe_chain.cpp.
  *
  * @details This chain implements the "any remote input source alive"
@@ -37,12 +37,12 @@
  *   This whole module is gated by `-D HAS_FAILSAFE`
  *   (mirroring the umbrella pattern of failsafe.cb / failsafe_chain.cpp).
  *   Without the flag, the chain is empty (count == 0) and the
- *   `remote_link_fallback_update()` façade is a no-op.
+ *   `failsafe_soft_update()` façade is a no-op.
  *
  *   Reference: failsafe_module.md §12.5 (new design — chantier 12.5).
  *****************************************************************************/
 
-#include "remote_link_fallback_chain.h"
+#include "failsafe_soft_chain.h"
 
 #if defined(HAS_FAILSAFE)   // link rework S1b: the soft chain is part of the failsafe module
 
@@ -69,13 +69,13 @@
  *   until its owner writes `false` (healthy) this cycle, then the chain
  *   consumes it via the OR-guard reset.
  */
-static CbProc kRemoteLinkFallbackProcs[] = {
+static CbProc kFailsafeSoftProcs[] = {
     // --- 0. Reset (always present) -----------------------------------------
     // Forces pipeline value = 0 (= healthy) at cycle start.  This is the
     // foundation of the failsafe-by-default contract: the aggregator
     // starts healthy, contributors OR-fault back to 1 if needed.
     {
-        .name    = "remote_link_fallback_reset",
+        .name    = "failsafe_soft_reset",
         .fn      = cb_reset_fn,
     },
 
@@ -87,7 +87,7 @@ static CbProc kRemoteLinkFallbackProcs[] = {
     // stays at its failsafe default (true = lost); this OR-guard latches
     // the pipeline value to 1 and consumes the channel back to true.
     {
-        .name    = "remote_link_or_ps4_ds4_bt",
+        .name    = "failsafe_soft_or_local_remote",
         .inCh    = DigitalComBusID::LOCAL_REMOTE_FAIL,
         .outCh   = DigitalComBusID::LOCAL_REMOTE_FAIL,
         .fn      = cb_or_fn,
@@ -104,7 +104,7 @@ static CbProc kRemoteLinkFallbackProcs[] = {
     // A board without such a link gets false each cycle; a TX-only link never
     // counts (it knows nothing of its peer).
     {
-        .name    = "remote_link_or_com",
+        .name    = "failsafe_soft_or_node_link",
         .inCh    = DigitalComBusID::NODE_LINK_FAIL,
         .outCh   = DigitalComBusID::NODE_LINK_FAIL,
         .fn      = cb_or_fn,
@@ -117,8 +117,8 @@ static CbProc kRemoteLinkFallbackProcs[] = {
 };
 
 /// @brief Static proc count — equals the array length.
-static const uint8_t kRemoteLinkFallbackProcsCount =
-    sizeof(kRemoteLinkFallbackProcs) / sizeof(kRemoteLinkFallbackProcs[0]);
+static const uint8_t kFailsafeSoftProcsCount =
+    sizeof(kFailsafeSoftProcs) / sizeof(kFailsafeSoftProcs[0]);
 
 
 // =============================================================================
@@ -133,19 +133,19 @@ static const uint8_t kRemoteLinkFallbackProcsCount =
  *   `DigitalComBusID::FAILSAFE_SOFT` — the runner commits the latched
  *   pipeline value to the top-level channel after all procs.
  */
-CbChain kRemoteLinkFallbackChain[] = {
+CbChain kFailsafeSoftChain[] = {
     {
-        .name      = "remote_link_fallback_main",
+        .name      = "failsafe_soft_main",
         .inCh      = std::nullopt,                          // no seed (reset proc)
         .outCh     = DigitalComBusID::FAILSAFE_SOFT,     // top-level latch
-        .procs     = kRemoteLinkFallbackProcs,
-        .procCount = kRemoteLinkFallbackProcsCount,
+        .procs     = kFailsafeSoftProcs,
+        .procCount = kFailsafeSoftProcsCount,
     },
 };
 
 /// @brief Static chain count — equals the array length.
-const uint8_t kRemoteLinkFallbackChainCount =
-    sizeof(kRemoteLinkFallbackChain) / sizeof(kRemoteLinkFallbackChain[0]);
+const uint8_t kFailsafeSoftChainCount =
+    sizeof(kFailsafeSoftChain) / sizeof(kFailsafeSoftChain[0]);
 
 
 // =============================================================================
@@ -154,21 +154,21 @@ const uint8_t kRemoteLinkFallbackChainCount =
 
 #include <core/system/combus/processors/proc_chain.h>   // proc_chain_update()
 
-void remote_link_fallback_update(ComBus& bus) {
-    proc_chain_update(kRemoteLinkFallbackChain, kRemoteLinkFallbackChainCount, bus);
+void failsafe_soft_update(ComBus& bus) {
+    proc_chain_update(kFailsafeSoftChain, kFailsafeSoftChainCount, bus);
 }
 
 #else  // HAS_FAILSAFE
 
 // Failsafe module disabled: expose a no-op façade + empty chain table.
-// Callers can still invoke remote_link_fallback_update() — it just returns
+// Callers can still invoke failsafe_soft_update() — it just returns
 // immediately without touching the bus.  The FAILSAFE_SOFT channel does not
 // exist either (its .cb requires HAS_FAILSAFE).
-void remote_link_fallback_update(ComBus& /*bus*/) {
+void failsafe_soft_update(ComBus& /*bus*/) {
     // no-op
 }
-const uint8_t kRemoteLinkFallbackChainCount = 0u;
+const uint8_t kFailsafeSoftChainCount = 0u;
 
 #endif  // HAS_FAILSAFE
 
-// EOF remote_link_fallback_chain.cpp
+// EOF failsafe_soft_chain.cpp

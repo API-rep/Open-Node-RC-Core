@@ -32,16 +32,6 @@
 // =============================================================================
 
 /**
- * @brief Failsafe init — currently a no-op.
- *
- * @details The per-cycle reset is now performed by the `cb_reset_fn`
- *   processor at the head of the hard failsafe chain, so there is no
- *   global pivot to clear at boot.  Kept for API compatibility —
- *   will be removed when the chain refactor is complete.
- */
-void failsafe_init();
-
-/**
  * @brief Failsafe orchestrator — runs `kFailsafeChain[]` via the
  *   standard `proc_chain_update()` runner.
  *

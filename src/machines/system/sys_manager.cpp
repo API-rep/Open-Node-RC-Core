@@ -10,7 +10,7 @@
 #include <machines/system/input/input_update.h> // input_update(bus) — machine mapping
 #include <core/system/vbat/vbat.h>              // vbat_update() — orchestrates vbat_sense + VBAT_FAIL
 #include <core/system/failsafe/failsafe.h>      // failsafe_update() — publishes DigitalComBusID::FAILSAFE_HARD
-#include <core/system/com/link_health/remote_link_fallback_chain.h>  // chantier 12.5: FAILSAFE_SOFT → IDLE fallback
+#include <core/system/com/link_health/failsafe_soft_chain.h>  // chantier 12.5: FAILSAFE_SOFT → IDLE fallback
 
 
 // =============================================================================
@@ -38,7 +38,7 @@ void sys_manager_update(ComBus& bus) {
       // Chantier 12.6: the historical open-drain pre-clear of `bus.isNotDrived`
       // (FS1) is REMOVED — link health is now monitored at transport level by
       // per-link contributors (LOCAL_REMOTE_FAIL, NODE_LINK_FAIL, ...) and
-      // aggregated by the remote_link_fallback_chain into FAILSAFE_SOFT.
+      // aggregated by the failsafe_soft_chain into FAILSAFE_SOFT.
     failsafe_update(bus);
 
       // --- 4. Chantier 12.5 — FAILSAFE_SOFT → IDLE fallback chain ---
@@ -48,7 +48,7 @@ void sys_manager_update(ComBus& bus) {
       // failsafe module (link rework S1b: HAS_FAILSAFE).  See
       // failsafe_module.md §12.5 (new design).
 #if defined(HAS_FAILSAFE)
-    remote_link_fallback_update(bus);
+    failsafe_soft_update(bus);
 #endif
 }
 

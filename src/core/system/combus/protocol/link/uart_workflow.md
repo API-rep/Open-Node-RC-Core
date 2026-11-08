@@ -571,7 +571,7 @@ Ordre d'un tour de `loop()` (`src/machines/main.cpp`, appels aux lignes 51, 57-5
 
 1. `sys_manager_update(comBus)` : réception ComBus (`com_rx_update`), acquisition
    des entrées (`input_refresh`, `input_update`), `vbat_update`, `failsafe_update`
-   (chaîne failsafe dure), puis `remote_link_fallback_update` si
+   (chaîne failsafe dure), puis `failsafe_soft_update` si
    `HAS_REMOTE_LINK_LOST_FALLBACK`
    (`src/machines/system/sys_manager.cpp:19-43`) ;
 2. chaînes de processors d'entrée et de simulation (`proc_chain_update`) ;

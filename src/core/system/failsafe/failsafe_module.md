@@ -77,8 +77,8 @@ Les deux chaînes ont la même forme : un reset en tête (`cb_reset_fn`, agréga
 
 | | Chaîne dure | Chaîne douce |
 |---|---|---|
-| code | `src/core/system/failsafe/failsafe_chain.cpp` (`kFailsafeChain[]`) | `src/core/system/com/link_health/remote_link_fallback_chain.cpp` (`kRemoteLinkFallbackChain[]`) |
-| lancée par | `failsafe_update()` | `remote_link_fallback_update()` |
+| code | `src/core/system/failsafe/failsafe_chain.cpp` (`kFailsafeChain[]`) | `src/core/system/com/link_health/failsafe_soft_chain.cpp` (`kFailsafeSoftChain[]`) |
+| lancée par | `failsafe_update()` | `failsafe_soft_update()` |
 | contributeurs | `VBAT_FAIL`, `BOARD_LINK_FAIL` | `LOCAL_REMOTE_FAIL`, `NODE_LINK_FAIL` |
 
 Chaque contributeur est dans un bloc `#if defined(HAS_<SOURCE>_FAILSAFE)`. Une chaîne sans contributeur écrit `false` à chaque cycle.
@@ -123,7 +123,7 @@ src/core/system/failsafe/
 
 src/core/system/com/link_health/
 ├── failsafe_soft.cb          // FAILSAFE_SOFT (SYSTEM, both_or)
-├── remote_link_fallback_chain.h / .cpp   // kRemoteLinkFallbackChain[] : chaîne douce
+├── failsafe_soft_chain.h / .cpp   // kFailsafeSoftChain[] : chaîne douce
 ├── board_link_fail.cb        // BOARD_LINK_FAIL (BOARD)
 ├── node_link_fail.cb         // NODE_LINK_FAIL (BOARD)
 └── failsafe_soft.md          // la chaîne douce
@@ -141,7 +141,7 @@ src/core/system/combus/processors/logic/cb_or.h   // cb_or_fn
 |---|---|
 | Maintien de `HALT` | `cb_runlevel_hold_fn`, `src/core/system/combus/processors/base/cb_runlevel.h` |
 | Agrégats | `failsafe_hard.cb`, `failsafe_soft.cb` |
-| Chaînes | `failsafe_chain.cpp`, `remote_link_fallback_chain.cpp` |
+| Chaînes | `failsafe_chain.cpp`, `failsafe_soft_chain.cpp` |
 | Contributeurs de lien | `com_rx_update()`, `src/core/system/com/com_manager.cpp` |
 | Ordre d'exécution | `sys_manager_update()`, `src/machines/system/sys_manager.cpp` |
 | Réaction runlevel | `kRunlevelProcs[]`, `.../processors/input/runlevel_config.h` |

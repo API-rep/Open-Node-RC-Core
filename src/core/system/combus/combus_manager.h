@@ -6,7 +6,7 @@
  *   has been REMOVED from the `ComBus` struct (see `combus_defs.h`).
  *   Link health is now monitored per-channel by independent contributors
  *   (LOCAL_REMOTE_FAIL, NODE_LINK_FAIL, ...) aggregated by
- *   `remote_link_fallback_chain.cpp` into `FAILSAFE_SOFT`.  See
+ *   `failsafe_soft_chain.cpp` into `FAILSAFE_SOFT`.  See
  *   `doc/failsafe_module.md` §12.5 (new design) and §12.6 (cleanup).
  *
  *   resetComBusDriveFlags and combus_watchdog are removed.  The

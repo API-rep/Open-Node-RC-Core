@@ -4,7 +4,7 @@
 # receiving ComBus link of the board to another node (scope INTER_NODE, link
 # rework S2) is not alive, never seen included (no grace).  It is a
 # contributor: a chain of the failsafe module reads it (today the soft chain,
-# remote_link_fallback_chain.cpp, FAILSAFE_SOFT).
+# failsafe_soft_chain.cpp, FAILSAFE_SOFT).
 #
 # Notes:
 # - BOARD scope: only the board that owns the links knows their state.  The

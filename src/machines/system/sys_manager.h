@@ -13,7 +13,7 @@
  *   3. Failsafe update via `failsafe_update(bus)` — runs the hard failsafe
  *      processor chain (reset + contributors), publishes the aggregated
  *      `DigitalComBusID::FAILSAFE_HARD` channel.
- *   4. Chantier 12.5 — `remote_link_fallback_update(bus)` (gated by
+ *   4. Chantier 12.5 — `failsafe_soft_update(bus)` (gated by
  *      `HAS_FAILSAFE`) — if FAILSAFE_SOFT just rose,
  *      forces RUNLEVEL = IDLE.
  *
@@ -64,7 +64,7 @@
  *   2. `vbat_update()` — battery sensing + re-arm of `VBAT_FAIL`.
  *   3. `failsafe_update(bus)` — runs the hard failsafe chain, publishes
  *      `DigitalComBusID::FAILSAFE_HARD` on the bus.
- *   4. Chantier 12.5 — `remote_link_fallback_update(bus)` (only if
+ *   4. Chantier 12.5 — `failsafe_soft_update(bus)` (only if
  *      `HAS_FAILSAFE` is defined): observes
  *      `FAILSAFE_SOFT` and forces RUNLEVEL = IDLE on the rising edge.
  *

@@ -112,7 +112,7 @@ static void render_overview() {
 	}
 
 	// Chantier 12.6: ctrlConn now derived from FAILSAFE_SOFT contributor
-	// (SYSTEM aggregator published by the remote_link_fallback_chain).  For
+	// (SYSTEM aggregator published by the failsafe_soft_chain).  For
 	// backward compatibility, fallback to the historical `lastFrameMs` proxy
 	// when the channel is not active (autonomous builds without HAS_FAILSAFE).
 	bool ctrlConn;

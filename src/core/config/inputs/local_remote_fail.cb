@@ -4,7 +4,7 @@
 # alive" signal of the active local input backend (today the PS4 DualShock
 # Bluetooth backend, src/core/config/inputs/PS4_dualshock.*; tomorrow a PPM /
 # SBUS receiver).  It is a contributor: a chain of the failsafe module reads it
-# (today the soft chain, remote_link_fallback_chain.cpp, FAILSAFE_SOFT).
+# (today the soft chain, failsafe_soft_chain.cpp, FAILSAFE_SOFT).
 #
 # Notes:
 # - BOARD scope: private to the board owning the input backend (not shared and
