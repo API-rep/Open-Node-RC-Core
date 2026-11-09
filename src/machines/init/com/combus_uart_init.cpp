@@ -24,15 +24,15 @@
 // 1. BOARD PORT LOOKUP
 // =============================================================================
 
-    // The board port that is UART number `uartIdx`, or nullptr if the board has none.
+	// The board port that is UART number `uartIdx`, or nullptr if the board has none.
 static const ComPort* findUartPort( uint8_t uartIdx )
 {
-    for (uint8_t i = 0u; i < comPortsCount; ++i) {
-        if (comPorts[i].type == ComPortType::UART && comPorts[i].uart.index == uartIdx) {
-            return &comPorts[i];
-        }
-    }
-    return nullptr;
+	for (uint8_t i = 0u; i < comPortsCount; ++i) {
+		if (comPorts[i].type == ComPortType::UART && comPorts[i].uart.index == uartIdx) {
+			return &comPorts[i];
+		}
+	}
+	return nullptr;
 }
 
 
@@ -42,39 +42,39 @@ static const ComPort* findUartPort( uint8_t uartIdx )
 
 void combus_uart_init()
 {
-    static_assert(kComProtoExt.rate <= UartMaxBaud,
-                  "Extension link rate exceeds board hardware ceiling UartMaxBaud");
-    static_assert(kComProtoExt.txHz > 0u && kComProtoExt.txHz <= ComBusUartMaxTxHz,
-                  "Extension link txHz out of range [1, ComBusUartMaxTxHz]");
+	static_assert(kComProtoExt.rate <= UartMaxBaud,
+	              "Extension link rate exceeds board hardware ceiling UartMaxBaud");
+	static_assert(kComProtoExt.txHz > 0u && kComProtoExt.txHz <= ComBusUartMaxTxHz,
+	              "Extension link txHz out of range [1, ComBusUartMaxTxHz]");
 
-        // --- Resolve the ComDev, the UART number and the role of this end from the build flag ---
-    #if defined(COMBUS_UART)
-        constexpr uint8_t uartCh = COMBUS_UART;
-        const ComDev*     dev    = &kComDevExtBi;         // full-duplex
-        constexpr LinkEnd end    = LinkEnd::TX_RX;
-    #else
-        constexpr uint8_t uartCh = COMBUS_UART_TX;
-        const ComDev*     dev    = &kComDevExtUni;        // TX only
-        constexpr LinkEnd end    = LinkEnd::TX;
-    #endif
+		// --- Resolve the ComDev, the UART number and the role of this end from the build flag ---
+	#if defined(COMBUS_UART)
+	    constexpr uint8_t uartCh = COMBUS_UART;
+	    const ComDev*     dev    = &kComDevExtBi;         // full-duplex
+	    constexpr LinkEnd end    = LinkEnd::TX_RX;
+	#else
+	    constexpr uint8_t uartCh = COMBUS_UART_TX;
+	    const ComDev*     dev    = &kComDevExtUni;        // TX only
+	    constexpr LinkEnd end    = LinkEnd::TX;
+	#endif
 
-    const ComPort* port = findUartPort(uartCh);
-    if (port == nullptr) {
-        sys_log_err("[COMBUS_UART] this board has no UART%u port — ComBus link not started\n", (unsigned)uartCh);
-        return;
-    }
+	const ComPort* port = findUartPort(uartCh);
+	if (port == nullptr) {
+		sys_log_err("[COMBUS_UART] this board has no UART%u port — ComBus link not started\n", (unsigned)uartCh);
+		return;
+	}
 
-        // --- Wiring of the link, and the caller-owned storage for it (its size IS the link count) ---
-    const ComDevMap maps[] = { { dev, port, end } };
-    constexpr uint8_t kLinkCount = 1u;
+		// --- Wiring of the link, and the caller-owned storage for it (its size IS the link count) ---
+	const ComDevMap maps[] = { { dev, port, end } };
+	constexpr uint8_t kLinkCount = 1u;
 
-    static CombusTxState  txStates[kLinkCount];
-    static CombusRxState  rxStates[kLinkCount];
-    static ComLinkRuntime runtime[kLinkCount];
-    static ComBusLink     links[kLinkCount];
-    const ComLinksStorage storage = { txStates, rxStates, runtime, links };
+	static CombusTxState  txStates[kLinkCount];
+	static CombusRxState  rxStates[kLinkCount];
+	static ComLinkRuntime runtime[kLinkCount];
+	static ComBusLink     links[kLinkCount];
+	const ComLinksStorage storage = { txStates, rxStates, runtime, links };
 
-    combus_links_init(maps, kLinkCount, storage, &pinReg, &comBus);
+	combus_links_init(maps, kLinkCount, storage, &pinReg, &comBus);
 }
 
 #endif  // COMBUS_UART_TX / COMBUS_UART
