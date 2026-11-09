@@ -1,6 +1,6 @@
 /******************************************************************************
  * @file dashboard_links.cpp
- * @brief ANSI terminal dashboard — links view (key '7', link rework).
+ * @brief ANSI terminal dashboard — links view (key '7').
  *****************************************************************************/
 
 #ifdef DEBUG_DASHBOARD

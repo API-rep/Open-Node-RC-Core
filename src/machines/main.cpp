@@ -15,7 +15,7 @@
 #include <core/system/vbat/vbat_sense.h>
 
 #include <machines/system/sys_manager.h>
-#include <combus_base_ids.h>   // AnalogComBusBaseID / DigitalComBusBaseID (Phase 4)
+#include <combus_base_ids.h>   // AnalogComBusBaseID / DigitalComBusBaseID
 
 
 /**
@@ -62,7 +62,7 @@ void loop() {
 // =============================================================================
 
 	// --- 1. RunLevel tracking and timing tokens ---
-  // RL3: lastRunLevel reads from the generic analog channel RUNLEVEL (no dedicated struct field).
+  // lastRunLevel reads the analog channel RUNLEVEL.
   static RunLevel lastRunLevel = RunLevel::NOT_YET_SET;
   static uint32_t stateTM      = 0;
 
@@ -90,7 +90,7 @@ void loop() {
       const bool keyActive = comBus.digitalBus[static_cast<uint8_t>(DigitalComBusID::KEY_ACTIVE)].value;
       if (!keyActive && (millis() - stateTM >= kSleepTimeoutMs)) {
           sys_log_info("[SYSTEM][EVENT] reason=sleep_timeout action=enter_SLEEPING\n");
-          // RL3: generic analog write via RUNLEVEL channel.
+          // Write the run level to the analog channel RUNLEVEL.
           combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::SLEEPING, ChanLayer::SYSTEM);
       }
       break;
@@ -108,7 +108,7 @@ void loop() {
       }
 
         // --- 1. Auto-transition to RUNNING ---
-        // RL3: generic analog write via RUNLEVEL channel.
+        // Write the run level to the analog channel RUNLEVEL.
         combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::RUNNING, ChanLayer::SYSTEM);
       break;
     }
@@ -134,7 +134,7 @@ void loop() {
         // --- 0.5. Idle timeout: no stick/button input for kEngineOffTimeoutMs → IDLE ---
       {
         const int32_t kIdleBand = static_cast<int32_t>(CbusNeutral) / 20;  // ±5 % threshold
-        // Phase 4 (A14) + Phase 5 (A15): each TYPE has its own 0-based
+        // Each type of channel has its own 0-based
         // counter, so CH_COUNT is the exact count per type — no
         // subtraction needed.
         constexpr uint8_t kBaseAnalogCount =
@@ -152,7 +152,7 @@ void loop() {
         if (active) s_lastActivityMs = millis();
         if (millis() - s_lastActivityMs >= kEngineOffTimeoutMs) {
             sys_log_info("[SYSTEM][EVENT] reason=idle_timeout action=enter_IDLE\n");
-            // RL3: generic analog write via RUNLEVEL channel.
+            // Write the run level to the analog channel RUNLEVEL.
             combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::IDLE, ChanLayer::SYSTEM);
             break;
         }
@@ -163,7 +163,7 @@ void loop() {
         uint8_t  chIdx    = static_cast<uint8_t>(machine.dcDev[i].comChannel.value());
         uint16_t busVal   = comBus.analogBus[chIdx].value;  ///< read-only — ComBus is never modified here
 
-        uint16_t motorCmd = busVal;   // Chantier 12.6: legacy `isDrived` comment removed — link health is now monitored by FAILSAFE_SOFT.
+        uint16_t motorCmd = busVal;   // link health is monitored by FAILSAFE_SOFT, not here
 
 #ifndef PATCH_MOTORS_FORCE_SLEEP
         float finalSpeed = (float)map(motorCmd, 0, comBus.analogBusMaxVal, -PERCENT_MAX, PERCENT_MAX);
@@ -186,7 +186,7 @@ void loop() {
         disableAllDcDrivers(machine);
       }
         // Auto-transition to IDLE — no shutdown sequence implemented yet (winter 2026).
-        // RL3: generic analog write via RUNLEVEL channel.
+        // Write the run level to the analog channel RUNLEVEL.
         combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::IDLE, ChanLayer::SYSTEM);
       break;
     }
@@ -207,13 +207,11 @@ void loop() {
     // ---------------------------------------------------------
     case RunLevel::HALT : {
     // ---------------------------------------------------------
-      // FS2 — dedicated hardware safety reaction.  Triggered by the
-      // `cb_runlevel_fn` instance in runlevelProcs[] when FAILSAFE_HARD=true.
-      // Runs the same stop/sleep/disable sequence as the legacy ad-hoc
-      // block (removed in FS2).  isNewRunLevel guards against re-running
-      // the sequence every cycle while FAILSAFE_HARD stays asserted.
-      // Link rework S3: HALT is held by the runlevel chain (halt_hold) —
-      // only a reboot leaves it.
+      // Hardware safety reaction: stop, sleep and disable the drivers.
+      // Written by the `cb_runlevel_fn` instance of runlevelProcs[] when
+      // FAILSAFE_HARD=true.  isNewRunLevel keeps the sequence from running
+      // again every cycle while FAILSAFE_HARD stays asserted.  HALT is held
+      // by the runlevel chain (halt_hold): only a reboot leaves it.
       if (isNewRunLevel) {
         sys_log_warn("[SYSTEM][SAFE] reason=failsafe_aggregator action=force_idle_and_lock\n");
         stopAllDcDrivers(machine);
@@ -238,7 +236,7 @@ void loop() {
     // ---------------------------------------------------------
     default : {
     // ---------------------------------------------------------
-      // Link rework S3: a value outside RunLevel (bug, corrupted value) is
+      // A value outside RunLevel (bug, corrupted value) is
       // a hard fault.  Write HALT: next cycle runs its reaction, and the
       // runlevel chain (halt_hold) keeps it until a reboot.
       sys_log_warn("[SYSTEM][SAFE] reason=unknown_runlevel value=%d action=halt\n", static_cast<int>(curRunLevel));
@@ -251,7 +249,7 @@ void loop() {
 // 3. SYSTEM TASKS (Output dispatch)
 // =============================================================================
 
-	// --- Output dispatch (sound TX, …) ---
+	// --- Output dispatch (ComBus TX, …) ---
   output_update(comBus);
 
 	// dashboard_update() removed — handled by dedicated FreeRTOS task on Core 0.

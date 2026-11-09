@@ -95,7 +95,7 @@ static void render_overview() {
 	{
 		char left[56], right[36];
 		int lLen = snprintf(left,  sizeof(left),  "  [ OVERVIEW ]  %s", s_mach->infoName);
-		// RL3: runLevel is now a plain analog channel — read from analogBus[RUNLEVEL].
+		// The run level is the analog channel RUNLEVEL.
 		int rLen = snprintf(right, sizeof(right), "%-12s  uptime: %s  ", dashRunLevelStr((RunLevel)s_bus->analogBus[static_cast<uint8_t>(AnalogComBusID::RUNLEVEL)].value), upt);
 		dLine("%s%*s%s", left, (int)DashInnerW - lLen - rLen, "", right);
 	}
@@ -111,10 +111,8 @@ static void render_overview() {
 		snprintf(batStr, sizeof(batStr), "N/A    ");
 	}
 
-	// Chantier 12.6: ctrlConn now derived from FAILSAFE_SOFT contributor
-	// (SYSTEM aggregator published by the failsafe_soft_chain).  For
-	// backward compatibility, fallback to the historical `lastFrameMs` proxy
-	// when the channel is not active (autonomous builds without HAS_FAILSAFE).
+	// ctrlConn derived from FAILSAFE_SOFT (SYSTEM aggregator published by the
+	// failsafe_soft_chain).  Without HAS_FAILSAFE, the `lastFrameMs` proxy.
 	bool ctrlConn;
 #if defined(HAS_FAILSAFE)
 	ctrlConn = !s_bus->digitalBus[static_cast<uint8_t>(DigitalComBusID::FAILSAFE_SOFT)].value;
@@ -122,7 +120,7 @@ static void render_overview() {
 	ctrlConn = (millis() - s_bus->lastFrameMs) < 2000u;
 #endif
 
-	// RL3: runLevel is now a plain analog channel — read from analogBus[RUNLEVEL].
+	// The run level is the analog channel RUNLEVEL.
 	const RunLevel curRl = (RunLevel)s_bus->analogBus[static_cast<uint8_t>(AnalogComBusID::RUNLEVEL)].value;
 	bool drvEnabled = (curRl == RunLevel::RUNNING ||
 	                   curRl == RunLevel::STARTING);
@@ -142,7 +140,7 @@ static void render_overview() {
 	for (uint8_t i = 0; i < wireEnd && i < s_analogCh; i++) {
 		uint16_t    raw  = s_bus->analogBus[i].value;
 		int16_t     pct  = dashPctBipolar(raw, s_bus->analogBusMaxVal);
-		// Chantier 12.6: same heuristic as ctrlConn — see above.
+		// Same heuristic as ctrlConn — see above.
 		bool        drv;
 #if defined(HAS_FAILSAFE)
 		drv = !s_bus->digitalBus[static_cast<uint8_t>(DigitalComBusID::FAILSAFE_SOFT)].value;

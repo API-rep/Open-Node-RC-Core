@@ -63,7 +63,7 @@
      *
      * @details Signal devices carry a ComBus channel reference and a `DevUsage`
      *   tag.  Entries tagged `UNDEFINED` are handled by dedicated module logic
-     *   (engine key FSM, indicator/hazard mux in sound_core).
+     *   (engine key FSM, indicator and hazard logic).
      */
     enum SigDev {
         HORN_SIG    = 0,   ///< Horn trigger → DevUsage::SIG_HORN.
@@ -89,7 +89,7 @@
     #include "ext_board/ext_board.h"
   #endif  // IS_MAINBOARD/IS_EXT_BOARD
 
-    // No #else error here: sound_node and remote envs include this file for
+    // No #else error here: the remote envs include this file for
     // kVehicleName only — they define neither flag.
 
 #endif  // MACHINE_VOLVO_A60_H_BRUDER

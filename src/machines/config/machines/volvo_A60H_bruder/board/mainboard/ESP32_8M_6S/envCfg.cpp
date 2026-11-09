@@ -12,7 +12,7 @@
  *   Clone entries (parentID set) inherit their full configuration from the
  *   named parent at init time — only overrides need to be declared.
  *   ComBus channel assignments reference the enums in combus_types.h and
- *   are validated at sound/output module init.
+ *   are validated at output module init.
  ******************************************************************************/
 
 #if defined (BOARD_ESP32_8M_6S)

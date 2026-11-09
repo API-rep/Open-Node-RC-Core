@@ -1,17 +1,16 @@
 /******************************************************************************
- * @file combus_uart_init.h
- * @brief ComBus UART transport env init — machine env.
+ * @file  combus_uart_init.h
+ * @brief ComBus link of the board: from the build flag to a running link.
  *
- * @details Handles ComBus UART transport setup for the machine environment.
- *   Active when any ComBus UARTx TX flag is defined:
- *     -D COMBUS_UART_TX=N  — TX-only on UARTn
- *     -D COMBUS_UART=N     — full-duplex (TX + RX) on UARTn
- *   Degrades to an inline no-op when none of these flags are set.
+ * @details Active with one of the ComBus UART flags:
+ *     -D COMBUS_UART_TX=N  transmit only, on UART N
+ *     -D COMBUS_UART=N     both ways, on UART N
+ *   An inline no-op without them.
  *
- *   Delegates protocol layer wiring to the core entry point:
- *   combus_link_start() in <core/system/combus/protocol/link/combus_link_defs.h>.
+ *   The link itself is started by combus_links_init() (combus_links.h).
  *****************************************************************************/
 #pragma once
+
 
 
 // =============================================================================
@@ -20,7 +19,7 @@
 
 #if defined(COMBUS_UART_TX) || defined(COMBUS_UART)
 
-/// Initialise the ComBus UART transport (machine env: TX frame config, baud, rate).
+	/// Start the ComBus link chosen by the build flag, on its UART port.
 void combus_uart_init();
 
 #else

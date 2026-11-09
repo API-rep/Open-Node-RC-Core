@@ -1,54 +1,30 @@
 /******************************************************************************
- * @file sys_manager.h
- * @brief System-level tick orchestrator — single entry point per loop cycle.
+ * @file  sys_manager.h
+ * @brief System step of a machine: every recurring system service, once per loop.
  *
- * @details Centralises all recurring system services that must run once per
- *   loop, in a deterministic order, before application logic:
+ * @details One call per loop, before the application logic, in a fixed order: each
+ *   step reads what the previous ones wrote in the same cycle.
+ *     0. Reception: com_rx_update() applies the received frames and writes the link
+ *        contributors, NODE_LINK_FAIL and BOARD_LINK_FAIL.
+ *     1. Inputs: input_refresh() (core, the physical acquisition), then
+ *        input_update() (machine, the mapping to the ComBus).  Each input backend
+ *        writes its own contributor (LOCAL_REMOTE_FAIL).
+ *     2. Battery: vbat_update() writes VBAT_FAIL.
+ *     3. Hard chain: failsafe_update() publishes FAILSAFE_HARD.
+ *     4. Soft chain: failsafe_soft_update() publishes FAILSAFE_SOFT.
  *
- *   1. Input acquisition: core `input_refresh()` then machine
- *      `input_update(bus)` — each backend writes its OWN *_LINK_LOST
- *      contributor (FS1 redesign, see doc/failsafe_module.md §12.5).
- *   2. Battery update via `vbat_update()` — ADC sensing, sliding average,
- *      low-bat detection, and re-arm of `DigitalComBusID::VBAT_FAIL`.
- *   3. Failsafe update via `failsafe_update(bus)` — runs the hard failsafe
- *      processor chain (reset + contributors), publishes the aggregated
- *      `DigitalComBusID::FAILSAFE_HARD` channel.
- *   4. Chantier 12.5 — `failsafe_soft_update(bus)` (gated by
- *      `HAS_FAILSAFE`) — if FAILSAFE_SOFT just rose,
- *      forces RUNLEVEL = IDLE.
+ *   The two failsafe channels are only published here.  The runlevel chain of the
+ *   machine turns them into HALT or IDLE, and main.cpp reacts to the run level.
  *
- *   **Chantier 12.6 (cleanup):** the historical open-drain
- *   `bus.isDrived` / `bus.isNotDrived` flag has been REMOVED from the
- *   `ComBus` struct (see `combus_defs.h`).  Link health is now monitored
- *   per-channel by independent contributors (no shared state, no ordering
- *   pitfalls).  `sys_manager_reset(ComBus&)` is now a NO-OP kept for
- *   source-level compatibility with out-of-tree callers (sound node etc.).
- *
- *   **Why this file lives under machines/ and not core/:**
- *   Step 1 calls this machine's own `input_update(bus)` (the input device ->
- *   ComBus mapping — see machines/system/input/input_update.h), which is
- *   machine-specific by nature. Keeping sys_manager here avoids a core file
- *   depending on a machine path. The trade-off: each machine owns its own
- *   copy of this orchestrator. If that duplication becomes painful across
- *   several machines, consider factoring the generic part (vbat / failsafe
- *   / link-fallback) back into core behind a registered input hook — ask
- *   if/when that's worth revisiting.
- *
- *   Machine node: call `sys_manager_update()` once as the first statement
- *   in `loop()`.
- *
- *   Sound node: no equivalent needed — link health is monitored per-link
- *   by com_rx_update(), which publishes `NODE_LINK_FAIL` and
- *   `BOARD_LINK_FAIL` from the scope of each link.  See
- *   `com_manager.cpp` for the wiring.
- *
- *   The aggregated Failsafe state is published on
- *   `comBus.digitalBus[DigitalComBusID::FAILSAFE_HARD]` by the Failsafe chain
- *   (see `doc/failsafe_module.md`).
+ *   This file lives under machines/, not core/: step 1 calls the machine's own
+ *   input_update().  Each machine therefore owns this orchestrator.  If several
+ *   machines come to share it, the generic steps could move to core behind a
+ *   registered input hook.
  *****************************************************************************/
 #pragma once
 
 #include <core/system/combus/combus_defs.h>
+
 
 
 // =============================================================================
@@ -56,21 +32,14 @@
 // =============================================================================
 
 /**
- * @brief Full system tick — call ONCE per loop, BEFORE application logic.
+ * @brief Run the system step once: reception, inputs, battery, the two failsafe chains.
  *
- * @details Executes in order:
- *   1. `input_refresh()` (core) — physical acquisition.
- *      `input_update(bus)` (machine) — input -> ComBus mapping.
- *   2. `vbat_update()` — battery sensing + re-arm of `VBAT_FAIL`.
- *   3. `failsafe_update(bus)` — runs the hard failsafe chain, publishes
- *      `DigitalComBusID::FAILSAFE_HARD` on the bus.
- *   4. Chantier 12.5 — `failsafe_soft_update(bus)` (only if
- *      `HAS_FAILSAFE` is defined): observes
- *      `FAILSAFE_SOFT` and forces RUNLEVEL = IDLE on the rising edge.
+ * @details Call once per loop, as the first statement of loop(), before the
+ *   application logic.
  *
- *   Returns `void`.  Consumers read `comBus.digitalBus[DigitalComBusID::FAILSAFE_HARD]`
- *   for the aggregated Failsafe state.
+ * @param bus  ComBus of the node.
  */
+
 void sys_manager_update(ComBus& bus);
 
 // EOF sys_manager.h

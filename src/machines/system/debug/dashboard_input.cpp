@@ -38,7 +38,7 @@ static uint8_t       s_digitalCh  = 0;
  */
 static void renderDigitalCompact(const ComBus* bus, uint8_t n)
 {
-	// Chantier 12.6: '*' = healthy is now derived from FAILSAFE_SOFT
+	// '*' = healthy, derived from FAILSAFE_SOFT
 	// (SYSTEM aggregator).  Fallback to lastFrameMs proxy on autonomous builds.
 #if defined(HAS_FAILSAFE)
 	const bool busDriven = !bus->digitalBus[static_cast<uint8_t>(DigitalComBusID::FAILSAFE_SOFT)].value;
@@ -83,7 +83,7 @@ static void render_input_view() {
 	dLine("  %-3s  %-40s  %-6s  %-5s  %s",
 	      "CH", "Name", "Raw", "Pct", "Drived");
 	dMid();
-	// Chantier 12.6: same heuristic as renderDigitalCompact() — see above.
+	// Same heuristic as renderDigitalCompact() — see above.
 	const bool busDrivenIn = (millis() - s_bus->lastFrameMs) < 2000u;
 	for (uint8_t i = 0; i < s_analogCh; i++) {
 		uint16_t    raw  = s_bus->analogBus[i].value;
@@ -104,7 +104,7 @@ static void render_input_view() {
 	dMid();
 	dLine("  combus state");
 	dMid();
-	// RL3: runLevel is now a plain analog channel — read from analogBus[RUNLEVEL].
+	// The run level is the analog channel RUNLEVEL.
 	dLine("  RunLevel: %-14s  keyOn: %-5s  battLow: %-5s  analogBusMax: %-7u  %u analog + %u digital ch  denied: %u",
 	      dashRunLevelStr((RunLevel)s_bus->analogBus[static_cast<uint8_t>(AnalogComBusID::RUNLEVEL)].value),
 	      s_bus->digitalBus[static_cast<uint8_t>(DigitalComBusID::KEY_ACTIVE)].value ? "YES" : "NO",

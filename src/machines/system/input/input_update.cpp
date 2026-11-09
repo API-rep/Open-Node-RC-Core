@@ -65,9 +65,7 @@ void input_update(ComBus &bus) {
     combus_set_digital(bus, m.busChannel, finalState, ChanLayer::SYSTEM);
   }
 
-    // Chantier 12.6 (cleanup): the legacy `bus.isNotDrived = false;` line
-    // is REMOVED — the open-drain flag no longer exists.  Each input
-    // backend now writes its own *_LINK_LOST contributor (see below).
+    // Each input backend writes its own contributor.
     //
     // PS4_BT backend publishes LOCAL_REMOTE_FAIL here.  If the PS4
     // controller stops refreshing the input device (no analog/digital

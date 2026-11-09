@@ -15,7 +15,7 @@
  *   0  halt_hold: no lever.  HOLD (cb_runlevel_hold_fn).
  *                 When RUNLEVEL is already HALT → claim the chain: nothing
  *                 behind runs (soft fault, key), so HALT is left only by a
- *                 reboot (init.cpp writes IDLE).  Link rework S3.
+ *                 reboot (init.cpp writes IDLE).
  *
  *   1  failsafe:  inCh = FAILSAFE_HARD.  CONTINUOUS (cb_runlevel_fn).
  *                 When FAILSAFE_HARD=true → write RUNLEVEL=HALT (dedicated value, see machines_defs.h)
@@ -26,7 +26,7 @@
  *                 in main.cpp's switch(curRunLevel).
  *
  *   1b failsafe_soft: inCh = FAILSAFE_SOFT.  EDGE-TRIGGERED (cb_runlevel_once_fn).
- *                 chantier 12.5: FAILSAFE_SOFT is the OR-aggregated health of all
+ *                 FAILSAFE_SOFT is the OR-aggregated health of all
  *                 remote input sources (PS4_BT, UART, …) computed by the
  *                 failsafe_soft_chain.  On its rising edge (0→1, link
  *                 just dropped), force RUNLEVEL=IDLE and claim the chain (so
@@ -78,7 +78,7 @@ static constexpr CbRunlevelCfg kRunlevelCfg {
 };
 
 #if defined(HAS_FAILSAFE)
-  ///  failsafe_soft — chantier 12.5: FAILSAFE_SOFT 0→1 → force RUNLEVEL=IDLE + claim.
+  ///  failsafe_soft — FAILSAFE_SOFT 0→1 → force RUNLEVEL=IDLE + claim.
   ///  Rising edge only (edge-triggered).  Falling edge = manual recovery via KEY.
   ///  Sits AFTER failsafe so a hard failsafe condition always wins.
 static constexpr CbRunlevelCfg kFailsafeSoftRunlevelCfg {
@@ -108,7 +108,7 @@ static CbRunlevelOnceState gFailsafeSoftOnceState {};
 
 /**
  * @brief  Runlevel chain proc array.
- * @details Steps (chantier 12.5 new design):
+ * @details Steps:
  *   0  halt_hold   : HOLD — RUNLEVEL already HALT → claim (nothing behind runs, until a reboot).
  *   1  failsafe    : CONTINUOUS — FAILSAFE_HARD=true → RUNLEVEL=HALT + claim (highest priority).
  *   1b failsafe_soft : EDGE-TRIGGERED — FAILSAFE_SOFT 0→1 → RUNLEVEL=IDLE + claim.

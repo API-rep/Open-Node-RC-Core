@@ -1,6 +1,6 @@
 /******************************************************************************
  * @file dashboard_links.h
- * @brief ANSI terminal dashboard — links view (key '7', link rework).
+ * @brief ANSI terminal dashboard — links view (key '7').
  *
  * @details A home page listing the links under watch (name, scope, state,
  *   contract, mode, coupler and role, pairing of a coupled link) and the

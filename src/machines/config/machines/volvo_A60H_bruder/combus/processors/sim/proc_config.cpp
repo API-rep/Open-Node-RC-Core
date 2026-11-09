@@ -20,7 +20,7 @@
  *                    subgear-claim(SUBGEAR_BUS), direct-claim(DIRECT_DRIVE),
  *                    gear-fsm(DRIVE_STATE_BUS), gear-ramp -> out(GEAR)
  *                    gear-inv-ratio: wheel_speed * 1000 / gearRatio[prevGear] = engine_rpm;
- *                    writes engine_rpm to ESC_RPM_BUS (sound node reads engine RPM).
+ *                    writes engine_rpm to ESC_RPM_BUS, where the RPM is published.
  *
  *     SIM_STEERING : in(STEERING_BUS) -> bypass(DIRECT_DRIVE), ramp -> out(STEERING_BUS)
  *     SIM_DUMP     : in(DUMP_BUS) -> bypass(DIRECT_DRIVE), ramp -> out(DUMP_BUS)

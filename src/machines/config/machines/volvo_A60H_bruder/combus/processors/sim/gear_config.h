@@ -11,9 +11,9 @@
  *   kGearCfg defined here — sim_traction_config.h must be included after.
  *
  *   Chain function: ESC_RPM_BUS (wheel_speed seed) → automatic gear selection →
- *     GEAR + ESC_RPM_BUS overwritten to engine_rpm + GEAR_SHIFTING.
+ *     GEAR + ESC_RPM_BUS overwritten to engine_rpm.
  *   In:  ESC_RPM_BUS (wheel_speed), SUBGEAR_BUS, DRIVE_STATE_BUS, DIRECT_DRIVE.
- *   Out: GEAR (final gear), ESC_RPM_BUS (engine_rpm), GEAR_SHIFTING (machine-local).
+ *   Out: GEAR (final gear), ESC_RPM_BUS (engine_rpm).
  *
  *   gear-inv-ratio: wheel_speed * 1000 / gearRatio[prevGear] → engine_rpm written to
  *     ESC_RPM_BUS. rpm-fade overrides it. Gear=0 (uninit) → passthrough. 1-cycle
@@ -24,9 +24,8 @@
  *   gear-ramp: writes gTractionRampDyn.rampTimeMs after gear selection; THROTTLE chain
  *     reads it at next cycle (1-cycle latency — avoids circular dependency).
  *   upshift-damp: observer — does not modify `value`. Writes extAccelSteps to freeze
- *     traction ramp for upshiftDampMs. Commits GEAR_SHIFTING=1 during damp window.
+ *     traction ramp for upshiftDampMs, signalled in outValue during the damp window.
  *     Automatically disabled when gear chain is off (no stale side-effects).
- *     @todo winter 2026: promote GEAR_SHIFTING to WIRE region for sound node access.
  *   Claim cascade — priority: SubGear > Manual > Direct > Auto (FSM).
  *     manual-claim disabled: MANUAL_GEAR_SET not yet written by INPUT chain —
  *     uninitialised channel causes random claims → saccades.
@@ -80,7 +79,7 @@ static GearDampState gGearDampState {};
  *   5.3  direct-claim  : DIRECT_DRIVE HIGH → force gear=1, claim chain.
  *   6  gear-fsm       : hysteresis FSM on RPM thresholds + DRIVE_STATE.
  *   7  gear-ramp      : writes gTractionRampDyn.rampTimeMs for new gear.
- *   8  upshift-damp   : observer — extAccelSteps + GEAR_SHIFTING=1 during damp window.
+ *   8  upshift-damp   : observer — extAccelSteps during damp window, shifting signal in outValue.
  */
 
 static CbProc kGearProcs[] = {
@@ -131,7 +130,7 @@ static CbProc kGearProcs[] = {
       .cfg       = &kGearCfg,
       .dynCfg    = &gTractionRampDyn,
     },
-      // 8. upshift-damp — observer: freeze ramp + signal GEAR_SHIFTING on upshift.
+      // 8. upshift-damp — observer: freeze ramp on upshift, shifting signal in outValue.
     { .name    = "upshift-damp",                 // GEAR_SHIFTING output removed (no reader)
       .fn      = gear_upshift_damp_fn,
       .cfg     = &kGearCfg,

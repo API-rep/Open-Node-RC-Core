@@ -15,7 +15,7 @@
  *     SIM_GEAR     : ESC_RPM_BUS  -> [gear-inv-ratio, gear-fsm, gear-ramp]
  *                                  -> GEAR
  *                    gear-inv-ratio converts wheel_speed to engine_rpm and
- *                    writes it to ESC_RPM_BUS (sound node reads engine RPM).
+ *                    writes it to ESC_RPM_BUS, where the RPM is published.
  *     SIM_STEERING : STEERING_BUS -> [bypass, ramp]  -> STEERING_BUS
  *     SIM_DUMP     : DUMP_BUS     -> [bypass, ramp]  -> DUMP_BUS
  *

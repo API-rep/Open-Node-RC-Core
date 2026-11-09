@@ -103,7 +103,7 @@
    * @brief Top-level machine descriptor for the Volvo A60H Bruder.
    *
    * @details Aggregates all device array pointers and counts.  Consumed by
-   *   `machine_init()` and the sound / output module init functions.
+   *   `machine_init()` and the output module init functions.
    */
   inline constexpr EnvCfg machine {
     .infoName      = kVehicleName,

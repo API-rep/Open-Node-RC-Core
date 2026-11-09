@@ -31,7 +31,7 @@ static uint16_t cbRead(const ComBus& bus, const ChanOpt& ch)
  *  @note  Proc-chain outputs are internal computed values, not physical inputs:
  *         they never touch link-health state.  Each input backend
  *         (PS4_BT, UART, ...) writes its own *_LINK_LOST contributor channel,
- *         and the aggregator chain (`remote_link_fallback_chain.cpp`) handles
+ *         and the aggregator chain (`failsafe_soft_chain.cpp`) handles
  *         the OR-aggregation into `FAILSAFE_SOFT`.
  */
 static void cbWrite(ComBus& bus, const ChanOpt& ch, uint16_t value)
