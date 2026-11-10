@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tests for flags.py — A4.
+Tests for flags.py — the build context.
 
 Two layers:
 
@@ -176,8 +176,8 @@ def test_extract_from_env_cppdefines_none():
 
 def test_extract_from_env_cppdefines_unsupported_entry_raises():
     """
-    A4 must NOT silently skip entries it doesn't recognise. Per the
-    A4 prompt: "ne pas masquer le problème par une implémentation fragile".
+    flags.py must NOT silently skip entries it doesn't recognise, rather
+    than hide the problem behind a fragile implementation.
     SCons can host objects like SCons.Node.Python.Value that don't fit
     the documented shapes — a silent skip would mask a real source-of-truth
     mismatch.

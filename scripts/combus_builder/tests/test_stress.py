@@ -9,7 +9,7 @@ that must hold for ANY input:
   2. ID numbering contract (per type, BASE < SYSTEM < BOARD, view prefixes).
   3. MD5 sensitivity matrix (which scope change moves which view hash).
   4. MD5 insensitivity (`infoName`, an explicit default `value`, satisfied
-     `requires` do not move the hash; chantier 2.1).
+     `requires` do not move the hash).
   5. Duplicate ids are always rejected.
   6. Fuzzing: junk field values and junk YAML never raise anything but the
      documented validation / parse errors.
@@ -205,7 +205,7 @@ EXPECTED_CHANGED = {
 
 
 def _change_default_value(ch: dict) -> None:
-    """Give the channel a default value that renders differently (chantier 2.1: value is hashed)."""
+    """Give the channel a default value that renders differently (value is hashed)."""
     if ch["type"] == "analog":
         ch["value"] = 54321 if ch.get("value") == 12345 else 12345
     else:
@@ -247,7 +247,7 @@ def test_hash_ignores_labels_explicit_defaults_and_satisfied_requires(seed):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_candidates_keep_stable_base_ids_and_stable_md5(seed):
-    """Link rework 2.2a: adding candidates never moves a stable BASE id nor the stable MD5."""
+    """Adding candidates never moves a stable BASE id nor the stable MD5."""
     from scripts.combus_builder.generator import resolve_requires
     from scripts.combus_builder.md5 import stable_view
 
@@ -413,7 +413,7 @@ def _oracle(declared: dict[str, str | None]):
     bothish = n_both + n_bor
     absent = [b for b, d in declared.items() if d is None]
     out = dict(declared)
-    # ND6: `both_or` explicitly declared while fewer than 2 boards explicitly
+    # `both_or` explicitly declared while fewer than 2 boards explicitly
     # declare a writer (anything but `none`) -> single-writer warning.
     explicit_writers = sum(d not in (None, "none") for d in dirs)
     single_writer_warn = n_bor >= 1 and explicit_writers < 2

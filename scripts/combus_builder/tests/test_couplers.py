@@ -1,7 +1,6 @@
-"""Couplers: the norm of a link between nodes (link rework, steps 3.4a to 3.5).
+"""Couplers: the norm of a link between nodes.
 
-Rules validated by the owner (2026-10-31; socket view: 2026-11-01, step 3.4e;
-sides: 2026-11-01, step 3.5):
+Rules validated by the owner:
   - T1 a coupler is a folder src/core/config/couplers/<name>/ of ordinary
     BASE channels, a brick of the machine: directions are those of the socket
     side, the hub of the star (machine-centric: `downlink_pt` relayed to the
@@ -27,7 +26,7 @@ sides: 2026-11-01, step 3.5):
   - T8 the names of the coupler are the norm (no renaming);
   - T9 the coupler files never enter the ComBus by discovery: they are read
     apart, and only for the couplers declared by the node;
-  - L (step 3.4e, 2026-11-01) local channels: a channel of the coupler that
+  - L local channels: a channel of the coupler that
     requires the flag of one of its sides belongs to that side only (filtered
     by `requires`), never on the link (frame, MD5); BOARD or SYSTEM; its name
     starts with the name of the coupler; an input from the remote (the
@@ -132,7 +131,7 @@ def test_t1_the_test_coupler_is_read_apart(hitch):
 
 
 # =============================================================================
-# L: local channels (step 3.4e)
+# L: local channels
 # =============================================================================
 
 def _coupler_folder(tmp_path, name, body):
@@ -196,7 +195,7 @@ def test_l5_local_channels_on_the_vehicle_only_and_off_the_link(tmp_path, tracto
 
 
 def test_p1_a_coupler_without_link_channel_is_passive(tmp_path, tractor, capsys):
-    """Step 3.4d: a local instance of the coupler, no link, no ComPeerLink."""
+    """A passive coupler: a local instance of the coupler, no link, no ComPeerLink."""
     assert links_module.is_passive_coupler(load_coupler_channels(SRC, "test_tool"), "test_tool")
     assert not links_module.is_passive_coupler(load_coupler_channels(SRC, "test_coupler"), "test_coupler")
     generate(tractor, _ctx(M, "MACHINE_TYPE_TEST_TRACTOR", HITCH, TOOL), tmp_path)
@@ -254,7 +253,7 @@ def test_t9_discovery_never_loads_a_coupler(machine_type):
 
 
 # =============================================================================
-# T2: category and sides (step 3.5)
+# T2: category and sides
 # =============================================================================
 
 def test_t2_sides_from_flags():
@@ -413,7 +412,7 @@ def test_row11_each_side_expects_the_md5_of_the_other_role(hitch, tractor, trail
 
 
 def test_t5_theme_does_not_change_order_nor_md5():
-    """Kept from step 3.1a."""
+    """The theme moves neither the order of the frame nor the MD5."""
     def make(theme_a, theme_b):
         a, b = _ch("AA", "uplink"), _ch("BB", "uplink")
         a["theme"], b["theme"] = theme_a, theme_b
@@ -432,7 +431,7 @@ def test_t5_candidates_leave_the_stable_md5():
 
 
 # =============================================================================
-# Row 13: one source per channel on the vehicle (unchanged)
+# Row 13: one source per channel on the socket side
 # =============================================================================
 
 def test_row13_two_couplers_sources_of_the_same_channel():
@@ -443,7 +442,7 @@ def test_row13_two_couplers_sources_of_the_same_channel():
 
 
 def test_row13_the_vehicle_relays_from_one_attachment_to_the_other():
-    """Kept from step 3.2b: one coupler is the source, the vehicle passes it on to the other."""
+    """One coupler is the source, the socket side relays it to the other."""
     lr = _link([_ch("TILT", "downlink")], [_ch("TILT", "downlink_pt")], name="r")      # r sends it
     ld = _link([_ch("TILT", "downlink_pt")], [_ch("TILT", "downlink_pt")], name="d")   # relayed to d
     check_single_source([lr, ld])
@@ -451,7 +450,7 @@ def test_row13_the_vehicle_relays_from_one_attachment_to_the_other():
 
 
 def test_row13_both_or_is_the_merge_not_two_sources():
-    """Kept from step 3.2b."""
+    """both_or is the merge, not two sources."""
     links = [_link([_ch("F", "both_or", type_="digital")], [_ch("F", "both_or", type_="digital")], name=n)
              for n in ("r", "d")]
     check_single_source(links)
@@ -480,7 +479,7 @@ def test_row1_t7_generated_header_and_build_log(tmp_path, tractor, capsys):
             "static_cast<uint8_t>(AnalogComBusID::TEST_BRAKE_BUS), "
             "static_cast<uint8_t>(AnalogComBusID::TEST_TILT_ANGLE)") in text
     assert '.coupler   = "test_coupler",' in text
-    assert ".role      = ComLinkRole::SOCKET," in text      # step 3.4c: the role of this node
+    assert ".role      = ComLinkRole::SOCKET," in text      # the role of this node
     assert ".announced = { .stable = kAnnouncedMd5, .next = kAnnouncedMd5Next }," in text
     assert ".expected  = { .stable = kExpectedMd5,  .next = kExpectedMd5Next }," in text
     assert ".ids = kAnalog,  .rx = kAnalogRx }," in text

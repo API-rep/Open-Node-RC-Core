@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tests for the ND8 (correctif 1/3) machine-type discovery filter.
+Tests for the machine-type discovery filter.
 
 Coverage:
   - machine_type.detect_machine_type():
@@ -10,7 +10,7 @@ Coverage:
       * Valued defines (e.g. MACHINE_TYPE_X=1) are also detected
   - machine_type.filter_files_by_machine_type():
       * None (no machine type) -> keep the generic files, exclude every
-        machine type profile (link rework 3.1: peer types share names)
+        machine type profile (peer types share names)
       * "dumper_truck" -> keep dumper_truck/, exclude excavator/ and loader/
       * Generic .cb files (outside core/config/machines/) always kept
       * Order of input is preserved
@@ -229,7 +229,7 @@ def test_is_machine_type_path_case_sensitive():
 # =============================================================================
 
 def test_filter_none_keeps_only_generic_files():
-    """machine_type=None -> no machine type profile (link rework 3.1: peer types share names)."""
+    """machine_type=None -> no machine type profile (peer types share names)."""
     files = [
         _parts("src", "core", "config", "machines", "dumper_truck", "a.cb"),
         _parts("src", "core", "config", "machines", "excavator", "b.cb"),
@@ -319,7 +319,7 @@ def test_discover_config_files_with_machine_type_excludes_others(tmp_path):
 
 
 def test_discover_config_files_no_machine_type_keeps_no_type_profile(tmp_path):
-    """No machine_type -> no machine type profile (link rework 3.1)."""
+    """No machine_type -> no machine type profile."""
     src = tmp_path / "src"
     (src / "core" / "config" / "machines" / "dumper_truck").mkdir(parents=True)
     (src / "core" / "config" / "machines" / "excavator").mkdir(parents=True)
@@ -362,30 +362,30 @@ def test_discover_and_parse_backward_compatible_no_machine_type(tmp_path):
     _write_cb(src / "core" / "config" / "machines" / "excavator" / "b.cb",
               "channels: []\n")
 
-    # No machine_type -> no machine type profile (link rework 3.1).
+    # No machine_type -> no machine type profile.
     _buildroot, _files, parsed = discover_and_parse(project_root=tmp_path)
     assert len(parsed) == 0
 
 
 # =============================================================================
-# 5. End-to-end pipeline test: ND2 diffusion unchanged by the filter
+# 5. End-to-end pipeline test: diffusion unchanged by the filter
 # =============================================================================
 
 def test_filter_does_not_change_nd2_diffusion_behaviour():
     """Adding the machine-type filter to discover_and_parse must not
-    change the ND2 diffusion result for the existing single-type
+    change the diffusion result for the existing single-type
     scenario (dumper_truck, the only active type today).
 
     Scenario:
       - A SYSTEM channel 'BAT_LOW' declared in dumper_truck/combus/ with
         requires=[IS_MAINBOARD] on mainboard only.
-      - soundboard sees the synthetic downlink (ND2 rule 5).
+      - soundboard sees the synthetic downlink.
 
     We verify that:
       - With filter (machine_type='dumper_truck'): diffusion works and
         the synthetic copy is present on soundboard.
-      - Without machine type (None): no machine type profile is loaded
-        (link rework 3.1), so BAT_LOW is absent on both boards.
+      - Without machine type (None): no machine type profile is loaded,
+        so BAT_LOW is absent on both boards.
     """
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
@@ -435,7 +435,7 @@ def test_filter_does_not_change_nd2_diffusion_behaviour():
             assert "BAT_LOW" not in _decls_by_id(results["no_filter"][board_id])
 
         # With the filter: BAT_LOW on mainboard is uplink, on soundboard
-        # is downlink (ND2 rule 5).
+        # is downlink.
         main_with = _decls_by_id(results["filter_dumper_truck"]["mainboard"])
         snd_with = _decls_by_id(results["filter_dumper_truck"]["soundboard"])
         assert main_with.get("BAT_LOW") == "uplink", (
@@ -466,17 +466,16 @@ def _decls_by_id(parsed):
 
 
 # =============================================================================
-# 6. Simulated different-type scenario (ND8 spec test #1)
+# 6. Simulated different-type scenario
 # =============================================================================
 
 def test_simulated_excavator_build_excludes_dumper_truck(tmp_path):
     """Spec test: a simulated MACHINE_TYPE_EXCAVATOR build must exclude
     the dumper_truck/ .cb files (and vice-versa).
 
-    This is the third test from the spec:
-      '`.cb` sous machines/dumper_truck/ inclus pour un build
-       MACHINE_TYPE_DUMPER_TRUCK, exclu pour un type différent simulé
-       (`.cb` fictif sous machines/excavator/).'
+    A `.cb` under machines/dumper_truck/ is included for a
+    MACHINE_TYPE_DUMPER_TRUCK build, excluded for a simulated other type
+    (a fictitious `.cb` under machines/excavator/).
 
     We test the symmetric direction: a fake 'excavator' build
     excludes a fake 'dumper_truck/' .cb (the real dumper_truck/ .cb

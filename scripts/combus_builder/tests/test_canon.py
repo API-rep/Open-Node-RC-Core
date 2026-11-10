@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tests for canon (A5.1) — strict canonisation of `channels:`.
+Tests for canon — strict canonisation of `channels:`.
 
 Coverage:
   - Section extraction (extension-agnostic).
@@ -60,7 +60,7 @@ from scripts.combus_builder.canon import (
 # =============================================================================
 
 def _parsed(path: Path, raw: dict, type_label: str = "channel_def"):
-    """Build a (path, type_label, raw_dict) tuple as A3 would return."""
+    """Build a (path, type_label, raw_dict) tuple as parser.py would return."""
     return (path, type_label, raw)
 
 
@@ -487,7 +487,7 @@ def test_scope_invalid(tmp_path):
 
 
 # =============================================================================
-# theme (cadré)
+# theme (from VALID_THEMES)
 # =============================================================================
 
 def test_theme_required(tmp_path):
@@ -686,7 +686,7 @@ def test_dir_base_both(tmp_path):
 
 
 # =============================================================================
-# A2.1 — Variantes `*_OR` (uplink_or, downlink_or, both_or)
+# Variants `*_OR` (uplink_or, downlink_or, both_or)
 # =============================================================================
 
 def test_dir_system_uplink_or_normalizes(tmp_path):
@@ -730,7 +730,7 @@ def test_dir_base_uplink_or_normalizes(tmp_path):
 
 
 def test_dir_or_rejected_on_analog(tmp_path):
-    """A2.1 : `*_OR` rejeté sur `type: analog` (OR-fusion n'a pas de sens)."""
+    """`*_OR` refused on `type: analog` (an OR merge has no meaning)."""
     p = tmp_path / "a.cb"
     parsed = [_parsed(p, {"channels": [_ch(type_="analog", direction="uplink_or")]})]
     try:
@@ -743,7 +743,7 @@ def test_dir_or_rejected_on_analog(tmp_path):
 
 
 def test_dir_or_rejected_on_board(tmp_path):
-    """A2.1 : `*_OR` rejeté sur `scope: BOARD` (un seul écrivain possible)."""
+    """`*_OR` refused on `scope: BOARD` (a single possible writer)."""
     p = tmp_path / "a.cb"
     parsed = [_parsed(p, {"channels": [_ch(type_="digital", scope="BOARD", direction="uplink_or")]})]
     try:
@@ -755,7 +755,7 @@ def test_dir_or_rejected_on_board(tmp_path):
 
 
 def test_dir_or_rejected_on_downlink_or_board(tmp_path):
-    """A2.1 : `downlink_or` rejeté sur BOARD."""
+    """`downlink_or` refused on BOARD."""
     p = tmp_path / "a.cb"
     parsed = [_parsed(p, {"channels": [_ch(type_="digital", scope="BOARD", direction="downlink_or")]})]
     try:
@@ -767,7 +767,7 @@ def test_dir_or_rejected_on_downlink_or_board(tmp_path):
 
 
 def test_dir_or_rejected_on_both_or_board(tmp_path):
-    """A2.1 : `both_or` rejeté sur BOARD."""
+    """`both_or` refused on BOARD."""
     p = tmp_path / "a.cb"
     parsed = [_parsed(p, {"channels": [_ch(type_="digital", scope="BOARD", direction="both_or")]})]
     try:
@@ -779,12 +779,12 @@ def test_dir_or_rejected_on_both_or_board(tmp_path):
 
 
 def test_dir_or_mixed_with_uplink_rejected(tmp_path):
-    """A2.1 : `uplink_or` + `uplink` rejeté (incohérent : OR n'ajoute rien)."""
+    """`uplink_or` + `uplink` cannot be mixed (inconsistent: the OR adds nothing)."""
     p = tmp_path / "a.cb"
     parsed = [_parsed(p, {"channels": [_ch(type_="digital", direction="uplink_or")]})]
-    # Note : avec le format string, on ne peut pas mélanger `uplink_or` + `uplink`
-    # dans la même valeur. Ce test vérifie que `uplink_or` seul est valide
-    # (le mélange serait une erreur de syntaxe YAML, pas une erreur de validation).
+    # Note: with the string format, `uplink_or` and `uplink` cannot be mixed in
+    # one value. This test checks that `uplink_or` alone is valid (the mix would
+    # be a YAML syntax error, not a validation error).
     result = canonize(parsed)
     ch = result.canonical_definitions[0]
     assert ch.direction_or == frozenset({"uplink"})
@@ -801,7 +801,7 @@ def test_dir_base_uplink_downlink(tmp_path):
 
 
 def test_dir_base_none_normalizes_to_empty(tmp_path):
-    # A9.5 — BASE now accepts `none` (per A9.3 contract extension).
+    # BASE accepts `none`.
     # BASE = type-level declaration, no inter-node wire activity.
     # Intra-node propagation remains implicit.
     p = tmp_path / "a.cb"
@@ -1124,7 +1124,7 @@ def test_requires_duplicate_rejected(tmp_path):
 
 
 # =============================================================================
-# ND4 bis: BASE n'accepte pas de requires
+# BASE refuses requires
 # =============================================================================
 
 def _ch_remote(id_: str = "STEER_CMD", requires=None) -> dict:
@@ -1148,20 +1148,19 @@ def _ch_remote(id_: str = "STEER_CMD", requires=None) -> dict:
 def test_base_without_requires_accepted(tmp_path):
     """BASE channel without `requires` (or with empty list) -> OK.
 
-    Comportement actuel inchangé : un channel BASE sans requires
-    (champ absent ou liste vide) doit passer la validation sans
-    erreur. C'est le cas normal pour une frame fixe de type de
-    machine.
+    A BASE channel without requires (field absent or empty list) passes
+    the validation without error: the normal case for the fixed frame of
+    a machine type.
     """
     p = tmp_path / "a.cb"
-    # Cas 1 : champ `requires` absent.
+    # Case 1: field `requires` absent.
     parsed = [_parsed(p, {"channels": [_ch_remote()]})]
     result = canonize(parsed)
     assert len(result.canonical_definitions) == 1
     assert result.canonical_definitions[0].scope == "BASE"
     assert result.canonical_definitions[0].requires == frozenset()
 
-    # Cas 2 : `requires: []` (liste vide explicite).
+    # Case 2: `requires: []` (explicit empty list).
     parsed = [_parsed(p, {"channels": [_ch_remote(requires=[])]})]
     result = canonize(parsed)
     assert len(result.canonical_definitions) == 1
@@ -1172,15 +1171,14 @@ def test_base_without_requires_accepted(tmp_path):
 def test_base_with_requires_rejected(tmp_path):
     """BASE channel with non-empty `requires` -> ChannelValidationError.
 
-    Un channel BASE représente une frame fixe, héritée d'une
-    config générique de type de machine, partagée telle quelle
-    entre le nœud machine et la télécommande. `requires` (activation
-    conditionnelle à la compilation) n'a pas de sens sur BASE :
-    ça introduirait des variantes de frame selon la config buildée,
-    alors que la frame doit rester fixe par type de machine.
+    A BASE channel belongs to a fixed frame, from the generic profile of a
+    machine type, shared as is by the machine node and the remote.
+    `requires` (activation at compile time) has no meaning on BASE: it
+    would give frame variants depending on the built config, while the
+    frame must stay fixed per machine type.
 
-    Le message d'erreur doit nommer le channel et expliquer
-    pourquoi (move to SYSTEM/BOARD scope, or remove the requires).
+    The error message must name the channel and explain why (move to
+    SYSTEM/BOARD scope, or remove the requires).
     """
     p = tmp_path / "a.cb"
     parsed = [_parsed(p, {"channels": [
@@ -1211,8 +1209,8 @@ def test_base_with_requires_rejected(tmp_path):
 def test_base_with_multiple_requires_rejected(tmp_path):
     """BASE channel with multiple requires -> ChannelValidationError.
 
-    Variante du test précédent avec plusieurs flags dans requires,
-    pour vérifier que le message d'erreur liste bien tous les flags.
+    Variant of the previous test with several flags in requires: the
+    error message lists every flag.
     """
     p = tmp_path / "a.cb"
     parsed = [_parsed(p, {"channels": [
@@ -1230,10 +1228,9 @@ def test_base_with_multiple_requires_rejected(tmp_path):
 
 
 def test_system_with_requires_still_accepted(tmp_path):
-    """SYSTEM channel with requires -> OK (sanity check, comportement inchangé).
+    """SYSTEM channel with requires -> OK (sanity check).
 
-    Le garde-fou ND4 bis ne s'applique qu'à BASE. SYSTEM continue
-    d'accepter requires normalement.
+    The guard applies to BASE only: SYSTEM accepts requires.
     """
     p = tmp_path / "a.cb"
     parsed = [_parsed(p, {"channels": [{
@@ -1252,11 +1249,10 @@ def test_system_with_requires_still_accepted(tmp_path):
 
 
 def test_board_with_requires_still_accepted(tmp_path):
-    """BOARD channel with requires -> OK (sanity check, comportement inchangé).
+    """BOARD channel with requires -> OK (sanity check).
 
-    Le garde-fou ND4 bis ne s'applique qu'à BASE. BOARD continue
-    d'accepter requires normalement (filtrage par board géré par
-    diffuse_system_channels()).
+    The guard applies to BASE only: BOARD accepts requires (filtered per
+    board by diffuse_system_channels()).
     """
     p = tmp_path / "a.cb"
     parsed = [_parsed(p, {"channels": [{
@@ -1495,7 +1491,7 @@ def test_active_vs_canonical(tmp_path):
 
 
 # =============================================================================
-# Structural test: A5.1 does NOT depend on extension for routing
+# Structural test: the canon does NOT depend on extension for routing
 # =============================================================================
 
 def test_a5_does_not_branch_on_extension():
@@ -1549,7 +1545,7 @@ def test_real_failsafe_cb_validates():
     assert ch.type == "digital"
     assert ch.scope == "SYSTEM"
     assert ch.theme == "failsafe"
-    # A2.1 : the .cb uses `direction: both_or`, so the wire
+    # the .cb uses `direction: both_or`, so the wire
     # direction is carried by `direction_or` (not `direction`).
     # `effective_direction` is the union of both — the canonical
     # accessor for "what the wire sees".
@@ -1574,7 +1570,7 @@ def test_real_vbat_failsafe_cb_validates():
     assert ch.type == "digital"
     assert ch.scope == "SYSTEM"
     assert ch.theme == "failsafe"
-    # A2.1 : vbat_fail.cb uses `direction: uplink_or` (a
+    # vbat_fail.cb uses `direction: uplink_or` (a
     # contributor that OR-merges into the FAILSAFE_HARD aggregator).
     # `effective_direction` is the union of `direction` and
     # `direction_or` — the canonical accessor for "what the wire

@@ -1,4 +1,4 @@
-"""Machine type configuration and the link with the remote (link rework, step 3.6).
+"""Machine type configuration and the link with the remote.
 
 Rules validated by the owner (2026-11-02):
   - <type>.mtype lists the couplers the type supports (socket, plug): part of

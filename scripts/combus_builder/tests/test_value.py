@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
 """
-Tests for the `value:` field of `channels:` (A5.x / A6.x).
+Tests for the `value:` field of `channels:` (canon and generator).
 
 Coverage:
-  - Validation analog : CbusMinVal / CbusNeutral / CbusMaxVal accepted,
-                         constants unknown / low / high rejected.
-  - Validation digital : low / high accepted, integer / analog constants
-                         rejected.
-  - Formes invalides : null, list, dict, float, out-of-range.
-  - Pipeline : value survives parsing → canon → merge → generation.
-  - Comportement absent : reproduit le défaut générateur
-                           (CbusNeutral / false).
-  - Conflit de fusion : deux `value` différents pour le même id → erreur.
-  - Failsafe : channels FAILSAFE_HARD / VBAT_FAIL démarrent à `true` (`fault`).
-  - Régression : tests existants pour `value=CbusNeutral` / `false`
-                 restent verts.
+  - Analog validation: CbusMinVal / CbusNeutral / CbusMaxVal accepted,
+                       unknown constants / low / high rejected.
+  - Digital validation: low / high / fault accepted, integer / analog
+                        constants rejected.
+  - Invalid forms: null, list, dict, float, out-of-range.
+  - Pipeline: value survives parsing → canon → merge → generation.
+  - Absent value: the generator default (CbusNeutral / false).
+  - Merge conflict: two different `value`s for the same id → error.
+  - Failsafe: channels FAILSAFE_HARD / VBAT_FAIL start at `true` (`fault`).
+  - Regression: the tests for `value=CbusNeutral` / `false` stay green.
 
 Runs against the real parser / validator / generator, with no mocking.
 """
@@ -346,7 +344,7 @@ def test_value_dict_rejected(tmp_path: Path):
 # =============================================================================
 
 def test_value_absent_keeps_canon_value_none(tmp_path: Path):
-    """Absent → ChannelDefinition.value == None (pas de défaut appliqué ici)."""
+    """Absent → ChannelDefinition.value == None (no default applied here)."""
     p = tmp_path / "ch.cb"
     raw = _raw_channel()  # value omitted (Ellipsis)
     assert "value" not in raw
@@ -415,7 +413,7 @@ def test_render_value_digital_high():
 
 
 # =============================================================================
-# 9. PIPELINE : _emit_channel_init écrit la valeur runtime correcte
+# 9. PIPELINE: _emit_channel_init writes the right runtime value
 # =============================================================================
 
 def test_emit_channel_init_writes_runtime_value_analog_cbus_min_val():
@@ -465,7 +463,7 @@ def test_emit_channel_init_digital_default_is_false():
 
 
 # =============================================================================
-# 10. CONFLIT DE FUSION : value différent pour le même id
+# 10. MERGE CONFLICT: different value for the same id
 # =============================================================================
 
 def test_merge_two_channels_with_different_value_raises(tmp_path: Path):
@@ -512,7 +510,7 @@ def test_merge_two_channels_with_same_value_succeeds(tmp_path: Path):
 
 
 # =============================================================================
-# 11. USAGE RÉEL : channels failsafe déclarés value: fault (link rework S3a)
+# 11. REAL USE: failsafe channels declared value: fault
 # =============================================================================
 
 def test_failsafe_cb_declares_value_high(tmp_path: Path):
@@ -560,7 +558,7 @@ def test_failsafe_channels_canonicalise_to_true():
     import yaml
     with p.open("r", encoding="utf-8") as f:
         raw = yaml.safe_load(f)
-    # Simulate A3 output: list[tuple[Path, type_label, raw_dict]]
+    # Simulate the parser output: list[tuple[Path, type_label, raw_dict]]
     parsed = [(p, "cb", raw)]
     result = canonize(parsed)
     ch = next(c for c in result.canonical_definitions if c.id == "FAILSAFE_HARD")
@@ -568,11 +566,11 @@ def test_failsafe_channels_canonicalise_to_true():
 
 
 # =============================================================================
-# 12. USAGE RÉEL : GEAR legacy (value: 1) migré en YAML (futur)
+# 12. REAL USE: a GEAR value (value: 1) written in YAML
 # =============================================================================
 
 def test_gear_like_analog_with_value_one_canonises_and_renders(tmp_path: Path):
-    """Simulate a future migration of GEAR (legacy value=1) into a .cb file."""
+    """A GEAR-like analog channel with value 1 in a .cb file."""
     p = tmp_path / "gear_bus.cb"
     raw = _raw_channel(cid="GEAR", type_="analog", value=1, theme="core")
     ch = validate_channel(p, raw, 0)
@@ -585,11 +583,11 @@ def test_gear_like_analog_with_value_one_canonises_and_renders(tmp_path: Path):
 
 
 # =============================================================================
-# 13. RÉGRESSION : tests existants pour le comportement legacy
+# 13. REGRESSION: the generator default when value is absent
 # =============================================================================
 
 def test_legacy_analog_value_default_in_cpp_is_cbus_neutral():
-    """Reproduit test_render_source_analog_default_is_cbus_neutral."""
+    """Same as test_render_source_analog_default_is_cbus_neutral."""
     ch = _make_analog(value=None)
     vc = ViewChannel(numeric_id=0, ch=ch, direction_bits=Direction.UPLINK)
     body: list[str] = []

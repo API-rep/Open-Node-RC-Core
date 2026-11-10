@@ -1,4 +1,4 @@
-"""The `zeroAt` field of an analog channel (link rework, step S3-4).
+"""The `zeroAt` field of an analog channel.
 
 Rules validated by the owner (2026-10-28):
   - `zeroAt: neutral | start` places the LOGICAL zero of an analog channel in
@@ -9,7 +9,7 @@ Rules validated by the owner (2026-10-28):
     build;
   - the canonical form is the boolean `zero_at_neutral` (C++: `zeroAtNeutral`).
 
-Point 1 of S3-4: the field.  The MD5, the generated flag and the accessors
+The field.  The MD5, the generated flag and the accessors
 are the next points.
 """
 
@@ -172,6 +172,6 @@ def test_generated_flag_compiles():
 
 
 def test_no_real_channel_uses_it_yet():
-    """S3-4 builds the mechanism only: GEAR_BUS / SUBGEAR_BUS move with the simulation WIP."""
+    """The mechanism only: GEAR_BUS / SUBGEAR_BUS follow later (TODO(Simulation chain))."""
     _, _, parsed = discover_and_parse(project_root=REPO_ROOT)
     assert not any(ch.zero_at_neutral for ch in canonize(parsed).canonical_definitions)

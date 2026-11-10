@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-ND1 integration tests — exercise the per-board generation loop and
+Node-mode integration tests — exercise the per-board generation loop and
 resolve_build_context_static() against a real (fictitious) project.
 
-These tests cover the two gaps identified in the post-review of ND1:
+These tests cover two cases of the per-board loop:
 
   1. test_generate_per_board_mother_uses_static_resolution
      Exercises _generate_per_board() (the function extracted from

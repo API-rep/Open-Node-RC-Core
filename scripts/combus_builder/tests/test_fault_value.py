@@ -1,4 +1,4 @@
-"""The `fault` value of the failsafe digital channels (link rework, step S3a).
+"""The `fault` value of the failsafe digital channels.
 
 Rules validated by the owner (2026-10-27):
   - the safe value of a channel is neutral (analog CbusNeutral, digital

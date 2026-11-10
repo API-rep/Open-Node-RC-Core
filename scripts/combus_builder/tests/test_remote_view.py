@@ -1,8 +1,8 @@
-"""The ComBus of a remote: the BASE view of the machine type it drives, mirrored (chantier 4, embryo).
+"""The ComBus of a remote: the BASE view of the machine type it drives, mirrored.
 
 Rules validated by the owner (2026-11-01):
   - R1 a remote (IS_REMOTE) drives a machine type (-D MACHINE_TYPE_<TYPE>);
-    one type for the embryo, the wiring ready for several (step 4.1);
+    one type for the embryo, the wiring ready for several;
   - R2 its ComBus is the BASE view of that type, mirrored: what the machine
     receives (`downlink`, `downlink_pt`: received then relayed) the remote
     sends (`uplink`); what the machine sends (`uplink`) the remote receives
@@ -109,7 +109,7 @@ def test_row1_the_remote_combus_holds_the_base_of_the_type(tmp_path, dumper):
 
 
 def test_row5_the_remote_and_the_machine_agree_on_the_link(tmp_path, dumper):
-    """Step 3.6: the contract is the MD5 of the remote link, no longer the BASE one."""
+    """The contract is the MD5 of the remote link, not the BASE one."""
     generate(dumper, _ctx("IS_MACHINE", TYPE), tmp_path / "machine")
     generate(dumper, _ctx("IS_REMOTE", TYPE), tmp_path / "remote")
     def md5s(folder):

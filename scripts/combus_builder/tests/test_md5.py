@@ -1,26 +1,26 @@
 #!/usr/bin/env python3
 """
-Tests for md5.py (A7.2) - MD5 computation for the THREE combus views.
+Tests for md5.py - MD5 computation for the THREE combus views.
 
 Coverage:
   - canonical_bytes() shape (JSON, sort_keys, includes required fields)
   - compute_view_hash() returns 16-byte digest
   - Hash inputs are: id, type, scope, direction, value, in wire order
-    (chantier 2.1: theme and infoName no longer hashed)
+    (theme and infoName no longer hashed)
   - Hash is independent of:
       * file order / discovery order
       * key ordering in the channel dict (cosmetic change)
   - Hash is sensitive to:
-      * direction change (the case that motivated A7)
+      * direction change
       * any channel field change
   - Hash inputs do NOT include:
       * projectVersion (separate constant)
-      * requires (already captured by presence/absence after A6.1)
-  - Scope influence per A7.2 task brief:
+      * requires (already captured by presence/absence in the view)
+  - Scope influence:
       * BASE influences all three hashes
       * SYSTEM influences combus_system and combus, NOT combus_base
       * BOARD influences combus, NOT combus_system NOR combus_base
-      * combus_base hash value is UNCHANGED vs A7.1
+      * combus_base hash is the plain MD5 of its canonical bytes
   - generate_md5_artifacts() emits 4 files:
       * combus_base_md5.h
       * combus_system_md5.h
@@ -31,7 +31,7 @@ Coverage:
       * k<View>ComBusMd5Hex     32-char lowercase hex per view
       * kProjectVersionMajor/Minor  (in combus_wire_common.h only)
       * kCombusHandshakeWirePayloadLen = 19u (in combus_wire_common.h only;
-        16 md5 + major + minor + dev, link rework 2.2b)
+        16 md5 + major + minor + dev
   - NO kMachineType (still removed).
   - 4-en-1 compile check: all four headers can be included together
     in a single TU without redefinition.
@@ -223,8 +223,8 @@ def test_compute_view_hash_changes_when_direction_changes():
     """A direction change on a BASE channel must change the hash on
     BASE and full views (real contract signal).
 
-    On the SYSTEM view, uplink and downlink collapse to ONE_WAY (ND7),
-    so the hash is the SAME — this is the documented ND7 invariant.
+    On the SYSTEM view, uplink and downlink collapse to ONE_WAY,
+    so the hash is the SAME — this is the documented ONE_WAY invariant.
     """
     chs1 = _canon_from_yamls(_ch(scope="BASE", direction="uplink"))
     chs2 = _canon_from_yamls(_ch(scope="BASE", direction="downlink"))
@@ -237,7 +237,7 @@ def test_compute_view_hash_changes_when_direction_changes():
         assert compute_view_hash(v1).md5_hex != compute_view_hash(v2).md5_hex, (
             f"FAIL: {name} hash does not diverge between uplink and downlink"
         )
-    # SYSTEM view: hash MUST be the SAME (ND7 ONE_WAY canonisation).
+    # SYSTEM view: hash MUST be the SAME (ONE_WAY canonisation).
     h_local_u = compute_view_hash(sel1.system)
     h_local_d = compute_view_hash(sel2.system)
     assert h_local_u.md5_hex == h_local_d.md5_hex, (
@@ -247,7 +247,7 @@ def test_compute_view_hash_changes_when_direction_changes():
 
 
 def test_compute_view_hash_unchanged_when_infoName_changes():
-    """Chantier 2.1, row 1: a debug label is not part of the contract."""
+    """Row 1: a debug label is not part of the contract."""
     chs1 = _canon_from_yamls(_ch(scope="BASE", info_name="Foo"))
     chs2 = _canon_from_yamls(_ch(scope="BASE", info_name="Bar"))
     sel1 = select_views(chs1)
@@ -295,7 +295,7 @@ def test_compute_view_hash_changes_when_scope_moves():
 
 
 # =============================================================================
-# A7.2 scope influence matrix
+# Scope influence matrix
 # =============================================================================
 
 def test_base_influences_all_three_hashes():
@@ -348,20 +348,19 @@ def test_board_influences_only_full():
 
 
 def test_combus_base_hash_matches_a71_value():
-    """A7.2 task brief: combus_base hash MUST NOT change vs A7.1.
+    """The combus_base hash is the plain MD5 of the canonical bytes of the view.
 
-    The MD5 computation is strictly the same function on the same view
-    of the same channels. We verify by running both the legacy (A7.1)
-    single-view path and the A7.2 three-view path and comparing.
+    We verify by comparing compute_view_hash() with hashlib.md5 on
+    canonical_bytes().
     """
     raw = _ch(scope="BASE", direction="uplink")
     chs = _canon_from_yamls(raw)
     sel = select_views(chs)
 
-    # A7.2 hash on sel.base
+    # Hash of sel.base
     h_a72 = compute_view_hash(sel.base)
 
-    # Reproduce the A7.1 bytes path: canonical_bytes + manual md5
+    # Reproduce it by hand: canonical_bytes + md5
     expected = hashlib.md5(canonical_bytes(sel.base)).hexdigest()
     assert h_a72.md5_hex == expected
 
@@ -484,7 +483,7 @@ def test_common_header_has_shared_constants():
 
 
 def test_common_header_no_machine_type():
-    """kMachineType is still removed (A7.1 simplification, unchanged in A7.2)."""
+    """No kMachineType constant."""
     from scripts.combus_builder.md5 import _render_common_header
     out = _render_common_header()
     assert "kMachineType" not in out
@@ -567,10 +566,10 @@ def test_four_headers_compile_together(tmp_path):
 
 
 # =============================================================================
-# A10 — Determinism on the REAL repo (end-to-end, bit-identical)
+# Determinism on the REAL repo (end-to-end, bit-identical)
 # =============================================================================
 #
-# A10 of the Roadmap: "Validate determinism (2 runs -> identical contract)".
+# Determinism: 2 runs -> identical contract.
 # This test runs the FULL pipeline (parser -> canon -> select_views ->
 # generate -> generate_md5_artifacts) twice on the real .cb files in src/,
 # then asserts that:
@@ -614,7 +613,7 @@ def _run_full_pipeline(out_dir: Path):
 
 
 def test_a10_full_pipeline_deterministic_bit_identical(tmp_path: Path):
-    """A10: 2 runs of the full pipeline on the real repo produce bit-identical
+    """2 runs of the full pipeline on the real repo produce bit-identical
     headers (not just same hash)."""
     out1 = tmp_path / "run1"
     out2 = tmp_path / "run2"
@@ -660,7 +659,7 @@ def test_a10_full_pipeline_deterministic_bit_identical(tmp_path: Path):
 
 
 def test_a10_md5_deterministic_across_file_discovery_order(tmp_path: Path):
-    """A10: even if the OS returns .cb files in a different order, the
+    """Even if the OS returns .cb files in a different order, the
     generated headers are bit-identical."""
     from scripts.combus_builder.parser import discover_and_parse
     from scripts.combus_builder.canon import canonize
@@ -708,7 +707,7 @@ def test_a10_md5_deterministic_across_file_discovery_order(tmp_path: Path):
 
 
 # =============================================================================
-# ND7 — ONE_WAY canonisation for MD5 hashing
+# ONE_WAY canonisation for MD5 hashing
 # =============================================================================
 #
 # Rationale: in a multi-board node, the same SYSTEM channel can legitimately
@@ -741,7 +740,7 @@ def test_canonical_direction_downlink_is_one_way():
 def test_canonical_direction_uplink_and_downlink_collide():
     """uplink and downlink must produce the SAME canonical value.
 
-    This is the core ND7 invariant: the role mirror between boards
+    This is the core ONE_WAY invariant: the role mirror between boards
     must not produce a hash divergence.
     """
     assert _canonical_direction_for_hash(frozenset({"uplink"})) == \
@@ -788,9 +787,9 @@ def test_canonical_direction_both_distinct_from_none():
 
 def test_nd7_uplink_vs_downlink_same_hash_on_system_view():
     """Two channels identical except uplink vs downlink must produce
-    the SAME MD5 on the SYSTEM view (ND7 ONE_WAY canonisation).
+    the SAME MD5 on the SYSTEM view (ONE_WAY canonisation).
 
-    This is the end-to-end ND7 invariant: the role mirror between
+    This is the end-to-end ONE_WAY invariant: the role mirror between
     boards must not produce a hash divergence on the SYSTEM view.
 
     BASE and full views are NOT affected by ONE_WAY (uplink/downlink
@@ -935,7 +934,7 @@ def test_nd7_canonical_bytes_none_unchanged_on_system():
 
 
 # =============================================================================
-# A2.1 — hash canonisation of the `*_or` direction variants (direct contract)
+# hash canonisation of the `*_or` direction variants (direct contract)
 # =============================================================================
 
 import pytest  # noqa: E402
@@ -959,7 +958,7 @@ def test_canonical_direction_for_hash_full_mapping(direction, direction_or, expe
 
 
 # =============================================================================
-# Chantier 2.1 — what the contract hash covers (table validated by the owner)
+# what the contract hash covers (table validated by the owner)
 # =============================================================================
 
 def _hashes(*yamls):
@@ -1013,7 +1012,7 @@ def test_contract_row11_analog_default_value_changes_hash():
 
 
 def test_generate_prints_one_md5_line_per_set(tmp_path, capsys):
-    """Chantier 2.1: the build log shows the MD5 of each set, with its channel counts."""
+    """The build log shows the MD5 of each set, with its channel counts."""
     from scripts.combus_builder.generator import generate
 
     chs = _canon_from_yamls(_ch(id_="B1", scope="BASE", type_="analog"),

@@ -1,4 +1,4 @@
-"""Category of a node: one per env (link rework, step 3.5).
+"""Category of a node: one per env.
 
 Rules validated by the owner (2026-11-01):
   - a node is a compiled firmware with a ComBus; exactly one category per env:

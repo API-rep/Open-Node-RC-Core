@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ND6 tests — A2.1 representation: `direction` (frozenset) + `direction_or`
+both_or tests — representation: `direction` (frozenset) + `direction_or`
 (frozenset), mutually exclusive. No `ch.both_or` bool. No SYSTEM-only
 restriction on `both_or` (it is accepted on SYSTEM and BASE).
 
@@ -13,10 +13,10 @@ Coverage:
   - canon/channels.py: `both_or` is a direction token, accepted on
     SYSTEM and BASE, rejected on BOARD and on analog.
   - diffusion.py: family-based rule (uplink-ish, downlink-ish,
-    both-ish). 2 uplink-ish = fatal, 1 uplink-ish → absentes
-    `downlink`, both-ish only → absentes `both`/`both_or`,
-    both-ish + uplink/downlink = fatal sémantique, both + both_or
-    = warning non fatal.
+    both-ish). 2 uplink-ish = fatal, 1 uplink-ish → absent boards get
+    `downlink`, both-ish only → absent boards get `both`/`both_or`,
+    both-ish + uplink/downlink = fatal semantic conflict, both + both_or
+    = non-fatal warning.
   - md5.py: payload includes `direction` + `direction_or`. SYSTEM
     view applies ONE_WAY canonisation (uplink/downlink/uplink_or/
     downlink_or → same hash). BASE view: no canonisation.
@@ -110,7 +110,7 @@ def test_canon_both_or_accepted_for_system_digital():
 
 
 def test_canon_both_or_accepted_for_base_digital():
-    """direction=both_or with scope=BASE + type=digital → accepted (A2.1)."""
+    """direction=both_or with scope=BASE + type=digital → accepted."""
     raw = _make_channel(scope="BASE", direction="both_or")
     chs = _canon_from_yamls(raw)
     assert chs[0].direction == frozenset()
@@ -155,7 +155,7 @@ def test_canon_both_or_in_direction_tokens():
 
 
 # =============================================================================
-# DIFFUSION: family-based rule (A2.1)
+# DIFFUSION: family-based rule
 # =============================================================================
 
 def test_diffusion_two_uplink_ish_is_fatal():
@@ -169,7 +169,7 @@ def test_diffusion_two_uplink_ish_is_fatal():
 
 
 def test_diffusion_one_uplink_ish_absentees_get_downlink():
-    """1 uplink-ish (uplink_or) → absentes reçoivent `downlink` (token simple)."""
+    """1 uplink-ish (uplink_or) → absent boards get `downlink` (plain token)."""
     explicit = [
         ("board_a", "uplink_or", Path("a.cb")),
     ]
@@ -178,7 +178,7 @@ def test_diffusion_one_uplink_ish_absentees_get_downlink():
 
 
 def test_diffusion_one_uplink_ish_uplink_token_absentees_get_downlink():
-    """1 uplink-ish (uplink) → absentes reçoivent `downlink`."""
+    """1 uplink-ish (uplink) → absent boards get `downlink`."""
     explicit = [
         ("board_a", "uplink", Path("a.cb")),
     ]
@@ -187,7 +187,7 @@ def test_diffusion_one_uplink_ish_uplink_token_absentees_get_downlink():
 
 
 def test_diffusion_both_only_absentees_get_both():
-    """both seul → absentes reçoivent `both`."""
+    """both alone → absent boards get `both`."""
     explicit = [
         ("board_a", "both", Path("a.cb")),
     ]
@@ -196,7 +196,7 @@ def test_diffusion_both_only_absentees_get_both():
 
 
 def test_diffusion_both_or_only_absentees_get_both_or():
-    """both_or seul → absentes reçoivent `both_or` (OR préservé)."""
+    """both_or alone → absent boards get `both_or` (OR kept)."""
     explicit = [
         ("board_a", "both_or", Path("a.cb")),
     ]
@@ -205,7 +205,7 @@ def test_diffusion_both_or_only_absentees_get_both_or():
 
 
 def test_diffusion_both_ish_mixed_with_uplink_is_fatal_semantic():
-    """both-ish + uplink-ish = FATAL sémantique."""
+    """both-ish + uplink-ish = FATAL semantic conflict."""
     explicit = [
         ("board_a", "both", Path("a.cb")),
         ("board_b", "uplink", Path("b.cb")),
@@ -216,7 +216,7 @@ def test_diffusion_both_ish_mixed_with_uplink_is_fatal_semantic():
 
 
 def test_diffusion_both_ish_mixed_with_downlink_is_fatal_semantic():
-    """both_or + downlink = FATAL sémantique."""
+    """both_or + downlink = FATAL semantic conflict."""
     explicit = [
         ("board_a", "both_or", Path("a.cb")),
         ("board_b", "downlink", Path("b.cb")),
@@ -249,7 +249,7 @@ def test_diffusion_downlink_only_is_warning_canal_mort():
 
 
 def test_diffusion_none_only_no_synthesis_no_warning():
-    """none seul → pas de synthèse, pas de warning."""
+    """none alone → no synthesis, no warning."""
     explicit = [
         ("board_a", "none", Path("a.cb")),
     ]
@@ -259,7 +259,7 @@ def test_diffusion_none_only_no_synthesis_no_warning():
 
 
 # =============================================================================
-# MD5: groups of equality (A2.1)
+# MD5: groups of equality
 # =============================================================================
 
 def test_md5_base_distinguishes_all_7_tokens():
@@ -302,7 +302,7 @@ def test_md5_system_one_way_groups():
 
 
 def test_md5_both_and_both_or_produce_different_hash():
-    """`both` et `both_or` produisent des hash différents (même vue)."""
+    """`both` and `both_or` give different hashes (same view)."""
     chs_both = _canon_from_yamls(_make_channel(direction="both"))
     chs_both_or = _canon_from_yamls(_make_channel(direction="both_or"))
     v_both = _view_with(chs_both, name="combus_base")
@@ -313,7 +313,7 @@ def test_md5_both_and_both_or_produce_different_hash():
 
 
 def test_md5_uplink_and_uplink_or_produce_different_hash_base():
-    """BASE: `uplink` et `uplink_or` produisent des hash différents."""
+    """BASE: `uplink` and `uplink_or` give different hashes."""
     chs_uplink = _canon_from_yamls(_make_channel(direction="uplink"))
     chs_uplink_or = _canon_from_yamls(_make_channel(direction="uplink_or"))
     v_uplink = _view_with(chs_uplink, name="combus_base")
@@ -350,7 +350,7 @@ def _emit_for_token(tok: str, ctype: str = "digital") -> str:
 
 
 def test_generator_bitmask_and_bothor_for_all_7_tokens():
-    """Pour chacun des 7 tokens, vérifier le bitmask Direction::X et .bothOr."""
+    """For each of the 7 tokens, check the Direction::X bitmask and .bothOr."""
     expected = {
         "uplink":      ("Direction::Uplink",   "false"),
         "downlink":    ("Direction::Downlink", "false"),
@@ -367,28 +367,28 @@ def test_generator_bitmask_and_bothor_for_all_7_tokens():
 
 
 def test_generator_analog_never_emits_bothor():
-    """Pour un channel analog, .bothOr n'est jamais émis (champ inexistant)."""
+    """For an analog channel, .bothOr is never emitted (no such field)."""
     line = _emit_for_token("both", ctype="analog")
     assert ".bothOr" not in line
     assert ".betweenNodes = Direction::Both" in line
 
 
 def test_generator_uplink_or_emits_uplink_not_none():
-    """Régression : uplink_or doit produire Direction::Uplink (pas None)."""
+    """Regression: uplink_or must give Direction::Uplink (not None)."""
     line = _emit_for_token("uplink_or")
     assert ".betweenNodes = Direction::Uplink" in line
     assert ".betweenNodes = Direction::None" not in line
 
 
 def test_generator_downlink_or_emits_downlink_not_none():
-    """Régression : downlink_or doit produire Direction::Downlink (pas None)."""
+    """Regression: downlink_or must give Direction::Downlink (not None)."""
     line = _emit_for_token("downlink_or")
     assert ".betweenNodes = Direction::Downlink" in line
     assert ".betweenNodes = Direction::None" not in line
 
 
 def test_generator_both_or_emits_both_not_none():
-    """Régression : both_or doit produire Direction::Both (pas None)."""
+    """Regression: both_or must give Direction::Both (not None)."""
     line = _emit_for_token("both_or")
     assert ".betweenNodes = Direction::Both" in line
     assert ".betweenNodes = Direction::None" not in line

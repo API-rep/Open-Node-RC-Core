@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-test_mother_not_a_board.py — ND2 fix: "mere = board fantome".
+test_mother_not_a_board.py — the mother env is not a board.
 
 Scope:
   Verify that the mother env (board_id=None) is EXCLUDED from the
   SYSTEM diffusion pool when the node has at least one sub-env.
 
   Three test cases (per the spec):
-    1. Mere + 2 sous-envs (mainboard, soundboard): uplink declared on
+    1. Mother + 2 sub-envs (mainboard, soundboard): uplink declared on
        mainboard only -> soundboard receives downlink, NO conflict,
        mother is NOT in the diffusion pool.
     2. Mere + 2 sous-envs: uplink on mainboard AND soundboard ->
@@ -270,9 +270,10 @@ channels:
 """,
         }, src_dir)
 
-        # Mere porte IS_MAINBOARD pour que la declaration de mainboard.cb
-        # (requires=[IS_MAINBOARD]) soit active sur la mere aussi : sans le
-        # correctif, la mere entre dans le conflit et apparait dans le message.
+        # The mother carries IS_MAINBOARD so that the declaration of
+        # mainboard.cb (requires=[IS_MAINBOARD]) is active on the mother too:
+        # if the mother were in the pool, it would join the conflict and
+        # appear in the message.
         node = _make_node(project_root, {
             None: {"IS_MACHINE", "COMMON_FLAG", "IS_MAINBOARD"},
             "mainboard": {"IS_MAINBOARD", "IS_MACHINE", "COMMON_FLAG"},

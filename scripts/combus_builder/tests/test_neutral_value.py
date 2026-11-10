@@ -1,4 +1,4 @@
-"""The safe value of an analog channel is CbusNeutral (link rework, step S3).
+"""The safe value of an analog channel is CbusNeutral.
 
 Rules validated by the owner (2026-10-27):
   - the safe value of a channel is neutral: analog `CbusNeutral` (digital

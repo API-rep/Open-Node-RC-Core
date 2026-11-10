@@ -1,4 +1,4 @@
-"""Candidate channels, stable / next MD5 and the DEV version field (link rework, step 2.2a).
+"""Candidate channels, stable / next MD5 and the DEV version field.
 
 Rules validated by the owner (2026-10-23):
   - a BASE channel may be a candidate (`candidate: true`); the .cb gives its
@@ -13,7 +13,7 @@ Rules validated by the owner (2026-10-23):
   - the SYSTEM set contains the candidates: two boards of a node with
     different candidates have different SYSTEM MD5 (their link is refused);
   - project_version.h has a third field, PROJECT_VERSION_DEV, written in
-    combus_wire_common.h (logged only by the handshake, step 2.2b).
+    combus_wire_common.h (logged only by the handshake).
 """
 
 from __future__ import annotations
@@ -227,7 +227,7 @@ def test_dev_is_written_in_the_common_header(tmp_path):
 
 
 # =============================================================================
-# Step 2.2b — what the firmware needs from the builder
+# What the firmware needs from the builder
 # =============================================================================
 
 def test_base_md5_header_carries_the_stable_channel_counts(tmp_path):

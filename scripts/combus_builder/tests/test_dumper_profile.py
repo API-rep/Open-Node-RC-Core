@@ -1,4 +1,4 @@
-"""The dumper_truck channel set after the recadrage of 2026-10-25 (link rework, before step 2.4).
+"""The dumper_truck channel set: BASE commands, SYSTEM computed states.
 
 Rules validated by the owner:
   - BASE holds the standard command buses only, the ones a remote sends:
@@ -92,7 +92,7 @@ def test_computed_states_are_produced_by_their_processing_board(channels, cid, r
 
 
 def test_base_downlink_commands_are_redistributed_in_the_node(channels):
-    """Link rework 2.4: every BASE command reaches every board of the node (downlink_pt)."""
+    """Every BASE command reaches every board of the node (downlink_pt)."""
     plain = sorted(cid for cid, ch in channels.items()
                    if ch.scope == "BASE" and _dir(ch) == "downlink" and not ch.passthrough)
     assert plain == [], f"BASE downlink without _pt: {plain}"

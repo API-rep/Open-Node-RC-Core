@@ -89,7 +89,7 @@ TEN = {
     "combus_system_ids.h", "combus_base_ids.h",
     "combus_system_md5.h", "combus_base_md5.h", "combus_md5.h",
     "combus_wire_common.h",
-    "combus_peer_links.h",            # link rework 3.1
+    "combus_peer_links.h",
 }
 
 

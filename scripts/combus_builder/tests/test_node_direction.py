@@ -1,4 +1,4 @@
-"""Direction of a channel inside the node, and `downlink_pt` (link rework, step 2.4).
+"""Direction of a channel inside the node, and `downlink_pt`.
 
 Rules validated by the owner (2026-10-25):
   - the direction of a BASE `.cb` is the direction of the NODE (between
@@ -9,7 +9,7 @@ Rules validated by the owner (2026-10-25):
     node (node direction uplink), the other boards receive it (downlink);
   - `downlink` without `_pt`: the connected board uses it alone (node
     direction none everywhere); `uplink`, `both`: none in the node;
-    `both_or`: unchanged (the merge of step 1.1b relays it);
+    `both_or`: unchanged (the OR merge relays it);
   - SYSTEM / BOARD: the node direction is the direction (SYSTEM diffusion);
   - `both_pt` is refused (several sources by nature), `_pt` on SYSTEM too
     (SYSTEM is already diffused);

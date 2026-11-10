@@ -1,4 +1,4 @@
-"""Safe value of every channel (link rework, step 3.2a).
+"""Safe value of every channel.
 
 Rules validated by the owner (2026-10-25):
   - the default value of a .cb IS its safe value: sent until the writer has

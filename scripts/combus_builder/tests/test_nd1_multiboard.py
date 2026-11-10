@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-ND1 multiboard validation script (CLI, no real PlatformIO build).
+Node-mode validation script (CLI, no real PlatformIO build).
 
-This script validates the ND1 implementation by simulating a node with
+This script validates the node mode by simulating a node with
 2 fictitious sub-envs and verifying that:
 
   1. parse_env_hierarchy() correctly detects the node structure.
@@ -11,8 +11,8 @@ This script validates the ND1 implementation by simulating a node with
   3. generate() is called 2 times with 2 different filename_prefixes.
   4. The generated files have the expected per-board names.
 
-It also validates the legacy single-board mode (no node detected) by
-verifying that the behaviour is strictly identical to pre-ND1.
+It also validates the single-board mode (no node detected): one set of
+unprefixed files.
 
 Usage:
     python scripts/combus_builder/tests/test_nd1_multiboard.py
@@ -140,7 +140,7 @@ def _make_fake_build_context(
 
 
 # =============================================================================
-# Test 1: legacy single-board mode (ND1: strictly unchanged)
+# Test 1: legacy single-board mode (strictly unchanged)
 # =============================================================================
 
 def test_legacy_mode() -> None:

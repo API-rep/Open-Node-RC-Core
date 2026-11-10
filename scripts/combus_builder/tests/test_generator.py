@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
 """
-Tests for generator.py (A6.1) - C++ artifact generation.
+Tests for generator.py - C++ artifact generation.
 
-A6.1 corrections vs A6:
-  - ChannelDescriptor is REMOVED.
-  - The generator emits REAL AnalogComBus / DigitalComBus runtime
-    structures (infoName, value, layer, direction) — matching
-    src/core/system/combus/combus_defs.h.
-  - ChanLayer is preserved (audit A6 confirmed _layer_ok() requires it).
-  - direction is a fourth field on each runtime struct entry.
+What the generator emits:
+  - No ChannelDescriptor abstraction.
+  - The REAL AnalogComBus / DigitalComBus runtime structures (infoName,
+    value, layer, flow) — matching src/core/system/combus/combus_defs.h.
+  - ChanLayer (the layer check of combus_access requires it).
 
 Coverage:
-  - requires resolution (errors only — A6 raises, not filters).
-  - View selection (combus = BASE+SYSTEM+BOARD; combus_base = BASE).
+  - requires resolution (a channel whose flags are missing is skipped and logged).
+  - View selection (combus = BASE+SYSTEM+BOARD; combus_system = BASE+SYSTEM;
+    combus_base = BASE).
   - Deterministic ID allocation.
   - WIRE_END computation.
   - Direction C++ representation (0/1/2/3, both normalization).
@@ -120,11 +119,11 @@ def _ctx_with_values(values: dict) -> BuildContext:
 
 
 # =============================================================================
-# A6.1 SPECIFIC: ChannelDescriptor must NOT appear
+# ChannelDescriptor must NOT appear
 # =============================================================================
 
 def test_no_channel_descriptor_struct_in_rendered_header():
-    """A6.1: ChannelDescriptor abstraction is REMOVED. Header must not
+    """No ChannelDescriptor abstraction. Header must not
     declare a ChannelDescriptor struct."""
     chs = _canon_from_yamls({"channels": [_ch("FOO")]})
     view = _build_view_with_channels(chs)
@@ -134,7 +133,7 @@ def test_no_channel_descriptor_struct_in_rendered_header():
 
 
 def test_no_channel_descriptor_in_rendered_source():
-    """A6.1: generated .cpp must not reference ChannelDescriptor either."""
+    """The generated .cpp must not reference ChannelDescriptor either."""
     chs = _canon_from_yamls({"channels": [
         _ch("FOO", info_name="Foo"),
         _ch("BAR", type_="analog", info_name="Bar"),
@@ -158,11 +157,11 @@ def test_no_channel_descriptor_in_full_generation(tmp_path):
 
 
 # =============================================================================
-# A6.1 SPECIFIC: ChanLayer is PRESERVED
+# ChanLayer is PRESERVED
 # =============================================================================
 
 def test_chanlayer_enum_in_combus_defs():
-    """combus_defs.h still defines ChanLayer (audit A6 confirmed _layer_ok)."""
+    """combus_defs.h defines ChanLayer (used by the layer check)."""
     h = (REPO_ROOT / "src" / "core" / "system" / "combus" / "combus_defs.h").read_text(encoding="utf-8")
     assert "enum class ChanLayer" in h
     for v in ("BOARD", "SYSTEM", "BASE", "UNDEFINED"):
@@ -194,11 +193,11 @@ def test_generated_header_includes_combus_defs():
 
 
 # =============================================================================
-# A6.1 SPECIFIC: direction is added to runtime structs
+# The direction of each channel in the runtime structs
 # =============================================================================
 
 def test_direction_field_in_combus_defs():
-    """AnalogComBus and DigitalComBus carry a ChanFlow: one direction per kind of link (link rework 2.4)."""
+    """AnalogComBus and DigitalComBus carry a ChanFlow: one direction per kind of link."""
     h = (REPO_ROOT / "src" / "core" / "system" / "combus" / "combus_defs.h").read_text(encoding="utf-8")
     assert "struct ChanFlow" in h
     assert "Direction betweenNodes" in h and "Direction betweenBoards" in h
@@ -411,11 +410,11 @@ def test_select_views_both_views():
 
 
 # =============================================================================
-# A6.2 — combus_system view (BASE + SYSTEM, no BOARD)
+# combus_system view (BASE + SYSTEM, no BOARD)
 # =============================================================================
 
 def test_select_views_system_excludes_board():
-    """A6.2: combus_system contains exactly BASE+SYSTEM channels, no BOARD."""
+    """combus_system contains exactly BASE+SYSTEM channels, no BOARD."""
     chs = _canon_from_yamls({
         "channels": [
             _ch("R1", scope="BASE"),
@@ -434,7 +433,7 @@ def test_select_views_system_excludes_board():
 
 
 def test_select_views_system_is_prefix_of_full():
-    """A6.2: combus_system is a strict prefix of combus (BASE+SYSTEM channels
+    """combus_system is a strict prefix of combus (BASE+SYSTEM channels
     appear in the same order, with the same numeric IDs)."""
     chs = _canon_from_yamls({
         "channels": [
@@ -462,7 +461,7 @@ def test_select_views_system_is_prefix_of_full():
 
 
 def test_select_views_system_no_renumbering():
-    """A6.2: a channel that appears in both combus and combus_system has the
+    """A channel that appears in both combus and combus_system has the
     SAME numeric_id in both views (no renumbering)."""
     chs = _canon_from_yamls({
         "channels": [
@@ -487,7 +486,7 @@ def test_select_views_system_no_renumbering():
 
 
 def test_select_views_system_wire_end_equals_full_wire_end():
-    """A6.2: combus_system.wire_end == combus.wire_end (same BASE/SYSTEM
+    """combus_system.wire_end == combus.wire_end (same BASE/SYSTEM
     boundary by construction)."""
     chs = _canon_from_yamls({
         "channels": [
@@ -502,7 +501,7 @@ def test_select_views_system_wire_end_equals_full_wire_end():
 
 
 def test_select_views_system_deterministic():
-    """A6.2: combus_system is deterministic (parity with combus/combus_base)."""
+    """combus_system is deterministic (parity with combus/combus_base)."""
     chs_a = _canon_from_yamls({"channels": [
         _ch("R1", scope="BASE"),
         _ch("L1", scope="SYSTEM"),
@@ -520,7 +519,7 @@ def test_select_views_system_deterministic():
 
 
 def test_select_views_system_empty_when_no_base_or_system():
-    """A6.2: combus_system is empty when only BOARD channels exist."""
+    """combus_system is empty when only BOARD channels exist."""
     chs = _canon_from_yamls({"channels": [
         _ch("S1", scope="BOARD", direction=None),
         _ch("S2", scope="BOARD", direction=None),
@@ -531,7 +530,7 @@ def test_select_views_system_empty_when_no_base_or_system():
 
 
 def test_generate_emits_combus_board_files(tmp_path):
-    """A6.2 / Phase 2: generate() emits combus_system_ids.h only (no system .h/.cpp)."""
+    """generate() emits combus_system_ids.h only (no system .h/.cpp)."""
     chs = _canon_from_yamls({"channels": [
         _ch("R1", scope="BASE"),
         _ch("L1", scope="SYSTEM"),
@@ -539,7 +538,7 @@ def test_generate_emits_combus_board_files(tmp_path):
     ]})
     sel = generate(chs, _ctx([]), tmp_path)
     assert (tmp_path / "combus_system_ids.h").exists()
-    # Phase 2: the runtime .h/.cpp are NOT emitted for the system/base views.
+    # The runtime .h/.cpp are NOT emitted for the system/base views.
     assert not (tmp_path / "combus_system.h").exists()
     assert not (tmp_path / "combus_system.cpp").exists()
     # The full view still emits its three files.
@@ -552,7 +551,7 @@ def test_generate_emits_combus_board_files(tmp_path):
 
 
 def test_combus_board_ids_header_excludes_board():
-    """A6.2: combus_system_ids.h must NOT contain any BOARD channel."""
+    """combus_system_ids.h must NOT contain any BOARD channel."""
     chs = _canon_from_yamls({"channels": [
         _ch("R1", scope="BASE"),
         _ch("L1", scope="SYSTEM"),
@@ -567,7 +566,7 @@ def test_combus_board_ids_header_excludes_board():
 
 
 def test_combus_board_no_wire_end_sentinel():
-    """A6.2: combus_system_ids.h does NOT declare a WireEnd sentinel
+    """combus_system_ids.h does NOT declare a WireEnd sentinel
     (combus.WireEnd is the canonical boundary; combus_system reuses it)."""
     chs = _canon_from_yamls({"channels": [
         _ch("R1", scope="BASE"),
@@ -639,7 +638,7 @@ def test_view_channel_direction_bits():
 
 def _build_view_with_channels(channels: list[ChannelDefinition]) -> View:
     """Build a test View wrapping a list of channels (mirror of
-    `_select_view` from generator.py). Phase 5 (A15): each type has
+    `_select_view` from generator.py). Each type has
     its own 0-based counter.
     """
     _VIEW_SCOPE_ORDER = {"BASE": 0, "SYSTEM": 1, "BOARD": 2}
@@ -688,16 +687,16 @@ def test_render_ids_header_basic():
     assert "enum class DigitalComBusID : uint8_t" in out
     assert "FOO = 0" in out
     assert "CH_COUNT" in out
-    # Phase 4 (A14): WireEnd constants are no longer emitted.
+    # No WireEnd constant is emitted.
     assert "CombusWireEnd" not in out
 
 
 # =============================================================================
-# Phase 1 A.11 — per-bus wire-end divergence (regression guard)
+# Per-bus wire-end divergence (regression guard)
 # =============================================================================
 
 def test_wire_end_analog_and_digital_can_diverge():
-    """Phase 1 A.11 regression guard: a config with 5 BASE analog and
+    """Regression guard: a config with 5 BASE analog and
     3 BASE digital channels must yield wire_end_analog=5 and
     wire_end_digital=3, with the two values explicitly distinct.
 
@@ -747,7 +746,7 @@ def test_wire_end_analog_and_digital_equal_when_counts_match():
 
 
 def test_render_ids_header_does_not_emit_wire_end():
-    """Phase 4 (A14) regression guard: the generated combus_ids.h must
+    """Regression guard: the generated combus_ids.h must
     NOT contain ComBusWireEnd / ComBusWireEndAnalog / ComBusWireEndDigital
     anymore. Wire dimensions are now derived directly from the Base
     view's ID enums (AnalogComBusBaseID::CH_COUNT and
@@ -809,7 +808,7 @@ def test_render_ids_header_no_wire_end_for_base_view():
 
 
 def test_render_header_externs_real_runtime_structs():
-    """A6.1: header declares extern AnalogComBusArray[] / DigitalComBusArray[]."""
+    """The header declares extern AnalogComBusArray[] / DigitalComBusArray[]."""
     chs = _canon_from_yamls({"channels": [
         _ch("FOO", type_="digital", scope="BASE"),
         _ch("BAR", type_="analog", scope="BASE"),
@@ -821,7 +820,7 @@ def test_render_header_externs_real_runtime_structs():
 
 
 def test_render_header_no_direction_enum():
-    """A6.1: Direction enum is defined in combus_defs.h (runtime), NOT in
+    """The Direction enum is defined in combus_defs.h (runtime), NOT in
     the generated header. Generator only USES the enum."""
     chs = _canon_from_yamls({"channels": [_ch("FOO")]})
     view = _build_view_with_channels(chs)
@@ -846,7 +845,7 @@ def test_render_header_base_view_no_bus_instance():
 
 
 def test_render_source_real_runtime_structs():
-    """A6.1: source defines AnalogComBusArray[] / DigitalComBusArray[] directly."""
+    """The source defines AnalogComBusArray[] / DigitalComBusArray[] directly."""
     chs = _canon_from_yamls({"channels": [
         _ch("FOO", info_name="Foo channel", direction="uplink"),
         _ch("BAR", type_="analog", info_name="Bar analog", direction="both"),
@@ -997,11 +996,11 @@ def test_generate_empty_yields_empty_views(tmp_path):
 
 
 # =============================================================================
-# Phase 2 / A12 — combus_system and combus_base .h/.cpp are NOT emitted
+# combus_system and combus_base .h/.cpp are NOT emitted
 # =============================================================================
 
 def test_generate_does_not_emit_system_base_h_cpp(tmp_path):
-    """Phase 2 / A12: combus_system.h/.cpp and combus_base.h/.cpp
+    """combus_system.h/.cpp and combus_base.h/.cpp
     are NO LONGER written to disk. Only the _ids.h + _md5.h headers
     are emitted for these views. The MD5 payload is built directly
     from the in-memory View model (see md5.canonical_bytes), so no
@@ -1025,7 +1024,7 @@ def test_generate_does_not_emit_system_base_h_cpp(tmp_path):
     # combus_system / combus_base: ids only (no .h/.cpp)
     assert (tmp_path / "combus_system_ids.h").is_file()
     assert (tmp_path / "combus_base_ids.h").is_file()
-    # Phase 2: the .h/.cpp counterparts MUST NOT exist
+    # The .h/.cpp counterparts MUST NOT exist
     assert not (tmp_path / "combus_system.h").exists(), \
         "combus_system.h should NOT be emitted"
     assert not (tmp_path / "combus_system.cpp").exists(), \
@@ -1039,7 +1038,7 @@ def test_generate_does_not_emit_system_base_h_cpp(tmp_path):
     assert (tmp_path / "combus_base_md5.h").is_file()
     assert (tmp_path / "combus_md5.h").is_file()
     assert (tmp_path / "combus_wire_common.h").is_file()
-    # Links between nodes (link rework 3.1): always written, empty without peer
+    # Links between nodes: always written, empty without peer
     assert (tmp_path / "combus_peer_links.h").is_file()
     # Total: 10 files
     all_files = sorted(p.name for p in tmp_path.iterdir())
@@ -1047,7 +1046,7 @@ def test_generate_does_not_emit_system_base_h_cpp(tmp_path):
 
 
 def test_md5_payload_built_from_view_model_not_files(tmp_path):
-    """Phase 2: the MD5 payload must be built from the in-memory View
+    """The MD5 payload must be built from the in-memory View
     model, NOT from reading combus_system.cpp / combus_base.cpp
     (which are no longer on disk).
 
@@ -1096,7 +1095,7 @@ def test_generated_ids_header_parses():
     assert re.search(r"enum\s+class\s+AnalogComBusID\s*:\s*uint8_t", ids)
     assert re.search(r"enum\s+class\s+DigitalComBusID\s*:\s*uint8_t", ids)
     assert re.search(r"A1\s*=\s*0", ids)
-    assert re.search(r"D1\s*=\s*0", ids)  # A15: per-type counters
+    assert re.search(r"D1\s*=\s*0", ids)  # per-type counters
     assert re.search(r"CH_COUNT", ids)
 
 
@@ -1230,7 +1229,7 @@ def test_generator_against_real_repo_files():
         sel = generate(chs, ctx, Path(tmp_dir))
         assert sel.full.ch_count > 0
         assert sel.full.ch_count >= sel.base.ch_count
-        # Phase 2: combus (3 files) + the two *_ids.h of the other views.
+        # combus (3 files) + the two *_ids.h of the other views.
         emitted = ("combus.h", "combus.cpp", "combus_ids.h",
                    "combus_system_ids.h", "combus_base_ids.h")
         for fname in emitted:
@@ -1420,9 +1419,9 @@ def test_generated_cpp_direction_for_downlink():
 
 
 # =============================================================================
-# Phase 5 (A15) — ID/data correspondence tests
+# ID/data correspondence tests
 # =============================================================================
-# These tests guard against the bug found in A14 verification: the
+# These tests guard against an indexing bug: the
 # generator previously allocated IDs via a single global enumerate()
 # over a (scope, type, theme, id)-sorted channel list, which mixed
 # analog and digital channels into one sequence. The result: digital
@@ -1436,7 +1435,7 @@ def test_generated_cpp_direction_for_downlink():
 
 
 def test_a15_analog_ids_are_0_based_per_type():
-    """Phase 5 (A15) regression guard: analog channels must have 0-based
+    """Regression guard: analog channels must have 0-based
     numeric_id within their own type, NOT in a global sequence that
     mixes with digital channels.
 
@@ -1464,7 +1463,7 @@ def test_a15_analog_ids_are_0_based_per_type():
 
 
 def test_a15_generated_array_data_matches_enum_ids():
-    """Phase 5 (A15) regression guard: the generated combus.cpp must
+    """Regression guard: the generated combus.cpp must
     place each channel's data at the array index equal to its enum ID.
 
     Before the fix: digital channels had enum IDs 2, 3 but their data
@@ -1522,7 +1521,7 @@ def test_a15_generated_array_data_matches_enum_ids():
 
 
 def test_a15_base_view_only_contains_base_channels():
-    """Phase 5 (A15): the combus_base view must only contain channels
+    """The combus_base view must only contain channels
     with scope=BASE, regardless of type.
     """
     chs = _canon_from_yamls({"channels": [
@@ -1538,7 +1537,7 @@ def test_a15_base_view_only_contains_base_channels():
 
 
 def test_a15_wire_end_equals_count_of_base_channels():
-    """Phase 5 (A15): view.wire_end must equal the count of BASE
+    """view.wire_end must equal the count of BASE
     channels of ALL types (analog + digital).
     """
     chs = _canon_from_yamls({"channels": [

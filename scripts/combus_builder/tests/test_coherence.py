@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 """
-Tests for coherence.py (A8) - CPPDEFINES / PlatformIO coherence check.
+Tests for coherence.py - CPPDEFINES / PlatformIO coherence check.
 
 Coverage:
   - list_known_envs() parses [env:NAME] sections from platformio.ini
   - is_known_env() accepts / rejects the right names
   - unknown env raises UnknownEnvironmentError
-  - check_coherence() reuses A4 (no re-implementation)
+  - check_coherence() reuses flags.py (no re-implementation)
   - coherent env (override matches idedata shape) -> coherent=True
   - divergent env -> coherent=False + divergence fields populated
   - flag present in override -> present in report's "extra" set when idedata lacks it
   - flag absent in override -> present in report's "missing" set when idedata has it
   - flag with value -> correctly compared (matched AND mismatched)
-  - skipped path: A4 acquire fails -> report.skipped=True
+  - skipped path: the acquisition fails -> report.skipped=True
   - skipped path: idedata subprocess fails -> report.skipped=True
   - multi-env: each env produces an independent report
-  - structural check: A8 imports from A4 (does not re-implement)
+  - structural check: coherence.py imports from flags.py (does not re-implement)
 """
 
 from __future__ import annotations
@@ -132,13 +132,13 @@ def test_is_known_env_false(tmp_path):
 
 
 # =============================================================================
-# Structural / reuse-of-A4 check
+# Structural / reuse-of-flags.py check
 # =============================================================================
 
 def test_a8_imports_from_a4_not_reimplements():
-    """A8 must reuse A4's API, not re-implement CPPDEFINES acquisition."""
+    """coherence.py must reuse the API of flags.py, not re-implement CPPDEFINES acquisition."""
     import scripts.combus_builder.coherence as a8
-    # A8 exposes the same primitive helpers A4 uses.
+    # coherence.py exposes the same primitive helpers as flags.py.
     assert a8.acquire_build_context is acquire_build_context
     assert a8.read_idedata is read_idedata
     assert a8.compare_context_to_idedata is compare_context_to_idedata
@@ -330,7 +330,7 @@ def test_unknown_env_raises(tmp_path):
 
 
 def test_acquire_failure_marks_skipped(tmp_path):
-    """When A4 cannot acquire the ctx, A8 returns a skipped report."""
+    """When the ctx cannot be acquired, the check returns a skipped report."""
     _write_platformio_ini(tmp_path, """\
         [platformio]
         src_dir = src
@@ -354,7 +354,7 @@ def test_acquire_failure_marks_skipped(tmp_path):
 
 
 def test_idedata_failure_marks_skipped(tmp_path):
-    """When idedata subprocess fails, A8 returns a skipped report."""
+    """When idedata subprocess fails, the check returns a skipped report."""
     _write_platformio_ini(tmp_path, """\
         [platformio]
         src_dir = src
@@ -517,7 +517,7 @@ def test_multi_env_one_divergent_one_coherent(tmp_path):
 def test_list_known_envs_finds_real_project_envs():
     """Smoke check: the project's own platformio.ini exposes several envs."""
     envs = list_known_envs(REPO_ROOT)
-    # We expect at least these (already verified manually during A8 design).
+    # We expect at least these (verified manually when the check was written).
     expected_subset = {
         "machines", "volvo_A60H_bruder", "remotes",
         "test_combus_loopback",

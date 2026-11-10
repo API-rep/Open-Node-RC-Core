@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-ND2 diffusion tests — exercise diffuse_system_channels() against
+Diffusion tests — exercise diffuse_system_channels() against
 fictitious 2-board nodes.
 
-These tests cover the ND2 spec:
+These tests cover the diffusion rules:
   - Mirror simple: BAT_LOW declared uplink on mainboard only ->
     soundboard receives BAT_LOW in downlink.
   - Complementary pair: uplink on mainboard + downlink on soundboard
@@ -17,17 +17,16 @@ These tests cover the ND2 spec:
     FATAL (distinct error class).
   - BASE channel present on one board only -> passed through to
     both boards WITHOUT mirroring.
-  - Legacy mode: diffusion.py is never called (verified by the fact
+  - Single-board mode: diffusion.py is never called (verified by the fact
     that the orchestrator only calls it in node mode).
 
-Ownership convention (ND2):
+Ownership convention:
   A declaration is "owned" by a board iff its `requires` list is
   satisfied by that board's BuildContext. A declaration with no
   `requires` is active for ALL boards (and would trigger an intra-board
-  conflict if duplicated). This matches the spec:
-    "Résoudre, pour chaque board du node, quelles déclarations brutes
-     de cet `id` sont actives pour son `BuildContext` (même logique de
-     filtre `requires` que `resolve_requires`)."
+  conflict if duplicated): for each board of the node, the raw
+  declarations of an `id` active for its `BuildContext` (same `requires`
+  filter as `resolve_requires`).
 
 Usage:
     python scripts/combus_builder/tests/test_nd2_diffusion.py
@@ -121,7 +120,7 @@ def _make_parsed(
 
 
 # =============================================================================
-# Test 1: Single uplink producer (ND2 generalised rule 5)
+# Test 1: Single uplink producer (generalised rule 5)
 # =============================================================================
 
 def test_mirror_simple() -> None:
@@ -131,7 +130,7 @@ def test_mirror_simple() -> None:
       - mainboard.cb: BAT_LOW with requires=[IS_MAINBOARD] -> active for mainboard only
       - soundboard.cb: SPK_VOL with requires=[IS_EXT_BOARD] -> active for soundboard only
 
-    Per the generalised ND2 rule:
+    Per the generalised rule:
       - BAT_LOW: rule 5 (n_up==1, n_down==0) -> soundboard (absent) becomes downlink.
       - SPK_VOL: rule 6 (n_up==0, n_down==1) -> WARNING 'canal mort', mainboard (absent) becomes none.
         (The old 'mirror' behavior is gone in the N-board version: if there's
@@ -324,11 +323,9 @@ channels:
 # =============================================================================
 
 def test_downlink_downlink_now_warning() -> None:
-    """Both boards declare BAT_LOW as downlink -> WARNING (canal mort), not fatal.
+    """Both boards declare BAT_LOW as downlink -> WARNING (dead channel), not fatal.
 
-    CHANGED BEHAVIOUR (ND2 generalised to N boards): in the
-    2-board version this was a fatal DiffusionConflictError. The
-    generalised rule (point 6) says: n_up == 0, n_down >= 1 ->
+    The generalised rule (point 6) says: n_up == 0, n_down >= 1 ->
     emit a warning and let absent boards receive `none`. Build
     continues.
 
@@ -633,7 +630,7 @@ channels:
 def test_base_passthrough() -> None:
     """BASE channel present on one board only -> passed through to both, no mirroring.
 
-    BASE channels are NOT subject to diffusion (ND5 is out of scope).
+    BASE channels are NOT subject to diffusion.
     They are passed through to every board unchanged.
     """
     print("\n=== Test 9: BASE pass-through ===")
@@ -753,11 +750,11 @@ def _extract_channel_ids_and_dirs(
 # =============================================================================
 
 # =============================================================================
-# 3-BOARD TESTS (ND2 generalised to N >= 2)
+# 3-BOARD TESTS (the rule generalised to N >= 2)
 # =============================================================================
 
 def test_3b_uplink_2downlink_explicit() -> None:
-    """1 uplink + 2 downlink explicites sur 3 boards -> pas d'erreur, rien à diffuser."""
+    """1 uplink + 2 explicit downlink on 3 boards -> no error, nothing to diffuse."""
     print("\n=== Test 11: 3b — 1 uplink + 2 downlink explicites ===")
     with tempfile.TemporaryDirectory() as td:
         tmp_path = Path(td)
@@ -887,7 +884,7 @@ channels:
 
 
 def test_3b_2uplink_conflict() -> None:
-    """2 uplink sur 2 boards différentes, 3e absente -> conflit fatal, message nomme les 2 boards en uplink."""
+    """2 uplink on 2 different boards, the 3rd absent -> fatal conflict, the message names the 2 uplink boards."""
     print("\n=== Test 13: 3b — 2 uplink (conflit fatal) ===")
     with tempfile.TemporaryDirectory() as td:
         tmp_path = Path(td)
@@ -1075,7 +1072,7 @@ channels:
 
 
 def test_3b_1both_1uplink_1absent_semantic() -> None:
-    """1 both + 1 uplink (2 autres absentes) -> conflit sémantique fatal."""
+    """1 both + 1 uplink (2 others absent) -> fatal semantic conflict."""
     print("\n=== Test 16: 3b — 1 both + 1 uplink (semantic conflict) ===")
     with tempfile.TemporaryDirectory() as td:
         tmp_path = Path(td)
@@ -1210,7 +1207,7 @@ channels:
 
 
 # =============================================================================
-# Test 18: BOARD scope — not diffused, requires-filtered per board (ND4)
+# Test 18: BOARD scope — not diffused, requires-filtered per board
 # =============================================================================
 
 def test_board_not_diffused_requires_filtered() -> None:
@@ -1275,7 +1272,7 @@ channels:
 
 
 # =============================================================================
-# Test 19: BOARD scope — apparent conflict is ignored (ND4)
+# Test 19: BOARD scope — apparent conflict is ignored
 # =============================================================================
 
 def test_board_apparent_conflict_ignored() -> None:
