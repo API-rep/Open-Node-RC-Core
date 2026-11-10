@@ -1,4 +1,4 @@
-# test_trailer.mtype — the TEST trailer, used only by the tests (link rework 3.6)
+# test_trailer.mtype — the TEST trailer, used only by the tests
 
 couplers:
   socket: []

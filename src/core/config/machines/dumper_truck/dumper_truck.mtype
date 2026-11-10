@@ -1,4 +1,4 @@
-# dumper_truck.mtype — configuration of the machine type (link rework 3.6)
+# dumper_truck.mtype — configuration of the machine type
 #
 # The couplers this type supports: part of its contract with the remote (the
 # commands they relay travel on the remote link, with or without the coupler).

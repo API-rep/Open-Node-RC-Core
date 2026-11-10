@@ -1,26 +1,25 @@
 # runlevel.cb — ComBus channel for machine run level
 #
 # This file declares the RUNLEVEL channel. It is the single, authoritative
-# definition of the machine run level as a ComBus channel (replacing the
-# historical `comBus.runLevel` struct field — see RL0 audit).
+# definition of the machine run level as a ComBus channel.
 #
 # Notes:
 # - SYSTEM scope: the run level is shared by all boards composing the
-#   local node. The system FSM (main.cpp) writes it; consumers (light
-#   interpreter, dashboards, processors) read it.
+#   local node. Initialised by machine_init(), then written by the runlevel
+#   chain (cb_runlevel); consumers (light interpreter, dashboards,
+#   processors) read it.
 # - Direction [uplink]: a single writer (the "owner" board, typically the
 #   mainboard) publishes the run level. Multiple readers consume it.
-#   `both` was rejected to avoid silent multi-writer races — see RL1
-#   discussion. The owner is gated by `-D HAS_RUNLEVEL_MANAGER`.
+#   Not `both`: it would allow silent multi-writer races. The owner is
+#   gated by `-D HAS_RUNLEVEL_MANAGER`.
 # - type: analog (uint16_t). The value is mapped to RunLevel enum
 #   (include/defs/machines_defs.h) via static_cast on the C++ side.
 #   Mapping: 0=IDLE, 1=STARTING, 2=RUNNING, 3=TURNING_OFF,
 #            4=SLEEPING, 5=RESET.
 # - value: 0 (IDLE default).
-# - requires: [HAS_RUNLEVEL_MANAGER] — the channel is only emitted on
-#   the board that owns the run level (mainboard by convention). Other
-#   boards do not see the channel (future work: invert via SYSTEM+link
-#   convention so non-owner boards can still consume it).
+# - requires: [HAS_RUNLEVEL_MANAGER] — the channel is declared on the
+#   board that owns the run level (mainboard by convention); in node mode
+#   the other boards receive it by diffusion (downlink).
 
 
 channels:

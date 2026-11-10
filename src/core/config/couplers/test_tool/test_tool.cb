@@ -1,10 +1,10 @@
-# test_tool.cb — the TEST passive coupler (link rework, step 3.4d)
+# test_tool.cb — the TEST passive coupler
 #
 # A fictitious passive coupler used only by the tests (pytest, and the Unity
 # test env), carried by the TEST tractor: a tool coupled by hand (a tiltable
 # bucket), without node nor ComBus link.  A passive coupler is a local
-# instance of the coupler: only local channels (they require the nature of
-# the node that carries it, never on a link), prefixed by its name.
+# instance of the coupler: only local channels (they require the flag of its
+# socket, never on a link), prefixed by its name.
 #
 # - TEST_TOOL_DETECT_SW: the detector of the tool (switch; an RFID reader
 #   later), the trigger of its CouplingDev;

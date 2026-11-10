@@ -1,7 +1,7 @@
 # input.cb — states the input chains of a dumper truck compute from the buttons (SYSTEM)
 #
 # The remote sends the intent (the button, BASE downlink); the machine
-# computes the state (link rework, recadrage of 2026-10-25):
+# computes the state:
 # - KEY_ACTIVE: engine on / off, toggled from KEY_BTN by the
 #   INPUT_KEY_RUNLEVEL chain.  Read by the runlevel chain (key -> STARTING),
 #   main loop, dashboards.
@@ -12,7 +12,7 @@
 #   Read by the throttle chain (cb_cruise).
 #
 # SYSTEM, uplink on the board that runs the input chains (HAS_INPUT_PROC): the
-# other boards of the node receive them by diffusion.  Were BASE none.
+# other boards of the node receive them by diffusion.
 
 channels:
 

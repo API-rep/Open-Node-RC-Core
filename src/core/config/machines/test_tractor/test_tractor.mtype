@@ -1,4 +1,4 @@
-# test_tractor.mtype — the TEST tractor, used only by the tests (link rework 3.6)
+# test_tractor.mtype — the TEST tractor, used only by the tests
 
 couplers:
   socket: [test_coupler, test_tool]

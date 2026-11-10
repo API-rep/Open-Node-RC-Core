@@ -1,31 +1,30 @@
-# test_coupler.cb — the TEST coupler (link rework, steps 3.4a and 3.4e)
+# test_coupler.cb — the TEST coupler
 #
 # A fictitious coupler used only by the tests (pytest, and the Unity test
-# env), carried by the TEST tractor (vehicle) and the TEST trailer
-# (attachment).  A coupler is the norm of a link, like a standard plug: its
+# env), carried by the TEST tractor (socket) and the TEST trailer (plug).  A coupler is the norm of a link, like a standard plug: its
 # channels are the full contract of the link, whatever the machines carrying
 # it know.  A channel of the coupler unknown to a machine type is injected in
 # the ComBus of the node, at its safe value.
 #
-# A coupler is a brick of the machine: directions are those of the VEHICLE,
-# as in any .cb of the machine (the attachment gets its side of the plug):
+# A coupler is a brick of the machine: directions are those of the SOCKET,
+# as in any .cb of the machine (the plug gets its side of the coupler):
 # - TEST_BRAKE_BUS, TEST_LIGHTS: received from the remote, relayed to the
-#   attachment (downlink_pt);
-# - TEST_TILT_ANGLE, TEST_AXLE_LOAD: received from the attachment (the TEST
+#   plug (downlink_pt);
+# - TEST_TILT_ANGLE, TEST_AXLE_LOAD: received from the plug (the TEST
 #   tractor does not know TEST_AXLE_LOAD: injected, an absent function);
 # - TEST_COUPLED_FAIL: fault shared by the whole convoy (OR merge).
 #
-# Local channels (step 3.4e): BOARD (or SYSTEM when the switch sits on another
+# Local channels: BOARD (or SYSTEM when the switch sits on another
 # board of the node), they require the flag of one side of the coupler
 # (HAS_COUPLER_SOCKET_TEST_COUPLER), so they exist on that side only and never
 # travel on the link; their names start with the name
-# of the coupler (TEST_COUPLER_), so that several couplers on one vehicle never
+# of the coupler (TEST_COUPLER_), so that several couplers on one machine never
 # clash.  The coupling button is not here: an input from the remote belongs to
 # the input contract of the machine type (TEST_COUPLER_BTN, test_tractor):
 # - TEST_COUPLER_CMD: the latched coupling command, the trigger of the
 #   CouplingDev, written by the chain of the coupler (test_coupler_chain.cpp);
 #   low at boot: a new press is needed after a reboot;
-# - TEST_COUPLER_COUPLED: coupled (CouplingDev::coupled, step 3.4d): written by the
+# - TEST_COUPLER_COUPLED: coupled (CouplingDev::coupled): written by the
 #   core, COUPLED and the engaged switch settled (the detector);
 # - TEST_COUPLER_ENGAGED_SW: the engaged switch of the coupler, an optional
 #   guard ("you may couple"), present with HAS_TEST_COUPLER_ENGAGED_SW.

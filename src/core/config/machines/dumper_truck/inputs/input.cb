@@ -4,8 +4,7 @@
 #   - Defines the raw acquisition channels (sticks + buttons) that input_update()
 #     writes each loop, before any INPUT/SIM processor conditions them.
 #   - The buttons a remote can send too are BASE commands in combus/
-#     (KEY_BTN, DIRECT_DRIVE_BTN, CRUISE_TOGGLE_BTN; link rework recadrage of
-#     2026-10-25).
+#     (KEY_BTN, DIRECT_DRIVE_BTN, CRUISE_TOGGLE_BTN).
 #   - These channels live in firmware ONLY — NEVER transmitted on the wire
 #     (direction: none). They are private to the acquisition layer.
 #   - They are the SOURCE side of the input mapping (PS4_dualshock_map.cpp)
@@ -22,12 +21,8 @@
 #   - Device raw sources from PS4_dualshock.cpp descriptors
 #     (sticks: [-127,+127], triggers: [0,255]).
 #
-# History (A9.9):
-#   - These channels used to be declared in hand-written .inc files of the
-#     Volvo instance, as LOCAL/REMOTE (former names of SYSTEM/BASE) — both
-#     ill-named per ChanLayer spec (raw acquisition is intra-firmware, not on
-#     the wire).
-#   - They are now the canonical default for ANY dumper_truck instance
+# Type level:
+#   - These channels are the default for ANY dumper_truck instance
 #     (Cat 770, Bell B45, Komatsu HD785, ...).
 #   - This .cb file is the source of truth; the ComBus Builder generates the
 #     enums and arrays.

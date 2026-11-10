@@ -7,10 +7,8 @@
 #   the dashboard.
 #
 # A computed value, not a command: SYSTEM, uplink on the board that runs the
-# simulation chains (HAS_SIM_PROC); the other boards of the node receive it (a
-# motor or sound board).
-# Lives next to what is responsible for it: the processor chains of the type
-# (link rework, recadrage of 2026-10-25; was BASE none in combus/).
+# simulation chains (HAS_SIM_PROC); the other boards of the node receive it.
+# Lives next to what is responsible for it: the processor chains of the type.
 
 channels:
 

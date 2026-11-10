@@ -1,26 +1,24 @@
-# test_links.cb — BASE profile of the TEST tractor type (link rework, step 3.1)
+# test_links.cb — BASE profile of the TEST tractor type
 #
 # A fictitious machine type used only by the tests of the links between
 # nodes (pytest, and the Unity test env).  Never loaded by a real machine:
 # the machine type filter keeps only the active type (MACHINE_TYPE_TEST_TRACTOR).
-# Names are prefixed TEST_ so that an env without machine type (which loads
-# every type) cannot clash with a real profile.
+# Names are prefixed TEST_ so that they never clash with a real profile.
 #
 # Directions are those of the tractor (node view):
 # - TEST_BRAKE_BUS, TEST_LIGHTS: received from the remote, relayed to the trailer;
 # - TEST_THROTTLE_BUS: received from the remote, not relayed;
 # - TEST_TILT_ANGLE, received from the trailer, is not here: the coupler brings
-#   it (a channel of this file comes from the remote, link rework 3.6);
+#   it (a channel of this file comes from the remote);
 # - TEST_COUPLED_FAIL: fault shared by the whole convoy (OR merge);
 # - TEST_BEACON: received from the remote, not relayed (the trailer does not
 #   know it).  It comes before the digital channels of the link in the local
-#   order, so that the table of the link is not the identity (step 3.1b).
+#   order, so that the table of the link is not the identity.
 # - TEST_GEAR_BUS: received from the remote, not relayed; its logical zero is
-#   at CbusNeutral (`zeroAt: neutral`): test of the application accessors
-#   (step S3-4).
+#   at CbusNeutral (`zeroAt: neutral`): test of the application accessors.
 # - TEST_COUPLER_BTN: the coupling button of the TEST coupler, an input from
 #   the remote (input contract of the machine type), read by the chain of the
-#   coupler (step 3.4e).
+#   coupler.
 
 channels:
 

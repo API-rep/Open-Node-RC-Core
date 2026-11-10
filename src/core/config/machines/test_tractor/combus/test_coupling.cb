@@ -1,4 +1,4 @@
-# test_coupling.cb — coupling of the TEST tractor to its trailer (link rework, step 3.3)
+# test_coupling.cb — coupling of the TEST tractor to its trailer
 #
 # A fictitious machine type used only by the tests (see test_links.cb).
 #

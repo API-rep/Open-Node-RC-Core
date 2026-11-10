@@ -1,4 +1,4 @@
-# test_links.cb — BASE profile of the TEST trailer type (link rework, step 3.1)
+# test_links.cb — BASE profile of the TEST trailer type
 #
 # A fictitious machine type used only by the tests of the links between
 # nodes (pytest, and the Unity test env).  Never loaded by a real machine:
