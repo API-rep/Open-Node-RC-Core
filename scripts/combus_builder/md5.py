@@ -1,39 +1,42 @@
 #!/usr/bin/env python3
 """
-combus_builder/md5.py - A7.2: MD5 computation for the three combus views.
+combus_builder/md5.py - MD5 computation for the three combus views.
 
 Generates a deterministic 16-byte MD5 hash for each of the three views:
-  - combus_base : BASE only (what crosses the wire)
+  - combus_base : BASE only (what crosses the wire); two hashes, the
+                  stable set and the next set (stable channels then
+                  candidates)
   - combus_system  : BASE + SYSTEM (inter-node alignment)
   - combus        : BASE + SYSTEM + BOARD (full picture)
 
-Inputs (identical for all three, chantier 2.1):
-  - id, type, scope, direction (sorted list), value (rendered C++ literal)
+Inputs (identical for all three):
+  - id, type, scope, direction (sorted list), value (rendered C++ literal),
+    and zeroAt when it is `neutral`
   - Channels in wire order: the order of the view, i.e. the numeric IDs of
     _select_view() in generator.py (analog then digital; BASE<SYSTEM<BOARD,
     then theme, then id).
 
 Independence:
-  - file discovery order (A3 stable output -> A5 stable order)
+  - file discovery order (the parser and the canon give a stable order)
   - YAML formatting, comments
   - key ordering within channel dicts (JSON sort_keys=True)
   - requires (its effect is already captured by the channel's
-    presence/absence in the view after A6.1 resolution)
-  - theme and infoName (chantier 2.1): a debug label, or a theme that does
-    not move the channel on the wire, does not change the contract
+    presence/absence in the view, after generator.resolve_requires())
+  - theme and infoName: a debug label, or a theme that does not move the
+    channel on the wire, does not change the contract
 
 projectVersion is NOT hashed — emitted as a SHARED constant
-(kProjectVersionMajor, kProjectVersionMinor, kCombusHandshakeWirePayloadLen;
-values read from project_version.h by read_project_version())
-so a mismatch produces a precise diagnostic (option B).
+(kProjectVersionMajor, kProjectVersionMinor, kProjectVersionDev,
+kCombusHandshakeWirePayloadLen; values read from project_version.h by
+read_project_version()) so a mismatch tells the hash from the version.
 
-Architecture (A7.2):
+Architecture:
   - 3 view-specific headers:
-      combus_base_md5.h  ->  kCombusBaseComBusMd5[16] + Hex
+      combus_base_md5.h  ->  kCombusBaseComBusMd5[16] + Hex, and the next set
       combus_system_md5.h   ->  kCombusSystemComBusMd5[16]  + Hex
       combus_md5.h         ->  kCombusComBusMd5[16]       + Hex
   - 1 shared header:
-      combus_wire_common.h ->  kProjectVersionMajor/Minor,
+      combus_wire_common.h ->  kProjectVersionMajor/Minor/Dev,
                                kCombusHandshakeWirePayloadLen
     Included by each view-specific header.
   - Each view header declares ONLY its own md5/hex constants. The shared
@@ -41,13 +44,6 @@ Architecture (A7.2):
     redefinition when all four headers are included in the same TU.
   - C++ uses `static constexpr` (xtensa-esp32-elf-g++ rejects inline
     constexpr at namespace scope in some configurations).
-
-A7.2 history:
-  - A7: 2 hashes (combus_system + combus_base), with kMachineType.
-  - A7.1: simplification to combus_base only + kMachineType removed.
-  - A7.2: restore the 3 views (combus + combus_system + combus_base).
-    kMachineType stays removed. The shared constants pattern replaces
-    the A7.1 'emit shared only in combus_system_md5.h' hack.
 """
 
 from __future__ import annotations
@@ -69,9 +65,9 @@ def _canonical_direction_for_hash(
     direction: frozenset[str],
     direction_or: frozenset[str] = frozenset(),
 ) -> list[str]:
-    """Canonise `direction` + `direction_or` for MD5 hashing (ND7 — ONE_WAY, A2.1).
+    """Canonise `direction` + `direction_or` for MD5 hashing (ONE_WAY).
 
-    Rationale (ND7):
+    Rationale:
       In a multi-board node, the same SYSTEM channel can legitimately
       appear as `uplink` on one board and `downlink` on another — this
       is a role mirror, not a contract drift. The MD5 must NOT flag
@@ -82,7 +78,7 @@ def _canonical_direction_for_hash(
       genuinely absent on the wire) and must remain distinguishable
       from each other and from the one-way cases.
 
-    A2.1 mapping (direction + direction_or → canonical list):
+    Mapping (direction + direction_or → canonical list):
       - uplink        → ['ONE_WAY']
       - downlink      → ['ONE_WAY']
       - uplink_or     → ['ONE_WAY']   (same family as uplink)
@@ -95,7 +91,7 @@ def _canonical_direction_for_hash(
     generation — the generated C++ must preserve the real direction
     so that the runtime can dispatch on uplink/downlink/both/none.
     """
-    # A2.1 : direction and direction_or are mutually exclusive.
+    # direction and direction_or are mutually exclusive.
     # The effective direction is direction | direction_or.
     if direction_or:
         # *OR token — direction is empty, direction_or carries the wire sense.
@@ -119,22 +115,22 @@ def _view_channel_canonical(vc: ViewChannel, apply_one_way: bool = False) -> dic
     """Return a JSON-serialisable dict representing one channel.
 
     The dict keys are a fixed list (no per-channel metadata). The direction
-    is canonised via `_canonical_direction_for_hash()` (ND7 ONE_WAY) ONLY
+    is canonised via `_canonical_direction_for_hash()` (ONE_WAY) ONLY
     when `apply_one_way` is True — i.e. for the SYSTEM view. For BASE and
     full views, the raw direction is kept (sorted) so that real contract
     signals (uplink vs downlink on BASE channels) are preserved.
 
-    `infoName` and `theme` are NOT included (chantier 2.1); `value` is.
+    `infoName` and `theme` are NOT included; `value` is.
 
-    A2.1 (2c-bis) : `direction_or` is emitted as a separate field so
+    `direction_or` is emitted as a separate field so
     that two channels identical except on the anti-oscillation flag
     produce different hashes. This matters for the SYSTEM view: `both`
     and `both_or` share the same frozenset direction
     (`{uplink, downlink}`) but are treated as a real config
     divergence by diffusion.py (warning, not don't-care). The hash
     must therefore distinguish them so that a drift between boards
-    built separately is detected — otherwise the runtime wiring of
-    `bothOr` (next chantier) would silently mask a config bug.
+    built separately is detected — otherwise the OR merge of `bothOr`
+    at runtime would silently mask a config bug.
 
     ONE_WAY canonisation is unaffected: it only neutralises the
     uplink/downlink distinction, never the both_or flag (carried by
@@ -142,7 +138,7 @@ def _view_channel_canonical(vc: ViewChannel, apply_one_way: bool = False) -> dic
     """
     if apply_one_way:
         direction = _canonical_direction_for_hash(vc.ch.direction, vc.ch.direction_or)
-        # A2.1 (2c-bis) : for SYSTEM, direction_or must also be
+        # For SYSTEM, direction_or must also be
         # canonised so that uplink/downlink/uplink_or/downlink_or
         # all collapse to the same hash. The ONE_WAY canonisation
         # neutralises the uplink/downlink distinction AND the
@@ -167,7 +163,7 @@ def _view_channel_canonical(vc: ViewChannel, apply_one_way: bool = False) -> dic
         # emitted separately so both/both_or remain distinguishable.
         direction = sorted(vc.ch.direction)
         direction_or = sorted(vc.ch.direction_or)
-    # Chantier 2.1 — only what makes the contract: the channel (id, type,
+    # Only what makes the contract: the channel (id, type,
     # scope), its direction, and the default value it is sent with while its
     # writer has not written it (rendered C++ literal: an absent value and its
     # explicit default hash the same).  The position on the wire is the order
@@ -181,7 +177,7 @@ def _view_channel_canonical(vc: ViewChannel, apply_one_way: bool = False) -> dic
         "direction_or": direction_or,
         "value": _render_value(vc.ch, vc.ch.type),
     }
-    # Link rework S3-4: the place of the logical zero is part of the contract
+    # The place of the logical zero is part of the contract
     # (two ends disagreeing on it read the same raw value differently).  Hashed
     # only when it is `neutral`, so the MD5 of every other channel is unchanged.
     if vc.ch.zero_at_neutral:
@@ -192,7 +188,7 @@ def _view_channel_canonical(vc: ViewChannel, apply_one_way: bool = False) -> dic
 def canonical_bytes(view: View) -> bytes:
     """Return the canonical byte representation of a view, suitable for hashing.
 
-    ND7 ONE_WAY canonisation is applied ONLY to the SYSTEM view (the role
+    ONE_WAY canonisation is applied ONLY to the SYSTEM view (the role
     mirror between boards of the same node is a SYSTEM concept). BASE and
     full views keep the raw direction so that real contract signals
     (uplink vs downlink on BASE channels) are preserved.
@@ -228,7 +224,7 @@ class ViewHash:
 
 
 def stable_view(view: View) -> View:
-    """Return the view without its candidate channels (link rework 2.2a).
+    """Return the view without its candidate channels.
 
     The BASE set has two MD5: the stable one, hashed on this view, and the
     next one, hashed on the full view (stable channels then candidates).
@@ -304,7 +300,7 @@ def read_project_version(project_root) -> tuple[int, int, int]:
     """Read (major, minor, dev) from <project_root>/project_version.h.
 
     Parses `PROJECT_VERSION_MAJOR` / `PROJECT_VERSION_MINOR` /
-    `PROJECT_VERSION_DEV` constants (`= 0u;`; DEV since link rework 2.2a).
+    `PROJECT_VERSION_DEV` constants (`= 0u;`).
     Each must be an integer in 0..255 (uint8 on the wire).
     Raises ProjectVersionError when the file or a constant is missing
     or out of range: a silent fallback would put a wrong version in the
@@ -386,7 +382,7 @@ def _render_view_header(
 
     Includes the shared header for projectVersion constants.
     Declares ONLY this view's md5 + hex constants.  With `next_hash` (BASE
-    view, link rework 2.2a), the md5 is the stable one and the next one
+    view), the md5 is the stable one and the next one
     follows as <md5>Next / <hex>Next.
     """
     view = hash_.view_name
@@ -515,7 +511,7 @@ def generate_md5_artifacts(
                                kCombusHandshakeWirePayloadLen)
 
     Returns: dict[view_name -> ViewHash], list[Path].  The dict also holds
-    "combus_base_next" (next set of the BASE view, link rework 2.2a).
+    "combus_base_next" (next set of the BASE view).
     """
     hashes = {
         "combus_base": compute_view_hash(stable_view(sel.base)),

@@ -1,31 +1,21 @@
 #!/usr/bin/env python3
 """
-combus_builder/generator.py - A6.1: C++ artifact generation.
+combus_builder/generator.py - C++ artifact generation.
 
-A6.1 corrections vs A6:
-  - REMOVED ChannelDescriptor abstraction.
-  - Generator now emits REAL runtime structures (AnalogComBus / DigitalComBus)
-    that match the runtime in src/core/system/combus/combus_defs.h.
-  - `direction` is added as a fourth field on those structs (alongside
-    `infoName`, `value`, `layer`). `ChanLayer` is preserved unchanged
-    (audit A6 confirmed `_layer_ok()` requires it).
-  - Both views still produced:
-      * combus        = BASE + SYSTEM + BOARD
-      * combus_base = BASE only
-
-Scope (A6.1):
-  - Take canonised ChannelDefinitions (A5.1) + BuildContext (A4).
-  - Resolve `requires` against BuildContext.
+What it does:
+  - Take the canonised ChannelDefinitions (canon/) and the BuildContext
+    (flags.py).
+  - Resolve `requires` against the BuildContext.
   - Allocate deterministic numeric IDs per view.
-  - Emit the real runtime structures, not a new abstraction.
+  - Emit the runtime structures of src/core/system/combus/combus_defs.h
+    (AnalogComBus / DigitalComBus: infoName, value, layer, flow, plus
+    zeroAtNeutral or bothOr), not an abstraction of them.
+  - Three views: combus (BASE + SYSTEM + BOARD), combus_system
+    (BASE + SYSTEM) and combus_base (BASE only).
 
-Out of scope (A6.1):
-  - ChanLayer refactor (audit warned: layer is functionally used).
-  - runLevelLayer / battLowLayer migration.
-  - chains: (Phase C).
-  - MD5 (A7).
-  - .cbch.
-  - Full .inc migration: done (the .inc files no longer exist).
+Not here:
+  - MD5 (md5.py) and the links between nodes (links.py).
+  - `chains:` (TODO(ComBus processors)).
 
 Direction representation (C++):
   - `enum class Direction : uint8_t { None=0, Uplink=1, Downlink=2, Both=3 }`
@@ -35,7 +25,7 @@ Direction representation (C++):
 
 View contract:
   - combus (BASE+SYSTEM+BOARD):
-      * ID range [0, CH_COUNT) where BASE is [0, WIRE_END) and
+      * per type, ID range [0, CH_COUNT) where BASE is [0, WIRE_END) and
         SYSTEM+BOARD is [WIRE_END, CH_COUNT).
       * Generated artifacts:
           - combus_ids.h        (enum class only)
@@ -61,7 +51,7 @@ Generation directory:
   - Configurable via CLI flag --out-dir
   - Files are written atomically (write to .tmp, then rename).
 
-ND1 (multiboard):
+Node mode (several boards):
   - generate() accepts an optional `filename_prefix: str = ""` parameter.
   - When non-empty, every emitted file is renamed with the prefix
     inserted between the view name and the suffix:
@@ -99,7 +89,7 @@ from .flags import BuildContext
 # =============================================================================
 
 class GeneratorError(Exception):
-    """Base class for A6.1 generator errors."""
+    """Base class of the generator errors."""
 
 
 class RequiresResolutionError(GeneratorError):
@@ -172,7 +162,7 @@ class ViewChannel:
     A channel resolved for a specific view.
 
     numeric_id: sequential [0..CH_COUNT) within the view.
-    ch:         the original A5.1 channel definition.
+    ch:         the original channel definition (canon/channels.py).
     direction_bits: 0/1/2/3 from Direction.from_frozenset.
     """
 
@@ -184,15 +174,14 @@ class ViewChannel:
 @dataclass(frozen=True)
 class View:
     """
-    One resolved view (combus OR combus_base).
+    One resolved view (combus, combus_system or combus_base).
 
-    name:             "combus" or "combus_base".
+    name:             "combus", "combus_system" or "combus_base".
     channels:         list of ViewChannel in ID order.
-    wire_end:         index of the first non-BASE channel (== len if no SYSTEM/BOARD).
-    wire_end_analog:  count of BASE analog channels (== number of BASE analog
-                      channels in canonical order).  Used by the C++ generator
-                      to emit a per-bus wire-end constant (Phase 1 A.11 fix:
-                      analog and digital wire-ends are NOT always equal).
+    wire_end:         count of BASE channels, both types (== len if no SYSTEM/BOARD).
+    wire_end_analog:  count of BASE analog channels: the wire end of the
+                      analog bus (analog and digital wire ends are NOT
+                      always equal).
     wire_end_digital: count of BASE digital channels.  See wire_end_analog.
     ch_count:         total channel count in this view.
     """
@@ -214,7 +203,7 @@ class ViewSelection:
     All three views in one struct, sharing the same ID space.
 
     full:   combus        (BASE + SYSTEM + BOARD)
-    system: combus_system (BASE + SYSTEM)         — A6.2
+    system: combus_system (BASE + SYSTEM)
     base:   combus_base   (BASE only)
 
     A channel that appears in multiple views has the SAME numeric_id in
@@ -241,14 +230,14 @@ _SCOPE_TO_CHANLAYER: dict[str, str] = {
 
 
 # =============================================================================
-# ND1: filename prefix helper
+# Filename prefix of a board (node mode)
 # =============================================================================
 
 def _file_base(view_name: str, filename_prefix: str) -> str:
     """
-    Return the file basename for a view, with the ND1 prefix applied.
+    Return the file basename for a view, with the board prefix applied.
 
-    Legacy (filename_prefix == ""): returns view_name unchanged.
+    Single board (filename_prefix == ""): returns view_name unchanged.
     Node mode (filename_prefix != ""): returns "<view_name>_<prefix>".
 
     Example:
@@ -301,8 +290,8 @@ def resolve_requires(
 # =============================================================================
 
 # Scope order for the COMBINED view (combus): BASE first, then SYSTEM, then BOARD.
-# This preserves the legacy wire-end ordering (BASE channels occupy
-# indices [0..WIRE_END) so the wire codec doesn't change).
+# BASE channels occupy the indices [0..WIRE_END) of their type: the frame
+# carries this prefix only.
 _VIEW_SCOPE_ORDER: dict[str, int] = {
     "BASE": 0,
     "SYSTEM": 1,
@@ -319,16 +308,13 @@ def _select_view(
     Select channels whose scope is in allowed_scopes, allocate deterministic
     IDs in canonical order, and compute WIRE_END.
 
-    ID allocation policy (Phase 5 A15 fix — bug d'indexation):
+    ID allocation policy:
         Each TYPE (analog, digital) has its OWN 0-based counter. The
         numeric_id assigned to a channel is its position within its type
         in the view, NOT its position in the global view-wide sequence.
         This guarantees that `DigitalComBusArray[DigitalComBusID::XXX]`
-        accesses the correct slot — previously, IDs were allocated via a
-        single global enumerate() which mixed analog and digital into one
-        sequence, causing digital IDs to start at 9 (after the 9 analog
-        BASE channels) and a complete misalignment between the enum
-        values and the runtime array indices.
+        accesses the correct slot: one counter for both types would make
+        the digital IDs start after the analog ones, out of the array.
 
     allowed_scopes is the set of scopes that belong to this view.
     For combus: {"BASE", "SYSTEM", "BOARD"}.
@@ -338,7 +324,7 @@ def _select_view(
         (scope priority, candidate, theme, id)
     Scope priority: BASE < SYSTEM < BOARD (preserves wire order:
     BASE channels are at the lowest indices, SYSTEM next, BOARD last).
-    Link rework 2.2a: the BASE candidates come after the stable BASE
+    The BASE candidates come after the stable BASE
     channels of their type, so adding one never moves a stable BASE id
     (the next set is the stable set followed by the candidates).
     """
@@ -366,21 +352,19 @@ def _select_view(
 
     view_channels: list[ViewChannel] = []
     wire_end = 0
-    # Phase 1 A.11 fix: per-bus wire-end counters (analog vs digital).
-    # Both counters track BASE channels only, separated by type.  The
+    # Per-bus wire-end counters (analog vs digital).  Both counters track BASE channels only, separated by type.  The
     # final values (after the loop) represent the count of BASE
     # channels of each type in the view, which may differ from
     # `wire_end` (= total BASE count across both types).
     wire_end_analog = 0
     wire_end_digital = 0
-    # Phase 5 A15: separate 0-based counters per type.
+    # Separate 0-based counters per type.
     analog_idx = 0
     digital_idx = 0
     # The wire order is: all analog channels first (in scope/theme/id
-    # order), then all digital channels (in scope/theme/id order). This
-    # preserves the legacy "BASE channels at the lowest indices"
-    # invariant: among the analog channels, BASE ones come first
-    # because they sort before SYSTEM/BOARD.
+    # order), then all digital channels (in scope/theme/id order).  Within
+    # each type the BASE channels hold the lowest indices, because they
+    # sort before SYSTEM/BOARD.
     for ch in selected_analog:
         view_channels.append(ViewChannel(
             numeric_id=analog_idx,
@@ -420,7 +404,7 @@ def select_views(channels: list[ChannelDefinition]) -> ViewSelection:
     All views share the same ID space (a channel has the same numeric
     ID in every view it appears in — no renumbering between views).
 
-    The combus_system view (A6.2) is a strict prefix of combus: it
+    The combus_system view is a strict prefix of combus: it
     contains exactly the BASE+SYSTEM channels of combus, in the same
     order, with the same numeric IDs. This is by construction because
     the sort key is identical and the prefix is contiguous.
@@ -466,8 +450,8 @@ def _escape_cpp_string(s: str) -> str:
 def _default_value_for_type(type_: str) -> str:
     """
     Return the C++ literal for the default `value` of a freshly-generated
-    channel WHEN THE YAML CHANNEL DEFINES NO `value:` (matches the
-    runtime convention of the former hand-written .inc files).
+    channel WHEN THE YAML CHANNEL DEFINES NO `value:` (parser.py refuses
+    that in a `.cb`; the default serves the direct calls and the tests).
 
     Analog defaults to CbusNeutral (neutral 16-bit value). Digital defaults
     to false. The runtime may override these at boot via combus_set_*().
@@ -481,9 +465,9 @@ def _default_value_for_type(type_: str) -> str:
     return "false"
 
 
-# Mapping canon → littéral C++ pour les tokens `value:` acceptés.
-# Les tokens sont émis tels quels (ce sont déjà des symboles C++ valides
-# ou des littéraux booléens).
+# Canon token → C++ literal, for the accepted `value:` tokens.  The analog
+# tokens are emitted as is (they are C++ symbols); the digital ones become
+# boolean literals.
 _VALUE_TOKEN_TO_CPP: dict[str, str] = {
     # analog
     "CbusMinVal":  "CbusMinVal",
@@ -492,7 +476,7 @@ _VALUE_TOKEN_TO_CPP: dict[str, str] = {
     # digital
     "low":  "false",
     "high": "true",
-    "fault": "true",   # link rework S3a: safe value of a failsafe alarm, same literal as `high`
+    "fault": "true",   # safe value of a failsafe alarm, same literal as `high`
 }
 
 
@@ -503,8 +487,7 @@ def _render_value(ch: ChannelDefinition, type_: str) -> str:
 
     Resolution order :
       1. If `ch.value is None` (YAML absent) → use the generator default
-         (analog: CbusNeutral, digital: false). Behaviour preserved from
-         pre-A5.x to keep legacy parity.
+         (analog: CbusNeutral, digital: false).
       2. If `ch.value` is a string token (e.g. 'CbusNeutral', 'high') →
          emit the mapped C++ literal (see _VALUE_TOKEN_TO_CPP).
       3. If `ch.value` is an int (analog only) → emit `<n>u` (uint16_t).
@@ -545,9 +528,9 @@ def _render_value(ch: ChannelDefinition, type_: str) -> str:
     )
 
 
-# Mapping view.name -> C++ identifier prefix (must match legacy naming).
-# Legacy uses "ComBus" (B majuscule) — str.capitalize() would yield
-# "Combus" which is wrong. We hardcode the correct form here.
+# Mapping view.name -> C++ identifier prefix.  The C++ code writes "ComBus"
+# (capital B): str.capitalize() would yield "Combus", so the form is written
+# here.
 _VIEW_ID_PREFIX: dict[str, str] = {
     "combus": "ComBus",
     "combus_system": "ComBusSystem",
@@ -572,7 +555,7 @@ def _render_ids_header(view: View, ctx: BuildContext) -> str:
                 .replace("<view_name>", view.name)
                 .replace("<ctx_summary>", _ctx_summary(ctx)))
     body.append("")
-    body.append("#pragma once")  # Phase 4 (A14): guard against multiple inclusion (was missing — caused multiple-definition errors when included directly from .cpp files).
+    body.append("#pragma once")
     body.append("")
     body.append("#include <cstdint>")
     body.append("")
@@ -599,13 +582,8 @@ def _render_ids_header(view: View, ctx: BuildContext) -> str:
         body.append("};")
         body.append("")
 
-    # Phase 4 (A14): ComBusWireEnd / ComBusWireEndAnalog / ComBusWireEndDigital
-    # are no longer emitted. Wire dimensions are now derived directly from
-    # the Base view's ID enums (AnalogComBusBaseID::CH_COUNT and
-    # DigitalComBusBaseID::CH_COUNT) at the call site. See:
-    #   - src/machines/init/com/combus_uart_init.cpp
-    #   - src/machines/main.cpp
-    #   - src/machines/system/debug/dashboard_machine.cpp
+    # No wire-end constant: the wire dimensions are the CH_COUNT of the BASE
+    # view enums (AnalogComBusBaseID, DigitalComBusBaseID), at the call site.
 
     body.append("// EOF")
     return "\n".join(body) + "\n"
@@ -620,7 +598,7 @@ def _render_header(view: View, ctx: BuildContext, *, filename_prefix: str = "") 
       - extern declarations of the channel arrays
       - extern declaration of the bus instance (combus view only)
 
-    `filename_prefix` (ND1): when non-empty, the `#include` directive
+    `filename_prefix` (node mode): when non-empty, the `#include` directive
     targets the prefixed ids header (e.g. `combus_mainboard_ids.h`).
     The C++ enum identifiers (AnalogComBusID, etc.) are NOT prefixed —
     they remain stable across boards so application code does not need
@@ -677,7 +655,7 @@ def _render_source(view: View, ctx: BuildContext, *, filename_prefix: str = "") 
       - DigitalComBusArray[] (if digital channels exist)
       - comBus definition (combus view only)
 
-    `filename_prefix` (ND1): when non-empty, the `#include` directive
+    `filename_prefix` (node mode): when non-empty, the `#include` directive
     targets the prefixed header (e.g. `combus_mainboard.h`).
     """
     cap = _VIEW_ID_PREFIX[view.name]
@@ -729,9 +707,8 @@ def _render_source(view: View, ctx: BuildContext, *, filename_prefix: str = "") 
         body.append("// =============================================================================")
         body.append("")
         body.append("ComBus comBus {")
-        # RL3: runLevel + runLevelLayer removed from struct. RUNLEVEL is a
-        #       plain analog channel; initialise via combus_set_analog() at
-        #       runtime in machine_init().
+        # The run level is the plain analog channel RUNLEVEL, not a field of
+        # the struct.
         body.append(f"    .analogBus       = Analog{cap}Array,")
         body.append(f"    .digitalBus      = Digital{cap}Array,")
         body.append("    .analogBusMaxVal = (1UL << (sizeof(uint16_t) * 8)) - 1")
@@ -743,7 +720,7 @@ def _render_source(view: View, ctx: BuildContext, *, filename_prefix: str = "") 
 
 
 # =============================================================================
-# LINK REWORK 2.4 — DIRECTION INSIDE THE NODE
+# DIRECTION INSIDE THE NODE
 # =============================================================================
 
 # Flags that mean "this board establishes the connection with another node":
@@ -765,7 +742,7 @@ def node_direction(ch: ChannelDefinition, connected: bool) -> frozenset[str]:
     SYSTEM / BOARD: the direction itself (SYSTEM diffusion).  BASE: the .cb
     direction is the direction of the node; inside the node only
     `downlink_pt` circulates (the connected board redistributes it: uplink,
-    the others receive it: downlink) and `both_or` (relayed by the 1.1b
+    the others receive it: downlink) and `both_or` (relayed by the OR
     merge).  `downlink`, `uplink`, `both`, `none`: not in the node.
     """
     if ch.scope != "BASE":
@@ -778,7 +755,7 @@ def node_direction(ch: ChannelDefinition, connected: bool) -> frozenset[str]:
 
 
 def check_single_connected_board(boards: dict) -> None:
-    """Refuse a node with several boards connected to other nodes (confrontation in step 3.1).
+    """Refuse a node with several boards connected to other nodes.
 
     `boards` maps a board id to its BuildContext; the mother env (id None)
     is not a board and is ignored.
@@ -802,27 +779,23 @@ def _emit_channel_init(body: list[str], vc: ViewChannel, type_: str, connected: 
           .bothOr = { .enabled = false } },
 
     The `.value` field is rendered from the canonical channel value
-    (see _render_value). It honours the YAML `value:` contract :
-      - analog : CbusMinVal / CbusNeutral / CbusMaxVal / `<n>u`
-      - digital : false / true
+    (see _render_value). It honours the YAML `value:` contract:
+      - analog: CbusMinVal / CbusNeutral / CbusMaxVal / `<n>u`
+      - digital: false / true (`high` and `fault` are true)
     Falls back to the generator default when `value:` is absent.
 
     The `.layer` field comes from the channel's scope (BASE/SYSTEM/BOARD).
     The `.flow` field (ChanFlow) holds the two directions: `.betweenNodes`
     (the bitmask from Direction.from_frozenset, used on an inter-node link)
     and `.betweenBoards` (the direction inside the node, node_direction(),
-    used on an intra-node link, link rework 2.4).
+    used on an intra-node link).
 
-    The `.bothOr` field (A2.1, a BothOrMerge) is ONLY emitted for digital
-    channels.  Its `.enabled` is initialised to `true` iff the channel's `direction_or` is
-    exactly `{uplink, downlink}` (i.e. the YAML token was `both_or`).
-    For all other digital channels (uplink/downlink/both/none and
-    uplink_or/downlink_or), it is `false`. For analog channels, the
-    field is NOT emitted at all (the C++ struct has no `.bothOr` on
-    AnalogComBus). The `bool bothOr` field in DigitalComBus
-    (combus_defs.h) remains in place but is currently inert — the
-    runtime wiring (combus_frame_apply) is deferred to a separate
-    chantier.
+    The `.bothOr` field (a BothOrMerge) is ONLY emitted for digital
+    channels.  Its `.enabled` is `true` iff the channel's `direction_or` is
+    exactly `{uplink, downlink}` (i.e. the YAML token was `both_or`), and
+    `false` for every other digital channel.  For analog channels the
+    field is NOT emitted (AnalogComBus has no `.bothOr`); `.zeroAtNeutral`
+    is emitted instead, for a `zeroAt: neutral` channel only.
     """
     escaped_info = _escape_cpp_string(vc.ch.info_name)
     layer = _SCOPE_TO_CHANLAYER[vc.ch.scope]
@@ -830,7 +803,7 @@ def _emit_channel_init(body: list[str], vc: ViewChannel, type_: str, connected: 
     node_dir_name = Direction.to_cpp_enum_name(Direction.from_frozenset(node_direction(vc.ch, connected)))
     value_literal = _render_value(vc.ch, type_)
     if type_ == "digital":
-        # A2.1 : .bothOr = true iff direction_or == {uplink, downlink}
+        # .bothOr = true iff direction_or == {uplink, downlink}
         # (i.e. the YAML token was `both_or`). All other digital
         # tokens (uplink, downlink, both, none, uplink_or, downlink_or)
         # yield .bothOr = false.
@@ -845,7 +818,7 @@ def _emit_channel_init(body: list[str], vc: ViewChannel, type_: str, connected: 
     else:
         # analog: .bothOr does not exist (validation rejects
         # both_or=true on analog channels at the canon layer).
-        # Link rework S3-4: `.zeroAtNeutral = true` only for a `zeroAt: neutral`
+        # `.zeroAtNeutral = true` only for a `zeroAt: neutral`
         # channel; the entry of every other channel is unchanged.
         zero_at = ", .zeroAtNeutral = true" if vc.ch.zero_at_neutral else ""
         body.append(
@@ -878,9 +851,8 @@ def _safe_write(path: Path, content: str) -> None:
         raise
 
 
-# Views that should NOT emit the .h/.cpp runtime artifacts.
-# Phase 2 / A12 hook: only the ids + md5 headers are written to disk.
-# The .h/.cpp rendering is SKIPPED entirely for these views —
+# Views that should NOT emit the .h/.cpp runtime artifacts: only the ids
+# and md5 headers are written to disk.  The .h/.cpp rendering is SKIPPED entirely for these views —
 # _render_header() and _render_source() are never called. Only the
 # ids header is rendered and written. The MD5 payload for these views
 # is built independently, directly from the in-memory View model
@@ -898,15 +870,14 @@ def emit_view(
     """
     Emit the ids header for a view into out_dir.
 
-    Phase 2 / A12 hook: for combus_system and combus_base, the .h/.cpp
-    runtime artifacts are NO LONGER written to disk. Only the
-    <view>_ids.h header is emitted.
+    For combus_system and combus_base, the .h/.cpp runtime artifacts are
+    NOT written to disk: only the <view>_ids.h header is emitted.
 
     The MD5 payload is built directly from the in-memory View model
     (see md5.canonical_bytes), so the .h/.cpp files are not needed as
     an intermediate for hashing.
 
-    `filename_prefix` (ND1): when non-empty, every emitted file is
+    `filename_prefix` (node mode): when non-empty, every emitted file is
     renamed with the prefix inserted between the view name and the
     suffix (e.g. `combus_mainboard_ids.h`).
 
@@ -921,7 +892,7 @@ def emit_view(
     # Skip the .h/.cpp emission for views that don't need them.
     if view.name in _NO_EMIT_RUNTIME_VIEWS:
         return written
-    # For combus (full view), emit the .h/.cpp as before.
+    # For combus (full view), emit the .h/.cpp too.
     written.append(_safe_write_collect(out_dir / f"{base}.h", _render_header(view, ctx, filename_prefix=filename_prefix)))
     written.append(_safe_write_collect(out_dir / f"{base}.cpp", _render_source(view, ctx, filename_prefix=filename_prefix)))
     return written
@@ -942,11 +913,10 @@ def _emit_md5_files(
     """
     Return the hashes (view name -> ViewHash) of the views.
 
-    Write the MD5 headers, with the ND1 prefix inserted in the three
+    Write the MD5 headers, with the board prefix inserted in the three
     view-specific names.
 
-    ND1 deliberately avoids touching md5.py, which always writes the
-    un-prefixed names. With a prefix, md5.py therefore writes into a
+    md5.py always writes the un-prefixed names.  With a prefix, md5.py therefore writes into a
     scratch subdirectory and the files are moved into out_dir under
     their prefixed names. Writing the un-prefixed names directly in
     out_dir and renaming them would delete the un-prefixed MD5 headers
@@ -979,7 +949,7 @@ def _emit_md5_files(
 
 
 def _print_set_hashes(sel: ViewSelection, hashes: dict, filename_prefix: str) -> None:
-    """Chantier 2.1 — one build-log line per channel set: its MD5 and its size."""
+    """One build-log line per channel set: its MD5 and its size."""
     board = f"  [{filename_prefix}]" if filename_prefix else ""
     from .md5 import stable_view
 
@@ -1004,24 +974,26 @@ def generate(
     project_version: tuple[int, int, int] | None = None,
 ) -> ViewSelection:
     """
-    Full A7 + A12 generation pipeline.
+    Full generation pipeline.
 
-    1. Resolve `requires` against ctx.
-    2. Select views (combus, combus_system, combus_base).
-    3. Emit the view headers into out_dir.
+    1. Add the contract of the link with the remote, mirror the view of a
+       remote, inject the channels of the couplers.
+    2. Resolve `requires` against ctx (each skipped channel is logged).
+    3. Select views (combus, combus_system, combus_base).
+    4. Emit the view headers into out_dir.
        - combus: 3 files (ids.h, .h, .cpp)
-       - combus_system, combus_base: 1 file each (ids.h only — Phase 2)
-       The .h/.cpp files for combus_system and combus_base are NOT
-       written to disk anymore (Phase 2): the MD5 payload is built
-       from the in-memory View model, so no intermediate file is
-       needed. See emit_view() and _NO_EMIT_RUNTIME_VIEWS.
-    4. Emit MD5 artifacts (combus_md5.h, combus_system_md5.h,
-       combus_base_md5.h, combus_wire_common.h).
+       - combus_system, combus_base: 1 file each (ids.h only)
+       The MD5 payload is built from the in-memory View model, so no
+       intermediate file is needed. See emit_view() and
+       _NO_EMIT_RUNTIME_VIEWS.
+    5. Emit MD5 artifacts (combus_md5.h, combus_system_md5.h,
+       combus_base_md5.h, combus_wire_common.h) and log the set hashes.
+    6. Emit combus_peer_links.h (the links between nodes).
 
     `project_version`: optional (major, minor, dev) written in
     combus_wire_common.h (see md5.read_project_version()).
 
-    `filename_prefix` (ND1): when non-empty, every emitted file is
+    `filename_prefix` (node mode): when non-empty, every emitted file is
     renamed with the prefix inserted between the view name and the
     suffix (e.g. `combus_mainboard_ids.h`). The C++ enum identifiers
     are NOT prefixed — they remain stable across boards. No selection /
@@ -1031,7 +1003,7 @@ def generate(
     inspect what was generated.
     """
     contract = _remote_contract(channels, ctx)
-    if contract:                            # step 3.6: the commands of the supported couplers are in the contract
+    if contract:                            # the commands of the supported couplers are in the contract
         known = {ch.id for ch in channels}
         channels = list(channels) + [c for c in contract[1] if c.id not in known]
     channels = _remote_view(channels, ctx)
@@ -1054,7 +1026,7 @@ def generate(
 
 
 def _remote_contract(channels: list[ChannelDefinition], ctx: BuildContext):
-    """Link rework 3.6 — (machine type, commands) of the link with the remote, or None.
+    """(machine type, commands) of the link with the remote, or None.
 
     None for a build without category or machine type.  Checks the couplers
     the type supports (.mtype): one meaning per name, one source per channel.
@@ -1083,7 +1055,7 @@ def _is_remote(ctx: BuildContext) -> bool:
 
 
 def _remote_view(channels: list[ChannelDefinition], ctx: BuildContext) -> list[ChannelDefinition]:
-    """Chantier 4 — a remote (IS_REMOTE): the BASE view of the machine type it drives, mirrored.
+    """A remote (IS_REMOTE): the BASE view of the machine type it drives, mirrored.
 
     GeneratorError when the remote names no machine type.  Unchanged for a
     machine.
@@ -1100,7 +1072,7 @@ def _remote_view(channels: list[ChannelDefinition], ctx: BuildContext) -> list[C
 
 
 def _inject_couplers(channels: list[ChannelDefinition], ctx: BuildContext):
-    """Link rework 3.4a / 3.5 — the ComBus of the couplers merges into the ComBus of the node.
+    """The ComBus of the couplers merges into the ComBus of the node.
 
     Returns the channels with the channels of the declared couplers injected
     (links.inject_coupler_channels), and the couplers as {name: (side,
@@ -1141,7 +1113,7 @@ def _inject_couplers(channels: list[ChannelDefinition], ctx: BuildContext):
 
 def _emit_peer_links(channels: list[ChannelDefinition], couplers, contract, ctx: BuildContext, out_dir: Path,
                      filename_prefix: str) -> None:
-    """Link rework 3.1a / 3.4a — the links through the couplers of this node (combus_peer_links.h).
+    """The links through the couplers of this node (combus_peer_links.h).
 
     Always written (empty without coupler), so that the build has a fixed set
     of artefacts.  One build-log line per link: its MD5 and its size.
@@ -1152,7 +1124,7 @@ def _emit_peer_links(channels: list[ChannelDefinition], couplers, contract, ctx:
     links = []
     try:
         for name, (side, coupler_chs) in couplers.items():
-            if is_passive_coupler(coupler_chs, name):     # step 3.4d: a local instance, no link
+            if is_passive_coupler(coupler_chs, name):     # a local instance, no link
                 print(f"[combus_builder] set COUPLER {name} (passive)")
                 continue
             link = compute_coupler_link(name, coupler_chs, channels, side)
@@ -1162,14 +1134,14 @@ def _emit_peer_links(channels: list[ChannelDefinition], couplers, contract, ctx:
             print(f"[combus_builder] set LINK {name} ({link.role})  md5={link_md5(link)}  "
                   f"A{n_analog}+D{n_digital}{board}")
             links.append(link)
-        if contract and contract[1]:        # step 3.6: the link with the remote, its own contract
+        if contract and contract[1]:        # the link with the remote, its own contract
             machine_type, commands = contract
             link = compute_remote_link(machine_type, commands, PLUG if _is_remote(ctx) else SOCKET)
             print(f"[combus_builder] set LINK {link.coupler} ({link.role})  md5={link_md5(link)}  "
                   f"A{sum(1 for c in link.channels if c.type == 'analog')}"
                   f"+D{sum(1 for c in link.channels if c.type == 'digital')}")
             links.append(link)
-        check_single_source(links)          # step 3.2b: one source per channel on the node
+        check_single_source(links)          # one source per channel on the node
     except LinkError as e:
         raise GeneratorError(f"link through a coupler: {e}") from e
 
