@@ -261,7 +261,7 @@ def check_coherence(
             coherent=False,
             ctx_source="acquire_failed",
             skipped=True,
-            skip_reason=f"A4 could not acquire the ctx: {e}",
+            skip_reason=f"could not acquire the build context: {e}",
         )
 
     # Step 3: idedata.
@@ -418,7 +418,7 @@ def main(argv: list[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser(
         prog="combus_builder.coherence",
-        description="A8 CPPDEFINES / PlatformIO coherence check.",
+        description="CPPDEFINES / PlatformIO coherence check.",
     )
     parser.add_argument(
         "envs", nargs="*",

@@ -344,7 +344,7 @@ def _normalize_direction(
     if raw_dir in DIRECTION_OR_TOKENS and type_ != "digital":
         raise ChannelValidationError(
             path, channel_id,
-            f"`direction: {raw_dir!r}` (A2.1 `*_OR` variant) is only valid "
+            f"`direction: {raw_dir!r}` (a `*_OR` variant) is only valid "
             f"on `type: digital` channels (OR-fusion has no meaning on "
             f"analog magnitudes); got `type: {type_!r}`",
         )
@@ -501,7 +501,7 @@ def _validate_value(
             )
         raise ChannelValidationError(
             path, channel_id,
-            f"`value` for digital must be a string token ('low' or 'high'), "
+            f"`value` for digital must be a string token ('low', 'high' or 'fault'), "
             f"got {type(raw_val).__name__} ({raw_val!r})",
         )
 

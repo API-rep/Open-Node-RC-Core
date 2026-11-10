@@ -349,7 +349,7 @@ def test_acquire_failure_marks_skipped(tmp_path):
 
     assert report.skipped is True
     assert report.coherent is False
-    assert "A4 could not acquire" in report.skip_reason
+    assert "could not acquire the build context" in report.skip_reason
     assert "simulated A4 failure" in report.skip_reason
 
 

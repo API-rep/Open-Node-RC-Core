@@ -661,7 +661,7 @@ def _generate_combus_action(target, source, env):
         return 1
     if machine_type is not None:
         print(
-            f"[combus_scons_action] ND8 machine-type filter active: "
+            f"[combus_scons_action] machine-type filter active: "
             f"machine_type={machine_type!r} (excludes "
             f"core/config/machines/<other>/)"
         )
@@ -704,7 +704,7 @@ def _generate_combus_action(target, source, env):
 
     if node.is_node:
         print(
-            f"[combus_scons_action] ND1 node mode detected: "
+            f"[combus_scons_action] node mode detected: "
             f"mother_env={node.mother_env!r}, "
             f"boards={[b[0] for b in boards]}"
         )

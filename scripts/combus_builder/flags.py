@@ -246,14 +246,14 @@ def _extract_from_env_cppdefines(env: Any) -> tuple[set[str], dict[str, str]]:
                 raise BuildContextError(
                     "env['CPPDEFINES'] contains an entry of unsupported "
                     f"shape at index {idx}: {entry!r} (type={type(entry).__name__}). "
-                    "A4 cannot reliably extract a complete build context "
+                    "The builder cannot reliably extract a complete build context "
                     "from this value. Pass override_cppdefines explicitly, "
                     "or extend the extractor to handle this shape."
                 )
     else:
         raise BuildContextError(
             "env['CPPDEFINES'] has an unsupported container type: "
-            f"{type(raw).__name__} (value={raw!r}). A4 cannot reliably "
+            f"{type(raw).__name__} (value={raw!r}). The builder cannot reliably "
             "extract a complete build context from this value."
         )
 

@@ -264,7 +264,7 @@ def parse_yaml_file(path: Path) -> tuple[Path, str, Any]:
                 raise ParseError(
                     path,
                     f"channel {ch.get('id')!r}: no `value:`. The default value is the "
-                    f"safe value of the channel and must be written (link rework 3.2a)",
+                    f"safe value of the channel and must be written",
                 )
             if isinstance(ch, dict):
                 _check_fault_value(path, ch)
@@ -285,13 +285,12 @@ def _check_fault_value(path: Path, ch: dict) -> None:
     cid, theme, value = ch.get("id"), ch.get("theme"), ch.get("value")
     if value == "high":
         raise ParseError(path, f"channel {cid!r}: `value: high` is refused. A true safe value only "
-                               f"makes sense for a failsafe alarm, written `value: fault` (link rework S3a)")
+                               f"makes sense for a failsafe alarm, written `value: fault`")
     if theme == "failsafe" and value != "fault":
         raise ParseError(path, f"channel {cid!r}: a digital channel of the theme `failsafe` is an "
-                               f"alarm, its safe value is declared `value: fault` (link rework S3a)")
+                               f"alarm, its safe value is declared `value: fault`")
     if value == "fault" and theme != "failsafe":
-        raise ParseError(path, f"channel {cid!r}: `value: fault` belongs to the theme `failsafe` only "
-                               f"(link rework S3a)")
+        raise ParseError(path, f"channel {cid!r}: `value: fault` belongs to the theme `failsafe` only")
 
 
 # Link rework S3: an analog channel not at neutral is a warning until the chains
@@ -313,7 +312,7 @@ def _check_neutral_value(path: Path, ch: dict) -> None:
         return
     cid, value = ch.get("id"), ch.get("value")
     msg = (f"channel {cid!r}: the safe value of an analog channel is `CbusNeutral`, "
-           f"declared `value: {value}` (link rework S3)")
+           f"declared `value: {value}`")
     if NEUTRAL_VALUE_IS_ERROR:
         raise ParseError(path, msg)
     key = (str(path), str(cid))
