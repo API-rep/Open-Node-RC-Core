@@ -1,39 +1,39 @@
 #!/usr/bin/env python3
 """
-combus_builder/canon/channels.py — A5.1: contrat et canonisation des `channels:`.
+combus_builder/canon/channels.py — contract and canonisation of `channels:`.
 
-Ce module regroupe TOUT le vocabulaire et les règles propres au format
-`channels:`. Il est volontairement monolithique (par format, pas par
-constante) pour rester lisible et éditable.
+This module holds ALL the vocabulary and the rules of the `channels:` format.
+It is monolithic on purpose (one module per format, not per constant), to stay
+readable and easy to edit.
 
-Vocabulaires centralisés (modifiables ici, sans toucher au reste) :
-  - ALLOWED_FIELDS       : clés autorisées par channel.
-  - VALID_TYPES          : valeurs autorisées pour `type`.
-  - VALID_SCOPES         : valeurs autorisées pour `scope`.
-  - VALID_THEMES         : valeurs autorisées pour `theme`.
-  - SCOPE_ORDER          : ordre canonique des scopes.
-  - DIRECTION_TOKENS     : tokens de surface autorisés.
-  - DIRECTION_BY_SCOPE   : tokens autorisés par scope (incl. `both`/`none`).
+Vocabularies (edit them here, nothing else to touch):
+  - ALLOWED_FIELDS       : keys allowed in a channel.
+  - VALID_TYPES          : values of `type`.
+  - VALID_SCOPES         : values of `scope`.
+  - VALID_THEMES         : values of `theme`.
+  - SCOPE_ORDER          : canonical order of the scopes.
+  - DIRECTION_TOKENS     : surface tokens of `direction`.
+  - DIRECTION_BY_SCOPE   : tokens allowed per scope (`both` and `none` included).
 
-Règles de validation :
-  - clés inconnues → erreur explicite ;
-  - `id` requis, non vide, unique globalement ;
-  - `infoName` REQUIS, non vide ;
-  - `type` ∈ VALID_TYPES ;
-  - `scope` ∈ VALID_SCOPES ;
-  - `theme` ∈ VALID_THEMES ;
-  - `direction` : contrat par scope (voir _validate_direction) ;
-  - `requires` : optionnel, AND, doublons interdits.
+Validation rules:
+  - unknown key → explicit error;
+  - `id` required, non-empty, unique across all files;
+  - `infoName` REQUIRED, non-empty;
+  - `type` ∈ VALID_TYPES;
+  - `scope` ∈ VALID_SCOPES;
+  - `theme` ∈ VALID_THEMES;
+  - `direction`: contract per scope (see _normalize_direction);
+  - `requires`: optional, AND, no duplicates.
 
-Représentation interne de `direction` :
+Internal form of `direction`:
   - `both`  → frozenset({"uplink", "downlink"})
   - `none`  → frozenset()
   - `uplink` / `downlink` → frozenset({"uplink"}) / frozenset({"downlink"})
-  - Combinaisons incohérentes (ex. `both` + `uplink`) → erreur.
+  - inconsistent combinations (e.g. `both` + `uplink`) → error.
 
-Sortie :
-  - ChannelDefinition (frozen dataclass) avec `direction: frozenset[str]`
-    normalisé (uniquement `uplink` et/ou `downlink`, jamais `both`/`none`).
+Output:
+  - ChannelDefinition (frozen dataclass), with `direction: frozenset[str]`
+    normalised (only `uplink` and/or `downlink`, never `both` or `none`).
 """
 
 from __future__ import annotations
@@ -44,10 +44,10 @@ from typing import Any, Iterable
 
 
 # =============================================================================
-# VOCABULAIRES (un seul endroit à modifier pour étendre)
+# VOCABULARIES (the only place to edit to extend them)
 # =============================================================================
 
-# Champs autorisés par channel. Toute autre clé est une erreur.
+# Keys allowed in a channel. Any other key is an error.
 ALLOWED_FIELDS: frozenset[str] = frozenset({
     "id",
     "infoName",
@@ -57,103 +57,101 @@ ALLOWED_FIELDS: frozenset[str] = frozenset({
     "direction",
     "requires",
     "value",
-    "candidate",   # link rework 2.2a: BASE channel on trial (id ends with CANDIDATE_SUFFIX)
-    "zeroAt",      # link rework S3-4: place of the logical zero of an analog channel
+    "candidate",   # BASE channel on trial (its id gets CANDIDATE_SUFFIX)
+    "zeroAt",      # place of the logical zero of an analog channel
 })
 
-# Values of `zeroAt` (link rework S3-4): where the LOGICAL zero of an analog
-# channel sits in its raw range — at 0 (`start`, the default) or at
-# `CbusNeutral` (`neutral`).  Storage (raw uint16_t) and frame are unchanged.
+# Values of `zeroAt`: where the LOGICAL zero of an analog channel sits in its
+# raw range — at 0 (`start`, the default) or at `CbusNeutral` (`neutral`).
+# Storage (raw uint16_t) and frame are unchanged.
 VALID_ZERO_AT: frozenset[str] = frozenset({"start", "neutral"})
 
-# Suffixe obligatoire (et réservé) du nom d'un channel candidat (link rework 2.2a).
+# Suffix of a candidate channel, added by the builder (reserved in the `.cb`).
 CANDIDATE_SUFFIX: str = "_NEXT"
 
-# Tokens acceptés pour `value` sur un channel analog.
-# Mapping vers littéraux C++ uint16_t (cf. src/core/system/combus/combus_res.h).
+# Tokens accepted for `value` on an analog channel.
+# They map to uint16_t C++ literals (see src/core/system/combus/combus_res.h).
 VALID_ANALOG_VALUES: frozenset[str] = frozenset({
     "CbusMinVal",
     "CbusNeutral",
     "CbusMaxVal",
 })
 
-# Tokens acceptés pour `value` sur un channel digital.
+# Tokens accepted for `value` on a digital channel.
 VALID_DIGITAL_VALUES: frozenset[str] = frozenset({
     "low",
     "high",
-    "fault",       # link rework S3a: true, the safe value of a failsafe alarm (theme failsafe only)
+    "fault",       # true, the safe value of a failsafe alarm (theme failsafe only)
 })
 
-# Bornes pour les valeurs analog numériques brutes (entier accepté dans [0..65535]).
+# Bounds of a raw numeric analog value (integer accepted in [0..65535]).
 ANALOG_VALUE_MIN: int = 0
 ANALOG_VALUE_MAX: int = 65535
 
-# Types autorisés.
+# Allowed types.
 VALID_TYPES: frozenset[str] = frozenset({"analog", "digital"})
 
-# Scopes autorisés.
+# Allowed scopes.
 VALID_SCOPES: frozenset[str] = frozenset({"SYSTEM", "BASE", "BOARD"})
 
-# Thèmes autorisés. À étendre ici quand un nouveau thème apparaît.
+# Allowed themes. Extend here when a new theme appears.
 VALID_THEMES: frozenset[str] = frozenset({
-    "core",        # A9.1: STEERING_BUS (dumper_truck/combus/steering_bus.cb)
-    "failsafe",    # the failsafe group: aggregators FAILSAFE_*, contributors *_FAIL (link rework S3a: `com` merged here)
+    "core",        # the controls of the machine (steering, throttle, gears...)
+    "failsafe",    # the failsafe group: aggregators FAILSAFE_*, contributors *_FAIL
     "vbat",
     "light",
     "input",
     "sim",        # values computed by the simulation chains (HAS_SIM_PROC): ESC_SPEED_BUS, ESC_RPM_BUS, DRIVE_STATE_BUS
-    "coupler",    # link rework 3.4e: local channels of a coupler (command, engaged switch...)
-    "remote",     # link rework 3.4e: inputs sent by the remote (buttons, sticks); the existing ones move later (WIP simulation)
-    # Ajouter ici les nouveaux thèmes légitimes.
+    "coupler",    # local channels of a coupler (command, engaged switch...)
+    "remote",     # inputs sent by the remote (buttons, sticks); TODO(Simulation chain): the existing inputs move here
+    # Add the new legitimate themes here.
 })
 
-# Ordre canonique des scopes (utilisé par le tri).
+# Canonical order of the scopes (used by the sort).
 SCOPE_ORDER: dict[str, int] = {
     "SYSTEM": 0,
     "BASE": 1,
     "BOARD": 2,
 }
 
-# Tokens de surface autorisés dans `direction`.
-# A2.1 (2026-08-29) : ajout des variantes `*_OR` (uplink_or, downlink_or, both_or)
-# qui ajoutent une politique de fusion OR logique à la direction wire.
+# Surface tokens allowed in `direction`.  The `*_OR` variants add a logical OR
+# merge policy to the wire direction.
 DIRECTION_TOKENS: frozenset[str] = frozenset({
     "uplink", "downlink", "both", "none",
-    "uplink_or", "downlink_or", "both_or",  # A2.1
+    "uplink_or", "downlink_or", "both_or",
 })
 
-# Tokens autorisés par scope (en surface).
-# A2.1 : les variantes `*_OR` ne sont acceptées que sur SYSTEM/BASE
-# (un channel BOARD n'a qu'un seul écrivain possible — la fusion OR
-# n'a pas de sens, on est toujours en last-write-wins effectif).
+# Surface tokens allowed per scope.  The `*_OR` variants are accepted on SYSTEM
+# and BASE only: a BOARD channel has a single possible writer, so an OR merge
+# has no meaning (last write wins).
 DIRECTION_BY_SCOPE: dict[str, frozenset[str]] = {
     "SYSTEM": frozenset({"uplink", "downlink", "both", "none",
                         "uplink_or", "downlink_or", "both_or"}),
     "BASE": frozenset({"uplink", "downlink", "both", "none",
                          "uplink_or", "downlink_or", "both_or"}),
-    "BOARD": frozenset({"none"}),  # seule valeur de surface acceptée
+    "BOARD": frozenset({"none"}),  # the only surface value accepted
 }
 
-# Passthrough (link rework 2.4) : `downlink_pt` = un `downlink` de BASE que la
-# carte connectée à un autre nœud redistribue dans le nœud.  Seul jeton `_pt`
-# accepté ; `both_pt` est refusé (plusieurs sources par nature).
+# Passthrough: `downlink_pt` is a BASE `downlink` that the board connected to
+# another node redistributes inside the node.  The only `_pt` token accepted;
+# `both_pt` is refused (several sources by nature).
 PASSTHROUGH_TOKENS: frozenset[str] = frozenset({"downlink_pt"})
 
-# Tokens `*_OR` (A2.1) — sous-ensemble de DIRECTION_TOKENS.
+# The `*_OR` tokens, a subset of DIRECTION_TOKENS.
 DIRECTION_OR_TOKENS: frozenset[str] = frozenset({"uplink_or", "downlink_or", "both_or"})
 
 
 
 # =============================================================================
-# ERREURS
+# ERRORS
 # =============================================================================
 
 class ChannelError(Exception):
-    """Base class pour les erreurs A5.1 channels."""
+    """Base class of the `channels:` errors."""
 
 
 class ChannelValidationError(ChannelError):
-    """Une définition de channel est invalide (structure ou sémantique)."""
+    """A channel definition is invalid (structure or meaning)."""
 
     def __init__(self, path: Path, channel_id: str | None, message: str):
         self.path = path
@@ -163,7 +161,7 @@ class ChannelValidationError(ChannelError):
 
 
 class ChannelConflictError(ChannelError):
-    """Deux définitions partagent le même id."""
+    """Two definitions share the same id."""
 
     def __init__(self, channel_id: str, first_path: Path, second_path: Path,
                  first_def: dict, second_def: dict):
@@ -188,28 +186,25 @@ class ChannelConflictError(ChannelError):
 @dataclass(frozen=True)
 class ChannelDefinition:
     """
-    Définition de channel validée et normalisée.
+    A validated and normalised channel definition.
 
-    `direction` est TOUJOURS un frozenset de `{"uplink", "downlink"}`
-    (ou vide pour `none`/BOARD). Les tokens de surface `both` et
-    `none` sont normalisés à la validation et n'apparaissent jamais
-    dans cette représentation.
+    `direction` is ALWAYS a frozenset of `{"uplink", "downlink"}` (empty for
+    `none` and BOARD).  The surface tokens `both` and `none` are normalised
+    at validation and never appear here.
 
-    `direction_or` (A2.1) est TOUJOURS un frozenset de `{"uplink", "downlink"}`
-    (ou vide si pas de sémantique `*_OR`). Les tokens de surface
-    `uplink_or` / `downlink_or` / `both_or` sont normalisés à la
-    validation et n'apparaissent jamais dans cette représentation.
-    La sémantique `*_OR` est exclusive : un channel ne peut pas avoir
-    à la fois `direction` et `direction_or` non vides (la fusion OR
-    n'a de sens que si plusieurs sources écrivent sur le même sens).
+    `direction_or` is ALWAYS a frozenset of `{"uplink", "downlink"}` (empty
+    without a `*_OR` token).  The surface tokens `uplink_or`, `downlink_or`
+    and `both_or` are normalised at validation and never appear here.  The
+    two are exclusive: a channel cannot have both `direction` and
+    `direction_or` non-empty (an OR merge only makes sense when several
+    sources write the same direction).
 
-    `value` est `None` si le champ est absent du YAML ; sinon :
-      - analog : l'un des tokens `CbusMinVal` / `CbusNeutral` / `CbusMaxVal`
-                 OU un entier `[ANALOG_VALUE_MIN..ANALOG_VALUE_MAX]`.
-      - digital : l'un des tokens `low` / `high`.
-    La forme canonique est conservée telle quelle (pas de conversion
-    implicite) afin que le générateur C++ puisse décider du littéral
-    exact à émettre.
+    `value` is `None` when the field is absent from the YAML; otherwise:
+      - analog: one of the tokens `CbusMinVal` / `CbusNeutral` / `CbusMaxVal`,
+                OR an integer in `[ANALOG_VALUE_MIN..ANALOG_VALUE_MAX]`;
+      - digital: one of the tokens `low` / `high` / `fault`.
+    The canonical form is kept as is (no implicit conversion), so that the
+    C++ generator decides on the exact literal to emit.
     """
 
     id: str
@@ -218,41 +213,38 @@ class ChannelDefinition:
     scope: str
     theme: str
     direction: frozenset[str]
-    direction_or: frozenset[str]  # A2.1 — sémantique de fusion OR (vide si absent)
+    direction_or: frozenset[str]  # OR merge policy (empty without a `*_OR` token)
     requires: frozenset[str]
     source_path: Path
     raw: dict[str, Any] = field(default_factory=dict)
     value: str | int | None = None
-    candidate: bool = False  # link rework 2.2a — BASE channel on trial (id ends with _NEXT)
-    passthrough: bool = False  # link rework 2.4 — `downlink_pt`: redistributed in the node
-    zero_at_neutral: bool = False  # link rework S3-4 — `zeroAt: neutral`: logical zero at CbusNeutral
+    candidate: bool = False  # BASE channel on trial (id ends with _NEXT)
+    passthrough: bool = False  # `downlink_pt`: redistributed in the node
+    zero_at_neutral: bool = False  # `zeroAt: neutral`: logical zero at CbusNeutral
 
     def sort_key(self) -> tuple[int, str, str, str]:
-        """Clé de tri canonique : (scope, type, theme, id)."""
+        """Canonical sort key: (scope, type, theme, id)."""
         return (SCOPE_ORDER.get(self.scope, len(SCOPE_ORDER)),
                 self.type, self.theme, self.id)
 
     @property
     def effective_direction(self) -> frozenset[str]:
-        """Direction filaire effective = direction | direction_or.
+        """Effective wire direction = direction | direction_or.
 
-        C'est la SEULE direction à utiliser pour le bitmask C++ et
-        l'appartenance aux vues base/system. Les tokens `*_OR`
-        (uplink_or, downlink_or, both_or) ne remplissent que
-        `direction_or` ; leur sémantique filaire (bitmask, transport)
-        est identique à leur équivalent non-OR. Cette propriété
-        unifie les deux représentations pour les consommateurs aval
-        (generator, md5).
+        The ONLY direction to use for the C++ bitmask and for the membership
+        of the base and system views.  The `*_OR` tokens (uplink_or,
+        downlink_or, both_or) fill `direction_or` only; on the wire (bitmask,
+        transport) they behave as their plain equivalent.  This property
+        unifies both forms for the consumers (generator, md5).
 
-        Invariant A2.1 : `direction` et `direction_or` sont
-        mutuellement exclusifs (un seul des deux est non-vide à la
-        fois), donc l'union est simplement la concaténation.
+        `direction` and `direction_or` are exclusive (only one is non-empty),
+        so the union is simply the one that is set.
         """
         return self.direction | self.direction_or
 
 
 # =============================================================================
-# VALIDATION : direction
+# VALIDATION: direction
 # =============================================================================
 
 def _normalize_direction(
@@ -263,37 +255,35 @@ def _normalize_direction(
     raw_dir: Any,
 ) -> tuple[frozenset[str], frozenset[str]]:
     """
-    Valide et normalise `direction` selon le scope et le type.
+    Validate and normalise `direction` according to the scope and the type.
 
-    Règles (decision mainteneur 2026-08-22 : direction = string, pas liste) :
-      - Champ absent pour BOARD → (frozenset(), frozenset()) (= none implicite).
-      - Doit être une STRING unique ∈ {uplink, downlink, both, none,
-                                       uplink_or, downlink_or, both_or}.
-      - BOARD : seule 'none' (ou champ absent) est acceptée.
-      - SYSTEM/BASE : 'uplink', 'downlink', 'both', 'none' tous OK
-                       selon la politique par scope.
-      - `both` est un raccourci pour {uplink, downlink}.
-      - `none` est un raccourci pour {}.
+    Rules:
+      - field absent on BOARD → (frozenset(), frozenset()) (implicit none);
+      - otherwise a single STRING ∈ {uplink, downlink, both, none,
+                                     uplink_or, downlink_or, both_or};
+      - BOARD: only 'none' (or the field absent) is accepted;
+      - SYSTEM/BASE: 'uplink', 'downlink', 'both', 'none', per the policy
+        of the scope;
+      - `both` is a shortcut for {uplink, downlink};
+      - `none` is a shortcut for {}.
 
-    Règles A2.1 (variantes `*_OR`) :
-      - `*_OR` uniquement sur `type: digital` (rejet sur analog).
-      - `*_OR` uniquement sur `scope: SYSTEM/BASE` (rejet sur BOARD).
-      - `*_OR` est mutuellement exclusif avec `direction` non-vide :
-        un channel ne peut pas avoir à la fois une direction wire
-        classique ET une sémantique de fusion OR.
-      - Normalisation :
+    Rules of the `*_OR` variants:
+      - digital only (refused on analog);
+      - SYSTEM/BASE only (refused on BOARD);
+      - exclusive with a plain direction: a channel cannot have both a
+        classic wire direction and an OR merge;
+      - normalisation:
           * `uplink_or`   → direction_or = {uplink},   direction = {}
           * `downlink_or` → direction_or = {downlink}, direction = {}
           * `both_or`     → direction_or = {uplink, downlink}, direction = {}
 
-    Pourquoi une string (et non une liste) : les valeurs possibles sont
-    mutuellement exclusives. Une liste n'apporte rien et complique la
-    syntaxe YAML.
+    Why a string and not a list: the values are mutually exclusive.  A list
+    adds nothing and makes the YAML syntax heavier.
 
-    Retourne un tuple (direction, direction_or) de frozensets normalisés
-    (uniquement uplink/downlink). Un seul des deux est non-vide à la fois.
+    Returns a tuple (direction, direction_or) of normalised frozensets (only
+    uplink/downlink).  Only one of them is non-empty.
     """
-    # Cas BOARD : champ absent → (frozenset(), frozenset())
+    # BOARD: field absent → (frozenset(), frozenset())
     if raw_dir is None:
         if scope == "BOARD":
             return (frozenset(), frozenset())
@@ -303,7 +293,7 @@ def _normalize_direction(
             "(BOARD may omit it and defaults to 'none')",
         )
 
-    # Doit être une string.
+    # Must be a string.
     if not isinstance(raw_dir, str):
         raise ChannelValidationError(
             path, channel_id,
@@ -312,7 +302,7 @@ def _normalize_direction(
             f"'none', 'uplink_or', 'downlink_or', 'both_or'",
         )
 
-    # BOARD : seule 'none' est acceptée (les `*_OR` sont rejetés ici).
+    # BOARD: only 'none' is accepted (the `*_OR` tokens are refused here).
     if scope == "BOARD":
         if raw_dir == "none":
             return (frozenset(), frozenset())
@@ -323,7 +313,7 @@ def _normalize_direction(
             f"got {raw_dir!r}",
         )
 
-    # SYSTEM/BASE : la valeur doit être un token autorisé globalement.
+    # SYSTEM/BASE: the value must be a known token.
     if raw_dir not in DIRECTION_TOKENS:
         raise ChannelValidationError(
             path, channel_id,
@@ -331,7 +321,7 @@ def _normalize_direction(
             f"got {raw_dir!r}",
         )
 
-    # Tokens autorisés par scope.
+    # Tokens allowed per scope.
     allowed = DIRECTION_BY_SCOPE[scope]
     if raw_dir not in allowed:
         raise ChannelValidationError(
@@ -340,7 +330,7 @@ def _normalize_direction(
             f"allowed for this scope: {sorted(allowed)}",
         )
 
-    # A2.1 : `*_OR` uniquement sur `type: digital`.
+    # `*_OR` on `type: digital` only.
     if raw_dir in DIRECTION_OR_TOKENS and type_ != "digital":
         raise ChannelValidationError(
             path, channel_id,
@@ -349,9 +339,9 @@ def _normalize_direction(
             f"analog magnitudes); got `type: {type_!r}`",
         )
 
-    # Normalisation : `both` → {uplink, downlink}, `none` → {},
-    # `uplink`/`downlink` → {uplink}/{downlink}.
-    # A2.1 : `*_OR` → direction_or rempli, direction vide.
+    # Normalisation: `both` → {uplink, downlink}, `none` → {},
+    # `uplink`/`downlink` → {uplink}/{downlink}; `*_OR` → direction_or set,
+    # direction empty.
     if raw_dir == "both":
         return (frozenset({"uplink", "downlink"}), frozenset())
     if raw_dir == "none":
@@ -366,7 +356,7 @@ def _normalize_direction(
 
 
 # =============================================================================
-# VALIDATION : requires
+# VALIDATION: requires
 # =============================================================================
 
 def _validate_requires(
@@ -375,14 +365,14 @@ def _validate_requires(
     raw_req: Any,
 ) -> frozenset[str]:
     """
-    Valide `requires`.
+    Validate `requires`.
 
-    Règles :
-      - Optionnel. Absent ou [] → frozenset() (actif par défaut).
-      - Si présent : liste de strings non vides.
-      - Doublons interdits.
-      - Sémantique : AND (tous les flags doivent être présents).
-        La résolution effective est du ressort de A8.
+    Rules:
+      - optional; absent or [] → frozenset() (active by default);
+      - when present: a list of non-empty strings;
+      - no duplicates;
+      - meaning: AND (all the flags must be defined).  It is resolved
+        against the build flags by generator.resolve_requires().
     """
     if raw_req is None:
         return frozenset()
@@ -413,7 +403,7 @@ def _validate_requires(
 
 
 # =============================================================================
-# VALIDATION : value
+# VALIDATION: value
 # =============================================================================
 
 def _validate_value(
@@ -423,35 +413,33 @@ def _validate_value(
     raw_val: Any,
 ) -> str | int | None:
     """
-    Valide et normalise `value` selon le `type` du channel.
+    Validate and normalise `value` according to the `type` of the channel.
 
-    Règles :
-      - Champ absent (`raw_val is None`) → None (= défaut générateur).
-      - `value: null` explicite → erreur (canonique : null ≠ valeur absente).
-      - analog :
-          * Token ∈ {"CbusMinVal", "CbusNeutral", "CbusMaxVal"} → str tel quel.
-          * Entier dans [ANALOG_VALUE_MIN..ANALOG_VALUE_MAX] → int tel quel.
-          * Tout autre type ou valeur hors bornes → erreur.
-      - digital :
-          * Token ∈ {"low", "high"} → str tel quel.
-          * Toute autre valeur → erreur.
-      - Cross-type strict :
-          * low/high sur analog → erreur.
-          * CbusMinVal/Neutral/MaxVal sur digital → erreur.
-          * entier sur digital → erreur.
+    Rules:
+      - field absent (`raw_val is None`) → None (generator default; parser.py
+        refuses it in a `.cb`, where the value is the safe value);
+      - explicit `value: null` → error (null is not an absent value);
+      - analog:
+          * token ∈ {"CbusMinVal", "CbusNeutral", "CbusMaxVal"} → str as is;
+          * integer in [ANALOG_VALUE_MIN..ANALOG_VALUE_MAX] → int as is;
+          * any other type, or out of bounds → error;
+      - digital:
+          * token ∈ VALID_DIGITAL_VALUES → str as is;
+          * any other value → error;
+      - strict across types:
+          * low/high/fault on analog → error;
+          * CbusMinVal/Neutral/MaxVal on digital → error;
+          * integer on digital → error.
 
-    Retourne :
-      - None si absent.
-      - str (token) ou int (entier brut) si présent et valide.
+    Returns:
+      - None when absent;
+      - str (token) or int (raw integer) when present and valid.
     """
-    # Cas absent : champ non présent dans le YAML.
+    # Absent: the field is not in the YAML.
     if raw_val is None:
-        # Distinction absent / null :
-        # PyYAML retourne None pour `key: null` ET pour clé absente.
-        # On ne peut PAS distinguer les deux ici sans contexte.
-        # La distinction est faite par validate_channel() qui vérifie
-        # explicitement `raw_val is None AND "value" in raw` via
-        # ChannelValidationError séparé. Voir validate_channel().
+        # Absent or null: PyYAML returns None for `key: null` AND for an
+        # absent key, so the two cannot be told apart here.
+        # validate_channel() does it first, with _check_value_explicit_null().
         return None
 
     # analog
@@ -467,7 +455,7 @@ def _validate_value(
                 f"got unknown token {raw_val!r}",
             )
         if isinstance(raw_val, bool):
-            # bool est sous-classe de int en Python : on l'exclut explicitement.
+            # bool is a subclass of int in Python: excluded explicitly.
             raise ChannelValidationError(
                 path, channel_id,
                 f"`value` for analog must be a token or an integer, "
@@ -481,7 +469,7 @@ def _validate_value(
                 f"`value` for analog must be in [{ANALOG_VALUE_MIN}.."
                 f"{ANALOG_VALUE_MAX}] (uint16_t range), got {raw_val!r}",
             )
-        # Autres types YAML : float, list, dict, etc.
+        # Other YAML types: float, list, dict...
         raise ChannelValidationError(
             path, channel_id,
             f"`value` for analog must be a string token or an integer, "
@@ -505,7 +493,7 @@ def _validate_value(
             f"got {type(raw_val).__name__} ({raw_val!r})",
         )
 
-    # type inconnu (ne devrait pas arriver : validate_channel filtre avant).
+    # Unknown type (should not happen: validate_channel filters it first).
     raise ChannelValidationError(
         path, channel_id,
         f"`value` validation called with unknown `type`={type_!r}",
@@ -518,11 +506,11 @@ def _check_value_explicit_null(
     raw: dict[str, Any],
 ) -> None:
     """
-    Rejette explicitement `value: null` (≠ champ absent).
+    Refuse an explicit `value: null` (not the same as an absent field).
 
-    PyYAML retourne None à la fois pour clé absente et pour clé=None.
-    On distingue les deux cas ici : si "value" est dans le mapping ET
-    que raw["value"] est None, c'est une erreur explicite.
+    PyYAML returns None both for an absent key and for key=None.  The two
+    are told apart here: "value" in the mapping AND raw["value"] None is an
+    explicit error.
     """
     if "value" in raw and raw["value"] is None:
         raise ChannelValidationError(
@@ -534,7 +522,7 @@ def _check_value_explicit_null(
 
 
 # =============================================================================
-# VALIDATION : un channel complet
+# VALIDATION: a whole channel
 # =============================================================================
 
 def validate_channel(
@@ -543,10 +531,10 @@ def validate_channel(
     index: int,
 ) -> ChannelDefinition:
     """
-    Valide un channel brut et retourne un ChannelDefinition normalisé.
+    Validate a raw channel and return a normalised ChannelDefinition.
 
-    Lève ChannelValidationError sur tout problème (structure, sémantique,
-    clé inconnue, doublon, combinaison incohérente).
+    Raises ChannelValidationError on any problem (structure, meaning,
+    unknown key, duplicate, inconsistent combination).
     """
     if not isinstance(raw, dict):
         raise ChannelValidationError(
@@ -554,7 +542,7 @@ def validate_channel(
             f"channel #{index} must be a mapping, got {type(raw).__name__}",
         )
 
-    # --- clés inconnues (rejet explicite) ---
+    # --- unknown keys (refused explicitly) ---
     unknown = set(raw.keys()) - ALLOWED_FIELDS
     if unknown:
         raise ChannelValidationError(
@@ -563,7 +551,7 @@ def validate_channel(
             f"allowed fields are {sorted(ALLOWED_FIELDS)}",
         )
 
-    # --- id (requis, non vide) ---
+    # --- id (required, non-empty) ---
     cid = raw.get("id")
     if cid is None:
         raise ChannelValidationError(
@@ -575,7 +563,7 @@ def validate_channel(
             f"channel #{index} `id` must be a non-empty string, got {cid!r}",
         )
 
-    # --- infoName (REQUIS, non vide) ---
+    # --- infoName (REQUIRED, non-empty) ---
     info_name = raw.get("infoName")
     if info_name is None:
         raise ChannelValidationError(
@@ -611,25 +599,21 @@ def validate_channel(
             f"`scope` must be one of {sorted(VALID_SCOPES)}, got {cscope!r}",
         )
 
-    # --- ND4 bis (2026-10-04): BASE n'accepte pas de requires ---
-    # Un channel scope BASE représente une frame fixe, héritée
-    # d'une config générique de type de machine, partagée telle
-    # quelle entre le nœud machine et la télécommande. `requires`
-    # (activation conditionnelle à la compilation) n'a pas de sens
-    # sur BASE : ça introduirait des variantes de frame selon la
-    # config buildée, alors que la frame doit rester fixe par type
-    # de machine. On rejette donc explicitement tout `requires`
-    # non vide sur un channel BASE, avec un message qui pointe
-    # vers les alternatives (SYSTEM/BOARD scope, ou suppression du
-    # requires).
+    # --- BASE refuses `requires` ---
+    # A BASE channel belongs to a fixed frame, from the generic profile of a
+    # machine type, shared as is by the machine node and the remote.
+    # `requires` (activation at compile time) would give frame variants
+    # depending on the built config, while the frame must stay fixed per
+    # machine type.  A non-empty `requires` on a BASE channel is refused,
+    # with a message that points to the alternatives (SYSTEM/BOARD scope, or
+    # no requires).
     if cscope == "BASE":
         raw_req = raw.get("requires")
         if raw_req is not None:
-            # Normalise pour le message : on accepte une liste vide
-            # (équivalent à "pas de requires"), on rejette tout le
-            # reste.
+            # An empty list is accepted (same as no requires), anything else
+            # is refused.
             if isinstance(raw_req, list) and len(raw_req) == 0:
-                pass  # requires: [] est OK (équivalent à absent)
+                pass  # requires: [] is OK (same as absent)
             else:
                 raise ChannelValidationError(
                     path, cid,
@@ -640,7 +624,7 @@ def validate_channel(
                     f"requires",
                 )
 
-    # --- theme (cadré) ---
+    # --- theme (from VALID_THEMES) ---
     ctheme = raw.get("theme")
     if ctheme is None:
         raise ChannelValidationError(
@@ -659,10 +643,10 @@ def validate_channel(
             f"this is intentional",
         )
 
-    # --- direction (contrat par scope + type, A2.1) ---
-    # Link rework 2.4 : `downlink_pt` = `downlink` redistribué dans le nœud par
-    # la carte connectée à un autre nœud ; BASE seulement (SYSTEM est déjà
-    # diffusé) ; `both_pt` refusé (plusieurs sources par nature).
+    # --- direction (contract per scope and type) ---
+    # `downlink_pt` is a `downlink` redistributed inside the node by the board
+    # connected to another node; BASE only (SYSTEM is already diffused);
+    # `both_pt` refused (several sources by nature).
     raw_direction = raw.get("direction")
     passthrough = False
     if isinstance(raw_direction, str) and raw_direction.endswith("_pt"):
@@ -693,18 +677,18 @@ def validate_channel(
     # --- requires ---
     requires = _validate_requires(path, cid, raw.get("requires"))
 
-    # --- value (optionnel) ---
-    # Distinction explicite absent / null AVANT _validate_value (qui retourne
-    # None pour les deux cas).
+    # --- value (optional) ---
+    # Absent and null are told apart BEFORE _validate_value (which returns
+    # None for both).
     _check_value_explicit_null(path, cid, raw)
     value = _validate_value(path, cid, ctype, raw.get("value"))
 
-    # --- candidate (optionnel, link rework 2.2a) ---
-    # Un channel BASE à l'essai : hors de l'ensemble stable et de son MD5,
-    # échangé seulement en mode next.  Le `.cb` donne le nom définitif et le
-    # builder ajoute le suffixe : le statut est visible partout dans le code,
-    # et retirer `candidate` promeut le channel sous son nom définitif.  Le
-    # suffixe est réservé au builder.
+    # --- candidate (optional) ---
+    # A BASE channel on trial: out of the stable set and of its MD5, sent in
+    # next mode only.  The `.cb` gives the final name and the builder adds
+    # the suffix: the status shows everywhere in the code, and removing
+    # `candidate` promotes the channel under its final name.  The suffix is
+    # reserved to the builder.
     candidate = raw.get("candidate", False)
     if not isinstance(candidate, bool):
         raise ChannelValidationError(
@@ -724,10 +708,10 @@ def validate_channel(
     if candidate:
         cid = cid + CANDIDATE_SUFFIX
 
-    # --- zeroAt (optionnel, link rework S3-4) ---
-    # Place du zéro LOGIQUE dans la plage brute d'un analogique : au début
-    # (`start`, défaut, le codage d'aujourd'hui) ou au neutre (`neutral`).
-    # Ne change ni le stockage (uint16_t brut) ni la trame.
+    # --- zeroAt (optional) ---
+    # Place of the LOGICAL zero in the raw range of an analog channel: at the
+    # start (`start`, the default) or at neutral (`neutral`).  Changes neither
+    # the storage (raw uint16_t) nor the frame.
     raw_zero_at = raw.get("zeroAt", "start")
     if not isinstance(raw_zero_at, str) or raw_zero_at not in VALID_ZERO_AT:
         raise ChannelValidationError(
@@ -760,38 +744,37 @@ def validate_channel(
 
 
 # =============================================================================
-# EXTRACTION DEPUIS A3
+# EXTRACTION FROM THE PARSED FILES
 # =============================================================================
 
 def extract_channels_sections(
     parsed: list[tuple[Path, str, Any]],
 ) -> list[tuple[Path, list[Any]]]:
     """
-    Extrait la section `channels:` de chaque document parsé par A3.
+    Extract the `channels:` section of each document parsed by parser.py.
 
-    A5.1 sélectionne par CLÉ, pas par extension. Un `.cbch` avec une
-    section `channels:` est traité comme un `.cb` avec une section
-    `channels:`.
+    The selection is by KEY, not by extension: a `.cbch` with a `channels:`
+    section is handled as a `.cb` with a `channels:` section.
 
-    Distinction précise :
-      - clé `channels:` absente  → ignorée silencieusement
-      - `channels: null`          → erreur de validation explicite
-      - `channels: []`            → section valide vide
-      - `channels: [...]`         → section valide non vide
+    Precisely:
+      - key `channels:` absent   → skipped silently
+      - `channels: null`         → explicit validation error
+      - `channels: []`           → valid empty section
+      - `channels: [...]`        → valid non-empty section
 
-    Les documents sans `channels:` peuvent contenir d'autres sections
-    (comme `chains:`) qui ne sont pas du ressort de A5.1.
+    The documents without `channels:` may hold other sections (such as
+    `chains:`), which are not handled here.
     """
     out: list[tuple[Path, list[Any]]] = []
     for path, _type_label, raw in parsed:
         if not isinstance(raw, dict):
             continue
         if "channels" not in raw:
-            # Clé absente : le fichier ne déclare aucun channel.
+            # Key absent: the file declares no channel.
             continue
         section = raw["channels"]
         if section is None:
-            # Clé présente mais valeur null : erreur explicite.
+            # Key present but null: explicit error.
             raise ChannelValidationError(
                 path, None,
                 "`channels:` is explicitly null; expected a list of channels "
@@ -808,11 +791,11 @@ def extract_channels_sections(
 
 
 # =============================================================================
-# FUSION + CONFLITS
+# MERGE AND CONFLICTS
 # =============================================================================
 
 class ChannelValueConflictError(ChannelError):
-    """Deux définitions d'un même channel portent des `value` incompatibles."""
+    """Two definitions of the same channel carry incompatible `value`s."""
 
     def __init__(self, channel_id: str, first_path: Path, second_path: Path,
                  first_value: Any, second_value: Any):
@@ -835,18 +818,14 @@ def merge_channels(
     sections: list[tuple[Path, list[Any]]],
 ) -> list[ChannelDefinition]:
     """
-    Valide chaque channel, détecte les conflits d'ID, retourne la liste
-    fusionnée (non triée).
+    Validate each channel, detect the id conflicts, return the merged list
+    (not sorted).
 
-    Lève ChannelValidationError, ChannelConflictError ou
+    Raises ChannelValidationError, ChannelConflictError or
     ChannelValueConflictError.
 
-    Note :
-      - Un même id avec des `value` différents est une erreur explicite
-        (pas de fusion silencieuse).
-      - Si l'un des deux `value` est None (= défaut générateur), l'autre
-        gagne ; la présence explicite de `value` reste cohérente avec
-        "même id = même contrat".
+    An id defined twice is always an error: ChannelValueConflictError when
+    the two `value`s differ, ChannelConflictError otherwise (no silent merge).
     """
     by_id: dict[str, ChannelDefinition] = {}
     for path, section in sections:
@@ -871,8 +850,8 @@ def merge_channels(
                 )
             by_id[ch.id] = ch
 
-    # Link rework 2.2a — the final name of a candidate (without the suffix)
-    # must be free: promoting it would otherwise create a duplicate.
+    # The final name of a candidate (without the suffix) must be free:
+    # promoting it would otherwise create a duplicate.
     for ch in by_id.values():
         if not ch.candidate:
             continue
@@ -887,9 +866,9 @@ def merge_channels(
 
 
 # =============================================================================
-# TRI CANONIQUE
+# CANONICAL SORT
 # =============================================================================
 
 def canonize_channels(channels: list[ChannelDefinition]) -> list[ChannelDefinition]:
-    """Tri canonique : (scope, type, theme, id)."""
+    """Canonical sort: (scope, type, theme, id)."""
     return sorted(channels, key=lambda ch: ch.sort_key())

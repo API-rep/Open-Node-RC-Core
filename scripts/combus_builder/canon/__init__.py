@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """
-combus_builder/canon — A5: orchestration de la canonisation.
+combus_builder/canon — orchestration of the canonisation.
 
-Ce package regroupe les canoniseurs par format de section. Chaque
-format (`channels:`, `chains:`, etc.) a son propre module qui
-expose son contrat et ses règles.
+This package holds one canoniser per section format.  Each format
+(`channels:`, `chains:`...) has its own module, with its contract and its
+rules.
 
-Aujourd'hui :
-  - canon.channels  : contrat et canonisation des `channels:`.
+Today:
+  - canon.channels  : contract and canonisation of `channels:`.
 
-Demain (Phase C) :
-  - canon.chains    : câblage des chaînes (CbProcChain).
+TODO(ComBus processors):
+  - canon.chains    : wiring of the chains (CbProcChain).
 
-L'orchestration générale (point d'entrée canonize()) vit ici.
+The orchestration (entry point canonize()) lives here.
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ from .channels import (
 
 
 __all__ = [
-    # Vocabulaires
+    # Vocabularies
     "ALLOWED_FIELDS",
     "VALID_TYPES",
     "VALID_SCOPES",
@@ -58,7 +58,7 @@ __all__ = [
     "SCOPE_ORDER",
     "DIRECTION_TOKENS",
     "DIRECTION_BY_SCOPE",
-    # Erreurs
+    # Errors
     "ChannelError",
     "ChannelValidationError",
     "ChannelConflictError",
@@ -78,12 +78,12 @@ __all__ = [
 @dataclass(frozen=True)
 class CanonResult:
     """
-    Sortie de la canonisation.
+    Output of the canonisation.
 
-    active_definitions    : validé, sans conflit, ordre de découverte
-                            (pour diagnostic).
-    canonical_definitions : même contenu, trié par (scope, type, theme, id).
-                            C'est ce que A6 / A7 / A8 consomment.
+    active_definitions    : validated, without conflict, in discovery order
+                            (for diagnostics).
+    canonical_definitions : same content, sorted by (scope, type, theme, id).
+                            What the hook, the CLI and links.py consume.
     """
 
     active_definitions: list[ChannelDefinition]
@@ -94,13 +94,13 @@ def canonize(
     parsed: list[tuple[Path, str, Any]],
 ) -> CanonResult:
     """
-    Point d'entrée A5.
+    Entry point of the canonisation.
 
-    Prend la sortie de A3 (list[tuple[Path, type_label, raw_dict]]) et
-    retourne un CanonResult.
+    Takes the output of parser.py (list[tuple[Path, type_label, raw_dict]])
+    and returns a CanonResult.
 
-    Aujourd'hui : ne canonise que `channels:`. Demain : ajoutera
-    `chains:` (Phase C) sans changer cette signature.
+    Only `channels:` is canonised today; `chains:` will be added without
+    changing this signature.
     """
     sections = extract_channels_sections(parsed)
     active = merge_channels(sections)
