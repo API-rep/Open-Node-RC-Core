@@ -214,8 +214,7 @@ NON). Elle décide si le channel existe pour une board :
   `platformio.ini`) : même règle, le channel n'est pas généré quand un flag
   manque. Il est signalé dans le journal du build
   (`[combus_builder] requires: channel 'X' not generated (flag not defined: ...)`),
-  donc jamais écarté en silence. Avant le 2026-10-22, un flag manquant était
-  une erreur de build (`RequiresResolutionError`).
+  donc jamais écarté en silence.
 
 Sert à activer des fonctions
 (`HAS_FAILSAFE`, `HAS_VBAT_FAILSAFE`...), pas à désigner un type de board.

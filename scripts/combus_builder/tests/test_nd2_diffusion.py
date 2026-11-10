@@ -1136,12 +1136,12 @@ def test_pipeline_full_requires_stale_fix() -> None:
     mainboard only, direction uplink. The synthetic declaration
     diffused to soundboard must NOT carry the stale `requires`
     field — otherwise resolve_requires() in the downstream
-    pipeline would raise RequiresResolutionError on soundboard
-    (which does NOT have IS_MAINBOARD).
+    pipeline would drop BAT_LOW on soundboard (which does NOT have
+    IS_MAINBOARD).
 
     This test exercises the FULL pipeline (not just
-    diffuse_system_channels() in isolation) and would FAIL on the
-    pre-fix code with RequiresResolutionError.
+    diffuse_system_channels() in isolation): BAT_LOW must be in the
+    soundboard view.
     """
     print("\n=== Test 17: pipeline complet — requires stale fix ===")
     with tempfile.TemporaryDirectory() as td:
@@ -1180,24 +1180,18 @@ channels:
         soundboard_canon = canonize(diffused["soundboard"])
 
         # Step 3: generate() with the REAL soundboard BuildContext
-        # (which does NOT have IS_MAINBOARD). This is where the
-        # pre-fix code would raise RequiresResolutionError.
-        from scripts.combus_builder.generator import (
-            RequiresResolutionError,
-            generate,
-        )
+        # (which does NOT have IS_MAINBOARD): a stale `requires` would
+        # drop BAT_LOW here.
+        from scripts.combus_builder.generator import generate
         soundboard_ctx = node.boards["soundboard"]
         out_dir = tmp_path / "out_soundboard"
         out_dir.mkdir()
-        try:
-            sel = generate(
-                soundboard_canon.canonical_definitions,
-                soundboard_ctx,
-                out_dir,
-                filename_prefix="soundboard",
-            )
-        except RequiresResolutionError as e:
-            raise AssertionError(f"RequiresResolutionError raised: {e}")
+        sel = generate(
+            soundboard_canon.canonical_definitions,
+            soundboard_ctx,
+            out_dir,
+            filename_prefix="soundboard",
+        )
 
         # Verify BAT_LOW is present, active, in downlink.
         # The full view contains all SYSTEM channels.
@@ -1211,7 +1205,7 @@ channels:
             f"BAT_LOW direction_bits should be 2 (downlink, mirrored from mainboard's uplink), "
             f"got {bat_low_vc.direction_bits}"
         )
-        print(f"  OK   BAT_LOW present in soundboard, direction=downlink (no RequiresResolutionError)")
+        print(f"  OK   BAT_LOW present in soundboard, direction=downlink")
 
 
 

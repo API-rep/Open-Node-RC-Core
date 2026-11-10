@@ -21,7 +21,7 @@ Two layers:
        that drops combus_ctx.json)
      - trigger `pio run -t idedata -e <env>` for the ground truth
      - compare via compare_context_to_idedata
-     - opt-in via COMBUS_A4_INTEGRATION=1 (heavy: full build)
+     - opt-in via COMBUS_INTEGRATION=1 (heavy: full build)
 """
 
 from __future__ import annotations
@@ -607,11 +607,11 @@ def test_integration_real_build_dump_then_compare_idedata(tmp_path):
     NEVER derived from each other. This is the only sequence that
     closes the "is the prod path the same as the idedata path" question.
 
-    Skips unless COMBUS_A4_INTEGRATION=1 (it requires a real build
+    Skips unless COMBUS_INTEGRATION=1 (it requires a real build
     with toolchains installed).
     """
-    if os.environ.get("COMBUS_A4_INTEGRATION") != "1":
-        print("  SKIP (set COMBUS_A4_INTEGRATION=1 to run)")
+    if os.environ.get("COMBUS_INTEGRATION") != "1":
+        print("  SKIP (set COMBUS_INTEGRATION=1 to run)")
         return
     if not _pio_exists():
         print("  SKIP (pio not on PATH)")
@@ -656,8 +656,8 @@ def test_integration_real_build_dump_then_compare_idedata(tmp_path):
 
 def test_integration_remote_env_real_build(tmp_path):
     """Same as above but on a remote-style env. Skips if no such env."""
-    if os.environ.get("COMBUS_A4_INTEGRATION") != "1":
-        print("  SKIP (set COMBUS_A4_INTEGRATION=1 to run)")
+    if os.environ.get("COMBUS_INTEGRATION") != "1":
+        print("  SKIP (set COMBUS_INTEGRATION=1 to run)")
         return
     if not _pio_exists():
         print("  SKIP (pio not on PATH)")

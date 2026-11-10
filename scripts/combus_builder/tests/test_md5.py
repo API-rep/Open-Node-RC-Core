@@ -605,8 +605,8 @@ def _run_full_pipeline(out_dir: Path):
     result = canonize(parsed)
     sel = select_views(result.canonical_definitions)
     # The real repo has channels with `requires: [HAS_FAILSAFE, HAS_VBAT_FAILSAFE]`.
-    # We must declare these flags in the BuildContext, otherwise generate() raises
-    # RequiresResolutionError. This mirrors what test_generator.py does.
+    # We must declare these flags in the BuildContext, otherwise generate() skips
+    # those channels. This mirrors what test_generator.py does.
     ctx = _ctx(["HAS_FAILSAFE", "HAS_VBAT_FAILSAFE", "HAS_RUNLEVEL_MANAGER"])
     # generate() takes the raw list of ChannelDefinitions, not the ViewSelection.
     generate(result.canonical_definitions, ctx, out_dir)

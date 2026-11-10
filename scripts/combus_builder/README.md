@@ -563,7 +563,7 @@ Outils de cohérence avec PlatformIO :
   par `platformio.ini` ni par le hook principal ; il sert aux tests
   d'intégration.
 - Les tests d'intégration lourds de `test_flags.py` ne s'exécutent qu'avec
-  `COMBUS_A4_INTEGRATION=1`.
+  `COMBUS_INTEGRATION=1`.
 
 Un test doit échouer par `assert` ou par exception. Un test qui `return False`
 passe à vide sous pytest. Pour vérifier qu'un test « mord », faire échouer le

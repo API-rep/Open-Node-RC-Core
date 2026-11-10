@@ -92,23 +92,6 @@ class GeneratorError(Exception):
     """Base class of the generator errors."""
 
 
-class RequiresResolutionError(GeneratorError):
-    """A channel requires a flag that is not present in BuildContext.
-
-    No longer raised by resolve_requires() (since 2026-10-22, a channel whose
-    flags are missing is skipped and reported). Kept for compatibility.
-    """
-
-    def __init__(self, channel_id: str, missing: list[str], path: Path):
-        self.channel_id = channel_id
-        self.missing = missing
-        self.path = path
-        super().__init__(
-            f"channel {channel_id!r} ({path}) requires {missing!r} "
-            f"but BuildContext does not define them"
-        )
-
-
 # =============================================================================
 # C++ DIRECTION REPRESENTATION (matches combus_defs.h Direction enum)
 # =============================================================================
@@ -1176,8 +1159,8 @@ def main(
           f"-> {out_dir}/{base_full}.{{h,cpp,_ids.h}}")
     print(f"[combus_builder] generated view 'combus_system' "
           f"({sel.system.ch_count} channels, WIRE_END={sel.system.wire_end}) "
-          f"-> {out_dir}/{file_system}.{{h,cpp,_ids.h}}")
+          f"-> {out_dir}/{file_system}_ids.h")
     print(f"[combus_builder] generated view 'combus_base' "
           f"({sel.base.ch_count} channels, WIRE_END={sel.base.wire_end}) "
-          f"-> {out_dir}/{file_base}.{{h,cpp,_ids.h}}")
+          f"-> {out_dir}/{file_base}_ids.h")
     return 0

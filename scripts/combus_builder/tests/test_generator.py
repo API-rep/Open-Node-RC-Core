@@ -43,7 +43,6 @@ from scripts.combus_builder.flags import BuildContext
 from scripts.combus_builder.generator import (
     Direction,
     GeneratorError,
-    RequiresResolutionError,
     View,
     ViewChannel,
     ViewSelection,

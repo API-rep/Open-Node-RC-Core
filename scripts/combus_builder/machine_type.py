@@ -149,18 +149,6 @@ def detect_machine_type(ctx) -> str | None:
     return _flag_to_dir_segment(active[0])
 
 
-def machine_type_dir_for(ctx) -> str | None:
-    """
-    Convenience wrapper around detect_machine_type().
-
-    Identical behaviour, but the function name mirrors the directory
-    semantics. Kept separate so the call sites read clearly:
-    `machine_type_dir_for(ctx)` is more intention-revealing than
-    `detect_machine_type(ctx)` in filter code.
-    """
-    return detect_machine_type(ctx)
-
-
 # =============================================================================
 # FILE FILTER (pure helper, no I/O)
 # =============================================================================
