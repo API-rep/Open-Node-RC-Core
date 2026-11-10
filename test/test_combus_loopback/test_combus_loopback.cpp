@@ -1638,7 +1638,7 @@ static void test_mode_system_link_has_no_separate_candidates(void) {
 }
 
 /** Row 1: no candidate: legacy requests only, STABLE in legacy mode. */
-static void test_mode_row1_no_candidate_is_legacy(void) {
+static void test_mode_row1_no_candidate_is_stable(void) {
     startHealthLink(LinkEnd::TX_RX, kInterDev);
     TEST_ASSERT_FALSE(linkCtx()->hasCandidates);
 
@@ -1663,30 +1663,30 @@ static void test_mode_row2_same_candidates_is_next(void) {
 }
 
 /** Retries: with candidates and no answer, 6 NEXT requests (burst of 3, then 3 retries), then legacy. */
-static void test_mode_next_requests_then_legacy(void) {
+static void test_mode_next_requests_then_stable(void) {
     startHealthLink(LinkEnd::TX_RX, kInterDev);
     enableCandidates();
     drainWire();
 
-    uint8_t nNext = 0u, nLegacy = 0u;
-    bool legacyBeforeNext = false;
+    uint8_t nNext = 0u, nStable = 0u;
+    bool stableBeforeNext = false;
     for (uint32_t t0 = millis(); (millis() - t0) < 1500u; ) {
         combus_handshake_tx_update(linkCtx(), s_com);
         delay(20u);
         WireHandshake hs[4];
         const uint8_t n = readHandshakes(hs, 4u);
         for (uint8_t i = 0u; i < n; ++i) {
-            if (isNextFlag(hs[i].flags)) { ++nNext; if (nLegacy > 0u) { legacyBeforeNext = true; } }
-            else                         { ++nLegacy; }
+            if (isNextFlag(hs[i].flags)) { ++nNext; if (nStable > 0u) { stableBeforeNext = true; } }
+            else                         { ++nStable; }
         }
     }
     TEST_ASSERT_EQUAL_UINT8(6u, nNext);
-    TEST_ASSERT_GREATER_THAN_UINT8(0u, nLegacy);
-    TEST_ASSERT_FALSE_MESSAGE(legacyBeforeNext, "a NEXT request after a legacy one");
+    TEST_ASSERT_GREATER_THAN_UINT8(0u, nStable);
+    TEST_ASSERT_FALSE_MESSAGE(stableBeforeNext, "a NEXT request after a stable one");
 }
 
 /** Row 3: the NEXT ACK carries another next MD5: legacy at once, legacy ACK: stable mode. */
-static void test_mode_row3_other_next_falls_back_to_legacy_at_once(void) {
+static void test_mode_row3_other_next_falls_back_to_stable_at_once(void) {
     startHealthLink(LinkEnd::TX_RX, kInterDev);
     enableCandidates();
 
@@ -2141,10 +2141,10 @@ void setup() {
 
     // --- Group O: next / legacy mode (chantier 2.2b) ---
     RUN_TEST(test_mode_system_link_has_no_separate_candidates);
-    RUN_TEST(test_mode_row1_no_candidate_is_legacy);
+    RUN_TEST(test_mode_row1_no_candidate_is_stable);
     RUN_TEST(test_mode_row2_same_candidates_is_next);
-    RUN_TEST(test_mode_next_requests_then_legacy);
-    RUN_TEST(test_mode_row3_other_next_falls_back_to_legacy_at_once);
+    RUN_TEST(test_mode_next_requests_then_stable);
+    RUN_TEST(test_mode_row3_other_next_falls_back_to_stable_at_once);
     RUN_TEST(test_mode_row5_matching_next_moves_to_next);
     RUN_TEST(test_mode_row6_other_next_while_next_back_to_stable);
     RUN_TEST(test_mode_row9_loss_restarts_with_next);

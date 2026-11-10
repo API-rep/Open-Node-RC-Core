@@ -442,7 +442,7 @@ def test_filter_does_not_change_nd2_diffusion_behaviour():
             f"mainboard BAT_LOW expected uplink, got {main_with.get('BAT_LOW')!r}"
         )
         assert snd_with.get("BAT_LOW") == "downlink", (
-            f"soundboard BAT_LOW expected downlink (ND2 rule 5), "
+            f"soundboard BAT_LOW expected downlink (rule 5), "
             f"got {snd_with.get('BAT_LOW')!r}"
         )
 

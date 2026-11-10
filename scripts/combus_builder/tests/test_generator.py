@@ -1027,13 +1027,13 @@ def test_generate_does_not_emit_system_base_h_cpp(tmp_path):
     assert (tmp_path / "combus_base_ids.h").is_file()
     # Phase 2: the .h/.cpp counterparts MUST NOT exist
     assert not (tmp_path / "combus_system.h").exists(), \
-        "combus_system.h should NOT be emitted (Phase 2)"
+        "combus_system.h should NOT be emitted"
     assert not (tmp_path / "combus_system.cpp").exists(), \
-        "combus_system.cpp should NOT be emitted (Phase 2)"
+        "combus_system.cpp should NOT be emitted"
     assert not (tmp_path / "combus_base.h").exists(), \
-        "combus_base.h should NOT be emitted (Phase 2)"
+        "combus_base.h should NOT be emitted"
     assert not (tmp_path / "combus_base.cpp").exists(), \
-        "combus_base.cpp should NOT be emitted (Phase 2)"
+        "combus_base.cpp should NOT be emitted"
     # MD5 artifacts (3 views + shared)
     assert (tmp_path / "combus_system_md5.h").is_file()
     assert (tmp_path / "combus_base_md5.h").is_file()

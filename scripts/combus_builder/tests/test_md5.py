@@ -136,7 +136,7 @@ def test_canonical_bytes_includes_required_fields():
     for f in ("id", "type", "scope", "direction", "value"):
         assert f in ch, f"missing field {f}"
     for f in ("theme", "infoName"):
-        assert f not in ch, f"field {f} must not be hashed (chantier 2.1)"
+        assert f not in ch, f"field {f} must not be hashed"
 
 
 def test_canonical_bytes_view_name_included():
@@ -241,7 +241,7 @@ def test_compute_view_hash_changes_when_direction_changes():
     h_local_u = compute_view_hash(sel1.system)
     h_local_d = compute_view_hash(sel2.system)
     assert h_local_u.md5_hex == h_local_d.md5_hex, (
-        f"ND7 FAIL: system hash diverges between uplink and downlink "
+        f"ONE_WAY FAIL: system hash diverges between uplink and downlink "
         f"(uplink={h_local_u.md5_hex}, downlink={h_local_d.md5_hex})"
     )
 
@@ -803,7 +803,7 @@ def test_nd7_uplink_vs_downlink_same_hash_on_system_view():
     h_u = compute_view_hash(sel_u.system)
     h_d = compute_view_hash(sel_d.system)
     assert h_u.md5_hex == h_d.md5_hex, (
-        f"ND7 FAIL: system hash diverges between uplink and downlink "
+        f"ONE_WAY FAIL: system hash diverges between uplink and downlink "
         f"(uplink={h_u.md5_hex}, downlink={h_d.md5_hex})"
     )
 
@@ -822,7 +822,7 @@ def test_nd7_uplink_vs_downlink_different_hash_on_base_view():
     h_u = compute_view_hash(sel_u.base)
     h_d = compute_view_hash(sel_d.base)
     assert h_u.md5_hex != h_d.md5_hex, (
-        f"ND7 FAIL: base hash does not diverge between uplink and downlink "
+        f"ONE_WAY FAIL: base hash does not diverge between uplink and downlink "
         f"(uplink={h_u.md5_hex}, downlink={h_d.md5_hex})"
     )
 
@@ -843,7 +843,7 @@ def test_nd7_both_vs_uplink_different_hash():
         h_b = compute_view_hash(getattr(sel_b, attr))
         h_u = compute_view_hash(getattr(sel_u, attr))
         assert h_b.md5_hex != h_u.md5_hex, (
-            f"ND7 FAIL: {attr} hash does not diverge between both and uplink "
+            f"ONE_WAY FAIL: {attr} hash does not diverge between both and uplink "
             f"(both={h_b.md5_hex}, uplink={h_u.md5_hex})"
         )
 
@@ -864,7 +864,7 @@ def test_nd7_none_vs_downlink_different_hash():
         h_n = compute_view_hash(getattr(sel_n, attr))
         h_d = compute_view_hash(getattr(sel_d, attr))
         assert h_n.md5_hex != h_d.md5_hex, (
-            f"ND7 FAIL: {attr} hash does not diverge between none and downlink "
+            f"ONE_WAY FAIL: {attr} hash does not diverge between none and downlink "
             f"(none={h_n.md5_hex}, downlink={h_d.md5_hex})"
         )
 
@@ -882,7 +882,7 @@ def test_nd7_both_vs_none_different_hash():
         h_b = compute_view_hash(getattr(sel_b, attr))
         h_n = compute_view_hash(getattr(sel_n, attr))
         assert h_b.md5_hex != h_n.md5_hex, (
-            f"ND7 FAIL: {attr} hash does not diverge between both and none "
+            f"ONE_WAY FAIL: {attr} hash does not diverge between both and none "
             f"(both={h_b.md5_hex}, none={h_n.md5_hex})"
         )
 

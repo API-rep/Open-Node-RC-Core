@@ -232,7 +232,7 @@ static void test_row5_contract_is_the_link_md5(void) {
 }
 
 /** Row 5b: on the loopback the tractor hears its own role, as a second vehicle: the contract is refused (3.4a). */
-static void test_row5b_two_vehicles_refuse_each_other(void) {
+static void test_row5b_two_sockets_refuse_each_other(void) {
     startLink();
     CombusHandshakeContext* ctx = &s_runtime.handshake;
     for (uint32_t t0 = millis(); (millis() - t0) < 1000u; ) {
@@ -240,7 +240,7 @@ static void test_row5b_two_vehicles_refuse_each_other(void) {
         delay(10u);
         combus_rx_update();
     }
-    TEST_ASSERT_FALSE_MESSAGE(combus_handshake_is_contract_validated(ctx), "two vehicles agreed on a contract");
+    TEST_ASSERT_FALSE_MESSAGE(combus_handshake_is_contract_validated(ctx), "two sockets agreed on a contract");
     ensureStable();                     // control: same jumper, the attachment role is accepted
 }
 
@@ -855,16 +855,16 @@ static void test_pair_row11_coupled_ignores_coupling_frames(void) {
 static constexpr ComPeerLink kAttLink = {
     kLink.coupler, ComLinkRole::PLUG, kLink.expected, kLink.announced, kLink.analog, kLink.digital
 };
-static constexpr ComDev kAttachmentDev = {
-    "test_as_attachment", LinkScope::INTER_NODE, LinkType::BIDIRECTIONAL,
+static constexpr ComDev kPlugDev = {
+    "test_as_plug", LinkScope::INTER_NODE, LinkType::BIDIRECTIONAL,
     &kProto, LinkActivation::ON_COUPLING, &kHitch, &kAttLink
 };
-static const NodeAddr kVehicle1 = fakeAddr(0xC1u);
-static const NodeAddr kVehicle2 = fakeAddr(0xC2u);
+static const NodeAddr kSocket1 = fakeAddr(0xC1u);
+static const NodeAddr kSocket2 = fakeAddr(0xC2u);
 
-static void startAttachmentLink(void) {
+static void startPlugLink(void) {
     resetBus();
-    const ComDevMap map = { &kAttachmentDev, &s_port, LinkEnd::TX_RX };
+    const ComDevMap map = { &kPlugDev, &s_port, LinkEnd::TX_RX };
     TEST_ASSERT_TRUE(combus_link_build(map, s_com, s_runtime, s_link));
     s_link.target = &bus;
     combus_link_start(kLinkIdx, &s_link);
@@ -874,10 +874,10 @@ static void startAttachmentLink(void) {
 }
 
 /** Row 12: a request that agrees: an answer, same round, its MAC, its age. */
-static void test_pair_row12_attachment_answers(void) {
-    startAttachmentLink();
+static void test_pair_row12_plug_answers(void) {
+    startPlugLink();
     hitch(true);
-    sendCoupling(CouplingMsg::REQUEST, kVehicle1, 1u);
+    sendCoupling(CouplingMsg::REQUEST, kSocket1, 1u);
     runLinks(60u);
     CouplingFrame last;
     TEST_ASSERT_TRUE(combus_coupling_last_rx(kLinkIdx, last));
@@ -890,10 +890,10 @@ static void test_pair_row12_attachment_answers(void) {
 }
 
 /** Row 13: a request out of the tolerance: no answer. */
-static void test_pair_row13_attachment_ignores_old_request(void) {
-    startAttachmentLink();
+static void test_pair_row13_plug_ignores_old_request(void) {
+    startPlugLink();
     hitch(true);
-    sendCoupling(CouplingMsg::REQUEST, kVehicle1, 1u, 10000);
+    sendCoupling(CouplingMsg::REQUEST, kSocket1, 1u, 10000);
     runLinks(60u);
     CouplingFrame last;
     TEST_ASSERT_TRUE(combus_coupling_last_rx(kLinkIdx, last));
@@ -902,12 +902,12 @@ static void test_pair_row13_attachment_ignores_old_request(void) {
 }
 
 /** Row 14: requests from two vehicles: CONFLICT, no link. */
-static void test_pair_row14_attachment_two_vehicles(void) {
-    startAttachmentLink();
+static void test_pair_row14_plug_two_sockets(void) {
+    startPlugLink();
     hitch(true);
-    sendCoupling(CouplingMsg::REQUEST, kVehicle1, 1u);
+    sendCoupling(CouplingMsg::REQUEST, kSocket1, 1u);
     runLinks(40u);
-    sendCoupling(CouplingMsg::REQUEST, kVehicle2, 2u);
+    sendCoupling(CouplingMsg::REQUEST, kSocket2, 2u);
     runLinks(40u);
     TEST_ASSERT_TRUE(pairing() == PairingState::CONFLICT);
     com_rx_update(bus);
@@ -915,11 +915,11 @@ static void test_pair_row14_attachment_two_vehicles(void) {
 }
 
 /** Row 15: 4 requests from one vehicle: COUPLED once the window closes. */
-static void test_pair_row15_attachment_coupled(void) {
-    startAttachmentLink();
+static void test_pair_row15_plug_coupled(void) {
+    startPlugLink();
     hitch(true);
     for (uint8_t r = 1u; r <= 4u; ++r) {
-        sendCoupling(CouplingMsg::REQUEST, kVehicle1, r);
+        sendCoupling(CouplingMsg::REQUEST, kSocket1, r);
         runLinks(100u);
     }
     TEST_ASSERT_TRUE(pairing() == PairingState::PAIRING);              // the window is still open
@@ -1514,7 +1514,7 @@ void setup() {
     RUN_TEST(test_row2_emission_through_the_table);
     RUN_TEST(test_row3_reception_through_the_table);
     RUN_TEST(test_row5_contract_is_the_link_md5);
-    RUN_TEST(test_row5b_two_vehicles_refuse_each_other);
+    RUN_TEST(test_row5b_two_sockets_refuse_each_other);
     RUN_TEST(test_row6_both_or_through_the_table);
     RUN_TEST(test_row7_end_to_end);
     RUN_TEST(test_loss_row1_to_3_received_positions_take_back_their_safe_value);
@@ -1559,10 +1559,10 @@ void setup() {
     RUN_TEST(test_pair_row9_off_while_pairing);
     RUN_TEST(test_pair_row10_conflict_then_new_pairing);
     RUN_TEST(test_pair_row11_coupled_ignores_coupling_frames);
-    RUN_TEST(test_pair_row12_attachment_answers);
-    RUN_TEST(test_pair_row13_attachment_ignores_old_request);
-    RUN_TEST(test_pair_row14_attachment_two_vehicles);
-    RUN_TEST(test_pair_row15_attachment_coupled);
+    RUN_TEST(test_pair_row12_plug_answers);
+    RUN_TEST(test_pair_row13_plug_ignores_old_request);
+    RUN_TEST(test_pair_row14_plug_two_sockets);
+    RUN_TEST(test_pair_row15_plug_coupled);
     RUN_TEST(test_pair_row16_short_drop_kept);
     RUN_TEST(test_pair_row17_long_drop_detached);
     RUN_TEST(test_pair_row18_retry_succeeds);

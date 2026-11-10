@@ -1076,7 +1076,7 @@ channels:
 
 def test_3b_1both_1uplink_1absent_semantic() -> None:
     """1 both + 1 uplink (2 autres absentes) -> conflit sémantique fatal."""
-    print("\n=== Test 16: 3b — 1 both + 1 uplink (conflit sémantique) ===")
+    print("\n=== Test 16: 3b — 1 both + 1 uplink (semantic conflict) ===")
     with tempfile.TemporaryDirectory() as td:
         tmp_path = Path(td)
         project_root = tmp_path / "proj"
