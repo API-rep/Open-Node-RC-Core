@@ -2,7 +2,7 @@
 """
 combus_builder/machine_type.py — Detect the active machine-type from a BuildContext.
 
-Scope (correctif 1/3, ND8):
+Scope:
 
   A .cb file under `core/config/machines/<type>/` belongs to one machine
   type (e.g. dumper_truck, excavator, loader). The build context, in a
@@ -12,10 +12,10 @@ Scope (correctif 1/3, ND8):
   context that targets <type>.
 
   This module is the single source of truth for that detection. It is
-  REUSED wherever a machine-type decision is needed (currently: the
-  `.cb` discovery filter, see parser.filter_by_machine_type). Future
-  consumers (e.g. an MD5 prelude, a build report) can import the same
-  helper — no second implementation.
+  REUSED wherever a machine-type decision is needed (the `.cb`
+  discovery filter, filter_files_by_machine_type; the hook; the remote
+  and the couplers in generator.py and links.py) — no second
+  implementation.
 
 Design choices:
 
@@ -31,15 +31,13 @@ Design choices:
     frozenset). Adding a new machine type = adding the flag here AND
     creating the corresponding `core/config/machines/<type>/` folder.
   - The mapping `flag -> directory_segment` is `MACHINE_TYPE_<X>` -> `<x>`.
-    This is a simple lowercase transform; if a future flag needs a
-    non-trivial mapping, extend MACHINE_TYPE_DIR_OVERRIDES below.
+    This is a simple lowercase transform (see _flag_to_dir_segment).
 
-If the context has zero or more than one `MACHINE_TYPE_*` flag, this is
-treated as "no machine type active" (returns None). The rationale:
-non-machine builds (sound_node, remotes) do not define any
-MACHINE_TYPE_*; pathological multi-flag contexts are user error and
-should NOT silently pick a winner (the filter would then drop .cb
-files of a legitimate type).
+A context without a `MACHINE_TYPE_*` flag has no machine type active
+(returns None): a build without a machine type (the test envs, for
+instance).  A remote names the type it drives.  A context with more than
+one flag is a user error and raises AmbiguousMachineTypeError: picking a
+winner silently would drop the .cb files of a legitimate type.
 """
 from __future__ import annotations
 
@@ -79,8 +77,8 @@ MACHINE_TYPE_FLAGS: frozenset[str] = frozenset({
     "MACHINE_TYPE_DUMPER_TRUCK",
     "MACHINE_TYPE_EXCAVATOR",
     "MACHINE_TYPE_LOADER",
-    # Fictitious types of the tests of the links between nodes (link rework
-    # 3.1): listed so that a real machine excludes them.
+    # Fictitious types of the tests of the links between nodes: listed so
+    # that a real machine excludes them.
     "MACHINE_TYPE_TEST_TRACTOR",
     "MACHINE_TYPE_TEST_TRAILER",
 })
@@ -127,8 +125,8 @@ def detect_machine_type(ctx) -> str | None:
     Returns:
         - the directory segment (e.g. "dumper_truck") if exactly one
           MACHINE_TYPE_* flag is present in ctx (with or without value).
-        - None if no MACHINE_TYPE_* flag is present (non-machine build,
-          e.g. sound_node, remote).
+        - None if no MACHINE_TYPE_* flag is present (a build without a
+          machine type).
 
     Raises:
         AmbiguousMachineTypeError if more than one MACHINE_TYPE_* flag
@@ -218,11 +216,11 @@ def filter_files_by_machine_type(files, machine_type: str | None) -> list:
     given active machine type.
 
     Behaviour:
-      - machine_type is None (non-machine build, e.g. a remote): KEEP the
-        generic files, EXCLUDE every machine type profile.  Link rework
-        3.1: the profiles of neighbour node types share channel names on
-        purpose (BRAKE_BUS in a tractor and in its trailer); loaded
-        together they would clash.  Before 2026-10-25 every file was kept.
+      - machine_type is None (a build without a machine type): KEEP the
+        generic files, EXCLUDE every machine type profile.  The profiles
+        of neighbour node types share channel names on purpose (BRAKE_BUS
+        in a tractor and in its trailer); loaded together they would
+        clash.
       - machine_type is a known directory segment (e.g. "dumper_truck"):
         KEEP every file EXCEPT those under
         core/config/machines/<other_type>/. Generic files
@@ -240,8 +238,8 @@ def filter_files_by_machine_type(files, machine_type: str | None) -> list:
     """
     files = list(files)
     if machine_type is None:
-        # No machine type active: no machine type profile at all (link
-        # rework 3.1, see the docstring).
+        # No machine type active: no machine type profile at all (see the
+        # docstring).
         all_dirs = [_flag_to_dir_segment(f) for f in MACHINE_TYPE_FLAGS]
         return [p for p in files if not is_machine_type_path(p, all_dirs)]
 

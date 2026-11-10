@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """
-combus_builder/links.py — links between nodes (link rework, steps 3.1a to 3.5).
+combus_builder/links.py — links between nodes.
 
 The contract of a link is a COUPLER, the norm of the link, like a standard
 plug (src/core/config/couplers/<name>/*.cb).  A node is a machine (IS_MACHINE)
-or a remote (IS_REMOTE); a machine declares, per coupler, its side
-(step 3.5):
+or a remote (IS_REMOTE); a machine declares, per coupler, its side:
 
   - `-D HAS_COUPLER_SOCKET_<NAME>`: it has the socket, it carries (0 to n);
   - `-D HAS_COUPLER_PLUG_<NAME>`: it has the plug, it is carried (0 or 1).
@@ -24,7 +23,7 @@ and:
     a channel of the coupler unknown to the machine type is added at its safe
     value (an absent function stays safe): as written on the socket side,
     its side of the plug on the plug side (see _plug_view);
-  - star (step 3.2b): on the plug side, `downlink_pt` only redistributes in
+  - star: on the plug side, `downlink_pt` only redistributes in
     its node, it receives on the link; on the socket side, `downlink_pt`
     receives where the plug side emits (that link is its source) and emits
     where the plug side receives;
@@ -34,10 +33,10 @@ and:
     (check_single_source, both_or excepted);
   - the common frame is sorted: analog then digital, stable before candidate,
     then the name (never the theme);
-  - passive coupler (step 3.4d): a coupler without link channel, only its
+  - passive coupler: a coupler without link channel, only its
     local channels (a tool coupled by hand, a tiltable bucket): a local
     instance of the coupler, no link, no ComPeerLink; on the socket side only;
-  - local channels (step 3.4e): a channel of the coupler that requires the
+  - local channels: a channel of the coupler that requires the
     flag of one side of this coupler (HAS_COUPLER_SOCKET_<NAME> or
     HAS_COUPLER_PLUG_<NAME>) belongs to that side only (the button, the
     latched command, an engaged switch...): injected as written (the filter
@@ -47,7 +46,7 @@ and:
     when it comes from another board of the node, never BASE (an input from
     the remote belongs to the input contract of the machine type); a link
     channel is BASE;
-  - machine type (step 3.6): <type>.mtype lists the couplers the type supports;
+  - machine type: <type>.mtype lists the couplers the type supports;
     an instance needs its support; the remote link carries only what the remote
     sends (the inputs of the type, the commands the supported couplers relay),
     with its own MD5: the same with or without the coupler; names are generic
@@ -74,17 +73,17 @@ from .canon import canonize
 from .canon.channels import ChannelDefinition
 from .parser import parse_yaml_file
 
-SOCKET_FLAG_PREFIX = "HAS_COUPLER_SOCKET_"   # step 3.5: the side that carries (0 to n)
-PLUG_FLAG_PREFIX = "HAS_COUPLER_PLUG_"       # step 3.5: the side that is carried (0 or 1)
-REMOVED_PEER_FLAG_PREFIX = "COMBUS_PEER_"    # step 3.4a: replaced by the couplers, refused explicitly
+SOCKET_FLAG_PREFIX = "HAS_COUPLER_SOCKET_"   # the side that carries (0 to n)
+PLUG_FLAG_PREFIX = "HAS_COUPLER_PLUG_"       # the side that is carried (0 or 1)
+REMOVED_PEER_FLAG_PREFIX = "COMBUS_PEER_"    # replaced by the couplers, refused explicitly
 
-# Category of a node (step 3.5): exactly one per env.  A machine is a compiled
-# node that is driven; a remote is a node that drives (chantier 4).  The place
+# Category of a node: exactly one per env.  A machine is a compiled node that
+# is driven; a remote is a node that drives.  The place
 # of a machine in the star is the side of each of its couplers, not a nature.
 NODE_CATEGORIES = ("IS_MACHINE", "IS_REMOTE")
 
 SOCKET, PLUG = "socket", "plug"               # the two sides of a coupler, the role of a node on its link
-REMOTE_LINK_PREFIX = "remote_"                # step 3.6: the link machine <-> remote, per machine type
+REMOTE_LINK_PREFIX = "remote_"                # the link machine <-> remote, per machine type
 
 _UP, _DOWN = "uplink", "downlink"
 _SWAP = {_UP: _DOWN, _DOWN: _UP}
@@ -103,7 +102,7 @@ class LinkChannel:
     value: str                # rendered default value (C++ literal), the safe value of the coupler
     flow: str                 # "to_peer" | "from_peer" | "both" | "or"
     token: str                # surface direction in the coupler, socket view (for the MD5)
-    zero_at_neutral: bool = False  # step S3-4: logical zero at CbusNeutral, the same on both sides
+    zero_at_neutral: bool = False  # logical zero at CbusNeutral, the same on both sides
 
 
 @dataclass
@@ -182,7 +181,7 @@ def is_local_channel(ch: ChannelDefinition, name: str) -> bool:
 
 
 def is_passive_coupler(coupler_chs, name: str) -> bool:
-    """A passive coupler (step 3.4d): no link channel, only local channels."""
+    """A passive coupler: no link channel, only local channels."""
     return all(is_local_channel(ch, name) for ch in coupler_chs)
 
 
@@ -267,7 +266,7 @@ def inject_coupler_channels(channels, coupler_chs, name: str, side: str) -> list
 
 
 # =============================================================================
-# Remote (chantier 4)
+# Remote
 # =============================================================================
 
 def _remote_view(ch: ChannelDefinition) -> ChannelDefinition:
@@ -294,12 +293,12 @@ def _remote_view(ch: ChannelDefinition) -> ChannelDefinition:
 
 
 def remote_channels(channels, machine_type: str) -> list[ChannelDefinition]:
-    """The ComBus of a remote driving `machine_type` (chantier 4, R2).
+    """The ComBus of a remote driving `machine_type`.
 
     Every BASE channel (the contract of the machine type) seen from the
     remote (_remote_view); the SYSTEM and BOARD channels of the machine type
     stay inside the machine; the other channels (core, remote) are kept.
-    The contract of the link is its own MD5 (compute_remote_link, step 3.6).
+    The contract of the link is its own MD5 (compute_remote_link).
     """
     from .machine_type import is_machine_type_path
 
@@ -313,7 +312,7 @@ def remote_channels(channels, machine_type: str) -> list[ChannelDefinition]:
 
 
 # =============================================================================
-# Machine type configuration and contract with the remote (step 3.6)
+# Machine type configuration and contract with the remote
 # =============================================================================
 
 @dataclass(frozen=True)
@@ -430,7 +429,7 @@ def compute_remote_link(machine_type: str, commands, side: str) -> LinkSet:
 def _flow(a: ChannelDefinition, b: ChannelDefinition, local_is_socket: bool) -> str:
     """Flow of one channel on the link a (local) <-> b (peer, in its own view); LinkError if it does not flow.
 
-    Step 3.2b, star: on the plug side, `_pt` only redistributes in its node (a
+    Star: on the plug side, `_pt` only redistributes in its node (a
     plain receiver on the link); on the socket side, `_pt` receives where the
     plug side emits (that link is its source) and emits where the plug side
     receives.
@@ -520,7 +519,7 @@ def link_md5(link: LinkSet, stable: bool = False, peer: bool = False) -> str:
         if stable and c.candidate:
             continue
         entry = {"id": c.id, "type": c.type, "candidate": c.candidate, "value": c.value, "dir": c.token}
-        if c.zero_at_neutral:                    # step S3-4: hashed only when neutral
+        if c.zero_at_neutral:                    # hashed only when neutral
             entry["zeroAt"] = "neutral"
         entries.append(entry)
     payload = {"coupler": link.coupler, "role": role, "channels": entries}
