@@ -1,16 +1,18 @@
 /******************************************************************************
  * @file  main.cpp
- * @brief Remote: entry point (chantier 4, embryo).
+ * @brief Remote: entry point.
  *
- * @details The embryo opens the link to the machine it drives and runs it:
- *   the remote sends its inputs (the BASE view of the machine type,
- *   mirrored).  No physical input yet (INPUT_NONE, step 4.2): the channels
- *   keep their safe value.
+ * @details Opens the link to the machine it drives and runs it: the remote sends its
+ *   inputs, the BASE view of the machine type, mirrored.
+ *
+ *   TODO(chantier 4): no physical input yet (INPUT_NONE): the channels keep their
+ *   safe value.
  *****************************************************************************/
 
 #include <Arduino.h>
 
 #include <remotes/com/remote_links.h>
+
 
 
 void setup() {
@@ -20,6 +22,8 @@ void setup() {
 
 void loop() {
 	remote_links_update();
+
+		// Pace the loop: each link keeps its own timer
 	delay(2);
 }
 

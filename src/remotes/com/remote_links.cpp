@@ -1,11 +1,12 @@
 /******************************************************************************
  * @file  remote_links.cpp
- * @brief Links of the remote to the machines it drives (chantier 4, embryo).
+ * @brief Links of the remote to the machines it drives.
  *
- * @details The embryo drives one machine: its ComBus is the target of the
- *   link and the source of the frames.  Several machines (step 4.1) need a
- *   target and a source per link (combus_links_init() and combus_tx_update()
- *   take one ComBus today).
+ * @details The remote drives one machine: its ComBus is the target of the received
+ *   frames and the source of the sent ones.
+ *
+ *   TODO(chantier 4): several machines need a target and a source per link;
+ *   combus_links_init() and combus_tx_update() take one ComBus today.
  *****************************************************************************/
 
 #include "remote_links.h"
@@ -18,42 +19,62 @@
 #include <remotes/config/driven_machines.h>
 
 
-	// Caller-owned storage of the links, one slot per driven machine.
+
+	// Storage of the links, one slot per driven machine.
 static UartCtx        s_uart[kDrivenMachineCount];
 static CombusTxState  s_tx[kDrivenMachineCount];
 static CombusRxState  s_rx[kDrivenMachineCount];
 static ComLinkRuntime s_runtime[kDrivenMachineCount];
 static ComBusLink     s_links[kDrivenMachineCount];
 
-static_assert(kDrivenMachineCount == 1u, "the embryo drives one machine: several need a ComBus per link (step 4.1)");
+static_assert(kDrivenMachineCount == 1u, "one driven machine: several need a ComBus per link (chantier 4)");
 
+
+/**
+ * @brief Links bring-up. One link per driven machine.
+ *
+ * @details In order:
+ *   1. The UART pool, one slot per link.
+ *   2. The wiring of each link, from the table of the driven machines.
+ *   3. combus_links_init(), on the ComBus of the machine.
+ */
 
 uint8_t remote_links_init( void )
 {
+		// 1. UART pool
 	uart_com_register_pool(s_uart, kDrivenMachineCount);
 
+		// 2. Wiring of each link
 	ComDevMap maps[kDrivenMachineCount];
+
 	for (uint8_t i = 0u; i < kDrivenMachineCount; ++i) { maps[i] = kDrivenMachines[i].link; }
 
+		// 3. Links
 	const ComLinksStorage storage = { s_tx, s_rx, s_runtime, s_links };
+
 	if (!combus_links_init(maps, kDrivenMachineCount, storage, nullptr, kDrivenMachines[0].bus)) {
 		sys_log_err("[REMOTE] links not started\n");
 		return 0u;
 	}
+
 	sys_log_info("[REMOTE] driving %u machine(s): %s\n", (unsigned)kDrivenMachineCount, kDrivenMachines[0].name);
+
 	return kDrivenMachineCount;
 }
 
 
+	/// nullptr out of range.
 ComLinkRuntime* remote_links_runtime( uint8_t idx )
 {
 	return (idx < kDrivenMachineCount) ? &s_runtime[idx] : nullptr;
 }
 
 
+	/// Receive first, then watch, then send: the sent frames follow the state of the links.
 void remote_links_update( void )
 {
 	ComBus& bus = *kDrivenMachines[0].bus;
+
 	combus_rx_update();
 	combus_links_update(bus);
 	combus_tx_update(&bus);
