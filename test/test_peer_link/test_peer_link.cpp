@@ -1,10 +1,10 @@
 /******************************************************************************
  * @file test_peer_link.cpp
- * @brief Link between two nodes through the generated tables (link rework 3.1b).
+ * @brief Link between two nodes through the generated tables.
  *
  * @details The board is a fictitious TEST tractor carrying the TEST coupler
- *   (core/config/machines/test_tractor/, core/config/couplers/test_coupler/,
- *   step 3.4a).  The frame of the link is the full coupler, and its table
+ *   (core/config/machines/test_tractor/, core/config/couplers/test_coupler/).
+ *   The frame of the link is the full coupler, and its table
  *   (combus_peer_links.h):
  *     analog  0: TEST_AXLE_LOAD (it receives it; unknown to the tractor type,
  *                injected: an absent function), 1: TEST_BRAKE_BUS (it sends
@@ -14,12 +14,12 @@
  *   link; they come before channels of the link in the local order, so the
  *   table is not the identity.
  *
- *   The MD5 carries the coupler and a role (step 3.4a): the tractor announces
- *   the vehicle MD5 and expects the attachment one.  On the loopback it hears
- *   itself, so it refuses (row 5b, two vehicles); to stand for the trailer,
- *   the tests make it announce the attachment MD5 (actAsTheTrailer()).
+ *   The MD5 carries the coupler and a side: the tractor announces the socket
+ *   MD5 and expects the plug one.  On the loopback it hears itself, so it
+ *   refuses (row 5b, two sockets); to stand for the trailer, the tests make it
+ *   announce the plug MD5 (actAsTheTrailer()).
  *
- *   Rows of the table validated by the owner (2026-10-25):
+ *   Rows of the table validated by the owner:
  *     1  the generated descriptor;
  *     2  emission in wire order, through the table;
  *     3  reception through the table, only what the tractor receives;
@@ -28,13 +28,13 @@
  *     6  both_or through the table, no echo;
  *     7  end to end on the loopback (handshake with the link MD5, data).
  *   Row 8 (a link without peer is unchanged) is test_combus_loopback.
- *   Then the loss of the link (3.2c, table of 2026-10-26): the received
+ *   Then the loss of the link: the received
  *   positions take back their safe value.
- *   Then the accessors of the logical value (step S3-4, table of 2026-10-29):
+ *   Then the accessors of the logical value:
  *   TEST_GEAR_BUS declares `zeroAt: neutral` (logical zero at CbusNeutral);
  *   combus_get_analog / combus_set_analog apply the offset, the raw accessors
  *   and the transport do not.
- *   Then the coupling (step 3.3, table of 2026-10-29): a link ON_COUPLING
+ *   Then the coupling: a link ON_COUPLING
  *   described by a CouplingDev (trigger TEST_HITCHED, contributor
  *   TEST_HITCH_LINK_FAIL) is inactive while unhitched, active with a grace
  *   once hitched, and reports its loss only through its contributor.
@@ -51,7 +51,7 @@
 #include <core/system/combus/protocol/handshake/combus_handshake.h>
 #include <core/system/combus/protocol/handshake/combus_handshake_tx.h>
 #include <core/system/combus/protocol/coupling/combus_coupling.h>
-#include <core/config/couplers/test_coupler/test_coupler_chain.h>   // test_coupler_socket_chain (3.4e)
+#include <core/config/couplers/test_coupler/test_coupler_chain.h>   // test_coupler_socket_chain
 #include <core/system/hw/transport/uart_com.h>
 #include <core/system/combus/protocol/combus_tx.h>
 #include <core/system/combus/protocol/combus_rx.h>
@@ -137,7 +137,7 @@ static void startLink(void) {
     combus_links_watch(&s_runtime, 1u);
 }
 
-/** On the loopback the tractor hears itself: make it announce the attachment MD5, as the trailer would (3.4a). */
+/** On the loopback the tractor hears itself: make it announce the plug MD5, as the trailer would. */
 static void actAsTheTrailer(void) {
     s_runtime.handshake.announced = kLink.expected;
 }
@@ -214,7 +214,7 @@ static void test_row3_reception_through_the_table(void) {
     TEST_ASSERT_FALSE(bus.digitalBus[kBeacon].value);                 // not in the link
 }
 
-/** Row 5: the contract of the link is the MD5 of its coupler: the tractor announces its role, expects the other (3.4a). */
+/** Row 5: the contract of the link is the MD5 of its coupler: the tractor announces its role, expects the other. */
 static void test_row5_contract_is_the_link_md5(void) {
     startLink();
     const CombusHandshakeContext& ctx = s_runtime.handshake;
@@ -231,7 +231,7 @@ static void test_row5_contract_is_the_link_md5(void) {
     TEST_ASSERT_EQUAL_UINT8(2u, s_link.rxCfg->nDigital);
 }
 
-/** Row 5b: on the loopback the tractor hears its own role, as a second vehicle: the contract is refused (3.4a). */
+/** Row 5b: on the loopback the tractor hears its own side, as a second socket: the contract is refused. */
 static void test_row5b_two_sockets_refuse_each_other(void) {
     startLink();
     CombusHandshakeContext* ctx = &s_runtime.handshake;
@@ -241,7 +241,7 @@ static void test_row5b_two_sockets_refuse_each_other(void) {
         combus_rx_update();
     }
     TEST_ASSERT_FALSE_MESSAGE(combus_handshake_is_contract_validated(ctx), "two sockets agreed on a contract");
-    ensureStable();                     // control: same jumper, the attachment role is accepted
+    ensureStable();                     // control: same jumper, the plug side is accepted
 }
 
 /** Row 6: the fault raised by the trailer is merged through the table; the tractor does not echo it. */
@@ -287,9 +287,9 @@ static void test_row7_end_to_end(void) {
 
 
 // =============================================================================
-// LOSS OF THE LINK (link rework 3.2c)
+// LOSS OF THE LINK
 //
-// Table validated by the owner (2026-10-26): at the loss of a link with a peer
+// Table validated by the owner: at the loss of a link with a peer
 // (silence, or contract dropped), the positions this node receives and writes
 // in its ComBus take back their safe value (CbusNeutral / false); the
 // positions it sends do not move; both_or is unchanged (a lost link
@@ -369,13 +369,13 @@ static void test_loss_row6_contract_dropped(void) {
 
 
 // =============================================================================
-// COUPLING (step 3.3)
+// COUPLING
 // =============================================================================
 
 static constexpr uint8_t kHitched   = static_cast<uint8_t>(DigitalComBusID::TEST_HITCHED);
 static constexpr uint8_t kHitchFail = static_cast<uint8_t>(DigitalComBusID::TEST_HITCH_LINK_FAIL);
 
-    // No debounce here (engageMs = releaseMs = 0): the trigger acts at once (3.4c rows 16 and 17 test it).
+    // No debounce here (engageMs = releaseMs = 0): the trigger acts at once (the pairing rows 16 and 17 test it).
 static constexpr CouplingDev kHitch = {
     "test_coupler", DigitalComBusID::TEST_HITCHED, DigitalComBusID::TEST_HITCH_LINK_FAIL, 200u, 0u, 0u
 };
@@ -395,7 +395,7 @@ static void startCoupledLink(void) {
     while (s_com->available(s_com->ctx) > 0) { s_com->readByte(s_com->ctx); }   // nothing left from the last test
 }
 
-static uint32_t s_hitchMs = 0u;   ///< raw rising edge of the trigger, origin of the age of the hitch (3.4c)
+static uint32_t s_hitchMs = 0u;   ///< raw rising edge of the trigger, origin of the age of the hitch
 
 static void hitch(bool on) {
     if (on && !bus.digitalBus[kHitched].value) { s_hitchMs = millis(); }
@@ -490,7 +490,7 @@ static void test_coupling_row2_unhitched_frame_not_applied(void) {
     TEST_ASSERT_EQUAL_UINT16(0u, bus.analogBus[kTilt].value);
 }
 
-/** Row 3: hitched: it pairs (3.4c: the requests go out), no fault meanwhile. */
+/** Row 3: hitched: it pairs (the requests go out), no fault meanwhile. */
 static void test_coupling_row3_hitched_within_grace(void) {
     startCoupledLink();
     combus_coupling_reset();
@@ -513,7 +513,7 @@ static void test_coupling_row4_hitched_alive_applies(void) {
     TEST_ASSERT_FALSE(bus.digitalBus[kHitchFail].value);
 }
 
-/** Row 5: hitched, the trailer stays mute: not paired (3.4c), its own contributor only. */
+/** Row 5: hitched, the trailer stays mute: not paired, its own contributor only. */
 static void test_coupling_row5_hitched_mute_after_grace(void) {
     startCoupledLink();
     hitch(true);
@@ -541,7 +541,7 @@ static void test_coupling_row6_unhitch_live_link(void) {
     TEST_ASSERT_FALSE(bus.digitalBus[kHitchFail].value);
 }
 
-/** Row 7: hitched again: a new pairing (3.4c), no fault meanwhile. */
+/** Row 7: hitched again: a new pairing, no fault meanwhile. */
 static void test_coupling_row7_rehitch_new_grace(void) {
     startCoupledLink();
     hitch(true);
@@ -552,7 +552,7 @@ static void test_coupling_row7_rehitch_new_grace(void) {
     hitch(false);
     hitch(true);
     TEST_ASSERT_TRUE(pairing() == PairingState::PAIRING);
-    TEST_ASSERT_FALSE(bus.digitalBus[kHitchFail].value);                 // sound while pairing
+    TEST_ASSERT_FALSE(bus.digitalBus[kHitchFail].value);                 // healthy while pairing
     TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::NEVER_SEEN);
 }
 
@@ -587,13 +587,13 @@ static void test_link_check_refuses_a_bad_table(void) {
 
 
 // =============================================================================
-// COUPLING FRAME (step 3.4b)
+// COUPLING FRAME
 //
-// Table validated by the owner (2026-10-31): the coupling frame is apart from
+// Table validated by the owner: the coupling frame is apart from
 // the handshake (seq == 0 + flag kCombusFrameFlagCoupling, 19 bytes), routed
 // by combus_rx to the coupling module; it neither makes the link alive nor
-// touches the contract.  Step 3.4b records a received frame, the pairing is
-// step 3.4c.
+// touches the contract.  These rows record a received frame; the pairing
+// follows (PAIRING).
 // =============================================================================
 
 static CouplingFrame sampleCouplingFrame(void) {
@@ -727,13 +727,13 @@ static void test_cpl_frame_row7_local_addr(void) {
 
 
 // =============================================================================
-// PAIRING (step 3.4c)
+// PAIRING
 //
-// Rules P1 to P12 validated by the owner (2026-10-31).  The board is the
-// tractor (vehicle): its requests come back on the loopback and are ignored;
+// Rules P1 to P12 validated by the owner.  The board is the
+// tractor (socket): its requests come back on the loopback and are ignored;
 // the answers of the trailers are forged (answerRequests()).  Rows 12 to 15
 // make it the plug side (a copy of the link with role PLUG), the
-// requests of the vehicles being forged.
+// requests of the sockets being forged.
 // =============================================================================
 
 /** Row 1: one trailer answers the 5 rounds: COUPLED, then the handshake of today. */
@@ -851,7 +851,7 @@ static void test_pair_row11_coupled_ignores_coupling_frames(void) {
 }
 
 
-    // --- The board as an attachment (rows 12 to 15) ---
+    // --- The board as a plug (rows 12 to 15) ---
 static constexpr ComPeerLink kAttLink = {
     kLink.coupler, ComLinkRole::PLUG, kLink.expected, kLink.announced, kLink.analog, kLink.digital
 };
@@ -901,7 +901,7 @@ static void test_pair_row13_plug_ignores_old_request(void) {
     TEST_ASSERT_EQUAL_UINT32(1u, combus_coupling_rx_count(kLinkIdx));
 }
 
-/** Row 14: requests from two vehicles: CONFLICT, no link. */
+/** Row 14: requests from two sockets: CONFLICT, no link. */
 static void test_pair_row14_plug_two_sockets(void) {
     startPlugLink();
     hitch(true);
@@ -914,7 +914,7 @@ static void test_pair_row14_plug_two_sockets(void) {
     TEST_ASSERT_TRUE(bus.digitalBus[kHitchFail].value);
 }
 
-/** Row 15: 4 requests from one vehicle: COUPLED once the window closes. */
+/** Row 15: 4 requests from one socket: COUPLED once the window closes. */
 static void test_pair_row15_plug_coupled(void) {
     startPlugLink();
     hitch(true);
@@ -1003,9 +1003,9 @@ static void test_pair_row19_retries_exhausted(void) {
 
 
 // =============================================================================
-// CHAIN OF THE COUPLER (step 3.4e)
+// CHAIN OF THE COUPLER
 //
-// Rules validated by the owner (2026-11-01): the chain of the TEST coupler
+// Rules validated by the owner: the chain of the TEST coupler
 // (core/config/couplers/test_coupler/test_coupler_chain.cpp) latches the
 // coupling button (TEST_COUPLER_BTN, input of the machine type) into the
 // command (TEST_COUPLER_CMD, local channel of the coupler, the trigger): at
@@ -1150,9 +1150,9 @@ static void test_chain_row11_uncoupling_without_the_switch(void) {
 
 
 // =============================================================================
-// PASSIVE COUPLER AND COUPLED OUTPUT (step 3.4d)
+// PASSIVE COUPLER AND COUPLED OUTPUT
 //
-// Rules validated by the owner (2026-11-01): a passive coupler (a tool coupled
+// Rules validated by the owner: a passive coupler (a tool coupled
 // by hand) is a local instance of the coupler, without link; its trigger is
 // its detector, coupled once settled (engageMs / releaseMs), without pairing.
 // CouplingDev::coupled is written by the core: active, COUPLED and the
@@ -1338,9 +1338,9 @@ static void test_view_row2_passive_coupler_snapshot(void) {
 
 
 // =============================================================================
-// PAIRED PEER (link rework 3.4, frames of another identity)
+// PAIRED PEER (frames of another identity)
 //
-// Validated by the owner (2026-11-02): a data frame carries no sender, so the
+// Validated by the owner: a data frame carries no sender, so the
 // filter belongs to the transport.  Once COUPLED, the identity of the peer is
 // kept and handed to the transport (NodeCom::setPeer, a fake one here), cleared
 // when detached.  A coupling frame of another identity is counted and journaled.
@@ -1427,7 +1427,7 @@ static void test_peer_row4_foreign_frames_counted(void) {
 
 
 // =============================================================================
-// ACCESSORS OF THE LOGICAL VALUE (step S3-4)
+// ACCESSORS OF THE LOGICAL VALUE
 // =============================================================================
 
 static constexpr AnalogComBusID kGearId  = AnalogComBusID::TEST_GEAR_BUS;

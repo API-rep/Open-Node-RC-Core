@@ -1,13 +1,13 @@
 /******************************************************************************
  * @file test_runlevel.cpp
- * @brief Runlevel chain of the Volvo: HALT held until a reboot (link rework S3, brick 1).
+ * @brief Runlevel chain of the Volvo: HALT held until a reboot.
  *
  * @details The real chain (kRunlevelProcs, runlevel_config.h) runs through the
  *   real runner (proc_chain_step), one call = one cycle.  The levers
  *   (FAILSAFE_HARD, FAILSAFE_SOFT, KEY_ACTIVE) and RUNLEVEL are written
  *   directly on the bus, as their sources would.
  *
- *   Rows of the table validated by the owner (2026-10-27):
+ *   Rows of the table validated by the owner:
  *     1  RUNNING, hard fault → HALT;
  *     2  HALT, hard fault cleared → stays HALT;
  *     3  HALT, fault cleared, key pressed → stays HALT (was STARTING);

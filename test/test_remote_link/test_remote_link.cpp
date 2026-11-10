@@ -1,17 +1,17 @@
 /******************************************************************************
  * @file test_remote_link.cpp
- * @brief Remote embryo: its link to the machine it drives (chantier 4).
+ * @brief Remote: its link to the machine it drives.
  *
  * @details The board is a remote (IS_REMOTE) driving a dumper truck: its
  *   ComBus is the BASE view of that type, mirrored (what the machine
  *   receives, the remote sends).  The link carries only what the remote sends,
- *   with its own table and MD5 (link rework 3.6): each end announces its side
+ *   with its own table and MD5: each end announces its side
  *   and expects the other.  On the TX<->RX jumper (GPIO 17 <-> 16) the remote
  *   hears its own side and refuses it; made to announce the machine side, the
  *   handshake becomes STABLE and its frames make the link alive.  This does
  *   not prove the agreement with a real machine (pytest does, on the MD5).
  *
- *   Rows of the table validated by the owner (2026-11-01, 2026-11-02): R8,
+ *   Rows of the table validated by the owner: the link with the machine,
  *   plus the generated mirror seen from the C++ side.
  *   Run: pio test -e test_remote_link
  *****************************************************************************/

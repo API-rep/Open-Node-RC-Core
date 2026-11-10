@@ -2,7 +2,7 @@
  * @file test_combus_loopback.cpp
  * @brief ComBus codec + UART loopback test suite.
  *
- * @details Five independent test groups:
+ * @details Independent test groups:
  *
  *   Group A — codec round-trip (no hardware required):
  *     Fills the generated machine ComBus with random analog/digital data,
@@ -17,44 +17,44 @@
  *     and asserts field equality. Also verifies SOF-scan re-sync by injecting
  *     garbage bytes before a valid frame.
  *
- *   Group H — RX write identity by link layer (chantier 0.1):
+ *   Group H — RX write identity by link layer:
  *     Re-initialises the loopback link with a target ComBus and a layer, then
  *     checks which channels the received frame is allowed to write: a BASE
  *     link writes BASE channels only, a SYSTEM link writes BASE and SYSTEM
  *     channels, a BOARD link gets the SYSTEM identity.  Same TX↔RX jumper as
  *     Group B (runs after test_loopback_init).
  *
- *   Group I — links from their description (chantier 0.4):
+ *   Group I — links from their description:
  *     combus_link_check() and combus_link_build() turn a ComDevMap (a ComDev
  *     wired on a ComPort) into a ComBusLink: layer from the scope, frame size
  *     from the matching view, TX / RX from the role of the end, and the
  *     refusals. No wiring needed: the port is never opened.
  *
- *   Group J — receiving link health (chantier 1.1):
+ *   Group J — receiving link health:
  *     A receiving link is lost until its first frame and again after
  *     linkTimeoutMs of silence; com_rx_update() applies the received frames; a
  *     TX-only link never counts as lost.
  *     Same TX↔RX jumper as Group B.
  *
- *   Group K — denied writes are counted (chantier 1.1):
+ *   Group K — denied writes are counted:
  *     A write refused by the layer check (a SYSTEM caller on a BOARD channel)
  *     increments combus_denied_writes(); an accepted write does not.
  *
- *   Group L — both_or merge, anti ping-pong (chantier 1.1b):
+ *   Group L — both_or merge, anti ping-pong:
  *     A frame from a "peer" carrying FAILSAFE = true makes the merged FAILSAFE
  *     true while this board's own value is false; it falls back when the peer
  *     clears or goes silent; the frame this board sends back does not echo the
  *     peer's value; a board that never wrote the channel does not contribute.
  *     Same TX↔RX jumper as Group B.
  *
- *   Group M — link loss by scope (chantier 1.1c, rewritten in link rework S2):
+ *   Group M — link loss by scope:
  *     Rows 1 to 6 of the table validated by the owner: per link, its scope
  *     (between boards -> BOARD_LINK_FAIL, to another node -> NODE_LINK_FAIL),
  *     its state (never seen, alive, lost), the 3 s startup grace of a link
  *     between boards (shortened here), and what com_rx_update() publishes.
  *     Same TX↔RX jumper as Group B.
  *
- *   Group N — link contract, ACK and blocking (chantier 1.2):
+ *   Group N — link contract, ACK and blocking:
  *     Rows 1 to 12 of the table validated by the owner: a link is UNKNOWN until
  *     a handshake with the same MD5 and major version (a bidirectional end needs
  *     the ACK of its request, a receive-only end the request itself); data
@@ -64,58 +64,54 @@
  *     touches the contract (P4 removed).  Peer frames are forged on the wire.
  *     Same TX↔RX jumper as Group B.
  *
- *   Group O — next / legacy mode (chantier 2.2b):
- *     Rows of the table validated by the owner: without candidates, legacy
+ *   Group O — next / stable mode:
+ *     Rows of the table validated by the owner: without candidates, stable
  *     requests only; with candidates, NEXT requests first (burst then 3
- *     retries), a NEXT ACK that does not match switches to legacy at once; the
+ *     retries), a NEXT ACK that does not match switches to stable at once; the
  *     mode follows what the peer announces in its NEXT handshakes; periodic
  *     requests and ACK follow the mode; a loss starts again with NEXT; DEV is
  *     only logged.  No machine type has candidates: the tests give the link a
  *     fake next MD5 (enableCandidates()).  Same TX↔RX jumper as Group B.
  *
- *   Group P — receive buffers and frame limits (chantier 2.3):
+ *   Group P — receive buffers and frame limits:
  *     The RX buffers of a link are sized to the SYSTEM next set (the largest
  *     that travels), not the full view; a frame whose nAnalog or nDigital
  *     exceeds the set of its link is refused; only the nDigital bits announced
  *     are unpacked (the padding bits of the last byte never reach the buffer);
  *     a shorter frame is accepted.
  *
- *   Group Q — receive filter by direction (chantier 2.4):
+ *   Group Q — receive filter by direction:
  *     A received frame only writes a channel whose direction for the link
- *     includes Downlink: `direction` on an inter-node link (BASE identity),
- *     `nodeDirection` on an intra-node link.  The builder writes both in the
+ *     includes Downlink: `flow.betweenNodes` on an inter-node link (BASE
+ *     identity), `flow.betweenBoards` on an intra-node link.  The builder writes
+ *     both in the
  *     generated arrays (BASE `downlink_pt`: Downlink in the node for a board
  *     not connected to another node).
  *
- *   Group C — view identity (Phase 3 / A13):
+ *   Group C — view identity:
  *     Validates that the 3 view-specific enums (AnalogComBusID,
  *     AnalogComBusSystemID, AnalogComBusBaseID and their digital
  *     counterparts) reference the SAME runtime object in
  *     AnalogComBusArray[] / DigitalComBusArray[].
  *
- *   Group D — wire-end sizing (LY2):
+ *   Group D — wire-end sizing:
  *     Verifies that combus_frame_encode() sizes the wire payload to the
  *     layer's prefix length (BASE shorter than FULL), with expected sizes
  *     computed from the generated CH_COUNT constants.
  *
- *   Group G — RUNLEVEL round-trip (RL3).
+ *   Group G — RUNLEVEL round-trip: RUNLEVEL is an ordinary channel of the frame.
  *
- *   Group E — MD5 pointer resolution by layer (LY4):
+ *   Group E — MD5 pointer resolution by layer:
  *     Verifies that combus_link_start() resolves the per-link
  *     expected.stable pointer from link->layer (BASE / SYSTEM / BOARD),
  *     and that combus_handshake_compare() matches correctly when
  *     given the right local MD5 pointer.  Same pattern as Group D —
  *     verify the resolution at init, not the per-frame behaviour.
  *
- *   Group F — REMOVED (chantier 12.6 cleanup):
- *     The historical "failsafe trigger on combus link loss" test relied on
- *     the FS1 open-drain `isNotDrived` flag and a dedicated FS1 contributor
- *     channel.  Both have been removed in chantier 12.5/12.6: link health
- *     is now monitored at transport level by per-backend *_LINK_LOST
- *     contributors (LOCAL_REMOTE_FAIL, NODE_LINK_FAIL, ...) and
- *     aggregated by `failsafe_soft_chain.cpp` into FAILSAFE_SOFT,
- *     which feeds the top-level FAILSAFE aggregator.
- *     See failsafe_module.md §12.5 (new design) and §12.6 (cleanup).
+ *   Group R — a handshake across the end of the receive ring buffer.
+ *
+ *   The loss of a link is tested by Group M (BOARD_LINK_FAIL, NODE_LINK_FAIL);
+ *   their aggregation into FAILSAFE_SOFT belongs to the failsafe chains.
  *
  * @note Runs on the ESP32 board. Group B requires a physical TX↔RX jumper
  *   on the Serial2 pins (GPIO 17 ↔ 16). Run via: pio test -e test_combus_loopback
@@ -138,14 +134,10 @@
 #include <core/system/combus/protocol/handshake/combus_handshake_rx.h> // combus_handshake_compare() — Group E
 #include <core/system/combus/protocol/handshake/combus_handshake_tx.h> // combus_handshake_tx_update() — Groups J, N
 
-// Phase 3 / A13: include combus.h (declares AnalogComBusArray /
-// DigitalComBusArray) AND the 3 view-specific ids headers so the
-// runtime identity test can reference AnalogComBusID, AnalogComBusSystemID
-// and AnalogComBusBaseID in the same translation unit.
-//
-// combus.h transitively includes combus_ids.h, so we do NOT include
-// it directly here (avoids the double-definition error: combus_ids.h
-// does not yet have a #pragma once guard).
+// Include combus.h (declares AnalogComBusArray / DigitalComBusArray) AND the
+// view-specific ids headers so the runtime identity test can reference
+// AnalogComBusID, AnalogComBusSystemID and AnalogComBusBaseID in the same
+// translation unit.  combus.h includes combus_ids.h.
 #include "combus.h"
 #include "combus_system_ids.h"
 #include "combus_base_ids.h"
@@ -214,16 +206,16 @@ static void fillRandom(uint32_t seed) {
     for (uint8_t i = 0u; i < kNDigital; ++i) {
         txComBus.digitalBus[i].value = (rand() % 2) == 1;
     }
-    // RL3: runLevel is no longer a struct field — write RUNLEVEL via the generic
-    // analog accessor (RUNLEVEL is a SYSTEM channel, so a SYSTEM caller may write it).
+    // RUNLEVEL is an ordinary channel: write it via the generic analog accessor
+    // (RUNLEVEL is a SYSTEM channel, so a SYSTEM caller may write it).
     combus_set_raw_analog(txComBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::RUNNING, ChanLayer::SYSTEM);
 }
 
 /** Assert that the decoded frame matches txComBus, over the channels the frame carries. */
 static void assertFrameMatchesBus(const ComBusFrame* frame, const ComBus* bus) {
     TEST_ASSERT_NOT_NULL(frame);
-    // RL2: runLevel is no longer a header field — it travels as a standard
-    // combus channel (RUNLEVEL, scope SYSTEM), checked by the channel loop below.
+    // RUNLEVEL travels as a standard combus channel (scope SYSTEM), checked
+    // by the channel loop below.
     // A frame carries a prefix of the bus (its wire-end), not always the full bus.
     for (uint8_t i = 0u; i < frame->header.cfg.nAnalog; ++i) {
         TEST_ASSERT_EQUAL_UINT16(bus->analogBus[i].value, frame->analog[i]);
@@ -242,7 +234,7 @@ static void assertFrameMatchesBus(const ComBusFrame* frame, const ComBus* bus) {
 static void test_codec_single_roundtrip(void) {
     fillRandom(0xDEADBEEFul);
 
-    // LY2 — encode takes analogWireEnd / digitalWireEnd.  Use the full
+    // encode takes analogWireEnd / digitalWireEnd.  Use the full
     // enum set so the codec iterates over every channel.  seq starts at 1:
     // 0 is reserved for the handshake and refused by the encoder.
     uint8_t len = combus_frame_encode(kCfg, encodeBuf, &txComBus, 1u, kNAnalog, kNDigital);
@@ -262,7 +254,7 @@ static void test_codec_seq_zero_refused(void) {
     TEST_ASSERT_EQUAL_UINT8(0u, len);
 }
 
-/** The header flags byte is reserved (FS2: no failsafe bit any more) — it must decode as 0. */
+/** The header flags byte is reserved (no failsafe bit) — it must decode as 0. */
 static void test_codec_flags_reserved(void) {
     fillRandom(0x12345678ul);
 
@@ -321,7 +313,7 @@ static void test_loopback_init(void) {
     combus_tx_register_pool(s_txStates, 1);
     combus_rx_register_pool(s_rxStates, 1);
 
-    // LY2 — combus_tx_init() takes a ChanLayer parameter.  Use BASE for
+    // combus_tx_init() takes a ChanLayer parameter.  Use BASE for
     // the loopback test (matches the machine env default): the frames
     // carry the BASE prefix of the bus.
     combus_tx_init(kLinkIdx, com, kCfg, 50u, ChanLayer::BASE);   // 50 Hz TX
@@ -380,7 +372,7 @@ static void test_loopback_monkey(void) {
 
 
 // =============================================================================
-// GROUP H — RX WRITE IDENTITY BY LINK LAYER (chantier 0.1)
+// GROUP H — RX WRITE IDENTITY BY LINK LAYER
 //
 // A frame received on a link is applied onto the target ComBus with the layer
 // of that link as write identity (combus_rx_init() `layer` parameter):
@@ -426,7 +418,7 @@ static void sendAndApply(ChanLayer rxLayer) {
     resetRxTarget();
         // Group H tests the write identity, not the direction: RUNLEVEL is
         // uplink on this test board (HAS_RUNLEVEL_MANAGER), so make it a
-        // received channel here (chantier 2.4 filter, Group Q).
+        // received channel here (direction filter, Group Q).
     rxTargetAnalog[kRunLevelIdx].flow.betweenNodes     = Direction::Downlink;
     rxTargetAnalog[kRunLevelIdx].flow.betweenBoards = Direction::Downlink;
 
@@ -465,7 +457,7 @@ static void test_rx_base_link_refuses_system_channels(void) {
 
 
 // =============================================================================
-// GROUP C — VIEW IDENTITY (Phase 3 / A13)
+// GROUP C — VIEW IDENTITY
 //
 // Validates the central invariant of Solution A: the 3 view-specific
 // enums (AnalogComBusID, AnalogComBusSystemID, AnalogComBusBaseID and
@@ -596,7 +588,7 @@ static void test_id_prefix_alignment_digital(void) {
 
 
 // =============================================================================
-// GROUP D — WIRE-END SIZING (LY2)
+// GROUP D — WIRE-END SIZING
 //
 // Verifies that combus_frame_encode() with a smaller analogWireEnd /
 // digitalWireEnd produces a SHORTER buffer than with the full enum set:
@@ -660,7 +652,7 @@ static void test_wire_end_clamped_to_cfg(void) {
 
 
 // =============================================================================
-// GROUP G — RUNLEVEL ROUND-TRIP (RL3)
+// GROUP G — RUNLEVEL ROUND-TRIP
 //
 // Verifies that the RUNLEVEL analog channel survives an encode→decode
 // round-trip without any special-cased handling in the codec. The
@@ -688,11 +680,11 @@ static void test_runlevel_roundtrip_via_channel(void) {
 
 
 // =============================================================================
-// GROUP E — MD5 POINTER RESOLUTION BY LAYER (LY4)
+// GROUP E — MD5 POINTER RESOLUTION BY LAYER
 //
 // Verifies that combus_link_start() resolves the per-link
 // expected.stable pointer from link->layer (BASE / SYSTEM / BOARD), and
-// that combus_handshake_compareAndLog() matches correctly when given
+// that combus_handshake_compare() matches correctly when given
 // the right local MD5 pointer.  Same pattern as Group D — verify the
 // resolution at init, not the per-frame behaviour.
 //
@@ -703,7 +695,7 @@ static void test_runlevel_roundtrip_via_channel(void) {
 //   - kCombusSystemComBusMd5  (SYSTEM view, extension board link)
 //
 // The 3 arrays MUST be distinct (different views hash different
-// channel sets).  This is the structural invariant that LY4 relies on — if
+// channel sets).  This is the structural invariant the resolution relies on — if
 // two views ever produced the same MD5, the per-layer resolution
 // would be a no-op and the test would catch it.
 // =============================================================================
@@ -785,7 +777,7 @@ static void test_md5_resolution_system(void) {
 }
 
 // =============================================================================
-// GROUP I — LINKS FROM THEIR DESCRIPTION (chantier 0.4)
+// GROUP I — LINKS FROM THEIR DESCRIPTION
 //
 // combus_link_build() fills a ComBusLink from a ComDevMap without opening any
 // port, so these tests need no wiring. s_unusedCom (Group E) stands for the
@@ -931,7 +923,7 @@ static void test_link_build_refuses_bad_wiring(void) {
 
 
 // =============================================================================
-// GROUP J — RECEIVING LINK HEALTH (chantier 1.1)
+// GROUP J — RECEIVING LINK HEALTH
 //
 // A TX↔RX link is built from its description on the loopback port, with
 // rxTargetBus (Group H) as the node ComBus. The link is lost until its first
@@ -1034,7 +1026,7 @@ static void test_link_health_ignores_tx_only_link(void) {
 
 
 // =============================================================================
-// GROUP K — DENIED WRITES ARE COUNTED (chantier 1.1)
+// GROUP K — DENIED WRITES ARE COUNTED
 //
 // NODE_LINK_FAIL is a BOARD-scope channel: a SYSTEM caller is refused. This is
 // the mistake that kept FAILSAFE_SOFT stuck on the Volvo; the count makes
@@ -1055,7 +1047,7 @@ static void test_denied_write_is_counted(void) {
 
 
 // =============================================================================
-// GROUP L — BOTH_OR MERGE, ANTI PING-PONG (chantier 1.1b)
+// GROUP L — BOTH_OR MERGE, ANTI PING-PONG
 //
 // The health link of Group J (TX↔RX on the loopback port, frames applied to
 // rxTargetBus) receives frames built from peerBus, as a remote board would send
@@ -1179,9 +1171,9 @@ static void test_both_or_board_never_writing_does_not_contribute(void) {
 
 
 // =============================================================================
-// GROUP M — LINK LOSS BY SCOPE (chantier 1.1c, rewritten in link rework S2)
+// GROUP M — LINK LOSS BY SCOPE
 //
-// Table validated by the owner (2026-10-27): onLoss is removed; each receiving
+// Table validated by the owner: onLoss is removed; each receiving
 // link reports its loss according to its scope.  A link between the boards of
 // the node feeds BOARD_LINK_FAIL (lost, or never seen once its startup grace
 // has elapsed); a link to another node feeds NODE_LINK_FAIL (not alive, never
@@ -1291,7 +1283,7 @@ static void test_loss_row6_tx_only_link_never_contributes(void) {
 
 
 // =============================================================================
-// GROUP N — LINK CONTRACT, ACK AND BLOCKING (chantier 1.2)
+// GROUP N — LINK CONTRACT, ACK AND BLOCKING
 //
 // One test per row of the table validated by the owner.  The link is built on
 // the loopback port (Group J helpers).  What a remote peer would send is forged
@@ -1588,7 +1580,7 @@ static void test_contract_failsafe_keeps_contract(void) {
 
 
 // =============================================================================
-// GROUP O — NEXT / LEGACY MODE (chantier 2.2b)
+// GROUP O — NEXT / STABLE MODE
 //
 // No machine type has candidates yet: enableCandidates() gives the link a fake
 // next MD5, as if this board had candidates.  On the loopback, a NEXT request
@@ -1637,7 +1629,7 @@ static void test_mode_system_link_has_no_separate_candidates(void) {
     TEST_ASSERT_FALSE(linkCtx()->hasCandidates);
 }
 
-/** Row 1: no candidate: legacy requests only, STABLE in legacy mode. */
+/** Row 1: no candidate: stable requests only, STABLE in stable mode. */
 static void test_mode_row1_no_candidate_is_stable(void) {
     startHealthLink(LinkEnd::TX_RX, kInterDev);
     TEST_ASSERT_FALSE(linkCtx()->hasCandidates);
@@ -1662,7 +1654,7 @@ static void test_mode_row2_same_candidates_is_next(void) {
     TEST_ASSERT_TRUE(linkCtx()->nextMode);
 }
 
-/** Retries: with candidates and no answer, 6 NEXT requests (burst of 3, then 3 retries), then legacy. */
+/** Retries: with candidates and no answer, 6 NEXT requests (burst of 3, then 3 retries), then stable. */
 static void test_mode_next_requests_then_stable(void) {
     startHealthLink(LinkEnd::TX_RX, kInterDev);
     enableCandidates();
@@ -1685,7 +1677,7 @@ static void test_mode_next_requests_then_stable(void) {
     TEST_ASSERT_FALSE_MESSAGE(stableBeforeNext, "a NEXT request after a stable one");
 }
 
-/** Row 3: the NEXT ACK carries another next MD5: legacy at once, legacy ACK: stable mode. */
+/** Row 3: the NEXT ACK carries another next MD5: stable at once, stable ACK: stable mode. */
 static void test_mode_row3_other_next_falls_back_to_stable_at_once(void) {
     startHealthLink(LinkEnd::TX_RX, kInterDev);
     enableCandidates();
@@ -1696,7 +1688,7 @@ static void test_mode_row3_other_next_falls_back_to_stable_at_once(void) {
     TEST_ASSERT_EQUAL_UINT8(0u, linkCtx()->nextTriesLeft);
 
     drainWire();
-    combus_handshake_tx_update(linkCtx(), s_com);                   // first burst request: legacy already
+    combus_handshake_tx_update(linkCtx(), s_com);                   // first burst request: stable already
     delay(kRxPollMs);
     WireHandshake hs[2];
     TEST_ASSERT_EQUAL_UINT8(1u, readHandshakes(hs, 2u));
@@ -1712,13 +1704,13 @@ static void test_mode_row3_other_next_falls_back_to_stable_at_once(void) {
 static void test_mode_row5_matching_next_moves_to_next(void) {
     startHealthLink(LinkEnd::TX_RX, kInterDev);
     enableCandidates();
-    sendGoodAck();                                                  // legacy ACK: stable mode
+    sendGoodAck();                                                  // stable ACK: stable mode
     pumpRx();
     TEST_ASSERT_TRUE(isStable());
     TEST_ASSERT_FALSE(linkCtx()->nextMode);
 
     drainWire();
-    delay(kCombusHandshakePeriodMs + 20u);                          // row 10: periodic request is legacy
+    delay(kCombusHandshakePeriodMs + 20u);                          // row 10: periodic request is stable
     combus_handshake_tx_update(linkCtx(), s_com);
     delay(kRxPollMs);
     WireHandshake hs[2];
@@ -1799,7 +1791,7 @@ static void test_mode_row11_dev_is_only_logged(void) {
 
 
 // =============================================================================
-// GROUP P — RECEIVE BUFFERS AND FRAME LIMITS (chantier 2.3)
+// GROUP P — RECEIVE BUFFERS AND FRAME LIMITS
 //
 // Codec rows need no wiring; the inter-node row uses the loopback link of
 // Group J.  Counts are always channel counts, never bytes: the digital
@@ -1878,7 +1870,7 @@ static void test_inter_node_link_refuses_more_digitals_than_base(void) {
 
 
 // =============================================================================
-// GROUP Q — RECEIVE FILTER BY DIRECTION (chantier 2.4)
+// GROUP Q — RECEIVE FILTER BY DIRECTION
 //
 // No wiring: a frame is encoded from txComBus, decoded, then applied onto
 // rxTargetBus with the identity of an inter-node link (BASE) or of an
@@ -1954,14 +1946,6 @@ static void test_filter_generated_directions(void) {
 }
 
 
-// Chantier 12.6 (cleanup): Group F (FS1 failsafe re-arm) REMOVED — link
-// health is now monitored by the per-backend *_LINK_LOST contributors
-// (LOCAL_REMOTE_FAIL, NODE_LINK_FAIL, ...) aggregated into
-// FAILSAFE_SOFT, which feeds the top-level FAILSAFE aggregator
-// (see failsafe_module.md §12.5 new design).
-//
-// The replacement tests (link health via FAILSAFE_SOFT aggregation)
-// will be added in a future chantier once the contract is finalised.
 
 /** combus_handshake_compare() must match when given the right local MD5. */
 static void test_md5_compare_match_with_correct_local(void) {
@@ -2061,11 +2045,11 @@ void setup() {
     RUN_TEST(test_loopback_resync_after_garbage);
     RUN_TEST(test_loopback_monkey);
 
-    // --- Group H: RX write identity by link layer (chantier 0.1) ---
+    // --- Group H: RX write identity by link layer ---
     RUN_TEST(test_rx_system_link_applies_system_channels);
     RUN_TEST(test_rx_base_link_refuses_system_channels);
 
-    // --- Group C: view identity (Phase 3 / A13) ---
+    // --- Group C: view identity ---
     // Memory identity (pointer equality) + prefix alignment (numeric).
     // The generated combus_generated/combus.cpp is added to the test
     // env's source list via scripts/combus_test_add_generated_source.py.
@@ -2076,47 +2060,47 @@ void setup() {
     RUN_TEST(test_id_prefix_alignment_analog);
     RUN_TEST(test_id_prefix_alignment_digital);
 
-    // --- Group D: wire-end sizing (LY2) ---
+    // --- Group D: wire-end sizing ---
     RUN_TEST(test_wire_end_base_shorter_than_full);
     RUN_TEST(test_wire_end_system_sized_by_view);
     RUN_TEST(test_wire_end_zero_is_minimum);
     RUN_TEST(test_wire_end_clamped_to_cfg);
 
-    // --- Group G: RUNLEVEL round-trip (RL3) ---
+    // --- Group G: RUNLEVEL round-trip ---
     // Verifies that the RUNLEVEL analog channel survives an encode→decode
     // round-trip without any special-cased handling in the codec.
     RUN_TEST(test_runlevel_roundtrip_via_channel);
 
-    // --- Group E: MD5 pointer resolution by layer (LY4) ---
+    // --- Group E: MD5 pointer resolution by layer ---
     RUN_TEST(test_md5_arrays_are_distinct);
     RUN_TEST(test_md5_resolution_base);
     RUN_TEST(test_md5_resolution_system);
     RUN_TEST(test_md5_compare_match_with_correct_local);
 
-    // --- Group I: links from their description (chantier 0.4) ---
+    // --- Group I: links from their description ---
     RUN_TEST(test_link_build_inter_node_tx);
     RUN_TEST(test_link_build_rx_only);
     RUN_TEST(test_link_build_intra_node_tx_rx);
     RUN_TEST(test_link_scope_layer);
     RUN_TEST(test_link_build_refuses_bad_wiring);
 
-    // --- Group J: receiving link health (chantier 1.1) ---
+    // --- Group J: receiving link health ---
     RUN_TEST(test_link_health_lost_until_first_frame);
     RUN_TEST(test_link_health_alive_after_frame);
     RUN_TEST(test_link_health_lost_after_silence);
     RUN_TEST(test_link_health_ignores_tx_only_link);
 
-    // --- Group K: denied writes are counted (chantier 1.1) ---
+    // --- Group K: denied writes are counted ---
     RUN_TEST(test_denied_write_is_counted);
 
-    // --- Group L: both_or merge, anti ping-pong (chantier 1.1b) ---
+    // --- Group L: both_or merge, anti ping-pong ---
     RUN_TEST(test_both_or_merges_peer_value);
     RUN_TEST(test_both_or_falls_back_when_peer_clears);
     RUN_TEST(test_both_or_ignores_silent_peer);
     RUN_TEST(test_both_or_sends_no_echo);
     RUN_TEST(test_both_or_board_never_writing_does_not_contribute);
 
-    // --- Group M: link loss by scope (chantier 1.1c, link rework S2) ---
+    // --- Group M: link loss by scope ---
     RUN_TEST(test_loss_row1_board_link_in_grace);
     RUN_TEST(test_loss_row2_board_link_never_seen_after_grace);
     RUN_TEST(test_loss_row3_board_link_alive_lost_back);
@@ -2124,7 +2108,7 @@ void setup() {
     RUN_TEST(test_loss_row5_node_link_alive_lost_back);
     RUN_TEST(test_loss_row6_tx_only_link_never_contributes);
 
-    // --- Group N: link contract, ACK and blocking (chantier 1.2) ---
+    // --- Group N: link contract, ACK and blocking ---
     RUN_TEST(test_contract_row1_request_ack_stable);
     RUN_TEST(test_contract_row2_peer_late);
     RUN_TEST(test_contract_row3_md5_mismatch);
@@ -2139,7 +2123,7 @@ void setup() {
     RUN_TEST(test_contract_row12_no_reply_to_ack);
     RUN_TEST(test_contract_failsafe_keeps_contract);
 
-    // --- Group O: next / legacy mode (chantier 2.2b) ---
+    // --- Group O: next / stable mode ---
     RUN_TEST(test_mode_system_link_has_no_separate_candidates);
     RUN_TEST(test_mode_row1_no_candidate_is_stable);
     RUN_TEST(test_mode_row2_same_candidates_is_next);
@@ -2151,14 +2135,14 @@ void setup() {
     RUN_TEST(test_mode_next_request_gets_next_ack);
     RUN_TEST(test_mode_row11_dev_is_only_logged);
 
-    // --- Group P: receive buffers and frame limits (chantier 2.3) ---
+    // --- Group P: receive buffers and frame limits ---
     RUN_TEST(test_buffers_sized_to_system_next_set);
     RUN_TEST(test_frame_larger_than_the_set_is_refused);
     RUN_TEST(test_padding_bits_do_not_reach_the_buffer);
     RUN_TEST(test_shorter_frame_is_accepted);
     RUN_TEST(test_inter_node_link_refuses_more_digitals_than_base);
 
-    // --- Group Q: receive filter by direction (chantier 2.4) ---
+    // --- Group Q: receive filter by direction ---
     RUN_TEST(test_filter_inter_node_downlink_is_applied);
     RUN_TEST(test_filter_inter_node_none_is_not_applied);
     RUN_TEST(test_filter_inter_node_uplink_is_not_applied);
@@ -2172,8 +2156,6 @@ void setup() {
     RUN_TEST(test_ring_handshake_read_across_the_end);
     RUN_TEST(test_ring_handshake_consumed_across_the_end);
 
-    // Chantier 12.6: Group F (FS1 failsafe re-arm) removed — see
-    // header docstring above (5 independent test groups A/B/C/D/E).
 
     UNITY_END();
 }
