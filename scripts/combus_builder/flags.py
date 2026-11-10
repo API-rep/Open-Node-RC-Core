@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-combus_builder/flags.py — A4: Build context acquisition.
+combus_builder/flags.py — Build context acquisition.
 
-Scope (A4 only):
+Scope:
   - Acquire the buildroot of the current PlatformIO node.
   - Acquire the CPPDEFINES actually transmitted to the compiler for the
     current PlatformIO environment.
@@ -10,12 +10,11 @@ Scope (A4 only):
     that an integration test can compare it against the ground truth
     (`pio run -t idedata`).
 
-A4 does NOT:
-  - discover .cb / .cbch files                 (A3 — parser.py)
-  - merge / canonise definitions                (A5 — canon.py)
-  - generate C++ headers                        (A6 — generator.py)
-  - compute MD5                                 (A7 — md5.py)
-  - validate processors                         (Phase C)
+This module does NOT:
+  - discover .cb / .cbch files                 (parser.py)
+  - merge / canonise definitions                (canon/)
+  - generate C++ headers                        (generator.py)
+  - compute MD5                                 (md5.py)
 
 Acquisition strategy (real PlatformIO environment):
 
@@ -35,13 +34,11 @@ Acquisition strategy (real PlatformIO environment):
      c) User-provided override (env argument or explicit extra flag list),
         for CLI / standalone tests.
 
-  A4 tries (a) first, then (b) if (a) is empty, and raises an explicit
-  BuildContextError if both are inaccessible / empty. This avoids the
-  "fragile implementation that hides the problem" trap.
+  The override (c), when given, wins.  Otherwise (a) first, then (b) if
+  (a) is empty; an explicit BuildContextError if both are inaccessible /
+  empty, rather than a fragile implementation that hides the problem.
 
-  We do NOT merge `extends` chains by hand (the doc marks this as a
-  transient hack in scripts/combus_builder/md5.py). If we observe
-  `extends` failures in `pre:` we document them and rely on `post:` instead.
+  We do NOT merge `extends` chains by hand.
 
 Real-build ground-truth validation (post: hook):
 
@@ -54,7 +51,7 @@ Real-build ground-truth validation (post: hook):
     2. triggers `pio run -t idedata -e <env>` for the ground truth,
     3. compares the two.
 
-  This is the only structurally sound way to assert that what A4 sees
+  This is the only structurally sound way to assert that what the builder sees
   in a real build matches what PlatformIO actually hands to the compiler.
   No text round-trip, no derivation from idedata itself.
 
@@ -85,7 +82,7 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Any, Iterable
 
-# Reuse A3's buildroot resolution to avoid parallel logic.
+# Reuse the buildroot resolution of parser.py to avoid parallel logic.
 from .parser import resolve_buildroot
 
 
@@ -241,8 +238,8 @@ def _extract_from_env_cppdefines(env: Any) -> tuple[set[str], dict[str, str]]:
                 v = entry[1] if len(entry) >= 2 and entry[1] is not None else None
                 items.append((k, v))
             else:
-                # Unknown shape — fail loudly. Per the prompt:
-                # "ne pas masquer le problème par une implémentation fragile".
+                # Unknown shape — fail loudly rather than hide the problem
+                # behind a fragile implementation.
                 raise BuildContextError(
                     "env['CPPDEFINES'] contains an entry of unsupported "
                     f"shape at index {idx}: {entry!r} (type={type(entry).__name__}). "
@@ -573,7 +570,7 @@ def compare_context_to_idedata(
 # =============================================================================
 
 def main(env: Any) -> int:
-    """A4 entry point usable from a PlatformIO extra_script."""
+    """Build-context entry point usable from a PlatformIO extra_script."""
     try:
         ctx = acquire_build_context(env)
     except BuildContextError as e:

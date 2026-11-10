@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-combus_builder/diffusion.py — ND2: automatic diffusion of SYSTEM channels
+combus_builder/diffusion.py — automatic diffusion of SYSTEM channels
 between boards of the same node.
 
-Scope (ND2):
+Scope:
   - Generalised to N >= 2 boards per node.
   - For each channel id with scope SYSTEM, look at the set of boards
     for which the declaration is ACTIVE (via the existing
@@ -13,7 +13,7 @@ Scope (ND2):
     declarations (if any) to inject on boards that didn't declare
     the channel.
 
-Generalised rule (ND2, per `id`):
+Generalised rule (per `id`):
   Let
     n_up   = number of boards active with direction `uplink`
     n_down = number of boards active with direction `downlink`
@@ -29,7 +29,7 @@ Generalised rule (ND2, per `id`):
           names ALL boards involved (not just 2).
 
   3. n_both >= 1, n_up == 0, n_down == 0
-       -> mode agrégation OR: every ABSENT board receives `both`.
+       -> aggregation: every ABSENT board receives `both`.
           Boards explicitly `none` stay `none` (they do NOT join
           the OR pool). No error.
 
@@ -43,9 +43,8 @@ Generalised rule (ND2, per `id`):
           `uplink` board is unchanged.
 
   6. n_up == 0, n_down >= 1 (n_both == 0 by case 2)
-       -> CHANGED BEHAVIOUR vs ND2 2-board: not a fatal error
-          anymore. Emit a WARNING ("canal mort" — no producer
-          uplink in the node). Absent boards receive `none`
+       -> not a fatal error: emit a WARNING ("dead channel" — no
+          producer uplink in the node). Absent boards receive `none`
           (we never invent a producer). Build continues.
 
   7. n_up == 0, n_down == 0, n_both == 0, n_none >= 1
@@ -59,28 +58,24 @@ Generalised rule (ND2, per `id`):
   is detected BEFORE the inter-board rule, so it always wins over
   the rule above.
 
-Out of scope (deferred):
-  - BASE diffusion (ND5).
-  - Runtime BOTH_OR merge in the C++ codec (ND6, runtime part): the
-    bothOr flag is emitted but not read by combus_frame_apply.
+Out of scope:
+  - BASE diffusion (the BASE channels are not diffused between boards).
   - merge_channels() in canon/channels.py is NOT touched: the
     per-board lists produced here contain at most one declaration
     per id (by construction), so merge_channels() never sees a
     duplicate.
 
-Pipeline position (ND2):
+Pipeline position:
   - discover_and_parse() runs once (repo-wide, board-agnostic).
   - diffuse_system_channels() runs ONCE, BEFORE canonize(), producing
     a dict[board_id -> list[tuple[Path, str, Any]]] in the same
     format as the output of discover_and_parse().
   - canonize() runs PER BOARD on its own resolved list.
-  - generate() runs PER BOARD (already in place since ND1).
+  - generate() runs PER BOARD.
 
-Node topology (ND2, generalised):
-  - N >= 2 boards. The "point-to-point" restriction of the
-    previous version is dropped. The rule is symmetric in the
-    sense that it only depends on the multiset of active
-    directions across the node.
+Node topology:
+  - N >= 2 boards. The rule is symmetric in the sense that it only
+    depends on the multiset of active directions across the node.
 """
 from __future__ import annotations
 
@@ -98,7 +93,7 @@ from .node_context import NodeContext
 # =============================================================================
 
 class DiffusionError(Exception):
-    """Base class for ND2 diffusion errors."""
+    """Base class of the diffusion errors."""
 
 
 class DiffusionConflictError(DiffusionError):
@@ -197,7 +192,7 @@ class _RawChannelDecl:
     `type`, `scope`, `theme`, `direction`, `requires`, `value` keys).
     `source_path` is the .cb file the declaration came from.
     `board_id` is the board this declaration belongs to (None for
-    the mother env in legacy mode, or the board_id in node mode).
+    the mother env in single-board mode, or the board_id in node mode).
     """
 
     raw: dict[str, Any]
@@ -225,12 +220,12 @@ def _warn(msg: str) -> None:
 # DIRECTION HELPERS
 # =============================================================================
 
-# Mirror table for diffusion (ND2).
+# Mirror table for diffusion.
 # When a channel is declared on exactly one board, the other board
 # receives a synthetic declaration with the direction MIRRORED.
-# A2.1 (2d-bis) : the OR policy is NEVER recopiée, SAUF `both_or`
-# qui se propage tel quel (l'anti-oscillation est un contrat
-# inter-boards, pas une politique locale au producteur).
+# The OR policy is NEVER copied, EXCEPT `both_or`, which propagates as
+# is (the anti-oscillation is a contract between boards, not a policy
+# local to the producer).
 #   uplink        → downlink
 #   uplink_or     → downlink   (OR policy dropped on the mirror)
 #   downlink      → uplink
@@ -240,11 +235,11 @@ def _warn(msg: str) -> None:
 #   none          → none
 _DIRECTION_MIRROR: dict[str, str] = {
     "uplink": "downlink",
-    "uplink_or": "downlink",   # A2.1 (2d-bis) : OR dropped on mirror
+    "uplink_or": "downlink",   # OR dropped on mirror
     "downlink": "uplink",
-    "downlink_or": "uplink",   # A2.1 (2d-bis) : OR dropped on mirror
+    "downlink_or": "uplink",   # OR dropped on mirror
     "both": "both",
-    "both_or": "both_or",      # A2.1 (2d-bis) : anti-oscillation IS propagated
+    "both_or": "both_or",      # anti-oscillation IS propagated
     "none": "none",
 }
 
@@ -371,7 +366,7 @@ def _resolve_group(
     explicit: list[tuple[str | None, str, Path]],
     all_board_ids: list[str | None],
 ) -> _ResolvedGroup:
-    """Apply the generalised ND2 rule to one SYSTEM channel id.
+    """Apply the generalised rule to one SYSTEM channel id.
 
     Args:
       channel_id:  the channel id (only used for error/warning messages).
@@ -404,7 +399,7 @@ def _resolve_group(
     absent = [b for b in all_board_ids if b not in explicit_set]
 
     # Tally directions across explicit declarations.
-    # A2.1 : work on FAMILIES, not on individual tokens.
+    # Work on FAMILIES, not on individual tokens.
     #   uplink-ish   = {uplink, uplink_or}
     #   downlink-ish = {downlink, downlink_or}
     #   both-ish     = {both, both_or}
@@ -417,7 +412,7 @@ def _resolve_group(
     n_both_or = sum(1 for _b, d, _p in explicit if d == "both_or")
     n_none = sum(1 for _b, d, _p in explicit if d == "none")
 
-    # --- ND6 (correctif 2/3): both vs both_or divergence warning ------
+    # --- both vs both_or divergence warning ---------------------------
     # If at least one board declares `both` and at least one declares
     # `both_or` for the same id, this is a config inconsistency: one
     # board applies anti-oscillation OR aggregation, the other does
@@ -442,8 +437,8 @@ def _resolve_group(
         )
 
     # --- Rule 2: both + (uplink or downlink) -> semantic FATAL --------
-    # NOTE (correctif 2/3): `both_or` is treated as `both` here (same
-    # family "bidirectionnel"). Mixing `both_or` with `uplink`/`downlink`
+    # NOTE: `both_or` is treated as `both` here (same family
+    # "bidirectional"). Mixing `both_or` with `uplink`/`downlink`
     # is the same fatal semantic conflict as mixing `both` with them.
     if (n_both + n_both_or) >= 1 and (n_up >= 1 or n_down >= 1):
         # Build the involved list: all explicit declarations (the
@@ -457,7 +452,7 @@ def _resolve_group(
         )
 
     # --- Rule 3: both-ish only (no uplink-ish, no downlink-ish) -------
-    # A2.1 : both-ish = {both, both_or}. If any board declared
+    # both-ish = {both, both_or}. If any board declared
     # `both_or`, the synthesis direction is `both_or` (preserve the
     # anti-oscillation flag on the synthetic copy). Otherwise it's
     # plain `both`.
@@ -684,7 +679,7 @@ def diffuse_system_channels(
         if group.warning is not None:
             _warn(group.warning)
 
-        # ---- ND6 (correctif 2/3): both_or single-writer warning ------
+        # ---- both_or single-writer warning ---------------------------
         # Detect `direction: both_or` on a channel active on a SINGLE
         # board only post-diffusion: the anti-oscillation flag has no
         # effect with one writer. The both-vs-both_or divergence is
@@ -795,7 +790,7 @@ def diffuse_system_channels(
                     continue
                 synthetic_raw = dict(source_decl.raw)
                 synthetic_raw["direction"] = synth_dir
-                # ND2 fix (2026-10-03): strip the `requires` field
+                # Strip the `requires` field
                 # from the synthetic declaration. The original
                 # `requires` belongs to the SOURCE board (e.g.
                 # `requires=[IS_MAINBOARD]` for a channel declared
@@ -805,9 +800,8 @@ def diffuse_system_channels(
                 # board's BuildContext — which typically does NOT
                 # satisfy it (that's often WHY the original
                 # declaration was inactive for the target board).
-                # This would drop the diffused copy (before 2026-10-22:
-                # raise RequiresResolutionError) exactly on the
-                # scenario ND2 is supposed to solve (conditional
+                # This would drop the diffused copy exactly on the
+                # scenario the diffusion is there to solve (conditional
                 # channel diffused to a sister board).
                 #
                 # A synthetic declaration has, by construction,
@@ -830,7 +824,7 @@ def diffuse_system_channels(
         # declarations (they come from the same repo-wide .cb files),
         # so picking the first is fine.
         #
-        # ND4 (2026-10-04): BOARD channels are strictly private to
+        # BOARD channels are strictly private to
         # the firmware of a board. Unlike BASE (which is shared by
         # definition and passed through to every board), a BOARD
         # channel with `requires=[IS_MAINBOARD]` must NOT be copied
@@ -843,7 +837,7 @@ def diffuse_system_channels(
             if (cid, scope) in seen_passthrough:
                 continue
             seen_passthrough.add((cid, scope))
-            # ND4: BOARD requires-filter per board. Pick the first
+            # BOARD requires-filter per board. Pick the first
             # declaration that is active for the current board (not
             # just the first declaration overall), so that each board
             # sees its own declaration when multiple boards declare

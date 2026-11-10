@@ -1,28 +1,27 @@
 #!/usr/bin/env python3
 """
-combus_builder/coherence.py - A8: CPPDEFINES / PlatformIO coherence check.
+combus_builder/coherence.py - CPPDEFINES / PlatformIO coherence check.
 
-Scope (A8 only):
+Scope:
   - Verify, for a PlatformIO environment, that the BuildContext acquired
-    by A4 (acquire_build_context) is consistent with the ground truth
-    produced by `pio run -t idedata -e <env>` (read_idedata +
+    by flags.py (acquire_build_context) is consistent with the ground
+    truth produced by `pio run -t idedata -e <env>` (read_idedata +
     idedata_to_defines).
-  - A8 REUSES A4: it does NOT re-implement CPPDEFINES acquisition.
-    If A4 ever changes its representation, A8 follows it automatically
-    via the existing helpers.
-  - A8 VERIFIES: it does NOT modify or correct the context.
-  - A8 is parameterisable by PlatformIO environment: it can be called
+  - It REUSES flags.py: it does NOT re-implement CPPDEFINES acquisition.
+    If flags.py ever changes its representation, this check follows it
+    automatically via the existing helpers.
+  - It VERIFIES: it does NOT modify or correct the context.
+  - It is parameterisable by PlatformIO environment: it can be called
     once per env, with independent results per call. No env is
     hard-coded.
 
-Out of scope (A8):
-  - discovery .cb / .cbch (A3)
-  - canonisation / merge (A5)
-  - generation C++ (A6)
-  - MD5 (A7)
-  - .cbch / processors (Phase C)
+Out of scope:
+  - discovery .cb / .cbch (parser.py)
+  - canonisation / merge (canon/)
+  - generation C++ (generator.py)
+  - MD5 (md5.py)
 
-Comparison rules (derived from A4 representation):
+Comparison rules (derived from the BuildContext representation):
   - flags without value : in ctx.defines (frozenset)
   - flags with value    : in ctx.defines_with_value (dict[str,str])
   - idedata emits       : list of strings ("FOO" or "FOO=value")
@@ -60,7 +59,7 @@ from .flags import (
 # =============================================================================
 
 class CoherenceError(Exception):
-    """Raised by A8 when one or more envs fail the coherence check.
+    """Raised when one or more envs fail the coherence check.
 
     The first divergent env's full diagnostic is included.
     """
@@ -77,11 +76,11 @@ class UnknownEnvironmentError(Exception):
 @dataclass(frozen=True)
 class CoherenceReport:
     """
-    Result of one A8 coherence check.
+    Result of one coherence check.
 
     env_name                : PlatformIO env name.
     coherent                : True if the ctx agrees with idedata.
-    ctx_source              : how A4 sourced the ctx (env/build_flags/override).
+    ctx_source              : how flags.py sourced the ctx (env/build_flags/override).
     ctx_defines_count       : number of value-less defines in ctx.
     ctx_values_count        : number of value defines in ctx.
     idedata_defines_count   : number of value-less defines in idedata.
@@ -189,15 +188,15 @@ def check_coherence(
     """
     Verify the CPPDEFINES coherence for a single PlatformIO environment.
 
-    Strategy (per A8 brief + A4 architecture):
+    Strategy:
       1. Verify the env is declared in platformio.ini (explicit error
          if not, instead of waiting for pio to fail opaquely).
-      2. Acquire the BuildContext through A4's `acquire_build_context`.
-         Reuses A4's representation exactly. Honours `override_cppdefines`
+      2. Acquire the BuildContext through flags.acquire_build_context.
+         Reuses its representation exactly. Honours `override_cppdefines`
          for test-only paths (label='override').
       3. Run `pio run -t idedata -e env_name` to obtain ground truth
-         (reuses A4's `read_idedata`).
-      4. Compare via A4's `compare_context_to_idedata` (strict=True).
+         (flags.read_idedata).
+      4. Compare via flags.compare_context_to_idedata (strict=True).
       5. Return a CoherenceReport. If strict=True AND the report
          diverges, also raise CoherenceError (after building the report,
          so the caller has both).
@@ -209,13 +208,13 @@ def check_coherence(
     Args:
       env_name            : PlatformIO env to test.
       project_dir         : path to the project containing platformio.ini.
-      override_cppdefines : optional explicit list of "-D" tokens used by A4
-                            to construct the ctx in 'override' mode.
+      override_cppdefines : optional explicit list of "-D" tokens used by
+                            flags.py to construct the ctx in 'override' mode.
                             Useful for tests. None = use the real acquisition
                             path (env -> build_flags -> raise).
       env                 : optional SCons env (real PlatformIO env passed
-                            by a post: hook). When provided, A4 uses it
-                            before any override. None = standalone / CLI.
+                            by a post: hook). An override, when given,
+                            wins over it. None = standalone / CLI.
       strict              : if True, raise CoherenceError on any divergence.
       timeout             : idedata subprocess timeout (seconds).
 
@@ -225,10 +224,10 @@ def check_coherence(
     Raises:
       UnknownEnvironmentError if env_name is not declared.
       CoherenceError          if strict=True AND the check diverges.
-      BuildContextError       if A4 fails to acquire the ctx (e.g. empty
-                              CPPDEFINES with require_non_empty=True). This
-                              is a real A8 finding (the env cannot be
-                              resolved) and is re-raised as-is.
+      BuildContextError       if flags.py fails to acquire the ctx (e.g.
+                              empty CPPDEFINES with require_non_empty=True).
+                              This is a real finding (the env cannot be
+                              resolved); it becomes a skipped report.
     """
     project_dir = Path(project_dir)
     if not is_known_env(env_name, project_dir):
@@ -239,12 +238,9 @@ def check_coherence(
             f"Known envs: {known}"
         )
 
-    # Step 2: acquire the ctx through A4. We pass `env` first (real path),
-    # `override_cppdefines` second (test path). A4 itself prefers env when
-    # both are present? No - actually A4 prefers override_cppdefines over env.
-    # So if the caller wants to test the real env, they pass env=None,
-    # override_cppdefines=None. If they want to test an override scenario,
-    # they pass override_cppdefines=[...]. Both are honoured by A4.
+    # Step 2: acquire the ctx through flags.py.  An override_cppdefines
+    # wins over env: to test the real env, pass override_cppdefines=None;
+    # to test an override scenario, pass override_cppdefines=[...].
     try:
         ctx = acquire_build_context(
             env=env,
@@ -253,7 +249,7 @@ def check_coherence(
             require_non_empty=True,
         )
     except BuildContextError as e:
-        # A4 says the ctx cannot be acquired. Surface as a SKIPPED report
+        # The ctx cannot be acquired. Surface as a SKIPPED report
         # so callers can iterate multiple envs without one failure killing
         # the rest. The exception is preserved in the message.
         return CoherenceReport(
@@ -278,7 +274,7 @@ def check_coherence(
             skip_reason=f"`pio run -t idedata` failed: {e}",
         )
 
-    # Step 4: compare via A4.
+    # Step 4: compare via flags.py.
     try:
         raw_report = compare_context_to_idedata(
             ctx, idedata, env_name, strict=True,
@@ -359,7 +355,7 @@ def check_coherence_multi(
       project_dir                     : project root.
       override_cppdefines_per_env     : optional {env_name: [...]}. If set,
                                         the matching env is tested with the
-                                        given override (A4 label='override').
+                                        given override (label='override').
                                         Env_names without an override use the
                                         real acquisition path.
       env_per_env                     : optional {env_name: SCons env}. If set,

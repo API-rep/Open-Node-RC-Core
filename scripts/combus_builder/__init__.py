@@ -2,7 +2,7 @@
 #
 # ComBus v2 builder package.
 #
-# Pipeline: parser -> canon -> (diffusion) -> generator -> md5.
+# Pipeline: parser -> canon -> (diffusion) -> generator -> md5, links.
 # See scripts/combus_builder/README.md for the module map.
 #
 # Modules:
@@ -15,4 +15,5 @@
 #       diffusion.py     — SYSTEM diffusion across boards
 #       generator.py     — views, IDs, C++ emission
 #       md5.py           — contract hashes
+#       links.py         — links between nodes (couplers, remote)
 #       coherence.py     — consistency checks with platformio.ini

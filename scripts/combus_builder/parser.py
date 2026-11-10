@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-combus_builder/parser.py — A3: Discovery + minimal YAML parsing.
+combus_builder/parser.py — Discovery + minimal YAML parsing.
 
-Scope (A3 only):
+Scope:
   - Determine the buildroot of the node currently built by PlatformIO.
   - Recursively walk the buildroot and collect every file whose extension
     matches the centralized CONFIG_EXTENSIONS set.
@@ -12,7 +12,7 @@ Scope (A3 only):
     verify minimal structural coherence, store the raw/parsed data with
     its source path.
 
-Out of scope (A4+):
+Out of scope (the next modules):
   - Canonical sort (scope, type, theme, id).
   - CPPDEFINES resolution as business logic.
   - C++ header generation.
@@ -26,18 +26,20 @@ Buildroot strategy:
   (env["PROJECT_SRC_DIR"] or env["PROJECT_DIR"] + "/src"). Fall back to
   "<project_root>/src" if the env is not provided (CLI / standalone mode).
   The buildroot is NEVER hardcoded to a specific node (machines/,
-  remotes/, sound_module/, ...): the actual src_dir is taken from the
+  remotes/, ...): the actual src_dir is taken from the
   PlatformIO configuration for the environment currently being built.
 
-ND8 (correctif 1/3): the discovery layer now accepts an optional
-`machine_type` parameter. When provided, files under
-`core/config/machines/<other_type>/` are excluded from the result. The
-filter is applied AFTER the file walk (single implementation) and BEFORE
-parsing — so the canonization, diffusion (ND2) and generation all
-operate on the already-filtered pool. The filter runs ONCE for the
-whole node (not per board) because the orchestrator
-(combus_scons_hook._generate_combus_action) calls discover_and_parse()
-exactly once before ND2 diffusion.
+Machine type: the discovery takes an optional `machine_type`.  Files
+under `core/config/machines/<other_type>/` are excluded from the result
+(without machine type, every machine type profile is).  The filter is
+applied AFTER the file walk (single implementation) and BEFORE parsing —
+so the canonization, the diffusion and the generation all operate on the
+already-filtered pool.  It runs ONCE for the whole node (not per board):
+the orchestrator (combus_scons_hook._generate_combus_action) calls
+discover_and_parse() exactly once, before the diffusion.
+
+Couplers: a coupler (core/config/couplers/<name>/) is never discovered;
+links.py reads the couplers the node declares.
 
 Usage as PlatformIO extra_script:
     extra_scripts = pre:scripts/combus_builder.py
@@ -149,15 +151,13 @@ def discover_config_files(
       machine_type: optional active machine type (e.g. "dumper_truck").
                     When provided, files under
                     core/config/machines/<other_type>/ are excluded from
-                    the result. When None (default), no machine-type
-                    filtering is applied (legacy behaviour — non-machine
-                    builds do not need the exclusion).
+                    the result. When None (default), every machine type
+                    profile is excluded (see filter_files_by_machine_type).
 
-    ND8 (correctif 1/3): the machine-type filter is applied HERE — after
-    the file walk, before the returned list is consumed by the rest of
-    the pipeline. This guarantees the filter runs ONCE per node (not per
-    board) and the diffusion (ND2) operates on the already-filtered
-    pool, exactly as the spec requires.
+    The machine-type filter is applied HERE — after the file walk, before
+    the returned list is consumed by the rest of the pipeline.  The filter
+    thus runs ONCE per node (not per board) and the diffusion operates on
+    the already-filtered pool.
     """
     if not buildroot.is_dir():
         raise FileNotFoundError(
@@ -174,17 +174,17 @@ def discover_config_files(
             if ext in CONFIG_EXTENSIONS:
                 found.append(Path(dirpath) / name)
 
-    # ND8: machine-type filter. Done AFTER the walk so we keep a single
+    # Machine-type filter. Done AFTER the walk so we keep a single
     # implementation (this is the only place where the full set of files
     # is materialised). The helper is pure and unit-tested separately.
-    # Always filtered (link rework 3.1): without machine type, no machine
-    # type profile is kept either (see filter_files_by_machine_type).
+    # Always filtered: without machine type, no machine type profile is
+    # kept either (see filter_files_by_machine_type).
     # Local import to keep parser.py importable even if the machine_type
     # module is in flux.
     from .machine_type import filter_files_by_machine_type
     found = filter_files_by_machine_type(found, machine_type)
 
-    # Link rework 3.4a: a coupler (core/config/couplers/<name>/) is read apart,
+    # A coupler (core/config/couplers/<name>/) is read apart,
     # only for the couplers declared by the node (links.load_coupler_channels),
     # never by discovery.
     found = [p for p in found if not _is_coupler_path(p)]
@@ -255,7 +255,7 @@ def parse_yaml_file(path: Path) -> tuple[Path, str, Any]:
             f"top-level YAML must be a mapping, got {type(data).__name__}",
         )
 
-    # Link rework 3.2a: the default value of a channel is its safe value (sent
+    # The default value of a channel is its safe value (sent
     # until the writer has written, taken back when its source is lost). The
     # implicit default of the generator is not always safe: it must be written.
     if type_label == "channel_def":
@@ -274,7 +274,7 @@ def parse_yaml_file(path: Path) -> tuple[Path, str, Any]:
 
 
 def _check_fault_value(path: Path, ch: dict) -> None:
-    """Link rework S3a: the true safe value of a failsafe alarm is declared `fault`.
+    """The true safe value of a failsafe alarm is declared `fault`.
 
     A digital channel of the theme `failsafe` (the failsafe group, "true =
     fault") must declare `value: fault`; `fault` outside that group is an error;
@@ -293,7 +293,7 @@ def _check_fault_value(path: Path, ch: dict) -> None:
         raise ParseError(path, f"channel {cid!r}: `value: fault` belongs to the theme `failsafe` only")
 
 
-# Link rework S3: an analog channel not at neutral is a warning until the chains
+# An analog channel not at neutral is a warning until the chains
 # of the real channels are safe at neutral; then switch to True (error).
 NEUTRAL_VALUE_IS_ERROR = False
 
@@ -302,7 +302,7 @@ _neutral_warned: set[tuple[str, str]] = set()
 
 
 def _check_neutral_value(path: Path, ch: dict) -> None:
-    """Link rework S3: the safe value of an analog channel is `CbusNeutral`, on every scope.
+    """The safe value of an analog channel is `CbusNeutral`, on every scope.
 
     Another value is reported once per channel on stderr, without breaking the
     build (`NEUTRAL_VALUE_IS_ERROR` turns it into an error): the build log is
@@ -344,18 +344,18 @@ def discover_and_parse(
     machine_type: str | None = None,
 ) -> tuple[Path, list[Path], list[tuple[Path, str, Any]]]:
     """
-    A3 pipeline: resolve buildroot, discover config files, parse them.
+    Discovery pipeline: resolve buildroot, discover config files, parse them.
 
     Returns (buildroot, discovered_files, parsed_data).
     `parsed_data` is a list of (path, type_label, raw_dict) tuples in
     discovery order. No sorting, no filtering, no canonization.
 
-    ND8 (correctif 1/3): the optional `machine_type` parameter is
-    forwarded to discover_config_files(). When provided, files under
-    core/config/machines/<other_type>/ are excluded before parsing.
+    The optional `machine_type` parameter is forwarded to
+    discover_config_files(): files under core/config/machines/<other_type>/
+    are excluded before parsing.
 
     This filter is applied ONCE for the whole node (the orchestrator
-    calls discover_and_parse() exactly once before ND2 diffusion). See
+    calls discover_and_parse() exactly once, before the diffusion). See
     combus_scons_hook._generate_combus_action for the call site.
     """
     buildroot = resolve_buildroot(env, project_root)
@@ -378,7 +378,7 @@ def _print_report(buildroot: Path, files: list[Path],
 
 
 def main(env: Any) -> int:
-    """A3 entry point usable from a PlatformIO extra_script."""
+    """Discovery entry point usable from a PlatformIO extra_script."""
     try:
         buildroot, files, parsed = discover_and_parse(env)
     except ParseError as e:

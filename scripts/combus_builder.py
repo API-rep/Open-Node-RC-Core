@@ -99,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     # 2. Discover + parse (machine type of the context, like the hook: without
-    #    type, no machine type profile is loaded — link rework 3.1).
+    #    type, no machine type profile is loaded).
     from scripts.combus_builder.machine_type import detect_machine_type
     try:
         _, _, parsed = discover_and_parse(project_root=project_root,

@@ -227,7 +227,7 @@ def _load_generate_per_board():
     """
     hook_path = Path(REPO_ROOT) / "scripts" / "combus_scons_hook.py"
     hook_source = hook_path.read_text(encoding="utf-8")
-    start_marker = "# =============================================================================\n# ND1: per-board generation"
+    start_marker = "# =============================================================================\n# Per-board generation"
     end_marker = "# =============================================================================\n# The SCons action"
     start_idx = hook_source.index(start_marker)
     end_idx = hook_source.index(end_marker)

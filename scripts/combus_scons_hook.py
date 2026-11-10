@@ -1,26 +1,25 @@
 #!/usr/bin/env python3
 """
-combus_scons_hook.py — A12 implementation: PlatformIO extra_script hook.
+combus_scons_hook.py — the PlatformIO extra_script hook of the ComBus builder.
 
 This script is loaded by PlatformIO via `extra_scripts = pre:...` in
 platformio.ini. It runs ONCE, BEFORE SCons resolves `build_src_filter`.
 
-Pipeline (A16 refactor — deferred SCons task):
+Pipeline (deferred SCons task):
   1. Eagerly add the `combus_generated/` directory to CPPPATH and
      `combus.cpp` to PIOBUILDFILES so SCons picks them up when the
      source list is resolved.
   2. Register a SINGLE SCons `env.Command()` that produces all the
      `combus_generated/*` artefacts LAZILY — at build time, not at
-     hook-registration time. This is the key change versus the
-     previous A12/A15 approach which called the generator eagerly.
+     hook-registration time.
 
 The SCons task is invalidated when:
   - any of the `*.cb` / `*.cbch` source files change, AND/OR
   - any of the configuration values listed in `varlist` (CPPDEFINES,
     CPPPATH, LIBDEPS, buildroot) change.
 
-This solves the two failure modes the previous eager-hook approach
-suffered from:
+This avoids the two failure modes of a generator called eagerly by the
+hook:
   - `pre:`  → CPPDEFINES is empty (env not yet built)
   - `post:` → PIOBUILDFILES is frozen (sources already resolved)
 
@@ -36,7 +35,7 @@ Usage in platformio.ini:
     extra_scripts =
         pre:scripts/combus_scons_hook.py
 
-Failure policy (revision 7, 2026-08-25):
+Failure policy:
   - Any error in the action is fatal (return non-zero from the action).
   - Anti-stale: artefacts are written into a sibling staging directory;
     only after a completeness check on the staging does the hook publish
@@ -48,33 +47,26 @@ Failure policy (revision 7, 2026-08-25):
     missing at action time, the build fails loudly (no silent
     generation with an incomplete context).
 
-ND1 (multiboard) — 2026-09-13:
+Node mode (several boards):
   - When the current PlatformIO env is a sub-env "board" of a node
     (e.g. [env:volvo_A60H_bruder_mainboard] is a sub-env of the
     mother env [env:volvo_A60H_bruder]), the hook:
       1. Detects the node hierarchy via parse_env_hierarchy().
       2. Resolves the BuildContext of every sister sub-env via
          resolve_build_context_static() (no subprocess, no compile).
-      3. Calls generate() once per board with a per-board
-         filename_prefix, producing per-board artefacts
-         (combus_<prefix>_ids.h, combus_<prefix>.h, combus_<prefix>.cpp,
-          combus_system_<prefix>_ids.h, combus_base_<prefix>_ids.h,
-          combus_<prefix>_md5.h, combus_system_<prefix>_md5.h,
-          combus_base_<prefix>_md5.h).
-         combus_wire_common.h is shared (not prefixed).
-  - Legacy single-board mode (no sister sub-env detected) is
-    STRICTLY UNCHANGED: same artefacts, same names, same behaviour.
-
-ND1 fix (2026-09-13, post-review): the per-board loop now correctly
-resolves the mother env's BuildContext. When the current build is a
-sub-env (e.g. volvo_A60H_bruder_mainboard), the unprefixed artefacts
-(combus.h, combus.cpp, combus_ids.h, ...) must reflect the MOTHER
-env's defines, not the sub-env's. The previous code reused the live
-`ctx` (which is the sub-env's) for the mother entry, causing silent
-drift of the unprefixed artefacts depending on which sub-env was
-built last. The fix: when board_id is None (mother entry), use the
-live `ctx` only if pio_env == node.mother_env; otherwise resolve the
-mother env statically via resolve_build_context_static().
+      3. Diffuses the SYSTEM channels across the boards
+         (diffusion.py).
+      4. Calls generate() once per board.  The board being compiled
+         gets the unprefixed names; every other board gets per-board
+         artefacts (combus_<prefix>_ids.h, combus_<prefix>.h,
+         combus_<prefix>.cpp, combus_system_<prefix>_ids.h,
+         combus_base_<prefix>_ids.h, combus_<prefix>_md5.h,
+         combus_system_<prefix>_md5.h, combus_base_<prefix>_md5.h,
+         combus_peer_links_<prefix>.h).  combus_wire_common.h is shared
+         (not prefixed).  The mother env is a meta env (shared
+         build_flags only): it generates nothing.
+  - Single-board mode (no sister sub-env detected): the unprefixed
+    artefacts only.
 """
 from __future__ import annotations
 
@@ -103,22 +95,22 @@ if str(_REPO_ROOT) not in sys.path:
 # Expected artefacts (the contract that this hook guarantees)
 # =============================================================================
 
-# Legacy single-board artefacts (ND1: unchanged for backward compat).
+# Single-board artefacts (also the unprefixed ones of node mode).
 EXPECTED_ARTIFACTS = (
     # combus (full view) — still needs .h/.cpp because it's the runtime
     # bus instance.
     "combus.h",
     "combus.cpp",
     "combus_ids.h",
-    # combus_system / combus_base: ids only (Phase 2).
+    # combus_system / combus_base: ids only.
     "combus_system_ids.h",
     "combus_base_ids.h",
-    # MD5 artefacts (A7). All 3 views are hashed.
+    # MD5 artefacts. All 3 views are hashed.
     "combus_system_md5.h",
     "combus_base_md5.h",
     "combus_md5.h",
     "combus_wire_common.h",
-    # Links between nodes (link rework 3.1): always written, empty without peer.
+    # Links between nodes: always written, empty without peer.
     "combus_peer_links.h",
 )
 
@@ -130,7 +122,7 @@ def _missing_artefacts(out_dir: Path, expected: list[str]) -> list[str]:
 
 
 # =============================================================================
-# ND1: platformio.ini env list + per-node expected artefacts
+# platformio.ini env list + per-node expected artefacts
 # =============================================================================
 
 # Regex matching `[env:NAME]` section headers in platformio.ini.
@@ -142,7 +134,7 @@ _RE_ENV_SECTION = re.compile(r"^\[env:([A-Za-z0-9_\-]+)\]\s*$")
 def _read_all_env_names(project_dir: Path) -> list[str]:
     """Parse platformio.ini and return the list of `[env:NAME]` names.
 
-    Used by ND1 to feed parse_env_hierarchy(). The parser is a simple
+    Used to feed parse_env_hierarchy(). The parser is a simple
     line-by-line regex — it does NOT try to evaluate `extends=`,
     `${...}` interpolation, or any other PlatformIO feature. It only
     needs the raw section names, which are syntactically trivial.
@@ -204,7 +196,7 @@ def _expected_artifacts_for_node(
 ) -> list[str]:
     """Return the list of expected artefacts for the current build.
 
-    Legacy mode (is_node=False): returns EXPECTED_ARTIFACTS unchanged.
+    Single-board mode (is_node=False): returns EXPECTED_ARTIFACTS unchanged.
 
     Node mode (is_node=True): returns the unprefixed artefacts
     (EXPECTED_ARTIFACTS, generated for the board whose env is
@@ -360,7 +352,7 @@ def _discover_builder_sources(project_dir: Path) -> list[str]:
 
 
 # =============================================================================
-# ND1: per-board generation (extracted for testability)
+# Per-board generation (extracted for testability)
 # =============================================================================
 
 class _BoardGenerationError(Exception):
@@ -418,11 +410,11 @@ def _generate_per_board(
                             env actually being built.
       project_dir:          The PlatformIO project root.
       canonical_definitions: The canonised channel definitions
-                            (board-specific, after ND2 diffusion).
+                            (board-specific, after the diffusion).
       staging_dir:          Where to write the artefacts.
       board_ctx:            Optional pre-resolved BuildContext. If
                             provided, skip the internal resolution
-                            (used by ND2 to avoid resolving the same
+                            (used by the node mode to avoid resolving the same
                             board twice — once for diffusion, once
                             for generation).
       unprefixed:           Force an empty filename prefix (node mode:
@@ -451,7 +443,7 @@ def _generate_per_board(
 
     # --- Resolve the BuildContext for this board -----------------------
     if board_ctx is not None:
-        # Pre-resolved by the caller (ND2: resolved once for diffusion,
+        # Pre-resolved by the caller (resolved once for the diffusion,
         # reused here for generation).
         prefix = "" if board_id is None else board_id
     elif board_id is None:
@@ -483,8 +475,8 @@ def _generate_per_board(
         prefix = ""
     else:
         # Sister sub-env: resolve statically (no subprocess, no
-        # compile). This is the parallel, deliberately lighter path
-        # introduced by ND1.
+        # compile): the parallel, deliberately lighter path of
+        # node_context.py.
         if project_dir is None:
             raise _BoardGenerationError(
                 f"cannot resolve board env {board_env_name!r} "
@@ -546,11 +538,11 @@ def _generate_combus_action(target, source, env):
       - generator / parser / canon errors
       - atomic-publish failure
 
-    ND1 (multiboard):
+    Node mode (several boards):
       - Detects whether the current env is a sub-env "board" of a node.
       - In node mode, generates per-board artefacts (one set per
         board_id, with a per-board filename_prefix).
-      - In legacy mode, behaviour is strictly identical to pre-ND1.
+      - In single-board mode, the unprefixed artefacts only.
     """
     print("[combus_scons_action] running combus builder…")
 
@@ -559,8 +551,8 @@ def _generate_combus_action(target, source, env):
     # --- 1. Hard fail on empty CPPDEFINES --------------------------------
     # By the time the action runs, the env is fully built and CPPDEFINES
     # is populated. If it isn't, the context is genuinely incomplete and
-    # the previous A12/A15 fallback (GetProjectOption("build_flags"))
-    # would be hiding a real misconfiguration.
+    # a fallback on GetProjectOption("build_flags") would be hiding a real
+    # misconfiguration.
     cppdefines = env.get("CPPDEFINES", [])
     if not cppdefines:
         sys.stderr.write(
@@ -570,7 +562,7 @@ def _generate_combus_action(target, source, env):
         return 1
 
     # --- 2. Hard fail unless exactly one category is set --------------------
-    # Link rework 3.5: the category of the node (IS_MACHINE or IS_REMOTE),
+    # The category of the node (IS_MACHINE or IS_REMOTE),
     # checked against the sides of its couplers by links.node_category().
     # NOTE: IS_MAINBOARD and IS_EXT_BOARD are DEPRECATED (the "board role"
     # axis no longer exists — every board is an implicit BOARD, owner of
@@ -644,14 +636,14 @@ def _generate_combus_action(target, source, env):
         f"{len(ctx.defines_with_value)} valued)"
     )
 
-    # --- 4b. ND8: detect machine type for the .cb discovery filter ------
-    # The machine type is derived from the LIVE BuildContext. In legacy
+    # --- 4b. Detect machine type for the .cb discovery filter ----------
+    # The machine type is derived from the LIVE BuildContext. In
     # single-board mode this is the only context. In node mode the
     # boards of a node all share the same machine type (verified later
     # at step 6c); the live ctx is either the mother's (when
     # pio_env == node.mother_env) or a sub-env's, and in both cases
     # the MACHINE_TYPE_* flag is identical across boards of the same
-    # node (ND1 invariant). Boards that resolve to a different
+    # node. Boards that resolve to a different
     # machine type are detected at step 6c below and raise a build
     # error there.
     try:
@@ -666,7 +658,7 @@ def _generate_combus_action(target, source, env):
             f"core/config/machines/<other>/)"
         )
 
-    # --- 5. Discover + parse (ND8: with machine_type filter) ------------
+    # --- 5. Discover + parse (with machine_type filter) -----------------
     try:
         _, _, parsed = discover_and_parse(env=env, machine_type=machine_type)
     except ParseError as e:
@@ -683,7 +675,7 @@ def _generate_combus_action(target, source, env):
         )
         return 1
 
-    # --- 6b. ND1: detect node mode ---------------------------------------
+    # --- 6b. Detect node mode --------------------------------------------
     # parse_env_hierarchy() is a pure function over the env name and
     # the list of env names declared in platformio.ini. It does NOT
     # touch the filesystem beyond reading platformio.ini (via
@@ -709,13 +701,13 @@ def _generate_combus_action(target, source, env):
             f"boards={[b[0] for b in boards]}"
         )
 
-    # --- 6c. ND8: verify all boards of a node agree on machine type ------
+    # --- 6c. Verify all boards of a node agree on machine type -----------
     # In node mode, every board's BuildContext must resolve to the
     # same machine type as the live ctx (or to None). If any board
     # disagrees, the build fails loudly. This check is what makes the
     # discovery filter safe: a divergence detected here means two
     # boards of the node would have received different .cb pools, so
-    # the cross-board diffusion (ND2) would mix incompatible
+    # the cross-board diffusion would mix incompatible
     # contracts.
     if node.is_node and machine_type is not None:
         try:
@@ -768,7 +760,7 @@ def _generate_combus_action(target, source, env):
         shutil.rmtree(staging_dir)
 
     if not node.is_node:
-        # --- 7a. Legacy single-board mode (ND1: strictly unchanged) -----
+        # --- 7a. Single-board mode ---------------------------------------
         try:
             sel = generate(canon.canonical_definitions, ctx, staging_dir,
                            project_version=project_version)
@@ -794,8 +786,8 @@ def _generate_combus_action(target, source, env):
             f"-> {staging_dir}"
         )
     else:
-        # --- 7b. ND1+ND2 node mode: one generate() call per board -------
-        # ND2: SYSTEM channels are diffused across boards BEFORE
+        # --- 7b. Node mode: one generate() call per board ---------------
+        # SYSTEM channels are diffused across boards BEFORE
         # canonize(). This requires resolving every board's
         # BuildContext first (so diffusion knows which declarations
         # are active for which board), then calling
@@ -875,7 +867,7 @@ def _generate_combus_action(target, source, env):
             is_node=True,
         )
 
-        # --- 7b.1b. Link rework 2.4: one board connected to other nodes ---
+        # --- 7b.1b. One board connected to other nodes ---
         from scripts.combus_builder.generator import GeneratorError, check_single_connected_board
         try:
             check_single_connected_board(node_boards_ctx)
@@ -897,8 +889,7 @@ def _generate_combus_action(target, source, env):
             return 1
 
         # --- 7b.3. Per-board canonize() + generate() ---
-        # ND2 fix (2026-10-12, "mere = board fantome"): skip the mother
-        # env (board_id=None) in the generation loop. The mother is a
+        # Skip the mother env (board_id=None) in the generation loop. The mother is a
         # meta env (shared build_flags only), not a runtime board, so
         # it does not produce combus artifacts. The diffusion step
         # (7b.2) also excludes it from the resolved list.
@@ -985,7 +976,7 @@ def _generate_combus_action(target, source, env):
 def _skip_action(target, source, env):
     """No-op action for COMBUS_BUILDER_SKIP=1 (artefacts must already be present)."""
     out_dir = _default_out_dir(env)
-    # In skip mode we only check the legacy artefacts (the ones the
+    # In skip mode we only check the unprefixed artefacts (the ones the
     # rest of the codebase includes unconditionally). Per-board
     # artefacts are not required for the build to succeed in skip mode
     # — they are only needed when the corresponding board is actually
@@ -1070,7 +1061,7 @@ def _register_deferred_task(env) -> None:
         env["COMBUS_REPO_ROOT"] = str(Path(project_dir).resolve())
 
     # --- Build the targets ----------------------------------------------
-    # ND1: in node mode, the targets list is extended with the per-board
+    # In node mode, the targets list is extended with the per-board
     # artefacts. We compute it eagerly here (at registration time) so
     # SCons knows the full set of expected outputs up front. The
     # detection itself is cheap (a regex over platformio.ini).
@@ -1098,7 +1089,7 @@ def _register_deferred_task(env) -> None:
                 ])
     except Exception:
         # If node detection fails at registration time, fall back to
-        # legacy targets. The action will re-detect and fail loudly if
+        # the single-board targets. The action will re-detect and fail loudly if
         # the situation is genuinely broken.
         pass
 

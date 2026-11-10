@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-combus_builder/node_context.py — ND1: formalise the "node" dimension.
+combus_builder/node_context.py — the "node" dimension.
 
-Scope (ND1 only):
+Scope:
   - Detect whether the current PlatformIO env is a sub-env "board" of a
     node (e.g. [env:volvo_A60H_bruder_mainboard] is a sub-env of the
     mother env [env:volvo_A60H_bruder]).
@@ -11,16 +11,11 @@ Scope (ND1 only):
   - Provide a NodeContext dataclass that the orchestrator (combus_scons_hook)
     consumes to drive per-board generation.
 
-Out of scope (ND1):
-  - Channel diffusion between boards (ND2).
-  - Direction conflict detection (ND3).
-  - MD5 ONE_WAY canonisation (ND7).
-  - merge_channels() in canon/channels.py is intentionally untouched:
-    a duplicated id between two .cb files of different boards still
-    raises ChannelConflictError. This is a transient behaviour, not a
-    bug of ND1.
+Out of scope:
+  - Channel diffusion between boards (diffusion.py).
+  - MD5 ONE_WAY canonisation (md5.py).
 
-Detection rule (ND1):
+Detection rule:
   - An env_name is a sub-env "board" of a node iff there exists another
     env in `all_env_names` whose name is a strict prefix of env_name
     followed by '_' (i.e. `<mother>_<board_id>`).
@@ -30,9 +25,9 @@ Detection rule (ND1):
     sub-env `<env_name>_<board_id>` in `all_env_names`), it is also
     treated as a node (the user is building the mother directly).
   - If neither condition holds, env_name is treated as a "base" env
-    (legacy single-board mode, board_id = None).
+    (single-board mode, board_id = None).
 
-BuildContext resolution (ND1):
+BuildContext resolution:
   - resolve_build_context_static() uses
     platformio.project.config.ProjectConfig to read the resolved
     build_flags of env_name (extends= and ${...} interpolation are
@@ -42,7 +37,7 @@ BuildContext resolution (ND1):
     parsing logic.
   - acquire_build_context() in flags.py is NOT touched: it remains the
     single source of truth for the env actually being built (the
-    mono-board / legacy case). resolve_build_context_static is a
+    single-board case). resolve_build_context_static is a
     parallel, deliberately lighter path used only for sister boards
     that we do NOT compile in this process.
 """
@@ -79,15 +74,15 @@ class NodeContext:
     The "node" view of the current PlatformIO build.
 
     mother_env : name of the mother env (e.g. "volvo_A60H_bruder").
-                 Always set, even in legacy single-board mode (in which
+                 Always set, even in single-board mode (in which
                  case it equals env_name).
-    boards     : dict[board_id -> BuildContext]. In legacy mode, contains
-                 a single entry with board_id = None. In node mode,
-                 contains one entry per detected sub-env (board_id is
-                 the suffix after '<mother>_', e.g. "mainboard",
-                 "soundboard").
+    boards     : dict[board_id -> BuildContext]. In single-board mode,
+                 contains a single entry with board_id = None. In node
+                 mode, contains one entry per detected sub-env (board_id
+                 is the suffix after '<mother>_', e.g. "mainboard",
+                 "extboard").
     is_node    : True iff at least one sister sub-env was detected.
-                 False in legacy single-board mode.
+                 False in single-board mode.
     """
 
     mother_env: str
@@ -95,7 +90,7 @@ class NodeContext:
     is_node: bool = False
 
     def board_ids(self) -> list[str | None]:
-        """Return the list of board_ids (None for legacy)."""
+        """Return the list of board_ids (None in single-board mode)."""
         return list(self.boards.keys())
 
 
@@ -121,7 +116,7 @@ def parse_env_hierarchy(
         also treated as a node (the user is building the mother
         directly).
       - If neither condition holds, env_name is treated as a "base"
-        env (legacy single-board mode, board_id = None).
+        env (single-board mode, board_id = None).
 
     Args:
       env_name:      the PlatformIO env currently being built.
@@ -130,7 +125,7 @@ def parse_env_hierarchy(
 
     Returns:
       NodeContext with:
-        - mother_env = env_name (legacy) or the detected mother.
+        - mother_env = env_name (single board) or the detected mother.
         - boards     = {} (caller is expected to populate it via
                        resolve_build_context_static()).
         - is_node    = True iff at least one sister sub-env was found.
@@ -164,7 +159,7 @@ def parse_env_hierarchy(
             for other in all_env_names
         )
         if not has_sub_envs:
-            # Legacy single-board mode.
+            # Single-board mode.
             return NodeContext(
                 mother_env=env_name,
                 boards={},
@@ -206,7 +201,7 @@ def _load_project_config(project_root: Path):
     PlatformIO is an optional dependency for combus_builder: the
     standalone CLI mode (combus_builder.py) does not require it, and
     the unit tests in tests/ do not require it. We only need it for
-    the static resolution path used by ND1.
+    the static resolution path of the sister boards.
 
     Raises NodeContextError if PlatformIO is not importable.
     """
@@ -227,12 +222,10 @@ def _load_project_config(project_root: Path):
 def _items_to_dict(items_raw: Any) -> dict[str, Any]:
     """Normalise the output of ProjectConfig.items(env=...) to a dict.
 
-    Why this function exists (ND1 fix, 2026-09-13):
-      The original implementation called `config.options(env=env_name)`,
-      which in PlatformIO 6.x returns a list of bare key names (e.g.
-      `['build_flags', 'platform']`) — NOT a dict and NOT a list of
-      (key, value) tuples. Calling `.get('build_flags', '')` on that
-      list raised `AttributeError: 'list' object has no attribute 'get'`.
+    Why this function exists:
+      `config.options(env=env_name)` returns, in PlatformIO 6.x, a list
+      of bare key names (e.g. `['build_flags', 'platform']`) — NOT a dict
+      and NOT a list of (key, value) tuples.
 
       The correct API for retrieving resolved (key, value) pairs is
       `config.items(env=env_name)`, which returns a list of
@@ -283,7 +276,7 @@ def resolve_build_context_static(
       - It does NOT compile anything.
 
     It is used only for sister boards that we do NOT compile in this
-    process (ND1). The env actually being built still goes through
+    process. The env actually being built still goes through
     acquire_build_context() in flags.py — that path is untouched.
 
     Args:
@@ -359,7 +352,7 @@ def resolve_build_context_static(
     # SCons env — the canonical PlatformIO convention is that src_dir
     # is <project_root>/src unless explicitly overridden in
     # platformio.ini (which we don't try to introspect here; the
-    # default is sufficient for ND1's purpose).
+    # default is sufficient for the sister boards).
     buildroot = resolve_buildroot(env=None, project_root=project_root)
 
     return BuildContext(

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-combus_builder_dump_ctx.py — A4 integration helper.
+combus_builder_dump_ctx.py — integration helper of flags.py (build context).
 
 PlatformIO `post:` hook. Run AFTER a real build to dump the
 acquired BuildContext (raw env["CPPDEFINES"], no override) into

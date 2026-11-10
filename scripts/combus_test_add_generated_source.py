@@ -1,23 +1,22 @@
 #!/usr/bin/env python3
 """
-combus_test_add_generated_source.py — Phase 3 / A13 helper.
+combus_test_add_generated_source.py — test helper of the ComBus builder.
 
 PlatformIO extra_script that adds the generated `combus_generated/combus.cpp`
-to the test environment's source list. This is required for the C++ runtime
-identity tests (Group C of test_combus_loopback.cpp) which reference
-`AnalogComBusArray` and `DigitalComBusArray` — those symbols are defined
-in the generated combus.cpp, not in any static .cpp file in the repo.
+to the test environment's source list. The test suites reference
+`AnalogComBusArray` and `DigitalComBusArray` (e.g. Group C of
+test_combus_loopback.cpp) — those symbols are defined in the generated
+combus.cpp, not in any static .cpp file in the repo.
 
 The combus_scons_hook.py (registered globally via [env] in platformio.ini)
 already generates the artefacts and adds the directory to CPPPATH. This
 script is a SECONDARY hook that ONLY adds the generated .cpp as a build
-source. It is registered ONLY for the test_combus_loopback env (via
+source. It is registered ONLY for the test envs (via
 `extra_scripts = pre:scripts/combus_test_add_generated_source.py` in
-that env's section).
+their sections).
 
 Why a separate script (not a modification of combus_scons_hook.py)?
-  - The hook is shared across all envs (machines, sound_node, remotes,
-    test). Adding the generated .cpp as a source there would force
+  - The hook is shared across all envs (machines, remotes, test). Adding the generated .cpp as a source there would force
     every env to compile it, which is already the case for the
     non-test envs (they include combus.cpp via their own build_src_filter
     or via the runtime). For the test env, we want to opt in explicitly.
