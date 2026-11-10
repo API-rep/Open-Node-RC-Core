@@ -18,7 +18,7 @@
 #include <remotes/config/driven_machines.h>
 
 
-    // Caller-owned storage of the links, one slot per driven machine.
+	// Caller-owned storage of the links, one slot per driven machine.
 static UartCtx        s_uart[kDrivenMachineCount];
 static CombusTxState  s_tx[kDrivenMachineCount];
 static CombusRxState  s_rx[kDrivenMachineCount];
@@ -30,33 +30,33 @@ static_assert(kDrivenMachineCount == 1u, "the embryo drives one machine: several
 
 uint8_t remote_links_init( void )
 {
-    uart_com_register_pool(s_uart, kDrivenMachineCount);
+	uart_com_register_pool(s_uart, kDrivenMachineCount);
 
-    ComDevMap maps[kDrivenMachineCount];
-    for (uint8_t i = 0u; i < kDrivenMachineCount; ++i) { maps[i] = kDrivenMachines[i].link; }
+	ComDevMap maps[kDrivenMachineCount];
+	for (uint8_t i = 0u; i < kDrivenMachineCount; ++i) { maps[i] = kDrivenMachines[i].link; }
 
-    const ComLinksStorage storage = { s_tx, s_rx, s_runtime, s_links };
-    if (!combus_links_init(maps, kDrivenMachineCount, storage, nullptr, kDrivenMachines[0].bus)) {
-        sys_log_err("[REMOTE] links not started\n");
-        return 0u;
-    }
-    sys_log_info("[REMOTE] driving %u machine(s): %s\n", (unsigned)kDrivenMachineCount, kDrivenMachines[0].name);
-    return kDrivenMachineCount;
+	const ComLinksStorage storage = { s_tx, s_rx, s_runtime, s_links };
+	if (!combus_links_init(maps, kDrivenMachineCount, storage, nullptr, kDrivenMachines[0].bus)) {
+		sys_log_err("[REMOTE] links not started\n");
+		return 0u;
+	}
+	sys_log_info("[REMOTE] driving %u machine(s): %s\n", (unsigned)kDrivenMachineCount, kDrivenMachines[0].name);
+	return kDrivenMachineCount;
 }
 
 
 ComLinkRuntime* remote_links_runtime( uint8_t idx )
 {
-    return (idx < kDrivenMachineCount) ? &s_runtime[idx] : nullptr;
+	return (idx < kDrivenMachineCount) ? &s_runtime[idx] : nullptr;
 }
 
 
 void remote_links_update( void )
 {
-    ComBus& bus = *kDrivenMachines[0].bus;
-    combus_rx_update();
-    combus_links_update(bus);
-    combus_tx_update(&bus);
+	ComBus& bus = *kDrivenMachines[0].bus;
+	combus_rx_update();
+	combus_links_update(bus);
+	combus_tx_update(&bus);
 }
 
 // EOF remote_links.cpp

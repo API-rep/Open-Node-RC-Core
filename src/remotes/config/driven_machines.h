@@ -25,8 +25,8 @@ inline constexpr ComProtocolCfg kComProtoMachine = { 115200u, 50u, 250u, 3000u }
 
 /// The link to a machine: between nodes, both ways, its own table (no pairing).
 inline constexpr ComDev kComDevMachine = {
-    "machine", LinkScope::INTER_NODE, LinkType::BIDIRECTIONAL,
-    &kComProtoMachine, LinkActivation::ALWAYS, nullptr, &combus::peer::kRemoteLink
+	"machine", LinkScope::INTER_NODE, LinkType::BIDIRECTIONAL,
+	&kComProtoMachine, LinkActivation::ALWAYS, nullptr, &combus::peer::kRemoteLink
 };
 
 /// The port of the remote board to the machine (UART2, GPIO 17 TX / 16 RX for now).
@@ -38,14 +38,14 @@ inline const ComPort kPortMachine = ComPort::makeUart("machine", { 2, 17, 16, 11
  */
 
 struct DrivenMachine {
-    const char*    name;   ///< for the logs (the machine type)
-    ComBus*        bus;    ///< its ComBus (one per machine type, step 4.1)
-    ComDevMap      link;   ///< the link to it
+	const char*    name;   ///< for the logs (the machine type)
+	ComBus*        bus;    ///< its ComBus (one per machine type, step 4.1)
+	ComDevMap      link;   ///< the link to it
 };
 
 /// The driven machines (the embryo: one).
 inline const DrivenMachine kDrivenMachines[] = {
-    { "dumper_truck", &comBus, { &kComDevMachine, &kPortMachine, LinkEnd::TX_RX } },
+	{ "dumper_truck", &comBus, { &kComDevMachine, &kPortMachine, LinkEnd::TX_RX } },
 };
 
 inline constexpr uint8_t kDrivenMachineCount = sizeof(kDrivenMachines) / sizeof(kDrivenMachines[0]);

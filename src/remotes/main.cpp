@@ -14,13 +14,13 @@
 
 
 void setup() {
-    Serial.begin(115200);
-    remote_links_init();
+	Serial.begin(115200);
+	remote_links_init();
 }
 
 void loop() {
-    remote_links_update();
-    delay(2);
+	remote_links_update();
+	delay(2);
 }
 
 // EOF main.cpp
