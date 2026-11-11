@@ -40,7 +40,7 @@ static void cbWrite(ComBus& bus, const ChanOpt& ch, uint16_t value)
     if (std::holds_alternative<AnalogComBusID>(*ch)) {
           // Raw, no offset of the logical zero.
           // TODO(Simulation chain): whether the processors work on the logical value.
-        combus_set_raw_analog(bus, std::get<AnalogComBusID>(*ch), value, ChanLayer::BOARD);
+        combus_set_raw_analog(bus, std::get<AnalogComBusID>(*ch), value);
     } else {
         combus_set_digital(bus, std::get<DigitalComBusID>(*ch), value != 0u);
     }

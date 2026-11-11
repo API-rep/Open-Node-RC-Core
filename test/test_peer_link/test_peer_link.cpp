@@ -1459,32 +1459,32 @@ void test_zero_row2_read_logical(void) {
 
 
 void test_zero_row3_write_logical(void) {
-    TEST_ASSERT_TRUE(combus_set_analog(bus, kGearId, 3, ChanLayer::BASE));
+    TEST_ASSERT_TRUE(combus_set_analog(bus, kGearId, 3));
     TEST_ASSERT_EQUAL_UINT16(CbusNeutral + 3u, rawOf(kGearId));
-    TEST_ASSERT_TRUE(combus_set_analog(bus, kGearId, -1, ChanLayer::BASE));
+    TEST_ASSERT_TRUE(combus_set_analog(bus, kGearId, -1));
     TEST_ASSERT_EQUAL_UINT16(CbusNeutral - 1u, rawOf(kGearId));
 }
 
 
 void test_zero_row4_write_is_bounded(void) {
-    combus_set_analog(bus, kGearId, 70000, ChanLayer::BASE);
+    combus_set_analog(bus, kGearId, 70000);
     TEST_ASSERT_EQUAL_UINT16(CbusMaxVal, rawOf(kGearId));
-    combus_set_analog(bus, kGearId, -40000, ChanLayer::BASE);
+    combus_set_analog(bus, kGearId, -40000);
     TEST_ASSERT_EQUAL_UINT16(0u, rawOf(kGearId));
 }
 
 
 void test_zero_row5_channel_without_zero_at_unchanged(void) {
-    combus_set_analog(bus, kBrakeId, 111, ChanLayer::BASE);
+    combus_set_analog(bus, kBrakeId, 111);
     TEST_ASSERT_EQUAL_UINT16(111u, rawOf(kBrakeId));
     TEST_ASSERT_EQUAL_INT32(111, combus_get_analog(bus, kBrakeId));
-    combus_set_analog(bus, kBrakeId, -5, ChanLayer::BASE);                // no negative without zeroAt: bounded at 0
+    combus_set_analog(bus, kBrakeId, -5);                // no negative without zeroAt: bounded at 0
     TEST_ASSERT_EQUAL_UINT16(0u, rawOf(kBrakeId));
 }
 
 
 void test_zero_row6_raw_accessors_never_offset(void) {
-    TEST_ASSERT_TRUE(combus_set_raw_analog(bus, kGearId, 1234u, ChanLayer::BASE));
+    TEST_ASSERT_TRUE(combus_set_raw_analog(bus, kGearId, 1234u));
     TEST_ASSERT_EQUAL_UINT16(1234u, rawOf(kGearId));
     TEST_ASSERT_EQUAL_UINT16(1234u, combus_get_raw_analog(bus, kGearId));
 }
@@ -1492,7 +1492,7 @@ void test_zero_row6_raw_accessors_never_offset(void) {
 
 void test_zero_row7_layer_check_kept(void) {
     setRaw(AnalogComBusID::RUNLEVEL, 0u);
-    TEST_ASSERT_FALSE(combus_set_analog(bus, AnalogComBusID::RUNLEVEL, 5, ChanLayer::BASE));   // BASE may not write SYSTEM
+    TEST_ASSERT_FALSE(combus_link_set_raw_analog(bus, AnalogComBusID::RUNLEVEL, 5u, ChanLayer::BASE));   // a BASE link may not write SYSTEM
     TEST_ASSERT_EQUAL_UINT16(0u, rawOf(AnalogComBusID::RUNLEVEL));
 }
 

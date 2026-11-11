@@ -341,8 +341,8 @@ void combus_frame_apply( const ComBusFrameCfg& cfg,
 				// Channel at this wire position
 			const uint8_t id = peer ? peer->analog.ids[i] : i;
 
-				// The scope check is done by combus_set_raw_analog()
-			combus_set_raw_analog(*combus, (AnalogComBusID)id, inputFrame->analog[i], caller);
+				// The scope check is done by combus_link_set_raw_analog()
+			combus_link_set_raw_analog(*combus, (AnalogComBusID)id, inputFrame->analog[i], caller);
 		}
 	}
 
@@ -361,8 +361,8 @@ void combus_frame_apply( const ComBusFrameCfg& cfg,
 				// Check that this node receives this position
 			if (peer ? !peer->digital.rx[i] : !receives(combus->digitalBus[i].flow)) { continue; }
 
-				// The scope check is done by combus_set_digital()
-			combus_set_digital(*combus, (DigitalComBusID)id, inputFrame->digital[i], caller);
+				// The scope check is done by combus_link_set_digital()
+			combus_link_set_digital(*combus, (DigitalComBusID)id, inputFrame->digital[i], caller);
 		}
 	}
 }

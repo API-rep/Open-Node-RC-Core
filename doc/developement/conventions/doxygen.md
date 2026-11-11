@@ -267,19 +267,19 @@ Example:
 
 ```cpp
 /**
- * @brief Write a value to an analog ComBus channel.
+ * @brief Transport: write the raw value of an analog channel, with the layer of a link.
  *
- * @param bus     Target ComBus instance receiving the update.
- * @param ch      Channel identifier.
- * @param val     New value to write.
- * @param caller  Caller layer checked against channel access rules.
+ * @param bus    Target ComBus instance receiving the update.
+ * @param ch     Channel identifier.
+ * @param val    New raw value to write.
+ * @param layer  Layer of the link, checked against channel access rules.
  *
  * @return True if the write was accepted.
  */
-bool combus_set_analog(ComBus& bus,
-                       AnalogComBusID ch,
-                       uint16_t val,
-                       ChanLayer caller);
+bool combus_link_set_raw_analog(ComBus& bus,
+                                AnalogComBusID ch,
+                                uint16_t val,
+                                ChanLayer layer);
 ```
 
 ### `///<`

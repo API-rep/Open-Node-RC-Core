@@ -108,7 +108,7 @@ void combus_coupling_publish( ComLinkRuntime& rt, ComBus& bus, bool lost )
 			&& (st == PairingState::CONFLICT || st == PairingState::FAILED
 			    || (st == PairingState::COUPLED && rt.watch.receives && lost));
 
-		combus_set_digital(bus, *dev.fail, fault, ChanLayer::BOARD);
+		combus_set_digital(bus, *dev.fail, fault);
 	}
 
 		// 2. Coupled
@@ -118,7 +118,7 @@ void combus_coupling_publish( ComLinkRuntime& rt, ComBus& bus, bool lost )
 			                           bus.digitalBus[static_cast<uint8_t>(*dev.detector)].value, millis());
 
 		combus_set_digital(bus, *dev.coupled,
-		                   rt.coupling.pairing.state == PairingState::COUPLED && detected, ChanLayer::BOARD);
+		                   rt.coupling.pairing.state == PairingState::COUPLED && detected);
 	}
 }
 
@@ -164,7 +164,7 @@ void combus_couplings_update( ComBus& bus )
 		const PairingState st = combus_pairing_update_passive(c.pairing, *c.dev, trig, millis());
 
 			// Write the state, if the coupler publishes it
-		if (c.dev->coupled) { combus_set_digital(bus, *c.dev->coupled, st == PairingState::COUPLED, ChanLayer::BOARD); }
+		if (c.dev->coupled) { combus_set_digital(bus, *c.dev->coupled, st == PairingState::COUPLED); }
 	}
 }
 

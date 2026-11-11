@@ -2,11 +2,16 @@
  * @file  combus_access.h
  * @brief ComBus accessors: every write checked against the layer of the channel.
  *
- * @details Every write to a channel goes through here.  The writer gives its layer
- *   (ChanLayer), compared with the layer of the channel (rules in combus_defs.h): a
- *   write that is not allowed is skipped and returns false.  Every denied write is
- *   counted (combus_denied_writes()) and logged once per channel by sys_log_warn()
- *   (DEBUG_SYSTEM builds).
+ * @details Every write to a channel goes through here, and is checked against the
+ *   layer of the channel (rules in combus_defs.h): a write that is not allowed is
+ *   skipped and returns false.  Every denied write is counted (combus_denied_writes())
+ *   and logged once per channel by sys_log_warn() (DEBUG_SYSTEM builds).
+ *
+ *   Two kinds of writers:
+ *   - the code of this board (modules, chains, main loop): combus_set_*(), with no
+ *     layer to give.  It writes as BOARD, which may write every declared channel;
+ *   - the transport, at the boundary of a link: combus_link_set_*(), with the layer
+ *     of the link, so that a frame only writes what its link may write.
  *
  *   Analog channels have two families of accessors:
  *   - application, combus_get_analog() and combus_set_analog(): the logical value
@@ -33,26 +38,31 @@
 // =============================================================================
 
 /**
- * @brief Write the raw value of an analog channel, with no offset (system side).
+ * @brief Transport: write the raw value of an analog channel, with the layer of a link.
  *
- * @param bus     Target ComBus.
- * @param ch      Channel.
- * @param val     New raw value.
- * @param caller  Layer of the writer, checked against the layer of the channel.
+ * @param bus    Target ComBus.
+ * @param ch     Channel.
+ * @param val    New raw value.
+ * @param layer  Layer of the link, checked against the layer of the channel.
  *
  * @return true if the write was accepted, false if the layer refused it.
  */
 
-bool combus_set_raw_analog(ComBus& bus, AnalogComBusID ch, uint16_t val, ChanLayer caller);
+bool combus_link_set_raw_analog(ComBus& bus, AnalogComBusID ch, uint16_t val, ChanLayer layer);
+
+
+	/// Write the raw value of an analog channel, with no offset (system side), as this board.
+inline bool combus_set_raw_analog(ComBus& bus, AnalogComBusID ch, uint16_t val) {
+	return combus_link_set_raw_analog(bus, ch, val, ChanLayer::BOARD);
+}
 
 
 	/// Optional channel: no write, and false, when it is absent.
-inline bool combus_set_raw_analog(ComBus& bus, const std::optional<AnalogComBusID>& ch,
-                                  uint16_t val, ChanLayer caller)
+inline bool combus_set_raw_analog(ComBus& bus, const std::optional<AnalogComBusID>& ch, uint16_t val)
 {
 	if (!ch.has_value()) return false;
 
-	return combus_set_raw_analog(bus, ch.value(), val, caller);
+	return combus_set_raw_analog(bus, ch.value(), val);
 }
 
 
@@ -69,21 +79,20 @@ uint16_t combus_get_raw_analog(const ComBus& bus, AnalogComBusID ch);
 
 
 /**
- * @brief Write the logical value of an analog channel (application side).
+ * @brief Write the logical value of an analog channel (application side), as this board.
  *
  * @details raw = val, plus CbusNeutral when the channel is `zeroAtNeutral`, bounded to
  *   the raw range [0, CbusMaxVal].  Without `zeroAt: neutral`, a negative value is
  *   bounded to 0.
  *
- * @param bus     Target ComBus.
- * @param ch      Channel.
- * @param val     New logical value.
- * @param caller  Layer of the writer, checked against the layer of the channel.
+ * @param bus  Target ComBus.
+ * @param ch   Channel.
+ * @param val  New logical value.
  *
  * @return true if the write was accepted, false if the layer refused it.
  */
 
-bool combus_set_analog(ComBus& bus, AnalogComBusID ch, int32_t val, ChanLayer caller);
+bool combus_set_analog(ComBus& bus, AnalogComBusID ch, int32_t val);
 
 
 /**
@@ -107,35 +116,34 @@ int32_t combus_get_analog(const ComBus& bus, AnalogComBusID ch);
 // =============================================================================
 
 /**
- * @brief Write a digital channel.
+ * @brief Transport: write a digital channel, with the layer of a link.
  *
  * @details For a both_or channel, the value written is this board's own term: the
  *   channel reads it OR the values received from the live links.
  *
- * @param bus     Target ComBus.
- * @param ch      Channel.
- * @param val     New value.
- * @param caller  Layer of the writer, checked against the layer of the channel.
+ * @param bus    Target ComBus.
+ * @param ch     Channel.
+ * @param val    New value.
+ * @param layer  Layer of the link, checked against the layer of the channel.
  *
  * @return true if the write was accepted, false if the layer refused it.
  */
 
-bool combus_set_digital(ComBus& bus, DigitalComBusID ch, bool val, ChanLayer caller);
+bool combus_link_set_digital(ComBus& bus, DigitalComBusID ch, bool val, ChanLayer layer);
 
 
-	/// Optional channel: no write, and false, when it is absent.
-inline bool combus_set_digital(ComBus& bus, const std::optional<DigitalComBusID>& ch,
-                               bool val, ChanLayer caller)
-{
-	if (!ch.has_value()) return false;
-
-	return combus_set_digital(bus, ch.value(), val, caller);
+	/// Write a digital channel as this board: processors, contributors, main loop.
+inline bool combus_set_digital(ComBus& bus, DigitalComBusID ch, bool val) {
+	return combus_link_set_digital(bus, ch, val, ChanLayer::BOARD);
 }
 
 
-	/// The code of this board writes with the layer BOARD: processors, contributors.
-inline bool combus_set_digital(ComBus& bus, DigitalComBusID ch, bool val) {
-	return combus_set_digital(bus, ch, val, ChanLayer::BOARD);
+	/// Optional channel: no write, and false, when it is absent.
+inline bool combus_set_digital(ComBus& bus, const std::optional<DigitalComBusID>& ch, bool val)
+{
+	if (!ch.has_value()) return false;
+
+	return combus_set_digital(bus, ch.value(), val);
 }
 
 

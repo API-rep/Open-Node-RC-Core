@@ -9,7 +9,7 @@
 
 #include <core/system/combus/protocol/coupling/combus_coupling_watch.h>
 #include <core/system/debug/logging/debug.h>
-#include <core/system/combus/combus_access.h>   // combus_set_raw_analog(), combus_set_digital()
+#include <core/system/combus/combus_access.h>   // combus_link_set_raw_analog(), combus_link_set_digital()
 #include <core/system/combus/combus_res.h>      // CbusNeutral
 
 #include "combus.h"   // AnalogComBusID, DigitalComBusID
@@ -219,14 +219,14 @@ void combus_link_take_back_safe_values( const ComPeerLink& peer, ComBus& bus )
 	for (uint8_t p = 0u; p < peer.analog.count; ++p) {
 		if (!peer.analog.rx[p]) { continue; }
 
-		combus_set_raw_analog(bus, static_cast<AnalogComBusID>(peer.analog.ids[p]), CbusNeutral, ChanLayer::BASE);
+		combus_link_set_raw_analog(bus, static_cast<AnalogComBusID>(peer.analog.ids[p]), CbusNeutral, ChanLayer::BASE);
 	}
 
 		// Each digital position this node receives, both_or left out
 	for (uint8_t p = 0u; p < peer.digital.count; ++p) {
 		if (!peer.digital.rx[p] || bus.digitalBus[peer.digital.ids[p]].bothOr.enabled) { continue; }
 
-		combus_set_digital(bus, static_cast<DigitalComBusID>(peer.digital.ids[p]), false, ChanLayer::BASE);
+		combus_link_set_digital(bus, static_cast<DigitalComBusID>(peer.digital.ids[p]), false, ChanLayer::BASE);
 	}
 }
 

@@ -62,7 +62,7 @@ void machine_init() {
 	  // --- 5. Boot-safe runlevel ---
   sys_log_info("[SYSTEM] Applying boot-safe runlevel...\n");
   // The run level is the analog channel RUNLEVEL.
-  combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)DEF_RUNLEVEL, ChanLayer::SYSTEM);
+  combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)DEF_RUNLEVEL);
   stopAllDcDrivers(machine);
   sleepAllDcDrivers(machine);
   disableAllDcDrivers(machine);

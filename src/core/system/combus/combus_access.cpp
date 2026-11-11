@@ -104,12 +104,12 @@ static void noteDenied(const char* label, bool isAnalog, uint8_t ch,
 // =============================================================================
 
 	/// The layer first: a denied write leaves the value as it was.
-bool combus_set_raw_analog(ComBus& bus, AnalogComBusID ch, uint16_t val, ChanLayer caller) {
+bool combus_link_set_raw_analog(ComBus& bus, AnalogComBusID ch, uint16_t val, ChanLayer layer) {
 	auto& slot = bus.analogBus[static_cast<uint8_t>(ch)];
 
 		// Check the layer
-	if (!layerOk(slot.layer, caller)) {
-		noteDenied("analog", true, static_cast<uint8_t>(ch), caller, slot.layer);
+	if (!layerOk(slot.layer, layer)) {
+		noteDenied("analog", true, static_cast<uint8_t>(ch), layer, slot.layer);
 		return false;
 	}
 
@@ -126,7 +126,7 @@ uint16_t combus_get_raw_analog(const ComBus& bus, AnalogComBusID ch) {
 
 
 	/// Logical to raw: the offset of the logical zero, then the bounds of the raw range.
-bool combus_set_analog(ComBus& bus, AnalogComBusID ch, int32_t val, ChanLayer caller) {
+bool combus_set_analog(ComBus& bus, AnalogComBusID ch, int32_t val) {
 	const auto& slot = bus.analogBus[static_cast<uint8_t>(ch)];
 
 	int32_t raw = slot.zeroAtNeutral ? val + static_cast<int32_t>(CbusNeutral) : val;
@@ -135,7 +135,7 @@ bool combus_set_analog(ComBus& bus, AnalogComBusID ch, int32_t val, ChanLayer ca
 	if (raw < 0)                                  raw = 0;
 	if (raw > static_cast<int32_t>(CbusMaxVal))   raw = static_cast<int32_t>(CbusMaxVal);
 
-	return combus_set_raw_analog(bus, ch, static_cast<uint16_t>(raw), caller);
+	return combus_set_raw_analog(bus, ch, static_cast<uint16_t>(raw));
 }
 
 
@@ -162,12 +162,12 @@ int32_t combus_get_analog(const ComBus& bus, AnalogComBusID ch) {
  *   3. Any other channel: the value.
  */
 
-bool combus_set_digital(ComBus& bus, DigitalComBusID ch, bool val, ChanLayer caller) {
+bool combus_link_set_digital(ComBus& bus, DigitalComBusID ch, bool val, ChanLayer layer) {
 	auto& slot = bus.digitalBus[static_cast<uint8_t>(ch)];
 
 		// 1. Layer
-	if (!layerOk(slot.layer, caller)) {
-		noteDenied("digital", false, static_cast<uint8_t>(ch), caller, slot.layer);
+	if (!layerOk(slot.layer, layer)) {
+		noteDenied("digital", false, static_cast<uint8_t>(ch), layer, slot.layer);
 		return false;
 	}
 

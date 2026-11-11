@@ -26,11 +26,11 @@ void input_update(ComBus &bus) {
                          ? (int16_t)dev.minVal
                          : (int16_t)((dev.minVal + dev.maxVal) / 2);
       uint16_t neutral = (uint16_t)map(restRaw, dev.minVal, dev.maxVal, 0, bus.analogBusMaxVal);
-      combus_set_raw_analog(bus, m.busChannel, neutral, ChanLayer::SYSTEM);
+      combus_set_raw_analog(bus, m.busChannel, neutral);
     }
 
     for (uint8_t i = 0; i < InputDigitalMapCount; i++) {
-      combus_set_digital(bus, InputDigitalMapArray[i].busChannel, false, ChanLayer::SYSTEM);
+      combus_set_digital(bus, InputDigitalMapArray[i].busChannel, false);
     }
     return;   // source inactive — LOCAL_REMOTE_FAIL stays at its failsafe default (true = lost)
   }
@@ -47,7 +47,7 @@ void input_update(ComBus &bus) {
     uint16_t val    = map(inputAnalogValue[devID], dev.minVal, dev.maxVal, 0, bus.analogBusMaxVal);
     uint16_t busVal = m.isInverted ? (bus.analogBusMaxVal - val) : val;
 
-    combus_set_raw_analog(bus, m.busChannel, busVal, ChanLayer::SYSTEM);
+    combus_set_raw_analog(bus, m.busChannel, busVal);
   }
 
 // ==========================================================
@@ -62,7 +62,7 @@ void input_update(ComBus &bus) {
     bool raw        = inputDigitalValue[devID];
     bool finalState = (raw != (m.isInverted || dev.isInverted));
 
-    combus_set_digital(bus, m.busChannel, finalState, ChanLayer::SYSTEM);
+    combus_set_digital(bus, m.busChannel, finalState);
   }
 
     // Each input backend writes its own contributor.
@@ -74,7 +74,7 @@ void input_update(ComBus &bus) {
     // lost), and the aggregator chain picks it up next cycle.
   bus.lastFrameMs = millis();
 #if defined(INPUT_PS4_DS4_BT) && defined(HAS_FAILSAFE) && defined(HAS_LOCAL_REMOTE_FAILSAFE)
-  combus_set_digital(bus, DigitalComBusID::LOCAL_REMOTE_FAIL, false, ChanLayer::BOARD);   // BOARD-scope channel: only a BOARD caller may write it
+  combus_set_digital(bus, DigitalComBusID::LOCAL_REMOTE_FAIL, false);
 #endif
 }
 

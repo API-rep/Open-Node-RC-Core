@@ -208,7 +208,7 @@ static void fillRandom(uint32_t seed) {
     }
     // RUNLEVEL is an ordinary channel: write it via the generic analog accessor
     // (RUNLEVEL is a SYSTEM channel, so a SYSTEM caller may write it).
-    combus_set_raw_analog(txComBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::RUNNING, ChanLayer::SYSTEM);
+    combus_set_raw_analog(txComBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::RUNNING);
 }
 
 /** Assert that the decoded frame matches txComBus, over the channels the frame carries. */
@@ -427,7 +427,7 @@ static void sendAndApply(ChanLayer rxLayer) {
 
     fillRandom(0x5EEDC0DEul);
     txComBus.analogBus[kThrottleIdx].value = kThrottleVal;
-    combus_set_raw_analog(txComBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::RUNNING, ChanLayer::SYSTEM);
+    combus_set_raw_analog(txComBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::RUNNING);
 
     delay(30u);
     combus_tx_update(&txComBus);
@@ -664,7 +664,7 @@ static void test_wire_end_clamped_to_cfg(void) {
 static void test_runlevel_roundtrip_via_channel(void) {
     // Write RUNLEVEL via the generic analog accessor (mainboard pattern).
     bool written = combus_set_raw_analog(txComBus, AnalogComBusID::RUNLEVEL,
-                                     (uint16_t)RunLevel::STARTING, ChanLayer::SYSTEM);
+                                     (uint16_t)RunLevel::STARTING);
     TEST_ASSERT_TRUE_MESSAGE(written, "RUNLEVEL write denied (layer check)");
 
     uint8_t len = combus_frame_encode(kCfg, encodeBuf, &txComBus, 7u, kNAnalog, kNDigital);
@@ -1037,11 +1037,11 @@ static void test_link_health_ignores_tx_only_link(void) {
 static void test_denied_write_is_counted(void) {
     const uint32_t before = combus_denied_writes();
 
-    TEST_ASSERT_FALSE(combus_set_digital(txComBus, DigitalComBusID::NODE_LINK_FAIL, true, ChanLayer::SYSTEM));
-    TEST_ASSERT_FALSE(combus_set_digital(txComBus, DigitalComBusID::NODE_LINK_FAIL, true, ChanLayer::SYSTEM));
+    TEST_ASSERT_FALSE(combus_link_set_digital(txComBus, DigitalComBusID::NODE_LINK_FAIL, true, ChanLayer::SYSTEM));
+    TEST_ASSERT_FALSE(combus_link_set_digital(txComBus, DigitalComBusID::NODE_LINK_FAIL, true, ChanLayer::SYSTEM));
     TEST_ASSERT_EQUAL_UINT32(before + 2u, combus_denied_writes());
 
-    TEST_ASSERT_TRUE(combus_set_digital(txComBus, DigitalComBusID::NODE_LINK_FAIL, false, ChanLayer::BOARD));
+    TEST_ASSERT_TRUE(combus_set_digital(txComBus, DigitalComBusID::NODE_LINK_FAIL, false));
     TEST_ASSERT_EQUAL_UINT32(before + 2u, combus_denied_writes());
 }
 

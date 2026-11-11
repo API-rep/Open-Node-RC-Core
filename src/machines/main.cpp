@@ -91,7 +91,7 @@ void loop() {
       if (!keyActive && (millis() - stateTM >= kSleepTimeoutMs)) {
           sys_log_info("[SYSTEM][EVENT] reason=sleep_timeout action=enter_SLEEPING\n");
           // Write the run level to the analog channel RUNLEVEL.
-          combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::SLEEPING, ChanLayer::SYSTEM);
+          combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::SLEEPING);
       }
       break;
     }
@@ -109,7 +109,7 @@ void loop() {
 
         // --- 1. Auto-transition to RUNNING ---
         // Write the run level to the analog channel RUNLEVEL.
-        combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::RUNNING, ChanLayer::SYSTEM);
+        combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::RUNNING);
       break;
     }
 
@@ -153,7 +153,7 @@ void loop() {
         if (millis() - s_lastActivityMs >= kEngineOffTimeoutMs) {
             sys_log_info("[SYSTEM][EVENT] reason=idle_timeout action=enter_IDLE\n");
             // Write the run level to the analog channel RUNLEVEL.
-            combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::IDLE, ChanLayer::SYSTEM);
+            combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::IDLE);
             break;
         }
       }
@@ -187,7 +187,7 @@ void loop() {
       }
         // Auto-transition to IDLE — no shutdown sequence implemented yet (winter 2026).
         // Write the run level to the analog channel RUNLEVEL.
-        combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::IDLE, ChanLayer::SYSTEM);
+        combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::IDLE);
       break;
     }
 
@@ -240,7 +240,7 @@ void loop() {
       // a hard fault.  Write HALT: next cycle runs its reaction, and the
       // runlevel chain (halt_hold) keeps it until a reboot.
       sys_log_warn("[SYSTEM][SAFE] reason=unknown_runlevel value=%d action=halt\n", static_cast<int>(curRunLevel));
-      combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::HALT, ChanLayer::SYSTEM);
+      combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)RunLevel::HALT);
       break;
     }
   }
