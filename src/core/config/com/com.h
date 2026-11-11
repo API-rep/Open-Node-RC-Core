@@ -2,10 +2,9 @@
  * @file  com.h
  * @brief Communication transport config — module selector.
  *
- * @details Includes the sub-config for each active communication module based on
- *   build flags. Follows the same pattern as inputs/inputs.h and vbat/config.h.
- *   Communication modules are optional — no compile error if no flag is set.
- *   Channel constants and static_asserts live in each sub-file.
+ * @details Includes the sub-config of each communication transport.  Channel
+ *   constants and static_asserts live in each sub-file.  The links of a board are
+ *   declared in its envCfg.h (comLinks[]).
  *******************************************************************************///
 #pragma once
 
@@ -21,8 +20,6 @@
 // 1. OUTPUT MODULE SELECTION
 // =============================================================================
 
-#if defined(COMBUS_UART_TX) || defined(COMBUS_UART)
-  #include "combus_uart.h"
-#endif
+#include "combus_uart.h"
 
 // EOF com.h

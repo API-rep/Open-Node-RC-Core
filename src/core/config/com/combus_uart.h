@@ -5,7 +5,7 @@
  * @details Derives the exact encoded frame size for this machine's ComBus
  *   layout and validates that it fits the generic transport protocol limits
  *   AND the board-supplied UART parameters are within safe operating ranges.
- *   Included by com/com.h when COMBUS_UART_TX=N or COMBUS_UART=N is set.
+ *   Included by com/com.h.
  *
  *   Constants exported:
  *     ComBusUartFrameSize  — exact frame size for this layout (bytes)
@@ -66,8 +66,6 @@ static constexpr uint8_t ComBusUartFrameSize =
 // =============================================================================
 
 	/// Controller-side frame-rate ceiling (Hz).
-	/// TODO: replace with SoundRxMaxHz from sound_config.h once sound node
-	///       firmware exposes its real receive throughput as a constexpr.
 static constexpr uint32_t ComBusUartMaxTxHz      = 200u;
 
 
@@ -80,7 +78,7 @@ static_assert(ComBusUartFrameSize <= CombusPhysUartMax,
               "ComBusUartFrameSize exceeds UART practical cap (CombusPhysUartMax)");
 
   // --- Baud rate and frame rate: the ComProtocolCfg of the link (board/com_dev.h) is checked ---
-  //     against UartMaxBaud and ComBusUartMaxTxHz in machines/init/com/combus_uart_init.cpp,
-  //     where the board header and the node links are both in scope.
+  //     against ComBusUartMaxTxHz in machines/init/com/board_links_init.cpp, and the line rate
+  //     against the ceiling of its port by combus_link_check().
 
 // EOF combus_uart.h

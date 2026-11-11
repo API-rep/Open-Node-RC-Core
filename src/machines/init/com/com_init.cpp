@@ -2,18 +2,15 @@
  * @file com_init.cpp
  * @brief EnvCfg env communication transports initialisation — orchestrator.
  *
- * @details Dispatches to each active transport sub-init based on compile flags.
- * Each sub-init is self-contained and degrades to a no-op when its flag is absent.
- *
- *   Active transports:
- *     COMBUS_UART_TX=N, COMBUS_UART_RX=N, COMBUS_UART=N — ComBus on UARTn (combus_uart_init.h)
+ * @details Starts the communication of the board:
+ *     the ComBus links of its table comLinks[] (board_links_init.h).
  *
  *   Future:
  *     (add new transport sub-inits here)
  *****************************************************************************/
 
 #include "com_init.h"
-#include "combus_uart_init.h"
+#include "board_links_init.h"
 
 
 // =============================================================================
@@ -22,7 +19,7 @@
 
 void com_init()
 {
-    combus_uart_init();  // no-op if no ComBus UART flag is defined
+    board_links_init();
 }
 
 // EOF com_init.cpp

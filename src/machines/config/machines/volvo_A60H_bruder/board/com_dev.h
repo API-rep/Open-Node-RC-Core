@@ -11,9 +11,7 @@
  *   which contains the BASE channels.  Their protocol parameters (line rate,
  *   transmit rate) are agreed by every board that wires them.
  *
- *   Until the boards declare their own ComDevMap table, the COMBUS_UART_TX=N and
- *   COMBUS_UART=N build flags choose which of the two extension links is wired
- *   (see machines/init/com/combus_uart_init.cpp).
+ *   Each board wires them in its table of links (comLinks[] of its envCfg.h).
  *******************************************************************************
  */
 #pragma once
@@ -30,14 +28,14 @@
 inline constexpr ComProtocolCfg kComProtoExt = { 115200u, 50u, 250u, 3000u };
 
 
-	/// One-way extension link (COMBUS_UART_TX=N): the board wires it as TX.
+	/// One-way extension link: the main board wires it as TX, the extension board as RX.
 inline constexpr ComDev kComDevExtUni = {
 	"combus", LinkScope::INTRA_NODE, LinkType::UNIDIRECTIONAL,
 	&kComProtoExt, LinkActivation::ALWAYS, nullptr
 };
 
 
-	/// Two-way extension link (COMBUS_UART=N): the board wires it as TX_RX.
+	/// Two-way extension link: both boards wire it as TX_RX.
 inline constexpr ComDev kComDevExtBi = {
 	"combus", LinkScope::INTRA_NODE, LinkType::BIDIRECTIONAL,
 	&kComProtoExt, LinkActivation::ALWAYS, nullptr

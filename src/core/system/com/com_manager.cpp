@@ -9,10 +9,7 @@
 #include <core/system/combus/combus_access.h>                       // combus_set_digital()
 #include <core/system/combus/protocol/combus_rx.h>                  // combus_rx_update()
 #include <core/system/combus/protocol/link/combus_link_watch.h>     // combus_links_lost(), combus_links_update()
-
-#if defined(COMBUS_UART_TX) || defined(COMBUS_UART)
-	#include <core/system/combus/protocol/combus_tx.h>
-#endif
+#include <core/system/combus/protocol/combus_tx.h>                  // combus_tx_update()
 
 
 
@@ -61,13 +58,9 @@ void com_rx_update(ComBus& bus) {
 // 2. EMISSION
 // =============================================================================
 
-	/// Each link keeps its own timer: this call is non-blocking.
+	/// Each link keeps its own timer: this call is non-blocking; nothing to do without a sending link.
 void com_update(const ComBus& bus) {
-
-#if defined(COMBUS_UART_TX) || defined(COMBUS_UART)
 	combus_tx_update(&bus);
-#endif
-
 }
 
 // EOF com_manager.cpp

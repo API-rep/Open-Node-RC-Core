@@ -28,6 +28,7 @@
   
   #include <core/system/combus/combus_defs.h>
   #include <core/system/hw/node_com.h>               // ComPort
+  #include <machines/config/machines/volvo_A60H_bruder/board/com_dev.h>   // kComDevExtUni, kComDevExtBi, ComDevMap
 
   // Board-specific hardware definitions (pins, ports, constants)
   #include <machines/config/boards/ESP32_8M_6S.h>
@@ -128,13 +129,34 @@
   /**
    * @brief Communication ports of the ESP32_8M_6S board (Volvo A60H Bruder).
    *
-   * @details One entry per port, in no particular order; a UART is found by its
-   *   `uart.index`. Values come from the active board header (ESP32_8M_6S.h)
-   *   included above. The ports in use are chosen by the init modules, via
-   *   COMBUS_UART_TX=N or COMBUS_UART=N (N = UART index).
+   * @details One entry per port; values come from the active board header
+   *   (ESP32_8M_6S.h) included above.  The ports in use are the ones the links
+   *   of the board (comLinks below) wire.
    */
   extern const ComPort comPorts[];
   extern const uint8_t comPortsCount;
+
+    /// Index of the extension port (COM/GPIO, UART2) in comPorts[].
+  inline constexpr uint8_t kComPortExt = 1u;
+
+
+  // =============================================================================
+  // Communication links
+  // =============================================================================
+
+  /**
+   * @brief ComBus links of the ESP32_8M_6S board (Volvo A60H Bruder).
+   *
+   * @details One entry per link: a ComDev of the node (board/com_dev.h) wired on
+   *   one port of this board, with the role of this end.  Started by
+   *   board_links_init().  To wire the extension link both ways, use
+   *   kComDevExtBi with LinkEnd::TX_RX.
+   */
+  inline const ComDevMap comLinks[] = {
+    { &kComDevExtUni, &comPorts[kComPortExt], LinkEnd::TX },   // to the extension board, transmit only
+  };
+
+  inline constexpr uint8_t comLinksCount = static_cast<uint8_t>(sizeof(comLinks) / sizeof(comLinks[0]));
   
 #endif  // BOARD_ESP32_8M_6S
 

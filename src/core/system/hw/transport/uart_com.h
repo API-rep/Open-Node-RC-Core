@@ -21,14 +21,13 @@
  *   sys_init();                                    // debug serial + pin registry
  *   static UartCtx pool[UartComMaxPorts];          // machine: static storage
  *   uart_com_register_pool(pool, UartComMaxPorts); // machine: register once
- *   combus_uart_init();                            // env: opens one NodeCom per ComBusLink[]
+ *   board_links_init();                            // env: opens one NodeCom per link of the board
  *   hw_init();                                     // hardware peripherals
  *   combus_link_start(...);                     // protocol layers wired to transport
  * @endcode
  *
- * Each ComBusLink entry resolves its own UART channel + pins from the
- * active COMBUS_UART* build flag and calls uart_com_init() directly — there
- * is no longer a single-link helper in this header.
+ * Each link of the board table (comLinks[]) names its port; combus_links_init()
+ * opens it with uart_com_init() — there is no single-link helper in this header.
  *****************************************************************************/
 #pragma once
 

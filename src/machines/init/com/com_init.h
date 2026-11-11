@@ -2,12 +2,10 @@
  * @file com_init.h
  * @brief EnvCfg env communication transports initialisation — umbrella.
  *
- * @details Initialises all active communication transport layers based on
- * active build flags. Each transport module degrades to a no-op when its
- * flag is absent.
+ * @details Initialises the communication of the board.
  *
  *   Active transports:
- *     COMBUS_UART_TX=N, COMBUS_UART=N — ComBus TX on UARTn
+ *     the ComBus links of the board table comLinks[] (envCfg.h)
  *
  *   Future:
  *     (additional transports registered here as sub-modules)
