@@ -141,6 +141,9 @@ Quick index to the documents that sit next to the code. Start from the subject, 
 * [Links](../src/core/system/combus/protocol/link/README.md) — how a link is declared, started and watched
 * [UART workflow](../src/core/system/combus/protocol/link/uart_workflow.md) — how the UART link is set up
 * [both_or merge (anti ping-pong)](../src/core/system/combus/protocol/both_or.md) — how a both_or channel such as FAILSAFE_HARD is shared between boards
+* [Work in progress: master](<WIP - Master.md>) — entry point of the open and coming work sites, their order and the work-in-progress documents (work in progress)
+* [Node transports](<WIP - Node transports.md>) — ESP-NOW first, then I2C and CAN; several peers on a link; the SYSTEM contract between boards (work in progress)
+* [Local remote](<WIP - Local remote.md>) — a local command source (PS4 controller, RC receiver) seen as a virtual node (work in progress)
 * [ComBus link rework](<WIP - ComBus link rework.md>) — preliminary study for the communication rework: multi-link, multi-protocol, versioning (work in progress)
 * [Remote firmware](<WIP - Remote firmware.md>) — the firmware of the remote, out of the link rework: what the embryo holds, the known blocking point, what remains to build (work in progress)
 * [Simulation chain](<WIP - Simulation chain.md>) — putting the machine processing chain in order: type contract (inputs, BASE outputs), default mapping in the core, overwrite by the machine, safe at neutral (work in progress)

@@ -2,7 +2,7 @@
 
 Statut : **en cours de rédaction** (document `WIP`), ouvert le 2026-10-25 pendant le *ComBus link rework* (recadrage avant l'étape 2.4). Rien n'est implémenté de ce document, sauf les deux premiers flags de traitement (§3).
 Public : le propriétaire et les futures sessions de travail sur la norme des processors.
-Plan : §1 objectif, §2 intentions (dont §2.5 sécurité, décidé le 2026-10-26), §3 premier pas fait, §4 questions ouvertes.
+Plan : §1 objectif, §2 intentions (dont §2.5 sécurité, décidé le 2026-10-26, et §2.8 norme des channels communs, à traiter tôt), §3 premier pas fait, §4 questions ouvertes.
 
 ## 1. Objectif
 
@@ -136,6 +136,17 @@ Suite du codage centré `zeroAt` (link rework S3-4 : champ `.cb`, drapeau `Analo
 - **Pas de brut dans une chaîne.** Pourquoi : la règle « neutre = sûr » ne tient que si les processors qui testent `!= 0` lisent 0 logique au neutre (le bug d'origine : `SUBGEAR_BUS` au neutre vu actif) ; un mélange brut / logique donnerait deux sens à une même valeur, et se tromperait en silence quand un channel passe en `zeroAt: neutral`. Gain d'optimisation négligeable : environ 3 instructions par entrée ou sortie de chaîne, une soixantaine par tour pour la Volvo, et ~120 octets de RAM pour le pipeline signé. Une exception ne s'envisagerait qu'après une mesure, déclarée par processor.
 - **Le brut reste réservé** au transport (codec, RX, perte de lien), aux pilotes d'entrée (sticks) et au moteur lui-même.
 - **Travail** (étape SC1 de `doc/WIP - Simulation chain.md`) : signature des `cb_*` en `int32_t&`, relecture des processors qui supposent 0..65535 (bornes, `CbusMaxVal`, `CbAnalog` signe/grandeur sur 16 bits), sans changer de comportement.
+
+### 2.8 Norme des channels communs et bibliothèques de types (repris du link rework, 2026-11-11)
+
+**À traiter tôt** (décision du propriétaire, 2026-11-11) : les chantiers suivants (simulation, feux, télécommande, transports) reposeront sur les noms posés ici.
+
+- **Bibliothèque de channels communs (« patterns »)** (principe retenu le 2026-10-25) : un channel commun à plusieurs nœuds est **défini une seule fois dans le cœur** (nom, type, valeur sûre, peut-être un sens canonique), réutilisable, prédéfini et sûr par nature ; chaque type de machine déclare seulement qu'il l'utilise et dans quel sens. La concordance entre deux profils (même type, même valeur, aujourd'hui vérifiée après coup par le builder) devient acquise par construction, et la valeur sûre ne se redéfinit pas localement. La télécommande en sera la grande utilisatrice. Reste à fixer : le dossier du cœur, la forme de la référence dans un `.cb`, la migration des profils existants.
+- **Bibliothèque de `.cb` standards** (idée du propriétaire, 2026-11-02) : un `.cb` qui en inclut d'autres, réutilisable et source de vérité unique.
+- **Dans la foulée** (idée du propriétaire, 2026-11-11) : une bibliothèque de **processors types** (les paquets de traitement du §2.2) et de **coupleurs types**.
+- **Channels critiques** (proposition à valider) : un channel critique (`FAILSAFE_*`, `RUNLEVEL`…) ne peut pas être candidat, pour qu'un retour en mode stable ne coupe jamais la sécurité ; la norme dit lesquels le sont (champ `critical` du `.cb`, ou liste du cœur).
+- **Un nom, un type** (proposition à valider) : un même nom de channel n'a qu'un seul type dans le dépôt (acquis par construction avec la bibliothèque de channels communs).
+- **Thème `sound`** à ajouter à `VALID_THEMES` quand les modules son reviendront.
 
 ## 3. Premier pas fait (recadrage du 2026-10-25)
 
