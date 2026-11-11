@@ -1,349 +1,113 @@
-# Le fichier `.cb` — référence de syntaxe
+# The `.cb` File — Writing ComBus Channels
 
-> Documentation utilisateur des fichiers `.cb`, référencée depuis
-> `doc/~combus_v2.md`. Ne décrit que ce qui est implémenté et vérifié sur le
-> code. Les points encore à venir sont marqués comme tels. Fonctionnement
-> interne du builder : `scripts/combus_builder/README.md`.
+A `.cb` file declares ComBus channels. It is a small YAML file read at build time by the [ComBus Builder](../../scripts/combus_builder/README.md) to generate the node firmware.
 
-## Principe
+This page tells you how to write one. How the builder works inside is described in its own README.
 
-Un fichier `.cb` est un fichier YAML qui déclare un ou plusieurs channels
-ComBus. Au build, le générateur Python (`combus_builder`) lit les `.cb`
-applicables à l'environnement compilé et produit les headers/sources ComBus
-de chaque board.
+---
+
+## An Example
 
 ```yaml
 channels:
-  - id: BAT_LOW
-    type: digital
-    scope: SYSTEM
-    theme: vbat
-    direction: uplink
-    requires: [HAS_VBAT_FAILSAFE]
-    infoName: "battery low"
+  - id: VBAT_FAIL                          # the name of the channel, unique in the project
+    infoName: "VBAT failsafe contributor"  # a readable label, for the logs and the dashboard
+    type: digital                          # analog (a value) or digital (true / false)
+    scope: SYSTEM                          # how far it goes: BASE, SYSTEM or BOARD
+    theme: failsafe                        # its functional group
+    direction: uplink_or                   # this board produces it (see below)
+    value: fault                           # its safe value
+    requires: [HAS_FAILSAFE, HAS_VBAT_FAILSAFE]   # it only exists with these build flags
 ```
 
-## Quels `.cb` sont pris en compte ?
+A file can declare several channels, one after the other under `channels:`.
 
-**Extension et recherche.** Le builder cherche, récursivement sous `src/`, les
-fichiers d'extension `.cb` et `.cbch` (en pratique, le dossier source du
-projet PlatformIO ; `src/` par défaut). Les dossiers `.pio`, `.git`,
-`__pycache__` et `node_modules` sont ignorés. Un fichier est lu comme YAML et
-doit être un mapping à la racine ; seule la section `channels:` est exploitée,
-quelle que soit l'extension. Les autres clés de premier niveau (par exemple
-`module:`) sont tolérées et ignorées ; une clé inconnue **dans un channel**
-(par exemple `module:`) est une erreur de build.
+---
 
-Un `.cb` peut être placé n'importe où sous `src/`, à côté du module qu'il
-décrit ou dans un dossier de configuration machine. Tous ne sont pas générés
-pour autant : seuls ceux qui font partie du **buildpath de l'environnement**
-le sont.
+## Where to Put It
 
-- Les `.cb` hors de `core/config/machines/<type>/` (modules du `core`,
-  configuration machine) sont toujours pris en compte.
-- Les `.cb` sous `core/config/machines/<type>/` ne sont pris en compte que si
-  `<type>` correspond au type de machine de l'environnement (flag
-  `MACHINE_TYPE_*`, ex. `MACHINE_TYPE_DUMPER_TRUCK` → `dumper_truck`). Ceux
-  des autres types sont ignorés. Les flags reconnus sont
-  `MACHINE_TYPE_DUMPER_TRUCK`, `MACHINE_TYPE_EXCAVATOR` et
-  `MACHINE_TYPE_LOADER` ; en ajouter un demande de modifier le builder
-  (`machine_type.py`).
-- Un environnement sans flag `MACHINE_TYPE_*` n'est filtré sur aucun type. C'est le cas de tous les environnements actuels : `MACHINE_TYPE_*` est défini dans un en-tête de machine et non passé en `-D`, donc le filtre est inactif pour l'instant.
-- Deux flags `MACHINE_TYPE_*` dans un même environnement, ou deux boards d'un
-  même nœud qui résolvent des types différents, sont une erreur de build.
+Anywhere under `src/`, next to what it describes: a core module, the profile of a machine type (`core/config/machines/<type>/`), a coupler (`core/config/couplers/<name>/`). The builder finds it on its own.
 
-Le filtre est appliqué une seule fois pour tout le nœud, avant la diffusion
-entre boards décrite plus bas.
+* The files of a machine type are only read when the firmware is built for that type (`-D MACHINE_TYPE_<TYPE>`).
+* The files of a coupler are only read when the node declares that coupler.
 
-L'ordre des fichiers et des channels n'a aucune incidence : le générateur
-trie les channels de façon canonique (`scope`, `type`, `theme`, `id`).
+---
 
-## Champs d'un channel
+## The Fields
 
-| Champ | Obligatoire | Valeurs | Rôle |
-|---|---|---|---|
-| `id` | oui | chaîne non vide, ex. `BAT_LOW`, `STEERING` | Identifiant unique du channel (devient un nom d'énumération C++) |
-| `type` | oui | `digital` \| `analog` | Famille du channel |
-| `scope` | oui | `BASE` \| `SYSTEM` \| `BOARD` | Portée de diffusion |
-| `theme` | oui | `core` \| `failsafe` \| `vbat` \| `light` \| `input` \| `sim` | Regroupement fonctionnel (liste fermée) |
-| `direction` | oui pour SYSTEM et BASE | `uplink` \| `downlink` \| `both` \| `none` \| `uplink_or` \| `downlink_or` \| `both_or` | Sens de circulation, avec ou sans fusion OR |
-| `requires` | non | liste de flags de compilation | Activation conditionnelle |
-| `value` | **oui** (depuis le link rework 3.2a) | analogique : `CbusMinVal` \| `CbusNeutral` \| `CbusMaxVal` \| entier ; numérique : `low` \| `fault` | Valeur par défaut **et valeur sûre** : émise tant que l'écrivain n'a rien écrit, reprise à la perte de la source. Incluse dans le hash MD5. Sans `value:`, le build casse, quelle que soit la portée. Un numérique du thème `failsafe` (une alarme, « vrai = faute ») déclare `fault` (vrai) ; `fault` est refusé ailleurs, et `high` est refusé partout (link rework S3a). Un analogique déclare `CbusNeutral`, quelle que soit la portée : une autre valeur donne un avertissement du builder (`[combus_builder] WARNING:`, une fois par channel) sans casser le build, tant que les chaînes de certains channels réels ne sont pas sûres au neutre ; le journal de compilation en est la liste vivante (link rework S3) |
-| `zeroAt` | non (analogique seulement) | `start` (défaut) \| `neutral` | Place du **zéro logique** dans la plage brute : au début (0) ou au neutre (`CbusNeutral`). Ce n'est pas un choix de type : le stockage reste un `uint16_t` brut et la trame ne change pas ; seuls les accesseurs applicatifs `combus_get_analog` / `combus_set_analog` appliquent l'offset (valeur logique signée, `int32_t`) ; le transport, les sticks et le moteur des chaînes travaillent en brut (`combus_get_raw_analog` / `combus_set_raw_analog`). Haché dans le MD5 (vues et liens) seulement quand il vaut `neutral` : les MD5 des autres channels ne bougent pas, et deux bouts en désaccord sont refusés au handshake ; deux types reliés qui le déclarent différemment cassent le build. Sur un numérique, ou avec une autre valeur, le build casse (link rework S3-4) |
-| `candidate` | non | `true` \| `false` | Channel `BASE` à l'essai (le builder ajoute `_NEXT` au nom), voir plus bas |
-| `infoName` | oui | chaîne non vide | Nom lisible pour le debug, hors du hash MD5 |
-
-### `id`
-
-Un `id` est unique pour tout le projet, tous types et scopes confondus. Une
-même déclaration en double est une erreur de build.
-
-### `theme`
-
-`theme` regroupe les channels par fonction. Le générateur n'accepte que les
-valeurs de la liste fermée `VALID_THEMES` (`canon/channels.py`) :
-`core`, `failsafe`, `vbat`, `light`, `input`, `sim`. Toute autre valeur est une erreur
-de build. Pour ajouter un thème, il faut l'ajouter à cette liste dans le
-builder. Le thème fait partie du tri : il peut déplacer un channel sur le fil
-(ce qui change le hash MD5), mais il n'est pas haché lui-même.
-
-Le thème `failsafe` est le **groupe failsafe** : agrégats `FAILSAFE_*` et
-contributeurs `*_FAIL`, des alarmes (« vrai = faute »). Ses numériques
-déclarent `value: fault` ; le contrôle est fait par le builder (link rework
-S3a, qui y a aussi fusionné l'ancien thème `com`).
+| Field | Required | What to write |
+|---|---|---|
+| `id` | yes | the name of the channel, in capitals: `STEERING_BUS`, `KEY_BTN`. Unique in the whole project |
+| `infoName` | yes | a short readable label |
+| `type` | yes | `analog` (0 to 65535) or `digital` (true / false) |
+| `scope` | yes | `BASE`, `SYSTEM` or `BOARD` (see below) |
+| `theme` | yes | one of `core`, `failsafe`, `vbat`, `light`, `input`, `sim`, `coupler`, `remote` |
+| `direction` | yes, except on `BOARD` | who sends and who receives (see below) |
+| `value` | yes | the safe value (see below) |
+| `requires` | no | build flags without which the channel does not exist |
+| `zeroAt` | no | analog only: where the logical zero sits (see below) |
+| `candidate` | no | `true` for a `BASE` channel on trial (see below) |
 
 ### `scope`
 
-| Scope | Portée | Description |
-|---|---|---|
-| `BASE` | Inter-nœuds | Frame normalisée d'un **type de machine** |
-| `SYSTEM` | Intra-nœud | Partagé entre toutes les boards d'un même nœud |
-| `BOARD` | Intra-board | Privé au firmware d'une board, jamais partagé |
-
-Anciens noms (avant le 2026-10-18) : `BASE` s'appelait `REMOTE`, `SYSTEM` s'appelait `LOCAL` et `BOARD` s'appelait `SYSTEM`. Les anciens noms `REMOTE` et `LOCAL` sont maintenant refusés ; `SYSTEM` reste valide mais désigne l'ancien `LOCAL`.
-
-**BASE.** Les channels BASE définissent la frame d'un type de machine
-(ex. `dumper_truck`). Ils sont déclarés une seule fois dans la définition du
-type et font automatiquement partie du ComBus de tout nœud de ce type
-(machine, télécommande...). C'est une frame fixe : `requires` y est interdit.
-L'inversion automatique de `direction` côté télécommande n'est pas encore
-implémentée.
-
-**SYSTEM.** Un channel SYSTEM déclaré sur une seule board est automatiquement
-diffusé aux autres boards du nœud (voir `direction`).
-
-**BOARD.** Jamais diffusé. `direction` est facultatif et vaut `none` par
-défaut.
+* `BASE`: part of the machine type, shared with the remote and with the other nodes;
+* `SYSTEM`: shared by the boards of the node;
+* `BOARD`: private to one board.
 
 ### `direction`
 
-`direction` s'écrit en **string** et du point de vue de la board qui déclare
-le channel.
+Written from the point of view of the board that declares the channel:
 
-| Valeur | Sens |
+| My board… | I write |
 |---|---|
-| `uplink` | la board publie la valeur |
-| `downlink` | la board reçoit la valeur |
-| `both` | la valeur circule dans les deux sens |
-| `uplink_or` | comme `uplink`, avec fusion OR des sources qui écrivent le channel |
-| `downlink_or` | comme `downlink`, avec fusion OR |
-| `both_or` | comme `both`, avec fusion OR |
-| `none` | pas de circulation |
-| `downlink_pt` | `BASE` seulement : comme `downlink`, et **redistribué dans le nœud** (link rework 2.4) |
+| produces and shares the value | `uplink` |
+| receives the value | `downlink` |
+| exchanges it both ways | `both` |
+| keeps it to itself | `none` |
+| shares an alarm that every board may raise | `both_or` |
+| receives it and passes it on to the other boards of its node (`BASE` only) | `downlink_pt` |
 
-**Variantes `*_or` (fusion OR).** Les trois variantes `uplink_or`,
-`downlink_or` et `both_or` ajoutent une politique de fusion OR logique au sens
-de circulation : quand plusieurs sources écrivent le même channel dans le même
-sens, le résultat est le OR de leurs valeurs au lieu du dernier écrit.
+* Declare a `SYSTEM` channel once, on the board that produces it: the other boards of the node receive it automatically.
+* A channel has a single producer: two boards declaring `uplink` for the same channel is an error.
+* `uplink_or` and `downlink_or` also exist, for digital channels written by several sources.
 
-- Réservées aux channels de type `digital` (le OR n'a pas de sens sur une
-  valeur analogique).
-- Acceptées sur `SYSTEM` et `BASE`, refusées sur `BOARD` (un seul écrivain
-  possible, la fusion n'a pas de sens).
-- Exemple d'usage pour `both_or` : deux boards qui se synchronisent sur un
-  même channel peuvent faire osciller la valeur (A met `true`, B resynchronise
-  avec `false`). Avec la fusion OR, une valeur à `true` n'est plus écrasée par
-  une resynchronisation.
-- **`both_or` est câblé** (2026-10-22) : sur chaque carte, la valeur est le OU
-  de la valeur écrite par la carte et des valeurs reçues des liens vivants, et ce
-  qu'une carte envoie sur un lien n'inclut jamais ce que ce lien lui a envoyé
-  (anti ping-pong). Détail : `src/core/system/combus/protocol/both_or.md`.
-- **`uplink_or` et `downlink_or` restent déclaratifs** : le canon valide et
-  mémorise la variante, sans traitement OR côté C++ (voir « Non implémenté »).
+### `value`: the Safe Value
 
-**Sens d'un `BASE` dans le nœud (link rework 2.4).** Le sens d'un channel
-`BASE` est celui **du nœud** (entre nœuds). Dans le nœud, sa source est la
-carte qui établit la connexion avec un autre nœud (un flag de
-`INTER_NODE_FLAGS` du builder, aujourd'hui `INPUT_PS4_DS4_BT`). Le builder en
-déduit, pour chaque carte, un second sens, `flow.betweenBoards`, utilisé sur
-les liens intra-nœud (le premier, `flow.betweenNodes`, est celui du `.cb`) :
+The value of the channel when nobody writes it, and the one it takes back when its source is lost:
 
-| Déclaré (`BASE`) | Carte connectée | Autres cartes |
-|---|---|---|
-| `downlink_pt` | `uplink` (redistribue) | `downlink` (reçoivent) |
-| `downlink` | `none` (s'en sert seule) | `none` |
-| `uplink`, `both`, `none` | `none` | `none` |
-| `both_or` | `both_or` (fusion de 1.1b) | `both_or` |
-
-`both_pt` est refusé (plusieurs sources par nature), `_pt` est refusé sur
-`SYSTEM` (déjà diffusé). Deux cartes d'un nœud connectées à d'autres nœuds :
-erreur de build (confrontation prévue au chantier 3.1). `_pt` ne change pas
-le MD5. À la réception, un channel n'est écrit que si son sens pour le lien
-comprend `downlink`.
-
-**Diffusion entre boards (SYSTEM).** Il suffit de déclarer le channel sur une
-board : les autres boards du nœud reçoivent automatiquement le channel avec
-la direction inverse. La politique OR est locale à la board qui la déclare :
-elle n'est pas recopiée, sauf pour `both_or`.
-
-| Déclaré | Reçu par les boards absentes |
-|---|---|
-| `uplink` ou `uplink_or` | `downlink` |
-| `both` | `both` |
-| `both_or` | `both_or` |
-| `none` | rien : le channel reste absent des autres boards |
-
-La copie diffusée reprend les champs de la déclaration d'origine (`theme`,
-`type`, `infoName`, `value`...) mais **pas son `requires`** : une board qui
-reçoit le channel par diffusion l'a toujours, même si les flags exigés par la
-board source n'y sont pas définis.
-
-Si plusieurs boards déclarent explicitement le même `id`, les variantes `*_or`
-suivent la règle de leur famille (`uplink`/`uplink_or`, `downlink`/`downlink_or`,
-`both`/`both_or`) :
-
-| Cas | Résultat |
-|---|---|
-| un seul `uplink`/`uplink_or`, le reste `downlink`/`downlink_or` ou absent | OK, les absentes deviennent `downlink` |
-| 2 `uplink`/`uplink_or` ou plus | erreur de build (deux producteurs) |
-| `downlink`/`downlink_or` seulement, aucun `uplink` | warning « canal mort », les absentes reçoivent `none` |
-| `both` ou `both_or` seuls | OK |
-| `both` + `both_or` | OK, warning (politique de fusion divergente) |
-| `both`/`both_or` mélangé avec une famille `uplink`/`downlink` | erreur de build |
-| `none` avec n'importe quoi | jamais un conflit |
+* analog: `CbusNeutral` (`CbusMinVal`, `CbusMaxVal` or an integer are accepted, with a warning);
+* digital: `low`: every function and processor is written so that low (off) is its safe state;
+* an alarm of the `failsafe` theme: `fault` (true, so that a missing value means a fault).
 
 ### `requires`
 
-Liste de flags de compilation (tous requis : sémantique ET, pas de OU ni de
-NON). Elle décide si le channel existe pour une board :
+A list of build flags, **all required**: `requires: [HAS_FAILSAFE, HAS_VBAT_FAILSAFE]`. Without them, the channel is not generated, and the build log says so. Not allowed on a `BASE` channel: the channels of a machine type are fixed.
 
-- **board d'un nœud** (environnement racine + sous-environnements) : la
-  déclaration est ignorée pour une board dont l'env ne définit pas tous les
-  flags ;
-- **environnement unique, sans sous-environnement** (cas actuel de
-  `platformio.ini`) : même règle, le channel n'est pas généré quand un flag
-  manque. Il est signalé dans le journal du build
-  (`[combus_builder] requires: channel 'X' not generated (flag not defined: ...)`),
-  donc jamais écarté en silence.
+### `zeroAt`
 
-Sert à activer des fonctions
-(`HAS_FAILSAFE`, `HAS_VBAT_FAILSAFE`...), pas à désigner un type de board.
-Exemple : `RUNLEVEL` (`runlevel.cb`) n'existe que sur la board qui définit
-`HAS_RUNLEVEL_MANAGER`, par convention la `mainboard` (une seule par machine).
-Ce channel est **obligatoire sur la carte principale** : `main.cpp` en dépend
-sans garde, donc en environnement unique `HAS_RUNLEVEL_MANAGER` doit être
-défini ; les autres cartes d'un nœud le reçoivent par diffusion. `FAILSAFE_HARD`
-(`HAS_FAILSAFE`) est dans le même cas en pratique (décision à confirmer).
-Ce n'est pas l'env racine (voir plus bas : l'env racine n'est pas une board).
-Interdit sur `scope: BASE`. Un `requires` vide (`[]`) est accepté sur BASE.
-
-### `value` et `infoName`
-
-`value` est copié tel quel lors d'une diffusion vers une autre board. C'est
-la valeur envoyée sur le fil tant que l'écrivain n'a rien écrit : elle fait
-partie du contrat, donc du hash MD5.
-`infoName` est un libellé de debug, hors du hash MD5.
+Analog only: fixes the logical zero of the value. `start` (the default) puts it at 0; `neutral` puts it at `CbusNeutral`, so that the value read by the application can be negative (a gear, a steering position).
 
 ### `candidate`
 
-Un channel `BASE` **à l'essai** (link rework, étape 2.2) : `candidate: true`.
+`candidate: true` marks a `BASE` channel on trial: it travels only between nodes that both have it, and the others keep working without it. Write its final name; the builder adds `_NEXT` until it is promoted.
 
-- le `.cb` donne son **nom définitif** (`id: TILT`) ; le builder ajoute le
-  suffixe `_NEXT` (`TILT_NEXT` dans le code C++). À la promotion, on retire
-  seulement `candidate: true` : le channel est généré sous son nom définitif,
-  et le compilateur signale chaque usage de `TILT_NEXT` à renommer ;
-- `_NEXT` écrit à la main dans un `id` est une erreur de build (suffixe réservé) ;
-- le nom définitif d'un candidat ne doit être celui d'aucun autre channel
-  (erreur de build : la promotion créerait un doublon) ;
-- réservé à `scope: BASE` pour l'instant ;
-- il est numéroté après les channels `BASE` stables de son type : en ajouter
-  un ne déplace aucun ID `BASE` stable, mais décale les ID `SYSTEM` ;
-- il est hors de l'ensemble `BASE` **stable** et de son MD5 : l'ajouter ne
-  casse aucun pair. L'ensemble **next** (stables puis candidats) a son propre
-  MD5 ; deux nœuds au même next échangent les candidats, sinon ils restent en
-  mode stable et les candidats gardent leur valeur par défaut (étape 2.2b) ;
-- entre les cartes d'un même nœud, les candidats doivent être identiques : ils
-  sont dans l'ensemble `SYSTEM`, dont le MD5 diffère sinon (lien refusé) ;
-- incrémenter `PROJECT_VERSION_DEV` (`project_version.h`) quand les candidats
-  changent.
+---
 
-## Validation MD5
+## When the Build Fails
 
-Chaque board génère un MD5 par vue (`combus_base`, `combus_system`,
-`combus`), que le handshake compare à celui du pair. Le détail du calcul est
-dans `scripts/combus_builder/README.md`. Ce qu'il faut retenir en écrivant un
-`.cb` :
+| The build says | What to do |
+|---|---|
+| ``no `value:` `` | add `value:`, the safe value of the channel |
+| `` `value: high` is refused `` | a true safe value is for an alarm: use `fault` in the `failsafe` theme, or `low` |
+| `` `theme` must be one of ... `` | use a theme of the list, or ask for a new one in the builder |
+| `channel id 'X' is defined in two files` | an `id` is unique: rename one, or remove the duplicate |
+| `channel BASE 'X' declares requires=...` | remove `requires`, or move the channel to `SYSTEM` or `BOARD` |
+| a conflict between two `uplink` | only one board produces a channel: the others declare `downlink`, or nothing |
+| `unknown field(s)` | a typo in a field name |
 
-- **Ce qui change le hash** : `id`, `type`, `scope`, `direction` (y compris la
-  variante OR), `value`, la place du channel sur le fil (l'ordre des ID, où le
-  thème intervient), ainsi que l'apparition ou la disparition d'un channel
-  dans une vue (par `requires`).
-- **Ce qui ne le change pas** : `infoName`, un `theme` qui ne déplace pas le
-  channel, `requires` en tant que tel, l'ordre des fichiers ou des channels, les
-  commentaires YAML.
-- **Ensemble BASE** : deux MD5, stable (sans les candidats) et next (stables
-  puis candidats), égaux sans candidat. Le journal du build affiche une ligne
-  par ensemble (`set BASE`, `set NEXT`, `set SYSTEM`).
-- **Vue SYSTEM** : `uplink`, `downlink`, `uplink_or` et `downlink_or` comptent
-  pour un même état. Deux boards d'un nœud peuvent donc avoir des rôles
-  opposés sur un channel sans désaccord. `both`, `both_or` et `none` restent
-  distincts.
-- **Vue BASE** : pas d'équivalence ; `uplink` et `uplink_or` donnent des
-  hash différents.
-- **En cas de désaccord entre deux boards (ou deux nœuds)** : comparer, pour
-  chaque côté, les `.cb` réellement pris en compte (filtre de type de machine,
-  `requires`), puis `id`, `scope`, `direction`, `value` et l'ordre des
-  channels concernés. Comparer d'abord les lignes `set` du journal des deux
-  builds.
+---
 
-## Environnements multi-boards
+## Going Further
 
-Un nœud est décrit par un environnement racine (appelé « mère » dans le code) et des sous-environnements par
-board. Le builder détecte un nœud par le nom : un env `X_<id>` est la board
-`<id>` de l'env `X` (exemple de convention : `volvo_A60H_bruder` pour l'env racine,
-`volvo_A60H_bruder_mainboard` pour une board). Sans sous-environnement, le
-build est en mode mono-board, inchangé.
-
-> État : le `platformio.ini` actuel ne déclare aucun sous-environnement, donc
-> le mode multi-boards n'est pas exercé en build réel. Le futur script YAML →
-> `platformio.ini` est **prévu**, pas écrit.
-
-**L'env racine n'est pas une board.** Il porte seulement la configuration
-commune du nœud (flags partagés), il ne correspond à aucun circuit. La carte
-principale de la machine est un sous-env (par exemple `..._mainboard`), donc une
-vraie board. L'env racine n'est pas une board au sens ComBus :
-
-- il ne participe pas à la diffusion SYSTEM entre boards (il ne compte ni
-  comme producteur, ni comme récepteur) ;
-- il ne génère pas de fichiers par board en mode multi-boards (le hook le
-  saute).
-
-Au build, le générateur résout les contextes de toutes les boards du nœud et
-produit les fichiers de chacune : non préfixés pour la board compilée, préfixés
-par le nom de la board pour les autres (`combus_<board>.h`, etc. ;
-`combus_wire_common.h` est commun).
-
-> Dans un nœud, la board compilée reçoit les noms **non préfixés** et les autres
-> boards les noms préfixés. Compiler l'env racine est refusé (message d'erreur).
-> Le dossier généré est partagé entre envs. Voir `scripts/combus_builder/README.md`.
-
-## Non implémenté à ce jour
-
-- Inversion/diffusion de `direction` pour le scope BASE côté télécommande.
-- Fusion OR côté C++ pour `uplink_or` et `downlink_or`. `both_or` est câblé
-  (voir `src/core/system/combus/protocol/both_or.md`). La fusion des contributeurs
-  locaux d'un agrégat (par exemple `VBAT_FAIL` → `FAILSAFE_HARD`) reste faite par une
-  chaîne CbProc (`cb_reset_fn` en tête puis `cb_or_fn` :
-  `src/core/system/failsafe/failsafe_chain.cpp`).
-
-### Contrat prévu pour la fusion OR (non implémenté)
-
-Repris de la note de conception de 2026-08-29 (variantes `*_or`). C'est une
-**cible**, pas le comportement actuel :
-
-- la fusion devrait être faite en un seul point, l'accesseur d'écriture
-  (`combus_set_digital`), et jamais répliquée dans un module écrivain ;
-- un cycle devrait respecter l'ordre : remise à zéro des channels `*_or` →
-  écritures (réception, entrées locales, autres sources) → agrégation
-  (chaînes de lecture) → émission. L'ordre entre réception et entrées locales
-  n'a pas d'importance (le OU est commutatif) ;
-- si la réception est déclenchée par interruption, un retard d'un cycle avant
-  la prise en compte d'une écriture distante est considéré comme acceptable.
-
-L'emplacement de la remise à zéro est aujourd'hui dans la chaîne elle-même
-(processor `cb_reset_fn`), pas dans l'accesseur ni dans `sys_manager_update`.
-
-Pour `both_or`, ce contrat est mis en œuvre depuis le 2026-10-22 : la fusion est
-faite dans l'accesseur (`combus_set_digital`), comme prévu, avec en plus une
-valeur de la carte gardée à part et une émission sans écho. Voir
-`src/core/system/combus/protocol/both_or.md`.
+* [ComBus](../combus.md): what the ComBus is, its layers.
+* [ComBus Builder in depth](../../scripts/combus_builder/README.md): how the files are found and read, the diffusion between boards, the fingerprints, the generated files.
