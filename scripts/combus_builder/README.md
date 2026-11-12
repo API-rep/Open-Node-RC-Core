@@ -6,14 +6,14 @@ References to the code give the file and the function, not the line number.
 
 ## 1. Purpose
 
-The builder reads YAML `.cb` files and generates the C++ headers and sources of the ComBus: identifier enumerations, channel arrays, bus instance, MD5 fingerprints, tables of the links between nodes. It replaces the manual declaration of the channels.
+The builder reads YAML `.cb` files and generates the C++ headers and sources of the ComBus: identifier enumerations, channel arrays, bus instance, MD5 fingerprints, tables of the links between nodes. It replaces the manual declaration of the channels, for a simpler end-user experience.
 
 Two entry points, outside the package:
 
 | Entry | Role |
 |---|---|
 | `scripts/combus_scons_hook.py` | PlatformIO hook, declared by `extra_scripts = pre:scripts/combus_scons_hook.py` in the `[env]` section of `platformio.ini`. The normal path. |
-| `scripts/combus_builder.py` | Stand-alone CLI. Single board only: no node detection nor diffusion; the machine type filter follows the context, as in the hook. Options: `--project-root`, `--out-dir`, `--define` (repeatable, form `"-D FLAG"` or `"-D KEY=VAL"`; a token without `-D` is not read). |
+| `scripts/combus_builder.py` | Stand-alone CLI. Single board only: no node detection or diffusion; the machine type filter follows the context, as in the hook. Options: `--project-root`, `--out-dir`, `--define` (repeatable, form `"-D FLAG"` or `"-D KEY=VAL"`; a token without `-D` is not read). |
 
 ## 2. Pipeline
 
@@ -41,7 +41,7 @@ Exact order in the hook (`_generate_combus_action`): discovery and parsing once 
 - **What a `.cb` describes.** A `.cb` says what exists and how it is exposed (identifier, type, scope, direction, activation, safe value). The business logic (thresholds, computations, processors) stays in C++.
 - **The flags come from the real build.** The builder does not reimplement PlatformIO: it reads `env["CPPDEFINES"]`, with `build_flags` as a fallback and an `override_cppdefines` parameter for the tests (`acquire_build_context`). The source used is traced in `BuildContext.cppdefines_source`. For the boards of a node that are not compiled, `node_context.py` reads the configuration through the PlatformIO API (`ProjectConfig`).
 - **No silent resolution.** Duplicate `id`, unknown key, `channels: null`, direction conflict: explicit error, never "the last one wins".
-- **An `id` is unique across the whole project**, all types, scopes and themes confounded (`ChannelConflictError`, `merge_channels`). Two definitions of the same `id` with different `value`s raise `ChannelValueConflictError`.
+- **An `id` is unique across the whole project**, whatever its type, scope or theme (`ChannelConflictError`, `merge_channels`). Two definitions of the same `id` with different `value`s raise `ChannelValueConflictError`.
 - **The sort is global**, after reading all the files: the order of the files has no meaning.
 - **The default value is the safe value.** A `.cb` must write `value:` for each channel (`parse_yaml_file`); a failsafe alarm declares `value: fault`; an analog channel that is not at `CbusNeutral` is reported in the build log.
 
@@ -167,7 +167,7 @@ The contract of a link is a **coupler**, the norm of the link, like a standard p
 - **Set of the link** (`compute_coupler_link()`): **all** of the coupler (full contract). A channel of the same name in the machine type must have the same type, the same value and the same `zeroAt`, and must **flow**: two senders, or nobody sending, is an error. On the socket, `downlink_pt` relays (it sends to the plug, or receives where the plug sends); one source per channel on the node (`check_single_source()`, `both_or` excepted).
 - **Common frame**: analog then digital, stable before candidates, then the name (never the theme).
 - **MD5 of the coupler and of the side** (`link_md5()`): it only covers the coupler (the same for every machine that carries it) and a side; each side announces MD5(coupler + its side) and expects MD5(coupler + the other side) (`peer=True`), so two sockets, or two plugs, linked by mistake refuse each other.
-- `combus_peer_links.h` (always written, empty without coupler nor remote): per link, the announced MD5s (`kAnnouncedMd5`, `kAnnouncedMd5Next`) and the expected ones (`kExpectedMd5`, `kExpectedMd5Next`), the channel counts, the **table** position on the wire → local ID (`kAnalog[]`, `kDigital[]`) and what this node receives (`kAnalogRx[]`, `kDigitalRx[]`).
+- `combus_peer_links.h` (always written, empty without a coupler or a remote): per link, the announced MD5s (`kAnnouncedMd5`, `kAnnouncedMd5Next`) and the expected ones (`kExpectedMd5`, `kExpectedMd5Next`), the channel counts, the **table** position on the wire → local ID (`kAnalog[]`, `kDigital[]`) and what this node receives (`kAnalogRx[]`, `kDigitalRx[]`).
 
 The build log shows one line per link: `[combus_builder] set LINK <coupler> (<side>)  md5=<32 hex>  A3+D2`. The test coupler `test_coupler` and the test types `test_tractor` and `test_trailer` (channels prefixed `TEST_`) are used by the tests (`test_couplers.py`, `test_remote_contract.py`).
 
