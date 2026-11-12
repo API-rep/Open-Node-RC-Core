@@ -31,7 +31,7 @@ This separation avoids mixing concerns and keeps each document focused on a sing
 
 | Question | Reference |
 |----------|-----------|
-| What does it look like? | [Formatting Items](conventions/formating.md) |
+| What does it look like? | [Formatting Items](conventions/formatting.md) |
 | Where does it go? | [Layout Rules](conventions/layout.md) |
 | Why is it written this way? | [Coding Standards](conventions/coding.md) |
 | How should it be documented? | [Doxygen Conventions](conventions/doxygen.md) |

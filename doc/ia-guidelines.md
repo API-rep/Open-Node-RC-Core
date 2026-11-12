@@ -22,7 +22,7 @@ An agent-specific file (for example `CLAUDE.md` at the repository root) holds th
 | [Development Guidelines](developement/README.md) | Overview of the conventions |
 | [Layout Rules](developement/conventions/layout.md) | How to organize code within files |
 | [Coding Standards](developement/conventions/coding.md) | Semantic rules, naming, debug facilities (§7) |
-| [Formatting Items](developement/conventions/formating.md) | Visual appearance of code elements |
+| [Formatting Items](developement/conventions/formatting.md) | Visual appearance of code elements |
 | [Doxygen Conventions](developement/conventions/doxygen.md) | Documentation standards |
 
 ### Configuration-Specific Guidelines

@@ -2,9 +2,9 @@
 
 This document defines how formatting elements are assembled and organised within files.
 
-If `formatting.md` defines the visual vocabulary, this document defines the rules used to compose it, similarly to paragraphs and tabulations in a word processor.
+If [`formatting.md`](formatting.md) defines the visual vocabulary, this document defines the rules used to compose it, similarly to paragraphs and tabulations in a word processor.
 
-This document intentionally avoids semantic C/C++ decisions. Those belong to `coding-conventions.md`.
+This document intentionally avoids semantic C/C++ decisions. Those belong to [`coding.md`](coding.md).
 
 Whenever practical, these rules should remain simple and compatible with automated formatting tools.
 
@@ -59,7 +59,7 @@ struct UartCfg {
 };
 ```
 
-Refer to the example files for representative spacing patterns.
+Refer to the [templates](../template/) for representative spacing patterns.
 
 ---
 
@@ -122,7 +122,7 @@ Visual form:
 // =============================================================================
 ```
 
-Refer to the example files for typical usage patterns.
+Refer to the [templates](../template/) for typical usage patterns.
 
 ---
 
@@ -232,7 +232,7 @@ Rules:
 * Rich documentation uses Doxygen blocks.
 * Compact Doxygen blocks may be used when extensive documentation would reduce readability.
 
-Refer to `doxygen-conventions.md`.
+Refer to [`doxygen.md`](doxygen.md).
 
 ---
 
@@ -337,13 +337,12 @@ Debug statements follow the indentation level of the surrounding scope.
 Example:
 
 ```cpp
-if (ready)
-{
-	LOG_DEBUG("[HW] Initialised.");
+if (ready) {
+	sys_log_info("[HW] Initialised.\n");
 }
 ```
 
-Refer to `debug-logging.md`.
+The logging functions are in `src/core/system/debug/logging/debug.h`.
 
 ---
 
