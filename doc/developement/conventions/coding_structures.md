@@ -4,7 +4,7 @@ This document defines the coding conventions used when implementing structures i
 
 It focuses on the structure definitions themselves: field organization, lightweight helpers, and readability considerations.
 
-Subsystem decomposition patterns (`cfg`, `state`, `dynCfg`) are described in `include/struct/README.md`. The patterns remain valid; the directory itself is deprecated as a location (see §5).
+Subsystem decomposition patterns (`cfg`, `state`, `dynCfg`) are described in `include/struct/README.md`. The patterns remain valid; the directory itself is deprecated as a location (see §6).
 
 ---
 
@@ -16,8 +16,8 @@ They should focus on describing data rather than implementing behaviour.
 
 ```cpp
 struct Position {
-    int16_t x;
-    int16_t y;
+	int16_t x;
+	int16_t y;
 };
 ```
 
@@ -27,20 +27,20 @@ Prefer:
 
 ```cpp
 struct MotorCfg {
-    uint16_t minSpeed;
-    uint16_t maxSpeed;
+	uint16_t minSpeed;
+	uint16_t maxSpeed;
 };
 
 struct MotorState {
-    uint16_t currentSpeed;
+	uint16_t currentSpeed;
 };
 
 struct Motor {
-    const char*       name;
-    uint8_t           id;
+	const char*       name;
+	uint8_t           id;
 
-    const MotorCfg*   cfg;
-    MotorState*       state;
+	const MotorCfg*   cfg;
+	MotorState*       state;
 };
 ```
 
@@ -71,12 +71,12 @@ Example:
 
 ```cpp
 struct Range {
-    uint16_t min;
-    uint16_t max;
+	uint16_t min;
+	uint16_t max;
 
-    constexpr bool contains(uint16_t value) const noexcept {
-        return value >= min && value <= max;
-    }
+	constexpr bool contains(uint16_t value) const noexcept {
+		return value >= min && value <= max;
+	}
 };
 ```
 
@@ -88,15 +88,15 @@ Prefer:
 
 ```cpp
 struct Range {
-    uint16_t min;
-    uint16_t max;
+	uint16_t min;
+	uint16_t max;
 
-    constexpr bool intersects(const Range& other) const noexcept;
+	constexpr bool intersects(const Range& other) const noexcept;
 };
 
 // Helper implementation
 constexpr bool Range::intersects(const Range& other) const noexcept {
-    return (min <= other.max) && (other.min <= max);
+	return (min <= other.max) && (other.min <= max);
 }
 ```
 
@@ -124,8 +124,8 @@ Small configurations may be duplicated entirely:
 ```cpp
 // Flash
 const RampCfg rampCfg = {
-    .rate   = 100,
-    .target = 2000,
+	.rate   = 100,
+	.target = 2000,
 };
 
 // RAM
@@ -161,19 +161,19 @@ Avoid:
 
 ```cpp
 struct ComPeerLink {
-    const char*    coupler;
-    const uint8_t* md5;
-    const uint8_t* md5Stable;
-    const uint8_t* md5Peer;
-    const uint8_t* md5PeerStable;
-    uint8_t        nAnalog;
-    uint8_t        nDigital;
-    uint8_t        nStableAnalog;
-    uint8_t        nStableDigital;
-    const uint8_t* analog;
-    const uint8_t* digital;
-    const bool*    analogRx;
-    const bool*    digitalRx;
+	const char*    coupler;
+	const uint8_t* md5;
+	const uint8_t* md5Stable;
+	const uint8_t* md5Peer;
+	const uint8_t* md5PeerStable;
+	uint8_t        nAnalog;
+	uint8_t        nDigital;
+	uint8_t        nStableAnalog;
+	uint8_t        nStableDigital;
+	const uint8_t* analog;
+	const uint8_t* digital;
+	const bool*    analogRx;
+	const bool*    digitalRx;
 };
 ```
 
@@ -181,23 +181,23 @@ Prefer:
 
 ```cpp
 struct ComLinkMd5 {
-    const uint8_t* stable;
-    const uint8_t* next;
+	const uint8_t* stable;
+	const uint8_t* next;
 };
 
 struct ComLinkTable {
-    uint8_t        count;
-    uint8_t        stableCount;
-    const uint8_t* ids;
-    const bool*    rx;
+	uint8_t        count;
+	uint8_t        stableCount;
+	const uint8_t* ids;
+	const bool*    rx;
 };
 
 struct ComPeerLink {
-    const char*  coupler;
-    ComLinkMd5   announced;
-    ComLinkMd5   expected;
-    ComLinkTable analog;
-    ComLinkTable digital;
+	const char*  coupler;
+	ComLinkMd5   announced;
+	ComLinkMd5   expected;
+	ComLinkTable analog;
+	ComLinkTable digital;
 };
 ```
 
@@ -211,7 +211,37 @@ Keep in mind:
 
 ---
 
-## 5. Where a Structure Lives
+## 5. Order the Fields of a Large Structure by Theme
+
+A structure grows field by field, each new one added at the end: its order ends up following its history, not its meaning. When the fields do not justify a sub-structure (§4) but still serve different concerns, order them by theme and give each group a short title.
+
+* Each group starts with a one-line `//` title, indented one tab deeper than the fields ([layout](layout.md), §6.1), and is separated from the next group by a blank line.
+* Columns are aligned inside a group only, so that one long type does not push the whole structure to the right.
+* The `///<` comments stay short: a label, a unit, the meaning of `nullptr`. A longer explanation goes into the `@details` of the structure.
+* A structure initialised by position (`{ "name", A, B, 200u }`, in the tests for example) keeps the order of those first fields; the groups start after them.
+
+```cpp
+struct ComLinkRuntime {
+		// The link
+	const ComDev* dev = nullptr;   ///< description of the link; nullptr = never built
+	NodeCom*      com = nullptr;   ///< transport: the pairing writes its coupling frames to it
+
+		// State: contract, watch, coupling
+	CombusHandshakeContext handshake = {};
+	ComLinkWatch           watch     = {};
+	ComLinkCoupling        coupling  = {};
+
+		// RX decode buffers, sized to the SYSTEM next set
+	uint16_t analogRx[static_cast<uint8_t>(AnalogComBusSystemID::CH_COUNT)]   = {};
+	bool     digitalRx[static_cast<uint8_t>(DigitalComBusSystemID::CH_COUNT)] = {};
+};
+```
+
+The structure then reads through its titles alone, like a function through its step comments. Examples: `ComBusLink`, `CouplingDev`, `ComLinkRuntime`, `CombusRxState`.
+
+---
+
+## 6. Where a Structure Lives
 
 `include/struct/` is deprecated. A new structure goes at the top of the **master header of its theme**, the one that already defines the neighbouring type (for example `ComDev` in `core/system/combus/protocol/link/combus_link_defs.h`).
 
