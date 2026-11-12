@@ -13,8 +13,11 @@
  *   then listens for one base period.  An answer counts when its age agrees with the
  *   socket's own within CouplingDev::ageToleranceMs.  No identity heard: FAILED;
  *   several: CONFLICT; one, in at least kCouplingMinAnswers rounds: COUPLED, else
- *   FAILED.  A FAILED pairing is retried (kCouplingRetries, every kCouplingRetryMs)
- *   while the trigger stays true; a CONFLICT never is.
+ *   FAILED.  A request that agrees, from another identity, means another socket is
+ *   hitched to this one: CONFLICT at once, and one request sent back so that the other
+ *   socket sees it too.  A FAILED pairing is retried
+ *   (kCouplingRetries, every kCouplingRetryMs) while the trigger stays true; a
+ *   CONFLICT never is.
  *
  *   Plug (the end that is carried): at the rising edge, it listens.  A request that
  *   agrees gets an answer (same round, its address, its age) 0 to
@@ -103,10 +106,10 @@ struct ComLinkPairing {
 	PairingCandidate cand[kCouplingMaxCandidates] = {};
 	uint8_t      nCand         = 0u;
 
-		// Plug: the answer to send
+		// Plug: the answer to send.  Socket: the request sent back to another socket
 	bool         answerPending = false;
 	uint8_t      answerRound   = 0u;
-	uint32_t     answerAtMs    = 0u;
+	uint32_t     answerAtMs    = 0u;      ///< plug only
 
 		// Presence detector of an active coupler (same debounce), and identity
 	bool         detRaw        = false;

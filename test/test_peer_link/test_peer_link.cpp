@@ -1001,6 +1001,54 @@ static void test_pair_row19_retries_exhausted(void) {
     TEST_ASSERT_TRUE(bus.digitalBus[kHitchFail].value);
 }
 
+/** Row 20: a request from another socket, agreeing: CONFLICT at once, fault, never retried. */
+static void test_pair_row20_socket_hears_a_socket(void) {
+    startCoupledLink();
+    hitch(true);
+    runLinks(120u);
+    TEST_ASSERT_TRUE(pairing() == PairingState::PAIRING);
+    sendCoupling(CouplingMsg::REQUEST, kSocket1, 1u);
+    runLinks(40u);
+    TEST_ASSERT_TRUE_MESSAGE(pairing() == PairingState::CONFLICT, "a request from another socket was not a conflict");
+    com_rx_update(bus);
+    TEST_ASSERT_TRUE(bus.digitalBus[kHitchFail].value);
+    runLinks(kCouplingRetryMs + 500u);
+    TEST_ASSERT_TRUE_MESSAGE(pairing() == PairingState::CONFLICT, "the conflict was retried");
+    TEST_ASSERT_TRUE(bus.digitalBus[kHitchFail].value);
+}
+
+/** Row 22: after that CONFLICT, one request of its own goes back (same round), then nothing more. */
+static void test_pair_row22_socket_sends_one_request_back(void) {
+    startCoupledLink();
+    hitch(true);
+    runLinks(120u);
+    sendCoupling(CouplingMsg::REQUEST, kSocket1, 2u);
+    for (uint32_t t0 = millis(); (millis() - t0) < 100u && pairing() != PairingState::CONFLICT; ) { com_rx_update(bus); delay(1u); }
+    TEST_ASSERT_TRUE(pairing() == PairingState::CONFLICT);
+    const uint32_t c0 = combus_coupling_rx_count(kLinkIdx);
+    runLinks(30u);
+    CouplingFrame last;
+    TEST_ASSERT_TRUE(combus_coupling_last_rx(kLinkIdx, last));
+    TEST_ASSERT_TRUE_MESSAGE(combus_coupling_rx_count(kLinkIdx) > c0, "no request went back to the other socket");
+    TEST_ASSERT_TRUE(last.msg == CouplingMsg::REQUEST);
+    TEST_ASSERT_EQUAL_UINT8(2u, last.round);
+    const NodeAddr self = combus_coupling_local_addr();
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(self.bytes, last.addr.bytes, 6u);
+    const uint32_t c1 = combus_coupling_rx_count(kLinkIdx);
+    runLinks(kCouplingRetryMs + 500u);
+    TEST_ASSERT_EQUAL_UINT32_MESSAGE(c1, combus_coupling_rx_count(kLinkIdx), "it went on sending after the conflict");
+}
+
+/** Row 21: a request from another socket hitched 10 s ago: ignored, the pairing goes on. */
+static void test_pair_row21_socket_ignores_an_old_request(void) {
+    startCoupledLink();
+    hitch(true);
+    runLinks(120u);
+    sendCoupling(CouplingMsg::REQUEST, kSocket1, 1u, 10000);
+    runLinks(40u);
+    TEST_ASSERT_TRUE_MESSAGE(pairing() == PairingState::PAIRING, "a request out of the tolerance ended the pairing");
+}
+
 
 // =============================================================================
 // CHAIN OF THE COUPLER
@@ -1567,6 +1615,9 @@ void setup() {
     RUN_TEST(test_pair_row17_long_drop_detached);
     RUN_TEST(test_pair_row18_retry_succeeds);
     RUN_TEST(test_pair_row19_retries_exhausted);
+    RUN_TEST(test_pair_row20_socket_hears_a_socket);
+    RUN_TEST(test_pair_row21_socket_ignores_an_old_request);
+    RUN_TEST(test_pair_row22_socket_sends_one_request_back);
 
     RUN_TEST(test_chain_row1_press_latches_at_once);
     RUN_TEST(test_chain_row3_remote_loss_keeps_the_command);

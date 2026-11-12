@@ -257,6 +257,7 @@ void conclude( ComLinkPairing& p, const CouplingDev& dev, PairingState state, co
  * @brief Socket step. Requests, final listening, conclusion.
  *
  * @details In order:
+ *   0. CONFLICT with another socket: the one request sent back, once.
  *   1. A FAILED pairing starts again once its delay is over, while retries are left.
  *   2. Requests: one per round when due, the next one after a drawn delay; after the
  *      last one, one base period of listening.
@@ -271,6 +272,15 @@ void conclude( ComLinkPairing& p, const CouplingDev& dev, PairingState state, co
 
 void stepSocket( ComLinkPairing& p, const CouplingDev& dev, NodeCom* com, uint32_t now )
 {
+		// 0. Another socket heard: one request back.  It is pairing, since it has just
+		//    requested: it hears this one and sees the conflict too.
+	if (p.state == PairingState::CONFLICT && p.answerPending) {
+		p.answerPending = false;
+		send(com, CouplingMsg::REQUEST, p.answerRound, combus_coupling_hitch_age(now - p.t0Ms));
+
+		return;
+	}
+
 		// 1. Retry
 	if (p.state == PairingState::FAILED && p.retriesLeft > 0u && (int32_t)(now - p.nextMs) >= 0) {
 		p.retriesLeft--;
@@ -348,8 +358,13 @@ void stepPlug( ComLinkPairing& p, const CouplingDev& dev, NodeCom* com, uint32_t
 /**
  * @brief Socket reception. Counts an answer that agrees, to a round already requested.
  *
- * @details A second identity is kept as a second candidate: the conclusion makes it a
- *   CONFLICT.  Beyond kCouplingMaxCandidates, the frame is ignored.
+ * @details In order:
+ *   1. A request that agrees, from another identity: another socket is hitched to this
+ *      one.  CONFLICT at once, never retried, and one request is sent back (see
+ *      stepSocket()).  Its own requests (an echo) are ignored.
+ *   2. Answers that agree, to a round already requested.
+ *   3. A second identity is kept as a second candidate: the conclusion makes it a
+ *      CONFLICT.  Beyond kCouplingMaxCandidates, the frame is ignored.
  *
  * @param p      Pairing state.
  * @param dev    CouplingDev of the link.
@@ -360,9 +375,23 @@ void stepPlug( ComLinkPairing& p, const CouplingDev& dev, NodeCom* com, uint32_t
 
 void onSocketFrame( ComLinkPairing& p, const CouplingDev& dev, const CouplingFrame& frame, uint8_t bit, uint32_t now )
 {
+		// 1. Another socket
+	if (frame.msg == CouplingMsg::REQUEST) {
+		if (!sameAddr(frame.addr, localAddr()) && agrees(p, dev, frame.hitchAgeMs, now)) {
+			conclude(p, dev, PairingState::CONFLICT, "another socket requested");
+
+			p.answerPending = true;
+			p.answerRound   = frame.round;
+		}
+
+		return;
+	}
+
+		// 2. Answers that agree
 	if (frame.msg != CouplingMsg::ANSWER || frame.round > p.round) { return; }
 	if (!agrees(p, dev, frame.hitchAgeMs, now)) { return; }
 
+		// 3. Candidate
 	const int c = candidateOf(p, frame.addr);
 
 	if (c < 0) { return; }
