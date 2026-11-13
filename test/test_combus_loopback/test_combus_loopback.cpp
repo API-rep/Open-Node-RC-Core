@@ -64,10 +64,11 @@
  *     touches the contract (P4 removed).  Peer frames are forged on the wire.
  *     Same TX↔RX jumper as Group B.
  *
- *   Group O — next / stable mode:
- *     Rows of the table validated by the owner: without candidates, stable
- *     requests only; with candidates, NEXT requests first (burst then 3
- *     retries), a NEXT ACK that does not match switches to stable at once; the
+ *   Group O — next / legacy mode:
+ *     Rows of the table validated by the owner: without candidates, legacy
+ *     requests only (without the "ComBus-next" channels); with candidates,
+ *     NEXT requests first (burst then 3 retries), a NEXT ACK that does not
+ *     match switches to legacy at once; the
  *     mode follows what the peer announces in its NEXT handshakes; periodic
  *     requests and ACK follow the mode; a loss starts again with NEXT; DEV is
  *     only logged.  No machine type has candidates: the tests give the link a
@@ -1580,7 +1581,7 @@ static void test_contract_failsafe_keeps_contract(void) {
 
 
 // =============================================================================
-// GROUP O — NEXT / STABLE MODE
+// GROUP O — NEXT / LEGACY MODE
 //
 // No machine type has candidates yet: enableCandidates() gives the link a fake
 // next MD5, as if this board had candidates.  On the loopback, a NEXT request
@@ -1629,7 +1630,7 @@ static void test_mode_system_link_has_no_separate_candidates(void) {
     TEST_ASSERT_FALSE(linkCtx()->hasCandidates);
 }
 
-/** Row 1: no candidate: stable requests only, STABLE in stable mode. */
+/** Row 1: no candidate: legacy requests only, STABLE in legacy mode. */
 static void test_mode_row1_no_candidate_is_legacy(void) {
     startHealthLink(LinkEnd::TX_RX, kInterDev);
     TEST_ASSERT_FALSE(linkCtx()->hasCandidates);
@@ -1654,7 +1655,7 @@ static void test_mode_row2_same_candidates_is_next(void) {
     TEST_ASSERT_TRUE(linkCtx()->nextMode);
 }
 
-/** Retries: with candidates and no answer, 6 NEXT requests (burst of 3, then 3 retries), then stable. */
+/** Retries: with candidates and no answer, 6 NEXT requests (burst of 3, then 3 retries), then legacy. */
 static void test_mode_next_requests_then_legacy(void) {
     startHealthLink(LinkEnd::TX_RX, kInterDev);
     enableCandidates();
@@ -1677,7 +1678,7 @@ static void test_mode_next_requests_then_legacy(void) {
     TEST_ASSERT_FALSE_MESSAGE(legacyBeforeNext, "a NEXT request after a legacy one");
 }
 
-/** Row 3: the NEXT ACK carries another next MD5: stable at once, stable ACK: stable mode. */
+/** Row 3: the NEXT ACK carries another next MD5: legacy at once, legacy ACK: stable mode. */
 static void test_mode_row3_other_next_falls_back_to_legacy_at_once(void) {
     startHealthLink(LinkEnd::TX_RX, kInterDev);
     enableCandidates();
@@ -1688,7 +1689,7 @@ static void test_mode_row3_other_next_falls_back_to_legacy_at_once(void) {
     TEST_ASSERT_EQUAL_UINT8(0u, linkCtx()->nextTriesLeft);
 
     drainWire();
-    combus_handshake_tx_update(linkCtx(), s_com);                   // first burst request: stable already
+    combus_handshake_tx_update(linkCtx(), s_com);                   // first burst request: legacy already
     delay(kRxPollMs);
     WireHandshake hs[2];
     TEST_ASSERT_EQUAL_UINT8(1u, readHandshakes(hs, 2u));
@@ -1704,13 +1705,13 @@ static void test_mode_row3_other_next_falls_back_to_legacy_at_once(void) {
 static void test_mode_row5_matching_next_moves_to_next(void) {
     startHealthLink(LinkEnd::TX_RX, kInterDev);
     enableCandidates();
-    sendGoodAck();                                                  // stable ACK: stable mode
+    sendGoodAck();                                                  // legacy ACK: stable mode
     pumpRx();
     TEST_ASSERT_TRUE(isStable());
     TEST_ASSERT_FALSE(linkCtx()->nextMode);
 
     drainWire();
-    delay(kCombusHandshakePeriodMs + 20u);                          // row 10: periodic request is stable
+    delay(kCombusHandshakePeriodMs + 20u);                          // row 10: periodic request is legacy
     combus_handshake_tx_update(linkCtx(), s_com);
     delay(kRxPollMs);
     WireHandshake hs[2];
@@ -2123,7 +2124,7 @@ void setup() {
     RUN_TEST(test_contract_row12_no_reply_to_ack);
     RUN_TEST(test_contract_failsafe_keeps_contract);
 
-    // --- Group O: next / stable mode ---
+    // --- Group O: next / legacy mode ---
     RUN_TEST(test_mode_system_link_has_no_separate_candidates);
     RUN_TEST(test_mode_row1_no_candidate_is_legacy);
     RUN_TEST(test_mode_row2_same_candidates_is_next);
