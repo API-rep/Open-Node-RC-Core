@@ -1718,6 +1718,7 @@ static void test_mode_row5_matching_next_moves_to_next(void) {
     TEST_ASSERT_EQUAL_UINT8(1u, readHandshakes(hs, 2u));
     TEST_ASSERT_FALSE(isNextFlag(hs[0].flags));
 
+    pumpRx();                                                       // the loop runs on: a pass later than the loss timeout drops its backlog
     sendForgedHandshake(false, true, combus::wire::kProjectVersionMajor, combus::wire::kProjectVersionMinor, true);
     pumpRx();                                                       // the peer announces the same next
     TEST_ASSERT_TRUE(isStable());

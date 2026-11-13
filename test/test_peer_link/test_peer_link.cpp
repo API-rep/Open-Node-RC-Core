@@ -367,6 +367,82 @@ static void test_loss_row6_contract_dropped(void) {
     TEST_ASSERT_EQUAL_UINT16(CbusNeutral, bus.analogBus[kTilt].value);
 }
 
+/** Row 7: a late pass (the loop stalled longer than the loss timeout) drops its backlog:
+ *  the old frame is not applied, the link is lost, then a fresh frame is applied again. */
+static void test_loss_row7_late_pass_drops_the_backlog(void) {
+    startLink();
+    ensureStable();
+    receiveFromTrailer(333u, false, 11u);
+    TEST_ASSERT_EQUAL_UINT16(333u, bus.analogBus[kTilt].value);
+
+        // The trailer sends while this end is stalled
+    const uint8_t len = encodeTrailerFrame(0u, 444u, false, false, 12u);
+    s_com->write(s_com->ctx, s_buf, len);
+    delay(kProto.linkTimeoutMs + 60u);
+    com_rx_update(bus);
+
+    TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::LOST);
+    TEST_ASSERT_EQUAL_UINT16(CbusNeutral, bus.analogBus[kTilt].value);   // the old 444 is not applied
+    TEST_ASSERT_EQUAL_INT(0, s_com->available(s_com->ctx));              // nothing left of the backlog
+
+        // The link comes back: a fresh frame is applied
+    ensureStable();
+    receiveFromTrailer(555u, false, 13u);
+    TEST_ASSERT_EQUAL_UINT16(555u, bus.analogBus[kTilt].value);
+}
+
+
+// =============================================================================
+// TRANSPORT
+//
+// The UART reads the driver in blocks (UartCtx::rxCache): byte by byte, once the
+// RX buffer of the driver is full, each byte costs about 340 us.
+// =============================================================================
+
+/** After a stall, a full RX buffer is read fast, every byte once and in order. */
+static void test_transport_full_buffer_read_in_blocks(void) {
+    while (s_com->available(s_com->ctx) > 0) { s_com->readByte(s_com->ctx); }
+
+        // 380 bytes: the RX buffer of the driver (256) is full, the rest waits in the FIFO
+    static uint8_t pattern[380];
+    for (uint16_t i = 0u; i < sizeof(pattern); ++i) { pattern[i] = (uint8_t)i; }
+    s_com->write(s_com->ctx, pattern, sizeof(pattern));
+    delay(80u);
+
+    const uint32_t t0 = micros();
+    uint16_t n   = 0u;
+    bool inOrder = true;
+    for (int b = s_com->readByte(s_com->ctx); b >= 0; b = s_com->readByte(s_com->ctx)) {
+        if (b != (uint8_t)n) { inOrder = false; }
+        ++n;
+    }
+    const uint32_t us = micros() - t0;
+
+    TEST_ASSERT_EQUAL_INT(0, s_com->available(s_com->ctx));
+    TEST_ASSERT_TRUE_MESSAGE(n >= 256u, "the RX buffer was not full - check TX<->RX jumper");
+    TEST_ASSERT_TRUE_MESSAGE(inOrder, "a byte lost, doubled or out of order");
+    char msg[64];
+    snprintf(msg, sizeof(msg), "%u bytes read in %lu us", (unsigned)n, (unsigned long)us);
+    TEST_ASSERT_TRUE_MESSAGE(us < 20000u, msg);
+    TEST_MESSAGE(msg);
+}
+
+/** The cache counts in available(): bytes read from the driver but not served yet. */
+static void test_transport_available_counts_the_cache(void) {
+    while (s_com->available(s_com->ctx) > 0) { s_com->readByte(s_com->ctx); }
+
+    static const uint8_t ten[10] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
+    s_com->write(s_com->ctx, ten, sizeof(ten));
+    delay(20u);
+
+    TEST_ASSERT_EQUAL_INT(10, s_com->available(s_com->ctx));
+    TEST_ASSERT_EQUAL_INT(1, s_com->readByte(s_com->ctx));
+    TEST_ASSERT_EQUAL_INT(9, s_com->available(s_com->ctx));
+    for (int k = 2; k <= 10; ++k) { TEST_ASSERT_EQUAL_INT(k, s_com->readByte(s_com->ctx)); }
+    TEST_ASSERT_EQUAL_INT(0, s_com->available(s_com->ctx));
+    TEST_ASSERT_EQUAL_INT(-1, s_com->readByte(s_com->ctx));
+}
+
 
 // =============================================================================
 // COUPLING
@@ -1569,6 +1645,9 @@ void setup() {
     RUN_TEST(test_loss_row4_shared_fault_falls_back);
     RUN_TEST(test_loss_row5_reconnection);
     RUN_TEST(test_loss_row6_contract_dropped);
+    RUN_TEST(test_loss_row7_late_pass_drops_the_backlog);
+    RUN_TEST(test_transport_full_buffer_read_in_blocks);
+    RUN_TEST(test_transport_available_counts_the_cache);
 
     RUN_TEST(test_zero_row1_flag_generated);
     RUN_TEST(test_zero_row2_read_logical);

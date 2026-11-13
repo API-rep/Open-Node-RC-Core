@@ -351,6 +351,7 @@ void combus_rx_init( uint8_t        linkIdx,
 	st.rxCount      = 0u;
 	st.snapValid    = false;
 	st.everReceived = false;
+	st.lastPassMs   = millis();
 
 	combus_handshake_internal::clearContractValidated(st.handshakeCtx);
 
@@ -374,10 +375,16 @@ void combus_rx_init( uint8_t        linkIdx,
  * @details For each link, in order:
  *   1. Guard: a slot never started is skipped.
  *   2. A link OFF drains its transport and keeps nothing.
- *   3. All the available bytes go to the ring.
- *   4. Decode until a decoder has nothing left to consume.  Several frames may have
+ *   3. A late pass drops its backlog.  Longer than the loss timeout since the last
+ *      pass: the loop was stalled, and the bytes waiting are at least that old.  Once
+ *      its RX buffer is full, the UART driver keeps the oldest bytes and loses the
+ *      newer ones: the whole backlog is stale, applying it would write old values on
+ *      the bus and refresh the age of the link.  The silence is then seen in step 6,
+ *      as if the bytes had been lost on the wire.
+ *   4. All the available bytes go to the ring.
+ *   5. Decode until a decoder has nothing left to consume.  Several frames may have
  *      arrived since the last pass.
- *   5. Watch of a STABLE contract.  The silence only counts once data has flowed: a
+ *   6. Watch of a STABLE contract.  The silence only counts once data has flowed: a
  *      receiver may validate its contract on a request, before any data frame.  The
  *      missing ACK only concerns a bidirectional end: the peer no longer receives it.
  */
@@ -393,13 +400,38 @@ void combus_rx_update( void )
 			// 1. Slot never started
 		if (!st.nodeCom) { continue; }
 
+			// Time since the last pass, by unsigned difference: millis() may wrap around
+		const uint32_t passMs = millis();
+		const uint32_t gapMs  = passMs - st.lastPassMs;
+		const bool     late   = (st.linkTimeoutMs != 0u) && (gapMs > st.linkTimeoutMs);
+
+		st.lastPassMs = passMs;
+
 			// 2. Link OFF: drain and forget
 		if (st.mode == CombusRxMode::OFF) {
 			while (st.nodeCom->available(st.nodeCom->ctx) > 0) { st.nodeCom->readByte(st.nodeCom->ctx); }
 			continue;
 		}
 
-			// 3. Bytes to the ring
+			// 3. Late pass: the transport and the ring are dropped
+		if (late) {
+			uint16_t dropped = st.rxCount;
+
+			while (st.nodeCom->available(st.nodeCom->ctx) > 0) {
+				if (st.nodeCom->readByte(st.nodeCom->ctx) >= 0) { ++dropped; }
+			}
+
+			st.rxHead  = 0u;
+			st.rxCount = 0u;
+
+				// Check for a running link: at its start, a slow boot is not a stall
+			if (dropped > 0u && st.everReceived) {
+				sys_log_warn("[COMBUS_RX] '%s': %lu ms since the last pass, %u stale bytes dropped\n",
+				             st.nodeCom->name, (unsigned long)gapMs, (unsigned)dropped);
+			}
+		}
+
+			// 4. Bytes to the ring
 		while (st.nodeCom->available(st.nodeCom->ctx) > 0) {
 			int b = st.nodeCom->readByte(st.nodeCom->ctx);
 
@@ -407,14 +439,14 @@ void combus_rx_update( void )
 			if (b >= 0) { rxBufPush(st, (uint8_t)b); }
 		}
 
-			// 4. Decode what is complete
+			// 5. Decode what is complete
 		while (st.rxCount >= CombusFrameMinLen) {
 			if (tryDecode(i, st) == 0u) {
 				break;
 			}
 		}
 
-			// 5. Watch of a STABLE contract
+			// 6. Watch of a STABLE contract
 		CombusHandshakeContext* ctx = st.handshakeCtx;
 
 		if (!ctx || !ctx->contractValidated) { continue; }

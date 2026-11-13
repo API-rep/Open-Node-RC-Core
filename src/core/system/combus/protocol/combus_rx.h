@@ -78,6 +78,7 @@ struct CombusRxState {
 	ChanLayer    writeLayer    = ChanLayer::UNDEFINED;   ///< layer of the link: the identity of the writes to `target`
 	uint32_t     linkTimeoutMs = 0u;                     ///< silence before the link is lost; 0: see peer_or
 	CombusRxMode mode          = CombusRxMode::ON;       ///< OFF and PAIRING: see CombusRxMode
+	uint32_t     lastPassMs    = 0u;                     ///< millis() at the last reception pass: a late one drops its backlog
 };
 
 
