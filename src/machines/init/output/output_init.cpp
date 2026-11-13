@@ -26,7 +26,7 @@
 void output_init() {
   sys_log_info("[OUTPUT] output_init ...\n");
 
-  com_init();    // no-op if no transport flag is defined
+  com_init();    // the links of the board (comLinks[])
 
   sys_log_info("[OUTPUT] output_init done\n\n");
 }
