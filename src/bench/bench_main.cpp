@@ -22,8 +22,10 @@
  *   The status line:
  *     S st=<state> ct=<0|1> nx=<0|1> pr=<pairing> age=<ms> den=<denied> up=<ms> lp=<ms>
  *       A=<v,...> D=<01...>
- *   (up: time since boot; lp: longest loop since the last status line, in ms;
- *   cbmax, cbavg: longest and mean ComBus time of a loop, RX + TX, in us.)
+ *   (up: time since boot; lp: longest loop since the last status line, in ms, without
+ *   the stall asked by `w`;
+ *   cbmax, cbavg: longest and mean ComBus time of a loop, RX + TX, in us; ws: stalls run
+ *   since boot.)
  *   The READY line carries the reset reason (esp_reset_reason()).
  *   The channels are given by index: the PC reads the generated combus_ids.h.
  *
@@ -101,6 +103,8 @@ static uint32_t s_maxRxUs   = 0u;     // longest RX part since then
 static uint32_t s_maxTxUs   = 0u;     // longest TX part since then
 static uint32_t s_sumCbUs   = 0u;     // ComBus time summed since then, for the mean
 static uint32_t s_nCb       = 0u;     // loops since then
+static uint32_t s_stallUs   = 0u;     // the stall asked by `w` in this loop: not counted in lp
+static uint32_t s_stalls    = 0u;     // stalls run since boot: the PC sees whether its `w` arrived
 
 
 	/// One status line: the state of the link, then every channel of the bus.
@@ -109,13 +113,13 @@ static void printStatus( void )
 	ComLinkView v;
 	combus_links_view(0u, v);
 
-	Serial.printf("S st=%u ct=%u nx=%u pr=%u age=%lu den=%lu up=%lu lp=%lu cbmax=%lu cbavg=%lu rxmax=%lu txmax=%lu A=",
+	Serial.printf("S st=%u ct=%u nx=%u pr=%u age=%lu den=%lu up=%lu lp=%lu cbmax=%lu cbavg=%lu rxmax=%lu txmax=%lu ws=%lu A=",
 	              (unsigned)v.state, (unsigned)v.contractStable, (unsigned)v.nextMode,
 	              (unsigned)combus_links_pairing_state(0u), (unsigned long)v.rxAgeMs,
 	              (unsigned long)combus_denied_writes(), (unsigned long)millis(),
 	              (unsigned long)(s_maxLoopUs / 1000u), (unsigned long)s_maxCbUs,
 	              (unsigned long)(s_nCb ? s_sumCbUs / s_nCb : 0u),
-	              (unsigned long)s_maxRxUs, (unsigned long)s_maxTxUs);
+	              (unsigned long)s_maxRxUs, (unsigned long)s_maxTxUs, (unsigned long)s_stalls);
 
 	s_maxLoopUs = 0u;
 	s_maxCbUs   = 0u;
@@ -166,7 +170,10 @@ static void runCommand( char* line )
 				// A module that blocks: busy wait, nothing else runs, the UART fills up
 			ok = (n == 2) && a > 0 && a <= 5000;
 			const uint32_t t0 = millis();
+			const uint32_t u0 = micros();
 			while (ok && (millis() - t0) < static_cast<uint32_t>(a)) { }
+			s_stallUs = micros() - u0;
+			if (ok) { ++s_stalls; }
 			break;
 		}
 		case 's':  printStatus(); return;
@@ -218,9 +225,12 @@ void loop()
 {
 	const uint32_t t0 = micros();
 
-		// Reception off: the bytes of the link are dropped, as with a cut RX wire
+		// Reception off: the bytes of the link are dropped, as with a cut RX wire (through the
+		// NodeCom of the port: its cache goes too)
 	if (!s_rxOn) {
-		while (Serial2.available() > 0) { Serial2.read(); }
+		NodeCom& com = s_uart[0].com;
+
+		while (com.available(com.ctx) > 0) { com.readByte(com.ctx); }
 	}
 
 	const uint32_t rx0 = micros();
@@ -250,8 +260,10 @@ void loop()
 	s_sumCbUs += cb;
 	s_nCb++;
 
-		// Longest loop, without the pause
-	const uint32_t dt = micros() - t0;
+		// Longest loop, without the pause nor the stall asked (the loop after it counts)
+	const uint32_t dt = micros() - t0 - s_stallUs;
+
+	s_stallUs = 0u;
 
 	if (dt > s_maxLoopUs) { s_maxLoopUs = dt; }
 

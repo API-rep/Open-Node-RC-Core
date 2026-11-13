@@ -90,6 +90,7 @@ class Board:
         self.max_lp = 0               # longest loop of the board, in ms
         self.max_cb = 0               # longest ComBus time of a loop (RX + TX), in us
         self.cb_avgs: list[int] = []  # mean ComBus time between two status lines, in us
+        self.retries = 0              # console replies lost or corrupted on the USB link, asked again
 
     # --- reset line ---
     def hold(self, on: bool) -> None:
@@ -155,19 +156,41 @@ class Board:
                 time.sleep(0.5)
         return "silent for 6 s (frozen, or its console is)"
 
+    # The USB bridge (CP210x) sometimes delivers a packet of 64 bytes 0xFF in place of
+    # the console output, on both boards: a reply lost that way is asked once more.
+    # The commands are idempotent (a, d, t, r, g, s), except w, never sent twice.
     def cmd(self, line: str, timeout: float = 1.0) -> None:
-        self.drain()
-        self.ser.write((line + "\n").encode())
-        self.wait_line("OK " + line, timeout)
+        for attempt in range(2):
+            self.drain()
+            self.ser.write((line + "\n").encode())
+            try:
+                self.wait_line("OK " + line, timeout)
+                return
+            except TimeoutError:
+                if attempt or line.startswith("w "):
+                    raise
+                self.retries += 1
 
     def status(self) -> dict:
-        self.drain()
-        self.ser.write(b"s\n")
-        line = self.wait_line("S ", 1.0)
-        f = dict(kv.split("=", 1) for kv in line[2:].split())
-        st = {k: int(f[k]) for k in ("st", "ct", "nx", "pr", "age", "den")}
-        st["up"], st["lp"] = int(f.get("up", -1)), int(f.get("lp", -1))
-        st["cbmax"] = int(f.get("cbmax", -1))
+        for attempt in range(3):
+            self.drain()
+            self.ser.write(b"s\n")
+            try:
+                line = self.wait_line("S ", 1.0)
+                if "\ufffd" in line:
+                    raise ValueError("corrupted status line")
+                f = dict(kv.split("=", 1) for kv in line[2:].split())
+                st = {k: int(f[k]) for k in ("st", "ct", "nx", "pr", "age", "den")}
+                st["up"], st["lp"] = int(f.get("up", -1)), int(f.get("lp", -1))
+                st["cbmax"] = int(f.get("cbmax", -1))
+                st["ws"] = int(f.get("ws", -1))
+                st["A"] = [int(v) for v in f["A"].split(",")] if f["A"] else []
+                st["D"] = [c == "1" for c in f["D"]]
+                break
+            except (TimeoutError, ValueError, KeyError):
+                if attempt == 2:
+                    raise
+                self.retries += 1
         if 0 <= st["up"] < self.last_up:
             self.up_resets += 1
         self.last_up = max(st["up"], 0)
@@ -175,8 +198,6 @@ class Board:
         if "cbmax" in f:
             self.max_cb = max(self.max_cb, int(f["cbmax"]))
             self.cb_avgs.append(int(f["cbavg"]))
-        st["A"] = [int(v) for v in f["A"].split(",")] if f["A"] else []
-        st["D"] = [c == "1" for c in f["D"]]
         return st
 
     # --- channels ---
@@ -505,6 +526,7 @@ def monkey(sc: str, a: Board, b: Board, steps: int, seed: int) -> None:
               "bad_cmd", "burst", "idle", "stall", "stall"] \
         + (["hitch_bounce", "hitch_drop"] if cfg["hitch"] else [])
     cb_peak: dict[str, tuple[int, str]] = {}
+    stalls_lost = [0]
 
     def live() -> list:
         """The boards not held in reset: a held board cannot take a command."""
@@ -582,18 +604,29 @@ def monkey(sc: str, a: Board, b: Board, steps: int, seed: int) -> None:
                 # long, it must, and take back its safe values (the invariants)
                 dur = rnd.choice([20, 80, 150, 400, 800, 2000])
                 peer = boards[1 - i]
-                watch = not held[1 - i] and peer.status()["st"] == ST_ALIVE and bd.status()["st"] == ST_ALIVE
+                sb = bd.status()
+                watch = not held[1 - i] and peer.status()["st"] == ST_ALIVE and sb["st"] == ST_ALIVE
                 bd.drain()
                 bd.ser.write(f"w {dur}\n".encode())
+                seen: list[str] = []
                 if watch:
                     time.sleep((dur - 50) / 1000 if dur >= 400 else dur * 0.9 / 1000)
                     sp = peer.status()
                     if dur <= 150 and sp["st"] != ST_ALIVE:
-                        violations.append(f"step {step} stall {dur} ms on {bd.name}: {peer.name} lost the link (st={sp['st']})")
+                        seen.append(f"step {step} stall {dur} ms on {bd.name}: {peer.name} lost the link (st={sp['st']})")
                     if dur >= 400 and sp["st"] == ST_ALIVE:
-                        violations.append(f"step {step} stall {dur} ms on {bd.name}: {peer.name} still alive")
-                bd.wait_line(f"OK w {dur}", dur / 1000 + 1.0)
-                trace[-1] += f" {dur} ms" + ("" if watch else " (not watched)")
+                        seen.append(f"step {step} stall {dur} ms on {bd.name}: {peer.name} still alive")
+                try:
+                    bd.wait_line(f"OK w {dur}", dur / 1000 + 1.0)
+                except TimeoutError:
+                    bd.retries += 1
+                # The stall counter tells whether the command reached the board (USB)
+                if bd.status()["ws"] == sb["ws"] + 1:
+                    violations.extend(seen)
+                    trace[-1] += f" {dur} ms" + ("" if watch else " (not watched)")
+                else:
+                    stalls_lost[0] += 1
+                    trace[-1] += f" {dur} ms (command lost on the USB, not run)"
             time.sleep(rnd.uniform(0.0, 0.4))
             invariants(step, ev)
     except TimeoutError:
@@ -627,11 +660,16 @@ def monkey(sc: str, a: Board, b: Board, steps: int, seed: int) -> None:
             s = sorted(x.cb_avgs)
             print(f"ComBus time per loop on {x.name}: mean {sum(s) // len(s)} us "
                   f"(median {s[len(s) // 2]}, worst mean {s[-1]}), peak {x.max_cb} us")
+    print(f"console replies asked again (USB): a {a.retries}, b {b.retries}; stall commands lost: {stalls_lost[0]}")
     check(f"M{sc} no crash nor unexpected reboot",
           a.crashes() == 0 and b.crashes() == 0, f"a {a.crashes()}, b {b.crashes()}")
     # A loop blocked near the loss timeout (250 ms) would make the link look lost
+    # lp leaves out the stall asked by `w`, but not the loop after it: the backlog it finds
     check(f"M{sc} longest loop under 100 ms on both", a.max_lp < 100 and b.max_lp < 100,
           f"a {a.max_lp} ms, b {b.max_lp} ms")
+    if "stall" in cb_peak:
+        check(f"M{sc} ComBus pass after a stall under 50 ms", cb_peak["stall"][0] < 50000,
+              f"{cb_peak['stall'][0]} us ({cb_peak['stall'][1]})")
     check(f"M{sc} safety invariants held after every event", not violations,
           "; ".join(violations[:5]) + (f" (+{len(violations) - 5})" if len(violations) > 5 else ""))
     check_until(f"M{sc} recovery: STABLE and alive on both", lambda: stable(a) and stable(b), 8.0,
