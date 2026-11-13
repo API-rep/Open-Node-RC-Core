@@ -48,13 +48,25 @@
  *   directly, without an internal core header. Core never allocates this —
  *   only writes into slots of a buffer handed to it via
  *   uart_com_register_pool().
+ *
+ *   The reception goes through a small cache: one call to the driver reads up to
+ *   UartRxChunk bytes, then readByte() serves them one at a time.  Read one byte
+ *   at a time, the driver costs about 340 us per byte once its RX buffer is full
+ *   (after a stall of the loop): 130 ms for 380 bytes, against 2.7 ms in blocks.
  */
+static constexpr uint8_t UartRxChunk = 64u;   ///< bytes read from the driver in one call
+
 struct UartCtx {
 	HardwareSerial* serial  = nullptr;  ///< Pointer to the associated HardwareSerial instance
 	const char*     owner   = nullptr;  ///< Name of the module owning this port
 	uint32_t        baud    = 0u;       ///< Baud rate recorded at init (used for duplicate detection)
 	bool            claimed = false;    ///< Indicates if the port is already allocated
 	NodeCom         com     = {};       ///< NodeCom instance linked to this port
+
+		// Reception cache
+	uint8_t rxCache[UartRxChunk] = {};  ///< bytes read from the driver, not served yet
+	uint8_t rxLen   = 0u;               ///< number of bytes in the cache
+	uint8_t rxPos   = 0u;               ///< next byte to serve
 };
 
 

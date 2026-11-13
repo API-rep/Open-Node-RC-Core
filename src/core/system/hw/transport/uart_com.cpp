@@ -42,14 +42,26 @@ static void uart_write(void* ctx, const uint8_t* data, size_t len) {
 	static_cast<UartCtx*>(ctx)->serial->write(data, len);
 }
 
-	/// @brief UART port Read function
+	/// @brief UART port Read function: serves the cache, refilled in one call to the driver
 static int uart_readByte(void* ctx) {
-	return static_cast<UartCtx*>(ctx)->serial->read();
+	UartCtx* port = static_cast<UartCtx*>(ctx);
+
+		// Check for an empty cache: one block from the driver, without waiting
+	if (port->rxPos >= port->rxLen) {
+		port->rxPos = 0u;
+		port->rxLen = static_cast<uint8_t>(port->serial->read(port->rxCache, sizeof(port->rxCache)));
+
+		if (port->rxLen == 0u) { return -1; }
+	}
+
+	return port->rxCache[port->rxPos++];
 }
 
-	/// @brief UART port Available function
+	/// @brief UART port Available function: the cache, then the driver
 static int uart_available(void* ctx) {
-	return static_cast<UartCtx*>(ctx)->serial->available();
+	UartCtx* port = static_cast<UartCtx*>(ctx);
+
+	return (port->rxLen - port->rxPos) + port->serial->available();
 }
 
 
@@ -98,6 +110,8 @@ NodeCom* uart_com_init(
 	port->owner      = owner;
 	port->baud       = baud;
 	port->claimed    = true;
+	port->rxLen      = 0u;
+	port->rxPos      = 0u;
 
 		// --- 3. Bind the NodeCom function pointers to this context ---
 	port->com.ctx       = port;
