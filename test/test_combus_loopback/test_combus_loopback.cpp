@@ -1512,6 +1512,30 @@ static void test_contract_row7_silence_then_renegotiation(void) {
     TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::ALIVE);
 }
 
+/** Row 13: a contract dropped then renegotiated, the last frame still recent: not alive
+ *  before a data frame under the new contract, so the safe values never pass for live. */
+static void test_contract_row13_alive_again_at_the_first_frame(void) {
+    startHealthLink(LinkEnd::TX_RX, kHealthDev);
+    sendGoodAck();
+    pumpRx();
+    sendPeerFrame(false);
+    pumpRx();
+    TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::ALIVE);
+
+    combus_handshake_internal::dropContract(linkCtx(), "test");     // an ACK lost, say
+    TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::LOST);
+
+    sendGoodAck();                                                  // within linkTimeoutMs of the frame
+    pumpRx();
+    TEST_ASSERT_TRUE(isStable());
+    TEST_ASSERT_LESS_THAN_UINT32(kHealthProtocol.linkTimeoutMs, combus_rx_age_ms(kLinkIdx));
+    TEST_ASSERT_TRUE_MESSAGE(combus_link_state(kLinkIdx) == ComLinkState::LOST, "alive before a frame");
+
+    sendPeerFrame(false);
+    pumpRx();
+    TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::ALIVE);
+}
+
 /** Row 8: STABLE, a handshake with another MD5 arrives: back to UNKNOWN. */
 static void test_contract_row8_bad_handshake_while_stable(void) {
     startHealthLink(LinkEnd::TX_RX, kHealthDev);
@@ -2165,6 +2189,7 @@ void setup() {
     RUN_TEST(test_contract_row6_data_ignored_until_stable);
     RUN_TEST(test_contract_row7_silence_then_renegotiation);
     RUN_TEST(test_contract_row8_bad_handshake_while_stable);
+    RUN_TEST(test_contract_row13_alive_again_at_the_first_frame);
     RUN_TEST(test_contract_row9_no_ack_means_lost);
     RUN_TEST(test_contract_row10_rx_only_end);
     RUN_TEST(test_contract_row11_tx_only_end);

@@ -495,13 +495,15 @@ uint32_t combus_rx_age_ms( uint8_t linkIdx )
 }
 
 
-	/// A link is alive under a valid contract only: a frame refused does not count.
+	/// A link is alive under a valid contract only, once a data frame was applied under it:
+	/// a link back keeps its safe values until then.  A frame refused does not count.
 bool combus_rx_is_alive( uint8_t linkIdx, uint32_t timeoutMs )
 {
 	if (!s_rxStates || linkIdx >= s_capacity) { return false; }
 
 	const CombusRxState& st = s_rxStates[linkIdx];
-	const bool contractOk = !st.handshakeCtx || st.handshakeCtx->contractValidated;
+	const bool contractOk = !st.handshakeCtx
+	                     || (st.handshakeCtx->contractValidated && st.handshakeCtx->dataSinceStable);
 
 	return contractOk && st.everReceived && (combus_rx_age_ms(linkIdx) < timeoutMs);
 }

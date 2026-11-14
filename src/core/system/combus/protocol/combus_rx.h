@@ -195,9 +195,9 @@ uint32_t combus_rx_age_ms( uint8_t linkIdx );
  * @param linkIdx    Slot of this link in the pool.
  * @param timeoutMs  Maximum age of the last frame accepted (ms).
  *
- * @return true if a frame arrived within @p timeoutMs under a valid contract; false
- *   otherwise, or if @p linkIdx is out of range.  A link without a handshake context
- *   has no contract to check.
+ * @return true if a frame arrived within @p timeoutMs under a valid contract, and a data
+ *   frame was applied since that contract began; false otherwise, or if @p linkIdx is
+ *   out of range.  A link without a handshake context has no contract to check.
  */
 
 bool combus_rx_is_alive( uint8_t linkIdx, uint32_t timeoutMs );
