@@ -184,6 +184,8 @@ class Board:
                 st["up"], st["lp"] = int(f.get("up", -1)), int(f.get("lp", -1))
                 st["cbmax"] = int(f.get("cbmax", -1))
                 st["ws"] = int(f.get("ws", -1))
+                for k in ("cx", "tw", "kw", "kl", "ka", "kf", "kr"):
+                    st[k] = int(f.get(k, -1))
                 st["A"] = [int(v) for v in f["A"].split(",")] if f["A"] else []
                 st["D"] = [c == "1" for c in f["D"]]
                 break
@@ -486,6 +488,70 @@ MONKEY = {
 }
 
 
+def corruption(sc: str, a: Board, b: Board, permille: int, bits: int, secs: float) -> None:
+    """Real frames corrupted on the wire: how many wrong frames get through the checks?
+
+    Both ends send fixed values, then corrupt `permille` of their writes (1 to `bits`
+    bits flipped at random), while each end watches its bus with the link alive: any
+    value that differs from the reference got through the SOF, length and CRC checks.
+    A difference seen after a recovery, before its first frame, counts apart (kr).
+    """
+    cfg = MONKEY[sc]
+    boards = [a, b]
+    print(f"\n=== K{sc}. Corruption: {permille} per thousand of the writes, 1 to {bits} bits, {secs:.0f} s ===",
+          flush=True)
+    if cfg["hitch"]:
+        for x in boards:
+            x.d("TEST_HITCHED", True)
+    if not check_until(f"K{sc} link STABLE and alive on both", lambda: stable(a) and stable(b), 6.0):
+        return
+    # Fixed values, far from the neutral and from each other
+    for i, bd in enumerate(boards):
+        for k, name in enumerate(cfg["wa"][i]):
+            bd.a(name, 1111 + 7777 * (k + 1) + 3 * i)
+        for k, name in enumerate(cfg["wd"][i]):
+            if name != "FAILSAFE_HARD":       # a fault would change the run of the node
+                bd.d(name, k % 2 == 0)
+    time.sleep(0.5)
+    for bd in boards:
+        bd.cmd("k 1")
+        bd.cmd(f"c {permille} {bits}")
+    alive = [0, 0]
+    samples = 0
+    t_end = time.time() + secs
+    while time.time() < t_end:
+        time.sleep(2.0)
+        samples += 1
+        for i, bd in enumerate(boards):
+            alive[i] += bd.status()["st"] == ST_ALIVE
+    for bd in boards:
+        bd.cmd("c 0 1")
+    end = [a.status(), b.status()]
+
+    def chan(bd: Board, kf: int) -> str:
+        """Name of the channel kf of the status line: analog n, digital 100 + n."""
+        if kf < 0:
+            return "-"
+        names = {v: k for k, v in (bd.digital if kf >= 100 else bd.analog).items()}
+        return names.get(kf - 100 if kf >= 100 else kf, str(kf))
+    for i, bd in enumerate(boards):
+        peer = end[1 - i]
+        mine = end[i]
+        print(f"{bd.name}: peer corrupted {peer['cx']} of {peer['tw']} writes; "
+              f"wrong values on the bus {mine['kw']} (loops {mine['kl']}, first {chan(bd, mine['kf'])}), "
+              f"loops alive {mine['ka']}, alive in {alive[i]}/{samples} samples, "
+              f"safe values left after a recovery {mine['kr']}")
+    print(f"console replies asked again (USB): a {a.retries}, b {b.retries}")
+    for i, bd in enumerate(boards):
+        peer, mine = end[1 - i], end[i]
+        check(f"K{sc} {bd.name}: no wrong value written on the bus", mine["kw"] == 0,
+              f"{mine['kw']} wrong for {peer['cx']} corrupted writes, first {chan(bd, mine['kf'])}")
+        # Above about 10 %, the handshakes get lost too: the contract may drop (measured, not judged)
+        if permille <= 100:
+            check(f"K{sc} {bd.name}: link alive under the corruption", alive[i] >= samples - 1,
+                  f"alive in {alive[i]}/{samples} samples")
+
+
 def monkey(sc: str, a: Board, b: Board, steps: int, seed: int) -> None:
     """Random events on the link, safety invariants after each one, then a recovery."""
     import random
@@ -690,9 +756,14 @@ def monkey(sc: str, a: Board, b: Board, steps: int, seed: int) -> None:
 def flash(env: str, port: str) -> None:
     print(f"flash {env} -> {port}", flush=True)
     log = ROOT / ".pio" / f"bench_flash_{env}.log"
-    with open(log, "w", encoding="utf-8") as f:
-        rc = subprocess.run(PIO + ["run", "-e", env, "-t", "upload", "--upload-port", port],
-                            cwd=ROOT, stdout=f, stderr=subprocess.STDOUT).returncode
+    # The auto-reset of esptool sometimes misses the download mode ("Wrong boot mode
+    # detected"): one more attempt
+    for _ in range(2):
+        with open(log, "w", encoding="utf-8") as f:
+            rc = subprocess.run(PIO + ["run", "-e", env, "-t", "upload", "--upload-port", port],
+                                cwd=ROOT, stdout=f, stderr=subprocess.STDOUT).returncode
+        if rc == 0:
+            break
     if rc != 0:
         raise RuntimeError(f"flash {env} failed, see {log}")
     log.unlink()
@@ -705,11 +776,14 @@ def main() -> int:
     ap.add_argument("--no-flash", action="store_true")
     ap.add_argument("--steps", type=int, default=120, help="monkey test: events per scenario")
     ap.add_argument("--seed", type=int, default=None, help="monkey test: random seed (replay)")
+    ap.add_argument("--kpm", type=int, default=500, help="corruption: writes corrupted, per thousand")
+    ap.add_argument("--kbits", type=int, default=8, help="corruption: up to this many bits flipped")
+    ap.add_argument("--ksecs", type=float, default=120.0, help="corruption: duration in s")
     ap.add_argument("scenarios", nargs="*", default=["A", "B", "C"])
     args = ap.parse_args()
 
     for sc in args.scenarios:
-        env_a, env_b = SCENARIOS[sc.lstrip("M")] if sc.startswith("M") else SCENARIOS[sc]
+        env_a, env_b = SCENARIOS[sc[1:]] if sc[0] in "MK" and len(sc) == 2 else SCENARIOS[sc]
         if not args.no_flash:
             flash(env_a, args.a)
             flash(env_b, args.b)
@@ -718,7 +792,9 @@ def main() -> int:
         try:
             a.reboot()
             b.reboot()
-            if sc.startswith("M"):
+            if sc.startswith("K") and len(sc) == 2:
+                corruption(sc[1:], a, b, args.kpm, args.kbits, args.ksecs)
+            elif sc.startswith("M"):
                 seed = args.seed if args.seed is not None else int(time.time())
                 monkey(sc[1:], a, b, args.steps, seed)
             else:

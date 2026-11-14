@@ -17,6 +17,11 @@
  *     r <0|1>         reception on / off (off: the received bytes are dropped)
  *     g <n>           send n random bytes on the link (noise on the wire, n <= 255)
  *     w <ms>          block the board for ms (busy wait, ms <= 5000), answered after it
+ *     c <pm> <bits>   corrupt pm per thousand of the writes to the link, 1 to `bits` bits
+ *                     flipped at random in each; the counters start again (c 0 1: off,
+ *                     the counters are kept)
+ *     k <0|1>         watch of the bus: `k 1` takes the bus as the reference, then counts
+ *                     every wrong value a frame writes on it (link alive, frame in place)
  *     s               print the status line
  *     x               restart the board
  *   The status line:
@@ -25,7 +30,12 @@
  *   (up: time since boot; lp: longest loop since the last status line, in ms, without
  *   the stall asked by `w`;
  *   cbmax, cbavg: longest and mean ComBus time of a loop, RX + TX, in us; ws: stalls run
- *   since boot.)
+ *   since boot; cx, tw: writes corrupted and writes made since `c`; kw: frames that
+ *   wrote a wrong value on the bus, kl: loops spent with one, ka: loops with the link
+ *   alive and a frame in place, since `k 1`; kf: first channel that differed, analog n
+ *   or digital 100 + n, -1: none.)
+ *   The watch reads the bus once per loop: a wrong frame followed by a good one in the
+ *   same pass is not seen, the counts are a lower bound.
  *   The READY line carries the reset reason (esp_reset_reason()).
  *   The channels are given by index: the PC reads the generated combus_ids.h.
  *
@@ -36,6 +46,7 @@
 
 #include <core/system/combus/combus_access.h>
 #include <core/system/combus/protocol/combus_tx.h>
+#include <core/system/combus/protocol/combus_rx.h>
 #include <core/system/combus/protocol/link/combus_links.h>
 #include <core/system/combus/protocol/link/combus_link_watch.h>
 #include <core/system/com/com_manager.h>
@@ -106,6 +117,122 @@ static uint32_t s_nCb       = 0u;     // loops since then
 static uint32_t s_stallUs   = 0u;     // the stall asked by `w` in this loop: not counted in lp
 static uint32_t s_stalls    = 0u;     // stalls run since boot: the PC sees whether its `w` arrived
 
+	// Corruption of the writes to the link (`c`)
+static uint16_t s_cxPermille = 0u;    // share of the writes corrupted, per thousand
+static uint8_t  s_cxBits     = 1u;    // a corrupted write gets 1 to s_cxBits bits flipped
+static uint32_t s_cxWrites   = 0u;    // writes corrupted since `c`
+static uint32_t s_txWrites   = 0u;    // writes made since `c`
+static void   (*s_rawWrite)(void* ctx, const uint8_t* data, size_t len) = nullptr;
+
+	// Watch of the bus (`k`): the values a wrong frame would write
+static constexpr uint8_t kNA = static_cast<uint8_t>(AnalogComBusID::CH_COUNT);
+static constexpr uint8_t kND = static_cast<uint8_t>(DigitalComBusID::CH_COUNT);
+static bool     s_kOn       = false;
+static bool     s_kWasWrong = false;
+static uint16_t s_kA[kNA]   = {};
+static bool     s_kD[kND]   = {};
+static uint32_t s_kWrong    = 0u;     // wrong values written on the bus, counted once per frame
+static uint32_t s_kWrongLp  = 0u;     // loops spent with a wrong value
+static uint32_t s_kAlive    = 0u;     // loops with the link alive and a frame in place
+static int      s_kFirst    = -1;     // first channel that differed
+static uint32_t s_kRecov    = 0u;     // differences seen after a recovery, before its first frame
+static bool     s_kWasAlive = false;
+static bool     s_kFresh    = false;  // a frame arrived since the link came back alive
+static uint8_t  s_kAliveSeq = 0u;     // seq of the snapshot when the link came back alive
+
+
+	/// The writes to the link go through here: some are corrupted (`c`), on a copy.
+static void benchWrite( void* ctx, const uint8_t* data, size_t len )
+{
+	s_txWrites++;
+
+		// Check for a write left as it is
+	if (s_cxPermille == 0u || len == 0u || len > 255u || (esp_random() % 1000u) >= s_cxPermille) {
+		s_rawWrite(ctx, data, len);
+		return;
+	}
+
+	uint8_t buf[255];
+	memcpy(buf, data, len);
+
+	const uint8_t nBits = static_cast<uint8_t>(1u + esp_random() % s_cxBits);
+
+	for (uint8_t k = 0u; k < nBits; ++k) {
+		const uint32_t bit = esp_random() % (static_cast<uint32_t>(len) * 8u);
+		buf[bit / 8u] ^= static_cast<uint8_t>(1u << (bit % 8u));
+	}
+
+	s_cxWrites++;
+	s_rawWrite(ctx, buf, len);
+}
+
+
+	/// `k 1`: the bus, with a frame in place, becomes the reference; false: no frame yet.
+static bool watchStart( void )
+{
+	if (!combus_rx_snapshot(0u)) { return false; }
+
+	for (uint8_t i = 0u; i < kNA; ++i) { s_kA[i] = comBus.analogBus[i].value; }
+	for (uint8_t i = 0u; i < kND; ++i) { s_kD[i] = comBus.digitalBus[i].value; }
+
+	s_kWrong = s_kWrongLp = s_kAlive = s_kRecov = 0u;
+	s_kFirst    = -1;
+	s_kWasWrong = false;
+	s_kWasAlive = false;
+
+	return true;
+}
+
+
+	/// Once per loop: does the bus differ from the reference?  Only while the link is alive
+	/// with a frame in place: outside, the received channels hold their safe value.  A link
+	/// back alive keeps its safe values until its first frame: that difference counts apart.
+static void watchFrame( void )
+{
+	ComLinkView v;
+	combus_links_view(0u, v);
+
+	const ComBusFrame* snap = combus_rx_snapshot(0u);
+
+		// Check for a live link with a frame
+	if (v.state != ComLinkState::ALIVE || !snap) { s_kWasWrong = false; s_kWasAlive = false; return; }
+
+		// Check for a link back alive, then for its first frame
+	if (!s_kWasAlive) {
+		s_kWasAlive = true;
+		s_kFresh    = false;
+		s_kAliveSeq = snap->header.seq;
+	} else if (!s_kFresh && snap->header.seq != s_kAliveSeq) {
+		s_kFresh = true;
+	}
+
+	s_kAlive++;
+
+	int diff = -1;
+
+	for (uint8_t i = 0u; diff < 0 && i < kNA; ++i) { if (comBus.analogBus[i].value  != s_kA[i]) { diff = i; } }
+	for (uint8_t i = 0u; diff < 0 && i < kND; ++i) { if (comBus.digitalBus[i].value != s_kD[i]) { diff = 100 + i; } }
+
+	if (diff < 0) { s_kWasWrong = false; return; }
+
+		// Check for a difference left by the loss: no frame since the recovery
+	if (!s_kFresh) {
+		if (!s_kWasWrong) { s_kRecov++; }
+		s_kWasWrong = true;
+		return;
+	}
+
+		// A new wrong frame: counted once, the loops it lasts apart
+	s_kWrongLp++;
+
+	if (!s_kWasWrong) {
+		s_kWrong++;
+		if (s_kFirst < 0) { s_kFirst = diff; }
+	}
+
+	s_kWasWrong = true;
+}
+
 
 	/// One status line: the state of the link, then every channel of the bus.
 static void printStatus( void )
@@ -113,13 +240,15 @@ static void printStatus( void )
 	ComLinkView v;
 	combus_links_view(0u, v);
 
-	Serial.printf("S st=%u ct=%u nx=%u pr=%u age=%lu den=%lu up=%lu lp=%lu cbmax=%lu cbavg=%lu rxmax=%lu txmax=%lu ws=%lu A=",
+	Serial.printf("S st=%u ct=%u nx=%u pr=%u age=%lu den=%lu up=%lu lp=%lu cbmax=%lu cbavg=%lu rxmax=%lu txmax=%lu ws=%lu cx=%lu tw=%lu kw=%lu kl=%lu ka=%lu kf=%d kr=%lu A=",
 	              (unsigned)v.state, (unsigned)v.contractStable, (unsigned)v.nextMode,
 	              (unsigned)combus_links_pairing_state(0u), (unsigned long)v.rxAgeMs,
 	              (unsigned long)combus_denied_writes(), (unsigned long)millis(),
 	              (unsigned long)(s_maxLoopUs / 1000u), (unsigned long)s_maxCbUs,
 	              (unsigned long)(s_nCb ? s_sumCbUs / s_nCb : 0u),
-	              (unsigned long)s_maxRxUs, (unsigned long)s_maxTxUs, (unsigned long)s_stalls);
+	              (unsigned long)s_maxRxUs, (unsigned long)s_maxTxUs, (unsigned long)s_stalls,
+	              (unsigned long)s_cxWrites, (unsigned long)s_txWrites, (unsigned long)s_kWrong,
+	              (unsigned long)s_kWrongLp, (unsigned long)s_kAlive, s_kFirst, (unsigned long)s_kRecov);
 
 	s_maxLoopUs = 0u;
 	s_maxCbUs   = 0u;
@@ -176,6 +305,19 @@ static void runCommand( char* line )
 			if (ok) { ++s_stalls; }
 			break;
 		}
+		case 'c':
+			ok = (n == 3) && a >= 0 && a <= 1000 && b >= 1 && b <= 32 && s_rawWrite != nullptr;
+			if (ok) {
+				s_cxPermille = static_cast<uint16_t>(a);
+				s_cxBits     = static_cast<uint8_t>(b);
+				if (a > 0) { s_cxWrites = s_txWrites = 0u; }   // c 0 keeps the counts, to be read
+			}
+			break;
+		case 'k':
+			ok = (n == 2);
+			s_kOn = ok && (a != 0) && watchStart();
+			ok = ok && (a == 0 || s_kOn);
+			break;
 		case 's':  printStatus(); return;
 		case 'x':  Serial.println("OK x"); Serial.flush(); ESP.restart(); return;
 		default:   ok = false; break;
@@ -216,6 +358,12 @@ void setup()
 	const ComLinksStorage storage = { s_tx, s_rx, s_runtime, s_links };
 	const bool started = combus_links_init(kMaps, 1u, storage, nullptr, &comBus);
 
+		// The writes to the link go through benchWrite (`c`)
+	if (started && s_uart[0].com.write) {
+		s_rawWrite          = s_uart[0].com.write;
+		s_uart[0].com.write = benchWrite;
+	}
+
 	Serial.printf("READY %s %s reason=%d\n", kDev.name, started ? "started" : "NOT STARTED",
 	              (int)esp_reset_reason());
 }
@@ -240,6 +388,8 @@ void loop()
 	uint32_t cb = micros() - rx0;
 
 	if (cb > s_maxRxUs) { s_maxRxUs = cb; }
+
+	if (s_kOn) { watchFrame(); }
 
 		// After the update: the status line reads the contributors just published
 	pollConsole();
