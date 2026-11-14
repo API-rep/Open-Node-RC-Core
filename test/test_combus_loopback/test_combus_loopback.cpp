@@ -1763,6 +1763,7 @@ static void test_mode_row3_other_next_falls_back_to_legacy_at_once(void) {
     TEST_ASSERT_EQUAL_UINT8(1u, readHandshakes(hs, 2u));
     TEST_ASSERT_FALSE(isNextFlag(hs[0].flags));
 
+    pumpRx();                                                       // the loop runs on: a pass later than the loss timeout drops its backlog
     sendGoodAck();
     pumpRx();
     TEST_ASSERT_TRUE(isStable());

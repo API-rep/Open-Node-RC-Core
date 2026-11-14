@@ -56,6 +56,10 @@
  */
 static constexpr uint8_t UartRxChunk = 64u;   ///< bytes read from the driver in one call
 
+	/// TX ring of the driver, in bytes.  Without it, write() waits until the bytes are in the
+	/// 128-byte FIFO: a larger frame, or a saturated line, blocks the loop.  Two large frames fit.
+static constexpr uint16_t UartTxBufSize = 512u;
+
 struct UartCtx {
 	HardwareSerial* serial  = nullptr;  ///< Pointer to the associated HardwareSerial instance
 	const char*     owner   = nullptr;  ///< Name of the module owning this port

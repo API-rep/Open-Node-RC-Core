@@ -130,7 +130,8 @@ NodeCom* uart_com_init(
 		if (rxPin >= 0) pin_claim(*reg, (uint8_t)rxPin, portOwner, "RX", true);
 	}
 
-		// --- 5. Configure and start the hardware serial port ---
+		// --- 5. Configure and start the hardware serial port: the TX ring first, it is set before begin() ---
+	serial->setTxBufferSize(UartTxBufSize);
 	serial->begin(baud, SERIAL_8N1, rxPin, txPin);
 
 	sys_log_info("[UART_COM] '%s' — baud=%u  tx=%d  rx=%d\n", owner, baud, txPin, rxPin);
