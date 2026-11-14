@@ -15,6 +15,8 @@ Usage:
     N1 negative: two machines on the remote link must refuse each other
     N2 negative: two tractors hitched together must not couple
     MA MB MC monkey test on A, B or C: random events, safety invariants, recovery (--steps, --seed)
+    KA KB KC corruption of real frames on A, B or C (--kpm, --kbits, --ksecs)
+    FA FB FC forged frames on A, B or C: a third node on the link (board b forges)
 
 The serial reset lines are used to hold a board in reset (it falls silent).
 """
@@ -129,6 +131,8 @@ class Board:
                 # The colour codes are removed from the whole buffer: one may be split
                 # between two reads, and the logs carry them without a newline
             for l in ANSI.sub("", buf).splitlines():
+                # A packet of 0xFF from the USB bridge may come just before the line
+                l = l.lstrip("�")
                 if l.startswith(prefix):
                     self.log.append(l)
                     return l
@@ -184,7 +188,7 @@ class Board:
                 st["up"], st["lp"] = int(f.get("up", -1)), int(f.get("lp", -1))
                 st["cbmax"] = int(f.get("cbmax", -1))
                 st["ws"] = int(f.get("ws", -1))
-                for k in ("cx", "tw", "kw", "kl", "ka", "kf", "kr"):
+                for k in ("cx", "tw", "kw", "kl", "ka", "kf", "kr", "lc", "fs"):
                     st[k] = int(f.get(k, -1))
                 st["A"] = [int(v) for v in f["A"].split(",")] if f["A"] else []
                 st["D"] = [c == "1" for c in f["D"]]
@@ -552,6 +556,131 @@ def corruption(sc: str, a: Board, b: Board, permille: int, bits: int, secs: floa
                   f"alive in {alive[i]}/{samples} samples")
 
 
+def forged(sc: str, a: Board, b: Board) -> None:
+    """Forged frames, valid on the wire, from a third node: board b forges, board a receives.
+
+    Strict checks: a foreign handshake (F1, F2) drops the link to its safe values and the
+    link comes back once the intruder is silent; a foreign coupling frame (F7, F8) never
+    breaks a COUPLED link, and a second plug while pairing is a CONFLICT.  Measured only,
+    for the design: the link under a periodic intruder, a foreign NEXT handshake (F3),
+    data from another sender (F4), a replay (F6).
+    """
+    cfg = MONKEY[sc]
+    boards = [a, b]
+    print(f"\n=== F{sc}. Forged frames: board b ({b.name}) forges, board a ({a.name}) receives ===", flush=True)
+    if cfg["hitch"]:
+        for x in boards:
+            x.d("TEST_HITCHED", True)
+    if not check_until(f"F{sc} link STABLE and alive on both", lambda: stable(a) and stable(b), 6.0):
+        return
+    # Fixed values, far from the neutral and from each other
+    for i, bd in enumerate(boards):
+        for k, name in enumerate(cfg["wa"][i]):
+            bd.a(name, 1111 + 7777 * (k + 1) + 3 * i)
+        for k, name in enumerate(cfg["wd"][i]):
+            if name != "FAILSAFE_HARD":       # a fault would change the run of the node
+                bd.d(name, k % 2 == 0)
+    time.sleep(0.5)
+
+    def back(label: str) -> None:
+        check_until(f"F{sc} {label}: the link is back on both", lambda: stable(a) and stable(b), 2.0)
+
+    # F1, F2: one foreign handshake, legacy request
+    for kind, what in ((1, "foreign MD5"), (2, "other MAJOR")):
+        a.cmd("k 1")
+        lc_a, lc_b = a.status()["lc"], b.status()["lc"]
+        b.cmd(f"f {kind} 0")
+        ok, dt, _ = until(lambda: a.status()["lc"] > lc_a and stable(a) and stable(b), 2.0)
+        sa, sb = a.status(), b.status()
+        check(f"F{sc} F{kind} one handshake with a {what}: the receiver loses the link", sa["lc"] > lc_a,
+              f"lc {lc_a} -> {sa['lc']}, peer lc {lc_b} -> {sb['lc']}")
+        check(f"F{sc} F{kind} then the link is back within 1 s", ok and dt < 1.0, f"{dt:.2f} s")
+        check(f"F{sc} F{kind} no wrong value on the bus", sa["kw"] == 0, f"kw {sa['kw']}, kr {sa['kr']}")
+
+    # F1 again, an intruder that speaks at the rate of a node: measured
+    a.cmd("k 1")
+    lc_a = a.status()["lc"]
+    b.cmd("f 1 250")
+    alive, n = 0, 0
+    t_end = time.time() + 3.0
+    while time.time() < t_end:
+        alive += a.status()["st"] == ST_ALIVE
+        n += 1
+        time.sleep(0.1)
+    b.cmd("f 0 0")
+    sa = a.status()
+    print(f"MEAS  F{sc} F1 foreign handshake every 250 ms for 3 s: receiver alive in {alive}/{n} samples, "
+          f"losses {sa['lc'] - lc_a}, kw {sa['kw']}", flush=True)
+    check(f"F{sc} F1 periodic: no wrong value on the bus", sa["kw"] == 0, f"kw {sa['kw']}")
+    back("F1 periodic stopped")
+
+    # F3: a foreign NEXT handshake, every 250 ms: measured
+    a.cmd("k 1")
+    lc_a = a.status()["lc"]
+    b.cmd("f 3 250")
+    time.sleep(3.0)
+    b.cmd("f 0 0")
+    sa = a.status()
+    print(f"MEAS  F{sc} F3 foreign NEXT handshake every 250 ms for 3 s: losses {sa['lc'] - lc_a}, "
+          f"wrong values {sa['kw']} (first {sa['kf']}), next mode {sa['nx']}", flush=True)
+    back("F3 stopped")
+
+    # F4: data from another sender, same layout, other values: measured
+    a.cmd("k 1")
+    b.cmd("f 4 100")
+    time.sleep(3.0)
+    b.cmd("f 0 0")
+    sa = a.status()
+    print(f"MEAS  F{sc} F4 data from another sender every 100 ms for 3 s ({b.status()['fs']} forged in all): "
+          f"wrong values on the bus {sa['kw']} (loops {sa['kl']}, first {sa['kf']})", flush=True)
+    time.sleep(0.5)
+
+    # F6: a replay, a real frame sent again 1 s later, after the values changed: measured
+    if cfg["wa"][1]:
+        b.cmd("f 5 0")
+        name = cfg["wa"][1][0]
+        b.a(name, 1111 + 7777 + 3 + 500)
+        time.sleep(1.0)
+        a.cmd("k 1")
+        b.cmd("f 6 0")
+        time.sleep(0.5)
+        sa = a.status()
+        print(f"MEAS  F{sc} F6 replay of a frame 1 s old: wrong values on the bus {sa['kw']} "
+              f"(loops {sa['kl']}, first {sa['kf']})", flush=True)
+
+    # F7, F8: foreign coupling frames (coupled link only)
+    if cfg["hitch"]:
+        b.cmd("f 7 100")
+        time.sleep(2.0)
+        b.cmd("f 0 0")
+        sa = a.status()
+        check(f"F{sc} F7 foreign coupling ANSWER while COUPLED: still COUPLED and alive",
+              sa["pr"] == PR_COUPLED and sa["st"] == ST_ALIVE, f"pr {sa['pr']}, st {sa['st']}")
+        a.cmd("f 8 100")
+        time.sleep(2.0)
+        a.cmd("f 0 0")
+        sb = b.status()
+        check(f"F{sc} F8 foreign coupling REQUEST while COUPLED (at the plug): still COUPLED and alive",
+              sb["pr"] == PR_COUPLED and sb["st"] == ST_ALIVE, f"pr {sb['pr']}, st {sb['st']}")
+        # A second plug answers while the socket pairs: CONFLICT
+        for x in boards:
+            x.d("TEST_HITCHED", False)
+        until(lambda: a.status()["pr"] == PR_DETACHED and b.status()["pr"] == PR_DETACHED, 3.0)
+        b.cmd("f 7 50")
+        for x in boards:
+            x.d("TEST_HITCHED", True)
+        check_until(f"F{sc} F7 a second plug answers while pairing: the socket is in CONFLICT",
+                    lambda: a.status()["pr"] == PR_CONFLICT, 4.0)
+        b.cmd("f 0 0")
+        for x in boards:
+            x.d("TEST_HITCHED", False)
+        until(lambda: a.status()["pr"] == PR_DETACHED, 3.0)
+        for x in boards:
+            x.d("TEST_HITCHED", True)
+        check_until(f"F{sc} F7 intruder gone, hitched again: COUPLED and alive on both",
+                    lambda: a.status()["pr"] == PR_COUPLED and stable(a) and stable(b), 6.0)
+
+
 def monkey(sc: str, a: Board, b: Board, steps: int, seed: int) -> None:
     """Random events on the link, safety invariants after each one, then a recovery."""
     import random
@@ -783,7 +912,7 @@ def main() -> int:
     args = ap.parse_args()
 
     for sc in args.scenarios:
-        env_a, env_b = SCENARIOS[sc[1:]] if sc[0] in "MK" and len(sc) == 2 else SCENARIOS[sc]
+        env_a, env_b = SCENARIOS[sc[1:]] if sc[0] in "MKF" and len(sc) == 2 else SCENARIOS[sc]
         if not args.no_flash:
             flash(env_a, args.a)
             flash(env_b, args.b)
@@ -794,6 +923,8 @@ def main() -> int:
             b.reboot()
             if sc.startswith("K") and len(sc) == 2:
                 corruption(sc[1:], a, b, args.kpm, args.kbits, args.ksecs)
+            elif sc.startswith("F") and len(sc) == 2:
+                forged(sc[1:], a, b)
             elif sc.startswith("M"):
                 seed = args.seed if args.seed is not None else int(time.time())
                 monkey(sc[1:], a, b, args.steps, seed)

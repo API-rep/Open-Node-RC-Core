@@ -22,6 +22,13 @@
  *                     the counters are kept)
  *     k <0|1>         watch of the bus: `k 1` takes the bus as the reference, then counts
  *                     every wrong value a frame writes on it (link alive, frame in place)
+ *     f <kind> <ms>   forge frames on the link, as a third node would: one now (ms = 0),
+ *                     or one every ms (f 0 0: off).  Kinds:
+ *                       1 handshake request, foreign MD5      2 handshake request, other MAJOR
+ *                       3 NEXT handshake request, foreign MD5
+ *                       4 data: the last frame sent, other analog values
+ *                       5 capture the last data frame sent    6 replay the frame captured
+ *                       7 coupling ANSWER, foreign address    8 coupling REQUEST, foreign address
  *     s               print the status line
  *     x               restart the board
  *   The status line:
@@ -33,7 +40,9 @@
  *   since boot; cx, tw: writes corrupted and writes made since `c`; kw: frames that
  *   wrote a wrong value on the bus, kl: loops spent with one, ka: loops with the link
  *   alive and a frame in place, since `k 1`; kf: first channel that differed, analog n
- *   or digital 100 + n, -1: none.)
+ *   or digital 100 + n, -1: none; kr: differences left by a loss, seen after a recovery
+ *   before its first frame; lc: losses of the link since boot (alive, then not); fs:
+ *   frames forged by `f` since boot.)
  *   The watch reads the bus once per loop: a wrong frame followed by a good one in the
  *   same pass is not seen, the counts are a lower bound.
  *   The READY line carries the reset reason (esp_reset_reason()).
@@ -49,6 +58,9 @@
 #include <core/system/combus/protocol/combus_rx.h>
 #include <core/system/combus/protocol/link/combus_links.h>
 #include <core/system/combus/protocol/link/combus_link_watch.h>
+#include <core/system/combus/protocol/frame/combus_frame.h>
+#include <core/system/combus/protocol/handshake/combus_handshake.h>
+#include <core/system/combus/protocol/coupling/combus_coupling.h>
 #include <core/system/com/com_manager.h>
 #include <core/system/hw/transport/uart_com.h>
 #include <combus.h>                // generated: comBus, the IDs
@@ -140,11 +152,32 @@ static bool     s_kWasAlive = false;
 static bool     s_kFresh    = false;  // a frame arrived since the link came back alive
 static uint8_t  s_kAliveSeq = 0u;     // seq of the snapshot when the link came back alive
 
+	// Losses of the link, counted on every loop: a short one is seen too
+static uint32_t s_lost      = 0u;
+static bool     s_wasAlive  = false;
+
+	// Forged frames (`f`): the last data frame sent, and the one captured for a replay
+static uint8_t  s_fLast[255];
+static uint8_t  s_fLastLen  = 0u;
+static uint8_t  s_fCap[255];
+static uint8_t  s_fCapLen   = 0u;
+static uint8_t  s_fKind     = 0u;     // kind sent every s_fPeriod ms; 0: none
+static uint32_t s_fPeriod   = 0u;
+static uint32_t s_fAtMs     = 0u;
+static uint32_t s_fSent     = 0u;     // frames forged since boot
+
 
 	/// The writes to the link go through here: some are corrupted (`c`), on a copy.
 static void benchWrite( void* ctx, const uint8_t* data, size_t len )
 {
 	s_txWrites++;
+
+		// Keep the last data frame (seq 1..255): the base of the forged data (`f`)
+	if (len >= CombusFrameMinLen && len <= sizeof(s_fLast) && data[0] == CombusFrameSof
+	 && data[1u + offsetof(CombusFrameHeader, seq)] != 0u) {
+		memcpy(s_fLast, data, len);
+		s_fLastLen = static_cast<uint8_t>(len);
+	}
 
 		// Check for a write left as it is
 	if (s_cxPermille == 0u || len == 0u || len > 255u || (esp_random() % 1000u) >= s_cxPermille) {
@@ -234,13 +267,99 @@ static void watchFrame( void )
 }
 
 
+	/// A handshake request as another node would send it: foreign MD5 or other MAJOR, legacy or NEXT.
+static void forgeHandshake( bool foreignMd5, bool otherMajor, bool next )
+{
+	uint8_t frame[CombusFrameHandshakeMinLen] = {};
+	const uint8_t* md5 = s_runtime[0].handshake.expected.stable;
+
+	frame[0] = CombusFrameSof;
+	frame[1u + offsetof(CombusFrameHeader, flags)] = next ? kCombusHandshakeFlagNext : 0u;
+
+	for (uint8_t i = 0u; i < 16u; ++i) { frame[CombusFrameHeaderLen + i] = md5 ? md5[i] : 0u; }
+
+	if (foreignMd5) { frame[CombusFrameHeaderLen] ^= 0xFFu; }
+
+	frame[CombusFrameHeaderLen + 16u] = static_cast<uint8_t>(combus::wire::kProjectVersionMajor + (otherMajor ? 1u : 0u));
+	frame[CombusFrameHeaderLen + 17u] = combus::wire::kProjectVersionMinor;
+	frame[CombusFrameHeaderLen + 18u] = combus::wire::kProjectVersionDev;
+
+	combus_frame_crc_put(frame, static_cast<uint8_t>(sizeof(frame) - CombusFrameCrcLen));
+	s_rawWrite(s_uart[0].com.ctx, frame, sizeof(frame));
+}
+
+
+	/// A coupling frame from a node that is not the peer: a made-up local address.
+static void forgeCoupling( CouplingMsg msg )
+{
+	CouplingFrame f;
+	f.msg        = msg;
+	f.round      = 1u;
+	f.addr.type  = LinkAddrType::MAC48;
+	f.hitchAgeMs = 40u;
+
+	const uint8_t addr[6] = { 0x02u, 0xBEu, 0x4Cu, 0x00u, 0x00u, 0x07u };
+	memcpy(f.addr.bytes, addr, sizeof(addr));
+
+	uint8_t buf[kCombusCouplingFrameLen];
+
+	if (combus_coupling_encode(buf, sizeof(buf), f) == sizeof(buf)) {
+		s_rawWrite(s_uart[0].com.ctx, buf, sizeof(buf));
+	}
+}
+
+
+	/// One forged frame of `kind`; false if it cannot be made (no data frame sent yet).
+static bool forge( uint8_t kind )
+{
+	switch (kind) {
+		case 1u: forgeHandshake(true,  false, false); break;
+		case 2u: forgeHandshake(false, true,  false); break;
+		case 3u: forgeHandshake(true,  false, true);  break;
+		case 4u: {
+				// The last frame sent, every analog value moved: the layout of the link, other values
+			if (s_fLastLen == 0u) { return false; }
+
+			uint8_t buf[255];
+			memcpy(buf, s_fLast, s_fLastLen);
+
+			const uint8_t nA = buf[1u + offsetof(CombusFrameHeader, cfg) + offsetof(ComBusFrameCfg, nAnalog)];
+			const uint8_t nD = buf[1u + offsetof(CombusFrameHeader, cfg) + offsetof(ComBusFrameCfg, nDigital)];
+			const uint8_t at = static_cast<uint8_t>(CombusFrameHeaderLen + (nD + 7u) / 8u);
+
+			for (uint8_t i = 0u; i < nA; ++i) { buf[at + 2u * i] ^= 0x55u; }
+
+			combus_frame_crc_put(buf, static_cast<uint8_t>(s_fLastLen - CombusFrameCrcLen));
+			s_rawWrite(s_uart[0].com.ctx, buf, s_fLastLen);
+			break;
+		}
+		case 5u:
+			if (s_fLastLen == 0u) { return false; }
+			memcpy(s_fCap, s_fLast, s_fLastLen);
+			s_fCapLen = s_fLastLen;
+			return true;
+		case 6u:
+			if (s_fCapLen == 0u) { return false; }
+			s_rawWrite(s_uart[0].com.ctx, s_fCap, s_fCapLen);
+			break;
+		case 7u: forgeCoupling(CouplingMsg::ANSWER);  break;
+		case 8u: forgeCoupling(CouplingMsg::REQUEST); break;
+		default: return false;
+	}
+
+	s_fSent++;
+
+	return true;
+}
+
+
 	/// One status line: the state of the link, then every channel of the bus.
 static void printStatus( void )
 {
 	ComLinkView v;
 	combus_links_view(0u, v);
 
-	Serial.printf("S st=%u ct=%u nx=%u pr=%u age=%lu den=%lu up=%lu lp=%lu cbmax=%lu cbavg=%lu rxmax=%lu txmax=%lu ws=%lu cx=%lu tw=%lu kw=%lu kl=%lu ka=%lu kf=%d kr=%lu A=",
+	Serial.printf("S st=%u ct=%u nx=%u pr=%u age=%lu den=%lu up=%lu lp=%lu cbmax=%lu cbavg=%lu rxmax=%lu txmax=%lu ws=%lu cx=%lu tw=%lu kw=%lu kl=%lu ka=%lu kf=%d kr=%lu lc=%lu fs=%lu A=",
 	              (unsigned)v.state, (unsigned)v.contractStable, (unsigned)v.nextMode,
 	              (unsigned)combus_links_pairing_state(0u), (unsigned long)v.rxAgeMs,
 	              (unsigned long)combus_denied_writes(), (unsigned long)millis(),
@@ -248,7 +367,8 @@ static void printStatus( void )
 	              (unsigned long)(s_nCb ? s_sumCbUs / s_nCb : 0u),
 	              (unsigned long)s_maxRxUs, (unsigned long)s_maxTxUs, (unsigned long)s_stalls,
 	              (unsigned long)s_cxWrites, (unsigned long)s_txWrites, (unsigned long)s_kWrong,
-	              (unsigned long)s_kWrongLp, (unsigned long)s_kAlive, s_kFirst, (unsigned long)s_kRecov);
+	              (unsigned long)s_kWrongLp, (unsigned long)s_kAlive, s_kFirst, (unsigned long)s_kRecov,
+	              (unsigned long)s_lost, (unsigned long)s_fSent);
 
 	s_maxLoopUs = 0u;
 	s_maxCbUs   = 0u;
@@ -317,6 +437,15 @@ static void runCommand( char* line )
 			ok = (n == 2);
 			s_kOn = ok && (a != 0) && watchStart();
 			ok = ok && (a == 0 || s_kOn);
+			break;
+		case 'f':
+			ok = (n == 3) && a >= 0 && a <= 8 && b >= 0 && b <= 10000 && s_rawWrite != nullptr;
+			if (ok) {
+				s_fKind   = (b > 0) ? static_cast<uint8_t>(a) : 0u;
+				s_fPeriod = static_cast<uint32_t>(b);
+				s_fAtMs   = millis();
+				if (a > 0 && b == 0) { ok = forge(static_cast<uint8_t>(a)); }
+			}
 			break;
 		case 's':  printStatus(); return;
 		case 'x':  Serial.println("OK x"); Serial.flush(); ESP.restart(); return;
@@ -390,6 +519,24 @@ void loop()
 	if (cb > s_maxRxUs) { s_maxRxUs = cb; }
 
 	if (s_kOn) { watchFrame(); }
+
+		// Losses of the link, every loop
+	{
+		ComLinkView v;
+		combus_links_view(0u, v);
+
+		const bool alive = (v.state == ComLinkState::ALIVE);
+
+		if (s_wasAlive && !alive) { s_lost++; }
+
+		s_wasAlive = alive;
+	}
+
+		// Forged frames, one every s_fPeriod ms
+	if (s_fKind != 0u && (millis() - s_fAtMs) >= s_fPeriod) {
+		s_fAtMs = millis();
+		forge(s_fKind);
+	}
 
 		// After the update: the status line reads the contributors just published
 	pollConsole();
