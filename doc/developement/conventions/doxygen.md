@@ -2,9 +2,9 @@
 
 This document defines the Doxygen documentation conventions used throughout the project.
 
-Formatting rules and object appearance are defined in `formatting.md`.
+Formatting rules and object appearance are defined in [`formatting.md`](formatting.md).
 
-Placement and spacing rules are defined in `layout.md`.
+Placement and spacing rules are defined in [`layout.md`](layout.md).
 
 ---
 
@@ -19,7 +19,11 @@ Doxygen documentation shall prioritise:
 
 All Doxygen documentation is written in English.
 
-Documentation should provide context that the code alone does not immediately convey.
+Documentation explains intent, context and constraints: what the code alone does not immediately convey. It never restates what the names and types already say.
+
+Doxygen documents entities: files, functions, types, structure members, enum values, constants, descriptor objects and configuration arrays. It does not organise the visual structure of a file: section separators and ordinary comments do that ([layout](layout.md), §5 and §6).
+
+An identifier is written as in the code, so that it can be searched: a function with its parentheses (`uart_com_init()`), an array with its brackets (`ports[]`), a member with its owner when it is ambiguous (`UartCtx::rxCache`).
 
 ---
 
@@ -58,28 +62,14 @@ Example:
  */
 ```
 
-### File-Level TODO
+### Open Work
 
-A `TODO:` section may appear in the file banner.
+A file banner carries no `TODO` list. Planned evolutions and open points belong to the WIP of their work item (see `doc/WIP - Master.md`), where they are ordered and discussed.
 
-Use it only for planned module evolution.
-
-Typical examples include:
-
-* structural refactoring;
-* future subsystem additions;
-* architectural improvements.
-
-Avoid implementation-specific TODOs in file banners.
-
-Example:
+In the code, a `TODO` marks one precise place only, and names the WIP that covers it, so that it can be found from both sides:
 
 ```cpp
-/*!
- * TODO:
- *   - Add sensing descriptors for future hardware revisions.
- *   - Migrate extension ports to the common descriptor registry.
- */
+		// TODO(Simulation chain): whether the processors work on the logical value.
 ```
 
 ---
@@ -102,7 +92,7 @@ Focus on:
 * configuration matrices;
 * lifecycle constraints.
 
-The goal is to allow callers to use the API correctly without reading the implementation.
+The goal is to allow callers to use the API correctly without reading the implementation. A header does not walk through the implementation.
 
 ### Source Files (`.cpp`)
 
@@ -178,24 +168,21 @@ Avoid:
 
 `@details` is expected by default.
 
-It provides the information required to understand the documented element beyond its short description.
+It provides the information required to understand the documented element beyond its short description. Typical contents:
 
-Typical contents include:
-
-* rationale;
-* operating modes;
-* ownership expectations;
-* constraints;
-* decision rules;
-* architectural context.
+* **the steps**, numbered as in the body of the function (section 6);
+* **the reasons for the choices**, and the obvious alternative that was rejected, when there is one;
+* **the failure and absence cases**: what is left untouched when the input is refused, what `nullptr`, `std::nullopt` or `0` means, which safe value is taken;
+* **the ownership and lifetime of the storage**: who allocates it, and how long it must live (static storage owned by the caller, for example);
+* **the conditions of existence**: the `HAS_*` flags that enable the element, the end or side it applies to (TX or RX, socket or plug);
+* **a short usage example** in `@code` ... `@endcode`, for the entry point of a module;
+* **where to go next**: the module that takes over, the README of the folder.
 
 Usage constraints belong in `@details`, not in `@brief`.
 
 `@details` may remain concise when little additional explanation is required.
 
-Documentation depth shall remain proportional to complexity.
-
-Typical guidance:
+Documentation depth shall remain proportional to complexity:
 
 * trivial declarations → short descriptions;
 * small helpers → concise `@details`;
@@ -216,7 +203,7 @@ Example:
 
 ```cpp
 /**
- * @brief Validate a MotionConfig before first use.
+ * @brief MotionConfig validator. Checks a configuration once, before its first use.
  *
  * @details Checks in order:
  *   1. Mandatory pointers are valid.
@@ -269,17 +256,15 @@ Example:
 /**
  * @brief Transport: write the raw value of an analog channel, with the layer of a link.
  *
- * @param bus    Target ComBus instance receiving the update.
- * @param ch     Channel identifier.
- * @param val    New raw value to write.
- * @param layer  Layer of the link, checked against channel access rules.
+ * @param bus    Target ComBus.
+ * @param ch     Channel.
+ * @param val    New raw value.
+ * @param layer  Layer of the link, checked against the layer of the channel.
  *
- * @return True if the write was accepted.
+ * @return true if the write was accepted, false if the layer refused it.
  */
-bool combus_link_set_raw_analog(ComBus& bus,
-                                AnalogComBusID ch,
-                                uint16_t val,
-                                ChanLayer layer);
+
+bool combus_link_set_raw_analog(ComBus& bus, AnalogComBusID ch, uint16_t val, ChanLayer layer);
 ```
 
 ### `///<`
@@ -300,23 +285,23 @@ Examples:
 
 ```cpp
 struct VBatSenseState {
-    float voltage;       ///< Last averaged battery voltage (V).
-    bool  disabled;      ///< True when the channel was found unpowered at init.
+	float voltage;       ///< Last averaged battery voltage (V).
+	bool  disabled;      ///< True when the channel was found unpowered at init.
 };
 ```
 
 ```cpp
 enum class DevUsage : uint8_t {
-    SIG_HORN  = 0x40,    ///< Audible horn or buzzer.
-    SIG_LIGHT = 0x41     ///< Lighting output.
+	SIG_HORN  = 0x40,    ///< Audible horn or buzzer.
+	SIG_LIGHT = 0x41     ///< Lighting output.
 };
 ```
 
 ```cpp
 inline constexpr Board boardCfg {
-    .infoName     = "ESP32 board",   ///< Human-readable board name.
-    .drvPort      = drvPortArray,    ///< Driver descriptor array.
-    .drvPortCount = DRV_PORT_COUNT   ///< Number of configured drivers.
+	.infoName     = "ESP32 board",   ///< Human-readable board name.
+	.drvPort      = drvPortArray,    ///< Driver descriptor array.
+	.drvPortCount = DRV_PORT_COUNT   ///< Number of configured drivers.
 };
 ```
 
@@ -340,72 +325,3 @@ Ask yourself:
 In short:
 
 > `@param` documents usage. `///<` documents identity.
-
----
-
-## 8. Doxygen Scope
-
-Doxygen documents entities.
-
-Typical entities include:
-
-* files;
-* functions;
-* types;
-* enums;
-* structures;
-* variables;
-* descriptor objects;
-* configuration arrays.
-
-Doxygen should not be used solely to organise the visual structure of a file.
-
-Use layout section separators and ordinary comments for that purpose.
-
-Avoid documentation blocks whose only role is to introduce the next section of code.
-
----
-
-## 9. Identifier References
-
-Use Doxygen references whenever they improve clarity.
-
-Typical examples include:
-
-* functions;
-* types;
-* structure members;
-* arrays;
-* configuration objects.
-
-Example:
-
-```cpp
-`uart_com_init()` claims one entry in the static `ports[]` registry.
-```
-
-References should support navigation and reduce ambiguity.
-
----
-
-## 10. Avoid
-
-Avoid documentation that merely restates the code.
-
-Examples:
-
-```cpp
-/** @brief Gets the current value. */
-
-/** @brief Sets the enabled flag. */
-```
-
-Avoid implementation walkthroughs in headers.
-
-Avoid duplicating information already obvious from names and types.
-
-Avoid maintenance instructions attached to entities when the information belongs to coding conventions instead.
-
-Documentation should explain intent, context and constraints rather than narrating the obvious.
-
-// EOF doxygen-conventions.md
