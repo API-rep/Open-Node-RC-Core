@@ -11,6 +11,8 @@
 
 #include <core/system/combus/protocol/link/combus_link_watch.h>   // combus_links_watch()
 #include <core/system/hw/transport/uart_com.h>
+#include <core/system/combus/protocol/frame/combus_frame.h>           // CombusFrameHeaderLen, CombusFrameCrcLen
+#include <core/system/combus/protocol/handshake/combus_handshake.h>   // CombusFrameHandshakeMinLen, period
 #include <core/system/debug/logging/debug.h>
 
 #include "combus.h"             // AnalogComBusID, DigitalComBusID
@@ -51,6 +53,26 @@ static void wireCounts( LinkScope scope, uint8_t& nAnalog, uint8_t& nDigital )
 	} else {
 		nAnalog  = static_cast<uint8_t>(AnalogComBusSystemID::CH_COUNT);
 		nDigital = static_cast<uint8_t>(DigitalComBusSystemID::CH_COUNT);
+	}
+}
+
+
+/**
+ * @brief Frame size of a link. The counts of its view, or of its table if it has one.
+ *
+ * @param map       Wiring of the link.
+ * @param nAnalog   Number of analog channels of its frames.
+ * @param nDigital  Number of digital channels of its frames.
+ */
+
+static void linkCounts( const ComDevMap& map, uint8_t& nAnalog, uint8_t& nDigital )
+{
+	wireCounts(map.dev->scope, nAnalog, nDigital);
+
+		// Check for a table: its counts replace those of the view
+	if (map.dev->peer) {
+		nAnalog  = map.dev->peer->analog.count;
+		nDigital = map.dev->peer->digital.count;
 	}
 }
 
@@ -102,6 +124,34 @@ static NodeCom* openPort( const ComDevMap& map, PinReg* pinReg )
 // =============================================================================
 
 /**
+ * @brief Line load. What this end sends, against what its line carries.
+ *
+ * @details The full frame of the link at txHz, plus a request and an ACK of the
+ *   handshake per period, in bits (10 per byte: start and stop) over the line rate.
+ *   Only an end that transmits on a UART loads its line.
+ */
+
+uint32_t combus_link_load_pct( const ComDevMap& map )
+{
+		// Check for an end that sends on a UART
+	if (!map.dev || !map.port || !map.dev->protocol || map.port->type != ComPortType::UART) { return 0u; }
+	if (!endTransmits(map.end) || map.dev->protocol->rate == 0u)                             { return 0u; }
+
+	uint8_t nAnalog  = 0u;
+	uint8_t nDigital = 0u;
+
+	linkCounts(map, nAnalog, nDigital);
+
+		// Bytes per second: the data frames, then the handshakes
+	const uint32_t frameLen = CombusFrameHeaderLen + (nDigital + 7u) / 8u + nAnalog * 2u + CombusFrameCrcLen;
+	const uint32_t bytes    = frameLen * map.dev->protocol->txHz
+	                        + 2u * CombusFrameHandshakeMinLen * 1000u / kCombusHandshakePeriodMs;
+
+	return bytes * 10u * 100u / map.dev->protocol->rate;
+}
+
+
+/**
  * @brief Wiring validator. Refuses a bad description before any port is claimed.
  *
  * @details In order:
@@ -111,7 +161,9 @@ static NodeCom* openPort( const ComDevMap& map, PinReg* pinReg )
  *   4. Rates: 1000 / txHz is an integer period, so above 1000 Hz it falls to 0 and the
  *      link stays silent.  A receiving end needs a timeout to detect a loss.
  *   5. Line rate against the ceiling of the port.
- *   6. Table: between nodes only, and small enough for the RX buffers.
+ *   6. Load of the line, see combus_link_load_pct(): warned above the margin, refused
+ *      above 100 %, where the writes would block the loop.
+ *   7. Table: between nodes only, and small enough for the RX buffers.
  */
 
 bool combus_link_check( const ComDevMap& map )
@@ -170,7 +222,22 @@ bool combus_link_check( const ComDevMap& map )
 		return false;
 	}
 
-		// 6. Table
+		// 6. Load of the line: warned above kCombusLinkLoadWarnPct, refused above 100 %
+	const uint32_t load = combus_link_load_pct(map);
+
+	if (load > kCombusLinkLoadMaxPct) {
+		sys_log_err("[COMBUS_LINKS] link '%s': %lu %% of its line rate (%lu baud): lower txHz, or raise the rate\n",
+		            dev.name, (unsigned long)load, (unsigned long)dev.protocol->rate);
+		return false;
+	}
+
+	if (load > kCombusLinkLoadWarnPct) {
+		sys_log_warn("[COMBUS_LINKS] link '%s': %lu %% of its line rate (%lu baud), above the %lu %% margin\n",
+		             dev.name, (unsigned long)load, (unsigned long)dev.protocol->rate,
+		             (unsigned long)kCombusLinkLoadWarnPct);
+	}
+
+		// 7. Table
 	if (dev.peer && dev.scope != LinkScope::INTER_NODE) {
 		sys_log_err("[COMBUS_LINKS] link '%s': a coupler is for a link between nodes only\n", dev.name);
 		return false;
@@ -211,13 +278,7 @@ bool combus_link_build( const ComDevMap& map,
 	uint8_t nAnalog  = 0u;
 	uint8_t nDigital = 0u;
 
-	wireCounts(map.dev->scope, nAnalog, nDigital);
-
-		// Check for a table: its counts replace those of the view
-	if (peer) {
-		nAnalog  = peer->analog.count;
-		nDigital = peer->digital.count;
-	}
+	linkCounts(map, nAnalog, nDigital);
 
 	const ComBusFrameCfg frameCfg = { nAnalog, nDigital };
 

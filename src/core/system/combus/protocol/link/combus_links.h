@@ -144,6 +144,8 @@ constexpr ChanLayer linkScopeLayer( LinkScope scope )
  *   - a transmitting end with a rate of 0, or above 1000 Hz (period of 0 ms);
  *   - a receiving end without a link timeout;
  *   - a line rate above the ceiling of the port;
+ *   - a line loaded above kCombusLinkLoadMaxPct (combus_link_load_pct()); above
+ *     kCombusLinkLoadWarnPct, the link is accepted with a warning;
  *   - a table on a link between boards, or too large for the RX buffers.
  *
  * @param map  Wiring to validate.
@@ -152,6 +154,28 @@ constexpr ChanLayer linkScopeLayer( LinkScope scope )
  */
 
 bool combus_link_check( const ComDevMap& map );
+
+
+	/// Load of a line above which a link is accepted with a warning, in % of its rate.
+static constexpr uint32_t kCombusLinkLoadWarnPct = 70u;
+
+	/// Load of a line above which a link is refused: the writes would block the loop.
+static constexpr uint32_t kCombusLinkLoadMaxPct = 100u;
+
+
+/**
+ * @brief Load of the line of one end, in % of its line rate.
+ *
+ * @details The full frame of the link at txHz, plus a handshake request and its ACK
+ *   per period, 10 bits per byte.  0 for an end that does not transmit, or a port
+ *   other than a UART.
+ *
+ * @param map  Wiring of the link.
+ *
+ * @return The load, in % (above 100: the line cannot carry it).
+ */
+
+uint32_t combus_link_load_pct( const ComDevMap& map );
 
 
 /**

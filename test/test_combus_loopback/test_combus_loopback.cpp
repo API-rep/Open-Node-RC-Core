@@ -935,20 +935,22 @@ static void test_link_build_refuses_bad_wiring(void) {
     TEST_ASSERT_FALSE(combus_link_check(noTxHz));
 
     // Transmit rate whose period in ms would be 0: the link would stay silent.  1000 Hz is the limit.
-    static constexpr ComProtocolCfg hz1000 = { 115200u, 1000u, 250u };
+    // A fast line (never opened), so that the load of the line does not refuse first.
+    static const ComPort fastPort = ComPort::makeUart("test_fast", { 2, kTxPin, kRxPin, 5000000u });
+    static constexpr ComProtocolCfg hz1000 = { 5000000u, 1000u, 250u };
     static constexpr ComDev fastestDev = {
         "test_1000hz", LinkScope::INTER_NODE, LinkType::UNIDIRECTIONAL,
         &hz1000, LinkActivation::ALWAYS, nullptr
     };
-    const ComDevMap atLimit = { &fastestDev, &s_testPort, LinkEnd::TX };
+    const ComDevMap atLimit = { &fastestDev, &fastPort, LinkEnd::TX };
     TEST_ASSERT_TRUE(combus_link_check(atLimit));
 
-    static constexpr ComProtocolCfg hz1001 = { 115200u, 1001u, 250u };
+    static constexpr ComProtocolCfg hz1001 = { 5000000u, 1001u, 250u };
     static constexpr ComDev tooFastDev = {
         "test_1001hz", LinkScope::INTER_NODE, LinkType::UNIDIRECTIONAL,
         &hz1001, LinkActivation::ALWAYS, nullptr
     };
-    const ComDevMap overHz = { &tooFastDev, &s_testPort, LinkEnd::TX };
+    const ComDevMap overHz = { &tooFastDev, &fastPort, LinkEnd::TX };
     TEST_ASSERT_FALSE_MESSAGE(combus_link_check(overHz), "a rate above 1000 Hz leaves the link silent");
 
     // Receiving end without a link timeout.
@@ -964,6 +966,38 @@ static void test_link_build_refuses_bad_wiring(void) {
     const ComDevMap fine = { &kTestDevUni, &s_testPort, LinkEnd::TX };
     TEST_ASSERT_FALSE(combus_link_build(fine, nullptr, s_testRuntime, link));
     TEST_ASSERT_EQUAL_STRING("untouched", link.name);
+}
+
+/** Load of the line: accepted below the margin, accepted with a warning up to 100 %, refused above. */
+static void test_link_load_warned_then_refused(void) {
+    static ComProtocolCfg proto = { 115200u, 50u, 250u };
+    static const ComDev dev = {
+        "test_load", LinkScope::INTER_NODE, LinkType::UNIDIRECTIONAL,
+        &proto, LinkActivation::ALWAYS, nullptr
+    };
+    const ComDevMap tx = { &dev, &s_testPort, LinkEnd::TX };
+    const ComDevMap rx = { &dev, &s_testPort, LinkEnd::RX };
+
+    proto.txHz = 50u;
+    const uint32_t at50 = combus_link_load_pct(tx);
+    TEST_ASSERT_GREATER_THAN_UINT32(0u, at50);
+    TEST_ASSERT_LESS_OR_EQUAL_UINT32(kCombusLinkLoadWarnPct, at50);
+    TEST_ASSERT_TRUE(combus_link_check(tx));
+    TEST_ASSERT_EQUAL_UINT32(0u, combus_link_load_pct(rx));             // a receiving end sends no frame
+
+    // Raise the rate until the margin is passed: still accepted up to 100 %
+    while (combus_link_load_pct(tx) <= kCombusLinkLoadWarnPct) { proto.txHz++; }
+    TEST_ASSERT_LESS_OR_EQUAL_UINT32(kCombusLinkLoadMaxPct, combus_link_load_pct(tx));
+    TEST_ASSERT_TRUE_MESSAGE(combus_link_check(tx), "refused below 100 %");
+
+    // Above 100 %: refused
+    while (combus_link_load_pct(tx) <= kCombusLinkLoadMaxPct) { proto.txHz++; }
+    TEST_ASSERT_FALSE_MESSAGE(combus_link_check(tx), "a line loaded above 100 % accepted");
+
+    char msg[64];
+    snprintf(msg, sizeof(msg), "50 Hz: %lu %%, refused from %u Hz", (unsigned long)at50, (unsigned)proto.txHz);
+    TEST_MESSAGE(msg);
+    proto.txHz = 50u;
 }
 
 
@@ -2156,6 +2190,7 @@ void setup() {
     RUN_TEST(test_link_build_intra_node_tx_rx);
     RUN_TEST(test_link_scope_layer);
     RUN_TEST(test_link_build_refuses_bad_wiring);
+    RUN_TEST(test_link_load_warned_then_refused);
 
     // --- Group J: receiving link health ---
     RUN_TEST(test_link_health_lost_until_first_frame);
