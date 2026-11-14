@@ -17,6 +17,8 @@ Usage:
     MA MB MC monkey test on A, B or C: random events, safety invariants, recovery (--steps, --seed)
     KA KB KC corruption of real frames on A, B or C (--kpm, --kbits, --ksecs)
     FA FB FC forged frames on A, B or C: a third node on the link (board b forges)
+    LA LB LC load of the link on A, B or C; line rate and frame rate set at build time
+             (BENCH_BAUD, BENCH_HZ through PLATFORMIO_BUILD_FLAGS)
 
 The serial reset lines are used to hold a board in reset (it falls silent).
 """
@@ -188,7 +190,8 @@ class Board:
                 st["up"], st["lp"] = int(f.get("up", -1)), int(f.get("lp", -1))
                 st["cbmax"] = int(f.get("cbmax", -1))
                 st["ws"] = int(f.get("ws", -1))
-                for k in ("cx", "tw", "kw", "kl", "ka", "kf", "kr", "lc", "fs"):
+                for k in ("cx", "tw", "kw", "kl", "ka", "kf", "kr", "lc", "fs", "rf", "bd", "hz", "fl",
+                          "txmax", "rxmax"):
                     st[k] = int(f.get(k, -1))
                 st["A"] = [int(v) for v in f["A"].split(",")] if f["A"] else []
                 st["D"] = [c == "1" for c in f["D"]]
@@ -681,6 +684,34 @@ def forged(sc: str, a: Board, b: Board) -> None:
                     lambda: a.status()["pr"] == PR_COUPLED and stable(a) and stable(b), 6.0)
 
 
+def load(sc: str, a: Board, b: Board, secs: float = 20.0) -> None:
+    """Load of the link: frames received per second, longest loop and TX time, losses."""
+    ok, dt, _ = until(lambda: stable(a) and stable(b), 8.0)
+    s0 = [a.status(), b.status()]
+    bd, hz, fl = s0[0]["bd"], s0[0]["hz"], max(s0[0]["fl"], s0[1]["fl"])
+    print(f"\n=== L{sc}. Load: {bd} baud, {hz} Hz, frame {fl} bytes "
+          f"(planned {100.0 * fl * hz * 10 / bd:.0f} % of the line, handshakes aside) ===", flush=True)
+    print(f"MEAS  L{sc} link STABLE on both: {ok} ({dt:.1f} s)", flush=True)
+    t0 = time.time()
+    lp, tx, age, alive, n = [0, 0], [0, 0], [0, 0], [0, 0], 0
+    while time.time() - t0 < secs:
+        time.sleep(1.0)
+        n += 1
+        for i, bd_ in enumerate((a, b)):
+            s = bd_.status()
+            lp[i] = max(lp[i], s["lp"])
+            tx[i] = max(tx[i], s["txmax"])
+            age[i] = max(age[i], s["age"])
+            alive[i] += s["st"] == ST_ALIVE
+    s1 = [a.status(), b.status()]
+    el = time.time() - t0
+    for i, bd_ in enumerate((a, b)):
+        fps = (s1[i]["rf"] - s0[i]["rf"]) / el
+        print(f"MEAS  L{sc} {bd_.name}: frames received {fps:.1f}/s of {hz}, alive {alive[i]}/{n} samples, "
+              f"losses {s1[i]['lc'] - s0[i]['lc']}, longest loop {lp[i]} ms, longest TX {tx[i]} us, "
+              f"oldest frame {age[i]} ms", flush=True)
+
+
 def monkey(sc: str, a: Board, b: Board, steps: int, seed: int) -> None:
     """Random events on the link, safety invariants after each one, then a recovery."""
     import random
@@ -912,7 +943,7 @@ def main() -> int:
     args = ap.parse_args()
 
     for sc in args.scenarios:
-        env_a, env_b = SCENARIOS[sc[1:]] if sc[0] in "MKF" and len(sc) == 2 else SCENARIOS[sc]
+        env_a, env_b = SCENARIOS[sc[1:]] if sc[0] in "MKFL" and len(sc) == 2 else SCENARIOS[sc]
         if not args.no_flash:
             flash(env_a, args.a)
             flash(env_b, args.b)
@@ -925,6 +956,8 @@ def main() -> int:
                 corruption(sc[1:], a, b, args.kpm, args.kbits, args.ksecs)
             elif sc.startswith("F") and len(sc) == 2:
                 forged(sc[1:], a, b)
+            elif sc.startswith("L") and len(sc) == 2:
+                load(sc[1:], a, b)
             elif sc.startswith("M"):
                 seed = args.seed if args.seed is not None else int(time.time())
                 monkey(sc[1:], a, b, args.steps, seed)

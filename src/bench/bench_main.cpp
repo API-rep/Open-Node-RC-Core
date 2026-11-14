@@ -42,7 +42,8 @@
  *   alive and a frame in place, since `k 1`; kf: first channel that differed, analog n
  *   or digital 100 + n, -1: none; kr: differences left by a loss, seen after a recovery
  *   before its first frame; lc: losses of the link since boot (alive, then not); fs:
- *   frames forged by `f` since boot.)
+ *   frames forged by `f` since boot; rf: data frames received since boot; bd, hz: line
+ *   rate and frame rate of the link; fl: length of the last data frame sent.)
  *   The watch reads the bus once per loop: a wrong frame followed by a good one in the
  *   same pass is not seen, the counts are a lower bound.
  *   The READY line carries the reset reason (esp_reset_reason()).
@@ -72,8 +73,16 @@
 // 1. THE LINK OF THE ROLE
 // =============================================================================
 
+	/// Line rate and frame rate, set at build time for the load tests (the same at both ends).
+#ifndef BENCH_BAUD
+	#define BENCH_BAUD 115200u
+#endif
+#ifndef BENCH_HZ
+	#define BENCH_HZ 50u
+#endif
+
 	/// Line rate, frame rate, loss timeout, startup grace: the same at both ends.
-static constexpr ComProtocolCfg kProto = { 115200u, 50u, 250u, 3000u };
+static constexpr ComProtocolCfg kProto = { BENCH_BAUD, BENCH_HZ, 250u, 3000u };
 
 	/// The port of the bench: UART2, GPIO 17 TX / 16 RX.
 static const ComPort kPort = ComPort::makeUart("bench", { 2, 17, 16, 115200u });
@@ -165,6 +174,11 @@ static uint8_t  s_fKind     = 0u;     // kind sent every s_fPeriod ms; 0: none
 static uint32_t s_fPeriod   = 0u;
 static uint32_t s_fAtMs     = 0u;
 static uint32_t s_fSent     = 0u;     // frames forged since boot
+
+	// Data frames received: one more each time the snapshot changes (one loop is far shorter
+	// than the period of a frame)
+static uint32_t s_rxFrames  = 0u;
+static uint8_t  s_rxSeq     = 0u;
 
 
 	/// The writes to the link go through here: some are corrupted (`c`), on a copy.
@@ -359,7 +373,7 @@ static void printStatus( void )
 	ComLinkView v;
 	combus_links_view(0u, v);
 
-	Serial.printf("S st=%u ct=%u nx=%u pr=%u age=%lu den=%lu up=%lu lp=%lu cbmax=%lu cbavg=%lu rxmax=%lu txmax=%lu ws=%lu cx=%lu tw=%lu kw=%lu kl=%lu ka=%lu kf=%d kr=%lu lc=%lu fs=%lu A=",
+	Serial.printf("S st=%u ct=%u nx=%u pr=%u age=%lu den=%lu up=%lu lp=%lu cbmax=%lu cbavg=%lu rxmax=%lu txmax=%lu ws=%lu cx=%lu tw=%lu kw=%lu kl=%lu ka=%lu kf=%d kr=%lu lc=%lu fs=%lu rf=%lu bd=%lu hz=%lu fl=%u A=",
 	              (unsigned)v.state, (unsigned)v.contractStable, (unsigned)v.nextMode,
 	              (unsigned)combus_links_pairing_state(0u), (unsigned long)v.rxAgeMs,
 	              (unsigned long)combus_denied_writes(), (unsigned long)millis(),
@@ -368,7 +382,8 @@ static void printStatus( void )
 	              (unsigned long)s_maxRxUs, (unsigned long)s_maxTxUs, (unsigned long)s_stalls,
 	              (unsigned long)s_cxWrites, (unsigned long)s_txWrites, (unsigned long)s_kWrong,
 	              (unsigned long)s_kWrongLp, (unsigned long)s_kAlive, s_kFirst, (unsigned long)s_kRecov,
-	              (unsigned long)s_lost, (unsigned long)s_fSent);
+	              (unsigned long)s_lost, (unsigned long)s_fSent, (unsigned long)s_rxFrames,
+	              (unsigned long)kProto.rate, (unsigned long)kProto.txHz, (unsigned)s_fLastLen);
 
 	s_maxLoopUs = 0u;
 	s_maxCbUs   = 0u;
@@ -519,6 +534,11 @@ void loop()
 	if (cb > s_maxRxUs) { s_maxRxUs = cb; }
 
 	if (s_kOn) { watchFrame(); }
+
+		// Data frames received
+	if (const ComBusFrame* snap = combus_rx_snapshot(0u)) {
+		if (snap->header.seq != s_rxSeq) { s_rxSeq = snap->header.seq; s_rxFrames++; }
+	}
 
 		// Losses of the link, every loop
 	{
