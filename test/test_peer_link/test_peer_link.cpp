@@ -692,12 +692,12 @@ static void sendCouplingFrame(const CouplingFrame& f) {
     combus_rx_update();
 }
 
-/** Row 1: encode then decode: the same fields, 19 bytes. */
+/** Row 1: encode then decode: the same fields, 20 bytes. */
 static void test_cpl_frame_row1_round_trip(void) {
     const CouplingFrame f = sampleCouplingFrame();
     uint8_t buf[kCombusCouplingFrameLen];
-    TEST_ASSERT_EQUAL_UINT8(19u, kCombusCouplingFrameLen);
-    TEST_ASSERT_EQUAL_UINT8(19u, combus_coupling_encode(buf, sizeof(buf), f));
+    TEST_ASSERT_EQUAL_UINT8(20u, kCombusCouplingFrameLen);
+    TEST_ASSERT_EQUAL_UINT8(20u, combus_coupling_encode(buf, sizeof(buf), f));
     TEST_ASSERT_EQUAL_UINT8(0u, buf[1 + 2]);                              // seq == 0
     TEST_ASSERT_EQUAL_UINT8(kCombusFrameFlagCoupling, buf[1 + 3]);        // the coupling flag
 
@@ -709,7 +709,7 @@ static void test_cpl_frame_row1_round_trip(void) {
     TEST_ASSERT_EQUAL_UINT8_ARRAY(f.addr.bytes, out.addr.bytes, 6u);
     TEST_ASSERT_EQUAL_UINT16(40u, out.hitchAgeMs);
     TEST_ASSERT_EQUAL_UINT16(0u, out.features);
-    TEST_ASSERT_EQUAL_UINT8(0u, combus_coupling_encode(buf, 18u, f));    // buffer too small
+    TEST_ASSERT_EQUAL_UINT8(0u, combus_coupling_encode(buf, 19u, f));    // buffer too small
 }
 
 /** Row 2: a corrupted byte (payload or CRC) is refused. */

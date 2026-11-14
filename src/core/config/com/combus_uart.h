@@ -40,7 +40,7 @@ static constexpr uint8_t CombusPhysUartMax = 255u;
  *     6 bytes — fixed header (SOF + n_analog + n_dig_bytes + seq + run_level + flags)
  *     ceil(DigitalComBusBaseID::CH_COUNT / 8) — digital channels packed LSB-first
  *     AnalogComBusBaseID::CH_COUNT × 2          — analog channels as uint16_t LE
- *     1 byte  — CRC-8
+ *     2 bytes — CRC-16
  */
 
 
@@ -57,7 +57,7 @@ static constexpr uint8_t ComBusUartFrameSize =
     CombusFrameHeaderLen
   + ((static_cast<uint8_t>(DigitalComBusBaseID::CH_COUNT) + 7u) / 8u)
   +  (static_cast<uint8_t>(AnalogComBusBaseID::CH_COUNT)  * 2u)
-  + 1u;
+  + CombusFrameCrcLen;
 
 
 

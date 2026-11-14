@@ -1,6 +1,6 @@
 /******************************************************************************
  * @file  combus_frame.h
- * @brief ComBus control frame codec: encode, decode, CRC-8 and bus application.
+ * @brief ComBus control frame codec: encode, decode, CRC-16 and bus application.
  *
  * @details Binary frame format (variable length):
  * @code
@@ -10,7 +10,7 @@
  *   1-4     4    header       CombusFrameHeader (combus_frame_defs.h)
  *   5       var  digital[]    bits packed LSB-first, ceil(n_digital/8) bytes
  *   5+d     var  analog[]     uint16_t LE, n_analog entries
- *   last    1    crc8         CRC-8/MAXIM over bytes [0 ... last-1]
+ *   last-1  2    crc16        CRC-16/CCITT-FALSE over bytes [0 ... last-2], high byte first
  * @endcode
  *
  *   `seq` is a rolling counter in 1..255 (wraps 255 -> 1, never 0).  `seq == 0`
@@ -43,8 +43,11 @@ static_assert(sizeof(CombusFrameSof) + sizeof(CombusFrameHeader) == 5u,
 	/// Fixed combus header size in bytes
 static constexpr uint8_t CombusFrameHeaderLen = sizeof(CombusFrameSof) + sizeof(CombusFrameHeader);
 
-	/// Minimum valid frame size (fixed header + CRC byte).
-static constexpr uint8_t CombusFrameMinLen = CombusFrameHeaderLen + sizeof(uint8_t);
+	/// Size of the CRC that closes every ComBus frame: CRC-16, high byte first.
+static constexpr uint8_t CombusFrameCrcLen = sizeof(uint16_t);
+
+	/// Minimum valid frame size (fixed header + CRC).
+static constexpr uint8_t CombusFrameMinLen = CombusFrameHeaderLen + CombusFrameCrcLen;
 
 
 
@@ -61,7 +64,7 @@ static constexpr uint8_t CombusFrameMinLen = CombusFrameHeaderLen + sizeof(uint8
  *
  * @param[in]  cfg             Static layout descriptor: the clamp of the counts below.
  * @param[out] outputBuffer    Output buffer, sized by the caller to at least
- *                             CombusFrameHeaderLen + ceil(nDigital/8) + nAnalog*2 + 1 bytes.
+ *                             CombusFrameHeaderLen + ceil(nDigital/8) + nAnalog*2 + CombusFrameCrcLen bytes.
  * @param[in]  combus          Source ComBus instance.
  * @param[in]  seq             Sequence counter, 1..255 (the caller increments it).
  *                             0 is refused: reserved, see the file banner.
@@ -142,14 +145,40 @@ void combus_frame_apply( const ComBusFrameCfg& cfg,
 
 
 /**
- * @brief Compute CRC-8/MAXIM (Dallas 1-Wire) over a byte buffer.
+ * @brief Compute CRC-16/CCITT-FALSE over a byte buffer.
+ *
+ * @details Polynomial 0x1021, init 0xFFFF, no reflection, no final XOR (check value
+ *   of "123456789": 0x29B1).  Detects every odd number of flipped bits and every
+ *   burst of 16 bits or less.
  *
  * @param[in] data  Input bytes.
  * @param[in] len   Number of bytes.
  *
- * @return The CRC-8 value.
+ * @return The CRC-16 value.
  */
 
-uint8_t combus_frame_crc8(const uint8_t* data, uint8_t len);
+uint16_t combus_frame_crc16(const uint8_t* data, uint8_t len);
+
+
+/**
+ * @brief Write the CRC of a frame after its bytes.
+ *
+ * @param[in,out] frame  The frame; CombusFrameCrcLen bytes are written at frame[len].
+ * @param[in]     len    Number of bytes covered by the CRC (everything before it).
+ */
+
+void combus_frame_crc_put(uint8_t* frame, uint8_t len);
+
+
+/**
+ * @brief Check the CRC written after the bytes of a frame.
+ *
+ * @param[in] frame  The frame; its CRC is read at frame[len].
+ * @param[in] len    Number of bytes covered by the CRC (everything before it).
+ *
+ * @return true if the CRC matches.
+ */
+
+bool combus_frame_crc_ok(const uint8_t* frame, uint8_t len);
 
 // EOF combus_frame.h

@@ -96,7 +96,7 @@ uint8_t combus_coupling_encode( uint8_t* buf, uint8_t bufLen, const CouplingFram
 
 		// 3. CRC
 	const uint8_t crcIndex = kPayloadStart + kCombusCouplingPayloadLen;
-	buf[crcIndex] = combus_frame_crc8(buf, crcIndex);
+	combus_frame_crc_put(buf, crcIndex);
 
 	return kCombusCouplingFrameLen;
 }
@@ -120,7 +120,7 @@ bool combus_coupling_decode( const uint8_t* buf, uint8_t len, CouplingFrame& out
 		// 2. CRC
 	const uint8_t crcIndex = kPayloadStart + kCombusCouplingPayloadLen;
 
-	if (combus_frame_crc8(buf, crcIndex) != buf[crcIndex]) { return false; }
+	if (!combus_frame_crc_ok(buf, crcIndex)) { return false; }
 
 		// 3. Header
 	const uint8_t* h = &buf[sizeof(CombusFrameSof)];

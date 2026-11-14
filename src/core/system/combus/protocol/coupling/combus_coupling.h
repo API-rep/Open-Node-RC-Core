@@ -48,7 +48,7 @@ static constexpr uint8_t kCombusCouplingPayloadLen = 13u;
 
 /// Total coupling frame size on the wire (SOF + header + payload + CRC).
 static constexpr uint8_t kCombusCouplingFrameLen =
-	CombusFrameHeaderLen + kCombusCouplingPayloadLen + sizeof(uint8_t);
+	CombusFrameHeaderLen + kCombusCouplingPayloadLen + CombusFrameCrcLen;
 
 /// Links whose last received coupling frame is recorded.
 static constexpr uint8_t kCombusCouplingMaxLinks = 4u;

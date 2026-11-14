@@ -187,7 +187,7 @@ static uint8_t decodeDataFrame( CombusRxState& st )
 	uint16_t expectedLenW = CombusFrameHeaderLen
 	                      + (uint16_t)nDigBytes
 	                      + (uint16_t)nAnalog * 2u
-	                      + 1u;
+	                      + CombusFrameCrcLen;
 
 		// Check for an impossible length: a false SOF
 	if (expectedLenW > CombusRxBufSize) {

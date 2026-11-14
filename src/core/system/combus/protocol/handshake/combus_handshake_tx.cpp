@@ -48,7 +48,7 @@ static uint8_t sendHandshake( const CombusHandshakeContext* ctx, NodeCom* nodeCo
 	uint8_t frame[ sizeof(CombusFrameSof)
 	             + sizeof(CombusFrameHeader)
 	             + kCombusHandshakePayloadLen
-	             + sizeof(uint8_t) ];
+	             + CombusFrameCrcLen ];
 	const uint8_t payloadStart = sizeof(CombusFrameSof)
 	                          + sizeof(CombusFrameHeader);
 
@@ -74,10 +74,10 @@ static uint8_t sendHandshake( const CombusHandshakeContext* ctx, NodeCom* nodeCo
 		// 4. CRC, then the write
 	const uint8_t crcByteIndex = payloadStart + kCombusHandshakePayloadLen;
 
-	frame[crcByteIndex] = combus_frame_crc8(frame, crcByteIndex);
+	combus_frame_crc_put(frame, crcByteIndex);
 
 		// Send it
-	const uint8_t totalLen = (uint8_t)(crcByteIndex + 1u);
+	const uint8_t totalLen = (uint8_t)(crcByteIndex + CombusFrameCrcLen);
 
 	nodeCom->write(nodeCom->ctx, frame, totalLen);
 

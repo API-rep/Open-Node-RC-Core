@@ -170,11 +170,10 @@ uint8_t combus_handshake_tryDecode(
 	}
 
 		// 4. Validate the CRC: on a mismatch, drop one byte and re-synchronise
-	uint8_t crcExpected = linear[expectedLen - 1u];
-	uint8_t crcActual   = combus_frame_crc8(linear, (uint8_t)(expectedLen - 1u));
+	bool crcOk = combus_frame_crc_ok(linear, (uint8_t)(expectedLen - CombusFrameCrcLen));
 
 		// Check the CRC: the RX path looks for the next SOF from the following byte
-	if (crcActual != crcExpected) {
+	if (!crcOk) {
 		ringHead  = (uint8_t)((ringHead + 1u) % ringBufSize);
 		ringCount = (uint8_t)(ringCount - 1u);
 

@@ -195,7 +195,7 @@ static NodeCom*          s_com    = nullptr;   ///< loopback transport, shared b
 
 /** Expected wire length of a control frame: SOF + header, digital bytes, analog values, CRC. */
 static constexpr uint8_t frameLen(uint8_t nAnalog, uint8_t nDigital) {
-    return (uint8_t)(CombusFrameHeaderLen + (nDigital + 7u) / 8u + nAnalog * 2u + 1u);
+    return (uint8_t)(CombusFrameHeaderLen + (nDigital + 7u) / 8u + nAnalog * 2u + CombusFrameCrcLen);
 }
 
 /** Fill txComBus with deterministic pseudo-random values seeded by `seed`. */
@@ -278,6 +278,50 @@ static void test_codec_crc_reject(void) {
 
     bool ok = combus_frame_decode(kCfg, &rxFrame, encodeBuf, len);
     TEST_ASSERT_FALSE(ok);  // CRC must catch the corruption
+}
+
+/** CRC-16/CCITT-FALSE: the reference check value of "123456789" is 0x29B1. */
+static void test_codec_crc16_check_value(void) {
+    const uint8_t data[] = { '1', '2', '3', '4', '5', '6', '7', '8', '9' };
+
+    TEST_ASSERT_EQUAL_HEX16(0x29B1u, combus_frame_crc16(data, sizeof(data)));
+}
+
+/** Every pair of flipped bits is refused, the layout bytes (nAnalog, nDigital) aside:
+ *  they change the length, so the CRC is no longer read at the same place. */
+static void test_codec_two_bit_errors_refused(void) {
+    fillRandom(0x2B172B17ul);
+
+    uint8_t len = combus_frame_encode(kCfg, encodeBuf, &txComBus, 3u, kNAnalog, kNDigital);
+    TEST_ASSERT_GREATER_THAN_UINT8(0u, len);
+
+    static uint8_t bad[255];
+    const uint16_t nBits    = (uint16_t)len * 8u;
+    uint32_t       pairs    = 0u;
+    uint32_t       accepted = 0u;
+
+    for (uint16_t i = 0u; i < nBits; ++i) {
+        if (i / 8u == 1u || i / 8u == 2u) { continue; }   // layout bytes
+
+        for (uint16_t j = (uint16_t)(i + 1u); j < nBits; ++j) {
+            if (j / 8u == 1u || j / 8u == 2u) { continue; }
+
+            memcpy(bad, encodeBuf, len);
+            bad[i / 8u] ^= (uint8_t)(1u << (i % 8u));
+            bad[j / 8u] ^= (uint8_t)(1u << (j % 8u));
+
+            pairs++;
+            if (combus_frame_decode(kCfg, &rxFrame, bad, len)) { accepted++; }
+        }
+
+        if ((i % 64u) == 0u) { yield(); }
+    }
+
+    char msg[80];
+    snprintf(msg, sizeof(msg), "%lu pairs of flipped bits over %u bytes, %lu accepted",
+             (unsigned long)pairs, (unsigned)len, (unsigned long)accepted);
+    TEST_MESSAGE(msg);
+    TEST_ASSERT_EQUAL_UINT32(0u, accepted);
 }
 
 /** Monkey test — N random seeds, each must round-trip cleanly. */
@@ -1337,7 +1381,7 @@ static void sendForgedHandshake(bool ack, bool goodMd5, uint8_t major, uint8_t m
     frame[payload + 16u] = major;
     frame[payload + 17u] = minor;
     frame[payload + 18u] = dev;
-    frame[payload + 19u] = combus_frame_crc8(frame, (uint8_t)(payload + 19u));
+    combus_frame_crc_put(frame, (uint8_t)(payload + 19u));
 
     s_com->write(s_com->ctx, frame, sizeof(frame));
     delay(kRxPollMs);
@@ -1999,7 +2043,7 @@ static void checkHandshakeAtRingHead(uint8_t head) {
     frame[CombusFrameHeaderLen + 16u] = combus::wire::kProjectVersionMajor;
     frame[CombusFrameHeaderLen + 17u] = combus::wire::kProjectVersionMinor;
     frame[CombusFrameHeaderLen + 18u] = combus::wire::kProjectVersionDev;
-    frame[sizeof(frame) - 1u] = combus_frame_crc8(frame, (uint8_t)(sizeof(frame) - 1u));
+    combus_frame_crc_put(frame, (uint8_t)(sizeof(frame) - CombusFrameCrcLen));
 
     static uint8_t ring[CombusRxBufSize];
     for (uint8_t i = 0u; i < sizeof(frame); ++i) {
@@ -2039,6 +2083,8 @@ void setup() {
     RUN_TEST(test_codec_seq_zero_refused);
     RUN_TEST(test_codec_flags_reserved);
     RUN_TEST(test_codec_crc_reject);
+    RUN_TEST(test_codec_crc16_check_value);
+    RUN_TEST(test_codec_two_bit_errors_refused);
     RUN_TEST(test_codec_monkey_roundtrip);
 
     // --- Group B: UART loopback (TX↔RX jumper required) ---

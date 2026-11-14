@@ -1,6 +1,6 @@
 /******************************************************************************
  * @file  combus_frame.cpp
- * @brief ComBus control frame codec: encode, decode, CRC-8 and bus application.
+ * @brief ComBus control frame codec: encode, decode, CRC-16 and bus application.
  *
  * @details The codec is pure: it knows neither the state of a link nor its loss,
  *   which the link layer watches (com_rx_update() publishes NODE_LINK_FAIL and
@@ -21,39 +21,80 @@
 // 1. CRC
 // =============================================================================
 
+namespace {
+
 /**
- * @brief Frame integrity check. Last byte of every frame, recomputed by the receiver.
+ * @brief Lookup table of the CRC-16, one entry per value of the high byte.
  *
- * @details CRC-8/MAXIM: polynomial 0x31 (reflected 0x8C), init 0x00, bits taken LSB
- *   first.  For each bit, the low bit of the CRC is mixed with the data bit; when they
- *   differ, the polynomial is applied after the shift.  Computed bit by bit: no lookup
- *   table is needed at the frame sizes used here.
+ * @details Built at compile time (C++17 constexpr), kept in flash: 256 entries of 16
+ *   bits, 512 bytes.  Entry i is the CRC of byte i shifted through the polynomial
+ *   0x1021, bit by bit, MSB first.
  */
 
-uint8_t combus_frame_crc8(const uint8_t* data, uint8_t len) {
-	uint8_t crc = 0x00;
+struct Crc16Table {
+	uint16_t v[256];
+
+	constexpr Crc16Table() : v() {
+		for (uint16_t i = 0u; i < 256u; ++i) {
+			uint16_t c = (uint16_t)(i << 8u);
+
+				// Each bit, MSB first: apply the polynomial when the top bit falls out
+			for (uint8_t b = 0u; b < 8u; ++b) {
+				c = (c & 0x8000u) ? (uint16_t)((c << 1u) ^ 0x1021u) : (uint16_t)(c << 1u);
+			}
+
+			v[i] = c;
+		}
+	}
+};
+
+constexpr Crc16Table kCrc16Table{};
+
+	/// Guard: the table matches the reference values of the polynomial.
+static_assert(kCrc16Table.v[1] == 0x1021u && kCrc16Table.v[255] == 0x1EF0u, "Bad CRC-16 table");
+
+}   // namespace
+
+
+/**
+ * @brief Frame integrity check. Last two bytes of every frame, recomputed by the receiver.
+ *
+ * @details CRC-16/CCITT-FALSE, one table lookup per byte: the high byte of the CRC,
+ *   mixed with the data byte, picks the entry.
+ */
+
+uint16_t combus_frame_crc16(const uint8_t* data, uint8_t len) {
+	uint16_t crc = 0xFFFFu;
 
 		// Mix each byte of the buffer
 	for (uint8_t i = 0; i < len; ++i) {
-		uint8_t byte = data[i];
-
-			// Each bit of the byte, LSB first
-		for (uint8_t b = 0; b < 8u; ++b) {
-				// Compare the low bit of the CRC with the data bit, then shift the CRC
-			uint8_t mix = (crc ^ byte) & 0x01u;
-			crc >>= 1u;
-
-				// Apply the polynomial when they differ
-			if (mix) {
-				crc ^= 0x8Cu;
-			}
-
-				// Next data bit
-			byte >>= 1u;
-		}
+		crc = (uint16_t)((crc << 8u) ^ kCrc16Table.v[((crc >> 8u) ^ data[i]) & 0xFFu]);
 	}
 
 	return crc;
+}
+
+
+/**
+ * @brief CRC written after the bytes of a frame, high byte first.
+ */
+
+void combus_frame_crc_put(uint8_t* frame, uint8_t len) {
+	uint16_t crc = combus_frame_crc16(frame, len);
+
+	frame[len]      = (uint8_t)(crc >> 8u);
+	frame[len + 1u] = (uint8_t)(crc & 0xFFu);
+}
+
+
+/**
+ * @brief CRC read after the bytes of a frame, compared with the one recomputed.
+ */
+
+bool combus_frame_crc_ok(const uint8_t* frame, uint8_t len) {
+	uint16_t crc = combus_frame_crc16(frame, len);
+
+	return frame[len] == (uint8_t)(crc >> 8u) && frame[len + 1u] == (uint8_t)(crc & 0xFFu);
 }
 
 
@@ -109,7 +150,7 @@ uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
 		// The frame length must fit a uint8_t
 	uint8_t nDigBytes = (nDigital + 7u) / 8u;   // ceil(nDigital / 8)
 
-	if ((CombusFrameHeaderLen + (uint16_t)nDigBytes + (uint16_t)nAnalog * 2u + 1u) > 255u) {
+	if ((CombusFrameHeaderLen + (uint16_t)nDigBytes + (uint16_t)nAnalog * 2u + CombusFrameCrcLen) > 255u) {
 		return 0;
 	}
 
@@ -164,8 +205,8 @@ uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
 	}
 
 		// 7. CRC over everything before it
-	outputBuffer[pos] = combus_frame_crc8(outputBuffer, pos);
-	pos++;
+	combus_frame_crc_put(outputBuffer, pos);
+	pos += CombusFrameCrcLen;
 
 	return pos;
 }
@@ -218,7 +259,7 @@ bool combus_frame_decode( const ComBusFrameCfg& cfg,
 	if (!outputFrame->analog || !outputFrame->digital) { return false; }
 
 		// The frame length must fit a uint8_t
-	uint16_t expectedLenW = CombusFrameHeaderLen + (uint16_t)nDigBytes + (uint16_t)header.cfg.nAnalog * 2u + 1u;
+	uint16_t expectedLenW = CombusFrameHeaderLen + (uint16_t)nDigBytes + (uint16_t)header.cfg.nAnalog * 2u + CombusFrameCrcLen;
 
 	if (expectedLenW > 255u) { return false; }
 
@@ -232,10 +273,7 @@ bool combus_frame_decode( const ComBusFrameCfg& cfg,
 	if (len < expectedLen) { return false; }
 
 		// 4. Validate the CRC
-	uint8_t crcExpected = inputBuffer[expectedLen - 1u];
-	uint8_t crcActual   = combus_frame_crc8(inputBuffer, (uint8_t)(expectedLen - 1u));
-
-	if (crcActual != crcExpected) { return false; }
+	if (!combus_frame_crc_ok(inputBuffer, (uint8_t)(expectedLen - CombusFrameCrcLen))) { return false; }
 
 		// 5. Unpack the digital bits announced: the padding of the last byte never reaches the buffer
 	const uint8_t nDigital = header.cfg.nDigital;

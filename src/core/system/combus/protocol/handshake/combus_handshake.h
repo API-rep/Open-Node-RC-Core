@@ -44,7 +44,7 @@ struct CombusHandshakeContext;
 /**
  * @brief Fixed payload length of the handshake frame, in bytes.
  *
- * @details Excludes SOF, header and CRC-8.  Layout:
+ * @details Excludes SOF, header and CRC.  Layout:
  * @code
  *   [0..15]  MD5 of the contract announced by this end (next set on a NEXT handshake)
  *   [16]     project version MAJOR: a difference breaks the contract
@@ -66,7 +66,7 @@ static constexpr uint8_t kCombusHandshakePayloadLen = 19u;
 	/// Total handshake frame size on the wire (SOF + header + payload + CRC).
 static constexpr uint8_t CombusFrameHandshakeMinLen =
 	sizeof(CombusFrameSof) + sizeof(CombusFrameHeader) +
-	kCombusHandshakePayloadLen + sizeof(uint8_t);
+	kCombusHandshakePayloadLen + CombusFrameCrcLen;
 
 
 /**
