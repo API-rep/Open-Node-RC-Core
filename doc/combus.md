@@ -32,21 +32,17 @@ This is where the ComBus is used the most:
 
 ## Declared, Not Programmed
 
-Channels are not written in C++. Each one is declared in a small configuration file, a `.cb` file, next to what it describes: the profile of a machine type, a core module, a coupler.
+You do not program a channel: you **declare** it. A few lines in a small text file, a `.cb` file, give its name, its type, how far it goes and its safe value. No C++ to write.
 
-At build time, the **ComBus Builder** reads these files and generates everything the firmware needs: the identifiers, the arrays, and a fingerprint of each set of channels. Consistency and compatibility are checked twice: at build time by the builder, and at runtime before two firmwares exchange anything.
+The file lives **next to what it describes**: a machine type, a module, a coupler. At build time, the project is scanned and every `.cb` it finds is taken in, as long as its module is part of the build. Nothing to register, no central list to edit.
 
----
+The same approach is being extended to the rest of the configuration: the processor chains, then the configuration of the machines and their boards.
 
-## Three Layers
+What it brings:
 
-Not every value has to travel everywhere. Each channel belongs to a layer that sets how far it goes:
-
-* **BASE**: the generic channel set of a machine type (truck, excavator, tractor...), used as the "norm" for node communication (internal and external);
-* **SYSTEM**: the specific channels of one node, owned by its system, defined for a custom machine configuration;
-* **BOARD**: the channels private to one board or sub-board firmware, for its internal use.
-
-A remote only needs to know the `BASE` channels of the machine it drives; the boards of a truck share their `SYSTEM` channels.
+* **Adding a module is simple.** A new function (lights, a winch, a sensor) comes with its own folder: its code, its `.cb`, and later its chains. Drop it into the project, and its channels appear where they are needed. A user can write an extra module without touching the core.
+* **A machine is assembled, not rewritten.** Enable a module, and its channels come with it; leave it out, and they disappear.
+* **Mistakes show up early.** A name used twice, a channel with no safe value, two boards claiming the same channel: the build refuses it and says why. And before two firmwares exchange anything, they check that they share the same channels.
 
 ---
 

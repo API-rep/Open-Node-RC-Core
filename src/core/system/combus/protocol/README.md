@@ -33,13 +33,13 @@ Machine modules
 
 ## Describing a Link
 
-A link is declared, not programmed:
+A link is declared in a configuration file, not programmed:
 
-- `ComDev` describes the link: its scope, direction, activation and rate.
-- `ComPort` describes the physical port of the board.
+- `ComDev` describes the link: its scope, its type (one way or both ways), its protocol (rates, loss timeout), its activation and, between nodes, its ComBus table.
+- `ComPort` describes the physical port, declared by the configuration of the board.
 - `ComDevMap` wires a `ComDev` on a `ComPort`, and gives the role of this end (`TX`, `RX` or `TX_RX`).
 
-At startup, `combus_links_init()` validates each `ComDevMap`, opens the port, which gives a `NodeCom`, then starts the link. All storage belongs to the caller and stays static: nothing is allocated.
+A board lists its links in a table (`comLinks[]` of its `envCfg.h`). At startup, `combus_links_init()` validates each `ComDevMap`, opens the port, which gives a `NodeCom`, then starts the link. All storage belongs to the caller and stays static: nothing is allocated.
 
 ## The Two Scopes
 
@@ -74,6 +74,7 @@ All frames start with the same header. Two bytes are enough to tell them apart:
 - **Transport independence**: the protocol only talks to `NodeCom`, never to `Serial` or another peripheral.
 - **One port, one owner**: opening a port already taken is a configuration error, reported and refused.
 - **An invalid frame costs only one byte**: the receiver drops that first byte and looks for the start of the next frame, without swallowing a good one.
+- **Old bytes are never applied**: when the loop comes back later than the loss timeout of a link, the bytes waiting are at least that old. They are dropped, and the link is lost by its silence, rather than fed with stale values.
 
 ## Adding a Transport
 
@@ -86,5 +87,7 @@ An adapter that provides a `NodeCom` is enough: `write()`, `readByte()`, `availa
 - [The handshake](handshake/README.md)
 - [Coupling and pairing](coupling/README.md)
 - [The `both_or` merge](both_or.md): the anti ping-pong between boards
-- [The UART workflow](link/uart_workflow.md): the init chain, from the build flag to `loop()`
+- [The UART workflow](link/uart_workflow.md): the init chain, from the board table to `loop()`
+- [Linking nodes](../../../../../doc/linking_nodes.md): the concepts behind the links
+- [The remote](../../../../remotes/README.md): the firmware of the remote and its link to the machine
 - [The builder](../../../../../scripts/combus_builder/README.md): how the IDs and tables are generated

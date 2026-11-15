@@ -46,6 +46,6 @@ The boards of a node interact by sharing the `SYSTEM` channel layer, which inclu
 
 ## Going Further
 
-* [ComBus](combus.md): the shared register and its layers.
+* [ComBus](combus.md): the shared register.
 * [Linking Nodes](linking_nodes.md): how nodes are linked together.
 * [Board Architecture](board_architecture.md): the build flags that describe a firmware.

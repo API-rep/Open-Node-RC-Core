@@ -109,5 +109,5 @@ Analog only: fixes the logical zero of the value. `start` (the default) puts it 
 
 ## Going Further
 
-* [ComBus](../combus.md): what the ComBus is, its layers.
+* [ComBus](../combus.md): what the ComBus is.
 * [ComBus Builder in depth](../../scripts/combus_builder/README.md): how the files are found and read, the diffusion between boards, the fingerprints, the generated files.
