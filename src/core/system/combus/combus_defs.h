@@ -153,6 +153,9 @@ static_assert(sizeof(BothOrMerge) == 4u * sizeof(bool),      "BothOrMerge must h
  *   raw uint16_t and the frame is unchanged; only the application accessors of
  *   combus_access.h apply the offset.
  *
+ *   `safe` is the value declared in the .cb (`value:`), the one the channel starts
+ *   with: a link that is lost gives it back to the channels it was writing.
+ *
  *   The order of the fields is the one of the generated initializers.
  */
 
@@ -162,10 +165,11 @@ struct AnalogComBus {
 	ChanLayer   layer         = ChanLayer::BOARD;   ///< who may write it
 	ChanFlow    flow          = {};                 ///< which way it travels, on each kind of link
 	bool        zeroAtNeutral = false;              ///< logical zero at CbusNeutral, else at 0
+	uint16_t    safe          = 0x7FFFu;            ///< safe value, declared in the .cb (default CbusNeutral, checked in combus_link_watch.cpp)
 };
 
-	// zeroAtNeutral sits in padding that already existed: an analog channel still
-	// takes 12 bytes on the ESP32 (32-bit pointer).
+	// zeroAtNeutral and safe sit in padding that already existed: an analog channel
+	// still takes 12 bytes on the ESP32 (32-bit pointer).
 #if UINTPTR_MAX == 0xFFFFFFFFu
 static_assert(sizeof(AnalogComBus) == 12u, "AnalogComBus must stay 12 bytes on a 32-bit target");
 #endif
@@ -174,7 +178,9 @@ static_assert(sizeof(AnalogComBus) == 12u, "AnalogComBus must stay 12 bytes on a
 /**
  * @brief A digital channel.
  *
- * @details The order of the fields is the one of the generated initializers.
+ * @details `safe` is the value declared in the .cb, as for an analog channel.
+ *
+ *   The order of the fields is the one of the generated initializers.
  */
 
 struct DigitalComBus {
@@ -183,7 +189,14 @@ struct DigitalComBus {
 	ChanLayer   layer  = ChanLayer::BOARD;    ///< who may write it
 	ChanFlow    flow   = {};                  ///< which way it travels, on each kind of link
 	BothOrMerge bothOr = {};                  ///< OR merge, used when bothOr.enabled
+	bool        safe   = false;               ///< safe value, declared in the .cb
 };
+
+	// safe adds 4 bytes to a digital channel (no padding was left).  Short of RAM one
+	// day: move the constant fields (infoName, layer, flow, safe) to a sub-structure in flash.
+#if UINTPTR_MAX == 0xFFFFFFFFu
+static_assert(sizeof(DigitalComBus) == 16u, "DigitalComBus must stay 16 bytes on a 32-bit target");
+#endif
 
 
 

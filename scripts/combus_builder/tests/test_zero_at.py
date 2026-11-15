@@ -137,7 +137,7 @@ def _empty_ctx():
 
 
 def test_row1_neutral_channel_is_generated_with_the_flag():
-    assert ".zeroAtNeutral = true }, // X_BUS" in _generated_source("neutral")
+    assert ".zeroAtNeutral = true, .safe = CbusNeutral }, // X_BUS" in _generated_source("neutral")
 
 
 @pytest.mark.parametrize("zero_at", [None, "start"])

@@ -291,7 +291,7 @@ static void test_row7_end_to_end(void) {
 //
 // Table validated by the owner: at the loss of a link with a peer
 // (silence, or contract dropped), the positions this node receives and writes
-// in its ComBus take back their safe value (CbusNeutral / false); the
+// in its ComBus take back their safe value (declared in the .cb); the
 // positions it sends do not move; both_or is unchanged (a lost link
 // contributes nothing to the merge).
 // =============================================================================
@@ -389,6 +389,52 @@ static void test_loss_row7_late_pass_drops_the_backlog(void) {
     ensureStable();
     receiveFromTrailer(555u, false, 13u);
     TEST_ASSERT_EQUAL_UINT16(555u, bus.analogBus[kTilt].value);
+}
+
+/** Row 8: the safe value given back is the one declared in the .cb (`safe`), not CbusNeutral. */
+static void test_loss_row8_declared_safe_value_given_back(void) {
+    const uint16_t declared = bus.analogBus[kTilt].safe;
+    bus.analogBus[kTilt].safe = 1234u;                              // as a .cb `value: 1234` would give it
+
+    startLink();
+    ensureStable();
+    receiveFromTrailer(333u, false, 14u);
+    delay(kProto.linkTimeoutMs + 60u);
+    com_rx_update(bus);
+    const uint16_t tilt = bus.analogBus[kTilt].value;
+    bus.analogBus[kTilt].safe = declared;
+
+    TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::LOST);
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(1234u, tilt, "the lost link did not give back the declared safe value");
+}
+
+/** Row 9: each received position gets its own safe value, digital included; both_or and the sent positions do not move. */
+static void test_loss_row9_take_back_per_channel(void) {
+    static AnalogComBus  a[2];
+    static DigitalComBus d[3];
+    static ComBus local = { .analogBus = a, .digitalBus = d };
+    for (AnalogComBus&  ch : a) { ch.layer = ChanLayer::BASE; ch.value = 500u;  }
+    for (DigitalComBus& ch : d) { ch.layer = ChanLayer::BASE; ch.value = false; }
+    a[0].safe = 0u;                                                 // a brake: released
+    a[1].safe = 1u;                                                 // sent by this node
+    d[0].safe = true;                                               // a fault: raised
+    d[1].safe = true;  d[1].bothOr.enabled = true;                  // both_or: never written by a frame
+    d[2].safe = true;                                               // sent by this node
+
+    static const uint8_t aIds[] = { 0u, 1u };
+    static const bool    aRx[]  = { true, false };
+    static const uint8_t dIds[] = { 0u, 1u, 2u };
+    static const bool    dRx[]  = { true, true, false };
+    const ComPeerLink peer = { .coupler = "t", .role = ComLinkRole::SOCKET, .announced = {}, .expected = {},
+                               .analog  = { 2u, 2u, aIds, aRx }, .digital = { 3u, 3u, dIds, dRx } };
+
+    combus_link_take_back_safe_values(peer, local);
+
+    TEST_ASSERT_EQUAL_UINT16(0u,   a[0].value);                     // received: its safe value
+    TEST_ASSERT_EQUAL_UINT16(500u, a[1].value);                     // sent: kept
+    TEST_ASSERT_TRUE_MESSAGE(d[0].value, "a received fault fell back to no fault");
+    TEST_ASSERT_FALSE(d[1].value);                                  // both_or: kept
+    TEST_ASSERT_FALSE(d[2].value);                                  // sent: kept
 }
 
 
@@ -1642,6 +1688,8 @@ void setup() {
     RUN_TEST(test_row6_both_or_through_the_table);
     RUN_TEST(test_row7_end_to_end);
     RUN_TEST(test_loss_row1_to_3_received_positions_take_back_their_safe_value);
+    RUN_TEST(test_loss_row8_declared_safe_value_given_back);
+    RUN_TEST(test_loss_row9_take_back_per_channel);
     RUN_TEST(test_loss_row4_shared_fault_falls_back);
     RUN_TEST(test_loss_row5_reconnection);
     RUN_TEST(test_loss_row6_contract_dropped);

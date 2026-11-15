@@ -759,13 +759,15 @@ def _emit_channel_init(body: list[str], vc: ViewChannel, type_: str, connected: 
 
         { .infoName = "...", .value = ..., .layer = ChanLayer::X,
           .flow = { .betweenNodes = Direction::Y, .betweenBoards = Direction::Z },
-          .bothOr = { .enabled = false } },
+          .bothOr = { .enabled = false }, .safe = ... },
 
     The `.value` field is rendered from the canonical channel value
     (see _render_value). It honours the YAML `value:` contract:
       - analog: CbusMinVal / CbusNeutral / CbusMaxVal / `<n>u`
       - digital: false / true (`high` and `fault` are true)
     Falls back to the generator default when `value:` is absent.
+    The `.safe` field, always last, holds the same literal: the value a
+    lost link gives back to the channel.
 
     The `.layer` field comes from the channel's scope (BASE/SYSTEM/BOARD).
     The `.flow` field (ChanFlow) holds the two directions: `.betweenNodes`
@@ -796,7 +798,8 @@ def _emit_channel_init(body: list[str], vc: ViewChannel, type_: str, connected: 
             f".value = {value_literal}, "
             f".layer = {layer}, "
             f".flow = {{ .betweenNodes = {dir_name}, .betweenBoards = {node_dir_name} }}, "
-            f".bothOr = {{ .enabled = {both_or_lit} }} }}, // {vc.ch.id}"
+            f".bothOr = {{ .enabled = {both_or_lit} }}, "
+            f".safe = {value_literal} }}, // {vc.ch.id}"
         )
     else:
         # analog: .bothOr does not exist (validation rejects
@@ -808,7 +811,8 @@ def _emit_channel_init(body: list[str], vc: ViewChannel, type_: str, connected: 
             f"    {{ .infoName = \"{escaped_info}\", "
             f".value = {value_literal}, "
             f".layer = {layer}, "
-            f".flow = {{ .betweenNodes = {dir_name}, .betweenBoards = {node_dir_name} }}{zero_at} }}, // {vc.ch.id}"
+            f".flow = {{ .betweenNodes = {dir_name}, .betweenBoards = {node_dir_name} }}{zero_at}, "
+            f".safe = {value_literal} }}, // {vc.ch.id}"
         )
 
 

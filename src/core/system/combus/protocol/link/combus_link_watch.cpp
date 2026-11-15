@@ -14,6 +14,9 @@
 
 #include "combus.h"   // AnalogComBusID, DigitalComBusID
 
+	// The default safe value of an analog channel, a literal in combus_defs.h, is the neutral.
+static_assert(AnalogComBus{}.safe == CbusNeutral, "AnalogComBus::safe must default to CbusNeutral");
+
 
 
 // =============================================================================
@@ -209,8 +212,10 @@ bool combus_links_lost( LinkScope scope )
 /**
  * @brief Safe values. Takes back what this node had received from a link now gone.
  *
- * @details The positions this node sends do not move.  A both_or position is skipped: a
- *   frame never writes it, and the merge ignores a link that is not alive.
+ * @details Each received channel gets back its declared safe value (`safe`, the
+ *   `value:` of its .cb).  The positions this node sends do not move.  A both_or
+ *   position is skipped: a frame never writes it, and the merge ignores a link that is
+ *   not alive.
  */
 
 void combus_link_take_back_safe_values( const ComPeerLink& peer, ComBus& bus )
@@ -219,14 +224,16 @@ void combus_link_take_back_safe_values( const ComPeerLink& peer, ComBus& bus )
 	for (uint8_t p = 0u; p < peer.analog.count; ++p) {
 		if (!peer.analog.rx[p]) { continue; }
 
-		combus_link_set_raw_analog(bus, static_cast<AnalogComBusID>(peer.analog.ids[p]), CbusNeutral, ChanLayer::BASE);
+		const uint8_t id = peer.analog.ids[p];
+		combus_link_set_raw_analog(bus, static_cast<AnalogComBusID>(id), bus.analogBus[id].safe, ChanLayer::BASE);
 	}
 
 		// Each digital position this node receives, both_or left out
 	for (uint8_t p = 0u; p < peer.digital.count; ++p) {
-		if (!peer.digital.rx[p] || bus.digitalBus[peer.digital.ids[p]].bothOr.enabled) { continue; }
+		const uint8_t id = peer.digital.ids[p];
+		if (!peer.digital.rx[p] || bus.digitalBus[id].bothOr.enabled) { continue; }
 
-		combus_link_set_digital(bus, static_cast<DigitalComBusID>(peer.digital.ids[p]), false, ChanLayer::BASE);
+		combus_link_set_digital(bus, static_cast<DigitalComBusID>(id), bus.digitalBus[id].safe, ChanLayer::BASE);
 	}
 }
 

@@ -85,7 +85,7 @@ void combus_links_watch( ComLinkRuntime* runtime, uint8_t count );
  * @details Called by com_rx_update().  For each link:
  *   - a coupled link has its pairing stepped and its contributors written;
  *   - a link with a table that stops being alive sends the positions it receives back
- *     to their safe value (CbusNeutral, false).  The positions it sends do not move, a
+ *     to their safe value (declared in the .cb).  The positions it sends do not move, a
  *     both_or is never written by a frame, and a link without a table is unchanged;
  *   - the loss and the recovery are logged once per change.  Lost here means lost, or
  *     never seen once startupGraceMs has elapsed, whatever the scope.
@@ -131,7 +131,8 @@ bool combus_links_lost( LinkScope scope );
 /**
  * @brief Send the positions received on a link back to their safe value.
  *
- * @details CbusNeutral for an analog channel, false for a digital one.  A both_or
+ * @details The safe value of each channel (its `safe` field, the `value:` of its .cb,
+ *   the one it starts with).  A both_or
  *   position is left out: a frame never writes it, and the merge ignores a link that is
  *   not alive.
  *

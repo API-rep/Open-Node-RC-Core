@@ -23,6 +23,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import pytest
+
 THIS_DIR = Path(__file__).resolve().parent
 REPO_ROOT = THIS_DIR.parent.parent.parent
 if str(REPO_ROOT) not in sys.path:
@@ -460,6 +462,24 @@ def test_emit_channel_init_digital_default_is_false():
     body: list[str] = []
     _emit_channel_init(body, vc, "digital")
     assert ".value = false," in body[0]
+
+
+@pytest.mark.parametrize("type_, value, literal", [
+    ("analog",  "CbusMinVal", "CbusMinVal"),
+    ("analog",  1,            "1u"),
+    ("analog",  None,         "CbusNeutral"),
+    ("digital", "high",       "true"),
+    ("digital", "fault",      "true"),
+    ("digital", None,         "false"),
+])
+def test_emit_channel_init_safe_is_the_declared_value(type_, value, literal):
+    """`.safe`, the value a lost link gives back, is the declared value, as last field."""
+    ch = _make_analog(value=value) if type_ == "analog" else _make_digital(value=value)
+    vc = ViewChannel(numeric_id=0, ch=ch, direction_bits=Direction.UPLINK)
+    body: list[str] = []
+    _emit_channel_init(body, vc, type_)
+    assert f".value = {literal}," in body[0]
+    assert f".safe = {literal} }}," in body[0]
 
 
 # =============================================================================
