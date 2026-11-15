@@ -5,13 +5,15 @@
 - Propriétaire amateur, francophone : répondre en français.
 - ComBus Builder (scripts/combus_builder/) : génère depuis des YAML .cb les en-têtes/sources ComBus par carte.
 - Il tourne via un hook SCons : scripts/combus_scons_hook.py (`extra_scripts = pre:scripts/combus_scons_hook.py`, section [env] de platformio.ini).
-- Architecture : scripts/combus_builder/README.md. Points ouverts : doc/combus_builder_handoff.md. Historique : git log.
-- Convention : un fichier dont le nom commence par ~, ou par « WIP - » à la racine de doc/, est en cours de rédaction (ex. doc/~combus_v2.md).
+- Architecture du builder : scripts/combus_builder/README.md. Chantiers et points ouverts : doc/WIP - Master.md. Historique : git log.
+- Convention : un fichier dont le nom commence par ~, ou par « WIP - » à la racine de doc/, est en cours de rédaction (ex. doc/WIP - Master.md).
+- Langue de la doc : la doc du projet est en anglais (style existant : accroche, conceptuel, technique) ; un WIP reste en français tant que son chantier est ouvert, puis son contenu utile passe dans la doc en anglais et le WIP est supprimé.
 - src/sound_module et les envs sound_node_* ont été retirés. Ne pas les réintroduire.
 - Scopes ComBus : BASE (profil du type de machine), SYSTEM (nœud), BOARD (carte). Avant le 2026-10-18 ils s'appelaient REMOTE, LOCAL et SYSTEM : les anciens commits, stashes et docs utilisent les anciens noms.
 
 ## Point d'entrée
-- Lire d'abord doc/ia-guidelines.md : point d'entrée commun à toutes les IA (règles de comportement, conventions de code, règles de session). Il renvoie vers doc/README.md, qui indexe la documentation par sujet.
+- En reprise de session : lire d'abord doc/WIP - Master.md (chantier en cours, ordre des suivants, ce qui attend), puis le sous-WIP du chantier visé.
+- Règles communes à toutes les IA : doc/ia-guidelines.md (comportement, conventions de code, règles de session). Index de la doc : doc/README.md, puis les fichiers de thème (doc/combus.md pour le ComBus).
 - Ce fichier ne contient que les consignes propres à Claude Code. Ne pas y dupliquer ce qui est dans doc/ia-guidelines.md.
 - Sujet ComBus Builder : scripts/combus_builder/README.md.
 
@@ -29,7 +31,8 @@
 - Avertissement LF/CRLF : normal, ne rien modifier pour ça.
 
 ## Tests
-- pytest : le dossier scripts/combus_builder/tests se lance d'un coup ou fichier par fichier (724 tests verts, aucun xfail au 2026-10-15).
+- pytest : le dossier scripts/combus_builder/tests se lance d'un coup ou fichier par fichier (992 tests verts au 2026-11-11).
+- Unity sur la carte : une suite = un env (test_combus_loopback, test_peer_link, test_remote_link, test_runlevel) ; `pio test -e <suite> --upload-port <port> --test-port <port>` ; voir test/README.md.
 - Toujours PYTHONIOENCODING=utf-8 (console Windows cp1252).
 - Un test qui retourne un booléen sans assert passe à vide. Vérifier qu'un test « mord » en le faisant échouer sur l'ancien code.
 - `scripts` n'a pas de __init__.py (namespace package) : les imports peuvent mélanger dépôts/worktrees. Vérifier `module.__file__`.

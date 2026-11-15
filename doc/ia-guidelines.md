@@ -9,9 +9,10 @@ An agent-specific file (for example `CLAUDE.md` at the repository root) holds th
 ## 1. Reading Order
 
 1. This file (rules for AI agents, sections 2 to 5).
-2. [Documentation Guide](README.md) — the words of the project ("Glossary"), then the topic you work on ("By Subject").
-3. Before writing or changing C/C++: the conventions below.
-4. Before writing documentation: [Documentation Guidelines](documentation_guidelines.md).
+2. [Work in progress](work_in_progress.md) — the master of the work sites: what is in progress, in which order, and the document of each work site.
+3. [Glossary](glossary.md), then the [Documentation Guide](README.md) and the theme file of the topic you work on (for example [ComBus](combus.md)).
+4. Before writing or changing C/C++: the conventions below.
+5. Before writing documentation: [Documentation Guidelines](documentation_guidelines.md).
 
 ---
 
@@ -132,5 +133,5 @@ The fork `API-rep/PS4_Controller_Host` @ `b58a05d` fixes the Bluetooth init for 
 
 ## Entry Points
 
-* [Main Documentation](README.md) — Start here for the project overview and the subject index
+* [Main Documentation](README.md) — Start here for the project overview and the theme files
 * [Development Guidelines](developement/README.md) — Development conventions overview
