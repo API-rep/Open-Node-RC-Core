@@ -64,13 +64,31 @@ The UART index of a port maps to the ESP32 serial: 0 = `Serial` (USB), 1 = `Seri
 
 `board_links_init()` (`src/machines/init/com/board_links_init.cpp`) owns the storage of the links (TX state, RX state, runtime, `ComBusLink`, one slot per entry of `comLinks[]`) and calls `combus_links_init()` (`combus_links.cpp`):
 
-1. **`combus_link_check()`**, for each link, before taking any port: a coupled link has its `CouplingDev` and its table; the link type and the role of the end agree; the frame rate is at most 1000 Hz and a receiving end has a loss timeout; the line rate is below the ceiling of the port; a table is used between nodes only, and fits the receive buffers. A refused link stays inactive and is logged; the others start anyway.
-2. **Opening the port**: `uart_com_init(serial, rate, txPin, rxPin, name, &pinReg)` gives the `NodeCom` of the link. The pin of a direction the end does not use is passed as `-1` and is not reserved. A port already taken is refused.
+1. **`combus_link_check()`**, for each link, before taking any port: a coupled link has its `CouplingDev` and its table; the link type and the role of the end agree; the frame rate is at most 1000 Hz and a receiving end has a loss timeout; the line rate is below the ceiling of the port; the line is not too loaded (see below); a table is used between nodes only, and fits the receive buffers. A refused link stays inactive and is logged; the others start anyway.
+2. **Opening the port**: `uart_com_init(serial, rate, txPin, rxPin, name, &pinReg)` gives the `NodeCom` of the link. The pin of a direction the end does not use is passed as `-1` and is not reserved. A port already taken is refused. The driver gets a 512-byte transmit ring before `begin()`: a write copies the frame and returns at once, instead of waiting until the whole frame is in the hardware FIFO.
 3. **`combus_link_build()`**: fills the `ComBusLink`: layer from the scope, frame sizes from the matching view, TX and RX from the role of the end, the table of the link if any.
 4. **TX and RX pools** registered, then **`combus_link_start()`** for each link: the handshake context (its contract), then the TX side and the RX side.
 5. **`combus_links_watch()`**: the links are put under watch; a coupled link starts off.
 
 Nothing is allocated: all the storage is static and belongs to the caller.
+
+### Line Load
+
+A transmitting end on a UART sends its full frame at its frame rate, plus a handshake request and its ACK every 250 ms, 10 bits per byte (start and stop). `combus_link_load_pct()` gives this load in % of the line rate:
+
+```text
+load = (frameLen × txHz + 2 × 26 × 1000 / 250) × 10 × 100 / rate
+```
+
+| Load | At boot |
+|---|---|
+| up to 70 % | the link starts |
+| above 70 % | the link starts, with a warning in the log |
+| above 100 % | the link is refused: the line cannot carry it |
+
+The margin is measured: at 94 % of a 19 200 baud line, the transmit ring fills and a write already blocks the loop for about 40 ms. The real configurations run at 115 200 baud and 50 Hz, about 20 %. The check only covers a UART: another kind of port counts as 0 for now.
+
+The transmit ring removes the blocking of large frames: a 226-byte frame took 20.6 ms to write without it, 0.19 ms with it. It does not save an overloaded line: the ring fills, and the writes block again.
 
 ---
 
