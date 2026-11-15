@@ -20,7 +20,7 @@ The major version of the project is also part of the contract. The minor and dev
 
 ## The Frame
 
-25 bytes long, it uses the reserved slot `seq == 0`:
+26 bytes long, it uses the reserved slot `seq == 0`:
 
 | Byte | Size | Field |
 |---|---|---|
@@ -30,7 +30,7 @@ The major version of the project is also part of the contract. The minor and dev
 | 4 | 1 | `flags`: bit 0 = ACK, else request; bit 1 = NEXT, else legacy (without the "ComBus-next" channels) |
 | 5 to 20 | 16 | announced MD5 |
 | 21, 22, 23 | 3 | project version: major, minor, development |
-| 24 | 1 | CRC-8/MAXIM over the previous bytes |
+| 24, 25 | 2 | CRC-16/CCITT-FALSE over the previous bytes, as in the [data frame](../frame/README.md) |
 
 ## The Sequence
 

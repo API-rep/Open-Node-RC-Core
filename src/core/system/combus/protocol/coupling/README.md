@@ -12,7 +12,7 @@ The trigger of the coupler, for example a hitch sensor, rises on both sides at t
 
 ## The Coupling Frame
 
-It is separate from the handshake: it does not make a link alive and does not touch the contract. 19 bytes long, it uses the `seq == 0` slot, marked by the coupling bit of `flags`:
+It is separate from the handshake: it does not make a link alive and does not touch the contract. 20 bytes long, it uses the `seq == 0` slot, marked by the coupling bit of `flags`:
 
 | Byte | Size | Field |
 |---|---|---|
@@ -26,7 +26,7 @@ It is separate from the handshake: it does not make a link alive and does not to
 | 8 to 13 | 6 | `addr.bytes`: the address (MAC of the ESP32) |
 | 14, 15 | 2 | `hitchAgeMs`: age of the hitching in ms, saturated at 65 535, little-endian |
 | 16, 17 | 2 | `features`: function mask, reserved, 0 for now |
-| 18 | 1 | CRC-8 over the previous bytes |
+| 18, 19 | 2 | CRC-16/CCITT-FALSE over the previous bytes, as in the [data frame](../frame/README.md) |
 
 A firmware that does not know this frame takes it for a handshake of the wrong length: the CRC fails, it drops one byte and resynchronises, without touching the contract.
 
