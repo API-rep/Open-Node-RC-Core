@@ -4,7 +4,7 @@ Statut : **à ouvrir** (document `WIP`), créé le 2026-11-11 à la clôture du 
 Public : le propriétaire et les futures sessions de travail sur les sources locales de commandes.
 Plan : §1 constat, §2 idée retenue, §3 règles, §4 questions ouvertes.
 
-Documents liés : [WIP - Remote firmware](<WIP - Remote firmware.md>) (la télécommande, un nœud à part entière) ; glossaire de [doc/README.md](README.md#glossary).
+Documents liés : [WIP - Remote firmware](<WIP - Remote firmware.md>) (la télécommande, un nœud à part entière) ; [glossaire](glossary.md).
 
 ---
 

@@ -246,19 +246,21 @@ the "Machine / Sound convergence" work in `doc/roadmap.md`.
 build_flags =
     -D IS_MACHINE
     -D MACHINE_VOLVO_A60_H_BRUDER
+    -D MACHINE_TYPE_DUMPER_TRUCK
 ```
 
 (`[volvo_A60H_id]` is a shared section, referenced as
 `${volvo_A60H_id.build_flags}` by the Volvo environments.)
 
-`MACHINE_*` selects the machine instance (and so the family).  Words: see
-the glossary of [doc/README.md](../../../../doc/README.md#glossary).
+`MACHINE_*` selects the machine instance; `MACHINE_TYPE_*` its family, read by
+the ComBus Builder (machine type filter) and by `machine_type.h`.  Words: see
+the [glossary](../../../../doc/glossary.md).
 
-**Category of the node** (link rework 3.5): every env sets exactly one
+**Category of the node**: every env sets exactly one
 category, checked by the ComBus Builder hook (`links.node_category()`):
 `IS_MACHINE` (a node that is driven) or `IS_REMOTE` (a node that drives).
 
-**Sides of the couplers** (link rework 3.5): the place of a machine in the
+**Sides of the couplers**: the place of a machine in the
 star of the links is the side of each of its couplers, never a fixed nature
 (a towed trommel is carried when hitched, stand-alone otherwise):
 

@@ -1,147 +1,147 @@
-# Module failsafe
+# Failsafe Module
 
-Ce document est la référence du module failsafe : ses deux chaînes (dure et douce), ses conventions de nom et ses règles. La chaîne douce a son propre document, `src/core/system/failsafe/failsafe_soft.md`.
+This document is the reference of the failsafe module: its two chains (hard and soft), its naming conventions and its rules. The soft chain has its own document, [failsafe_soft.md](failsafe_soft.md).
 
 ---
 
-## 1. Deux sévérités, deux chaînes
+## 1. Two Severities, Two Chains
 
-Le module distingue deux sévérités de faute. Chacune a son agrégat et sa réaction :
+The module distinguishes two severities of fault. Each one has its aggregate and its reaction:
 
-| Chaîne | Agrégat | Réaction (runlevel) | Exemple de cause |
+| Chain | Aggregate | Reaction (run level) | Example of cause |
 |---|---|---|---|
-| **dure** | `FAILSAFE_HARD` | `HALT` : moteurs arrêtés, endormis, désactivés ; on n'en sort que par un redémarrage | batterie basse, perte d'un lien entre cartes |
-| **douce** | `FAILSAFE_SOFT` | `IDLE` : mise en attente ; la reprise demande la clé | perte de la télécommande, perte d'un lien vers un autre nœud |
+| **hard** | `FAILSAFE_HARD` | `HALT`: motors stopped, put to sleep, disabled; only a reboot leaves it | low battery, loss of a link between boards |
+| **soft** | `FAILSAFE_SOFT` | `IDLE`: on hold; resuming takes the key | loss of the remote, loss of a link to another node |
 
-L'agrégat dit la **sévérité**, pas la réaction : la réaction peut évoluer sans renommage. La chaîne dure l'emporte toujours sur la douce (§6).
+The aggregate states the **severity**, not the reaction: the reaction may change without any renaming. The hard chain always wins over the soft one (§6).
 
-Le module entier est activé par `HAS_FAILSAFE` (posé par `[env:machines]`). Sans lui, il n'y a ni chaîne, ni agrégat, ni contributeur.
+The whole module is enabled by `HAS_FAILSAFE` (set by `[env:machines]`). Without it, there is no chain, no aggregate and no contributor.
 
 ---
 
-## 2. Conventions de nom
+## 2. Naming Conventions
 
-| Élément | Forme | Exemples |
+| Element | Form | Examples |
 |---|---|---|
-| agrégat | `FAILSAFE_<SÉVÉRITÉ>` | `FAILSAFE_HARD`, `FAILSAFE_SOFT` |
-| contributeur | `<SOURCE>_FAIL` | `VBAT_FAIL`, `BOARD_LINK_FAIL`, `NODE_LINK_FAIL`, `LOCAL_REMOTE_FAIL` |
-| flag d'un contributeur | `HAS_<SOURCE>_FAILSAFE` | `HAS_VBAT_FAILSAFE`, `HAS_BOARD_LINK_FAILSAFE` |
-| flag du module | `HAS_FAILSAFE` | — |
+| aggregate | `FAILSAFE_<SEVERITY>` | `FAILSAFE_HARD`, `FAILSAFE_SOFT` |
+| contributor | `<SOURCE>_FAIL` | `VBAT_FAIL`, `BOARD_LINK_FAIL`, `NODE_LINK_FAIL`, `LOCAL_REMOTE_FAIL` |
+| flag of a contributor | `HAS_<SOURCE>_FAILSAFE` | `HAS_VBAT_FAILSAFE`, `HAS_BOARD_LINK_FAILSAFE` |
+| flag of the module | `HAS_FAILSAFE` | — |
 
-Tous ces channels sont du thème **`failsafe`** : c'est le **groupe failsafe**. Ce sont des alarmes, « vrai = faute ». Leur valeur sûre est donc `true`, déclarée `value: fault` dans le `.cb` (§4).
+All these channels belong to the **`failsafe`** theme: the **failsafe group**. They are alarms, "true = fault". Their safe value is therefore `true`, declared `value: fault` in the `.cb` (§4).
 
 ---
 
-## 3. Contributeurs
+## 3. Contributors
 
-Un contributeur dit un **fait** (« la batterie défaille », « un lien entre cartes est tombé »), sans sévérité. C'est la chaîne qui le lit qui décide de la sévérité.
+A contributor states a **fact** ("the battery is failing", "a link between boards is down"), without any severity. The chain that reads it decides the severity.
 
-| Contributeur | Fait | Écrit par | Flag | Chaîne aujourd'hui |
+| Contributor | Fact | Written by | Flag | Chain today |
 |---|---|---|---|---|
-| `VBAT_FAIL` | batterie sous le seuil | `vbat_update()` (`src/core/system/vbat/vbat.cpp`) | `HAS_VBAT_FAILSAFE` | dure |
-| `BOARD_LINK_FAIL` | un lien qui reçoit, entre cartes du nœud, est perdu | `com_rx_update()` (`src/core/system/com/com_manager.cpp`) | `HAS_BOARD_LINK_FAILSAFE` | dure |
-| `NODE_LINK_FAIL` | un lien qui reçoit, vers un autre nœud, est perdu | `com_rx_update()` | `HAS_NODE_LINK_FAILSAFE` | douce |
-| `LOCAL_REMOTE_FAIL` | la télécommande locale (manette PS4 ; demain récepteur PPM/SBUS) ne répond plus | `input_update()` (`src/machines/system/input/input_update.cpp`) | `HAS_LOCAL_REMOTE_FAILSAFE` | douce |
+| `VBAT_FAIL` | battery below the threshold | `vbat_update()` (`src/core/system/vbat/vbat.cpp`) | `HAS_VBAT_FAILSAFE` | hard |
+| `BOARD_LINK_FAIL` | a receiving link, between boards of the node, is lost | `com_rx_update()` (`src/core/system/com/com_manager.cpp`) | `HAS_BOARD_LINK_FAILSAFE` | hard |
+| `NODE_LINK_FAIL` | a receiving link, to another node, is lost | `com_rx_update()` | `HAS_NODE_LINK_FAILSAFE` | soft |
+| `LOCAL_REMOTE_FAIL` | the local remote (PS4 controller; tomorrow a PPM/SBUS receiver) no longer answers | `input_update()` (`src/machines/system/input/input_update.cpp`) | `HAS_LOCAL_REMOTE_FAILSAFE` | soft |
 
-Un contributeur exige `HAS_FAILSAFE` et **son propre flag**, jamais celui d'une chaîne : il reste neutre et **rebranchable**.
+A contributor requires `HAS_FAILSAFE` and **its own flag**, never the flag of a chain: it stays neutral and **pluggable**.
 
-**Rebranchable veut dire déplaçable, jamais dupliqué.** Un contributeur est lu par **une seule chaîne** : la chaîne le réarme à `true` après lecture (§4), si bien qu'une seconde chaîne lirait une fausse faute. Pour changer la sévérité d'un contributeur, on déplace sa ligne d'une chaîne à l'autre.
+**Pluggable means movable, never duplicated.** A contributor is read by **a single chain**: the chain re-arms it to `true` after reading (§4), so a second chain would read a false fault. To change the severity of a contributor, move its line from one chain to the other.
 
-**Un lien couplé** (`ON_COUPLING`) a son propre contributeur, désigné par son `CouplingDev` (`fail`, par exemple `TRAILER_LINK_FAIL`) : sain tant que l'attelage est dételé et pendant l'appairage ; en faute s'il est attelé sans lien sain : appairage en conflit (deux candidats) ou en échec (trop peu de réponses), ou lien appairé puis perdu après le délai de grâce compté depuis l'appairage. Un lien couplé ne compte jamais dans `NODE_LINK_FAIL` : la machine range ce contributeur dans la chaîne de son choix.
+**A coupled link** (`ON_COUPLING`) has its own contributor, named by its `CouplingDev` (`fail`, for example `TRAILER_LINK_FAIL`): healthy while unhitched and during pairing; at fault when hitched without a healthy link: pairing in conflict (two candidates) or failed (too few answers), or a paired link lost after the grace counted from pairing. A coupled link never counts in `NODE_LINK_FAIL`: the machine puts this contributor in the chain of its choice.
 
-`BOARD_LINK_FAIL` et `NODE_LINK_FAIL` sont alimentés par la **portée** du lien : un lien entre cartes compte comme perdu s'il est silencieux, ou jamais vu une fois son délai de grâce (`startupGraceMs`) écoulé ; un lien vers un autre nœud compte dès qu'il n'est pas vivant, jamais vu compris. Il n'y a plus de politique de perte par lien (`onLoss`, supprimé) : la sévérité se décide en plaçant le contributeur dans une chaîne.
+`BOARD_LINK_FAIL` and `NODE_LINK_FAIL` are fed by the **scope** of the link: a link between boards counts as lost if it is silent, or never seen once its startup grace (`startupGraceMs`) is over; a link to another node counts as soon as it is not alive, never seen included. There is no per-link loss policy: the severity is decided by placing the contributor in a chain.
 
 ---
 
-## 4. Preuve de vie : `fault` par défaut et réarmement
+## 4. Proof of Life: `fault` by Default and Re-arming
 
-Chaque alarme vaut `true` (faute) par défaut : `value: fault` dans son `.cb`. Le builder le vérifie : un numérique du thème `failsafe` doit déclarer `fault`, et `fault` est refusé ailleurs.
+Each alarm is `true` (fault) by default: `value: fault` in its `.cb`. The builder checks it: a digital channel of the `failsafe` theme must declare `fault`, and `fault` is refused anywhere else.
 
-À chaque cycle :
+On every cycle:
 
 ```text
-module source  → écrit son contributeur à false (sain) s'il va bien
-chaîne         → lit le contributeur, fait le OU dans l'agrégat,
-                 puis le remet à true (cb_or_fn : « consume + guard »)
+source module  → writes its contributor to false (healthy) if all is well
+chain          → reads the contributor, ORs it into the aggregate,
+                 then puts it back to true (cb_or_fn: "consume + guard")
 ```
 
-Si le module source cesse d'écrire, son contributeur reste à `true` : la faute est levée. Le contributeur est à la fois un état de santé et une **preuve de vie**, sans délai ni horodatage. Conséquence : la valeur instantanée d'un contributeur sur le bus n'est pas l'état de santé ; il faut lire l'agrégat.
+If the source module stops writing, its contributor stays `true`: the fault is raised. The contributor is both a health state and a **proof of life**, without timeout or timestamp. Consequence: the instant value of a contributor on the bus is not the health state; read the aggregate.
 
 ---
 
-## 5. Les chaînes
+## 5. The Chains
 
-Les deux chaînes ont la même forme : un reset en tête (`cb_reset_fn`, agrégat à 0 = sain), puis un `cb_or_fn` par contributeur (entrée = sortie = le contributeur). L'agrégat passe à `true` dès qu'un contributeur est en faute, pour le cycle.
+Both chains have the same shape: a reset first (`cb_reset_fn`, aggregate to 0 = healthy), then one `cb_or_fn` per contributor (input = output = the contributor). The aggregate becomes `true` as soon as a contributor is at fault, for the cycle.
 
-| | Chaîne dure | Chaîne douce |
+| | Hard chain | Soft chain |
 |---|---|---|
 | code | `src/core/system/failsafe/failsafe_chain.cpp` (`kFailsafeChain[]`) | `src/core/system/failsafe/failsafe_soft_chain.cpp` (`kFailsafeSoftChain[]`) |
-| lancée par | `failsafe_update()` | `failsafe_soft_update()` |
-| contributeurs | `VBAT_FAIL`, `BOARD_LINK_FAIL` | `LOCAL_REMOTE_FAIL`, `NODE_LINK_FAIL` |
+| run by | `failsafe_update()` | `failsafe_soft_update()` |
+| contributors | `VBAT_FAIL`, `BOARD_LINK_FAIL` | `LOCAL_REMOTE_FAIL`, `NODE_LINK_FAIL` |
 
-Chaque contributeur est dans un bloc `#if defined(HAS_<SOURCE>_FAILSAFE)`. Une chaîne sans contributeur écrit `false` à chaque cycle.
+Each contributor is in an `#if defined(HAS_<SOURCE>_FAILSAFE)` block. A chain without a contributor writes `false` on every cycle.
 
-**Ordre d'exécution** (`sys_manager_update()`, `src/machines/system/sys_manager.cpp`) : réception (`com_rx_update`, qui écrit les contributeurs de lien), entrées (`input_update`), batterie (`vbat_update`), chaîne dure, chaîne douce. Toutes les sources ont donc écrit avant les chaînes, et les deux agrégats sont frais avant la chaîne runlevel et la machine à états de `main.cpp`. La valeur de démarrage des agrégats n'atteint jamais la machine à états.
-
----
-
-## 6. Réaction : la chaîne runlevel
-
-Le module ne connaît ni les runlevels, ni les machines. La réaction est dans la chaîne runlevel de la machine, `kRunlevelProcs[]` (`src/machines/config/machines/volvo_A60H_bruder/combus/processors/input/runlevel_config.h`), dans cet ordre :
-
-1. **le maintien de `HALT`** (`cb_runlevel_hold_fn`) : si le runlevel vaut déjà `HALT`, fait un *claim*, ce qui saute toutes les étapes suivantes ;
-2. **`FAILSAFE_HARD`** (`cb_runlevel_fn`, à chaque cycle) : tant qu'il est vrai, écrit `HALT` et fait un *claim* ;
-3. **`FAILSAFE_SOFT`** (`cb_runlevel_once_fn`, sur front montant) : écrit `IDLE` et fait un *claim* ;
-4. **la clé** (`KEY_ACTIVE`, sur ses fronts) : `STARTING` ou `TURNING_OFF`.
-
-`main.cpp` réagit au runlevel : `case RunLevel::HALT` arrête, endort et désactive les moteurs à l'entrée.
-
-**`HALT` ne se quitte que par un redémarrage** : une fois la faute dure retombée, ni la clé ni la faute douce n'en sortent. Au redémarrage, `init.cpp` écrit `IDLE`. Le maintien ne garde aucun état : il lit seulement la valeur de `RUNLEVEL`.
-
-**Valeur inconnue** : le `default` du `switch` de `main.cpp` traite toute valeur hors de `RunLevel` (bug, valeur corrompue) comme une faute dure. Il écrit `HALT`, qui est ensuite maintenu.
+**Execution order** (`sys_manager_update()`, `src/machines/system/sys_manager.cpp`): reception (`com_rx_update`, which writes the link contributors), inputs (`input_update`), battery (`vbat_update`), hard chain, soft chain. All the sources have therefore written before the chains, and both aggregates are fresh before the run level chain and the state machine of `main.cpp`. The startup value of the aggregates never reaches the state machine.
 
 ---
 
-## 7. Règles à conserver
+## 6. Reaction: the Run Level Chain
 
-- **Le module** ne contient aucune logique métier (batterie, liens, entrées) : il agrège des contributeurs et publie deux agrégats.
-- **Un module source** est propriétaire de son contributeur et l'écrit à chaque cycle.
-- **Un contributeur** est lu par une seule chaîne.
-- **Une machine** choisit ses contributeurs (flags) et leur chaîne (ligne dans la chaîne), et fournit sa réaction (chaîne runlevel).
+The module knows neither run levels nor machines. The reaction lives in the run level chain of the machine, `kRunlevelProcs[]` (`src/machines/config/machines/volvo_A60H_bruder/combus/processors/input/runlevel_config.h`), in this order:
+
+1. **holding `HALT`** (`cb_runlevel_hold_fn`): if the run level is already `HALT`, it makes a *claim*, which skips all the following steps;
+2. **`FAILSAFE_HARD`** (`cb_runlevel_fn`, on every cycle): while it is true, writes `HALT` and makes a *claim*;
+3. **`FAILSAFE_SOFT`** (`cb_runlevel_once_fn`, on a rising edge): writes `IDLE` and makes a *claim*;
+4. **the key** (`KEY_ACTIVE`, on its edges): `STARTING` or `TURNING_OFF`.
+
+`main.cpp` reacts to the run level: `case RunLevel::HALT` stops, puts to sleep and disables the motors on entry.
+
+**`HALT` is only left by a reboot**: once the hard fault has fallen, neither the key nor the soft fault leaves it. At reboot, `init.cpp` writes `IDLE`. The hold keeps no state: it only reads the value of `RUNLEVEL`.
+
+**Unknown value**: the `default` of the `switch` of `main.cpp` treats any value outside `RunLevel` (bug, corrupted value) as a hard fault. It writes `HALT`, which is then held.
 
 ---
 
-## 8. Fichiers
+## 7. Rules to Keep
+
+- **The module** holds no business logic (battery, links, inputs): it aggregates contributors and publishes two aggregates.
+- **A source module** owns its contributor and writes it on every cycle.
+- **A contributor** is read by a single chain.
+- **A machine** chooses its contributors (flags) and their chain (a line in the chain), and provides its reaction (run level chain).
+
+---
+
+## 8. Files
 
 ```text
 src/core/system/failsafe/
-├── failsafe.h / .cpp              // failsafe_update() : lance la chaîne dure
-├── failsafe_chain.h / .cpp        // kFailsafeChain[] : reset + contributeurs de la chaîne dure
+├── failsafe.h / .cpp              // failsafe_update(): runs the hard chain
+├── failsafe_chain.h / .cpp        // kFailsafeChain[]: reset + contributors of the hard chain
 ├── failsafe_hard.cb               // FAILSAFE_HARD (SYSTEM, both_or)
-├── failsafe_soft_chain.h / .cpp   // kFailsafeSoftChain[] : chaîne douce
+├── failsafe_soft_chain.h / .cpp   // kFailsafeSoftChain[]: soft chain
 ├── failsafe_soft.cb               // FAILSAFE_SOFT (SYSTEM, both_or)
-└── failsafe_soft.md               // la chaîne douce
+└── failsafe_soft.md               // the soft chain
 
-Les contributeurs restent à côté du module qui les écrit :
+The contributors stay next to the module that writes them:
 
-src/core/system/com/board_link_fail.cb      // BOARD_LINK_FAIL (BOARD), écrit par com_rx_update()
-src/core/system/com/node_link_fail.cb       // NODE_LINK_FAIL (BOARD), écrit par com_rx_update()
+src/core/system/com/board_link_fail.cb      // BOARD_LINK_FAIL (BOARD), written by com_rx_update()
+src/core/system/com/node_link_fail.cb       // NODE_LINK_FAIL (BOARD), written by com_rx_update()
 src/core/system/vbat/vbat_fail.cb           // VBAT_FAIL (SYSTEM, uplink_or)
-src/core/config/inputs/local_remote_fail.cb // LOCAL_REMOTE_FAIL (BOARD), écrit par input_update()
+src/core/config/inputs/local_remote_fail.cb // LOCAL_REMOTE_FAIL (BOARD), written by input_update()
 src/core/system/combus/processors/logic/cb_or.h   // cb_or_fn
 ```
 
 ---
 
-## 9. Référence rapide
+## 9. Quick Reference
 
-| Concept | Où |
+| Concept | Where |
 |---|---|
-| Maintien de `HALT` | `cb_runlevel_hold_fn`, `src/core/system/combus/processors/base/cb_runlevel.h` |
-| Agrégats | `failsafe_hard.cb`, `failsafe_soft.cb` |
-| Chaînes | `failsafe_chain.cpp`, `failsafe_soft_chain.cpp` |
-| Contributeurs de lien | `com_rx_update()`, `src/core/system/com/com_manager.cpp` |
-| Ordre d'exécution | `sys_manager_update()`, `src/machines/system/sys_manager.cpp` |
-| Réaction runlevel | `kRunlevelProcs[]`, `.../processors/input/runlevel_config.h` |
-| Réaction moteurs | `src/machines/main.cpp`, `case RunLevel::HALT` |
-| Lecture | `comBus.digitalBus[DigitalComBusID::FAILSAFE_HARD].value` (ou `FAILSAFE_SOFT`) |
+| Holding `HALT` | `cb_runlevel_hold_fn`, `src/core/system/combus/processors/base/cb_runlevel.h` |
+| Aggregates | `failsafe_hard.cb`, `failsafe_soft.cb` |
+| Chains | `failsafe_chain.cpp`, `failsafe_soft_chain.cpp` |
+| Link contributors | `com_rx_update()`, `src/core/system/com/com_manager.cpp` |
+| Execution order | `sys_manager_update()`, `src/machines/system/sys_manager.cpp` |
+| Run level reaction | `kRunlevelProcs[]`, `.../processors/input/runlevel_config.h` |
+| Motor reaction | `src/machines/main.cpp`, `case RunLevel::HALT` |
+| Reading | `comBus.digitalBus[DigitalComBusID::FAILSAFE_HARD].value` (or `FAILSAFE_SOFT`) |

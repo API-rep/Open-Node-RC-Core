@@ -49,3 +49,11 @@ This separation avoids mixing concerns and keeps each document focused on a sing
 
 * [Main Documentation](../README.md) — Project documentation entry point
 * [IA Guidelines](../ia-guidelines.md) — Quick reference for AI-assisted development
+
+---
+
+## Tools
+
+* [Debug architecture](../../src/core/system/debug/~README.md), [logging](../../src/core/system/debug/logging/~README.md) and [dashboard](../../src/core/system/debug/dashboard/~README.md)
+* [On-board tests](../../test/README.md) — the test suites and how to run them
+* Builder tests: see the "Running the Tests" section of the [ComBus Builder README](../../scripts/combus_builder/README.md)

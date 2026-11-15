@@ -18,9 +18,9 @@ Le code est relu (blocs 1 à 11) ; reste, dans l'ordre :
    - Montage : deux ESP32 en USB, liaison croisée GPIO 17 ↔ 16 dans les deux sens, masse commune par l'USB du même PC.
    - Ce qui reste à prouver à deux cartes : la mémoire `historique-tests-rework` (colonne « reste à deux cartes »), à reprendre ligne par ligne.
    - Aucun firmware n'a encore les deux bouts d'un vrai lien : pas de configuration de carte d'extension, la Volvo n'a pas de lien vers la télécommande, le type `test_trailer` n'a pas d'env. Première décision de la session : quels firmwares d'essai (envs de test à deux bouts), à valider par le propriétaire avant de les écrire.
-   - Relecture de la doc en cours dans l'autre conversation : ne pas toucher aux fichiers `.md`, ni à l'index git (un commit `refactor(tests)` y attend).
+   - Relecture de la doc en cours dans l'autre conversation : ne pas toucher aux fichiers `.md`.
 3. **Revue indépendante** par un agent tiers : relecture et tests fonctionnels, à partir des règles et des résultats attendus, sans les conclusions de l'auteur.
-4. **Relecture de la doc** par le propriétaire.
+4. **Relecture de la doc** par le propriétaire. Note : le commit `ee4f269` (`docs(builder)`) contient aussi le `refactor(tests)` de `test_combus_loopback.cpp` (identifiants « legacy »).
 5. **Merge** dans `main`.
 
 ## 2. Chantiers suivants (ordre proposé, à valider)

@@ -4,7 +4,7 @@ Statut : **à ouvrir** (document `WIP`), créé le 2026-11-11 à la clôture du 
 Public : le propriétaire et les futures sessions de travail sur les transports entre nœuds et entre cartes.
 Plan : §1 objectif, §2 ESP-NOW (premier transport traité), §3 plusieurs pairs sur un lien, §4 autres transports, §5 contrat `SYSTEM` entre cartes, §6 questions ouvertes.
 
-Vocabulaire : voir le glossaire de [doc/README.md](README.md#glossary). Fonctionnement actuel des liens : [protocol/link](../src/core/system/combus/protocol/link/README.md), [handshake](../src/core/system/combus/protocol/handshake/README.md), [coupling](../src/core/system/combus/protocol/coupling/README.md).
+Vocabulaire : voir le [glossaire](glossary.md). Fonctionnement actuel des liens : [protocol/link](../src/core/system/combus/protocol/link/README.md), [handshake](../src/core/system/combus/protocol/handshake/README.md), [coupling](../src/core/system/combus/protocol/coupling/README.md).
 
 ---
 
@@ -29,12 +29,18 @@ Le contrat, l'ACK, la perte et le mode next / stable sont aujourd'hui rangés da
 
 | Transport | Le principe tient | Comment |
 |---|---|---|
-| UART | oui | un TX vers un ou plusieurs RX ; chaque retour est un fil à part ; RS485 multi-émetteur exclu, sauf adressage ajouté par le transport |
+| UART | non, par décision | deux pairs par lien ; un multi-pair passe par un autre transport |
 | CAN | oui | l'identifiant CAN dit qui émet ; arbitrage du bus ; trames ComBus découpées en trames CAN de 8 octets par le transport (à la ISO-TP) |
 | ESP-NOW | oui | adresse MAC de l'émetteur à la réception : un flux par pair ; émission en diffusion ou adressée |
 | I2C | oui, avec réserve | le maître écrit vers chaque esclave et lit chaque esclave ; un esclave ne parle que lu : le maître doit lire chaque esclave au moins toutes les 250 ms ; deux esclaves ne se parlent pas directement |
 
 Réglé par le principe : identité de l'émetteur, contrat / ACK / silence par pair, collisions au démarrage, ensembles différents sur un même médium (deux bouts TX logiques), et en grande partie la liste des pairs attendus (chaque pair attendu est un lien configuré ; les pairs dynamiques, comme l'appairage ESP-NOW d'une télécommande, demandent un cache des pairs).
+
+**Exigences d'un transport multi-pair** (sans fil comme ESP-NOW, ou filaire à plusieurs pairs ; l'UART, par décision, reste à deux pairs par lien). Issues du banc, levier 3 (trames forgées par un troisième nœud, 2026-11-14) :
+
+- **Filtre par identité de l'émetteur** : le transport ne transmet au décodage que les trames du pair appairé (`NodeCom::setPeer`, étape 2.2 pour ESP-NOW : adresse MAC, que la trame de couplage porte déjà dans `addr.bytes`). Sans filtre, une poignée de main étrangère coupe le lien (voulu sur l'UART, option A), et les données d'un autre nœud sont appliquées (F4 : 15 à 31 valeurs fausses en 3 s).
+- **ACK aux étrangers** : aujourd'hui, toute demande reçoit un ACK, même étrangère. Le filtre règle ce point.
+- **Rejeu** (F6) : une vraie trame renvoyée plus tard est acceptée. À étudier : un contrôle d'avance du `seq` à la réception, ou un équivalent dans le transport.
 
 **Reste à traiter au niveau ComBus quand un TX servira plusieurs récepteurs :**
 

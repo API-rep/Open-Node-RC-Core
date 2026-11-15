@@ -1,115 +1,120 @@
-# Le handshake
+# The Handshake
 
-Deux firmwares flashés séparément peuvent ne pas avoir le même ComBus. Si l'un croit que la position 3 est le frein et l'autre la direction, la machine fait n'importe quoi. Le handshake le détecte avant le moindre mouvement : **tant que les deux bouts ne sont pas d'accord, aucune donnée n'est appliquée.**
+Two firmwares flashed separately may not have the same ComBus. If one believes that position 3 is the brake and the other the steering, the machine does anything. The handshake detects it before the slightest movement: **as long as both ends do not agree, no data is applied.**
 
-C'est un contrôle de cohérence, pas une mesure de sécurité.
+It is a consistency check, not a safety measure.
 
-## Le contrat
+## The Contract
 
-Le contrat d'un lien est le MD5 de l'ensemble des channels qu'il transporte, calculé par le builder.
+The contract of a link is the MD5 of the set of channels it carries, computed by the builder.
 
-| Lien | MD5 comparé |
+| Link | MD5 compared |
 |---|---|
-| portée `BASE` | celui de la vue `BASE` |
-| portée `SYSTEM` | celui de la vue `SYSTEM` |
-| avec une table (`ComPeerLink`) | celui du lien, propre à chaque côté |
+| `BASE` scope | the one of the `BASE` view |
+| `SYSTEM` scope | the one of the `SYSTEM` view |
+| with a table (`ComPeerLink`) | the one of the link, specific to each side |
 
-Sur un lien avec table, chaque bout annonce le MD5 de son côté et attend celui de l'autre. Deux embases, ou deux fiches, reliées par erreur se refusent donc.
+On a link with a table, each end announces the MD5 of its own side and expects the one of the other side. Two sockets, or two plugs, linked by mistake therefore refuse each other.
 
-La version majeure du projet fait aussi partie du contrat. La mineure et la version de développement sont seulement journalisées.
+The major version of the project is also part of the contract. The minor and development versions are only logged.
 
-## La trame
+## The Frame
 
-Longue de 25 octets, elle occupe l'emplacement réservé `seq == 0` :
+25 bytes long, it uses the reserved slot `seq == 0`:
 
-| Octet | Taille | Champ |
+| Byte | Size | Field |
 |---|---|---|
 | 0 | 1 | `SOF` = `0xAA` |
 | 1, 2 | 2 | `nAnalog` = 0, `nDigital` = 0 |
 | 3 | 1 | `seq` = 0 |
-| 4 | 1 | `flags` : bit 0 = ACK, sinon demande ; bit 1 = NEXT, sinon legacy |
-| 5 à 20 | 16 | MD5 annoncé |
-| 21, 22, 23 | 3 | version du projet : majeure, mineure, développement |
-| 24 | 1 | CRC-8/MAXIM sur les octets précédents |
+| 4 | 1 | `flags`: bit 0 = ACK, else request; bit 1 = NEXT, else legacy (without the "ComBus-next" channels) |
+| 5 to 20 | 16 | announced MD5 |
+| 21, 22, 23 | 3 | project version: major, minor, development |
+| 24 | 1 | CRC-8/MAXIM over the previous bytes |
 
-## Le déroulé
+## The Sequence
 
-Un lien démarre toujours `INCONNU`. Chaque bout envoie une **rafale** de 3 demandes à 100 ms d'intervalle, puis une demande toutes les 250 ms, quel que soit l'état du contrat.
+A link always starts `UNKNOWN`. Each end sends a **burst** of 3 requests 100 ms apart, then one request every 250 ms, whatever the state of the contract.
 
 ```text
-Bout A                                 Bout B
-  │ ── demande (MD5 de A) ───────────▶ │  arme un ACK, d'accord ou non
-  │ ◀─────────────── ACK (MD5 de B) ── │
-  │  compare : A passe STABLE          │
+End A                                  End B
+  │ ── request (MD5 of A) ───────────▶ │  arms an ACK, agreeing or not
+  │ ◀──────────────── ACK (MD5 of B) ── │
+  │  compares: A becomes STABLE        │
   │                                    │
-  │ ◀─────────── demande (MD5 de B) ── │
-  │ ── ACK (MD5 de A) ───────────────▶ │
-  │                                    │  compare : B passe STABLE
+  │ ◀──────────── request (MD5 of B) ── │
+  │ ── ACK (MD5 of A) ───────────────▶ │
+  │                                    │  compares: B becomes STABLE
 ```
 
-Pour passer `STABLE`, chacun a besoin d'une preuve :
+To become `STABLE`, each end needs a proof:
 
-- **Un bout bidirectionnel** attend l'ACK de sa propre demande : il sait alors que l'autre le reçoit.
-- **Un bout qui ne fait que recevoir** se contente de la demande de l'émetteur.
+- **A two-way end** waits for the ACK of its own request: it then knows that the other end receives it.
+- **A receive-only end** is satisfied with the request of the sender.
 
-Un bout qui ne fait qu'émettre n'attend rien : ses demandes périodiques permettent à un récepteur démarré plus tard de s'établir.
+A send-only end waits for nothing: its periodic requests let a receiver started later establish itself.
 
-## Les états
+A request is always answered with an ACK; an ACK is never answered.
 
-| | `INCONNU` | `STABLE` |
+## The States
+
+| | `UNKNOWN` | `STABLE` |
 |---|---|---|
-| Trames de données reçues | ignorées | appliquées |
-| Le lien compte comme vivant | non | oui, s'il reçoit |
-| Un bout bidirectionnel émet des données | non | oui |
+| Data frames received | ignored | applied |
+| The link counts as alive | no | yes, if it receives |
+| A two-way end sends data | no | yes |
 
-Un bout qui ne fait qu'émettre envoie toujours ses données.
+A send-only end always sends its data.
 
-Le contrat retombe à `INCONNU` sur :
+The contract falls back to `UNKNOWN` on:
 
-- un handshake refusé : MD5 et version majeure sont comparés à chaque fois, pas seulement au début ;
-- un silence plus long que le délai du lien, après des données ;
-- sur un bout bidirectionnel, aucun ACK pendant 1 s, soit 4 demandes : l'autre ne nous reçoit plus ;
-- une réinitialisation du transport.
+- a refused handshake: MD5 and major version are compared every time, not only at the start;
+- a silence longer than the timeout of the link, after data;
+- on a two-way end, no ACK for 1 s, that is 4 requests: the other end no longer receives us;
+- a reset of the transport.
 
-Le lien n'étant alors plus vivant, sa perte est publiée selon sa portée (`NODE_LINK_FAIL` ou `BOARD_LINK_FAIL`).
+The link is then no longer alive, and its loss is published according to its scope (`NODE_LINK_FAIL` or `BOARD_LINK_FAIL`).
 
-## Les channels candidats : stable, next, legacy
+A failsafe never touches the contract: blocking the frames would block the failsafe of the other boards.
 
-Un channel candidat est un channel ajouté à l'essai, derrière les channels stables. Il permet à deux firmwares de versions voisines de se parler. Le MD5 *stable* ne le compte pas, le MD5 *next* le compte. Ces modes ne concernent que les liens `BASE` : un lien `SYSTEM` transporte ses candidats dans son unique ensemble.
+## Candidate Channels: Stable, Next, Legacy
 
-| Mode | Quand | Channels transmis |
+A candidate channel is a channel added on trial, after the stable channels. It lets two firmwares of neighbouring versions talk to each other. The *stable* MD5 does not count it, the *next* MD5 does. These modes only concern `BASE` links: a `SYSTEM` link carries its candidates in its single set.
+
+| Mode | When | Channels sent |
 |---|---|---|
-| **next** | les deux bouts ont les mêmes candidats | tous |
-| **stable** | les candidats diffèrent | les stables seulement ; les candidats gardent leur valeur par défaut |
-| **legacy** | ce bout n'a aucun candidat | tous : il n'y a que des stables |
+| **next** | both ends have the same candidates | all of them |
+| **stable** | the candidates differ | the stable ones only; the candidates keep their default value |
+| **legacy** | this end has no candidate | all of them: there are only stable ones |
 
-Comment ils se mettent d'accord :
+How they agree:
 
-- Un bout avec candidats commence par des demandes NEXT : la rafale, puis 3 relances. Il passe ensuite aux demandes legacy, ou dès qu'un ACK NEXT n'est pas conforme.
-- Un handshake NEXT décide **du mode, jamais du contrat** : il ne peut pas faire tomber un lien.
-- Le mode suit ce que l'autre annonce, sans couper le lien. Une perte ramène au mode stable et réarme les demandes NEXT.
+- An end with candidates starts with NEXT requests: the burst, then 3 retries. It then switches to legacy requests (with the stable MD5), or as soon as a NEXT ACK does not match.
+- A NEXT handshake decides **the mode, never the contract**: it cannot drop a link.
+- The mode follows what the other end announces, without cutting the link. A loss brings it back to stable mode and re-arms the NEXT requests.
 
-Les candidats suivent toujours les stables sur le fil : une trame next lue en mode stable reste juste sur sa partie stable.
+The candidates always follow the stable channels on the wire: a next frame read in stable mode stays right on its stable part.
 
-## Les interrupteurs de compilation
+## Build Switches
 
-Réservés à la mise au point, ils sont à 0 par défaut :
+Reserved for debugging, they are 0 by default:
 
-| Macro | Effet |
+| Macro | Effect |
 |---|---|
-| `COMBUS_MD5_CHECK_DISABLE` | Accepte tout handshake. Une bannière très visible le signale au démarrage. |
-| `COMBUS_HANDSHAKE_BURST_DISABLE` | Supprime la rafale ; les demandes périodiques restent. |
+| `COMBUS_MD5_CHECK_DISABLE` | Accepts any handshake. A very visible banner reports it at startup. |
+| `COMBUS_HANDSHAKE_BURST_DISABLE` | Removes the burst; the periodic requests remain. |
 
-## Les fichiers
+## Files
 
-| Fichier | Contenu |
+| File | Content |
 |---|---|
-| `combus_handshake.h`, `.cpp` | Constantes, contexte par lien, aides communes |
-| `combus_handshake_rx.h`, `.cpp` | Décoder une trame, comparer, faire évoluer le contrat |
-| `combus_handshake_tx.h`, `.cpp` | La rafale, les demandes périodiques et les ACK |
+| `combus_handshake.h`, `.cpp` | Constants, per-link context, shared helpers |
+| `combus_handshake_rx.h`, `.cpp` | Decode a frame, compare, update the contract |
+| `combus_handshake_tx.h`, `.cpp` | The burst, the periodic requests and the ACKs |
 
-## Aller plus loin
+## Going Further
 
-- [Le protocole ComBus](../README.md) : la vue d'ensemble
-- [La trame de données](../frame/README.md) : ce que le contrat protège
-- [Le couplage et l'appairage](../coupling/README.md) : l'autre trame de l'emplacement `seq == 0`
+- [ComBus protocol](../README.md): the overview
+- [Data frame](../frame/README.md): what the contract protects
+- [Coupling and pairing](../coupling/README.md): the other frame of the `seq == 0` slot
+- [Linking nodes](../../../../../../doc/linking_nodes.md): why both ends must agree

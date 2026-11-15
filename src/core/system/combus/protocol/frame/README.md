@@ -1,39 +1,39 @@
-# La trame de données
+# The Data Frame
 
-Ce dossier transforme l'état du ComBus en octets, et inversement. Le codec est pur : il ne connaît ni l'état du lien, ni sa perte, ni aucun channel en particulier. Le run level et le failsafe y voyagent comme des channels ordinaires.
+This folder turns the state of the ComBus into bytes, and back. The codec is pure: it knows nothing of the state of the link, of its loss, or of any particular channel. The run level and the failsafe travel in it as ordinary channels.
 
-## Le format
+## The Format
 
-| Octet | Taille | Champ |
+| Byte | Size | Field |
 |---|---|---|
 | 0 | 1 | `SOF` = `0xAA` |
-| 1 | 1 | `nAnalog` : nombre de channels analogiques |
-| 2 | 1 | `nDigital` : nombre de channels numériques |
-| 3 | 1 | `seq` : compteur de trame |
-| 4 | 1 | `flags` : 0 sur une trame de données |
-| 5 | `ceil(nDigital / 8)` | channels numériques, 1 bit par channel, bit de poids faible d'abord |
-| 5 + d | `2 × nAnalog` | channels analogiques, `uint16` petit-boutiste |
-| fin | 1 | CRC-8/MAXIM sur tous les octets précédents |
+| 1 | 1 | `nAnalog`: number of analog channels |
+| 2 | 1 | `nDigital`: number of digital channels |
+| 3 | 1 | `seq`: frame counter |
+| 4 | 1 | `flags`: 0 on a data frame |
+| 5 | `ceil(nDigital / 8)` | digital channels, 1 bit per channel, least significant bit first |
+| 5 + d | `2 × nAnalog` | analog channels, little-endian `uint16` |
+| end | 1 | CRC-8/MAXIM over all the previous bytes |
 
-- Les channels numériques passent **avant** les analogiques.
-- Une trame fait 255 octets au plus, car sa longueur tient sur un octet.
-- `seq` va de 1 à 255, puis revient à 1. La valeur 0 est réservée au [handshake](../handshake/README.md) et au [couplage](../coupling/README.md) : l'encodeur la refuse.
+- The digital channels come **before** the analog ones.
+- A frame is 255 bytes at most, because its length fits in one byte.
+- `seq` goes from 1 to 255, then back to 1. The value 0 is reserved for the [handshake](../handshake/README.md) and the [coupling](../coupling/README.md): the encoder refuses it.
 
-## Quels channels voyagent
+## Which Channels Travel
 
-Une position sur le fil doit désigner le même channel des deux côtés. Il y a deux façons de le garantir :
+A position on the wire must designate the same channel on both sides. There are two ways to guarantee it:
 
-- **Sans table** : la position est l'identifiant du channel. La trame porte le début de la vue de la portée, car le builder range les identifiants pour que `BASE` soit le préfixe de `SYSTEM`.
-- **Avec table** (`ComPeerLink`, un lien entre nœuds) : la table donne, pour chaque position, le channel local et dit si ce nœud le reçoit ou l'envoie.
+- **Without a table**: the position is the identifier of the channel. The frame carries the start of the view of the scope, because the builder orders the identifiers so that `BASE` is the prefix of `SYSTEM`.
+- **With a table** (`ComPeerLink`, a link between nodes): the table gives, for each position, the local channel, and says whether this node receives or sends it.
 
-Dans les deux cas, c'est le [handshake](../handshake/README.md) qui prouve que les deux bouts sont d'accord : ils comparent le MD5 de cet ensemble de channels.
+In both cases, the [handshake](../handshake/README.md) proves that both ends agree: they compare the MD5 of this set of channels.
 
-## Le chemin d'une trame
+## The Path of a Frame
 
 ```text
-Émission    bus → combus_frame_encode() → octets → NodeCom
+Sending     bus → combus_frame_encode() → bytes → NodeCom
 
-Réception   NodeCom → octets → combus_frame_decode() → instantané du lien
+Receiving   NodeCom → bytes → combus_frame_decode() → snapshot of the link
                                                           │
                                  combus_frame_apply()  ←──┘
                                           │
@@ -41,26 +41,26 @@ Réception   NodeCom → octets → combus_frame_decode() → instantané du lie
                                          bus
 ```
 
-**`combus_frame_decode()`** valide d'abord, et n'écrit qu'ensuite : `SOF`, tailles annoncées, capacité du lien, CRC. Une trame refusée laisse la sortie intacte. Le résultat reste indexé par position sur le fil.
+**`combus_frame_decode()`** validates first, and only then writes: `SOF`, announced sizes, capacity of the link, CRC. A refused frame leaves the output untouched. The result stays indexed by position on the wire.
 
-**`combus_frame_apply()`** écrit au bus les seuls channels que ce nœud reçoit :
+**`combus_frame_apply()`** writes to the bus only the channels this node receives:
 
-- Avec une table, c'est elle qui le dit.
-- Sans table, c'est le sens du channel sur ce type de lien (`ChanFlow`).
+- With a table, the table says so.
+- Without a table, the direction of the channel on this kind of link says so (`ChanFlow`).
 
-Un channel que ce nœud produit n'est donc jamais écrasé par son pair. Les écritures passent par `combus_set_*()`, qui refuse un channel hors de la portée du lien : une trame n'écrit jamais un channel `BOARD`.
+A channel this node produces is therefore never overwritten by its peer. The writes go through `combus_link_set_*()`, with the layer of the link, which refuses a channel outside the scope of the link: a frame never writes a `BOARD` channel.
 
-**Le cas `both_or`** : ces channels ne sont jamais écrits par une trame. La valeur reçue reste dans l'instantané du lien, et `com_rx_update()` la fusionne à chaque tour avec celle de la carte. Voir [la fusion `both_or`](../both_or.md).
+**The `both_or` case**: these channels are never written by a frame. The received value stays in the snapshot of the link, and `com_rx_update()` merges it with the value of the board on every cycle. See [the `both_or` merge](../both_or.md).
 
-## Les fichiers
+## Files
 
-| Fichier | Contenu |
+| File | Content |
 |---|---|
-| `combus_frame.h`, `.cpp` | Encodage, décodage, application au bus, CRC |
-| `combus_frame_defs.h` | Les structures : disposition, en-tête, trame décodée |
+| `combus_frame.h`, `.cpp` | Encoding, decoding, applying to the bus, CRC |
+| `combus_frame_defs.h` | The structures: layout, header, decoded frame |
 
-## Aller plus loin
+## Going Further
 
-- [Le protocole ComBus](../README.md) : la vue d'ensemble
-- [Le handshake](../handshake/README.md) : le contrat du lien
-- [Le builder](../../../../../../scripts/combus_builder/README.md) : l'attribution des identifiants
+- [ComBus protocol](../README.md): the overview
+- [Handshake](../handshake/README.md): the contract of the link
+- [The builder](../../../../../../scripts/combus_builder/README.md): how the identifiers are assigned

@@ -1,16 +1,16 @@
-# Chaîne douce du failsafe (`FAILSAFE_SOFT`)
+# Soft Failsafe Chain (`FAILSAFE_SOFT`)
 
-Ce document décrit la chaîne douce. La référence du module (les deux chaînes, les noms, les règles) est `src/core/system/failsafe/failsafe_module.md`.
+This document describes the soft chain. The reference of the module (both chains, the names, the rules) is [failsafe_module.md](failsafe_module.md).
 
 ---
 
-## 1. Rôle
+## 1. Role
 
-La chaîne douce agrège les fautes **légères**, aujourd'hui des pertes de commande : la télécommande locale ne répond plus, ou un lien vers un autre nœud est tombé. Sa réaction est la mise en attente, runlevel `IDLE`, et non l'arrêt complet `HALT` de la chaîne dure.
+The soft chain aggregates the **light** faults, today losses of command: the local remote no longer answers, or a link to another node is down. Its reaction is to put the machine on hold, run level `IDLE`, and not the full stop `HALT` of the hard chain.
 
-**Pourquoi deux chaînes** : perdre la télécommande un instant (changer de machine pilotée, sortir de portée) ne doit pas déclencher la séquence de sécurité complète. La machine s'arrête et attend.
+**Why two chains**: losing the remote for a moment (switching to another machine, going out of range) must not trigger the full safety sequence. The machine stops and waits.
 
-**Reprise : manuelle.** Quand la faute disparaît, rien n'est écrit : la machine reste en `IDLE`, et c'est l'opérateur qui la redémarre avec la clé (Triangle). Même chose au premier branchement de la manette après le démarrage.
+**Resuming: manual.** When the fault disappears, nothing is written: the machine stays in `IDLE`, and the operator restarts it with the key (Triangle). The same happens when the controller is first connected after startup.
 
 ---
 
@@ -21,72 +21,72 @@ LOCAL_REMOTE_FAIL ──┐
                     ├──► reset + OR (cb_or_fn) ──► FAILSAFE_SOFT
 NODE_LINK_FAIL ─────┘                                   │
                                                         ▼
-                                             chaîne runlevel (front montant)
+                                             run level chain (rising edge)
                                                         │
                                                         ▼
                                                  RunLevel::IDLE
 ```
 
-La chaîne dure passe toujours avant (voir `failsafe_module.md` §6).
+The hard chain always comes first (see [failsafe_module.md](failsafe_module.md) §6).
 
 ---
 
-## 3. Contributeurs
+## 3. Contributors
 
-| Contributeur | Fait | Écrit par | Flag |
+| Contributor | Fact | Written by | Flag |
 |---|---|---|---|
-| `LOCAL_REMOTE_FAIL` | la télécommande locale ne répond plus (manette PS4 aujourd'hui) | `input_update()`, `src/machines/system/input/input_update.cpp`, quand le backend est connecté (`INPUT_PS4_DS4_BT`) | `HAS_LOCAL_REMOTE_FAILSAFE` |
-| `NODE_LINK_FAIL` | un lien qui reçoit, vers un autre nœud, n'est pas vivant (jamais vu compris) | `com_rx_update()`, `src/core/system/com/com_manager.cpp` | `HAS_NODE_LINK_FAILSAFE` |
+| `LOCAL_REMOTE_FAIL` | the local remote no longer answers (PS4 controller today) | `input_update()`, `src/machines/system/input/input_update.cpp`, when the backend is connected (`INPUT_PS4_DS4_BT`) | `HAS_LOCAL_REMOTE_FAILSAFE` |
+| `NODE_LINK_FAIL` | a receiving link, to another node, is not alive (never seen included) | `com_rx_update()`, `src/core/system/com/com_manager.cpp` | `HAS_NODE_LINK_FAILSAFE` |
 
-Les deux sont des channels `BOARD` (privés à la carte qui porte la source), du groupe failsafe, `value: fault`. Ils sont réarmés à `true` par la chaîne après lecture : leur valeur instantanée n'est pas l'état du lien, il faut lire `FAILSAFE_SOFT`.
+Both are `BOARD` channels (private to the board that carries the source), of the failsafe group, `value: fault`. The chain re-arms them to `true` after reading: their instant value is not the state of the link, read `FAILSAFE_SOFT`.
 
-`NODE_LINK_FAIL` est alimenté par les liens vers un autre nœud (portée `INTER_NODE`). Un lien jamais vu compte tout de suite : pas de délai de grâce, contrairement à `BOARD_LINK_FAIL`.
-
----
-
-## 4. Chaîne et agrégat
-
-- **Code** : `src/core/system/failsafe/failsafe_soft_chain.cpp`, `kFailsafeSoftChain[]`, lancée par `failsafe_soft_update()` dans `sys_manager_update()`, après la chaîne dure et avant la machine à états.
-- **Forme** : comme la chaîne dure. Un reset (agrégat à 0), puis un `cb_or_fn` par contributeur, chacun sous son flag.
-- **Agrégat** : `FAILSAFE_SOFT` (`failsafe_soft.cb`), `SYSTEM`, `both_or`, partagé par toutes les cartes du nœud.
-- **Activation** : `HAS_FAILSAFE`, comme tout le module. Sans contributeur, l'agrégat vaut `false` à chaque cycle.
+`NODE_LINK_FAIL` is fed by the links to another node (`INTER_NODE` scope). A link never seen counts at once: no startup grace, unlike `BOARD_LINK_FAIL`.
 
 ---
 
-## 5. Réaction
+## 4. Chain and Aggregate
 
-Dans la chaîne runlevel (`kRunlevelProcs[]`, `src/machines/config/machines/volvo_A60H_bruder/combus/processors/input/runlevel_config.h`), après la chaîne dure :
+- **Code**: `src/core/system/failsafe/failsafe_soft_chain.cpp`, `kFailsafeSoftChain[]`, run by `failsafe_soft_update()` in `sys_manager_update()`, after the hard chain and before the state machine.
+- **Shape**: like the hard chain. A reset (aggregate to 0), then one `cb_or_fn` per contributor, each under its flag.
+- **Aggregate**: `FAILSAFE_SOFT` (`failsafe_soft.cb`), `SYSTEM`, `both_or`, shared by all the boards of the node.
+- **Activation**: `HAS_FAILSAFE`, like the whole module. Without a contributor, the aggregate is `false` on every cycle.
+
+---
+
+## 5. Reaction
+
+In the run level chain (`kRunlevelProcs[]`, `src/machines/config/machines/volvo_A60H_bruder/combus/processors/input/runlevel_config.h`), after the hard chain:
 
 ```cpp
 static constexpr CbRunlevelCfg kFailsafeSoftRunlevelCfg {
-    .high  = RunLevel::IDLE,        // FAILSAFE_SOFT 0→1 : IDLE
-    .low   = std::nullopt,          // FAILSAFE_SOFT 1→0 : rien, la reprise passe par la clé
-    .claim = true,                  // bloque la clé pendant ce cycle
+    .high  = RunLevel::IDLE,        // FAILSAFE_SOFT 0→1: IDLE
+    .low   = std::nullopt,          // FAILSAFE_SOFT 1→0: nothing, resuming goes through the key
+    .claim = true,                  // blocks the key for this cycle
 };
 ```
 
-Si la machine est déjà en `HALT`, cette étape ne s'exécute pas : le maintien de `HALT`, en tête de chaîne, a fait un *claim*. Seul un redémarrage sort de `HALT`.
+If the machine is already in `HALT`, this step does not run: holding `HALT`, at the head of the chain, has made a *claim*. Only a reboot leaves `HALT`.
 
-Le processor est `cb_runlevel_once_fn` : il n'agit que sur le **front montant**. La faute douce ne « tient » pas le runlevel, contrairement à la chaîne dure. Comme les commandes de clé viennent de la télécommande, elles ne peuvent de toute façon pas arriver tant que la télécommande est perdue.
+The processor is `cb_runlevel_once_fn`: it only acts on the **rising edge**. The soft fault does not "hold" the run level, unlike the hard chain. Since the key commands come from the remote, they cannot arrive anyway while the remote is lost.
 
 ---
 
-## 6. Lecteurs
+## 6. Readers
 
-| Lecteur | Fichier | Usage |
+| Reader | File | Use |
 |---|---|---|
-| chaîne runlevel | `runlevel_config.h` | `IDLE` sur front montant |
-| tableau de bord machine | `src/machines/system/debug/dashboard_machine.cpp` | indicateur de télécommande connectée |
-| tableau de bord des entrées | `src/machines/system/debug/dashboard_input.cpp` | indicateur de bus piloté |
+| run level chain | `runlevel_config.h` | `IDLE` on a rising edge |
+| machine dashboard | `src/machines/system/debug/dashboard_machine.cpp` | remote connected indicator |
+| inputs dashboard | `src/machines/system/debug/dashboard_input.cpp` | driven bus indicator |
 
 ---
 
-## 7. Référence rapide
+## 7. Quick Reference
 
-| Concept | Où |
+| Concept | Where |
 |---|---|
-| Agrégat | `src/core/system/failsafe/failsafe_soft.cb` |
-| Chaîne | `src/core/system/failsafe/failsafe_soft_chain.cpp` |
-| Contributeurs | `src/core/config/inputs/local_remote_fail.cb`, `src/core/system/com/node_link_fail.cb` |
-| Réaction | `.../processors/input/runlevel_config.h` |
-| Ordre d'exécution | `src/machines/system/sys_manager.cpp` |
+| Aggregate | `src/core/system/failsafe/failsafe_soft.cb` |
+| Chain | `src/core/system/failsafe/failsafe_soft_chain.cpp` |
+| Contributors | `src/core/config/inputs/local_remote_fail.cb`, `src/core/system/com/node_link_fail.cb` |
+| Reaction | `.../processors/input/runlevel_config.h` |
+| Execution order | `src/machines/system/sys_manager.cpp` |

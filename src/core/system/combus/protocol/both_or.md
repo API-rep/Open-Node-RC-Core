@@ -1,107 +1,75 @@
-# Fusion `both_or` — l'anti ping-pong
+# The `both_or` Merge — Anti Ping-Pong
 
-Comment un channel `both_or` (par exemple `FAILSAFE_HARD`) est partagé entre les
-cartes : la règle, la mécanique, un exemple, et ce qui se passerait sans elle.
-Mis en place le 2026-10-22 (étape 1.1b du WIP *ComBus link rework*).
+How a `both_or` channel (for example `FAILSAFE_HARD`) is shared between boards: the rule, the mechanics, an example, and what would happen without it.
 
-## 1. La règle
+## 1. The Rule
 
-Un channel `both_or` est une valeur que toutes les cartes partagent. **Toute
-valeur positive, locale à la carte ou venant d'une carte distante, rend le
-channel vrai** sur la carte. Pour `FAILSAFE_HARD` : il suffit qu'une carte soit en
-défaut pour que tout le nœud soit en failsafe, et le failsafe retombe quand plus
-aucune carte n'est en défaut.
+A `both_or` channel is a value that all boards share. **Any true value, local to the board or coming from a remote board, makes the channel true** on the board. For `FAILSAFE_HARD`: one board at fault is enough to put the whole node in failsafe, and the failsafe falls back when no board is at fault any more.
 
-Deux pièges sont à éviter :
+Two traps must be avoided:
 
-- **écraser** : si la trame reçue écrasait la valeur de la carte, le calcul local
-  (la chaîne failsafe dure) l'effacerait au cycle suivant, ou inversement ;
-- **le ping-pong** : si une carte renvoyait à une autre la valeur qu'elle vient
-  d'en recevoir, chacune entretiendrait celle de l'autre et un `true` ne
-  retomberait jamais.
+- **overwriting**: if the received frame overwrote the value of the board, the local computation (the hard failsafe chain) would erase it on the next cycle, or the other way round;
+- **ping-pong**: if a board sent back to another the value it has just received from it, each would keep the other's value alive and a `true` would never fall back.
 
-## 2. La mécanique
+## 2. The Mechanics
 
-Pour chaque channel `both_or`, chaque carte garde **trois choses séparées** :
+For each `both_or` channel, each board keeps **three separate things**:
 
-| Terme | Ce que c'est | Où |
+| Term | What it is | Where |
 |---|---|---|
-| la valeur **hôte** | ce que le code de la carte écrit lui-même (la chaîne failsafe dure la recalcule à chaque cycle, à partir de `false` : le *clear*) | `DigitalComBus::bothOr.local` |
-| le **cache** des entrées | la dernière valeur reçue de **chaque lien**, une par lien | l'instantané de réception du lien (`combus_rx_snapshot`) |
-| la valeur **fusionnée** | ce que lisent tous les consommateurs (runlevel, sorties, tableau de bord) | `DigitalComBus::value` |
+| the **host** value | what the code of the board writes itself (the hard failsafe chain recomputes it on every cycle, starting from `false`: the *clear*) | `DigitalComBus::bothOr.local` |
+| the **cache** of the inputs | the last value received from **each link**, one per link | the receive snapshot of the link (`combus_rx_snapshot`) |
+| the **merged** value | what every consumer reads (run level, outputs, dashboard) | `DigitalComBus::value` |
 
-Quatre règles :
+Four rules:
 
-1. **Fusion** : `valeur = hôte OU (cache des liens vivants)`, réévaluée à chaque
-   cycle (`com_rx_update`) et à chaque écriture locale (`combus_set_digital`).
-   Une trame reçue n'écrase jamais la valeur : elle met seulement à jour le cache
-   de son lien.
-2. **Émission sans écho** : sur le lien L, la carte envoie
-   `hôte OU (cache des liens AUTRES que L)`. Elle ne renvoie jamais à L ce que L
-   lui a envoyé. Avec un seul lien, elle envoie simplement sa valeur hôte.
-3. **Une carte qui n'a jamais écrit le channel ne contribue pas** : son terme hôte
-   vaut `false` (`bothOr.written`). Une carte qui reçoit `FAILSAFE_HARD` par diffusion
-   sans le calculer garde sa valeur par défaut (`high`) dans le slot ; sans cette
-   règle, elle l'enverrait à tout le monde, et la machine resterait en failsafe
-   dès le démarrage. Elle ne fait que relayer.
-4. **Un lien perdu ne compte plus** : sa dernière valeur reçue est périmée. La
-   sécurité est alors assurée par le contributeur de perte de lien
-   (`BOARD_LINK_FAIL` / `NODE_LINK_FAIL`, voir `src/core/system/failsafe/failsafe_module.md` §3).
+1. **Merge**: `value = host OR (cache of the live links)`, re-evaluated on every cycle (`com_rx_update`) and on every local write (`combus_set_digital`). A received frame never overwrites the value: it only updates the cache of its link.
+2. **Sending without echo**: on link L, the board sends `host OR (cache of the links OTHER than L)`. It never sends back to L what L has sent to it. With a single link, it simply sends its host value.
+3. **A board that never wrote the channel does not contribute**: its host term is `false` (`bothOr.written`). A board that receives `FAILSAFE_HARD` by diffusion without computing it keeps its default value (`fault`, true) in the slot; without this rule, it would send it to everyone, and the machine would stay in failsafe from startup. It only relays.
+4. **A lost link no longer counts**: its last received value is stale. Safety is then ensured by the link loss contributor (`BOARD_LINK_FAIL` / `NODE_LINK_FAIL`, see [the failsafe module](../../failsafe/failsafe_module.md)).
 
-En formules, pour une carte B reliée aux liens L1…Ln :
+As formulas, for a board B linked to links L1…Ln:
 
 ```text
-hôte(B)        = bothOr.local si bothOr.written, sinon false
-valeur(B)      = hôte(B) OU cache(Li)              pour tous les Li vivants
-envoyé(B → Lk) = hôte(B) OU cache(Li)              pour tous les Li vivants, i ≠ k
+host(B)        = bothOr.local if bothOr.written, else false
+value(B)       = host(B) OR cache(Li)              for all live Li
+sent(B → Lk)   = host(B) OR cache(Li)              for all live Li, i ≠ k
 ```
 
-## 3. Exemple
+## 3. Example
 
-Trois cartes d'un nœud, reliées à la carte principale M. E (extension moteurs)
-calcule son propre `FAILSAFE_HARD` (par exemple une surchauffe de driver). S (carte
-son) ne le calcule pas : elle le reçoit par diffusion.
+Three boards of a node, linked to the main board M. E (motor extension) computes its own `FAILSAFE_HARD` (for example a driver overheating). S (another extension) does not compute it: it receives it by diffusion.
 
 ```text
       E ──── L1 ──── M ──── L2 ──── S
 ```
 
-| Instant | Événement | E (hôte → valeur) | M (hôte → valeur) | S (valeur) | M envoie sur L1 | M envoie sur L2 |
+| Time | Event | E (host → value) | M (host → value) | S (value) | M sends on L1 | M sends on L2 |
 |---|---|---|---|---|---|---|
-| t0 | tout va bien | 0 → **0** | 0 → **0** | **0** | 0 | 0 |
-| t1 | E surchauffe | 1 → **1** | 0, reçoit 1 de L1 → **1** | reçoit 1 de M → **1** | 0 OU (L2 : 0) = **0** | 0 OU (L1 : 1) = **1** |
-| t2 | E refroidit | 0 → **0** | 0, reçoit 0 de L1 → **0** | reçoit 0 → **0** | 0 | 0 |
+| t0 | all is well | 0 → **0** | 0 → **0** | **0** | 0 | 0 |
+| t1 | E overheats | 1 → **1** | 0, receives 1 from L1 → **1** | receives 1 from M → **1** | 0 OR (L2: 0) = **0** | 0 OR (L1: 1) = **1** |
+| t2 | E cools down | 0 → **0** | 0, receives 0 from L1 → **0** | receives 0 → **0** | 0 | 0 |
 
-À t1, M passe en `FAILSAFE_HARD` ; sa chaîne de runlevel écrit `RUNLEVEL = HALT`,
-qui est diffusé à E et S. À t2, tout retombe de soi-même (la sortie du runlevel
-`HALT` reste manuelle, à la clé).
+At t1, M goes into `FAILSAFE_HARD`; its run level chain writes `RUNLEVEL = HALT`, which is diffused to E and S. At t2, the fault falls back by itself (leaving the `HALT` run level still takes a reboot).
 
-**Sans l'émission sans écho**, à t1 M renverrait `1` à E ; à t2, E n'a plus de
-cause mais reçoit `1` de M, qui reçoit `1` de E : le ping-pong entretient le
-défaut pour toujours. **Si S contribuait sa valeur par défaut**, elle enverrait
-`1` en permanence et M ne sortirait jamais du failsafe.
+**Without sending without echo**, at t1 M would send `1` back to E; at t2, E has no cause any more but receives `1` from M, which receives `1` from E: the ping-pong keeps the fault alive forever. **If S contributed its default value**, it would send `1` permanently and M would never leave failsafe.
 
-## 4. Dans le code
+## 4. In the Code
 
-| Quoi | Où |
+| What | Where |
 |---|---|
-| champs `bothOr.enabled`, `bothOr.local`, `bothOr.written`, `bothOr.remote` | `src/core/system/combus/combus_defs.h` (`BothOrMerge`, dans `DigitalComBus`) |
-| écriture locale : garde l'hôte à part, recalcule la valeur | `combus_set_digital()`, `combus_access.cpp` |
-| terme hôte, mise à jour du cache fusionné | `combus_both_or_local()`, `combus_both_or_set_remote()`, `combus_access.h` |
-| une trame n'écrase pas un `both_or` | `combus_frame_apply()`, `frame/combus_frame.cpp` |
-| OU des liens vivants, avec un lien exclu | `combus_rx_peer_or()`, `combus_rx.cpp` |
-| fusion à chaque cycle | `com_rx_update()`, `src/core/system/com/com_manager.cpp` |
-| émission sans écho, lien par lien | `combus_tx_update()`, `combus_tx.cpp` (valeurs passées à `combus_frame_encode()`) |
-| délai de perte des liens qui reçoivent | `combus_links_watch()` → `combus_rx_set_link_timeout()` |
+| fields `bothOr.enabled`, `bothOr.local`, `bothOr.written`, `bothOr.remote` | `src/core/system/combus/combus_defs.h` (`BothOrMerge`, in `DigitalComBus`) |
+| local write: keeps the host apart, recomputes the value | `combus_set_digital()` → `combus_link_set_digital()`, `combus_access.cpp` |
+| host term, update of the merged cache | `combus_both_or_local()`, `combus_both_or_set_remote()`, `combus_access.h` |
+| a frame does not overwrite a `both_or` | `combus_frame_apply()`, `frame/combus_frame.cpp` |
+| OR of the live links, with one link excluded | `combus_rx_peer_or()`, `combus_rx.cpp` |
+| merge on every cycle | `com_rx_update()`, `src/core/system/com/com_manager.cpp` |
+| sending without echo, link by link | `combus_tx_update()`, `combus_tx.cpp` (values passed to `combus_frame_encode()`) |
+| loss timeout of the receiving links | `combus_links_watch()` → `combus_rx_set_link_timeout()` |
 
-Tests : groupe L de `test/test_combus_loopback` (fusion, retour à `false`, pair
-silencieux, pas d'écho, carte qui n'écrit jamais).
+Tests: Group L of `test/test_combus_loopback` (merge, back to `false`, silent peer, no echo, board that never writes).
 
-## 5. Limites
+## 5. Limits
 
-- Seuls les channels numériques `both_or` sont fusionnés. `uplink_or` et
-  `downlink_or` restent déclaratifs : ce sont des OU entre plusieurs producteurs,
-  que la diffusion refuse aujourd'hui (deux `uplink` = erreur de build).
-- Un relais (`passthrough`, étape 3.2) devra suivre la même règle d'émission
-  sans écho.
-- La perte d'un lien est traitée par les contributeurs de perte de lien, pas par la fusion.
+- Only the digital `both_or` channels are merged. `uplink_or` and `downlink_or` stay declarative: they are ORs between several producers, which the diffusion refuses today (two `uplink` = build error).
+- The loss of a link is handled by the link loss contributors, not by the merge.

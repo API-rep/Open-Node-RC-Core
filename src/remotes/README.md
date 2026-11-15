@@ -1,32 +1,33 @@
-# La télécommande
+# The Remote
 
-La télécommande est un nœud comme un autre : elle a son propre ComBus et un lien vers la machine qu'elle pilote. Ce dossier contient son firmware (env `remotes`).
+The remote is a node like any other: it has its own ComBus and a link to the machine it drives. This folder holds its firmware (env `remotes`).
 
-## Ce qu'elle envoie
+## What It Sends
 
-Un type de machine (`-D MACHINE_TYPE_<TYPE>`, par exemple `dumper_truck`) a un **contrat d'entrées** : la vue BASE de son profil. La télécommande en a le miroir, construit par le ComBus Builder : ce que la machine reçoit, la télécommande l'émet. Elle n'envoie donc que des entrées (sticks, boutons), et la machine reste seule maîtresse de ce qu'elle en fait.
+A machine type (`-D MACHINE_TYPE_<TYPE>`, for example `dumper_truck`) has an **input contract**: the `BASE` view of its profile. The remote has its mirror, built by the ComBus Builder: what the machine receives, the remote sends. It therefore only sends inputs (sticks, buttons), and the machine alone decides what to do with them.
 
-Le lien a sa propre table et son propre MD5 (`combus::peer::kRemoteLink`), les mêmes que la machine ait des coupleurs ou non. Comme pour tout lien avec table, le MD5 porte aussi le côté de chaque bout : la machine est l'embase, la télécommande la fiche. Il n'y a pas d'appairage : c'est un lien ordinaire entre nœuds.
+The link has its own table and its own MD5 (`combus::peer::kRemoteLink`), the same whether the machine has couplers or not. As for any link with a table, the MD5 also carries the side of each end: the machine is the socket, the remote the plug. There is no pairing: it is an ordinary link between nodes.
 
-## Comment le lien s'ouvre
+## How the Link Opens
 
 ```text
-setup()  remote_links_init()     un lien par machine pilotée (driven_machines.h)
-loop()   remote_links_update()   réception, surveillance, puis émission
+setup()  remote_links_init()     one link per driven machine (driven_machines.h)
+loop()   remote_links_update()   reception, watch, then sending
 ```
 
-La table des machines pilotées, `config/driven_machines.h`, donne pour chacune son nom, son ComBus et son lien (port, sens, protocole).
+The table of the driven machines, `config/driven_machines.h`, gives for each one its name, its ComBus and its link (port, direction, protocol).
 
-## Limites actuelles
+## Current Limits
 
-- **Une seule machine pilotée.** En piloter plusieurs demande un ComBus par machine, donc un par lien : `combus_links_init()` et `combus_tx_update()` n'en prennent qu'un aujourd'hui.
-- **Pas d'entrée physique** (`INPUT_NONE`) : les channels gardent leur valeur sûre.
-- **Le port est écrit en dur** (UART2, GPIO 17/16), en attendant une configuration de carte pour la télécommande.
+- **A single driven machine.** Driving several needs one ComBus per machine, so one per link: `combus_links_init()` and `combus_tx_update()` only take one today.
+- **No physical input** (`INPUT_NONE`): the channels keep their safe value.
+- **The port is hard-coded** (UART2, GPIO 17/16), until the remote has a board configuration.
 
-Ces trois points sont marqués `TODO(chantier 4)` dans le code.
+These three points are marked `TODO(chantier 4)` in the code. The rest of the work is in [WIP - Remote firmware](<../../doc/WIP - Remote firmware.md>).
 
-## Aller plus loin
+## Going Further
 
-- [Les liens](../core/system/combus/protocol/link/README.md) : décrire, démarrer et surveiller un lien
-- [Le protocole ComBus](../core/system/combus/protocol/README.md) : la vue d'ensemble
-- [Le ComBus Builder](../../scripts/combus_builder/README.md) : la vue miroir de la télécommande
+- [Linking nodes](../../doc/linking_nodes.md): the remote among the other nodes
+- [Links](../core/system/combus/protocol/link/README.md): describing, starting and watching a link
+- [ComBus protocol](../core/system/combus/protocol/README.md): the overview
+- [ComBus Builder](../../scripts/combus_builder/README.md): the mirror view of the remote

@@ -3,7 +3,7 @@
 Remise en ordre de la chaîne de traitement d'une machine : des entrées (boutons, sticks) jusqu'aux sorties du type de machine (channels `BASE`), en passant par la simulation et le motion. Ouvert le 2026-10-29, à la suite du lot « sécurité » du ComBus link rework (S3), dont il reprend les briques 3 et 4 (rapports, `zeroAt` sur les channels réels, frein).
 
 Documents liés :
-- `doc/WIP - ComBus link rework.md` (lignes S3-1 à S3-4 : `HALT`, contrôle du neutre, `zeroAt`) ;
+- ce que le link rework a fait (`HALT`, contrôle du neutre, `zeroAt`) : `src/core/system/failsafe/failsafe_module.md` et `doc/configuration/cb_syntax.md` (champs `value` et `zeroAt`) ;
 - `doc/WIP - ComBus processors.md` (flags de traitement par thème, paquets de traitement, redéfinition core → type de machine → machine) : le **format** des paquets et des redéfinitions y reste ; ce WIP-ci décide **quoi** chaîner et **dans quel ordre** ;
 - `doc/WIP - Light rework.md` (les feux, consommateurs des sorties).
 

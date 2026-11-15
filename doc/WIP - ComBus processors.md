@@ -46,7 +46,7 @@ Le link rework garde une seule règle : **un channel `SYSTEM uplink` est déclar
 
 ### 2.5 Sécurité : valeur sûre et deux chaînes failsafe (décidé le 2026-10-26)
 
-Côté channels, la règle est dans `doc/WIP - ComBus link rework.md` §2.3 (« Valeur sûre = neutre ») et §2.4 (« `onLoss` supprimé »). Côté traitement, elle impose :
+Côté channels, la règle est décrite dans `doc/configuration/cb_syntax.md` (champ `value` : valeur sûre = neutre) et `src/core/system/failsafe/failsafe_module.md` (la perte d'un lien est un fait, la chaîne décide de la sévérité). Côté traitement, elle impose :
 
 - **Toute chaîne fonctionne de façon sûre aux valeurs sûres** : `CbusNeutral` pour un analogique, `false` pour un numérique, `true` pour un numérique du thème `failsafe`. Exemples : frein ≤ neutre → frein nul (`cb_brake` fait aujourd'hui `>> 1`, donc mi-frein au neutre : à changer) ; rapport, sous-rapport, mode au neutre → point mort ou état sûr ; `RUNLEVEL` au neutre → réaction de `HALT`.
 - **Deux chaînes failsafe**, défendables toutes les deux : une **dure** (agrégat `FAILSAFE_HARD` → runlevel `HALT` : stop, sommeil, désactivation des moteurs, clé bloquée tant que le défaut dure) et une **douce** (agrégat `FAILSAFE_SOFT` → runlevel `IDLE`). Le nom de l'agrégat dit la **sévérité**, pas la réaction (qui peut évoluer sans renommage). Les **contributeurs** disent un **fait**, sans sévérité (`*_FAIL`) : le branchement vers l'une ou l'autre chaîne se décide dans la chaîne, et se change en déplaçant une ligne.

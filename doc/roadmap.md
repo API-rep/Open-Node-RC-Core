@@ -42,21 +42,14 @@ Aujourd'hui, le câblage des chaînes de ComBus Processors (qui est branché sur
 
 ### Rework du module de communication ComBus ###
 
-**Objectif de fin d'hiver :** voir la section « Objectifs de fin d'hiver 2027 » en tête de ce document.
+**Fait** (branche `combus-link-rework`, en cours de clôture) : plusieurs liens par carte, déclarés dans la configuration (`comLinks[]` de la carte) ; contrat de chaque lien (handshake MD5, modes stable et next, candidats) ; filtrage par sens à la réception ; coupleurs, attelage et appairage ; lien de la télécommande ; perte de lien et valeurs sûres ; tableau de bord des liens. Concepts : `doc/linking_nodes.md`. Suite et ordre des chantiers : `doc/WIP - Master.md`.
 
-Étude préliminaire (liens multi-instances, multi-protocoles) : `doc/WIP - ComBus link rework.md`. Intentions au §2, roadmap (chantiers et étapes) au §3.
+**Reste** : les autres transports, ESP-NOW d'abord (`doc/WIP - Node transports.md`).
 
-Aujourd'hui, seul l'UART est implémenté, de façon assez statique (flags `COMBUS_UART*`, `src/machines/init/com/combus_uart_init.cpp`). Objectif : un module de communication plus modulaire, ouvert à d'autres transports. L'interface de transport `NodeCom` existe déjà.
-
-**Early stage — filtrage selon `direction`.** Le champ `direction` est généré dans chaque canal mais n'est lu nulle part dans le runtime : l'émission envoie tous les canaux de la vue du lien. À traiter avec le rework de fond du mécanisme de communication, pas avant.
-- Volet « timeout » de ce chantier : relance côté télécommande pour un lien sans retour (uplink seul) ; accusé de réception et délai d'attente pour un lien avec retour (downlink). Aucune trace dans le code aujourd'hui.
-
-**Secondaire — qualité de service à deux niveaux (basse / haute priorité).** À envisager seulement si le besoin apparaît (encombrement du réseau, etc.). Aucune trace dans le code. Piste (2026-10-31) : c'est le plan des **données** (`seq` 1..255) qui se dédouble, pas `seq == 0` (réservé au contrôle : handshake, couplage) ; une trame rapide (gaz, direction, frein, failsafe, runlevel) à `txHz` élevé et une trame lente (phares, options) moins souvent, distinguées par un bit de `flags` ; un champ `.cb` `priority: high | low` haché dans le MD5, deux `ComLinkTable` par lien, la vie du lien portée par la trame rapide, les failsafe toujours rapides (contrôle du builder).
-
+**Secondaire — qualité de service à deux niveaux (basse / haute priorité).** À envisager seulement si le besoin apparaît (encombrement du réseau, etc.). Aucune trace dans le code. Piste (2026-10-31) : c'est le plan des **données** (`seq` 1..255) qui se dédouble, pas `seq == 0` (réservé au contrôle : handshake, couplage) ; une trame rapide (gaz, direction, frein, failsafe, runlevel) à `txHz` élevé et une trame lente (phares, options) moins souvent, distinguées par un bit de `flags` ; un champ `.cb` `priority: high | low` haché dans le MD5, deux tables par lien, la vie du lien portée par la trame rapide, les failsafe toujours rapides (contrôle du builder).
 ### Autres chantiers ###
 
 - Rapatrier les définitions de structures du dossier `include/struct` vers leurs fichiers respectifs.
-- **Tableau de bord des liens** (vue 7 « links », commencé le 2026-11-01, link rework) : une page d'accueil générique qui relève les liens existants (nom, portée, état, contrat, mode ; coupleur et rôle ; état de l'appairage d'un lien couplé ; les coupleurs passifs) et une page de détail par lien, navigable comme les autres détails du tableau de bord (contrat et MD5, âge de la dernière trame ; si couplé : commande, `coupled`, détecteur, faute, candidats et tours de l'appairage, relances, identité) ; lecture par une photo exposée par `combus_links` (`combus_links_view`), jamais par ses structures internes. Prérequis des essais à deux cartes. La télécommande (chantier 4) s'y greffera : son lien apparaîtra dans la page d'accueil comme les autres.
 - Vérifier la documentation actuelle (contenu, liens vers les fichiers) et sa segmentation, pour une prise de contexte optimale de l'agent IA lors de la (re)prise d'un job.
 - Écrire le script de parsing des configurations YAML de cartes et de machines (base du script de génération ci-dessous).
 - Créer le script de génération du `platformio.ini` d'une machine (env racine + sous-envs par carte) depuis un YAML (+ éventuellement une interface graphique de configuration).

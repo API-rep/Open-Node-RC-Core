@@ -66,41 +66,7 @@ Cette évolution vise principalement à clarifier la séparation entre configura
 
 ---
 
-## 4. ComBus v2 — architecture en couches
-
-L'usage du ComBus a progressivement dépassé son rôle initial de simple liaison entre télécommande et machine.
-
-ComBus v2 formalise les différents niveaux d'utilisation déjà introduits dans l'architecture actuelle :
-
-```text
-Inter-node    ← échanges entre nœuds distincts
-               (télécommande ↔ machine, machine ↔ son)
-
-Inter-device  ← échanges entre cartes d'un même système
-               (carte mère ↔ extensions)
-
-Intra-device  ← données locales partagées au sein d'un firmware
-               (VBAT, RunLevel, états simulés, valeurs intermédiaires...)
-```
-
-**Règle dure :** chaque canal appartient explicitement à l'une de ces couches,
-qui détermine sa portée et ses mécanismes de propagation.
-
-### Conséquences
-
-Cette séparation devra se refléter dans les structures ComBus, le transport des
-trames et la configuration :
-
-* les données inter-node définiront les échanges externes ;
-* les données inter-device structureront les extensions matérielles ;
-* les données intra-device resteront privées au firmware.
-
-Aucune décision n'est prise à ce stade concernant un typage plus fort des
-canaux. La simplicité du ComBus reste une priorité ; l'expérience de
-`TRACTION_BUS` montre qu'une abstraction trop riche devient rapidement
-contre-productive.
-
-### Typed channel groups (piste d'évolution)
+## 4. Typed channel groups (piste d'évolution)
 
 Une évolution possible consisterait à regrouper les canaux par domaines
 fonctionnels au lieu de les maintenir dans un espace plat unique :
@@ -490,27 +456,6 @@ sys_log_info(...)
 pour les plateformes mono-UART.
 
 **Prérequis :** utilisation réelle sur une carte ne disposant que d'un seul UART.
-
----
-
-### ComBus bidirectionnel
-
-Ajout d'un helper :
-
-```cpp
-combus_link_init()
-```
-
-encapsulant :
-
-```cpp
-combus_tx_init();
-combus_rx_init();
-```
-
-pour les futurs nœuds bidirectionnels.
-
-**Prérequis :** premier cas d'usage concret.
 
 ---
 

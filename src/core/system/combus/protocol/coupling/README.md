@@ -1,92 +1,102 @@
-# Le couplage et l'appairage
+# Coupling and Pairing
 
-Un lien qui passe par un coupleur n'existe que lorsque deux éléments sont attelés (`LinkActivation::ON_COUPLING`). Quand plusieurs engins sont à portée, reste à savoir **qui est attelé à qui**. Ce dossier répond à cette question avant d'ouvrir le lien.
+A link through a coupler only exists when two elements are hitched (`LinkActivation::ON_COUPLING`). When several machines are in range, the question is **who is hitched to whom**. This folder answers it before opening the link.
 
-Ce document décrit la mécanique. Pour le principe (coupleur, embase, fiche, ce qui se passe à l'attelage), commencer par [Relier les nœuds](../../../../../../doc/~combus_v2.md#relier-les-nœuds).
+This document describes the mechanics. For the principle (coupler, socket, plug, what happens when hitching), start with [Linking nodes](../../../../../../doc/linking_nodes.md).
 
-Vocabulaire : l'**embase** (`SOCKET`) est le côté qui porte, la **fiche** (`PLUG`) le côté porté.
+Vocabulary: the **socket** (`SOCKET`) is the side that carries, the **plug** (`PLUG`) the side that is carried.
 
-## L'idée
+## The Idea
 
-Le déclencheur du coupleur, par exemple un capteur d'attelage, monte des deux côtés au même moment. Chaque bout mesure donc l'**âge de son attelage**, et deux engins vraiment attelés annoncent presque le même. L'appairage repose sur cet accord : l'embase pose la question plusieurs fois, et seules les réponses dont l'âge concorde comptent.
+The trigger of the coupler, for example a hitch sensor, rises on both sides at the same moment. Each end therefore measures the **age of its hitching**, and two machines really hitched together announce almost the same one. Pairing relies on this agreement: the socket asks several times, and only the answers whose age matches count.
 
-## La trame de couplage
+## The Coupling Frame
 
-Elle est à part du handshake : elle ne rend pas un lien vivant et ne touche pas au contrat. Longue de 19 octets, elle occupe l'emplacement `seq == 0`, repérée par le bit de couplage de `flags` :
+It is separate from the handshake: it does not make a link alive and does not touch the contract. 19 bytes long, it uses the `seq == 0` slot, marked by the coupling bit of `flags`:
 
-| Octet | Taille | Champ |
+| Byte | Size | Field |
 |---|---|---|
 | 0 | 1 | `SOF` = `0xAA` |
 | 1, 2 | 2 | `nAnalog` = 0, `nDigital` = 0 |
 | 3 | 1 | `seq` = 0 |
-| 4 | 1 | `flags` : bit 2 = couplage |
-| 5 | 1 | `msg` : 1 = requête, 2 = réponse |
-| 6 | 1 | `round` : numéro du tour |
-| 7 | 1 | `addr.type` : 0 = aucune, 1 = MAC48 |
-| 8 à 13 | 6 | `addr.bytes` : l'adresse (MAC de l'ESP32) |
-| 14, 15 | 2 | `hitchAgeMs` : âge de l'attelage en ms, saturé à 65 535, petit-boutiste |
-| 16, 17 | 2 | `features` : masque des fonctions, réservé, à 0 pour l'instant |
-| 18 | 1 | CRC-8 sur les octets précédents |
+| 4 | 1 | `flags`: bit 2 = coupling |
+| 5 | 1 | `msg`: 1 = request, 2 = answer |
+| 6 | 1 | `round`: round number |
+| 7 | 1 | `addr.type`: 0 = none, 1 = MAC48 |
+| 8 to 13 | 6 | `addr.bytes`: the address (MAC of the ESP32) |
+| 14, 15 | 2 | `hitchAgeMs`: age of the hitching in ms, saturated at 65 535, little-endian |
+| 16, 17 | 2 | `features`: function mask, reserved, 0 for now |
+| 18 | 1 | CRC-8 over the previous bytes |
 
-Un firmware qui ne connaît pas cette trame la prend pour un handshake de mauvaise longueur : le CRC échoue, il jette un octet et se resynchronise, sans toucher au contrat.
+A firmware that does not know this frame takes it for a handshake of the wrong length: the CRC fails, it drops one byte and resynchronises, without touching the contract.
 
-## L'appairage
+## Pairing
 
 ```text
-         déclencheur vrai pendant engageMs
+         trigger true for engageMs
    DETACHED ───────────────────▶ PAIRING
        ▲                           │
-       │                           ├── un seul candidat, assez de tours ──▶ COUPLED
-       │                           ├── deux candidats ───────────────────▶ CONFLICT
-       │                           └── pas assez de réponses (embase) ───▶ FAILED
+       │                           ├── one candidate, enough rounds ──────▶ COUPLED
+       │                           ├── two candidates ────────────────────▶ CONFLICT
+       │                           └── not enough answers (socket) ───────▶ FAILED
        │
-       └── déclencheur faux pendant releaseMs, depuis n'importe quel état
+       └── trigger false for releaseMs, from any state
 ```
 
-| État | Le lien |
+| State | The link |
 |---|---|
-| `DETACHED` | est coupé |
-| `PAIRING` | ne décode que les trames de couplage, tout autre octet est jeté |
-| `COUPLED` | fonctionne normalement |
-| `CONFLICT` | reste coupé jusqu'à ce que le déclencheur retombe puis remonte |
-| `FAILED` | reste coupé ; l'embase retente tant que le déclencheur reste vrai |
+| `DETACHED` | is off |
+| `PAIRING` | only decodes coupling frames, any other byte is dropped |
+| `COUPLED` | works normally |
+| `CONFLICT` | stays off until the trigger falls and rises again |
+| `FAILED` | stays off; the socket retries as long as the trigger stays true |
 
-**Côté embase** : elle envoie 5 requêtes, espacées de 75 à 125 ms, puis écoute une dernière période de 100 ms. Une réponse compte si son âge concorde, à `ageToleranceMs` près.
+**Socket side**: it sends 5 requests, 75 to 125 ms apart, then listens for a last period of 100 ms. An answer counts if its age matches, within `ageToleranceMs`.
 
-- Aucune identité, ou moins de 4 tours pour la seule entendue : `FAILED`, retenté 3 fois toutes les 2 s.
-- Deux identités : `CONFLICT`, jamais retenté.
-- Une seule identité sur au moins 4 tours : `COUPLED`.
+- No identity, or fewer than 4 rounds for the only one heard: `FAILED`, retried 3 times every 2 s.
+- Two identities: `CONFLICT`, never retried.
+- A single identity over at least 4 rounds: `COUPLED`.
 
-**Côté fiche** : elle écoute et répond à chaque requête dont l'âge concorde, après un délai tiré entre 0 et 10 ms pour que deux fiches ne se répondent pas par-dessus.
+**Plug side**: it listens and answers every request whose age matches, after a delay drawn between 0 and 10 ms so that two plugs do not answer over each other.
 
-- Une seule embase sur au moins 4 requêtes : `COUPLED`.
-- Deux embases : `CONFLICT`, et elle ne répond plus.
-- Moins de requêtes : elle se remet à écouter.
+- A single socket over at least 4 requests: `COUPLED`.
+- Two sockets: `CONFLICT`, and it no longer answers.
+- Fewer requests: it starts listening again.
 
-Un déclencheur qui retombe moins longtemps que `releaseMs` est seulement journalisé : un faux contact ne dételle pas.
+A trigger that falls for less than `releaseMs` is only logged: a loose contact does not unhitch.
 
-## Une fois couplé
+## Once Coupled
 
-L'adresse du pair est gardée et transmise au transport (`NodeCom::setPeer`). Les trames de couplage venant d'une autre identité sont comptées. Sur le fil, cette adresse n'a pas d'effet ; elle servira à filtrer les émetteurs avec ESP-NOW.
+The address of the peer is kept and handed to the transport (`NodeCom::setPeer`). Coupling frames from another identity are counted. On a wire, this address has no effect; it will filter the senders with ESP-NOW.
 
-Le lien démarre alors comme les autres : [handshake](../handshake/README.md), puis données.
+The link then starts like the others: [handshake](../handshake/README.md), then data.
 
-## Le coupleur passif
+## Loss
 
-Un coupleur sans nœud de l'autre côté, comme un outil, n'a personne à qui parler. Son déclencheur est son détecteur de présence : `COUPLED` une fois celui-ci stabilisé, sans appairage (`combus_pairing_update_passive()`).
+A coupled link has its own failsafe contributor, named by its `CouplingDev` (`fail`, for example `TRAILER_LINK_FAIL`):
 
-## Les fichiers
+- healthy while unhitched, and during pairing;
+- at fault when hitched without a healthy link: pairing in `CONFLICT` or `FAILED`, or a paired link lost after the grace counted from pairing.
 
-| Fichier | Contenu |
+A coupled link never counts in `NODE_LINK_FAIL`: the machine puts its contributor in the chain of its choice.
+
+## The Passive Coupler
+
+A coupler without a node on the other side, such as a tool, has nobody to talk to. Its trigger is its presence detector: `COUPLED` once the detector has settled, without pairing (`combus_pairing_update_passive()`).
+
+## Files
+
+| File | Content |
 |---|---|
-| `combus_coupling.h`, `.cpp` | La trame de couplage : encoder, décoder, transmettre à l'appairage |
-| `combus_pairing.h`, `.cpp` | La machine à états de chaque bout |
-| `combus_coupling_watch.h`, `.cpp` | Applique l'état de l'appairage au lien, écrit les contributeurs du coupleur, suit les coupleurs passifs |
+| `combus_coupling.h`, `.cpp` | The coupling frame: encode, decode, hand over to pairing |
+| `combus_pairing.h`, `.cpp` | The state machine of each end |
+| `combus_coupling_watch.h`, `.cpp` | Applies the pairing state to the link, writes the contributors of the coupler, follows the passive couplers |
 
-La trame ne dépend pas de l'appairage : celui-ci s'enregistre auprès d'elle pour recevoir les trames.
+The frame does not depend on pairing: pairing registers with it to receive the frames.
 
-## Aller plus loin
+## Going Further
 
-- [Le protocole ComBus](../README.md) : la vue d'ensemble
-- [Les liens](../link/README.md) : comment un lien est décrit et surveillé
-- [Le handshake](../handshake/README.md) : ce qui suit l'appairage
+- [ComBus protocol](../README.md): the overview
+- [Links](../link/README.md): how a link is described and watched
+- [Handshake](../handshake/README.md): what follows pairing
+- [Failsafe module](../../../failsafe/failsafe_module.md): where the contributor of a coupler goes

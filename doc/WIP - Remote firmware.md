@@ -1,10 +1,10 @@
 # Firmware de la télécommande
 
-Statut : **en cours de rédaction** (document `WIP`), ouvert le 2026-11-01. Sorti du chantier 4 du [ComBus link rework](<WIP - ComBus link rework.md>) : c'est un développement à part entière.
+Statut : **en cours de rédaction** (document `WIP`), ouvert le 2026-11-01. Sorti du chantier 4 du ComBus link rework : c'est un développement à part entière. Ce qui existe est décrit dans [src/remotes/README.md](../src/remotes/README.md).
 Public : le propriétaire et les futures sessions de travail sur la télécommande.
 Plan : §1 pourquoi un WIP à part, §2 ce qui existe, §3 point bloquant connu, §4 ce qui reste à construire, §5 feuille de route, §6 questions ouvertes.
 
-Vocabulaire : voir le glossaire de [doc/README.md](README.md#glossary) (nœud, machine, télécommande, coupleur, embase, fiche).
+Vocabulaire : voir le [glossaire](glossary.md) (nœud, machine, télécommande, coupleur, embase, fiche).
 
 ---
 

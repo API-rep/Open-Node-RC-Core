@@ -113,6 +113,6 @@ As the community, ideas and technologies evolve, the architecture is expected to
 
 ## Going Further
 
-* [ComBus](../src/core/system/combus/README.md): what the bus is and how modules use it.
-* [ComBus protocol](../src/core/system/combus/protocol/README.md): how links are described, sent, received and watched.
-* [Coupling and pairing](../src/core/system/combus/protocol/coupling/README.md): how two nodes find out they are hitched.
+* [ComBus](combus.md): the shared register, and where to read more.
+* [Nodes](nodes.md): what a node is made of.
+* [Linking nodes](linking_nodes.md): how remotes, machines and trailers are linked, and what keeps those links safe.
