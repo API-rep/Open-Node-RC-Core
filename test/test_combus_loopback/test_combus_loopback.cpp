@@ -1849,6 +1849,41 @@ static void test_mode_row6_other_next_while_next_back_to_stable(void) {
     TEST_ASSERT_FALSE(linkCtx()->nextMode);
 }
 
+/**
+ * A third node that announces another next set (lever 3, F3): it only flips the mode.
+ * Its NEXT ACK does not refresh the ACK window, the next NEXT of the peer brings the
+ * next mode back, and the contract never drops.  Its request is still answered.
+ */
+static void test_mode_intruder_next_only_flips_the_mode(void) {
+    startHealthLink(LinkEnd::TX_RX, kInterDev);
+    enableCandidates();
+    ensureStable();
+    TEST_ASSERT_TRUE(linkCtx()->nextMode);
+    drainWire();
+
+    uint32_t lastAck = linkCtx()->lastAckMs;
+    for (uint8_t i = 0u; i < 3u; ++i) {
+        sendForgedHandshake(true, false, combus::wire::kProjectVersionMajor, combus::wire::kProjectVersionMinor, true);
+        pumpRx();                                                   // the intruder: another next set
+        TEST_ASSERT_TRUE_MESSAGE(isStable(), "a foreign NEXT dropped the contract");
+        TEST_ASSERT_FALSE(linkCtx()->nextMode);
+        TEST_ASSERT_EQUAL_UINT32_MESSAGE(lastAck, linkCtx()->lastAckMs, "a foreign NEXT ACK refreshed the ACK window");
+
+        sendForgedHandshake(true, true, combus::wire::kProjectVersionMajor, combus::wire::kProjectVersionMinor, true);
+        pumpRx();                                                   // the peer: the same next set
+        TEST_ASSERT_TRUE(isStable());
+        TEST_ASSERT_TRUE_MESSAGE(linkCtx()->nextMode, "the peer did not bring the next mode back");
+        TEST_ASSERT_NOT_EQUAL_UINT32(lastAck, linkCtx()->lastAckMs);
+        lastAck = linkCtx()->lastAckMs;
+    }
+
+    linkCtx()->ackPendingNext = false;
+    sendForgedHandshake(false, false, combus::wire::kProjectVersionMajor, combus::wire::kProjectVersionMinor, true);
+    pumpRx();                                                       // a foreign NEXT request
+    TEST_ASSERT_TRUE(isStable());
+    TEST_ASSERT_TRUE_MESSAGE(linkCtx()->ackPendingNext, "a foreign NEXT request left unanswered");
+}
+
 /** Row 9: the contract is lost: next requests again, from the start. */
 static void test_mode_row9_loss_restarts_with_next(void) {
     startHealthLink(LinkEnd::TX_RX, kInterDev);
@@ -2240,6 +2275,7 @@ void setup() {
     RUN_TEST(test_mode_row3_other_next_falls_back_to_legacy_at_once);
     RUN_TEST(test_mode_row5_matching_next_moves_to_next);
     RUN_TEST(test_mode_row6_other_next_while_next_back_to_stable);
+    RUN_TEST(test_mode_intruder_next_only_flips_the_mode);
     RUN_TEST(test_mode_row9_loss_restarts_with_next);
     RUN_TEST(test_mode_next_request_gets_next_ack);
     RUN_TEST(test_mode_row11_dev_is_only_logged);
