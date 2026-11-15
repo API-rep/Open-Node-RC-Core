@@ -479,3 +479,15 @@ MotionRamp {
 ```
 
 À créer lors de l'intégration du premier actionneur hydraulique dans la chaîne Motion.
+
+---
+
+### Filtre de valeurs aberrantes sur les entrées sans contrôle
+
+Idée du propriétaire (2026-11-14), reprise d'un renifleur de signaux PWM d'une pelleteuse RC : une lecture incohérente faisait trembler les servos. Une valeur analogique qui saute d'un coup (une manette de gaz de 100 % à 0 %) est écartée une fois, puis acceptée si la trame suivante la confirme ; une valeur numérique demande une confirmation sur deux trames.
+
+**Pas sur le ComBus** : le CRC-16 suffit (0 valeur fausse sur environ 17 000 trames corrompues au banc).
+
+**À prévoir au décodage des entrées sans contrôle** : PWM, PPM, et les protocoles série sans somme de contrôle. À vérifier pour chaque protocole : s'il porte déjà son propre contrôle de cohérence, le filtre peut y être désactivé.
+
+**Prérequis :** le premier backend d'entrée de ce type (récepteur RC PWM / PPM / SBUS).
