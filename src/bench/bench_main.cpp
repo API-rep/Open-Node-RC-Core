@@ -42,8 +42,8 @@
  *   alive and a frame in place, since `k 1`; kf: first channel that differed, analog n
  *   or digital 100 + n, -1: none; kr: differences left by a loss, seen after a recovery
  *   before its first frame; lc: losses of the link since boot (alive, then not); fs:
- *   frames forged by `f` since boot; rf: data frames received since boot; bd, hz: line
- *   rate and frame rate of the link; fl: length of the last data frame sent.)
+ *   frames forged by `f` since boot; rf: data frames received since boot; bd, hz, to: line
+ *   rate, frame rate and loss timeout of the link; fl: length of the last data frame sent.)
  *   The watch reads the bus once per loop: a wrong frame followed by a good one in the
  *   same pass is not seen, the counts are a lower bound.
  *   The READY line carries the reset reason (esp_reset_reason()).
@@ -81,8 +81,13 @@
 	#define BENCH_HZ 50u
 #endif
 
-	/// Line rate, frame rate, loss timeout, startup grace: the same at both ends.
-static constexpr ComProtocolCfg kProto = { BENCH_BAUD, BENCH_HZ, 250u, 3000u };
+	/// Loss timeout, set at build time for the mismatch tests (each end its own).
+#ifndef BENCH_TIMEOUT
+	#define BENCH_TIMEOUT 250u
+#endif
+
+	/// Line rate, frame rate, loss timeout, startup grace: the same at both ends, but in the mismatch tests.
+static constexpr ComProtocolCfg kProto = { BENCH_BAUD, BENCH_HZ, BENCH_TIMEOUT, 3000u };
 
 	/// The port of the bench: UART2, GPIO 17 TX / 16 RX.
 static const ComPort kPort = ComPort::makeUart("bench", { 2, 17, 16, 115200u });
@@ -373,7 +378,7 @@ static void printStatus( void )
 	ComLinkView v;
 	combus_links_view(0u, v);
 
-	Serial.printf("S st=%u ct=%u nx=%u pr=%u age=%lu den=%lu up=%lu lp=%lu cbmax=%lu cbavg=%lu rxmax=%lu txmax=%lu ws=%lu cx=%lu tw=%lu kw=%lu kl=%lu ka=%lu kf=%d kr=%lu lc=%lu fs=%lu rf=%lu bd=%lu hz=%lu fl=%u A=",
+	Serial.printf("S st=%u ct=%u nx=%u pr=%u age=%lu den=%lu up=%lu lp=%lu cbmax=%lu cbavg=%lu rxmax=%lu txmax=%lu ws=%lu cx=%lu tw=%lu kw=%lu kl=%lu ka=%lu kf=%d kr=%lu lc=%lu fs=%lu rf=%lu bd=%lu hz=%lu to=%lu fl=%u A=",
 	              (unsigned)v.state, (unsigned)v.contractStable, (unsigned)v.nextMode,
 	              (unsigned)combus_links_pairing_state(0u), (unsigned long)v.rxAgeMs,
 	              (unsigned long)combus_denied_writes(), (unsigned long)millis(),
@@ -383,7 +388,8 @@ static void printStatus( void )
 	              (unsigned long)s_cxWrites, (unsigned long)s_txWrites, (unsigned long)s_kWrong,
 	              (unsigned long)s_kWrongLp, (unsigned long)s_kAlive, s_kFirst, (unsigned long)s_kRecov,
 	              (unsigned long)s_lost, (unsigned long)s_fSent, (unsigned long)s_rxFrames,
-	              (unsigned long)kProto.rate, (unsigned long)kProto.txHz, (unsigned)s_fLastLen);
+	              (unsigned long)kProto.rate, (unsigned long)kProto.txHz, (unsigned long)kProto.linkTimeoutMs,
+	              (unsigned)s_fLastLen);
 
 	s_maxLoopUs = 0u;
 	s_maxCbUs   = 0u;

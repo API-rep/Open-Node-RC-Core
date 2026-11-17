@@ -19,6 +19,8 @@ Usage:
     FA FB FC forged frames on A, B or C: a third node on the link (board b forges)
     LA LB LC load of the link on A, B or C; line rate and frame rate set at build time
              (BENCH_BAUD, BENCH_HZ through PLATFORMIO_BUILD_FLAGS)
+    XA XB XC mismatch: the two ends built with different settings (--fa, --fb: BENCH_BAUD,
+             BENCH_HZ, BENCH_TIMEOUT), outside the MD5 of the contract (--xsecs)
 
 The serial reset lines are used to hold a board in reset (it falls silent).
 """
@@ -59,9 +61,17 @@ ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 # 1. BOARDS
 # =============================================================================
 
+_IDS: dict[str, str] = {}   # combus_ids.h of each env, read at its flash
+
+
+def keep_ids(env: str) -> None:
+    """Keep the generated ids of an env: a build with other flags wipes the whole build root."""
+    _IDS[env] = (BUILD / env / "combus_generated" / "combus_ids.h").read_text(encoding="utf-8")
+
+
 def channel_ids(env: str) -> tuple[dict, dict]:
     """Analog and digital channel indexes of an env, read from its generated combus_ids.h."""
-    text = (BUILD / env / "combus_generated" / "combus_ids.h").read_text(encoding="utf-8")
+    text = _IDS.get(env) or (BUILD / env / "combus_generated" / "combus_ids.h").read_text(encoding="utf-8")
     out = []
     for kind in ("Analog", "Digital"):
         m = re.search(rf"enum class {kind}ComBusID\s*:\s*uint8_t\s*\{{(.*?)\}};", text, re.S)
@@ -190,7 +200,7 @@ class Board:
                 st["up"], st["lp"] = int(f.get("up", -1)), int(f.get("lp", -1))
                 st["cbmax"] = int(f.get("cbmax", -1))
                 st["ws"] = int(f.get("ws", -1))
-                for k in ("cx", "tw", "kw", "kl", "ka", "kf", "kr", "lc", "fs", "rf", "bd", "hz", "fl",
+                for k in ("cx", "tw", "kw", "kl", "ka", "kf", "kr", "lc", "fs", "rf", "bd", "hz", "to", "fl",
                           "txmax", "rxmax"):
                     st[k] = int(f.get(k, -1))
                 st["A"] = [int(v) for v in f["A"].split(",")] if f["A"] else []
@@ -712,6 +722,62 @@ def load(sc: str, a: Board, b: Board, secs: float = 20.0) -> None:
               f"oldest frame {age[i]} ms", flush=True)
 
 
+def mismatch(sc: str, a: Board, b: Board, secs: float) -> None:
+    """Two ends built with different settings (line rate, frame rate, loss timeout).
+
+    These settings are outside the MD5: the contract cannot refuse them.  Strict: no
+    wrong value ever reaches the bus (the watch of `k`), and with no frame understood
+    no frame is accepted.  Measured: STABLE or not, alive samples, losses, frames per s.
+    """
+    cfg = MONKEY[sc]
+    boards = [a, b]
+    s0 = [a.status(), b.status()]
+    desc = "  /  ".join(f"{x.name} {s['bd']} baud {s['hz']} Hz timeout {s['to']} ms" for x, s in zip(boards, s0))
+    print(f"\n=== X{sc}. Mismatch: {desc} ===", flush=True)
+    if cfg["hitch"]:
+        for x in boards:
+            x.d("TEST_HITCHED", True)
+    ok, dt, _ = until(lambda: stable(a) and stable(b), 8.0)
+    print(f"MEAS  X{sc} link STABLE on both: {ok} ({dt:.1f} s)", flush=True)
+    for i, bd in enumerate(boards):
+        for k, name in enumerate(cfg["wa"][i]):
+            bd.a(name, 1111 + 7777 * (k + 1) + 3 * i)
+        for k, name in enumerate(cfg["wd"][i]):
+            if name != "FAILSAFE_HARD":       # a fault would change the run of the node
+                bd.d(name, k % 2 == 0)
+    time.sleep(0.5)
+    watched = [False, False]                  # `k 1` needs a frame in place: refused without
+    for i, bd in enumerate(boards):
+        try:
+            bd.cmd("k 1")
+            watched[i] = True
+        except TimeoutError:
+            pass
+    s1 = [a.status(), b.status()]
+    t0 = time.time()
+    alive, n = [0, 0], 0
+    while time.time() - t0 < secs:
+        time.sleep(1.0)
+        n += 1
+        for i, bd in enumerate(boards):
+            alive[i] += bd.status()["st"] == ST_ALIVE
+    s2 = [a.status(), b.status()]
+    el = time.time() - t0
+    for i, bd in enumerate(boards):
+        fps = (s2[i]["rf"] - s1[i]["rf"]) / el
+        print(f"MEAS  X{sc} {bd.name}: frames received {fps:.1f}/s (peer sends {s0[1 - i]['hz']}), "
+              f"alive {alive[i]}/{n} samples, losses {s2[i]['lc'] - s1[i]['lc']}, "
+              f"wrong values {s2[i]['kw'] if watched[i] else 'not watched (no frame at k 1)'} "
+              f"(loops alive with a frame {s2[i]['ka']}), frames since boot {s2[i]['rf']}", flush=True)
+    for i, bd in enumerate(boards):
+        if watched[i]:
+            check(f"X{sc} {bd.name}: no wrong value written on the bus", s2[i]["kw"] == 0,
+                  f"{s2[i]['kw']} wrong, first channel {s2[i]['kf']}")
+        if not ok:
+            check(f"X{sc} {bd.name}: no contract, no frame accepted", s2[i]["rf"] == 0 and alive[i] == 0,
+                  f"{s2[i]['rf']} frames since boot, alive {alive[i]}/{n}")
+
+
 def monkey(sc: str, a: Board, b: Board, steps: int, seed: int) -> None:
     """Random events on the link, safety invariants after each one, then a recovery."""
     import random
@@ -913,20 +979,25 @@ def monkey(sc: str, a: Board, b: Board, steps: int, seed: int) -> None:
 # 5. MAIN
 # =============================================================================
 
-def flash(env: str, port: str) -> None:
-    print(f"flash {env} -> {port}", flush=True)
+def flash(env: str, port: str, flags: str = "") -> None:
+    """Build and flash one board; `flags` (e.g. "-D BENCH_HZ=3u") replaces PLATFORMIO_BUILD_FLAGS for it."""
+    print(f"flash {env} -> {port}" + (f"  [{flags}]" if flags else ""), flush=True)
     log = ROOT / ".pio" / f"bench_flash_{env}.log"
+    environ = dict(os.environ)
+    if flags:
+        environ["PLATFORMIO_BUILD_FLAGS"] = flags
     # The auto-reset of esptool sometimes misses the download mode ("Wrong boot mode
     # detected"): one more attempt
     for _ in range(2):
         with open(log, "w", encoding="utf-8") as f:
             rc = subprocess.run(PIO + ["run", "-e", env, "-t", "upload", "--upload-port", port],
-                                cwd=ROOT, stdout=f, stderr=subprocess.STDOUT).returncode
+                                cwd=ROOT, env=environ, stdout=f, stderr=subprocess.STDOUT).returncode
         if rc == 0:
             break
     if rc != 0:
         raise RuntimeError(f"flash {env} failed, see {log}")
     log.unlink()
+    keep_ids(env)
 
 
 def main() -> int:
@@ -939,14 +1010,17 @@ def main() -> int:
     ap.add_argument("--kpm", type=int, default=500, help="corruption: writes corrupted, per thousand")
     ap.add_argument("--kbits", type=int, default=8, help="corruption: up to this many bits flipped")
     ap.add_argument("--ksecs", type=float, default=120.0, help="corruption: duration in s")
+    ap.add_argument("--fa", default="", help="build flags of board a only (mismatch tests), e.g. \"-D BENCH_HZ=3u\"")
+    ap.add_argument("--fb", default="", help="build flags of board b only")
+    ap.add_argument("--xsecs", type=float, default=20.0, help="mismatch: duration in s")
     ap.add_argument("scenarios", nargs="*", default=["A", "B", "C"])
     args = ap.parse_args()
 
     for sc in args.scenarios:
-        env_a, env_b = SCENARIOS[sc[1:]] if sc[0] in "MKFL" and len(sc) == 2 else SCENARIOS[sc]
+        env_a, env_b = SCENARIOS[sc[1:]] if sc[0] in "MKFLX" and len(sc) == 2 else SCENARIOS[sc]
         if not args.no_flash:
-            flash(env_a, args.a)
-            flash(env_b, args.b)
+            flash(env_a, args.a, args.fa)
+            flash(env_b, args.b, args.fb)
         a = Board(args.a, env_a, env_a)
         b = Board(args.b, env_b, env_b)
         try:
@@ -958,6 +1032,8 @@ def main() -> int:
                 forged(sc[1:], a, b)
             elif sc.startswith("L") and len(sc) == 2:
                 load(sc[1:], a, b)
+            elif sc.startswith("X") and len(sc) == 2:
+                mismatch(sc[1:], a, b, args.xsecs)
             elif sc.startswith("M"):
                 seed = args.seed if args.seed is not None else int(time.time())
                 monkey(sc[1:], a, b, args.steps, seed)
