@@ -27,7 +27,7 @@
   #include <defs/defs.h>
   
   #include <core/system/combus/combus_defs.h>
-  #include <core/system/hw/node_com.h>               // ComPortCfg
+  #include <core/system/hw/com_port.h>               // ComPortCfg
   #include <machines/config/machines/volvo_A60H_bruder/board/com_dev.h>   // kComDevExtUni, kComDevExtBi, ComDevMap
 
   // Board-specific hardware definitions (pins, ports, constants)

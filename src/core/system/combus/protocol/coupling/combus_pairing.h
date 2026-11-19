@@ -36,7 +36,7 @@
 
 #include <core/system/combus/protocol/link/combus_link_defs.h>      // CouplingDev
 #include <core/system/combus/protocol/coupling/combus_coupling.h>   // CouplingFrame, NodeAddr
-#include <core/system/hw/node_com.h>                                // ComPort
+#include <core/system/hw/com_port.h>                                // ComPort
 
 
 

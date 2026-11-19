@@ -34,7 +34,7 @@
 #include <stdint.h>
 #include <Arduino.h>
 
-#include "../node_com.h"
+#include "../com_port.h"
 #include <core/system/hw/pin_reg.h>
 
 

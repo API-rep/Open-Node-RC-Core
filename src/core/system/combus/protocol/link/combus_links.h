@@ -28,7 +28,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include <core/system/hw/node_com.h>
+#include <core/system/hw/com_port.h>
 #include <core/system/hw/pin_reg.h>
 #include <core/config/machines/combus_types.h>   // AnalogComBusID, DigitalComBusID
 #include "combus_system_ids.h"                   // size of the SYSTEM view

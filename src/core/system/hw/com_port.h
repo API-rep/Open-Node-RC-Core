@@ -1,5 +1,5 @@
 /******************************************************************************
- * @file  node_com.h
+ * @file  com_port.h
  * @brief Transport interface and physical ports: what the protocol sees of the hardware.
  *
  * @details ComPort is a small structure of functions, the bridge between the
@@ -100,4 +100,4 @@ struct ComPortCfg {
 	}
 };
 
-// EOF node_com.h
+// EOF com_port.h

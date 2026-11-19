@@ -13,7 +13,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include <core/system/hw/node_com.h>
+#include <core/system/hw/com_port.h>
 #include <core/system/combus/combus_defs.h>
 #include <core/system/combus/protocol/handshake/combus_handshake.h>   // CombusHandshakeContext
 

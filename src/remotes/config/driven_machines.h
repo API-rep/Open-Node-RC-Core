@@ -17,7 +17,7 @@
 #pragma once
 
 #include <core/system/combus/protocol/link/combus_link_defs.h>   // ComDev, ComDevMap, ComProtocolCfg
-#include <core/system/hw/node_com.h>                             // ComPortCfg
+#include <core/system/hw/com_port.h>                             // ComPortCfg
 #include <combus.h>                                              // generated: comBus, the mirrored BASE view
 #include <combus_peer_links.h>                                   // generated: combus::peer::kRemoteLink
 

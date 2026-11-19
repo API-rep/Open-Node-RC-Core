@@ -9,7 +9,7 @@
 #include <stdint.h>
 
 #include <core/system/combus/protocol/handshake/combus_handshake.h> // constants, CombusHandshakeContext
-#include <core/system/hw/node_com.h>                  // ComPort
+#include <core/system/hw/com_port.h>                  // ComPort
 
 
 /**

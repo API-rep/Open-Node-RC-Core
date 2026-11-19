@@ -3,7 +3,7 @@
  * @brief Definitions of a ComBus link: what it carries, how, and on which port.
  *
  * @details A link is declared, not programmed:
- *   - ComPortCfg (node_com.h): the hardware of a board;
+ *   - ComPortCfg (com_port.h): the hardware of a board;
  *   - ComDev: a logical link, shared by the boards or nodes it connects;
  *   - ComDevMap: the wiring of one end, a ComDev on a ComPortCfg.
  *
@@ -16,7 +16,7 @@
 #include <stdbool.h>
 #include <optional>
 
-#include <core/system/hw/node_com.h>
+#include <core/system/hw/com_port.h>
 #include <core/system/combus/combus_defs.h>                           // ChanLayer
 #include <core/system/combus/protocol/handshake/combus_handshake.h>   // CombusHandshakeContext
 
