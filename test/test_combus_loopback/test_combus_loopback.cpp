@@ -26,7 +26,7 @@
  *
  *   Group I — links from their description:
  *     combus_link_check() and combus_link_build() turn a ComDevMap (a ComDev
- *     wired on a ComPort) into a ComBusLink: layer from the scope, frame size
+ *     wired on a ComPortCfg) into a ComBusLink: layer from the scope, frame size
  *     from the matching view, TX / RX from the role of the end, and the
  *     refusals. No wiring needed: the port is never opened.
  *
@@ -840,7 +840,7 @@ static constexpr ComDev kTestDevBi = {
     &kTestProtocol, LinkActivation::ALWAYS, nullptr
 };
 
-static const ComPort s_testPort = ComPort::makeUart("test", { 2, kTxPin, kRxPin, 115200u });
+static const ComPortCfg s_testPort = ComPortCfg::makeUart("test", { 2, kTxPin, kRxPin, 115200u });
 
 static ComLinkRuntime s_testRuntime;
 
@@ -936,7 +936,7 @@ static void test_link_build_refuses_bad_wiring(void) {
 
     // Transmit rate whose period in ms would be 0: the link would stay silent.  1000 Hz is the limit.
     // A fast line (never opened), so that the load of the line does not refuse first.
-    static const ComPort fastPort = ComPort::makeUart("test_fast", { 2, kTxPin, kRxPin, 5000000u });
+    static const ComPortCfg fastPort = ComPortCfg::makeUart("test_fast", { 2, kTxPin, kRxPin, 5000000u });
     static constexpr ComProtocolCfg hz1000 = { 5000000u, 1000u, 250u };
     static constexpr ComDev fastestDev = {
         "test_1000hz", LinkScope::INTER_NODE, LinkType::UNIDIRECTIONAL,

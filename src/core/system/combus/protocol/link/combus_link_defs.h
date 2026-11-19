@@ -3,9 +3,9 @@
  * @brief Definitions of a ComBus link: what it carries, how, and on which port.
  *
  * @details A link is declared, not programmed:
- *   - ComPort (node_com.h): the hardware of a board;
+ *   - ComPortCfg (node_com.h): the hardware of a board;
  *   - ComDev: a logical link, shared by the boards or nodes it connects;
- *   - ComDevMap: the wiring of one end, a ComDev on a ComPort.
+ *   - ComDevMap: the wiring of one end, a ComDev on a ComPortCfg.
  *
  *   These are purely descriptive and live in Flash.  combus_links.h turns them into
  *   a ComBusLink at init.
@@ -183,9 +183,9 @@ struct ComDev {
  */
 
 struct ComDevMap {
-	const ComDev*  dev;
-	const ComPort* port;
-	LinkEnd        end;                   ///< BIDIRECTIONAL requires TX_RX
+	const ComDev*     dev;
+	const ComPortCfg* portCfg;
+	LinkEnd           end;                ///< BIDIRECTIONAL requires TX_RX
 };
 
 

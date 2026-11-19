@@ -149,9 +149,9 @@
 
   // Values from ESP32_8M_6S.h, included via envCfg.h → boards.h.
   // Port names are the silkscreen texts of the board (UART1 is not wired on it).
-  const ComPort comPorts[] = {
-  	ComPort::makeUart("USB",      { 0, Txd0Pin,   Rxd0Pin,   UartMaxBaud }),  // UART0 — USB / debug serial
-  	ComPort::makeUart("COM/GPIO", { 2, TxdExtPin, RxdExtPin, UartMaxBaud }),  // UART2 — extension port / ComBus link
+  const ComPortCfg comPorts[] = {
+  	ComPortCfg::makeUart("USB",      { 0, Txd0Pin,   Rxd0Pin,   UartMaxBaud }),  // UART0 — USB / debug serial
+  	ComPortCfg::makeUart("COM/GPIO", { 2, TxdExtPin, RxdExtPin, UartMaxBaud }),  // UART2 — extension port / ComBus link
   };
 
   const uint8_t comPortsCount = static_cast<uint8_t>(sizeof(comPorts) / sizeof(comPorts[0]));

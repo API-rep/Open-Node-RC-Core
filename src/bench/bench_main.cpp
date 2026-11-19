@@ -90,7 +90,7 @@
 static constexpr ComProtocolCfg kProto = { BENCH_BAUD, BENCH_HZ, BENCH_TIMEOUT, 3000u };
 
 	/// The port of the bench: UART2, GPIO 17 TX / 16 RX.
-static const ComPort kPort = ComPort::makeUart("bench", { 2, 17, 16, 115200u });
+static const ComPortCfg kPort = ComPortCfg::makeUart("bench", { 2, 17, 16, 115200u });
 
 #if defined(BENCH_TRACTOR) || defined(BENCH_TRAILER)
 	/// Coupled link: hitched by TEST_HITCHED, its loss in TEST_HITCH_LINK_FAIL.

@@ -98,7 +98,7 @@ static constexpr ComDev kTrailerDev = {
     "test_trailer", LinkScope::INTER_NODE, LinkType::BIDIRECTIONAL,
     &kProto, LinkActivation::ALWAYS, nullptr, &kLink
 };
-static const ComPort s_port = ComPort::makeUart("test", { 2, kTxPin, kRxPin, 115200u });
+static const ComPortCfg s_port = ComPortCfg::makeUart("test", { 2, kTxPin, kRxPin, 115200u });
 static ComLinkRuntime s_runtime;
 static ComBusLink     s_link;
 

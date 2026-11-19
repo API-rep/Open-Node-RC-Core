@@ -98,21 +98,21 @@ static bool endReceives ( LinkEnd end ) { return end != LinkEnd::TX; }
 
 static NodeCom* openPort( const ComDevMap& map, PinReg* pinReg )
 {
-	const ComPort& port = *map.port;
+	const ComPortCfg& cfg = *map.portCfg;
 
 		// One case per kind of port
-	switch (port.type) {
+	switch (cfg.type) {
 		case ComPortType::UART: {
-			const int txPin = endTransmits(map.end) ? port.uart.txPin : -1;
-			const int rxPin = endReceives (map.end) ? port.uart.rxPin : -1;
+			const int txPin = endTransmits(map.end) ? cfg.uart.txPin : -1;
+			const int rxPin = endReceives (map.end) ? cfg.uart.rxPin : -1;
 
-			return uart_com_init(uart_serial_for(port.uart.index), map.dev->protocol->rate,
+			return uart_com_init(uart_serial_for(cfg.uart.index), map.dev->protocol->rate,
 			                     txPin, rxPin, map.dev->name, pinReg);
 		}
 		case ComPortType::NONE:
 		default:
 			sys_log_err("[COMBUS_LINKS] link '%s': port '%s' has no usable type\n",
-			            map.dev->name, port.name);
+			            map.dev->name, cfg.name);
 			return nullptr;
 	}
 }
@@ -134,7 +134,7 @@ static NodeCom* openPort( const ComDevMap& map, PinReg* pinReg )
 uint32_t combus_link_load_pct( const ComDevMap& map )
 {
 		// Check for an end that sends on a UART
-	if (!map.dev || !map.port || !map.dev->protocol || map.port->type != ComPortType::UART) { return 0u; }
+	if (!map.dev || !map.portCfg || !map.dev->protocol || map.portCfg->type != ComPortType::UART) { return 0u; }
 	if (!endTransmits(map.end) || map.dev->protocol->rate == 0u)                             { return 0u; }
 
 	uint8_t nAnalog  = 0u;
@@ -171,7 +171,7 @@ uint32_t combus_link_load_pct( const ComDevMap& map )
 bool combus_link_check( const ComDevMap& map )
 {
 		// 1. Pointers
-	if (!map.dev || !map.port || !map.dev->protocol) {
+	if (!map.dev || !map.portCfg || !map.dev->protocol) {
 		sys_log_err("[COMBUS_LINKS] wiring rejected — null device, port or protocol\n");
 		return false;
 	}
@@ -235,10 +235,10 @@ bool combus_link_check( const ComDevMap& map )
 	}
 
 		// 5. Line rate
-	if (map.port->type == ComPortType::UART && dev.protocol->rate > map.port->uart.maxBaud) {
+	if (map.portCfg->type == ComPortType::UART && dev.protocol->rate > map.portCfg->uart.maxBaud) {
 		sys_log_err("[COMBUS_LINKS] link '%s': rate %lu exceeds the ceiling of port '%s' (%lu)\n",
 		            dev.name, (unsigned long)dev.protocol->rate,
-		            map.port->name, (unsigned long)map.port->uart.maxBaud);
+		            map.portCfg->name, (unsigned long)map.portCfg->uart.maxBaud);
 		return false;
 	}
 

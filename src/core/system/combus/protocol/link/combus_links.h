@@ -193,7 +193,7 @@ uint32_t combus_link_load_pct( const ComDevMap& map );
  *   @p link and @p runtime are only written on success.
  *
  * @param map      Wiring of the link.
- * @param com      Transport already opened for `map.port`.
+ * @param com      Transport already opened for `map.portCfg`.
  * @param runtime  Storage of this link.
  * @param link     Descriptor to fill.
  *

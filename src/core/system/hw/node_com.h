@@ -46,10 +46,10 @@ struct NodeCom {
 // =============================================================================
 
 /**
- * @brief Kind of communication hardware described by a ComPort.
+ * @brief Kind of communication hardware described by a ComPortCfg.
  *
  * @details Only UART is implemented.  Each further kind (I2C, CAN, internal ESP-NOW
- *   controller) adds one value here, one configuration struct, one member in the ComPort
+ *   controller) adds one value here, one configuration struct, one member in the ComPortCfg
  *   union and one case where the port is opened.
  */
 
@@ -78,25 +78,25 @@ struct UartPortCfg {
  *   given by `type`.  Created with the static factories, so a board table reads as a
  *   list of ports:
  * @code
- *   const ComPort comPorts[] = {
- *       ComPort::makeUart("COM/GPIO", { 2, TxdExtPin, RxdExtPin, UartMaxBaud }),
+ *   const ComPortCfg comPorts[] = {
+ *       ComPortCfg::makeUart("COM/GPIO", { 2, TxdExtPin, RxdExtPin, UartMaxBaud }),
  *   };
  * @endcode
  */
 
-struct ComPort {
+struct ComPortCfg {
 	const char* name;      ///< port name, as printed on the board silkscreen
 	ComPortType type;      ///< selects the active member of the union below
 	union {
 		UartPortCfg uart;  ///< valid when type == ComPortType::UART
 	};
 
-	constexpr ComPort() : name(""), type(ComPortType::NONE), uart() {}
-	constexpr ComPort(const char* portName, const UartPortCfg& cfg)
+	constexpr ComPortCfg() : name(""), type(ComPortType::NONE), uart() {}
+	constexpr ComPortCfg(const char* portName, const UartPortCfg& cfg)
 		: name(portName), type(ComPortType::UART), uart(cfg) {}
 
-	static constexpr ComPort makeUart(const char* portName, const UartPortCfg& cfg) {
-		return ComPort(portName, cfg);
+	static constexpr ComPortCfg makeUart(const char* portName, const UartPortCfg& cfg) {
+		return ComPortCfg(portName, cfg);
 	}
 };
 

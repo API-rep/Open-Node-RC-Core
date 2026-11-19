@@ -17,7 +17,7 @@
 #pragma once
 
 #include <core/system/combus/protocol/link/combus_link_defs.h>   // ComDev, ComDevMap, ComProtocolCfg
-#include <core/system/hw/node_com.h>                             // ComPort
+#include <core/system/hw/node_com.h>                             // ComPortCfg
 #include <combus.h>                                              // generated: comBus, the mirrored BASE view
 #include <combus_peer_links.h>                                   // generated: combus::peer::kRemoteLink
 
@@ -34,7 +34,7 @@ inline constexpr ComDev kComDevMachine = {
 
 	/// The port of the remote board to the machine: UART2, GPIO 17 TX / 16 RX.
 	/// TODO(chantier 4): from a board configuration of the remote.
-inline const ComPort kPortMachine = ComPort::makeUart("machine", { 2, 17, 16, 115200u });
+inline const ComPortCfg kPortMachine = ComPortCfg::makeUart("machine", { 2, 17, 16, 115200u });
 
 
 /**

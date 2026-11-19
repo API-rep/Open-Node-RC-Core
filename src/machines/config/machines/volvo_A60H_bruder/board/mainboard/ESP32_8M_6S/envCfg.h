@@ -27,7 +27,7 @@
   #include <defs/defs.h>
   
   #include <core/system/combus/combus_defs.h>
-  #include <core/system/hw/node_com.h>               // ComPort
+  #include <core/system/hw/node_com.h>               // ComPortCfg
   #include <machines/config/machines/volvo_A60H_bruder/board/com_dev.h>   // kComDevExtUni, kComDevExtBi, ComDevMap
 
   // Board-specific hardware definitions (pins, ports, constants)
@@ -133,7 +133,7 @@
    *   (ESP32_8M_6S.h) included above.  The ports in use are the ones the links
    *   of the board (comLinks below) wire.
    */
-  extern const ComPort comPorts[];
+  extern const ComPortCfg comPorts[];
   extern const uint8_t comPortsCount;
 
     /// Index of the extension port (COM/GPIO, UART2) in comPorts[].
