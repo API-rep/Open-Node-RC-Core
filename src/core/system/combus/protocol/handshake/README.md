@@ -114,7 +114,7 @@ Reserved for debugging, they are 0 by default:
 
 ## Going Further
 
-- [ComBus protocol](../README.md): the overview
+- [ComBus transmission](../README.md): the overview
 - [Data frame](../frame/README.md): what the contract protects
 - [Coupling and pairing](../coupling/README.md): the other frame of the `seq == 0` slot
 - [Linking nodes](../../../../../../doc/linking_nodes.md): why both ends must agree

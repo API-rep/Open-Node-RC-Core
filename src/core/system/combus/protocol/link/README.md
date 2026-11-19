@@ -2,6 +2,13 @@
 
 This folder answers three questions: how is a link described, how does it start, and how do we know it is lost?
 
+## Why Links
+
+A link carries no byte. It exists so that nothing is wired in the code: which port carries which channels, in which direction and at what rate, is left to the configuration. For each connection, a link joins the protocol and the hardware, with two roles:
+
+- **a mapper**, on the hardware side: it puts a logical link (`ComDev`) on a physical port (`ComPort`), with the role of this end (TX, RX or both). See [Describing a Link](#describing-a-link);
+- **an orchestrator**, on the protocol side: at boot, it has its port set up, sets its contract and starts its TX and RX; while it runs, it watches its state and reports its loss to the failsafe. See [Starting](#starting) and [Watching](#watching).
+
 ## Describing a Link
 
 A link is declared in a configuration file, not programmed, with the following components:
@@ -17,6 +24,17 @@ A link is declared in a configuration file, not programmed, with the following c
 The same `ComDev` is shared by both ends; each one wires it on its own port. A `ComDev` is **transport-agnostic**: it says what the link carries and how, never over what. The medium is the business of the `ComPort`, so the same `ComDev` can run over a wire or a radio link.
 
 A board lists its links in a table of `ComDevMap` next to its ports (`comLinks[]` of its `envCfg.h`); the remote lists the machines it drives (`remotes/config/driven_machines.h`).
+
+### The Two Scopes
+
+| Scope of the link | Connects | Channels carried |
+|---|---|---|
+| `INTER_NODE` | two nodes (remote, trailer...) | `BASE` |
+| `INTRA_NODE` | the boards of one node | `SYSTEM`, which includes `BASE` |
+
+`BOARD` channels stay on their board: they never travel.
+
+A link between nodes may also have **its own table** (`ComPeerLink`): this is the case of a link through a coupler and of the link with the remote. It then carries exactly the channels of that table.
 
 ## The Running Link
 
@@ -108,7 +126,7 @@ When a link with a table stops being alive, what this node received through that
 
 ## Going Further
 
-- [ComBus protocol](../README.md): the overview
+- [ComBus transmission](../README.md): the overview
 - [Coupling and pairing](../coupling/README.md): the links that only exist once hitched
 - [Handshake](../handshake/README.md): the contract of a link
 - [UART workflow](uart_workflow.md): the init chain, from the board table to `loop()`

@@ -1,93 +1,102 @@
-# ComBus Protocol
+# ComBus Transmission
 
-This folder carries the ComBus channels between two boards or two nodes, without knowing anything about the physical medium. It answers three questions: what goes on the wire, do both ends speak the same language, and is the link alive?
+The ComBus is a data structure, shared first by the modules of a single board, then by the boards of a node, and between nodes (a remote, a machine, a trailer). This folder holds the transmission protocol that carries it, designed to evolve and to adapt easily.
 
-## Overview
+## The Concept: Declare, Then Choose
+
+Modern hardware is more and more flexible in how its communication ports are configured: on a microcontroller, the same pair of GPIO can now host a UART, an I2C or a CAN controller. To avoid a tangle of crossed configurations, a board **declares its possible ports**, as a catalog. In parallel, the node **declares the links it may need**, without saying over what they run. Then the configuration of each board **pairs** a port with a link, and the pair becomes a working transport interface.
 
 ```text
-Machine modules
-        │  read and write the channels
-        ▼
-      ComBus
-        │
-        ▼
-    protocol/        describes the links, sends, receives, watches
-        │
-        ▼
-     NodeCom         write and read interface
-        │
-        ├── UART
-        └── ESP-NOW (to come)
+Ports of the board        Links of the node
+(what the hardware has)   (what may travel)
+
+  USB                       one-way extension ──┐
+  COM/GPIO ──┐              two-way extension   │
+  ...        │              ...                 │
+             ▼                                  ▼
+      ┌────────────────────────────────────────────────┐
+      │  Configuration of the board, one line:         │
+      │  one-way extension on COM/GPIO, as TX          │
+      └────────────────────────────────────────────────┘
 ```
 
-## Who Does What
+What it brings:
 
-| Element | Role |
-|---|---|
-| [`frame/`](frame/README.md) | The data frame: encode, decode, apply to the bus |
-| [`handshake/`](handshake/README.md) | The contract of the link: do both ends have the same MD5? |
-| [`coupling/`](coupling/README.md) | The pairing: who is hitched to whom? |
-| [`link/`](link/README.md) | The links: describe them, start them, watch them |
-| `combus_tx.*` | The transmission of each link, at its own rate |
-| `combus_rx.*` | The reception of each link: routes the bytes to the right decoder |
+- **Generic boards.** A board describes what it has, not what it does. The same board serves another machine, or another role, without touching its description.
+- **Pluggable transports.** Every port is used through the same few calls, whatever its protocol (UART, ESP-NOW...).
+- **A change is one line.** Moving a link to another port, or from a wire to a radio, only changes the configuration.
+- **A new kind of port is easy to add.** It only needs its own transport module; the rest of transmission do not change.
 
-## Describing a Link
+## The Layers
 
-A link is declared in a configuration file, not programmed:
+The ports and their transports are the ground floor. On top of them sits the protocol stack, and on top of the protocol, the ComBus itself. Like the TCP/IP network stack, the transmission is built as three layered blocks, each one only talking to the one below:
 
-- `ComDev` describes the link: its scope, its type (one way or both ways), its protocol (rates, loss timeout), its activation and, between nodes, its ComBus table.
-- `ComPort` describes the physical port, declared by the configuration of the board.
-- `ComDevMap` wires a `ComDev` on a `ComPort`, and gives the role of this end (`TX`, `RX` or `TX_RX`).
+```text
+                ┌──────────────────────────────────────┐
+  Data          │  ComBus: the channels of the modules │
+                └──────────────────┬───────────────────┘
+                ┌──────────────────┴───────────────────┐
+  Protocol      │  Contract       (handshake)          │
+                │  Pairing        (coupling)           │
+                │  Frame                               │
+                │  Transmission   (TX, RX)             │
+                └──────────────────┬───────────────────┘
+                                   │  link: maps, starts, watches
+                ┌──────────────────┴───────────────────┐
+  Hardware      │  Transport      (NodeCom)            │
+                │  Port           (UART, ...)          │
+                └──────────────────────────────────────┘
+```
 
-A board lists its links in a table (`comLinks[]` of its `envCfg.h`). At startup, `combus_links_init()` validates each `ComDevMap`, opens the port, which gives a `NodeCom`, then starts the link. All storage belongs to the caller and stays static: nothing is allocated.
+**Data.** The [ComBus](../README.md) holds the channels that the modules read and write. It knows nothing of the transmission stack, not even that it can travel through it.
 
-## The Two Scopes
+**Protocol.** It carries the channels, whatever the communication hardware:
 
-| Scope of the link | Connects | Channels carried |
-|---|---|---|
-| `INTER_NODE` | two nodes (remote, trailer...) | `BASE` |
-| `INTRA_NODE` | the boards of one node | `SYSTEM`, which includes `BASE` |
+- the **contract** checks that both ends have compatible firmwares and share the same channels, before any data is applied ([handshake](handshake/README.md));
+- the **pairing** makes sure that a coupled link talks to the element actually hitched to it, before the link opens ([coupling](coupling/README.md));
+- the **frame** turns the channels into bytes ready to send, and the bytes received back into channels ([frame](frame/README.md));
+- the **transmission** decides what leaves and what arrives on each link, and exchanges the bytes with the hardware (`combus_tx.*`, `combus_rx.*`, [below](#sending-and-receiving-the-combus)).
 
-`BOARD` channels stay on their board: they never travel.
+**Hardware.** It moves the bytes through the ports of the board ([the hardware](../../hw/README.md)):
 
-A link between nodes may also have **its own table** (`ComPeerLink`): this is the case of a link through a coupler and of the link with the remote. It then carries exactly the channels of that table.
+- the **transport** is reached through a **`NodeCom`**: the same few calls (`write()`, `readByte()`, `available()`), whatever the hardware behind it;
+- the **port** is set up at boot by the module of its kind (UART today, ESP-NOW to come), which keeps the details of the hardware behind these calls.
 
-## One Loop Cycle
+Behind the scenes, a [link](link/README.md) joins the **protocol** and the **hardware** for each connection, so that nothing is hard wired in the code.
+- As a **mapper**, it follows the configuration and puts a logical link on an available port.
+- As an **orchestrator**, it has that port set up and starts the protocol on it (contract, TX, RX), then watches the connection and reports its loss to the failsafe.
 
-1. **Reception**: `combus_rx_update()` reads the bytes and routes them to the right decoder.
-2. **Watch**: `combus_links_update()` follows the coupling and detects the loss of a link. A loss is published in `NODE_LINK_FAIL` or `BOARD_LINK_FAIL`, depending on the scope.
+## Sending and Receiving the ComBus
+
+Two modules do the actual work, on every loop cycle: `combus_tx` sends, `combus_rx` receives. Each one serves all the links of the board in turn, every link at its own rate. Neither of them ever waits: when nothing is due, or nothing has arrived, it moves on, so the rest of the loop is never held up.
+
+### One Loop Cycle
+
+1. **Reception**: `combus_rx_update()` reads the bytes of each link and routes them to the right decoder.
+2. **Watch**: `combus_links_update()` follows the coupling and detects the loss of a link.
 3. **Processing** of the machine.
-4. **Transmission**: `combus_tx_update()` sends the handshakes due, then a data frame when its time has come.
+4. **Transmission**: `combus_tx_update()` sends what is due on each link.
 
-## Telling Frames Apart
+### Sending
 
-All frames start with the same header. Two bytes are enough to tell them apart:
+On each link, `combus_tx_update()` first sends the handshakes due: an ACK to answer, the burst of the start, the periodic request. Then, when the period of the link has elapsed, it encodes a data frame and sends it.
 
-| `seq` | `flags` | Frame | Handled by |
-|---|---|---|---|
-| 1 to 255 | 0 | data | `frame/` |
-| 0 | coupling bit set | coupling | `coupling/` |
-| 0 | other | handshake | `handshake/` |
+A two-way end sends no data as long as its contract is not established: the other end could not use it. See [the contract](handshake/README.md).
 
-## The Rules
+### Receiving
 
-- **Transport independence**: the protocol only talks to `NodeCom`, never to `Serial` or another peripheral.
-- **One port, one owner**: opening a port already taken is a configuration error, reported and refused.
-- **An invalid frame costs only one byte**: the receiver drops that first byte and looks for the start of the next frame, without swallowing a good one.
-- **Old bytes are never applied**: when the loop comes back later than the loss timeout of a link, the bytes waiting are at least that old. They are dropped, and the link is lost by its silence, rather than fed with stale values.
+On each link, `combus_rx_update()` moves the available bytes into a ring buffer, then reads it frame by frame. The header of each frame says which decoder takes it: data, handshake or coupling ([telling frames apart](frame/README.md#telling-frames-apart)).
 
-## Adding a Transport
+Two guards protect the bus:
 
-An adapter that provides a `NodeCom` is enough: `write()`, `readByte()`, `available()`. The rest of the protocol does not change.
+- **A corrupted frame costs one byte**: the receiver drops it and looks for the start of the next frame, without swallowing a good one.
+- **Old bytes are never applied**: when the loop comes back later than the loss timeout of a link, the bytes waiting are at least that old. They are dropped, and the link is lost by its silence rather than fed with stale values.
+
+A data frame received under an established contract goes to the bus; the others are ignored.
 
 ## Going Further
 
-- [The links](link/README.md)
-- [The data frame](frame/README.md)
-- [The handshake](handshake/README.md)
-- [Coupling and pairing](coupling/README.md)
-- [The `both_or` merge](both_or.md): the anti ping-pong between boards
-- [The UART workflow](link/uart_workflow.md): the init chain, from the board table to `loop()`
 - [Linking nodes](../../../../../doc/linking_nodes.md): the concepts behind the links
+- [The `both_or` merge](both_or.md): a fault shared by several boards, without ping-pong
+- [The UART workflow](link/uart_workflow.md): the init chain, from the board table to `loop()`
 - [The remote](../../../../remotes/README.md): the firmware of the remote and its link to the machine
-- [The builder](../../../../../scripts/combus_builder/README.md): how the IDs and tables are generated

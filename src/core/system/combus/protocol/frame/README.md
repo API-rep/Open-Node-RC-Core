@@ -20,6 +20,16 @@ This folder turns the state of the ComBus into bytes, and back. The codec is pur
 - A frame is 255 bytes at most, because its length fits in one byte.
 - `seq` goes from 1 to 255, then back to 1. The value 0 is reserved for the [handshake](../handshake/README.md) and the [coupling](../coupling/README.md): the encoder refuses it.
 
+## Telling Frames Apart
+
+All frames start with the same header. Two bytes are enough to tell them apart:
+
+| `seq` | `flags` | Frame | Handled by |
+|---|---|---|---|
+| 1 to 255 | 0 | data | `frame/` |
+| 0 | coupling bit set | coupling | [`coupling/`](../coupling/README.md) |
+| 0 | other | handshake | [`handshake/`](../handshake/README.md) |
+
 ## Which Channels Travel
 
 A position on the wire must designate the same channel on both sides. There are two ways to guarantee it:
@@ -62,6 +72,6 @@ A channel this node produces is therefore never overwritten by its peer. The wri
 
 ## Going Further
 
-- [ComBus protocol](../README.md): the overview
+- [ComBus transmission](../README.md): the overview
 - [Handshake](../handshake/README.md): the contract of the link
 - [The builder](../../../../../../scripts/combus_builder/README.md): how the identifiers are assigned

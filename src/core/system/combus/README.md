@@ -143,7 +143,7 @@ Channels are not written by hand: each one is declared in a `.cb` file, and the 
 | `value` | its **safe value**: neutral for an analog channel, `false` for a digital one, `fault` for an alarm |
 | `requires` | the build flags without which the channel does not exist |
 | `zeroAt` | where the logical zero of an analog channel sits: at 0, or at neutral |
-| `candidate` | a `BASE` channel on trial, outside the stable contract |
+| `candidate` | a `BASE` channel on trial, outside the stable contract (dev. feature) |
 
 See the [`.cb` syntax](../../../../doc/configuration/cb_syntax.md) and the [ComBus Builder](../../../../scripts/combus_builder/README.md).
 
@@ -188,6 +188,6 @@ Machine Behavior
 
 - [ComBus overview](../../../../doc/combus.md): the introduction, the reading path and the index of the ComBus documents
 - [Linking nodes](../../../../doc/linking_nodes.md): how nodes are linked, and what keeps those links safe
-- [ComBus protocol](protocol/README.md): how the ComBus travels between boards and nodes
+- [ComBus transmission](protocol/README.md): how the ComBus travels between boards and nodes
 - [Accessors](combus_access.h): reading and writing channels, logical and raw values
 - [.cb syntax](../../../../doc/configuration/cb_syntax.md): declaring channels

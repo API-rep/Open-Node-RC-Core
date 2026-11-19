@@ -53,6 +53,6 @@ What it brings:
 * [Linking Nodes](linking_nodes.md): how nodes are linked, and what keeps those links safe.
 * [`.cb` syntax](configuration/cb_syntax.md): declaring channels.
 * [ComBus Builder](../scripts/combus_builder/README.md): how the channels become code.
-* [ComBus protocol](../src/core/system/combus/protocol/README.md): how the ComBus travels between boards and nodes.
+* [ComBus transmission](../src/core/system/combus/protocol/README.md): how the ComBus travels between boards and nodes.
 * [Processors](../src/core/system/combus/processors/~README.md): the processing blocks and their chains.
 * [Failsafe module](../src/core/system/failsafe/failsafe_module.md): the safety chains.

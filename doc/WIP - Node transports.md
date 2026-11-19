@@ -70,4 +70,5 @@ Le contrat `BASE` (entre nœuds) a ses deux MD5 stable et next et sa négociatio
 
 - ESP-NOW : nombre maximal de pairs de l'ESP32, charge utile exacte (documentation ESP-IDF).
 - **Identité du pair** : un pair au même MD5 branché sur le mauvais lien (même type de carte) n'est pas détecté par le contrat ; à traiter avec le cache des pairs (« friend cache »).
+- **Branchement à chaud entre matériel et protocole** (piste, pas un besoin) : choisir en marche quel port porte quel lien. L'activation `ON_COUPLING` en est déjà une prémice, sur un port fixe. Il faudrait pouvoir rendre un port (adaptateur, `PinReg`), démonter un lien dans son emplacement, et passer par la perte du lien avant de le reconstruire.
 - Nom du jeu de `ComDev` fournis par le cœur (« catalogue » est provisoire), et forme de leur paramétrage par `-D` (flags par modèle, ou une table) ; à terme, ces choix passeront par les fichiers de configuration YAML.
