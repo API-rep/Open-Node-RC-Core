@@ -1000,6 +1000,32 @@ static void test_link_load_warned_then_refused(void) {
     proto.txHz = 50u;
 }
 
+/** Timeout of a receiving end against the period: refused up to one period, warned below three. */
+static void test_link_timeout_against_period(void) {
+    static ComProtocolCfg proto = { 115200u, 50u, 250u };
+    static const ComDev dev = {
+        "test_timeout", LinkScope::INTER_NODE, LinkType::UNIDIRECTIONAL,
+        &proto, LinkActivation::ALWAYS, nullptr
+    };
+    const ComDevMap rx = { &dev, &s_testPort, LinkEnd::RX };
+    const ComDevMap tx = { &dev, &s_testPort, LinkEnd::TX };
+
+    proto.txHz = 50u; proto.linkTimeoutMs = 20u;                         // period 20 ms
+    TEST_ASSERT_FALSE_MESSAGE(combus_link_check(rx), "timeout equal to the period accepted");
+    proto.linkTimeoutMs = 15u;
+    TEST_ASSERT_FALSE_MESSAGE(combus_link_check(rx), "timeout below the period accepted");
+    TEST_ASSERT_TRUE_MESSAGE(combus_link_check(tx), "a sending end has no timeout to check");
+    proto.linkTimeoutMs = 21u;
+    TEST_ASSERT_TRUE_MESSAGE(combus_link_check(rx), "timeout above the period refused (warned only)");
+    proto.linkTimeoutMs = 60u;
+    TEST_ASSERT_TRUE(combus_link_check(rx));
+
+    proto.txHz = 3u; proto.linkTimeoutMs = 250u;                         // the bench case: period 333 ms
+    TEST_ASSERT_FALSE_MESSAGE(combus_link_check(rx), "3 Hz with a 250 ms timeout accepted");
+
+    proto.txHz = 50u; proto.linkTimeoutMs = 250u;
+}
+
 
 // =============================================================================
 // GROUP J — RECEIVING LINK HEALTH
@@ -2226,6 +2252,7 @@ void setup() {
     RUN_TEST(test_link_scope_layer);
     RUN_TEST(test_link_build_refuses_bad_wiring);
     RUN_TEST(test_link_load_warned_then_refused);
+    RUN_TEST(test_link_timeout_against_period);
 
     // --- Group J: receiving link health ---
     RUN_TEST(test_link_health_lost_until_first_frame);

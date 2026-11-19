@@ -159,7 +159,9 @@ uint32_t combus_link_load_pct( const ComDevMap& map )
  *   2. Coupling: a link ON_COUPLING needs its CouplingDev, and its table to pair.
  *   3. Direction: the type of the link and the end of this board must agree.
  *   4. Rates: 1000 / txHz is an integer period, so above 1000 Hz it falls to 0 and the
- *      link stays silent.  A receiving end needs a timeout to detect a loss.
+ *      link stays silent.  A receiving end needs a timeout to detect a loss, longer
+ *      than the period of the frames (both ends share the protocol), warned below
+ *      kCombusLinkTimeoutWarnPeriods periods.
  *   5. Line rate against the ceiling of the port.
  *   6. Load of the line, see combus_link_load_pct(): warned above the margin, refused
  *      above 100 %, where the writes would block the loop.
@@ -212,6 +214,24 @@ bool combus_link_check( const ComDevMap& map )
 	if (endReceives(map.end) && dev.protocol->linkTimeoutMs == 0u) {
 		sys_log_err("[COMBUS_LINKS] link '%s': a receiving end needs a non-zero linkTimeoutMs\n", dev.name);
 		return false;
+	}
+
+		// Timeout against the period of the frames, when the protocol gives a rate
+	if (endReceives(map.end) && dev.protocol->txHz != 0u && dev.protocol->txHz <= 1000u) {
+		const uint32_t periodMs = 1000u / dev.protocol->txHz;
+
+		if (dev.protocol->linkTimeoutMs <= periodMs) {
+			sys_log_err("[COMBUS_LINKS] link '%s': linkTimeoutMs %lu ms not longer than the period %lu ms (%lu Hz)\n",
+			            dev.name, (unsigned long)dev.protocol->linkTimeoutMs,
+			            (unsigned long)periodMs, (unsigned long)dev.protocol->txHz);
+			return false;
+		}
+
+		if (dev.protocol->linkTimeoutMs < kCombusLinkTimeoutWarnPeriods * periodMs) {
+			sys_log_warn("[COMBUS_LINKS] link '%s': linkTimeoutMs %lu ms, below %lu periods of %lu ms\n",
+			             dev.name, (unsigned long)dev.protocol->linkTimeoutMs,
+			             (unsigned long)kCombusLinkTimeoutWarnPeriods, (unsigned long)periodMs);
+		}
 	}
 
 		// 5. Line rate

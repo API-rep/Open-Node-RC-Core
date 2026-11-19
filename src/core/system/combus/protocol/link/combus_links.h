@@ -143,6 +143,9 @@ constexpr ChanLayer linkScopeLayer( LinkScope scope )
  *   - a BIDIRECTIONAL link not wired TX_RX, or a UNIDIRECTIONAL one wired TX_RX;
  *   - a transmitting end with a rate of 0, or above 1000 Hz (period of 0 ms);
  *   - a receiving end without a link timeout;
+ *   - a receiving end whose timeout is not longer than the period 1000 / txHz of
+ *     the same protocol: the link would drop between two frames; below
+ *     kCombusLinkTimeoutWarnPeriods periods, the link is accepted with a warning;
  *   - a line rate above the ceiling of the port;
  *   - a line loaded above kCombusLinkLoadMaxPct (combus_link_load_pct()); above
  *     kCombusLinkLoadWarnPct, the link is accepted with a warning;
@@ -161,6 +164,10 @@ static constexpr uint32_t kCombusLinkLoadWarnPct = 70u;
 
 	/// Load of a line above which a link is refused: the writes would block the loop.
 static constexpr uint32_t kCombusLinkLoadMaxPct = 100u;
+
+	/// Timeout of a receiving end, in periods of the frames, below which a link is accepted
+	/// with a warning: a single lost frame may already drop it.
+static constexpr uint32_t kCombusLinkTimeoutWarnPeriods = 3u;
 
 
 /**
