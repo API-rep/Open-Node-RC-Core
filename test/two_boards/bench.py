@@ -727,13 +727,24 @@ def mismatch(sc: str, a: Board, b: Board, secs: float) -> None:
 
     These settings are outside the MD5: the contract cannot refuse them.  Strict: no
     wrong value ever reaches the bus (the watch of `k`), and with no frame understood
-    no frame is accepted.  Measured: STABLE or not, alive samples, losses, frames per s.
+    no frame is accepted.  A board whose own timeout is not longer than its own period
+    refuses its link at boot (combus_link_check()), and only then.  Measured: STABLE or
+    not, alive samples, losses, frames per s.
     """
     cfg = MONKEY[sc]
     boards = [a, b]
     s0 = [a.status(), b.status()]
     desc = "  /  ".join(f"{x.name} {s['bd']} baud {s['hz']} Hz timeout {s['to']} ms" for x, s in zip(boards, s0))
     print(f"\n=== X{sc}. Mismatch: {desc} ===", flush=True)
+    for i, bd in enumerate(boards):           # restart to read the READY line: started or refused at boot
+        bd.reboot()
+        ready = [l for l in bd.log if l.startswith("READY")][-1]
+        refused = "NOT STARTED" in ready
+        expected = s0[i]["to"] <= 1000 // s0[i]["hz"]
+        print(f"MEAS  X{sc} {bd.name}: {ready}", flush=True)
+        check(f"X{sc} {bd.name}: link refused at boot exactly when its timeout is not longer than its period",
+              refused == expected,
+              f"refused {refused}, timeout {s0[i]['to']} ms, period {1000 // s0[i]['hz']} ms")
     if cfg["hitch"]:
         for x in boards:
             x.d("TEST_HITCHED", True)
