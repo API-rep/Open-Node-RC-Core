@@ -23,7 +23,7 @@
 #include <stdbool.h>
 
 #include <core/system/combus/protocol/frame/combus_frame.h>   // CombusFrameHeader, CombusFrameSof
-#include <core/system/hw/node_com.h>                          // NodeCom (TX path)
+#include <core/system/hw/node_com.h>                          // ComPort (TX path)
 
 	// Generated MD5 of each view (namespace combus::wire), resolved per link by
 	// combus_link_start().

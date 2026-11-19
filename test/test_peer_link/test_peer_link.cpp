@@ -88,7 +88,7 @@ static constexpr ComBusFrameCfg kLinkCfg = { 3u, 2u };
 static UartCtx        s_uartPool[1];
 static CombusTxState  s_txStates[1];
 static CombusRxState  s_rxStates[1];
-static NodeCom*       s_com = nullptr;
+static ComPort*       s_port = nullptr;
 static constexpr uint8_t kLinkIdx = 0u;
 
 static ComBus& bus = comBus;
@@ -98,7 +98,7 @@ static constexpr ComDev kTrailerDev = {
     "test_trailer", LinkScope::INTER_NODE, LinkType::BIDIRECTIONAL,
     &kProto, LinkActivation::ALWAYS, nullptr, &kLink
 };
-static const ComPortCfg s_port = ComPortCfg::makeUart("test", { 2, kTxPin, kRxPin, 115200u });
+static const ComPortCfg s_portCfg = ComPortCfg::makeUart("test", { 2, kTxPin, kRxPin, 115200u });
 static ComLinkRuntime s_runtime;
 static ComBusLink     s_link;
 
@@ -130,8 +130,8 @@ static uint8_t encodeTrailerFrame(uint16_t brake, uint16_t tilt, bool fault, boo
 /** Build the link with the trailer on the loopback port and put it under watch. */
 static void startLink(void) {
     resetBus();
-    const ComDevMap map = { &kTrailerDev, &s_port, LinkEnd::TX_RX };
-    TEST_ASSERT_TRUE(combus_link_build(map, s_com, s_runtime, s_link));
+    const ComDevMap map = { &kTrailerDev, &s_portCfg, LinkEnd::TX_RX };
+    TEST_ASSERT_TRUE(combus_link_build(map, s_port, s_runtime, s_link));
     s_link.target = &bus;
     combus_link_start(kLinkIdx, &s_link);
     combus_links_watch(&s_runtime, 1u);
@@ -147,7 +147,7 @@ static void ensureStable(void) {
     CombusHandshakeContext* ctx = &s_runtime.handshake;
     actAsTheTrailer();
     for (uint32_t t0 = millis(); !combus_handshake_is_contract_validated(ctx) && (millis() - t0) < 1500u; ) {
-        combus_handshake_tx_update(ctx, s_com);
+        combus_handshake_tx_update(ctx, s_port);
         delay(10u);
         combus_rx_update();
     }
@@ -236,7 +236,7 @@ static void test_row5b_two_sockets_refuse_each_other(void) {
     startLink();
     CombusHandshakeContext* ctx = &s_runtime.handshake;
     for (uint32_t t0 = millis(); (millis() - t0) < 1000u; ) {
-        combus_handshake_tx_update(ctx, s_com);
+        combus_handshake_tx_update(ctx, s_port);
         delay(10u);
         combus_rx_update();
     }
@@ -250,7 +250,7 @@ static void test_row6_both_or_through_the_table(void) {
     ensureStable();
 
     const uint8_t len = encodeTrailerFrame(0u, 0u, true, false, 5u);
-    s_com->write(s_com->ctx, s_buf, len);
+    s_port->write(s_port->ctx, s_buf, len);
     delay(kRxPollMs);
     com_rx_update(bus);
     TEST_ASSERT_TRUE(bus.digitalBus[kFault].value);
@@ -299,7 +299,7 @@ static void test_row7_end_to_end(void) {
 /** The trailer sends one frame (tilt, fault) and com_rx_update() receives it. */
 static void receiveFromTrailer(uint16_t tilt, bool fault, uint8_t seq) {
     const uint8_t len = encodeTrailerFrame(0u, tilt, fault, false, seq);
-    s_com->write(s_com->ctx, s_buf, len);
+    s_port->write(s_port->ctx, s_buf, len);
     delay(kRxPollMs);
     com_rx_update(bus);
 }
@@ -377,13 +377,13 @@ static void test_loss_row7_late_pass_drops_the_backlog(void) {
 
         // The trailer sends while this end is stalled
     const uint8_t len = encodeTrailerFrame(0u, 444u, false, false, 12u);
-    s_com->write(s_com->ctx, s_buf, len);
+    s_port->write(s_port->ctx, s_buf, len);
     delay(kProto.linkTimeoutMs + 60u);
     com_rx_update(bus);
 
     TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::LOST);
     TEST_ASSERT_EQUAL_UINT16(CbusNeutral, bus.analogBus[kTilt].value);   // the old 444 is not applied
-    TEST_ASSERT_EQUAL_INT(0, s_com->available(s_com->ctx));              // nothing left of the backlog
+    TEST_ASSERT_EQUAL_INT(0, s_port->available(s_port->ctx));              // nothing left of the backlog
 
         // The link comes back: a fresh frame is applied
     ensureStable();
@@ -447,24 +447,24 @@ static void test_loss_row9_take_back_per_channel(void) {
 
 /** After a stall, a full RX buffer is read fast, every byte once and in order. */
 static void test_transport_full_buffer_read_in_blocks(void) {
-    while (s_com->available(s_com->ctx) > 0) { s_com->readByte(s_com->ctx); }
+    while (s_port->available(s_port->ctx) > 0) { s_port->readByte(s_port->ctx); }
 
         // 380 bytes: the RX buffer of the driver (256) is full, the rest waits in the FIFO
     static uint8_t pattern[380];
     for (uint16_t i = 0u; i < sizeof(pattern); ++i) { pattern[i] = (uint8_t)i; }
-    s_com->write(s_com->ctx, pattern, sizeof(pattern));
+    s_port->write(s_port->ctx, pattern, sizeof(pattern));
     delay(80u);
 
     const uint32_t t0 = micros();
     uint16_t n   = 0u;
     bool inOrder = true;
-    for (int b = s_com->readByte(s_com->ctx); b >= 0; b = s_com->readByte(s_com->ctx)) {
+    for (int b = s_port->readByte(s_port->ctx); b >= 0; b = s_port->readByte(s_port->ctx)) {
         if (b != (uint8_t)n) { inOrder = false; }
         ++n;
     }
     const uint32_t us = micros() - t0;
 
-    TEST_ASSERT_EQUAL_INT(0, s_com->available(s_com->ctx));
+    TEST_ASSERT_EQUAL_INT(0, s_port->available(s_port->ctx));
     TEST_ASSERT_TRUE_MESSAGE(n >= 256u, "the RX buffer was not full - check TX<->RX jumper");
     TEST_ASSERT_TRUE_MESSAGE(inOrder, "a byte lost, doubled or out of order");
     char msg[64];
@@ -475,18 +475,18 @@ static void test_transport_full_buffer_read_in_blocks(void) {
 
 /** The cache counts in available(): bytes read from the driver but not served yet. */
 static void test_transport_available_counts_the_cache(void) {
-    while (s_com->available(s_com->ctx) > 0) { s_com->readByte(s_com->ctx); }
+    while (s_port->available(s_port->ctx) > 0) { s_port->readByte(s_port->ctx); }
 
     static const uint8_t ten[10] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
-    s_com->write(s_com->ctx, ten, sizeof(ten));
+    s_port->write(s_port->ctx, ten, sizeof(ten));
     delay(20u);
 
-    TEST_ASSERT_EQUAL_INT(10, s_com->available(s_com->ctx));
-    TEST_ASSERT_EQUAL_INT(1, s_com->readByte(s_com->ctx));
-    TEST_ASSERT_EQUAL_INT(9, s_com->available(s_com->ctx));
-    for (int k = 2; k <= 10; ++k) { TEST_ASSERT_EQUAL_INT(k, s_com->readByte(s_com->ctx)); }
-    TEST_ASSERT_EQUAL_INT(0, s_com->available(s_com->ctx));
-    TEST_ASSERT_EQUAL_INT(-1, s_com->readByte(s_com->ctx));
+    TEST_ASSERT_EQUAL_INT(10, s_port->available(s_port->ctx));
+    TEST_ASSERT_EQUAL_INT(1, s_port->readByte(s_port->ctx));
+    TEST_ASSERT_EQUAL_INT(9, s_port->available(s_port->ctx));
+    for (int k = 2; k <= 10; ++k) { TEST_ASSERT_EQUAL_INT(k, s_port->readByte(s_port->ctx)); }
+    TEST_ASSERT_EQUAL_INT(0, s_port->available(s_port->ctx));
+    TEST_ASSERT_EQUAL_INT(-1, s_port->readByte(s_port->ctx));
 }
 
 
@@ -509,12 +509,12 @@ static constexpr ComDev kHitchedTrailerDev = {
 /** Build the coupled link on the loopback port and put it under watch (unhitched). */
 static void startCoupledLink(void) {
     resetBus();
-    const ComDevMap map = { &kHitchedTrailerDev, &s_port, LinkEnd::TX_RX };
-    TEST_ASSERT_TRUE(combus_link_build(map, s_com, s_runtime, s_link));
+    const ComDevMap map = { &kHitchedTrailerDev, &s_portCfg, LinkEnd::TX_RX };
+    TEST_ASSERT_TRUE(combus_link_build(map, s_port, s_runtime, s_link));
     s_link.target = &bus;
     combus_link_start(kLinkIdx, &s_link);
     combus_links_watch(&s_runtime, 1u);
-    while (s_com->available(s_com->ctx) > 0) { s_com->readByte(s_com->ctx); }   // nothing left from the last test
+    while (s_port->available(s_port->ctx) > 0) { s_port->readByte(s_port->ctx); }   // nothing left from the last test
 }
 
 static uint32_t s_hitchMs = 0u;   ///< raw rising edge of the trigger, origin of the age of the hitch
@@ -550,7 +550,7 @@ static void sendCoupling(CouplingMsg msg, const NodeAddr& from, uint8_t round, i
     f.hitchAgeMs = combus_coupling_hitch_age((uint32_t)((int32_t)(millis() - s_hitchMs) + ageOffsetMs));
     uint8_t buf[kCombusCouplingFrameLen];
     combus_coupling_encode(buf, sizeof(buf), f);
-    s_com->write(s_com->ctx, buf, kCombusCouplingFrameLen);
+    s_port->write(s_port->ctx, buf, kCombusCouplingFrameLen);
 }
 
 /**
@@ -586,11 +586,11 @@ static constexpr uint8_t kAllRounds = 0x1Fu;
 
 /** Bytes that came back on the loopback after `ms` of transmit updates. */
 static int bytesSentDuring(uint32_t ms) {
-    while (s_com->available(s_com->ctx) > 0) { s_com->readByte(s_com->ctx); }
+    while (s_port->available(s_port->ctx) > 0) { s_port->readByte(s_port->ctx); }
     for (uint32_t t0 = millis(); (millis() - t0) < ms; ) { combus_tx_update(&bus); delay(5u); }
     delay(20u);
     int n = 0;
-    while (s_com->available(s_com->ctx) > 0) { s_com->readByte(s_com->ctx); ++n; }
+    while (s_port->available(s_port->ctx) > 0) { s_port->readByte(s_port->ctx); ++n; }
     return n;
 }
 
@@ -684,8 +684,8 @@ static void test_coupling_row9_on_coupling_needs_its_coupling_dev(void) {
         "no_coupling", LinkScope::INTER_NODE, LinkType::BIDIRECTIONAL,
         &kProto, LinkActivation::ON_COUPLING, nullptr, &kLink
     };
-    TEST_ASSERT_FALSE(combus_link_check({ &kNoCoupling, &s_port, LinkEnd::TX_RX }));
-    TEST_ASSERT_TRUE(combus_link_check({ &kHitchedTrailerDev, &s_port, LinkEnd::TX_RX }));
+    TEST_ASSERT_FALSE(combus_link_check({ &kNoCoupling, &s_portCfg, LinkEnd::TX_RX }));
+    TEST_ASSERT_TRUE(combus_link_check({ &kHitchedTrailerDev, &s_portCfg, LinkEnd::TX_RX }));
 }
 
 /** A table on a link between boards, or too large for the RX buffers, is refused before the port is opened. */
@@ -694,7 +694,7 @@ static void test_link_check_refuses_a_bad_table(void) {
         "table_between_boards", LinkScope::INTRA_NODE, LinkType::BIDIRECTIONAL,
         &kProto, LinkActivation::ALWAYS, nullptr, &kLink
     };
-    TEST_ASSERT_FALSE_MESSAGE(combus_link_check({ &kBetweenBoards, &s_port, LinkEnd::TX_RX }),
+    TEST_ASSERT_FALSE_MESSAGE(combus_link_check({ &kBetweenBoards, &s_portCfg, LinkEnd::TX_RX }),
                               "a table between boards reaches the opening of the port");
 
     static ComPeerLink tooLarge = kLink;
@@ -703,7 +703,7 @@ static void test_link_check_refuses_a_bad_table(void) {
         "table_too_large", LinkScope::INTER_NODE, LinkType::BIDIRECTIONAL,
         &kProto, LinkActivation::ALWAYS, nullptr, &tooLarge
     };
-    TEST_ASSERT_FALSE_MESSAGE(combus_link_check({ &kTooLarge, &s_port, LinkEnd::TX_RX }),
+    TEST_ASSERT_FALSE_MESSAGE(combus_link_check({ &kTooLarge, &s_portCfg, LinkEnd::TX_RX }),
                               "a table too large reaches the opening of the port");
 }
 
@@ -733,7 +733,7 @@ static CouplingFrame sampleCouplingFrame(void) {
 static void sendCouplingFrame(const CouplingFrame& f) {
     uint8_t buf[kCombusCouplingFrameLen];
     TEST_ASSERT_EQUAL_UINT8(kCombusCouplingFrameLen, combus_coupling_encode(buf, sizeof(buf), f));
-    s_com->write(s_com->ctx, buf, kCombusCouplingFrameLen);
+    s_port->write(s_port->ctx, buf, kCombusCouplingFrameLen);
     delay(kRxPollMs);
     combus_rx_update();
 }
@@ -798,7 +798,7 @@ static void test_cpl_frame_row3_hitch_age_saturates(void) {
 static void test_cpl_frame_row4_routed_to_the_coupling_module(void) {
     startLink();
     combus_coupling_reset();
-    while (s_com->available(s_com->ctx) > 0) { s_com->readByte(s_com->ctx); }
+    while (s_port->available(s_port->ctx) > 0) { s_port->readByte(s_port->ctx); }
     s_runtime.handshake.everReceived = false;     // kept from the previous tests: cleared to see this frame only
 
     sendCouplingFrame(sampleCouplingFrame());
@@ -986,12 +986,12 @@ static const NodeAddr kSocket2 = fakeAddr(0xC2u);
 
 static void startPlugLink(void) {
     resetBus();
-    const ComDevMap map = { &kPlugDev, &s_port, LinkEnd::TX_RX };
-    TEST_ASSERT_TRUE(combus_link_build(map, s_com, s_runtime, s_link));
+    const ComDevMap map = { &kPlugDev, &s_portCfg, LinkEnd::TX_RX };
+    TEST_ASSERT_TRUE(combus_link_build(map, s_port, s_runtime, s_link));
     s_link.target = &bus;
     combus_link_start(kLinkIdx, &s_link);
     combus_links_watch(&s_runtime, 1u);
-    while (s_com->available(s_com->ctx) > 0) { s_com->readByte(s_com->ctx); }
+    while (s_port->available(s_port->ctx) > 0) { s_port->readByte(s_port->ctx); }
     combus_coupling_reset();
 }
 
@@ -1061,12 +1061,12 @@ static constexpr ComDev kDebouncedDev = {
 
 static void startDebouncedLink(void) {
     resetBus();
-    const ComDevMap map = { &kDebouncedDev, &s_port, LinkEnd::TX_RX };
-    TEST_ASSERT_TRUE(combus_link_build(map, s_com, s_runtime, s_link));
+    const ComDevMap map = { &kDebouncedDev, &s_portCfg, LinkEnd::TX_RX };
+    TEST_ASSERT_TRUE(combus_link_build(map, s_port, s_runtime, s_link));
     s_link.target = &bus;
     combus_link_start(kLinkIdx, &s_link);
     combus_links_watch(&s_runtime, 1u);
-    while (s_com->available(s_com->ctx) > 0) { s_com->readByte(s_com->ctx); }
+    while (s_port->available(s_port->ctx) > 0) { s_port->readByte(s_port->ctx); }
 }
 
 /** Row 16: the trigger drops 100 ms (releaseMs = 300) and comes back: still COUPLED, data applied. */
@@ -1201,12 +1201,12 @@ static constexpr ComDev kChainedDev = {
 static void startChainedLink(bool engaged) {
     resetBus();
     test_coupler_socket_chain_reset();                 // no history from the previous test
-    const ComDevMap map = { &kChainedDev, &s_port, LinkEnd::TX_RX };
-    TEST_ASSERT_TRUE(combus_link_build(map, s_com, s_runtime, s_link));
+    const ComDevMap map = { &kChainedDev, &s_portCfg, LinkEnd::TX_RX };
+    TEST_ASSERT_TRUE(combus_link_build(map, s_port, s_runtime, s_link));
     s_link.target = &bus;
     combus_link_start(kLinkIdx, &s_link);
     combus_links_watch(&s_runtime, 1u);
-    while (s_com->available(s_com->ctx) > 0) { s_com->readByte(s_com->ctx); }
+    while (s_port->available(s_port->ctx) > 0) { s_port->readByte(s_port->ctx); }
     bus.digitalBus[kEngagedSw].value = engaged;
     com_rx_update(bus);                                 // the toggle sees the button released
     if (engaged) { runLinks(kTestCouplerEngagedDelayMs + 30u); }   // the switch has settled
@@ -1441,12 +1441,12 @@ static void test_tool_row9_active_coupled_output(void) {
     combus_couplings_watch(nullptr, 0u);
     resetBus();
     test_coupler_socket_chain_reset();
-    const ComDevMap map = { &kDetectedDev, &s_port, LinkEnd::TX_RX };
-    TEST_ASSERT_TRUE(combus_link_build(map, s_com, s_runtime, s_link));
+    const ComDevMap map = { &kDetectedDev, &s_portCfg, LinkEnd::TX_RX };
+    TEST_ASSERT_TRUE(combus_link_build(map, s_port, s_runtime, s_link));
     s_link.target = &bus;
     combus_link_start(kLinkIdx, &s_link);
     combus_links_watch(&s_runtime, 1u);
-    while (s_com->available(s_com->ctx) > 0) { s_com->readByte(s_com->ctx); }
+    while (s_port->available(s_port->ctx) > 0) { s_port->readByte(s_port->ctx); }
     bus.digitalBus[kEngagedSw].value = true;
     runLinks(kTestCouplerEngagedDelayMs + 30u);
     buttonDown();
@@ -1512,7 +1512,7 @@ static void test_view_row2_passive_coupler_snapshot(void) {
 //
 // Validated by the owner: a data frame carries no sender, so the
 // filter belongs to the transport.  Once COUPLED, the identity of the peer is
-// kept and handed to the transport (NodeCom::setPeer, a fake one here), cleared
+// kept and handed to the transport (ComPort::setPeer, a fake one here), cleared
 // when detached.  A coupling frame of another identity is counted and journaled.
 // TODO(chantier 5, ESP-NOW): prove the real filtering with two nodes in radio.
 // =============================================================================
@@ -1532,7 +1532,7 @@ static void startPeerTest(void) {
     combus_couplings_watch(nullptr, 0u);
     s_setPeerLen   = 0xFFu;
     s_setPeerCalls = 0u;
-    s_com->setPeer = fakeSetPeer;
+    s_port->setPeer = fakeSetPeer;
     startCoupledLink();
 }
 
@@ -1541,7 +1541,7 @@ static void test_peer_row1_handed_to_the_transport(void) {
     startPeerTest();
     hitch(true);
     const PairingState s = answerRequests(1500u, &kTrailerA, kAllRounds);
-    s_com->setPeer = nullptr;
+    s_port->setPeer = nullptr;
     TEST_ASSERT_TRUE(s == PairingState::COUPLED);
     TEST_ASSERT_EQUAL_UINT8(1u, s_setPeerCalls);
     TEST_ASSERT_EQUAL_UINT8(6u, s_setPeerLen);
@@ -1557,7 +1557,7 @@ static void test_peer_row2_cleared_when_detached(void) {
     hitch(true);
     const PairingState s = answerRequests(1500u, &kTrailerA, kAllRounds);
     hitch(false);
-    s_com->setPeer = nullptr;
+    s_port->setPeer = nullptr;
     TEST_ASSERT_TRUE(s == PairingState::COUPLED);
     TEST_ASSERT_EQUAL_UINT8(2u, s_setPeerCalls);
     TEST_ASSERT_EQUAL_UINT8(0u, s_setPeerLen);
@@ -1571,7 +1571,7 @@ static void test_peer_row3_no_peer_when_failed(void) {
     startPeerTest();
     hitch(true);
     const PairingState s = answerRequests(1500u, nullptr, 0u);
-    s_com->setPeer = nullptr;
+    s_port->setPeer = nullptr;
     TEST_ASSERT_TRUE(s == PairingState::FAILED);
     TEST_ASSERT_EQUAL_UINT8(0u, s_setPeerCalls);
 }
@@ -1579,7 +1579,7 @@ static void test_peer_row3_no_peer_when_failed(void) {
 /** Row 4: coupled, frames of another identity are counted; those of the peer are not; still COUPLED. */
 static void test_peer_row4_foreign_frames_counted(void) {
     startPeerTest();
-    s_com->setPeer = nullptr;
+    s_port->setPeer = nullptr;
     hitch(true);
     TEST_ASSERT_TRUE(answerRequests(1500u, &kTrailerA, kAllRounds) == PairingState::COUPLED);
     sendCoupling(CouplingMsg::ANSWER, kTrailerA, 1u);
@@ -1676,7 +1676,7 @@ void setup() {
     UNITY_BEGIN();
 
     uart_com_register_pool(s_uartPool, 1);
-    s_com = uart_com_init(&Serial2, 115200u, kTxPin, kRxPin, "test_peer_link");
+    s_port = uart_com_init(&Serial2, 115200u, kTxPin, kRxPin, "test_peer_link");
     combus_tx_register_pool(s_txStates, 1);
     combus_rx_register_pool(s_rxStates, 1);
 

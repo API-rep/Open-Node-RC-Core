@@ -44,24 +44,24 @@ static void uart_write(void* ctx, const uint8_t* data, size_t len) {
 
 	/// @brief UART port Read function: serves the cache, refilled in one call to the driver
 static int uart_readByte(void* ctx) {
-	UartCtx* port = static_cast<UartCtx*>(ctx);
+	UartCtx* uart = static_cast<UartCtx*>(ctx);
 
 		// Check for an empty cache: one block from the driver, without waiting
-	if (port->rxPos >= port->rxLen) {
-		port->rxPos = 0u;
-		port->rxLen = static_cast<uint8_t>(port->serial->read(port->rxCache, sizeof(port->rxCache)));
+	if (uart->rxPos >= uart->rxLen) {
+		uart->rxPos = 0u;
+		uart->rxLen = static_cast<uint8_t>(uart->serial->read(uart->rxCache, sizeof(uart->rxCache)));
 
-		if (port->rxLen == 0u) { return -1; }
+		if (uart->rxLen == 0u) { return -1; }
 	}
 
-	return port->rxCache[port->rxPos++];
+	return uart->rxCache[uart->rxPos++];
 }
 
 	/// @brief UART port Available function: the cache, then the driver
 static int uart_available(void* ctx) {
-	UartCtx* port = static_cast<UartCtx*>(ctx);
+	UartCtx* uart = static_cast<UartCtx*>(ctx);
 
-	return (port->rxLen - port->rxPos) + port->serial->available();
+	return (uart->rxLen - uart->rxPos) + uart->serial->available();
 }
 
 
@@ -69,7 +69,7 @@ static int uart_available(void* ctx) {
 // 3. PUBLIC API
 // =============================================================================
 
-NodeCom* uart_com_init(
+ComPort* uart_com_init(
     HardwareSerial* serial,
     uint32_t        baud,
     int             txPin,
@@ -105,21 +105,21 @@ NodeCom* uart_com_init(
 	}
 
 		// --- 2. Claim a context entry from the registry and record port metadata ---
-	UartCtx* port    = &g_ports[g_used++];
-	port->serial     = serial;
-	port->owner      = owner;
-	port->baud       = baud;
-	port->claimed    = true;
-	port->rxLen      = 0u;
-	port->rxPos      = 0u;
+	UartCtx* uart    = &g_ports[g_used++];
+	uart->serial     = serial;
+	uart->owner      = owner;
+	uart->baud       = baud;
+	uart->claimed    = true;
+	uart->rxLen      = 0u;
+	uart->rxPos      = 0u;
 
-		// --- 3. Bind the NodeCom function pointers to this context ---
-	port->com.ctx       = port;
-	port->com.write     = uart_write;
-	port->com.readByte  = uart_readByte;
-	port->com.available = uart_available;
-	port->com.name      = owner;
-	port->com.setPeer   = nullptr;      // a wire has one possible peer: nothing to filter
+		// --- 3. Bind the ComPort function pointers to this context ---
+	uart->port.ctx       = uart;
+	uart->port.write     = uart_write;
+	uart->port.readByte  = uart_readByte;
+	uart->port.available = uart_available;
+	uart->port.name      = owner;
+	uart->port.setPeer   = nullptr;      // a wire has one possible peer: nothing to filter
 
 		// --- 4. Claim pins in the registry before starting the port ---
 	if (reg != nullptr) {
@@ -136,7 +136,7 @@ NodeCom* uart_com_init(
 
 	sys_log_info("[UART_COM] '%s' — baud=%u  tx=%d  rx=%d\n", owner, baud, txPin, rxPin);
 
-	return &port->com;
+	return &uart->port;
 }
 
 

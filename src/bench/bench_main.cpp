@@ -304,7 +304,7 @@ static void forgeHandshake( bool foreignMd5, bool otherMajor, bool next )
 	frame[CombusFrameHeaderLen + 18u] = combus::wire::kProjectVersionDev;
 
 	combus_frame_crc_put(frame, static_cast<uint8_t>(sizeof(frame) - CombusFrameCrcLen));
-	s_rawWrite(s_uart[0].com.ctx, frame, sizeof(frame));
+	s_rawWrite(s_uart[0].port.ctx, frame, sizeof(frame));
 }
 
 
@@ -323,7 +323,7 @@ static void forgeCoupling( CouplingMsg msg )
 	uint8_t buf[kCombusCouplingFrameLen];
 
 	if (combus_coupling_encode(buf, sizeof(buf), f) == sizeof(buf)) {
-		s_rawWrite(s_uart[0].com.ctx, buf, sizeof(buf));
+		s_rawWrite(s_uart[0].port.ctx, buf, sizeof(buf));
 	}
 }
 
@@ -349,7 +349,7 @@ static bool forge( uint8_t kind )
 			for (uint8_t i = 0u; i < nA; ++i) { buf[at + 2u * i] ^= 0x55u; }
 
 			combus_frame_crc_put(buf, static_cast<uint8_t>(s_fLastLen - CombusFrameCrcLen));
-			s_rawWrite(s_uart[0].com.ctx, buf, s_fLastLen);
+			s_rawWrite(s_uart[0].port.ctx, buf, s_fLastLen);
 			break;
 		}
 		case 5u:
@@ -359,7 +359,7 @@ static bool forge( uint8_t kind )
 			return true;
 		case 6u:
 			if (s_fCapLen == 0u) { return false; }
-			s_rawWrite(s_uart[0].com.ctx, s_fCap, s_fCapLen);
+			s_rawWrite(s_uart[0].port.ctx, s_fCap, s_fCapLen);
 			break;
 		case 7u: forgeCoupling(CouplingMsg::ANSWER);  break;
 		case 8u: forgeCoupling(CouplingMsg::REQUEST); break;
@@ -509,9 +509,9 @@ void setup()
 	const bool started = combus_links_init(kMaps, 1u, storage, nullptr, &comBus);
 
 		// The writes to the link go through benchWrite (`c`)
-	if (started && s_uart[0].com.write) {
-		s_rawWrite          = s_uart[0].com.write;
-		s_uart[0].com.write = benchWrite;
+	if (started && s_uart[0].port.write) {
+		s_rawWrite           = s_uart[0].port.write;
+		s_uart[0].port.write = benchWrite;
 	}
 
 	Serial.printf("READY %s %s reason=%d\n", kDev.name, started ? "started" : "NOT STARTED",
@@ -524,11 +524,11 @@ void loop()
 	const uint32_t t0 = micros();
 
 		// Reception off: the bytes of the link are dropped, as with a cut RX wire (through the
-		// NodeCom of the port: its cache goes too)
+		// ComPort of the slot: its cache goes too)
 	if (!s_rxOn) {
-		NodeCom& com = s_uart[0].com;
+		ComPort& port = s_uart[0].port;
 
-		while (com.available(com.ctx) > 0) { com.readByte(com.ctx); }
+		while (port.available(port.ctx) > 0) { port.readByte(port.ctx); }
 	}
 
 	const uint32_t rx0 = micros();

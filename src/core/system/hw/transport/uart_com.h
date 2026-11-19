@@ -21,7 +21,7 @@
  *   sys_init();                                    // debug serial + pin registry
  *   static UartCtx pool[UartComMaxPorts];          // machine: static storage
  *   uart_com_register_pool(pool, UartComMaxPorts); // machine: register once
- *   board_links_init();                            // env: opens one NodeCom per link of the board
+ *   board_links_init();                            // env: opens one ComPort per link of the board
  *   hw_init();                                     // hardware peripherals
  *   combus_link_start(...);                     // protocol layers wired to transport
  * @endcode
@@ -65,7 +65,7 @@ struct UartCtx {
 	const char*     owner   = nullptr;  ///< Name of the module owning this port
 	uint32_t        baud    = 0u;       ///< Baud rate recorded at init (used for duplicate detection)
 	bool            claimed = false;    ///< Indicates if the port is already allocated
-	NodeCom         com     = {};       ///< NodeCom instance linked to this port
+	ComPort         port    = {};       ///< ComPort instance linked to this slot
 
 		// Reception cache
 	uint8_t rxCache[UartRxChunk] = {};  ///< bytes read from the driver, not served yet
@@ -103,7 +103,7 @@ void uart_com_register_pool(UartCtx* buffer, uint8_t capacity);
 static constexpr uint8_t UartHwChannelMax = 3u;
 
 /**
- * @brief Initialize a UART port and return a claimed NodeCom*.
+ * @brief Initialize a UART port and return a claimed ComPort*.
  *
  * @details Calls serial.begin() once and registers the port in the pool
  * handed to core via uart_com_register_pool(). Fails safely (logged,
@@ -119,9 +119,9 @@ static constexpr uint8_t UartHwChannelMax = 3u;
  * @param reg      Optional pin registry — TX and RX pins are claimed before
  *                 serial.begin() when non-null.
  *
- * @return Pointer to a ready-to-use NodeCom, or nullptr on failure.
+ * @return Pointer to a ready-to-use ComPort, or nullptr on failure.
  */
-NodeCom* uart_com_init( HardwareSerial* serial,
+ComPort* uart_com_init( HardwareSerial* serial,
                         uint32_t        baud,
                         int             txPin,
                         int             rxPin,

@@ -2,12 +2,12 @@
  * @file  node_com.h
  * @brief Transport interface and physical ports: what the protocol sees of the hardware.
  *
- * @details NodeCom is a small structure of functions, the bridge between the
+ * @details ComPort is a small structure of functions, the bridge between the
  *   communication modules (combus_tx, combus_rx...) and the physical transport (UART,
  *   ESP-NOW...).  These modules do not need to know the details of the transport.
  *
  *   At init, a transport adapter (uart_com_init()) opens the physical port and returns a
- *   NodeCom, which the protocol keeps for the whole run.
+ *   ComPort, which the protocol keeps for the whole run.
  *****************************************************************************/
 #pragma once
 
@@ -24,7 +24,7 @@
  * @brief The functions of a transport, filled by its adapter.
  */
 
-struct NodeCom {
+struct ComPort {
 	void*       ctx;                                                ///< private context of the adapter, passed to every function
 	void      (*write)    (void* ctx, const uint8_t* data, size_t len); ///< send bytes
 	int       (*readByte) (void* ctx);                              ///< read one byte (-1 = empty)

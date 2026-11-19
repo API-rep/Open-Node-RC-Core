@@ -41,7 +41,7 @@ void sys_init() {
 	// claim attempt by another module.
 	//
 	// TODO: the debug serial and the dashboard currently use Serial directly.
-	// A future refactor should route them through the NodeCom* returned here
+	// A future refactor should route them through the ComPort* returned here
 	// (write/readByte/available wrappers) instead of calling Serial.print()
 	// directly — this would complete the transport abstraction and allow serial0
 	// to be reused safely by other modules.

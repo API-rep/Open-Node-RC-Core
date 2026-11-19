@@ -186,7 +186,7 @@ static UartCtx       s_uartPool[1];
 static CombusTxState s_txStates[1];
 static CombusRxState s_rxStates[1];
 static constexpr uint8_t kLinkIdx = 0u;
-static NodeCom*          s_com    = nullptr;   ///< loopback transport, shared by Groups B and H
+static ComPort*          s_port   = nullptr;   ///< loopback transport, shared by Groups B and H
 
 
 // =============================================================================
@@ -350,9 +350,9 @@ static void test_loopback_init(void) {
     // The UART port registry must be registered before any uart_com_init().
     uart_com_register_pool(s_uartPool, 1);
 
-    NodeCom* com = uart_com_init(&Serial2, kLoopbackBaud, kTxPin, kRxPin, "test_loopback");
-    TEST_ASSERT_NOT_NULL(com);
-    s_com = com;
+    ComPort* port = uart_com_init(&Serial2, kLoopbackBaud, kTxPin, kRxPin, "test_loopback");
+    TEST_ASSERT_NOT_NULL(port);
+    s_port = port;
 
     // Register the per-link state pools (caller-owned, registered once at boot).
     combus_tx_register_pool(s_txStates, 1);
@@ -361,8 +361,8 @@ static void test_loopback_init(void) {
     // combus_tx_init() takes a ChanLayer parameter.  Use BASE for
     // the loopback test (matches the machine env default): the frames
     // carry the BASE prefix of the bus.
-    combus_tx_init(kLinkIdx, com, kCfg, 50u, ChanLayer::BASE);   // 50 Hz TX
-    combus_rx_init(kLinkIdx, com, kCfg, rxAnalogBuf, rxDigitalBuf);
+    combus_tx_init(kLinkIdx, port, kCfg, 50u, ChanLayer::BASE);   // 50 Hz TX
+    combus_rx_init(kLinkIdx, port, kCfg, rxAnalogBuf, rxDigitalBuf);
 }
 
 /** Send one frame, poll RX, assert snapshot matches what was sent. */
@@ -459,7 +459,7 @@ static void resetRxTarget(void) {
 
 /** Send one SYSTEM-prefix frame and let an RX link of layer `rxLayer` apply it onto rxTargetBus. */
 static void sendAndApply(ChanLayer rxLayer) {
-    TEST_ASSERT_NOT_NULL_MESSAGE(s_com, "Run test_loopback_init first");
+    TEST_ASSERT_NOT_NULL_MESSAGE(s_port, "Run test_loopback_init first");
     resetRxTarget();
         // Group H tests the write identity, not the direction: RUNLEVEL is
         // uplink on this test board (HAS_RUNLEVEL_MANAGER), so make it a
@@ -467,8 +467,8 @@ static void sendAndApply(ChanLayer rxLayer) {
     rxTargetAnalog[kRunLevelIdx].flow.betweenNodes     = Direction::Downlink;
     rxTargetAnalog[kRunLevelIdx].flow.betweenBoards = Direction::Downlink;
 
-    combus_tx_init(kLinkIdx, s_com, kCfg, 50u, ChanLayer::SYSTEM);
-    combus_rx_init(kLinkIdx, s_com, kCfg, rxAnalogBuf, rxDigitalBuf, &rxTargetBus, rxLayer);
+    combus_tx_init(kLinkIdx, s_port, kCfg, 50u, ChanLayer::SYSTEM);
+    combus_rx_init(kLinkIdx, s_port, kCfg, rxAnalogBuf, rxDigitalBuf, &rxTargetBus, rxLayer);
 
     fillRandom(0x5EEDC0DEul);
     txComBus.analogBus[kThrottleIdx].value = kThrottleVal;
@@ -775,11 +775,11 @@ static void test_md5_arrays_are_distinct(void) {
 /**
  * Placeholder transport for the MD5 resolution tests.
  *
- * combus_link_start() returns at once on a null `com`, before it resolves
+ * combus_link_start() returns at once on a null `port`, before it resolves
  * the MD5 pointer, so the link needs a non-null transport. It is never called:
  * these links have neither TX nor RX configuration.
  */
-static NodeCom s_unusedCom = { nullptr, nullptr, nullptr, nullptr, "test_unused" };
+static ComPort s_unusedPort = { nullptr, nullptr, nullptr, nullptr, "test_unused" };
 
 /** combus_link_start() with BASE layer must resolve to kCombusBaseComBusMd5. */
 static void test_md5_resolution_base(void) {
@@ -787,7 +787,7 @@ static void test_md5_resolution_base(void) {
     static ComBusLink link = {};
 
     link.name        = "test_remote";
-    link.com         = &s_unusedCom;  // non-null: combus_link_start() rejects a null transport
+    link.port        = &s_unusedPort;  // non-null: combus_link_start() rejects a null transport
     link.txCfg       = std::nullopt;  // skip TX init
     link.rxCfg       = std::nullopt;  // skip RX init
     link.handshakeCtx = &ctx;
@@ -809,7 +809,7 @@ static void test_md5_resolution_system(void) {
     static ComBusLink link = {};
 
     link.name        = "test_local";
-    link.com         = &s_unusedCom;
+    link.port        = &s_unusedPort;
     link.txCfg       = std::nullopt;
     link.rxCfg       = std::nullopt;
     link.handshakeCtx = &ctx;
@@ -825,7 +825,7 @@ static void test_md5_resolution_system(void) {
 // GROUP I — LINKS FROM THEIR DESCRIPTION
 //
 // combus_link_build() fills a ComBusLink from a ComDevMap without opening any
-// port, so these tests need no wiring. s_unusedCom (Group E) stands for the
+// port, so these tests need no wiring. s_unusedPort (Group E) stands for the
 // transport that combus_links_init() would have opened.
 // =============================================================================
 
@@ -849,10 +849,10 @@ static void test_link_build_inter_node_tx(void) {
     const ComDevMap map = { &kTestDevUni, &s_testPort, LinkEnd::TX };
     ComBusLink link{};
 
-    TEST_ASSERT_TRUE(combus_link_build(map, &s_unusedCom, s_testRuntime, link));
+    TEST_ASSERT_TRUE(combus_link_build(map, &s_unusedPort, s_testRuntime, link));
 
     TEST_ASSERT_TRUE(link.layer == ChanLayer::BASE);
-    TEST_ASSERT_TRUE(link.com == &s_unusedCom);
+    TEST_ASSERT_TRUE(link.port == &s_unusedPort);
     TEST_ASSERT_TRUE(link.handshakeCtx == &s_testRuntime.handshake);
     TEST_ASSERT_EQUAL_STRING("test_uni", link.name);
     TEST_ASSERT_TRUE(link.txCfg.has_value());
@@ -867,7 +867,7 @@ static void test_link_build_rx_only(void) {
     const ComDevMap map = { &kTestDevUni, &s_testPort, LinkEnd::RX };
     ComBusLink link{};
 
-    TEST_ASSERT_TRUE(combus_link_build(map, &s_unusedCom, s_testRuntime, link));
+    TEST_ASSERT_TRUE(combus_link_build(map, &s_unusedPort, s_testRuntime, link));
 
     TEST_ASSERT_FALSE(link.txCfg.has_value());
     TEST_ASSERT_TRUE(link.rxCfg.has_value());
@@ -880,7 +880,7 @@ static void test_link_build_intra_node_tx_rx(void) {
     const ComDevMap map = { &kTestDevBi, &s_testPort, LinkEnd::TX_RX };
     ComBusLink link{};
 
-    TEST_ASSERT_TRUE(combus_link_build(map, &s_unusedCom, s_testRuntime, link));
+    TEST_ASSERT_TRUE(combus_link_build(map, &s_unusedPort, s_testRuntime, link));
 
     TEST_ASSERT_TRUE(link.layer == ChanLayer::SYSTEM);
     TEST_ASSERT_TRUE(link.txCfg.has_value());
@@ -1054,11 +1054,11 @@ static bool healthLinkLost(void) {
 
 /** Build the health link on the loopback port, apply its frames to rxTargetBus and put it under watch. */
 static void startHealthLink(LinkEnd end, const ComDev& dev) {
-    TEST_ASSERT_NOT_NULL_MESSAGE(s_com, "Run test_loopback_init first");
+    TEST_ASSERT_NOT_NULL_MESSAGE(s_port, "Run test_loopback_init first");
     resetRxTarget();
 
     const ComDevMap map = { &dev, &s_testPort, end };
-    TEST_ASSERT_TRUE(combus_link_build(map, s_com, s_healthRuntime, s_healthLink));
+    TEST_ASSERT_TRUE(combus_link_build(map, s_port, s_healthRuntime, s_healthLink));
     if (s_healthLink.rxCfg.has_value()) { s_healthLink.target = &rxTargetBus; }
 
     combus_link_start(kLinkIdx, &s_healthLink);
@@ -1070,7 +1070,7 @@ static void ensureStable(void) {
     CombusHandshakeContext* ctx = &s_healthRuntime.handshake;
     const uint32_t t0 = millis();
     while (!combus_handshake_is_contract_validated(ctx) && (millis() - t0) < 1500u) {
-        combus_handshake_tx_update(ctx, s_com);
+        combus_handshake_tx_update(ctx, s_port);
         delay(10u);
         combus_rx_update();
     }
@@ -1188,7 +1188,7 @@ static void sendPeerFrame(bool failsafe) {
     const uint8_t len = combus_frame_encode(sysCfg, buf, &peerBus, seq, sysCfg.nAnalog, sysCfg.nDigital);
     TEST_ASSERT_TRUE_MESSAGE(len > 0u, "peer frame not encoded");
 
-    s_com->write(s_com->ctx, buf, len);
+    s_port->write(s_port->ctx, buf, len);
     delay(kRxPollMs);
 }
 
@@ -1407,15 +1407,15 @@ static bool isStable(void) { return combus_handshake_is_contract_validated(linkC
 
 /** Throw away every byte waiting on the loopback RX. */
 static void drainWire(void) {
-    while (s_com->available(s_com->ctx) > 0) { (void)s_com->readByte(s_com->ctx); }
+    while (s_port->available(s_port->ctx) > 0) { (void)s_port->readByte(s_port->ctx); }
 }
 
 /** Read everything waiting on the loopback RX: true if it is only whole handshake frames. */
 static bool wireHasOnlyHandshakes(void) {
     uint8_t buf[CombusRxBufSize];
     uint16_t n = 0u;
-    while (s_com->available(s_com->ctx) > 0 && n < sizeof(buf)) {
-        buf[n++] = (uint8_t)s_com->readByte(s_com->ctx);
+    while (s_port->available(s_port->ctx) > 0 && n < sizeof(buf)) {
+        buf[n++] = (uint8_t)s_port->readByte(s_port->ctx);
     }
     if ((n % CombusFrameHandshakeMinLen) != 0u) { return false; }
     for (uint16_t i = 0u; i < n; i += CombusFrameHandshakeMinLen) {
@@ -1443,7 +1443,7 @@ static void sendForgedHandshake(bool ack, bool goodMd5, uint8_t major, uint8_t m
     frame[payload + 18u] = dev;
     combus_frame_crc_put(frame, (uint8_t)(payload + 19u));
 
-    s_com->write(s_com->ctx, frame, sizeof(frame));
+    s_port->write(s_port->ctx, frame, sizeof(frame));
     delay(kRxPollMs);
 }
 
@@ -1657,27 +1657,27 @@ static void test_contract_row11_tx_only_end(void) {
     delay(kRxPollMs);
     TEST_ASSERT_EQUAL_INT(frameLen(static_cast<uint8_t>(AnalogComBusBaseID::CH_COUNT),
                                    static_cast<uint8_t>(DigitalComBusBaseID::CH_COUNT)),
-                          s_com->available(s_com->ctx));
+                          s_port->available(s_port->ctx));
     drainWire();
 
     for (uint32_t t0 = millis(); (millis() - t0) < 300u; ) {        // end of the burst
-        combus_handshake_tx_update(linkCtx(), s_com);
+        combus_handshake_tx_update(linkCtx(), s_port);
         delay(20u);
     }
     drainWire();
 
     for (uint32_t t0 = millis(); (millis() - t0) < kCombusHandshakePeriodMs + 50u; ) {   // the next request
-        combus_handshake_tx_update(linkCtx(), s_com);
+        combus_handshake_tx_update(linkCtx(), s_port);
         delay(10u);
-        if (s_com->available(s_com->ctx) > 0) { break; }
+        if (s_port->available(s_port->ctx) > 0) { break; }
     }
     delay(kRxPollMs);
-    TEST_ASSERT_EQUAL_INT(CombusFrameHandshakeMinLen, s_com->available(s_com->ctx));
+    TEST_ASSERT_EQUAL_INT(CombusFrameHandshakeMinLen, s_port->available(s_port->ctx));
     drainWire();
 
-    combus_handshake_tx_update(linkCtx(), s_com);                   // at once: not due yet
+    combus_handshake_tx_update(linkCtx(), s_port);                   // at once: not due yet
     delay(kRxPollMs);
-    TEST_ASSERT_EQUAL_INT(0, s_com->available(s_com->ctx));
+    TEST_ASSERT_EQUAL_INT(0, s_port->available(s_port->ctx));
 
     combus_links_watch(nullptr, 0u);
 }
@@ -1738,9 +1738,9 @@ struct WireHandshake {
 /** Read the handshakes waiting on the loopback RX (data frames are not expected here). */
 static uint8_t readHandshakes(WireHandshake* out, uint8_t max) {
     uint8_t n = 0u;
-    while (s_com->available(s_com->ctx) >= (int)CombusFrameHandshakeMinLen && n < max) {
+    while (s_port->available(s_port->ctx) >= (int)CombusFrameHandshakeMinLen && n < max) {
         uint8_t frame[CombusFrameHandshakeMinLen];
-        for (uint8_t i = 0u; i < CombusFrameHandshakeMinLen; ++i) { frame[i] = (uint8_t)s_com->readByte(s_com->ctx); }
+        for (uint8_t i = 0u; i < CombusFrameHandshakeMinLen; ++i) { frame[i] = (uint8_t)s_port->readByte(s_port->ctx); }
         TEST_ASSERT_EQUAL_HEX8_MESSAGE(CombusFrameSof, frame[0], "not a handshake on the wire");
         out[n].flags    = frame[4];
         out[n].md5First = frame[sizeof(CombusFrameSof) + sizeof(CombusFrameHeader)];
@@ -1764,7 +1764,7 @@ static void test_mode_row1_no_candidate_is_legacy(void) {
     TEST_ASSERT_FALSE(linkCtx()->hasCandidates);
 
     for (uint32_t t0 = millis(); (millis() - t0) < 400u; ) {        // the burst, read back unanswered
-        combus_handshake_tx_update(linkCtx(), s_com);
+        combus_handshake_tx_update(linkCtx(), s_port);
         delay(20u);
         WireHandshake hs[4];
         const uint8_t n = readHandshakes(hs, 4u);
@@ -1792,7 +1792,7 @@ static void test_mode_next_requests_then_legacy(void) {
     uint8_t nNext = 0u, nLegacy = 0u;
     bool legacyBeforeNext = false;
     for (uint32_t t0 = millis(); (millis() - t0) < 1500u; ) {
-        combus_handshake_tx_update(linkCtx(), s_com);
+        combus_handshake_tx_update(linkCtx(), s_port);
         delay(20u);
         WireHandshake hs[4];
         const uint8_t n = readHandshakes(hs, 4u);
@@ -1817,7 +1817,7 @@ static void test_mode_row3_other_next_falls_back_to_legacy_at_once(void) {
     TEST_ASSERT_EQUAL_UINT8(0u, linkCtx()->nextTriesLeft);
 
     drainWire();
-    combus_handshake_tx_update(linkCtx(), s_com);                   // first burst request: legacy already
+    combus_handshake_tx_update(linkCtx(), s_port);                   // first burst request: legacy already
     delay(kRxPollMs);
     WireHandshake hs[2];
     TEST_ASSERT_EQUAL_UINT8(1u, readHandshakes(hs, 2u));
@@ -1841,7 +1841,7 @@ static void test_mode_row5_matching_next_moves_to_next(void) {
 
     drainWire();
     delay(kCombusHandshakePeriodMs + 20u);                          // row 10: periodic request is legacy
-    combus_handshake_tx_update(linkCtx(), s_com);
+    combus_handshake_tx_update(linkCtx(), s_port);
     delay(kRxPollMs);
     WireHandshake hs[2];
     TEST_ASSERT_EQUAL_UINT8(1u, readHandshakes(hs, 2u));
@@ -1855,7 +1855,7 @@ static void test_mode_row5_matching_next_moves_to_next(void) {
 
     drainWire();
     delay(kCombusHandshakePeriodMs + 20u);                          // row 10: periodic request is NEXT now
-    combus_handshake_tx_update(linkCtx(), s_com);
+    combus_handshake_tx_update(linkCtx(), s_port);
     delay(kRxPollMs);
     const uint8_t n = readHandshakes(hs, 2u);
     TEST_ASSERT_GREATER_THAN_UINT8(0u, n);
@@ -1937,7 +1937,7 @@ static void test_mode_next_request_gets_next_ack(void) {
     TEST_ASSERT_FALSE(linkCtx()->ackPending);
 
     drainWire();
-    combus_handshake_tx_update(linkCtx(), s_com);
+    combus_handshake_tx_update(linkCtx(), s_port);
     delay(kRxPollMs);
     WireHandshake hs[2];
     TEST_ASSERT_EQUAL_UINT8(1u, readHandshakes(hs, 2u));
@@ -2026,7 +2026,7 @@ static void test_inter_node_link_refuses_more_digitals_than_base(void) {
     uint8_t buf[CombusRxBufSize];
     const uint8_t len = combus_frame_encode(wide, buf, &peerBus, 7u, kBaseA, kSysD);
     TEST_ASSERT_TRUE(kSysD > kBaseD);
-    s_com->write(s_com->ctx, buf, len);
+    s_port->write(s_port->ctx, buf, len);
     delay(kRxPollMs);
     pumpRx();
 

@@ -2,7 +2,7 @@
  * @file  combus_tx.h
  * @brief ComBus transmitter: the bus to data frames and handshakes, for every link.
  *
- * @details Transport-independent: each link writes through its own NodeCom, at its
+ * @details Transport-independent: each link writes through its own ComPort, at its
  *   own rate.  Non-blocking: a link does nothing until its period has elapsed.
  *
  *   The state of each link lives in a pool that the caller owns.  The usual entry
@@ -31,7 +31,7 @@
  */
 
 struct CombusTxState {
-	NodeCom*       nodeCom  = nullptr;   ///< transport of the link
+	ComPort*       port     = nullptr;   ///< transport of the link
 	ComBusFrameCfg frameCfg = {};        ///< capacity of the link: the clamp of the counts below
 
 	uint8_t  seq      = 1u;              ///< rolling frame counter, 1..255; 0 is reserved (see combus_frame.h)
@@ -77,14 +77,14 @@ void combus_tx_register_pool( CombusTxState* buffer, uint8_t capacity );
  * @brief Start the transmission of one link, and arm its handshake burst.
  *
  * @details Does nothing if the pool is not registered, if @p linkIdx is out of range,
- *   if @p nodeCom is null or if @p txHz is 0.  A rate above 1000 Hz gives a period of 0
+ *   if @p port is null or if @p txHz is 0.  A rate above 1000 Hz gives a period of 0
  *   and a silent link: combus_link_check() refuses it.
  *
  * @warning A @p layer other than BASE or SYSTEM is a configuration error: the system
  *   halts.
  *
  * @param linkIdx   Slot of this link in the pool.
- * @param nodeCom   Transport of the link.
+ * @param port      Transport of the link.
  * @param frameCfg  Capacity of the link: the clamp of the channels sent.
  * @param txHz      Rate of the data frames, 1 to 1000 Hz.
  * @param layer     Layer of the link: its frames carry the prefix of this view, unless
@@ -92,7 +92,7 @@ void combus_tx_register_pool( CombusTxState* buffer, uint8_t capacity );
  */
 
 void combus_tx_init( uint8_t        linkIdx,
-                     NodeCom*       nodeCom,
+                     ComPort*       port,
                      ComBusFrameCfg frameCfg,
                      uint32_t       txHz,
                      ChanLayer      layer );

@@ -210,7 +210,7 @@ struct ComBusLink {
 	const ComPeerLink* peer  = nullptr;                ///< link between nodes: table and MD5; nullptr = view of the layer
 
 		// Transport and contract, shared by TX and RX of this link
-	NodeCom*                com          = nullptr;
+	ComPort*                port         = nullptr;
 	CombusHandshakeContext* handshakeCtx = nullptr;
 
 		// Transmission; txCfg absent = this end does not transmit

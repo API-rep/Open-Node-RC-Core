@@ -22,14 +22,14 @@
  *   4. CRC over everything before it, then the write.
  *
  * @param ctx      Per-link handshake context; `expected.stable` is set (see the caller).
- * @param nodeCom  Transport to write through; `write` is set (see the caller).
+ * @param port     Transport to write through; `write` is set (see the caller).
  * @param flags    Kind of the frame: kCombusHandshakeFlagAck and / or
  *                 kCombusHandshakeFlagNext, 0 = legacy request.
  *
  * @return Number of bytes written, the size of a handshake frame.
  */
 
-static uint8_t sendHandshake( const CombusHandshakeContext* ctx, NodeCom* nodeCom, uint8_t flags )
+static uint8_t sendHandshake( const CombusHandshakeContext* ctx, ComPort* port, uint8_t flags )
 {
 		// 1. MD5 to announce
 	const uint8_t* stableMd5 = ctx->expected.stable;
@@ -79,7 +79,7 @@ static uint8_t sendHandshake( const CombusHandshakeContext* ctx, NodeCom* nodeCo
 		// Send it
 	const uint8_t totalLen = (uint8_t)(crcByteIndex + CombusFrameCrcLen);
 
-	nodeCom->write(nodeCom->ctx, frame, totalLen);
+	port->write(port->ctx, frame, totalLen);
 
 	return totalLen;
 }
@@ -129,10 +129,10 @@ static uint8_t requestFlags( CombusHandshakeContext* ctx )
  */
 
 uint8_t combus_handshake_tx_update( CombusHandshakeContext* ctx,
-                                    NodeCom*                nodeCom )
+                                    ComPort*                port )
 {
 		// 1. Guard checks
-	if (!ctx || !nodeCom || !nodeCom->write || !ctx->expected.stable) { return 0u; }
+	if (!ctx || !port || !port->write || !ctx->expected.stable) { return 0u; }
 
 	const uint32_t nowMs   = millis();
 	uint8_t        written = 0u;
@@ -140,13 +140,13 @@ uint8_t combus_handshake_tx_update( CombusHandshakeContext* ctx,
 		// 2. A request was received: answer it with an ACK of its kind (never answer an ACK)
 	if (ctx->ackPending) {
 		ctx->ackPending = false;
-		written = (uint8_t)(written + sendHandshake(ctx, nodeCom, kCombusHandshakeFlagAck));
+		written = (uint8_t)(written + sendHandshake(ctx, port, kCombusHandshakeFlagAck));
 	}
 
 		// Same for a NEXT request
 	if (ctx->ackPendingNext) {
 		ctx->ackPendingNext = false;
-		written = (uint8_t)(written + sendHandshake(ctx, nodeCom,
+		written = (uint8_t)(written + sendHandshake(ctx, port,
 		                                            kCombusHandshakeFlagAck | kCombusHandshakeFlagNext));
 	}
 
@@ -162,7 +162,7 @@ uint8_t combus_handshake_tx_update( CombusHandshakeContext* ctx,
 			// First frame at once, then one per burst period
 		if (ctx->lastBurstMs == 0u
 			|| (uint32_t)(nowMs - ctx->lastBurstMs) >= kCombusHandshakeBurstPeriodMs) {
-			written = (uint8_t)(written + sendHandshake(ctx, nodeCom, requestFlags(ctx)));
+			written = (uint8_t)(written + sendHandshake(ctx, port, requestFlags(ctx)));
 
 				// Set the timers: the periodic requests count from here
 			ctx->lastBurstMs   = nowMs;
@@ -180,7 +180,7 @@ uint8_t combus_handshake_tx_update( CombusHandshakeContext* ctx,
 
 		// 4. Then one request per period, whatever the state of the contract
 	if ((uint32_t)(nowMs - ctx->lastRequestMs) >= kCombusHandshakePeriodMs) {
-		written = (uint8_t)(written + sendHandshake(ctx, nodeCom, requestFlags(ctx)));
+		written = (uint8_t)(written + sendHandshake(ctx, port, requestFlags(ctx)));
 		ctx->lastRequestMs = nowMs;
 	}
 

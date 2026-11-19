@@ -108,15 +108,15 @@ int candidateOf( ComLinkPairing& p, const NodeAddr& addr )
  *
  * @details The functions mask is reserved: always 0 until defined.
  *
- * @param com    Transport of the link; nullptr or without write: nothing is sent.
+ * @param port   Transport of the link; nullptr or without write: nothing is sent.
  * @param msg    Request or answer.
  * @param round  Round of the pairing.
  * @param age    Age of the hitch of this end.
  */
 
-void send( NodeCom* com, CouplingMsg msg, uint8_t round, uint16_t age )
+void send( ComPort* port, CouplingMsg msg, uint8_t round, uint16_t age )
 {
-	if (!com || !com->write) { return; }
+	if (!port || !port->write) { return; }
 
 	CouplingFrame f;
 	f.msg        = msg;
@@ -128,7 +128,7 @@ void send( NodeCom* com, CouplingMsg msg, uint8_t round, uint16_t age )
 	uint8_t buf[kCombusCouplingFrameLen];
 	const uint8_t len = combus_coupling_encode(buf, sizeof(buf), f);
 
-	if (len) { com->write(com->ctx, buf, len); }
+	if (len) { port->write(port->ctx, buf, len); }
 }
 
 
@@ -264,19 +264,19 @@ void conclude( ComLinkPairing& p, const CouplingDev& dev, PairingState state, co
  *   3. Conclusion: no answer or too few rounds: FAILED, retried later; two identities:
  *      CONFLICT; one, in enough rounds: COUPLED.
  *
- * @param p    Pairing state.
- * @param dev  CouplingDev of the link.
- * @param com  Transport of the link.
- * @param now  millis().
+ * @param p     Pairing state.
+ * @param dev   CouplingDev of the link.
+ * @param port  Transport of the link.
+ * @param now   millis().
  */
 
-void stepSocket( ComLinkPairing& p, const CouplingDev& dev, NodeCom* com, uint32_t now )
+void stepSocket( ComLinkPairing& p, const CouplingDev& dev, ComPort* port, uint32_t now )
 {
 		// 0. Another socket heard: one request back.  It is pairing, since it has just
 		//    requested: it hears this one and sees the conflict too.
 	if (p.state == PairingState::CONFLICT && p.answerPending) {
 		p.answerPending = false;
-		send(com, CouplingMsg::REQUEST, p.answerRound, combus_coupling_hitch_age(now - p.t0Ms));
+		send(port, CouplingMsg::REQUEST, p.answerRound, combus_coupling_hitch_age(now - p.t0Ms));
 
 		return;
 	}
@@ -293,7 +293,7 @@ void stepSocket( ComLinkPairing& p, const CouplingDev& dev, NodeCom* com, uint32
 	if (p.round < kCouplingRounds) {
 		if ((int32_t)(now - p.nextMs) >= 0) {
 			p.round++;
-			send(com, CouplingMsg::REQUEST, p.round, combus_coupling_hitch_age(now - p.t0Ms));
+			send(port, CouplingMsg::REQUEST, p.round, combus_coupling_hitch_age(now - p.t0Ms));
 			p.nextMs = now + ((p.round < kCouplingRounds) ? roundDelay() : kCouplingBasePeriodMs);
 		}
 
@@ -327,20 +327,20 @@ void stepSocket( ComLinkPairing& p, const CouplingDev& dev, NodeCom* com, uint32
  *   3. Conclusion: enough rounds: COUPLED; fewer: the candidate is forgotten and the
  *      plug listens again.
  *
- * @param p    Pairing state.
- * @param dev  CouplingDev of the link.
- * @param com  Transport of the link.
- * @param now  millis().
+ * @param p     Pairing state.
+ * @param dev   CouplingDev of the link.
+ * @param port  Transport of the link.
+ * @param now   millis().
  */
 
-void stepPlug( ComLinkPairing& p, const CouplingDev& dev, NodeCom* com, uint32_t now )
+void stepPlug( ComLinkPairing& p, const CouplingDev& dev, ComPort* port, uint32_t now )
 {
 	if (p.state != PairingState::PAIRING) { return; }
 
 		// 1. Pending answer
 	if (p.answerPending && (int32_t)(now - p.answerAtMs) >= 0) {
 		p.answerPending = false;
-		send(com, CouplingMsg::ANSWER, p.answerRound, combus_coupling_hitch_age(now - p.t0Ms));
+		send(port, CouplingMsg::ANSWER, p.answerRound, combus_coupling_hitch_age(now - p.t0Ms));
 	}
 
 		// 2. Wait
@@ -471,7 +471,7 @@ PairingState combus_pairing_update( ComLinkPairing&    p,
                                     const CouplingDev& dev,
                                     ComLinkRole        role,
                                     bool               trigger,
-                                    NodeCom*           com,
+                                    ComPort*           port,
                                     uint32_t           now )
 {
 		// 1. Trigger
@@ -491,8 +491,8 @@ PairingState combus_pairing_update( ComLinkPairing&    p,
 	}
 
 		// 2. Step of the role
-	if (role == ComLinkRole::SOCKET) { stepSocket(p, dev, com, now); }
-	else                             { stepPlug(p, dev, com, now); }
+	if (role == ComLinkRole::SOCKET) { stepSocket(p, dev, port, now); }
+	else                             { stepPlug(p, dev, port, now); }
 
 	return p.state;
 }

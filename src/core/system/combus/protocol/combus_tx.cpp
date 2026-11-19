@@ -84,19 +84,19 @@ void combus_tx_register_pool( CombusTxState* buffer, uint8_t capacity )
  */
 
 void combus_tx_init( uint8_t        linkIdx,
-                     NodeCom*       nodeCom,
+                     ComPort*       port,
                      ComBusFrameCfg frameCfg,
                      uint32_t       txHz,
                      ChanLayer      layer )
 {
 		// 1. Guards
 	if (!s_txStates || linkIdx >= s_capacity) { return; }
-	if (!nodeCom || txHz == 0u) { return; }
+	if (!port || txHz == 0u) { return; }
 
 	CombusTxState& st = s_txStates[linkIdx];
 
 		// 2. Transport and layout
-	st.nodeCom  = nodeCom;
+	st.port     = port;
 	st.frameCfg = frameCfg;
 	st.active   = true;
 
@@ -132,7 +132,7 @@ void combus_tx_init( uint8_t        linkIdx,
 		// 7. Log
 	sys_log_info("[COMBUS_TX] init — link=%u  transport='%s'  rate=%uHz  A%u+D%u  wireEnd=A%u+D%u  layer=%u\n",
 	             (unsigned)linkIdx,
-	             nodeCom->name, (unsigned)txHz,
+	             port->name, (unsigned)txHz,
 	             (unsigned)frameCfg.nAnalog, (unsigned)frameCfg.nDigital,
 	             (unsigned)st.analogWireEnd, (unsigned)st.digitalWireEnd,
 	             (unsigned)layer);
@@ -240,11 +240,11 @@ void combus_tx_update( const ComBus* bus )
 		CombusTxState& st = s_txStates[i];
 
 			// 1. Slot never started, or suspended
-		if (!st.nodeCom || st.periodMs == 0u || !st.active) { continue; }
+		if (!st.port || st.periodMs == 0u || !st.active) { continue; }
 
 			// 2. Handshake
 		if (st.handshakeCtx) {
-			combus_handshake_tx_update(st.handshakeCtx, st.nodeCom);
+			combus_handshake_tx_update(st.handshakeCtx, st.port);
 		}
 
 			// 3. No data while the contract of a bidirectional end is UNKNOWN
@@ -287,7 +287,7 @@ void combus_tx_update( const ComBus* bus )
 
 		if (frameLen == 0u) { continue; }
 
-		st.nodeCom->write(st.nodeCom->ctx, frame, frameLen);
+		st.port->write(st.port->ctx, frame, frameLen);
 		logFrameSent(i, st.seq, frameLen, bus);
 
 			// 8. Next seq

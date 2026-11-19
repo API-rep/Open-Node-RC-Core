@@ -36,7 +36,7 @@
 
 #include <core/system/combus/protocol/link/combus_link_defs.h>      // CouplingDev
 #include <core/system/combus/protocol/coupling/combus_coupling.h>   // CouplingFrame, NodeAddr
-#include <core/system/hw/node_com.h>                                // NodeCom
+#include <core/system/hw/node_com.h>                                // ComPort
 
 
 
@@ -117,7 +117,7 @@ struct ComLinkPairing {
 	bool         detSettled    = false;
 	CouplingId   id            = {};      ///< read (readId) or default at the coupling, cleared at the release
 
-		// The paired peer, kept while COUPLED and handed to the transport (NodeCom::setPeer)
+		// The paired peer, kept while COUPLED and handed to the transport (ComPort::setPeer)
 	NodeAddr     peer          = {};      ///< identity of the paired peer, type NONE otherwise
 	uint16_t     foreignFrames = 0u;      ///< coupling frames of another identity received while COUPLED
 };
@@ -135,7 +135,7 @@ struct ComLinkPairing {
  * @param dev      CouplingDev of the link.
  * @param role     Role of this node on the link.
  * @param trigger  Value of the trigger channel on the bus.
- * @param com      Transport of the link: the coupling frames are written to it.
+ * @param port     Transport of the link: the coupling frames are written to it.
  * @param now      millis().
  *
  * @return The state after the step.
@@ -145,7 +145,7 @@ PairingState combus_pairing_update( ComLinkPairing&    p,
                                     const CouplingDev& dev,
                                     ComLinkRole        role,
                                     bool               trigger,
-                                    NodeCom*           com,
+                                    ComPort*           port,
                                     uint32_t           now );
 
 

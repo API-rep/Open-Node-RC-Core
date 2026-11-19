@@ -41,7 +41,7 @@ void combus_coupling_follow( ComLinkRuntime& rt, uint8_t linkIdx, ComBus& bus )
 	const bool trig = bus.digitalBus[static_cast<uint8_t>(rt.coupling.dev->trigger)].value;
 	const PairingState was = rt.coupling.pairing.state;
 	const PairingState is  = combus_pairing_update(rt.coupling.pairing, *rt.coupling.dev, rt.coupling.role,
-	                                               trig, rt.com, now);
+	                                               trig, rt.port, now);
 
 		// 2. No change
 	if (is == was) { return; }
@@ -58,10 +58,10 @@ void combus_coupling_follow( ComLinkRuntime& rt, uint8_t linkIdx, ComBus& bus )
 
 			// The transport may now keep the frames of the paired peer only.
 			// TODO(chantier 5, ESP-NOW): effective with the ESP-NOW adapter.
-		if (rt.com && rt.com->setPeer) {
+		if (rt.port && rt.port->setPeer) {
 			const NodeAddr& addr = rt.coupling.pairing.peer;
 
-			rt.com->setPeer(rt.com->ctx, addr.bytes, sizeof(addr.bytes));
+			rt.port->setPeer(rt.port->ctx, addr.bytes, sizeof(addr.bytes));
 		}
 
 		combus_rx_set_mode(linkIdx, CombusRxMode::ON);
@@ -71,8 +71,8 @@ void combus_coupling_follow( ComLinkRuntime& rt, uint8_t linkIdx, ComBus& bus )
 	}
 
 		// 4. Otherwise: the link is off
-	if (was == PairingState::COUPLED && rt.com && rt.com->setPeer) {
-		rt.com->setPeer(rt.com->ctx, nullptr, 0u);
+	if (was == PairingState::COUPLED && rt.port && rt.port->setPeer) {
+		rt.port->setPeer(rt.port->ctx, nullptr, 0u);
 	}
 
 		// Check for a link that was alive: its received values are no longer valid

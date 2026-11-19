@@ -85,7 +85,7 @@ static bool endReceives ( LinkEnd end ) { return end != LinkEnd::TX; }
 
 
 /**
- * @brief Port opener. Claims the hardware of a wired link and gives its transport.
+ * @brief Port set-up. Claims the hardware of a wired link and gives its ComPort.
  *
  * @details An end that does not transmit, or does not receive, leaves that pin
  *   unclaimed.  Each further kind of port adds one case here.
@@ -96,7 +96,7 @@ static bool endReceives ( LinkEnd end ) { return end != LinkEnd::TX; }
  * @return The transport, or nullptr on failure.
  */
 
-static NodeCom* openPort( const ComDevMap& map, PinReg* pinReg )
+static ComPort* setupPort( const ComDevMap& map, PinReg* pinReg )
 {
 	const ComPortCfg& cfg = *map.portCfg;
 
@@ -286,12 +286,12 @@ bool combus_link_check( const ComDevMap& map )
  */
 
 bool combus_link_build( const ComDevMap& map,
-                        NodeCom*         com,
+                        ComPort*         port,
                         ComLinkRuntime&  runtime,
                         ComBusLink&      link )
 {
 		// 1. Validate
-	if (!com || !combus_link_check(map)) { return false; }
+	if (!port || !combus_link_check(map)) { return false; }
 
 		// 2. Frame size
 	const ComPeerLink* peer = map.dev->peer;
@@ -305,7 +305,7 @@ bool combus_link_build( const ComDevMap& map,
 		// 3. Descriptor
 	ComBusLink built{};
 
-	built.com          = com;
+	built.port         = port;
 	built.layer        = linkScopeLayer(map.dev->scope);
 	built.handshakeCtx = &runtime.handshake;
 	built.name         = map.dev->name;
@@ -326,7 +326,7 @@ bool combus_link_build( const ComDevMap& map,
 
 		// 4. What the watch needs
 	runtime.dev                  = map.dev;
-	runtime.com                  = com;
+	runtime.port                 = port;
 	runtime.watch.receives       = endReceives(map.end);
 	runtime.watch.linkTimeoutMs  = map.dev->protocol->linkTimeoutMs;
 	runtime.watch.startupGraceMs = map.dev->protocol->startupGraceMs;
@@ -375,9 +375,9 @@ bool combus_links_init( const ComDevMap*       maps,
 			// Check the wiring before claiming the port
 		if (!combus_link_check(maps[i])) { allUp = false; continue; }
 
-		NodeCom* com = openPort(maps[i], pinReg);
+		ComPort* port = setupPort(maps[i], pinReg);
 
-		if (!combus_link_build(maps[i], com, storage.runtime[i], storage.links[i])) {
+		if (!combus_link_build(maps[i], port, storage.runtime[i], storage.links[i])) {
 			allUp = false;
 			continue;
 		}
@@ -429,7 +429,7 @@ void combus_links_start_all( ComBusLink* links, uint8_t count )
 void combus_link_start( uint8_t linkIdx, ComBusLink* link )
 {
 		// 1. Guards
-	if (!link || !link->com) { return; }
+	if (!link || !link->port) { return; }
 
 	if (!link->handshakeCtx) {
 		sys_log_err("[COMBUS_LINKS] start rejected — null handshakeCtx for link '%s'\n", link->name);
@@ -481,11 +481,11 @@ void combus_link_start( uint8_t linkIdx, ComBusLink* link )
 
 		// 8. TX side, then RX side
 	if (link->txCfg) {
-		combus_tx_init(linkIdx, link->com, *link->txCfg, link->txHz, link->layer);
+		combus_tx_init(linkIdx, link->port, *link->txCfg, link->txHz, link->layer);
 	}
 
 	if (link->rxCfg) {
-		combus_rx_init(linkIdx, link->com, *link->rxCfg, link->analogBuf, link->digitalBuf, link->target, link->layer);
+		combus_rx_init(linkIdx, link->port, *link->rxCfg, link->analogBuf, link->digitalBuf, link->target, link->layer);
 	}
 }
 

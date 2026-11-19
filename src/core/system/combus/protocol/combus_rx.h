@@ -2,7 +2,7 @@
  * @file  combus_rx.h
  * @brief ComBus receiver: bytes of a transport to decoded frames, for every link.
  *
- * @details Transport-independent: each link reads through its own NodeCom.  The
+ * @details Transport-independent: each link reads through its own ComPort.  The
  *   bytes pile up in a ring buffer, then go to the decoder of their kind of frame:
  *   data (frame/), handshake (handshake/) or coupling (coupling/).  A SOF scan finds
  *   the next frame after corrupted bytes.
@@ -55,7 +55,7 @@ enum class CombusRxMode : uint8_t {
 
 struct CombusRxState {
 		// Transport and layout of the link
-	NodeCom*       nodeCom  = nullptr;   ///< transport of the link
+	ComPort*       port     = nullptr;   ///< transport of the link
 	ComBusFrameCfg frameCfg = {};        ///< capacity of the link: the largest frame accepted
 
 		// Ring buffer, between the transport and the decoders
@@ -121,7 +121,7 @@ void combus_rx_register_pool( CombusRxState* buffer, uint8_t capacity );
  *   error: the system halts.
  *
  * @param linkIdx     Slot of this link in the pool.
- * @param nodeCom     Transport of the link.
+ * @param port        Transport of the link.
  * @param frameCfg    Capacity of the link: a larger frame is refused.
  * @param analogBuf   Output buffer owned by the caller, at least `frameCfg.nAnalog` entries.
  * @param digitalBuf  Output buffer owned by the caller, at least `frameCfg.nDigital` entries.
@@ -132,7 +132,7 @@ void combus_rx_register_pool( CombusRxState* buffer, uint8_t capacity );
  */
 
 void combus_rx_init( uint8_t        linkIdx,
-                     NodeCom*       nodeCom,
+                     ComPort*       port,
                      ComBusFrameCfg frameCfg,
                      uint16_t*      analogBuf,
                      bool*          digitalBuf,

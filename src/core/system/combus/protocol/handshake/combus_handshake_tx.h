@@ -9,7 +9,7 @@
 #include <stdint.h>
 
 #include <core/system/combus/protocol/handshake/combus_handshake.h> // constants, CombusHandshakeContext
-#include <core/system/hw/node_com.h>                  // NodeCom
+#include <core/system/hw/node_com.h>                  // ComPort
 
 
 /**
@@ -30,13 +30,13 @@
  *   frames.
  *
  * @param[in] ctx      Per-link handshake context, never shared across links.
- * @param[in] nodeCom  Transport to write through.
+ * @param[in] port     Transport to write through.
  *
- * @return Number of bytes written; 0 if nothing left, or if `ctx`, `nodeCom`, its
+ * @return Number of bytes written; 0 if nothing left, or if `ctx`, `port`, its
  *   `write` callback or the MD5 of the link is missing (link not initialised).
  */
 
 uint8_t combus_handshake_tx_update( CombusHandshakeContext* ctx,
-                                    NodeCom*                nodeCom );
+                                    ComPort*                port );
 
 // EOF combus_handshake_tx.h

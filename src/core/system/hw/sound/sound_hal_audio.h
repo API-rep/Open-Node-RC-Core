@@ -2,7 +2,7 @@
  * @file sound_hal_audio.h
  * Sound module — audio output hardware abstraction layer.
  *
- * @details Generic function-pointer interface (same pattern as NodeCom) that
+ * @details Generic function-pointer interface (same pattern as ComPort) that
  *   decouples the AudioTask (mixing logic) from the physical output backend.
  *
  *   Implementations:
@@ -44,7 +44,7 @@ enum SoundHalCh : uint8_t {
  * @details Returned by the init/runtime function (`sound_hal_dac_create`, …).
  *   The AudioTask retains the pointer for the lifetime of the program.
  *   All function pointers receive `ctx` as first argument (opaque backend
- *   state, same convention as `NodeCom`).
+ *   state, same convention as `ComPort`).
  *
  * @var SoundHalAudio::ctx        Opaque pointer passed to every function below.
  * @var SoundHalAudio::init       Set up hardware (DAC/I2S, timers, DMA). Call once.

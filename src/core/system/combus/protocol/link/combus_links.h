@@ -4,7 +4,7 @@
  *
  * @details Turns the ComDevMap table of a board into running links:
  *     1. combus_link_check() validates one ComDevMap;
- *     2. the port is opened and gives a NodeCom;
+ *     2. the port is set up and gives its ComPort;
  *     3. combus_link_build() fills the ComBusLink descriptor of that link;
  *     4. the TX and RX pools are registered and each link is started.
  *
@@ -87,7 +87,7 @@ struct ComLinkCoupling {
 struct ComLinkRuntime {
 		// The link
 	const ComDev* dev = nullptr;   ///< description of the link; nullptr = never built
-	NodeCom*      com = nullptr;   ///< transport: the pairing writes its coupling frames to it
+	ComPort*      port = nullptr;  ///< transport: the pairing writes its coupling frames to it
 
 		// State: contract, watch, coupling
 	CombusHandshakeContext handshake = {};
@@ -193,7 +193,7 @@ uint32_t combus_link_load_pct( const ComDevMap& map );
  *   @p link and @p runtime are only written on success.
  *
  * @param map      Wiring of the link.
- * @param com      Transport already opened for `map.portCfg`.
+ * @param port     Port already set up for `map.portCfg`.
  * @param runtime  Storage of this link.
  * @param link     Descriptor to fill.
  *
@@ -201,7 +201,7 @@ uint32_t combus_link_load_pct( const ComDevMap& map );
  */
 
 bool combus_link_build( const ComDevMap& map,
-                        NodeCom*         com,
+                        ComPort*         port,
                         ComLinkRuntime&  runtime,
                         ComBusLink&      link );
 

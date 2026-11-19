@@ -315,7 +315,7 @@ static uint8_t tryDecode( uint8_t linkIdx, CombusRxState& st )
  */
 
 void combus_rx_init( uint8_t        linkIdx,
-                     NodeCom*       nodeCom,
+                     ComPort*       port,
                      ComBusFrameCfg frameCfg,
                      uint16_t*      analogBuf,
                      bool*          digitalBuf,
@@ -324,12 +324,12 @@ void combus_rx_init( uint8_t        linkIdx,
 {
 		// 1. Guards
 	if (!s_rxStates || linkIdx >= s_capacity) { return; }
-	if (!nodeCom || !analogBuf || !digitalBuf) { return; }
+	if (!port || !analogBuf || !digitalBuf) { return; }
 
 	CombusRxState& st = s_rxStates[linkIdx];
 
 		// 2. Transport and layout
-	st.nodeCom  = nodeCom;
+	st.port     = port;
 	st.frameCfg = frameCfg;
 	st.mode     = CombusRxMode::ON;
 	st.target   = target;
@@ -358,7 +358,7 @@ void combus_rx_init( uint8_t        linkIdx,
 		// 6. Log
 	sys_log_info("[COMBUS_RX] init — link=%u  transport='%s'  A%u+D%u  layer=%u\n",
 	             (unsigned)linkIdx,
-	             nodeCom->name,
+	             port->name,
 	             (unsigned)frameCfg.nAnalog, (unsigned)frameCfg.nDigital,
 	             (unsigned)layer);
 }
@@ -398,7 +398,7 @@ void combus_rx_update( void )
 		CombusRxState& st = s_rxStates[i];
 
 			// 1. Slot never started
-		if (!st.nodeCom) { continue; }
+		if (!st.port) { continue; }
 
 			// Time since the last pass, by unsigned difference: millis() may wrap around
 		const uint32_t passMs = millis();
@@ -409,7 +409,7 @@ void combus_rx_update( void )
 
 			// 2. Link OFF: drain and forget
 		if (st.mode == CombusRxMode::OFF) {
-			while (st.nodeCom->available(st.nodeCom->ctx) > 0) { st.nodeCom->readByte(st.nodeCom->ctx); }
+			while (st.port->available(st.port->ctx) > 0) { st.port->readByte(st.port->ctx); }
 			continue;
 		}
 
@@ -417,8 +417,8 @@ void combus_rx_update( void )
 		if (late) {
 			uint16_t dropped = st.rxCount;
 
-			while (st.nodeCom->available(st.nodeCom->ctx) > 0) {
-				if (st.nodeCom->readByte(st.nodeCom->ctx) >= 0) { ++dropped; }
+			while (st.port->available(st.port->ctx) > 0) {
+				if (st.port->readByte(st.port->ctx) >= 0) { ++dropped; }
 			}
 
 			st.rxHead  = 0u;
@@ -427,13 +427,13 @@ void combus_rx_update( void )
 				// Check for a running link: at its start, a slow boot is not a stall
 			if (dropped > 0u && st.everReceived) {
 				sys_log_warn("[COMBUS_RX] '%s': %lu ms since the last pass, %u stale bytes dropped\n",
-				             st.nodeCom->name, (unsigned long)gapMs, (unsigned)dropped);
+				             st.port->name, (unsigned long)gapMs, (unsigned)dropped);
 			}
 		}
 
 			// 4. Bytes to the ring
-		while (st.nodeCom->available(st.nodeCom->ctx) > 0) {
-			int b = st.nodeCom->readByte(st.nodeCom->ctx);
+		while (st.port->available(st.port->ctx) > 0) {
+			int b = st.port->readByte(st.port->ctx);
 
 				// Check that a byte came back
 			if (b >= 0) { rxBufPush(st, (uint8_t)b); }
@@ -565,7 +565,7 @@ bool combus_rx_peer_or( uint8_t ch, uint8_t excludeLink )
 		const CombusRxState& st = s_rxStates[i];
 
 			// 1. Live links only
-		if (i == excludeLink || !st.nodeCom || !st.snap.digital || st.linkTimeoutMs == 0u) { continue; }
+		if (i == excludeLink || !st.port || !st.snap.digital || st.linkTimeoutMs == 0u) { continue; }
 		if (!combus_rx_is_alive(i, st.linkTimeoutMs)) { continue; }
 
 			// 2. Wire position of the channel
