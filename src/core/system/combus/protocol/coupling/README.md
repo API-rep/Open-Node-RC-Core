@@ -67,7 +67,7 @@ A trigger that falls for less than `releaseMs` is only logged: a loose contact d
 
 ## Once Coupled
 
-The address of the peer is kept and handed to the transport (`NodeCom::setPeer`). Coupling frames from another identity are counted. On a wire, this address has no effect; it will filter the senders with ESP-NOW.
+The address of the peer is kept and handed to the transport (`ComPort::setPeer`). Coupling frames from another identity are counted. On a wire, this address has no effect; it will filter the senders with ESP-NOW.
 
 The link then starts like the others: [handshake](../handshake/README.md), then data.
 

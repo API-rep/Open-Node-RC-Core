@@ -8,14 +8,14 @@ Only the communication ports are described here for now.
 
 ### Declaring a Port
 
-A **`ComPort`** ([`node_com.h`](node_com.h)) describes one communication port of a board: its name, its kind (`ComPortType`) and the settings of that kind. It is purely descriptive and lives in flash: declaring a port does not start it.
+A **`ComPortCfg`** ([`com_port.h`](com_port.h)) describes one communication port of a board: its name, its kind (`ComPortType`) and the settings of that kind. It is purely descriptive and lives in flash: declaring a port does not start it.
 
 The board lists all its ports in a table, `comPorts[]` of its `envCfg.cpp`, even those that no link uses yet. Each port is created with the factory of its kind:
 
 ```cpp
-const ComPort comPorts[] = {
-	ComPort::makeUart("USB",      { 0, Txd0Pin,   Rxd0Pin,   UartMaxBaud }),   // UART0, debug serial
-	ComPort::makeUart("COM/GPIO", { 2, TxdExtPin, RxdExtPin, UartMaxBaud }),   // UART2, extension port
+const ComPortCfg comPorts[] = {
+	ComPortCfg::makeUart("USB",      { 0, Txd0Pin,   Rxd0Pin,   UartMaxBaud }),   // UART0, debug serial
+	ComPortCfg::makeUart("COM/GPIO", { 2, TxdExtPin, RxdExtPin, UartMaxBaud }),   // UART2, extension port
 };
 ```
 
@@ -33,15 +33,15 @@ A transport adapter sets up one kind of port and drives it. It is the only code 
 
 | Kind | Adapter | Where |
 |---|---|---|
-| `UART` | `uart_com_init()` | [`transport/uart_com.h`](transport/uart_com.h) |
+| `UART` | `uart_port_init()` | [`transport/uart_port.h`](transport/uart_port.h) |
 
-At boot, the link calls the adapter of its port, with the line rate of the link and only the pins its end needs: a transmit-only end does not take the RX pin. The adapter claims the port and its pins: a port claimed twice is refused. It then returns a `NodeCom`.
+At boot, the link calls the adapter of its port, with the line rate of the link and only the pins its end needs: a transmit-only end does not take the RX pin. The adapter claims the port and its pins: a port claimed twice is refused. It then returns a `ComPort`.
 
 The UART adapter reads the driver in blocks of 64 bytes, then serves them one by one. Byte by byte, the driver is slow once its buffer is full: after a stall of the loop, 380 bytes took 130 ms instead of 2.7 ms.
 
-### NodeCom
+### ComPort
 
-A **`NodeCom`** ([`node_com.h`](node_com.h)) is the accessor of a port once set up: a small structure of functions, filled by the adapter.
+A **`ComPort`** ([`com_port.h`](com_port.h)) is the accessor of a port once set up: a small structure of functions, filled by the adapter.
 
 | Function | Role |
 |---|---|
@@ -50,7 +50,7 @@ A **`NodeCom`** ([`node_com.h`](node_com.h)) is the accessor of a port once set 
 | `available()` | number of bytes waiting |
 | `setPeer()` | optional: the only peer to deliver frames from, on a transport with several peers |
 
-Each link keeps its `NodeCom` for the whole run, and the [ComBus transmission](../combus/protocol/README.md) goes through it alone:
+Each link keeps its `ComPort` for the whole run, and the [ComBus transmission](../combus/protocol/README.md) goes through it alone:
 
 - the reception reads all the bytes from it, then hands each frame to its decoder;
 - the data frames, the handshakes and the coupling frames are written to it;
@@ -61,9 +61,9 @@ None of them touches anything else of the hardware, so a new medium only needs a
 ### Adding a Kind of Port
 
 1. One value in `ComPortType`.
-2. One settings structure, and its member in the union of `ComPort`, with its factory.
-3. One adapter in `transport/`, which returns a `NodeCom`.
-4. One case where the link sets up its port (`openPort()` in `combus_links.cpp`).
+2. One settings structure, and its member in the union of `ComPortCfg`, with its factory.
+3. One adapter in `transport/`, which returns a `ComPort`.
+4. One case where the link sets up its port (`setupPort()` in `combus_link_setup.cpp`).
 
 ## Going Further
 

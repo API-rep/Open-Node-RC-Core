@@ -42,9 +42,9 @@ In both cases, the [handshake](../handshake/README.md) proves that both ends agr
 ## The Path of a Frame
 
 ```text
-Sending     bus → combus_frame_encode() → bytes → NodeCom
+Sending     bus → combus_frame_encode() → bytes → ComPort
 
-Receiving   NodeCom → bytes → combus_frame_decode() → snapshot of the link
+Receiving   ComPort → bytes → combus_frame_decode() → snapshot of the link
                                                           │
                                  combus_frame_apply()  ←──┘
                                           │

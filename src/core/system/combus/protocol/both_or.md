@@ -65,7 +65,7 @@ At t1, M goes into `FAILSAFE_HARD`; its run level chain writes `RUNLEVEL = HALT`
 | OR of the live links, with one link excluded | `combus_rx_peer_or()`, `combus_rx.cpp` |
 | merge on every cycle | `com_rx_update()`, `src/core/system/com/com_manager.cpp` |
 | sending without echo, link by link | `combus_tx_update()`, `combus_tx.cpp` (values passed to `combus_frame_encode()`) |
-| loss timeout of the receiving links | `combus_links_watch()` → `combus_rx_set_link_timeout()` |
+| loss timeout of the receiving links | `combus_link_supervisor_start()` → `combus_rx_set_link_timeout()` |
 
 Tests: Group L of `test/test_combus_loopback` (merge, back to `false`, silent peer, no echo, board that never writes).
 

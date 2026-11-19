@@ -10,22 +10,22 @@ Vocabulaire : voir le [glossaire](glossary.md). Fonctionnement actuel des liens 
 
 ## 1. Objectif
 
-Le protocole ComBus est indépendant du transport : un lien n'échange des octets que par un `NodeCom`, et seul l'UART a un adaptateur aujourd'hui. Ce chantier ajoute les autres transports, en commençant par ESP-NOW (télécommande et remorque sans fil), sans toucher au codec ni au contrat des liens.
+Le protocole ComBus est indépendant du transport : un lien n'échange des octets que par un `ComPort`, et seul l'UART a un adaptateur aujourd'hui. Ce chantier ajoute les autres transports, en commençant par ESP-NOW (télécommande et remorque sans fil), sans toucher au codec ni au contrat des liens.
 
 ## 2. ESP-NOW (premier transport)
 
 | Étape | Livrable | Preuve |
 |---|---|---|
-| 2.1 | Adaptateur `NodeCom` ESP-NOW, un tampon de réception par pair (l'adresse MAC de l'émetteur est connue à la réception) | une trame ComBus fait l'aller-retour entre deux ESP32 |
-| 2.2 | `NodeCom::setPeer` : ne délivrer que les trames du pair appairé. Le cœur l'appelle déjà à l'appairage ; reste à le prouver à deux nœuds (`TODO(chantier 5, ESP-NOW)` de `test_peer_link`) | les trames d'un troisième nœud sont ignorées |
-| 2.3 | `ComDev` globaux fournis par le cœur (modèles ESP-NOW, radio, UART…), paramétrés par `-D` : deux nœuds compilés avec les mêmes flags partagent la même définition. `ComPort` sans broches (contrôleur interne) ou avec broches (module radio) | télécommande vers machine en ESP-NOW |
+| 2.1 | Adaptateur `ComPort` ESP-NOW, un tampon de réception par pair (l'adresse MAC de l'émetteur est connue à la réception) | une trame ComBus fait l'aller-retour entre deux ESP32 |
+| 2.2 | `ComPort::setPeer` : ne délivrer que les trames du pair appairé. Le cœur l'appelle déjà à l'appairage ; reste à le prouver à deux nœuds (`TODO(chantier 5, ESP-NOW)` de `test_peer_link`) | les trames d'un troisième nœud sont ignorées |
+| 2.3 | `ComDev` globaux fournis par le cœur (modèles ESP-NOW, radio, UART…), paramétrés par `-D` : deux nœuds compilés avec les mêmes flags partagent la même définition. `ComPortCfg` sans broches (contrôleur interne) ou avec broches (module radio) | télécommande vers machine en ESP-NOW |
 | 2.4 | Remorque et accessoires sur ESP-NOW (coupleurs actifs et passifs) ; filtrage des trames par identité | attelage et accessoire d'essai |
 
 **Lien à diffusion seule** (accessoire qui ne fait qu'émettre) : pas d'ACK, salve de handshake périodique et espacée ; le mode est déclaré dans le `ComDev`.
 
 ## 3. Plusieurs pairs sur un lien
 
-Le contrat, l'ACK, la perte et le mode next / stable sont aujourd'hui rangés dans le contexte du lien : **deux pairs par lien**. Principe retenu pour la suite : **un fil, un émetteur, un ou plusieurs récepteurs**. Au niveau ComBus, chaque flux reçu vient d'un seul émetteur ; c'est le transport qui démultiplexe (un `NodeCom` par émetteur) : un lien reçu = un pair = un contexte.
+Le contrat, l'ACK, la perte et le mode next / stable sont aujourd'hui rangés dans le contexte du lien : **deux pairs par lien**. Principe retenu pour la suite : **un fil, un émetteur, un ou plusieurs récepteurs**. Au niveau ComBus, chaque flux reçu vient d'un seul émetteur ; c'est le transport qui démultiplexe (un `ComPort` par émetteur) : un lien reçu = un pair = un contexte.
 
 | Transport | Le principe tient | Comment |
 |---|---|---|
@@ -38,7 +38,7 @@ Réglé par le principe : identité de l'émetteur, contrat / ACK / silence par 
 
 **Exigences d'un transport multi-pair** (sans fil comme ESP-NOW, ou filaire à plusieurs pairs ; l'UART, par décision, reste à deux pairs par lien). Issues du banc, levier 3 (trames forgées par un troisième nœud, 2026-11-14) :
 
-- **Filtre par identité de l'émetteur** : le transport ne transmet au décodage que les trames du pair appairé (`NodeCom::setPeer`, étape 2.2 pour ESP-NOW : adresse MAC, que la trame de couplage porte déjà dans `addr.bytes`). Sans filtre, une poignée de main étrangère coupe le lien (voulu sur l'UART, option A), et les données d'un autre nœud sont appliquées (F4 : 15 à 31 valeurs fausses en 3 s).
+- **Filtre par identité de l'émetteur** : le transport ne transmet au décodage que les trames du pair appairé (`ComPort::setPeer`, étape 2.2 pour ESP-NOW : adresse MAC, que la trame de couplage porte déjà dans `addr.bytes`). Sans filtre, une poignée de main étrangère coupe le lien (voulu sur l'UART, option A), et les données d'un autre nœud sont appliquées (F4 : 15 à 31 valeurs fausses en 3 s).
 - **ACK aux étrangers** : aujourd'hui, toute demande reçoit un ACK, même étrangère. Le filtre règle ce point.
 - **Rejeu** (F6) : une vraie trame renvoyée plus tard est acceptée. À étudier : un contrôle d'avance du `seq` à la réception, ou un équivalent dans le transport.
 
@@ -54,7 +54,7 @@ Réglé par le principe : identité de l'émetteur, contrat / ACK / silence par 
 
 | Étape | Livrable | Preuve |
 |---|---|---|
-| 4.1 | Ports I2C et CAN (autres variantes de `ComPort`) | un port I2C ou CAN s'ouvre depuis la table de la carte (`comLinks[]`) |
+| 4.1 | Ports I2C et CAN (autres variantes de `ComPortCfg`) | un port I2C ou CAN s'ouvre depuis la table de la carte (`comLinks[]`) |
 
 ## 5. Contrat `SYSTEM` entre cartes
 

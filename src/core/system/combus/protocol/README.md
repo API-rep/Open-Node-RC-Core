@@ -43,7 +43,7 @@ The ports and their transports are the ground floor. On top of them sits the pro
                 └──────────────────┬───────────────────┘
                                    │  link: maps, starts, watches
                 ┌──────────────────┴───────────────────┐
-  Hardware      │  Transport      (NodeCom)            │
+  Hardware      │  Transport      (ComPort)            │
                 │  Port           (UART, ...)          │
                 └──────────────────────────────────────┘
 ```
@@ -59,7 +59,7 @@ The ports and their transports are the ground floor. On top of them sits the pro
 
 **Hardware.** It moves the bytes through the ports of the board ([the hardware](../../hw/README.md)):
 
-- the **transport** is reached through a **`NodeCom`**: the same few calls (`write()`, `readByte()`, `available()`), whatever the hardware behind it;
+- the **transport** is reached through a **`ComPort`**: the same few calls (`write()`, `readByte()`, `available()`), whatever the hardware behind it;
 - the **port** is set up at boot by the module of its kind (UART today, ESP-NOW to come), which keeps the details of the hardware behind these calls.
 
 Behind the scenes, a [link](link/README.md) joins the **protocol** and the **hardware** for each connection, so that nothing is hard wired in the code.
@@ -73,7 +73,7 @@ Two modules do the actual work, on every loop cycle: `combus_tx` sends, `combus_
 ### One Loop Cycle
 
 1. **Reception**: `combus_rx_update()` reads the bytes of each link and routes them to the right decoder.
-2. **Watch**: `combus_links_update()` follows the coupling and detects the loss of a link.
+2. **Watch**: `combus_link_supervisor_update()` follows the coupling and detects the loss of a link.
 3. **Processing** of the machine.
 4. **Transmission**: `combus_tx_update()` sends what is due on each link.
 

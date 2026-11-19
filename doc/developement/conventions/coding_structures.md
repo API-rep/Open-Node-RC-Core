@@ -224,7 +224,7 @@ A structure grows field by field, each new one added at the end: its order ends 
 struct ComLinkRuntime {
 		// The link
 	const ComDev* dev = nullptr;   ///< description of the link; nullptr = never built
-	NodeCom*      com = nullptr;   ///< transport: the pairing writes its coupling frames to it
+	ComPort*      port = nullptr;  ///< transport: the pairing writes its coupling frames to it
 
 		// State: contract, watch, coupling
 	CombusHandshakeContext handshake = {};

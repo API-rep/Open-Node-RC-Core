@@ -15,7 +15,7 @@ Une machine reçoit ses commandes par deux chemins différents :
 - d'une **télécommande** (un nœud) : un lien ComBus, avec son contrat (MD5), sa table, son filtrage par sens et sa perte de lien (`NODE_LINK_FAIL`) ;
 - d'une **source locale** branchée sur la machine (aujourd'hui la manette PS4 en Bluetooth, demain un récepteur RC PPM / SBUS) : un backend d'entrée, dont les boutons et sticks sont mappés vers le ComBus par `inputs_map`, et dont la santé passe par un contributeur à part (`LOCAL_REMOTE_FAIL`).
 
-Le backend PS4 reste dans `input` : c'est un dispositif d'entrée, il n'expose pas de flux d'octets comme un `NodeCom`. Mais vu de la machine, une manette PS4 **est** une télécommande : deux chemins pour la même chose.
+Le backend PS4 reste dans `input` : c'est un dispositif d'entrée, il n'expose pas de flux d'octets comme un `ComPort`. Mais vu de la machine, une manette PS4 **est** une télécommande : deux chemins pour la même chose.
 
 ## 2. Idée retenue : un nœud virtuel
 

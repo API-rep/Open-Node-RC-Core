@@ -23,7 +23,7 @@ Documentation explains intent, context and constraints: what the code alone does
 
 Doxygen documents entities: files, functions, types, structure members, enum values, constants, descriptor objects and configuration arrays. It does not organise the visual structure of a file: section separators and ordinary comments do that ([layout](layout.md), §5 and §6).
 
-An identifier is written as in the code, so that it can be searched: a function with its parentheses (`uart_com_init()`), an array with its brackets (`ports[]`), a member with its owner when it is ambiguous (`UartCtx::rxCache`).
+An identifier is written as in the code, so that it can be searched: a function with its parentheses (`uart_port_init()`), an array with its brackets (`ports[]`), a member with its owner when it is ambiguous (`UartCtx::rxCache`).
 
 ---
 
