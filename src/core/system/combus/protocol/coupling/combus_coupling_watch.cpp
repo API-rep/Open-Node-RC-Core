@@ -7,8 +7,10 @@
 
 #include <Arduino.h>  // millis()
 
-#include <core/system/combus/protocol/link/combus_link_watch.h>   // combus_link_take_back_safe_values()
-#include <core/system/combus/combus_access.h>                     // combus_set_digital()
+#include <core/system/combus/protocol/link/combus_link_supervisor.h>   // combus_link_take_back_safe_values()
+#include <core/system/combus/protocol/combus_rx.h>                     // combus_rx_set_mode()
+#include <core/system/combus/protocol/combus_tx.h>                     // combus_tx_set_active()
+#include <core/system/combus/combus_access.h>                          // combus_set_digital()
 #include <core/system/debug/logging/debug.h>
 
 #include "combus.h"   // DigitalComBusID

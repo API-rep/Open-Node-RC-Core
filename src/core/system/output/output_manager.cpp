@@ -5,7 +5,7 @@
 
 #include "output_manager.h"
 
-#include <core/system/com/com_manager.h>   // com_update() — communication modules
+#include <core/system/com/com_manager.h>   // com_tx_update() — communication modules
 
 
 // =============================================================================
@@ -18,7 +18,7 @@
 void output_update(const ComBus& bus) {
 
 	// --- Communication modules (ComBus TX, ...) ---
-  com_update(bus);
+  com_tx_update(bus);
 
 }
 

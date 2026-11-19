@@ -1,12 +1,14 @@
 /******************************************************************************
- * @file  combus_link_watch.cpp
- * @brief Watch of the running links: their state, their loss, and their safe values.
+ * @file  combus_link_supervisor.cpp
+ * @brief Supervisor of the running links: their state, their loss, and their safe values.
  *****************************************************************************/
 
-#include "combus_link_watch.h"
+#include "combus_link_supervisor.h"
 
 #include <Arduino.h>  // millis()
 
+#include <core/system/combus/protocol/combus_rx.h>                       // combus_rx_is_alive(), combus_rx_set_mode()
+#include <core/system/combus/protocol/combus_tx.h>                       // combus_tx_set_active()
 #include <core/system/combus/protocol/coupling/combus_coupling_watch.h>
 #include <core/system/debug/logging/debug.h>
 #include <core/system/combus/combus_access.h>   // combus_link_set_raw_analog(), combus_link_set_digital()
@@ -23,7 +25,7 @@ static_assert(AnalogComBus{}.safe == CbusNeutral, "AnalogComBus::safe must defau
 // 1. STORAGE AND HELPERS
 // =============================================================================
 
-	// The links under watch, stored by the caller (see combus_links_watch()).
+	// The links under watch, stored by the caller (see combus_link_supervisor_start()).
 static ComLinkRuntime* s_watched      = nullptr;
 static uint8_t         s_watchedCount = 0u;
 
@@ -74,7 +76,7 @@ static bool lostAfterGrace( uint8_t linkIdx )
 // =============================================================================
 
 /**
- * @brief Start of the watch. Sets each link to a fresh state, and its grace to now.
+ * @brief Start of the supervision. Sets each link to a fresh state, and its grace to now.
  *
  * @details For each link, in order:
  *   1. The startup grace starts now, and nothing is reported lost yet.
@@ -83,7 +85,7 @@ static bool lostAfterGrace( uint8_t linkIdx )
  *      silent links in the both_or merge.
  */
 
-void combus_links_watch( ComLinkRuntime* runtime, uint8_t count )
+void combus_link_supervisor_start( ComLinkRuntime* runtime, uint8_t count )
 {
 	s_watched      = runtime;
 	s_watchedCount = count;
@@ -114,7 +116,7 @@ void combus_links_watch( ComLinkRuntime* runtime, uint8_t count )
 
 
 /**
- * @brief Watch pass. Follows the couplings, then the loss of each link.
+ * @brief Supervision pass. Follows the couplings, then the loss of each link.
  *
  * @details First the passive couplers.  Then, for each link, in order:
  *   1. Coupling: step the pairing, write the contributors.  An unhitched link stops here.
@@ -122,9 +124,10 @@ void combus_links_watch( ComLinkRuntime* runtime, uint8_t count )
  *   3. A link with a table that stops being alive: safe values, so that a relaying node
  *      passes on the safe value as it is.
  *   4. Log the loss and the recovery, once per change.
+ *   Last, the contributors of the loss, by scope, written on every cycle.
  */
 
-void combus_links_update( ComBus& bus )
+void combus_link_supervisor_update( ComBus& bus )
 {
 	combus_couplings_update(bus);
 
@@ -169,6 +172,14 @@ void combus_links_update( ComBus& bus )
 			sys_log_info("[COMBUS_LINKS] link '%s' back\n", rt.dev->name ? rt.dev->name : "?");
 		}
 	}
+
+		// Contributors of the loss
+#if defined(HAS_FAILSAFE) && defined(HAS_NODE_LINK_FAILSAFE)
+	combus_set_digital(bus, DigitalComBusID::NODE_LINK_FAIL, combus_links_lost(LinkScope::INTER_NODE));
+#endif
+#if defined(HAS_FAILSAFE) && defined(HAS_BOARD_LINK_FAILSAFE)
+	combus_set_digital(bus, DigitalComBusID::BOARD_LINK_FAIL, combus_links_lost(LinkScope::INTRA_NODE));
+#endif
 }
 
 
@@ -288,4 +299,4 @@ bool combus_links_view( uint8_t linkIdx, ComLinkView& out )
 	return true;
 }
 
-// EOF combus_link_watch.cpp
+// EOF combus_link_supervisor.cpp

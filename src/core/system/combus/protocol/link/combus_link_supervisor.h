@@ -1,22 +1,90 @@
 /******************************************************************************
- * @file  combus_link_watch.h
- * @brief Watch of the running links: their state, their loss, and their safe values.
+ * @file  combus_link_supervisor.h
+ * @brief Supervisor of the running links: their state, their loss, and their safe values.
  *
- * @details Each cycle, combus_links_update() follows the coupling of each link, catches
- *   the loss of a receiving link and logs its changes.  The dashboards read copies,
- *   never the internal structures.  The coupling itself: coupling/combus_coupling_watch.h.
+ * @details Each cycle, combus_link_supervisor_update() follows the coupling of each
+ *   link, catches the loss of a receiving link, logs its changes and writes the
+ *   contributors of the loss (NODE_LINK_FAIL, BOARD_LINK_FAIL).  The dashboards read
+ *   copies, never the internal structures.  The coupling itself:
+ *   coupling/combus_coupling_watch.h.  The links are set up by combus_link_setup.h.
  *****************************************************************************/
 #pragma once
 
 #include <stdint.h>
 #include <stdbool.h>
 
-#include <core/system/combus/protocol/link/combus_links.h>
+#include <core/system/hw/com_port.h>
+#include <core/config/machines/combus_types.h>                       // AnalogComBusID, DigitalComBusID
+#include "combus_system_ids.h"                                       // size of the SYSTEM view
+#include <core/system/combus/protocol/link/combus_link_defs.h>
+#include <core/system/combus/protocol/handshake/combus_handshake.h>
+#include <core/system/combus/protocol/coupling/combus_pairing.h>     // ComLinkPairing
 
 
 
 // =============================================================================
-// 1. STATE OF A LINK
+// 1. PER-LINK STORAGE
+// =============================================================================
+
+/**
+ * @brief What the watch of a link needs.
+ */
+
+struct ComLinkWatch {
+	bool     receives       = false;   ///< this link has an RX side
+	uint32_t linkTimeoutMs  = 0u;      ///< silence after which a receiving link is lost (ms)
+	uint32_t startupGraceMs = 0u;      ///< link between boards: wait for a first frame before it counts as lost (ms)
+	uint32_t watchStartMs   = 0u;      ///< start of the grace: set when the watch starts, and at the hitch
+	bool     reportedLost   = false;   ///< last loss state logged
+	bool     wasAlive       = false;   ///< alive at the last update, to catch the loss
+};
+
+
+/**
+ * @brief Coupling of a link ON_COUPLING.
+ */
+
+struct ComLinkCoupling {
+	const CouplingDev* dev     = nullptr;               ///< link ON_COUPLING; nullptr = always active
+	ComLinkRole        role    = ComLinkRole::SOCKET;   ///< side of this node, from its coupler (ComPeerLink::role)
+	ComLinkPairing     pairing = {};                    ///< pairing of the two ends
+	bool               coupled = false;                 ///< paired (PairingState::COUPLED) at the last update
+};
+
+
+/**
+ * @brief Per-link storage that the protocol layers keep pointing to.
+ *
+ * @details Holds the handshake context shared by TX and RX of the link, the RX decode
+ *   buffers, and what the watch needs.  The buffers are sized to the SYSTEM next set
+ *   (BASE stable channels, candidates, SYSTEM channels), the largest set that travels:
+ *   they fit any link, BASE being a prefix of it.  BOARD channels never travel and get
+ *   no room.  The limit accepted on a link is the set of that link (its rxCfg), not
+ *   the buffer size.
+ *
+ *   The name, the scope and the table of the link are read from its ComDev, never
+ *   copied: the description stays const, in Flash.
+ */
+
+struct ComLinkRuntime {
+		// The link
+	const ComDev* dev = nullptr;   ///< description of the link; nullptr = never built
+	ComPort*      port = nullptr;  ///< transport: the pairing writes its coupling frames to it
+
+		// State: contract, watch, coupling
+	CombusHandshakeContext handshake = {};
+	ComLinkWatch           watch     = {};
+	ComLinkCoupling        coupling  = {};
+
+		// RX decode buffers, sized to the SYSTEM next set
+	uint16_t analogRx[static_cast<uint8_t>(AnalogComBusSystemID::CH_COUNT)]   = {};
+	bool     digitalRx[static_cast<uint8_t>(DigitalComBusSystemID::CH_COUNT)] = {};
+};
+
+
+
+// =============================================================================
+// 2. STATE OF A LINK
 // =============================================================================
 
 /**
@@ -62,7 +130,7 @@ struct ComLinkView {
 
 
 // =============================================================================
-// 2. API
+// 3. API
 // =============================================================================
 
 /**
@@ -76,7 +144,7 @@ struct ComLinkView {
  * @param count    Number of entries in @p runtime.
  */
 
-void combus_links_watch( ComLinkRuntime* runtime, uint8_t count );
+void combus_link_supervisor_start( ComLinkRuntime* runtime, uint8_t count );
 
 
 /**
@@ -89,11 +157,14 @@ void combus_links_watch( ComLinkRuntime* runtime, uint8_t count );
  *     both_or is never written by a frame, and a link without a table is unchanged;
  *   - the loss and the recovery are logged once per change.  Lost here means lost, or
  *     never seen once startupGraceMs has elapsed, whatever the scope.
+ *   Then NODE_LINK_FAIL and BOARD_LINK_FAIL are written from combus_links_lost(), on
+ *   every cycle, when the build has these contributors (HAS_NODE_LINK_FAILSAFE,
+ *   HAS_BOARD_LINK_FAILSAFE); false when there is no such link.
  *
  * @param bus  ComBus the received positions and the contributors are written to.
  */
 
-void combus_links_update( ComBus& bus );
+void combus_link_supervisor_update( ComBus& bus );
 
 
 /**
@@ -156,7 +227,7 @@ PairingState combus_links_pairing_state( uint8_t linkIdx );
 
 
 // =============================================================================
-// 3. SNAPSHOTS FOR THE DASHBOARDS
+// 4. SNAPSHOTS FOR THE DASHBOARDS
 // =============================================================================
 
 /**
@@ -179,4 +250,4 @@ uint8_t combus_links_count( void );
 
 bool combus_links_view( uint8_t linkIdx, ComLinkView& out );
 
-// EOF combus_link_watch.h
+// EOF combus_link_supervisor.h

@@ -165,7 +165,7 @@ struct AnalogComBus {
 	ChanLayer   layer         = ChanLayer::BOARD;   ///< who may write it
 	ChanFlow    flow          = {};                 ///< which way it travels, on each kind of link
 	bool        zeroAtNeutral = false;              ///< logical zero at CbusNeutral, else at 0
-	uint16_t    safe          = 0x7FFFu;            ///< safe value, declared in the .cb (default CbusNeutral, checked in combus_link_watch.cpp)
+	uint16_t    safe          = 0x7FFFu;            ///< safe value, declared in the .cb (default CbusNeutral, checked in combus_link_supervisor.cpp)
 };
 
 	// zeroAtNeutral and safe sit in padding that already existed: an analog channel

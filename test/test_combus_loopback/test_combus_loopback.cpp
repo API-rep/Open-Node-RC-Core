@@ -129,7 +129,8 @@
 #include <core/system/combus/protocol/frame/combus_frame_defs.h>
 #include <core/system/combus/combus_access.h>          // combus_set_digital() — generic accessor
 #include <core/system/combus/protocol/link/combus_link_defs.h> // ComBusLink, combus_link_start() — Group E
-#include <core/system/combus/protocol/link/combus_link_watch.h>    // combus_link_check(), combus_link_build() — Group I
+#include <core/system/combus/protocol/link/combus_link_setup.h>      // combus_link_check(), combus_link_build() — Group I
+#include <core/system/combus/protocol/link/combus_link_supervisor.h> // combus_link_supervisor_start(), combus_link_state() — Group J
 #include <core/system/com/com_manager.h>                 // com_rx_update() — Group J
 #include <core/system/combus/protocol/handshake/combus_handshake.h> // CombusHandshakeContext — Groups E, N
 #include <core/system/combus/protocol/handshake/combus_handshake_rx.h> // combus_handshake_compare() — Group E
@@ -1062,7 +1063,7 @@ static void startHealthLink(LinkEnd end, const ComDev& dev) {
     if (s_healthLink.rxCfg.has_value()) { s_healthLink.target = &rxTargetBus; }
 
     combus_link_start(kLinkIdx, &s_healthLink);
-    combus_links_watch(&s_healthRuntime, 1u);
+    combus_link_supervisor_start(&s_healthRuntime, 1u);
 }
 
 /** Run the handshake on the loopback until the contract is STABLE (request, then its ACK). */
@@ -1126,7 +1127,7 @@ static void test_link_health_ignores_tx_only_link(void) {
 
     TEST_ASSERT_FALSE(healthLinkLost());
 
-    combus_links_watch(nullptr, 0u);
+    combus_link_supervisor_start(nullptr, 0u);
 }
 
 
@@ -1271,7 +1272,7 @@ static void test_both_or_board_never_writing_does_not_contribute(void) {
 
     TEST_ASSERT_FALSE(failsafeOnBus());
 
-    combus_links_watch(nullptr, 0u);
+    combus_link_supervisor_start(nullptr, 0u);
 }
 
 
@@ -1383,7 +1384,7 @@ static void test_loss_row6_tx_only_link_never_contributes(void) {
     TEST_ASSERT_FALSE(combus_links_lost(LinkScope::INTER_NODE));
     TEST_ASSERT_FALSE(combus_links_lost(LinkScope::INTRA_NODE));
 
-    combus_links_watch(nullptr, 0u);
+    combus_link_supervisor_start(nullptr, 0u);
 }
 
 
@@ -1679,7 +1680,7 @@ static void test_contract_row11_tx_only_end(void) {
     delay(kRxPollMs);
     TEST_ASSERT_EQUAL_INT(0, s_port->available(s_port->ctx));
 
-    combus_links_watch(nullptr, 0u);
+    combus_link_supervisor_start(nullptr, 0u);
 }
 
 /** Row 12: a request is answered, an ACK never is. */

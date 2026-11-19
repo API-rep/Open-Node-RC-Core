@@ -4,14 +4,14 @@
  *
  * @details combus_pairing decides who is hitched to whom; this module acts on it: it
  *   turns a link on or off, and writes the contributors of the coupler.  It also steps
- *   the passive couplers, which have no link.  Called each cycle by combus_links_update().
+ *   the passive couplers, which have no link.  Called each cycle by combus_link_supervisor_update().
  *****************************************************************************/
 #pragma once
 
 #include <stdint.h>
 #include <stdbool.h>
 
-#include <core/system/combus/protocol/link/combus_links.h>   // ComLinkRuntime
+#include <core/system/combus/protocol/link/combus_link_supervisor.h>   // ComLinkRuntime
 
 
 

@@ -15,6 +15,8 @@
 #include <core/system/combus/protocol/handshake/combus_handshake.h>
 #include <core/system/combus/protocol/handshake/combus_handshake_rx.h>  // combus_handshake_tryDecode
 #include <core/system/combus/protocol/coupling/combus_coupling.h>       // combus_coupling_tryDecode
+#include <core/system/combus/combus_access.h>                           // combus_both_or_set_remote()
+#include <core/config/machines/combus_types.h>                          // DigitalComBusID::CH_COUNT
 #include <core/system/debug/logging/debug.h>
 
 
@@ -305,7 +307,7 @@ static uint8_t tryDecode( uint8_t linkIdx, CombusRxState& st )
  *
  * @details In order:
  *   1. Guards: pool, slot and pointers.
- *   2. Transport and layout.  A link starts ON; combus_links_watch() turns a coupled
+ *   2. Transport and layout.  A link starts ON; combus_link_supervisor_start() turns a coupled
  *      one off.
  *   3. Write identity.  With a target, only BASE and SYSTEM are accepted: a silent
  *      fallback would hide a forgotten layer, and a frame never writes a BOARD channel.
@@ -588,6 +590,17 @@ bool combus_rx_peer_or( uint8_t ch, uint8_t excludeLink )
 	}
 
 	return false;
+}
+
+
+	/// Every both_or channel of the bus takes the OR of the live links as its remote part.
+void combus_rx_both_or_update( ComBus& bus )
+{
+	for (uint8_t ch = 0u; ch < static_cast<uint8_t>(DigitalComBusID::CH_COUNT); ++ch) {
+		if (bus.digitalBus[ch].bothOr.enabled) {
+			combus_both_or_set_remote(bus, static_cast<DigitalComBusID>(ch), combus_rx_peer_or(ch, CombusRxNoLink));
+		}
+	}
 }
 
 

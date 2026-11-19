@@ -1,15 +1,15 @@
 /******************************************************************************
- * @file  combus_links.cpp
+ * @file  combus_link_setup.cpp
  * @brief ComBus links from their description: validate, open the ports, start.
  *
  * @details Nothing is allocated here: every piece of state belongs to the caller.
  *****************************************************************************/
 
-#include "combus_links.h"
+#include "combus_link_setup.h"
 
 #include <string.h>   // memcmp()
 
-#include <core/system/combus/protocol/link/combus_link_watch.h>   // combus_links_watch()
+#include <core/system/combus/protocol/link/combus_link_supervisor.h>   // combus_link_supervisor_start()
 #include <core/system/hw/transport/uart_port.h>
 #include <core/system/combus/protocol/frame/combus_frame.h>           // CombusFrameHeaderLen, CombusFrameCrcLen
 #include <core/system/combus/protocol/handshake/combus_handshake.h>   // CombusFrameHandshakeMinLen, period
@@ -392,7 +392,7 @@ bool combus_links_init( const ComDevMap*       maps,
 	combus_links_start_all(storage.links, count);
 
 		// 3. Watch
-	combus_links_watch(storage.runtime, count);
+	combus_link_supervisor_start(storage.runtime, count);
 
 	return allUp;
 }
@@ -489,4 +489,4 @@ void combus_link_start( uint8_t linkIdx, ComBusLink* link )
 	}
 }
 
-// EOF combus_links.cpp
+// EOF combus_link_setup.cpp

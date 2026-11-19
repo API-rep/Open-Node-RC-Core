@@ -4,7 +4,7 @@
  *
  * @details The board declares its links next to its ports (comLinks[] of its
  *   envCfg.h): a ComDev of the node wired on one of its ports.  The links
- *   themselves are started by combus_links_init() (combus_links.h).
+ *   themselves are started by combus_links_init() (combus_link_setup.h).
  *****************************************************************************/
 #pragma once
 

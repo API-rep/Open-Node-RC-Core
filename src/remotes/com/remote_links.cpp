@@ -11,7 +11,8 @@
 
 #include "remote_links.h"
 
-#include <core/system/combus/protocol/link/combus_link_watch.h>
+#include <core/system/combus/protocol/link/combus_link_setup.h>
+#include <core/system/combus/protocol/link/combus_link_supervisor.h>
 #include <core/system/combus/protocol/combus_tx.h>
 #include <core/system/combus/protocol/combus_rx.h>
 #include <core/system/hw/transport/uart_port.h>       // uart_port_register_pool, UartCtx
@@ -76,7 +77,7 @@ void remote_links_update( void )
 	ComBus& bus = *kDrivenMachines[0].bus;
 
 	combus_rx_update();
-	combus_links_update(bus);
+	combus_link_supervisor_update(bus);
 	combus_tx_update(&bus);
 }
 

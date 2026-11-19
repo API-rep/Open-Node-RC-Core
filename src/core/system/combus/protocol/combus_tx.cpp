@@ -71,7 +71,7 @@ void combus_tx_register_pool( CombusTxState* buffer, uint8_t capacity )
  *
  * @details In order:
  *   1. Guards: pool, slot, transport and rate.
- *   2. Transport and layout.  A link starts active; combus_links_watch() suspends a
+ *   2. Transport and layout.  A link starts active; combus_link_supervisor_start() suspends a
  *      detached one.
  *   3. Period, by integer division.
  *   4. Channels carried: the size of the view of the layer.  The views are prefixes of

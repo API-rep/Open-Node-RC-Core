@@ -1,6 +1,6 @@
 /******************************************************************************
- * @file  combus_links.h
- * @brief ComBus links from their description: validate, open the ports, start.
+ * @file  combus_link_setup.h
+ * @brief Set-up of the ComBus links from their description: validate, set up the ports, start.
  *
  * @details Turns the ComDevMap table of a board into running links:
  *     1. combus_link_check() validates one ComDevMap;
@@ -21,7 +21,8 @@
  *   combus_links_init(maps, 1, storage, &pinReg, &bus);
  * @endcode
  *
- *   Once started, the links are watched by combus_link_watch.h.
+ *   Once started, the links are followed by the supervisor (combus_link_supervisor.h),
+ *   which also holds the per-link storage (ComLinkRuntime).
  *****************************************************************************/
 #pragma once
 
@@ -30,75 +31,16 @@
 
 #include <core/system/hw/com_port.h>
 #include <core/system/hw/pin_reg.h>
-#include <core/config/machines/combus_types.h>   // AnalogComBusID, DigitalComBusID
-#include "combus_system_ids.h"                   // size of the SYSTEM view
 #include <core/system/combus/protocol/link/combus_link_defs.h>
+#include <core/system/combus/protocol/link/combus_link_supervisor.h>   // ComLinkRuntime
 #include <core/system/combus/protocol/combus_tx.h>
 #include <core/system/combus/protocol/combus_rx.h>
-#include <core/system/combus/protocol/handshake/combus_handshake.h>
-#include <core/system/combus/protocol/coupling/combus_pairing.h>    // ComLinkPairing
 
 
 
 // =============================================================================
-// 1. PER-LINK STORAGE
+// 1. STORAGE OF THE CALLER
 // =============================================================================
-
-/**
- * @brief What the watch of a link needs.
- */
-
-struct ComLinkWatch {
-	bool     receives       = false;   ///< this link has an RX side
-	uint32_t linkTimeoutMs  = 0u;      ///< silence after which a receiving link is lost (ms)
-	uint32_t startupGraceMs = 0u;      ///< link between boards: wait for a first frame before it counts as lost (ms)
-	uint32_t watchStartMs   = 0u;      ///< start of the grace: set when the watch starts, and at the hitch
-	bool     reportedLost   = false;   ///< last loss state logged
-	bool     wasAlive       = false;   ///< alive at the last update, to catch the loss
-};
-
-
-/**
- * @brief Coupling of a link ON_COUPLING.
- */
-
-struct ComLinkCoupling {
-	const CouplingDev* dev     = nullptr;               ///< link ON_COUPLING; nullptr = always active
-	ComLinkRole        role    = ComLinkRole::SOCKET;   ///< side of this node, from its coupler (ComPeerLink::role)
-	ComLinkPairing     pairing = {};                    ///< pairing of the two ends
-	bool               coupled = false;                 ///< paired (PairingState::COUPLED) at the last update
-};
-
-
-/**
- * @brief Per-link storage that the protocol layers keep pointing to.
- *
- * @details Holds the handshake context shared by TX and RX of the link, the RX decode
- *   buffers, and what the watch needs.  The buffers are sized to the SYSTEM next set
- *   (BASE stable channels, candidates, SYSTEM channels), the largest set that travels:
- *   they fit any link, BASE being a prefix of it.  BOARD channels never travel and get
- *   no room.  The limit accepted on a link is the set of that link (its rxCfg), not
- *   the buffer size.
- *
- *   The name, the scope and the table of the link are read from its ComDev, never
- *   copied: the description stays const, in Flash.
- */
-
-struct ComLinkRuntime {
-		// The link
-	const ComDev* dev = nullptr;   ///< description of the link; nullptr = never built
-	ComPort*      port = nullptr;  ///< transport: the pairing writes its coupling frames to it
-
-		// State: contract, watch, coupling
-	CombusHandshakeContext handshake = {};
-	ComLinkWatch           watch     = {};
-	ComLinkCoupling        coupling  = {};
-
-		// RX decode buffers, sized to the SYSTEM next set
-	uint16_t analogRx[static_cast<uint8_t>(AnalogComBusSystemID::CH_COUNT)]   = {};
-	bool     digitalRx[static_cast<uint8_t>(DigitalComBusSystemID::CH_COUNT)] = {};
-};
-
 
 /**
  * @brief The arrays owned by the caller, used by combus_links_init().
@@ -257,4 +199,4 @@ void combus_links_start_all( ComBusLink* links, uint8_t count );
 
 void combus_link_start( uint8_t linkIdx, ComBusLink* link );
 
-// EOF combus_links.h
+// EOF combus_link_setup.h

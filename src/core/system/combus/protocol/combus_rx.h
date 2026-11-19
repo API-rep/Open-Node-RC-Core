@@ -207,7 +207,7 @@ bool combus_rx_is_alive( uint8_t linkIdx, uint32_t timeoutMs );
  * @brief Set the silence after which a receiving link counts as lost.
  *
  * @details Used by the watch of the contract and by combus_rx_peer_or().  Set by
- *   combus_links_watch().
+ *   combus_link_supervisor_start().
  *
  * @param linkIdx    Slot of this link in the pool.
  * @param timeoutMs  Silence (ms) after which the link is lost; 0 = never alive for
@@ -245,6 +245,19 @@ void combus_rx_set_mode( uint8_t linkIdx, CombusRxMode mode );
  */
 
 bool combus_rx_peer_or( uint8_t ch, uint8_t excludeLink );
+
+
+/**
+ * @brief Merge the both_or channels of a bus with the live links, once per cycle.
+ *
+ * @details For each both_or channel of @p bus, its remote part becomes
+ *   combus_rx_peer_or() over all the links: this board's value OR the live links
+ *   (anti ping-pong, both_or.md).  Called by com_rx_update(), after combus_rx_update().
+ *
+ * @param bus  ComBus whose both_or channels are merged.
+ */
+
+void combus_rx_both_or_update( ComBus& bus );
 
 
 

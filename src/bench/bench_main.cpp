@@ -57,8 +57,8 @@
 #include <core/system/combus/combus_access.h>
 #include <core/system/combus/protocol/combus_tx.h>
 #include <core/system/combus/protocol/combus_rx.h>
-#include <core/system/combus/protocol/link/combus_links.h>
-#include <core/system/combus/protocol/link/combus_link_watch.h>
+#include <core/system/combus/protocol/link/combus_link_setup.h>
+#include <core/system/combus/protocol/link/combus_link_supervisor.h>
 #include <core/system/combus/protocol/frame/combus_frame.h>
 #include <core/system/combus/protocol/handshake/combus_handshake.h>
 #include <core/system/combus/protocol/coupling/combus_coupling.h>

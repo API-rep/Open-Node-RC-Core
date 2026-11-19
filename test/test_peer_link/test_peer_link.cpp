@@ -55,7 +55,8 @@
 #include <core/system/hw/transport/uart_port.h>
 #include <core/system/combus/protocol/combus_tx.h>
 #include <core/system/combus/protocol/combus_rx.h>
-#include <core/system/combus/protocol/link/combus_link_watch.h>
+#include <core/system/combus/protocol/link/combus_link_setup.h>
+#include <core/system/combus/protocol/link/combus_link_supervisor.h>
 #include <core/system/combus/protocol/coupling/combus_coupling_watch.h>
 #include <core/system/combus/combus_access.h>
 #include <core/system/combus/combus_res.h>     // CbusNeutral (safe value of an analog channel, 3.2c)
@@ -134,7 +135,7 @@ static void startLink(void) {
     TEST_ASSERT_TRUE(combus_link_build(map, s_port, s_runtime, s_link));
     s_link.target = &bus;
     combus_link_start(kLinkIdx, &s_link);
-    combus_links_watch(&s_runtime, 1u);
+    combus_link_supervisor_start(&s_runtime, 1u);
 }
 
 /** On the loopback the tractor hears itself: make it announce the plug MD5, as the trailer would. */
@@ -513,7 +514,7 @@ static void startCoupledLink(void) {
     TEST_ASSERT_TRUE(combus_link_build(map, s_port, s_runtime, s_link));
     s_link.target = &bus;
     combus_link_start(kLinkIdx, &s_link);
-    combus_links_watch(&s_runtime, 1u);
+    combus_link_supervisor_start(&s_runtime, 1u);
     while (s_port->available(s_port->ctx) > 0) { s_port->readByte(s_port->ctx); }   // nothing left from the last test
 }
 
@@ -990,7 +991,7 @@ static void startPlugLink(void) {
     TEST_ASSERT_TRUE(combus_link_build(map, s_port, s_runtime, s_link));
     s_link.target = &bus;
     combus_link_start(kLinkIdx, &s_link);
-    combus_links_watch(&s_runtime, 1u);
+    combus_link_supervisor_start(&s_runtime, 1u);
     while (s_port->available(s_port->ctx) > 0) { s_port->readByte(s_port->ctx); }
     combus_coupling_reset();
 }
@@ -1065,7 +1066,7 @@ static void startDebouncedLink(void) {
     TEST_ASSERT_TRUE(combus_link_build(map, s_port, s_runtime, s_link));
     s_link.target = &bus;
     combus_link_start(kLinkIdx, &s_link);
-    combus_links_watch(&s_runtime, 1u);
+    combus_link_supervisor_start(&s_runtime, 1u);
     while (s_port->available(s_port->ctx) > 0) { s_port->readByte(s_port->ctx); }
 }
 
@@ -1205,7 +1206,7 @@ static void startChainedLink(bool engaged) {
     TEST_ASSERT_TRUE(combus_link_build(map, s_port, s_runtime, s_link));
     s_link.target = &bus;
     combus_link_start(kLinkIdx, &s_link);
-    combus_links_watch(&s_runtime, 1u);
+    combus_link_supervisor_start(&s_runtime, 1u);
     while (s_port->available(s_port->ctx) > 0) { s_port->readByte(s_port->ctx); }
     bus.digitalBus[kEngagedSw].value = engaged;
     com_rx_update(bus);                                 // the toggle sees the button released
@@ -1445,7 +1446,7 @@ static void test_tool_row9_active_coupled_output(void) {
     TEST_ASSERT_TRUE(combus_link_build(map, s_port, s_runtime, s_link));
     s_link.target = &bus;
     combus_link_start(kLinkIdx, &s_link);
-    combus_links_watch(&s_runtime, 1u);
+    combus_link_supervisor_start(&s_runtime, 1u);
     while (s_port->available(s_port->ctx) > 0) { s_port->readByte(s_port->ctx); }
     bus.digitalBus[kEngagedSw].value = true;
     runLinks(kTestCouplerEngagedDelayMs + 30u);

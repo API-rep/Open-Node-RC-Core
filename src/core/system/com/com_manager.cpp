@@ -5,11 +5,9 @@
 
 #include "com_manager.h"
 
-#include <core/config/machines/combus_types.h>                      // DigitalComBusID::NODE_LINK_FAIL, BOARD_LINK_FAIL
-#include <core/system/combus/combus_access.h>                       // combus_set_digital()
-#include <core/system/combus/protocol/combus_rx.h>                  // combus_rx_update()
-#include <core/system/combus/protocol/link/combus_link_watch.h>     // combus_links_lost(), combus_links_update()
-#include <core/system/combus/protocol/combus_tx.h>                  // combus_tx_update()
+#include <core/system/combus/protocol/combus_rx.h>                       // combus_rx_update(), combus_rx_both_or_update()
+#include <core/system/combus/protocol/link/combus_link_supervisor.h>     // combus_link_supervisor_update()
+#include <core/system/combus/protocol/combus_tx.h>                       // combus_tx_update()
 
 
 
@@ -21,35 +19,19 @@
  * @brief Reception pass. Brings the state of the links and of the bus up to date.
  *
  * @details In order:
- *   1. Receiving links: decode the frames, and apply them to the bus.
- *   2. both_or channels: this board's value OR the live links (anti ping-pong, both_or.md).
- *   3. Watch of the links: couplings, safe values, logs.
- *   4. Contributors of the loss, by scope, written on every cycle.
+ *   1. Receiving links: decode the frames, apply them to the bus, merge the both_or
+ *      channels (anti ping-pong, both_or.md).
+ *   2. Supervisor: couplings, safe values, logs, contributors of the loss.
  */
 
 void com_rx_update(ComBus& bus) {
 
 		// 1. Receiving links
 	combus_rx_update();
+	combus_rx_both_or_update(bus);
 
-		// 2. both_or channels
-	for (uint8_t ch = 0u; ch < static_cast<uint8_t>(DigitalComBusID::CH_COUNT); ++ch) {
-		if (bus.digitalBus[ch].bothOr.enabled) {
-			combus_both_or_set_remote(bus, static_cast<DigitalComBusID>(ch), combus_rx_peer_or(ch, CombusRxNoLink));
-		}
-	}
-
-		// 3. Watch of the links
-	combus_links_update(bus);
-
-		// 4. Contributors of the loss
-#if defined(HAS_FAILSAFE) && defined(HAS_NODE_LINK_FAILSAFE)
-	combus_set_digital(bus, DigitalComBusID::NODE_LINK_FAIL, combus_links_lost(LinkScope::INTER_NODE));
-#endif
-#if defined(HAS_FAILSAFE) && defined(HAS_BOARD_LINK_FAILSAFE)
-	combus_set_digital(bus, DigitalComBusID::BOARD_LINK_FAIL, combus_links_lost(LinkScope::INTRA_NODE));
-#endif
-
+		// 2. Supervisor
+	combus_link_supervisor_update(bus);
 }
 
 
@@ -59,7 +41,7 @@ void com_rx_update(ComBus& bus) {
 // =============================================================================
 
 	/// Each link keeps its own timer: this call is non-blocking; nothing to do without a sending link.
-void com_update(const ComBus& bus) {
+void com_tx_update(const ComBus& bus) {
 	combus_tx_update(&bus);
 }
 

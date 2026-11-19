@@ -7,7 +7,7 @@
  *   - ComDev: a logical link, shared by the boards or nodes it connects;
  *   - ComDevMap: the wiring of one end, a ComDev on a ComPortCfg.
  *
- *   These are purely descriptive and live in Flash.  combus_links.h turns them into
+ *   These are purely descriptive and live in Flash.  combus_link_setup.h turns them into
  *   a ComBusLink at init.
  *******************************************************************************///
 #pragma once
