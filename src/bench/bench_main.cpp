@@ -63,7 +63,7 @@
 #include <core/system/combus/protocol/handshake/combus_handshake.h>
 #include <core/system/combus/protocol/coupling/combus_coupling.h>
 #include <core/system/com/com_manager.h>
-#include <core/system/hw/transport/uart_com.h>
+#include <core/system/hw/transport/uart_port.h>
 #include <combus.h>                // generated: comBus, the IDs
 #include <combus_peer_links.h>     // generated: the tables of the links between nodes
 
@@ -503,7 +503,7 @@ static void pollConsole( void )
 void setup()
 {
 	Serial.begin(115200);
-	uart_com_register_pool(s_uart, 2u);
+	uart_port_register_pool(s_uart, 2u);
 
 	const ComLinksStorage storage = { s_tx, s_rx, s_runtime, s_links };
 	const bool started = combus_links_init(kMaps, 1u, storage, nullptr, &comBus);

@@ -6,7 +6,7 @@
  *   communication modules (combus_tx, combus_rx...) and the physical transport (UART,
  *   ESP-NOW...).  These modules do not need to know the details of the transport.
  *
- *   At init, a transport adapter (uart_com_init()) opens the physical port and returns a
+ *   At init, a transport adapter (uart_port_init()) opens the physical port and returns a
  *   ComPort, which the protocol keeps for the whole run.
  *****************************************************************************/
 #pragma once

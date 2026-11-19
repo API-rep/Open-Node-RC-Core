@@ -10,7 +10,7 @@
 #include <string.h>   // memcmp()
 
 #include <core/system/combus/protocol/link/combus_link_watch.h>   // combus_links_watch()
-#include <core/system/hw/transport/uart_com.h>
+#include <core/system/hw/transport/uart_port.h>
 #include <core/system/combus/protocol/frame/combus_frame.h>           // CombusFrameHeaderLen, CombusFrameCrcLen
 #include <core/system/combus/protocol/handshake/combus_handshake.h>   // CombusFrameHandshakeMinLen, period
 #include <core/system/debug/logging/debug.h>
@@ -106,7 +106,7 @@ static ComPort* setupPort( const ComDevMap& map, PinReg* pinReg )
 			const int txPin = endTransmits(map.end) ? cfg.uart.txPin : -1;
 			const int rxPin = endReceives (map.end) ? cfg.uart.rxPin : -1;
 
-			return uart_com_init(uart_serial_for(cfg.uart.index), map.dev->protocol->rate,
+			return uart_port_init(uart_serial_for(cfg.uart.index), map.dev->protocol->rate,
 			                     txPin, rxPin, map.dev->name, pinReg);
 		}
 		case ComPortType::NONE:

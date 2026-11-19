@@ -14,7 +14,7 @@
 #include <core/system/combus/protocol/link/combus_link_watch.h>
 #include <core/system/combus/protocol/combus_tx.h>
 #include <core/system/combus/protocol/combus_rx.h>
-#include <core/system/hw/transport/uart_com.h>       // uart_com_register_pool, UartCtx
+#include <core/system/hw/transport/uart_port.h>       // uart_port_register_pool, UartCtx
 #include <core/system/debug/logging/debug.h>
 #include <remotes/config/driven_machines.h>
 
@@ -42,7 +42,7 @@ static_assert(kDrivenMachineCount == 1u, "one driven machine: several need a Com
 uint8_t remote_links_init( void )
 {
 		// 1. UART pool
-	uart_com_register_pool(s_uart, kDrivenMachineCount);
+	uart_port_register_pool(s_uart, kDrivenMachineCount);
 
 		// 2. Wiring of each link
 	ComDevMap maps[kDrivenMachineCount];

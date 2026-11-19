@@ -7,7 +7,7 @@
 #include "../hw/hw_init_com.h"   // hw_init_com() — UART port pool
 #include <config/config.h>
 #include <core/system/debug/logging/debug.h>
-#include <core/system/hw/transport/uart_com.h>
+#include <core/system/hw/transport/uart_port.h>
 #include <core/system/combus/combus_init.h>
 #include <core/system/hw/pin_reg.h>
 
@@ -33,11 +33,11 @@ void sys_init() {
 	// --- 1. Pin registry (no deps: pure RAM init, first in sequence) ---
 	pin_reg_init(pinReg, PinRegMaxEntry);
 
-	// --- 2. Register the shared UART port pool (before any uart_com_init() claim) ---
+	// --- 2. Register the shared UART port pool (before any uart_port_init() claim) ---
 	hw_init_com();
 
 	// --- 3. Claim Serial0 in the UART pool if any debug or dashboard flag is set.
-	// The duplicate guard in uart_com_init() will catch any accidental Serial0
+	// The duplicate guard in uart_port_init() will catch any accidental Serial0
 	// claim attempt by another module.
 	//
 	// TODO: the debug serial and the dashboard currently use Serial directly.
@@ -48,7 +48,7 @@ void sys_init() {
 
 #if defined(DEBUG_ALL)  || defined(DEBUG_SYSTEM) || defined(DEBUG_INPUT) || \
     defined(DEBUG_HW)   || defined(DEBUG_COMBUS) || defined(DEBUG_DASHBOARD)
-	(void) uart_com_init(&Serial, DEBUG_MONITOR_BAUD, -1, -1, "debug", &pinReg);
+	(void) uart_port_init(&Serial, DEBUG_MONITOR_BAUD, -1, -1, "debug", &pinReg);
 #endif
 
   sys_log_info("[SYSTEM] System initialisation ...\n");

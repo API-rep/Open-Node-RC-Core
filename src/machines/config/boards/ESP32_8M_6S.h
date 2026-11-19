@@ -111,7 +111,7 @@
   static constexpr uint32_t UartMaxBaud = 115200u;  // hardware ceiling for all UART links on this board
 
     // Maximum number of simultaneously UART ports on this board (including Serial0/USB).
-  static constexpr uint8_t  UartComMaxPorts = 3u;
+  static constexpr uint8_t  UartMaxPorts = 3u;
 
     // Pin registry capacity — ESP32 has 40 GPIOs, 32 slots covers all usable pins.
   static constexpr uint8_t  PinRegMaxEntry = 32u;

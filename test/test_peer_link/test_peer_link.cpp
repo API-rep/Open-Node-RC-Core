@@ -52,7 +52,7 @@
 #include <core/system/combus/protocol/handshake/combus_handshake_tx.h>
 #include <core/system/combus/protocol/coupling/combus_coupling.h>
 #include <core/config/couplers/test_coupler/test_coupler_chain.h>   // test_coupler_socket_chain
-#include <core/system/hw/transport/uart_com.h>
+#include <core/system/hw/transport/uart_port.h>
 #include <core/system/combus/protocol/combus_tx.h>
 #include <core/system/combus/protocol/combus_rx.h>
 #include <core/system/combus/protocol/link/combus_link_watch.h>
@@ -1675,8 +1675,8 @@ void setup() {
     delay(2000u);
     UNITY_BEGIN();
 
-    uart_com_register_pool(s_uartPool, 1);
-    s_port = uart_com_init(&Serial2, 115200u, kTxPin, kRxPin, "test_peer_link");
+    uart_port_register_pool(s_uartPool, 1);
+    s_port = uart_port_init(&Serial2, 115200u, kTxPin, kRxPin, "test_peer_link");
     combus_tx_register_pool(s_txStates, 1);
     combus_rx_register_pool(s_rxStates, 1);
 

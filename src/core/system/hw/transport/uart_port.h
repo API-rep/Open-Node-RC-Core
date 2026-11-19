@@ -1,5 +1,5 @@
 /******************************************************************************
- * @file uart_com.h
+ * @file uart_port.h
  * @brief UART transport — port init, claim guard and channel helpers.
  *
  * @details Groups all transport-layer UART concerns: low-level port opening
@@ -9,7 +9,7 @@
  * Core owns ZERO static storage for the port registry. The caller (machine,
  * sound node, or any future integrator) allocates a static UartCtx[] array
  * sized to its own real needs and hands it to core exactly once via
- * uart_com_register_pool(), before the first uart_com_init() call. This pool
+ * uart_port_register_pool(), before the first uart_port_init() call. This pool
  * is shared by every UART owner in the program (ComBus, Sound, future
  * modules) — its capacity is fixed for the program's lifetime.
  *
@@ -19,15 +19,15 @@
  * Call sequence (per ComBus link, board-side):
  * @code
  *   sys_init();                                    // debug serial + pin registry
- *   static UartCtx pool[UartComMaxPorts];          // machine: static storage
- *   uart_com_register_pool(pool, UartComMaxPorts); // machine: register once
+ *   static UartCtx pool[UartMaxPorts];             // machine: static storage
+ *   uart_port_register_pool(pool, UartMaxPorts);   // machine: register once
  *   board_links_init();                            // env: opens one ComPort per link of the board
  *   hw_init();                                     // hardware peripherals
  *   combus_link_start(...);                     // protocol layers wired to transport
  * @endcode
  *
  * Each link of the board table (comLinks[]) names its port; combus_links_init()
- * opens it with uart_com_init() — there is no single-link helper in this header.
+ * opens it with uart_port_init() — there is no single-link helper in this header.
  *****************************************************************************/
 #pragma once
 
@@ -47,7 +47,7 @@
  * @details Exposed (not opaque) so the machine can declare its static array
  *   directly, without an internal core header. Core never allocates this —
  *   only writes into slots of a buffer handed to it via
- *   uart_com_register_pool().
+ *   uart_port_register_pool().
  *
  *   The reception goes through a small cache: one call to the driver reads up to
  *   UartRxChunk bytes, then readByte() serves them one at a time.  Read one byte
@@ -75,7 +75,7 @@ struct UartCtx {
 
 
 // =============================================================================
-// 2. POOL REGISTRATION  (call ONCE at boot, before any uart_com_init)
+// 2. POOL REGISTRATION  (call ONCE at boot, before any uart_port_init)
 // =============================================================================
 
 /**
@@ -88,7 +88,7 @@ struct UartCtx {
  * @details A second call is rejected (logged, ignored) — the pool is meant
  *   to be wired once at boot, by whichever init sequence runs first.
  */
-void uart_com_register_pool(UartCtx* buffer, uint8_t capacity);
+void uart_port_register_pool(UartCtx* buffer, uint8_t capacity);
 
 
 // =============================================================================
@@ -106,7 +106,7 @@ static constexpr uint8_t UartHwChannelMax = 3u;
  * @brief Initialize a UART port and return a claimed ComPort*.
  *
  * @details Calls serial.begin() once and registers the port in the pool
- * handed to core via uart_com_register_pool(). Fails safely (logged,
+ * handed to core via uart_port_register_pool(). Fails safely (logged,
  * nullptr) if called before the pool is registered, on a null serial
  * pointer, on a duplicate claim of the same physical port, or once the
  * pool's capacity is exhausted.
@@ -121,7 +121,7 @@ static constexpr uint8_t UartHwChannelMax = 3u;
  *
  * @return Pointer to a ready-to-use ComPort, or nullptr on failure.
  */
-ComPort* uart_com_init( HardwareSerial* serial,
+ComPort* uart_port_init( HardwareSerial* serial,
                         uint32_t        baud,
                         int             txPin,
                         int             rxPin,
@@ -137,4 +137,4 @@ ComPort* uart_com_init( HardwareSerial* serial,
 HardwareSerial* uart_serial_for(int n);
 
 
-// EOF uart_com.h
+// EOF uart_port.h

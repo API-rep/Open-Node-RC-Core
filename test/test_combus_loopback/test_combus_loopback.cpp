@@ -122,7 +122,7 @@
 #include <unity.h>
 
 #include <core/system/combus/protocol/frame/combus_frame.h>
-#include <core/system/hw/transport/uart_com.h>
+#include <core/system/hw/transport/uart_port.h>
 #include <core/system/combus/protocol/combus_tx.h>
 #include <core/system/combus/protocol/combus_rx.h>
 #include <core/system/combus/combus_defs.h>
@@ -347,10 +347,10 @@ static void test_codec_monkey_roundtrip(void) {
 
 /** Init combus_tx and combus_rx on the same Serial2 port (loopback). */
 static void test_loopback_init(void) {
-    // The UART port registry must be registered before any uart_com_init().
-    uart_com_register_pool(s_uartPool, 1);
+    // The UART port registry must be registered before any uart_port_init().
+    uart_port_register_pool(s_uartPool, 1);
 
-    ComPort* port = uart_com_init(&Serial2, kLoopbackBaud, kTxPin, kRxPin, "test_loopback");
+    ComPort* port = uart_port_init(&Serial2, kLoopbackBaud, kTxPin, kRxPin, "test_loopback");
     TEST_ASSERT_NOT_NULL(port);
     s_port = port;
 
