@@ -129,7 +129,7 @@ struct ChanFlow {
  *
  * @details The value read by everyone is this board's own value OR the values
  *   received from the live links.  A received frame never overwrites it:
- *   com_rx_update() refreshes `remote` each cycle and every local write recomputes the
+ *   combus_rx_update() refreshes `remote` each cycle and every local write recomputes the
  *   value.
  */
 

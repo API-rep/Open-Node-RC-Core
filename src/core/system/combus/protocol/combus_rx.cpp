@@ -372,6 +372,27 @@ void combus_rx_init( uint8_t        linkIdx,
 // =============================================================================
 
 /**
+ * @brief both_or merge of one bus. Its both_or channels take the OR of the live links.
+ *
+ * @details This board's value OR the live links (anti ping-pong, both_or.md), through
+ *   combus_rx_peer_or() over all the links.
+ *   TODO(remote, several driven machines): one bus per machine; the OR should then only
+ *   count the links of @p bus.
+ *
+ * @param bus  Target bus of at least one receiving link.
+ */
+
+static void mergeBothOr( ComBus& bus )
+{
+	for (uint8_t ch = 0u; ch < static_cast<uint8_t>(DigitalComBusID::CH_COUNT); ++ch) {
+		if (bus.digitalBus[ch].bothOr.enabled) {
+			combus_both_or_set_remote(bus, static_cast<DigitalComBusID>(ch), combus_rx_peer_or(ch, CombusRxNoLink));
+		}
+	}
+}
+
+
+/**
  * @brief Reception pass. Reads, decodes and watches each link in turn.
  *
  * @details For each link, in order:
@@ -389,6 +410,8 @@ void combus_rx_init( uint8_t        linkIdx,
  *   6. Watch of a STABLE contract.  The silence only counts once data has flowed: a
  *      receiver may validate its contract on a request, before any data frame.  The
  *      missing ACK only concerns a bidirectional end: the peer no longer receives it.
+ *   Last, once every link is read: the both_or merge, once per target bus.  Inside the
+ *   pass, so that no loop of a node can forget it.
  */
 
 void combus_rx_update( void )
@@ -461,6 +484,22 @@ void combus_rx_update( void )
 		} else if (ctx->bidirectional && (now - ctx->lastAckMs) > kCombusHandshakeAckTimeoutMs) {
 			combus_handshake_internal::dropContract(ctx, "no ACK, the peer does not receive this end");
 		}
+	}
+
+		// both_or merge, once per target bus
+	for (uint8_t i = 0u; i < s_capacity; ++i) {
+		ComBus* bus = s_rxStates[i].port ? s_rxStates[i].target : nullptr;
+
+		if (!bus) { continue; }
+
+			// Check that an earlier link has not merged this bus already
+		bool merged = false;
+
+		for (uint8_t j = 0u; j < i; ++j) {
+			if (s_rxStates[j].port && s_rxStates[j].target == bus) { merged = true; break; }
+		}
+
+		if (!merged) { mergeBothOr(*bus); }
 	}
 }
 
@@ -590,17 +629,6 @@ bool combus_rx_peer_or( uint8_t ch, uint8_t excludeLink )
 	}
 
 	return false;
-}
-
-
-	/// Every both_or channel of the bus takes the OR of the live links as its remote part.
-void combus_rx_both_or_update( ComBus& bus )
-{
-	for (uint8_t ch = 0u; ch < static_cast<uint8_t>(DigitalComBusID::CH_COUNT); ++ch) {
-		if (bus.digitalBus[ch].bothOr.enabled) {
-			combus_both_or_set_remote(bus, static_cast<DigitalComBusID>(ch), combus_rx_peer_or(ch, CombusRxNoLink));
-		}
-	}
 }
 
 

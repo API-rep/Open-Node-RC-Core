@@ -332,7 +332,7 @@ bool combus_frame_decode( const ComBusFrameCfg& cfg,
  *   (link between nodes), `betweenBoards` otherwise (link inside a node).
  *
  *   A both_or channel is never written here: the value received stays in the snapshot
- *   of the link, and com_rx_update() merges it with the value of this board on every
+ *   of the link, and combus_rx_update() merges it with the value of this board on every
  *   cycle (anti ping-pong, see protocol/both_or.md).
  */
 

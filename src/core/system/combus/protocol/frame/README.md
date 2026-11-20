@@ -61,7 +61,7 @@ Receiving   ComPort → bytes → combus_frame_decode() → snapshot of the link
 
 A channel this node produces is therefore never overwritten by its peer. The writes go through `combus_link_set_*()`, with the layer of the link, which refuses a channel outside the scope of the link: a frame never writes a `BOARD` channel.
 
-**The `both_or` case**: these channels are never written by a frame. The received value stays in the snapshot of the link, and `com_rx_update()` merges it with the value of the board on every cycle. See [the `both_or` merge](../both_or.md).
+**The `both_or` case**: these channels are never written by a frame. The received value stays in the snapshot of the link, and `combus_rx_update()` merges it with the value of the board on every cycle. See [the `both_or` merge](../both_or.md).
 
 ## Files
 

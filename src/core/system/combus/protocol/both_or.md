@@ -23,7 +23,7 @@ For each `both_or` channel, each board keeps **three separate things**:
 
 Four rules:
 
-1. **Merge**: `value = host OR (cache of the live links)`, re-evaluated on every cycle (`com_rx_update`) and on every local write (`combus_set_digital`). A received frame never overwrites the value: it only updates the cache of its link.
+1. **Merge**: `value = host OR (cache of the live links)`, re-evaluated on every cycle (`combus_rx_update()`) and on every local write (`combus_set_digital`). A received frame never overwrites the value: it only updates the cache of its link.
 2. **Sending without echo**: on link L, the board sends `host OR (cache of the links OTHER than L)`. It never sends back to L what L has sent to it. With a single link, it simply sends its host value.
 3. **A board that never wrote the channel does not contribute**: its host term is `false` (`bothOr.written`). A board that receives `FAILSAFE_HARD` by diffusion without computing it keeps its default value (`fault`, true) in the slot; without this rule, it would send it to everyone, and the machine would stay in failsafe from startup. It only relays.
 4. **A lost link no longer counts**: its last received value is stale. Safety is then ensured by the link loss contributor (`BOARD_LINK_FAIL` / `NODE_LINK_FAIL`, see [the failsafe module](../../failsafe/failsafe_module.md)).
@@ -63,7 +63,7 @@ At t1, M goes into `FAILSAFE_HARD`; its run level chain writes `RUNLEVEL = HALT`
 | host term, update of the merged cache | `combus_both_or_local()`, `combus_both_or_set_remote()`, `combus_access.h` |
 | a frame does not overwrite a `both_or` | `combus_frame_apply()`, `frame/combus_frame.cpp` |
 | OR of the live links, with one link excluded | `combus_rx_peer_or()`, `combus_rx.cpp` |
-| merge on every cycle | `com_rx_update()`, `src/core/system/com/com_manager.cpp` |
+| merge on every cycle | `combus_rx_update()`, `src/core/system/combus/protocol/combus_rx.cpp` |
 | sending without echo, link by link | `combus_tx_update()`, `combus_tx.cpp` (values passed to `combus_frame_encode()`) |
 | loss timeout of the receiving links | `combus_link_supervisor_start()` → `combus_rx_set_link_timeout()` |
 

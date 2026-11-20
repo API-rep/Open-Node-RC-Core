@@ -99,9 +99,8 @@ The transmit ring removes the blocking of large frames: a 226-byte frame took 20
 loop()
  ├─ sys_manager_update(comBus)            src/machines/system/sys_manager.cpp
  │    ├─ com_rx_update(bus)               src/core/system/com/com_manager.cpp
- │    │    ├─ combus_rx_update()          read the bytes, decode, apply the frames
- │    │    ├─ combus_rx_both_or_update(bus)
- │    │    │                              host value OR the live links
+ │    │    ├─ combus_rx_update()          read the bytes, decode, apply the frames,
+ │    │    │                              then both_or: host value OR the live links
  │    │    └─ combus_link_supervisor_update(bus)
  │    │                                   coupling, loss, safe values,
  │    │                                   NODE_LINK_FAIL / BOARD_LINK_FAIL

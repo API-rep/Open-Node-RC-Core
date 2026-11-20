@@ -36,7 +36,7 @@ The hard chain always comes first (see [failsafe_module.md](failsafe_module.md) 
 | Contributor | Fact | Written by | Flag |
 |---|---|---|---|
 | `LOCAL_REMOTE_FAIL` | the local remote no longer answers (PS4 controller today) | `input_update()`, `src/machines/system/input/input_update.cpp`, when the backend is connected (`INPUT_PS4_DS4_BT`) | `HAS_LOCAL_REMOTE_FAILSAFE` |
-| `NODE_LINK_FAIL` | a receiving link, to another node, is not alive (never seen included) | `com_rx_update()`, `src/core/system/com/com_manager.cpp` | `HAS_NODE_LINK_FAILSAFE` |
+| `NODE_LINK_FAIL` | a receiving link, to another node, is not alive (never seen included) | `combus_link_supervisor_update()`, `src/core/system/combus/protocol/link/combus_link_supervisor.cpp` | `HAS_NODE_LINK_FAILSAFE` |
 
 Both are `BOARD` channels (private to the board that carries the source), of the failsafe group, `value: fault`. The chain re-arms them to `true` after reading: their instant value is not the state of the link, read `FAILSAFE_SOFT`.
 

@@ -168,7 +168,7 @@ inline bool combus_both_or_local(const DigitalComBus& slot) {
  * @brief Refresh the received term of a both_or channel, and recompute its value.
  *
  * @details value = (this board's own term) OR @p remote.  Called once per cycle by
- *   com_rx_update(), with the OR of the values received from the live links (see
+ *   combus_rx_update(), with the OR of the values received from the live links (see
  *   protocol/both_or.md, anti ping-pong).
  *
  * @param bus     ComBus of the node.

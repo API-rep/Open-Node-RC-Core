@@ -39,8 +39,8 @@ A contributor states a **fact** ("the battery is failing", "a link between board
 | Contributor | Fact | Written by | Flag | Chain today |
 |---|---|---|---|---|
 | `VBAT_FAIL` | battery below the threshold | `vbat_update()` (`src/core/system/vbat/vbat.cpp`) | `HAS_VBAT_FAILSAFE` | hard |
-| `BOARD_LINK_FAIL` | a receiving link, between boards of the node, is lost | `com_rx_update()` (`src/core/system/com/com_manager.cpp`) | `HAS_BOARD_LINK_FAILSAFE` | hard |
-| `NODE_LINK_FAIL` | a receiving link, to another node, is lost | `com_rx_update()` | `HAS_NODE_LINK_FAILSAFE` | soft |
+| `BOARD_LINK_FAIL` | a receiving link, between boards of the node, is lost | `combus_link_supervisor_update()` (`src/core/system/combus/protocol/link/combus_link_supervisor.cpp`) | `HAS_BOARD_LINK_FAILSAFE` | hard |
+| `NODE_LINK_FAIL` | a receiving link, to another node, is lost | `combus_link_supervisor_update()` | `HAS_NODE_LINK_FAILSAFE` | soft |
 | `LOCAL_REMOTE_FAIL` | the local remote (PS4 controller; tomorrow a PPM/SBUS receiver) no longer answers | `input_update()` (`src/machines/system/input/input_update.cpp`) | `HAS_LOCAL_REMOTE_FAILSAFE` | soft |
 
 A contributor requires `HAS_FAILSAFE` and **its own flag**, never the flag of a chain: it stays neutral and **pluggable**.
@@ -81,7 +81,7 @@ Both chains have the same shape: a reset first (`cb_reset_fn`, aggregate to 0 = 
 
 Each contributor is in an `#if defined(HAS_<SOURCE>_FAILSAFE)` block. A chain without a contributor writes `false` on every cycle.
 
-**Execution order** (`sys_manager_update()`, `src/machines/system/sys_manager.cpp`): reception (`com_rx_update`, which writes the link contributors), inputs (`input_update`), battery (`vbat_update`), hard chain, soft chain. All the sources have therefore written before the chains, and both aggregates are fresh before the run level chain and the state machine of `main.cpp`. The startup value of the aggregates never reaches the state machine.
+**Execution order** (`sys_manager_update()`, `src/machines/system/sys_manager.cpp`): reception (`com_rx_update`, whose supervisor writes the link contributors), inputs (`input_update`), battery (`vbat_update`), hard chain, soft chain. All the sources have therefore written before the chains, and both aggregates are fresh before the run level chain and the state machine of `main.cpp`. The startup value of the aggregates never reaches the state machine.
 
 ---
 
@@ -124,8 +124,8 @@ src/core/system/failsafe/
 
 The contributors stay next to the module that writes them:
 
-src/core/system/com/board_link_fail.cb      // BOARD_LINK_FAIL (BOARD), written by com_rx_update()
-src/core/system/com/node_link_fail.cb       // NODE_LINK_FAIL (BOARD), written by com_rx_update()
+src/core/system/com/board_link_fail.cb      // BOARD_LINK_FAIL (BOARD), written by combus_link_supervisor_update()
+src/core/system/com/node_link_fail.cb       // NODE_LINK_FAIL (BOARD), written by combus_link_supervisor_update()
 src/core/system/vbat/vbat_fail.cb           // VBAT_FAIL (SYSTEM, uplink_or)
 src/core/config/inputs/local_remote_fail.cb // LOCAL_REMOTE_FAIL (BOARD), written by input_update()
 src/core/system/combus/processors/logic/cb_or.h   // cb_or_fn
@@ -140,7 +140,7 @@ src/core/system/combus/processors/logic/cb_or.h   // cb_or_fn
 | Holding `HALT` | `cb_runlevel_hold_fn`, `src/core/system/combus/processors/base/cb_runlevel.h` |
 | Aggregates | `failsafe_hard.cb`, `failsafe_soft.cb` |
 | Chains | `failsafe_chain.cpp`, `failsafe_soft_chain.cpp` |
-| Link contributors | `com_rx_update()`, `src/core/system/com/com_manager.cpp` |
+| Link contributors | `combus_link_supervisor_update()`, `src/core/system/combus/protocol/link/combus_link_supervisor.cpp` |
 | Execution order | `sys_manager_update()`, `src/machines/system/sys_manager.cpp` |
 | Run level reaction | `kRunlevelProcs[]`, `.../processors/input/runlevel_config.h` |
 | Motor reaction | `src/machines/main.cpp`, `case RunLevel::HALT` |

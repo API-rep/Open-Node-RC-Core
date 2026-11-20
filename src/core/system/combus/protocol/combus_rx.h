@@ -146,12 +146,16 @@ void combus_rx_init( uint8_t        linkIdx,
 // =============================================================================
 
 /**
- * @brief Reception of every link: read the transport, decode, watch the contract.
+ * @brief Reception of every link: read the transport, decode, watch the contract, merge.
  *
  * @details Non-blocking, to call on every loop.  On each link, reads all the bytes
  *   available, then decodes every complete frame.  A STABLE contract drops back to
  *   UNKNOWN after a silence longer than the link timeout, once data has flowed, or
  *   after kCombusHandshakeAckTimeoutMs without ACK on a bidirectional end.
+ *
+ *   Last, the both_or channels of each target bus take the OR of the live links as
+ *   their remote part (combus_rx_peer_or(), anti ping-pong, both_or.md).  A link
+ *   without a target bus has nothing merged.
  */
 
 void combus_rx_update( void );
@@ -245,19 +249,6 @@ void combus_rx_set_mode( uint8_t linkIdx, CombusRxMode mode );
  */
 
 bool combus_rx_peer_or( uint8_t ch, uint8_t excludeLink );
-
-
-/**
- * @brief Merge the both_or channels of a bus with the live links, once per cycle.
- *
- * @details For each both_or channel of @p bus, its remote part becomes
- *   combus_rx_peer_or() over all the links: this board's value OR the live links
- *   (anti ping-pong, both_or.md).  Called by com_rx_update(), after combus_rx_update().
- *
- * @param bus  ComBus whose both_or channels are merged.
- */
-
-void combus_rx_both_or_update( ComBus& bus );
 
 
 
