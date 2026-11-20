@@ -72,8 +72,8 @@ Two modules do the actual work, on every loop cycle: `combus_tx` sends, `combus_
 
 ### One Loop Cycle
 
-1. **Reception**: `combus_rx_update()` reads the bytes of each link and routes them to the right decoder.
-2. **Watch**: `combus_link_supervisor_update()` follows the coupling and detects the loss of a link.
+1. **Reception**: `combus_rx_update()` reads the bytes of each link and routes them to the right decoder; once every link is read, it merges the [`both_or`](both_or.md) channels.
+2. **Supervision**: `combus_link_supervisor_update()` follows the couplings, detects the loss of a link and reports it to the failsafe ([link](link/README.md#supervising)).
 3. **Processing** of the machine.
 4. **Transmission**: `combus_tx_update()` sends what is due on each link.
 

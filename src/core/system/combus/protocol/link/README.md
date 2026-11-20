@@ -7,7 +7,7 @@ This folder answers three questions: how is a link described, how does it start,
 A link carries no byte. It exists so that nothing is wired in the code: which port carries which channels, in which direction and at what rate, is left to the configuration. For each connection, a link joins the protocol and the hardware, with two roles:
 
 - **a mapper**, on the hardware side: it puts a logical link (`ComDev`) on a physical port (`ComPortCfg`), with the role of this end (TX, RX or both). See [Describing a Link](#describing-a-link);
-- **an orchestrator**, on the protocol side: at boot, it has its port set up, sets its contract and starts its TX and RX; while it runs, it watches its state and reports its loss to the failsafe. See [Starting](#starting) and [Watching](#watching).
+- **an orchestrator**, on the protocol side: at boot, the setup has its port set up, sets its contract and starts its TX and RX; while it runs, the supervisor follows its state and reports its loss to the failsafe. See [Starting](#starting) and [Supervising](#supervising).
 
 ## Describing a Link
 
@@ -63,7 +63,7 @@ For each ComDevMap:
 
 Register the TX and RX states
 combus_link_start()                 contract of the link, then TX and RX sides, for each link
-combus_link_supervisor_start()      puts the links under watch
+combus_link_supervisor_start()      hands the links to the supervisor
 ```
 
 1. **Check.** `combus_link_check()` refuses a description that cannot work, before the port is taken:
@@ -71,13 +71,14 @@ combus_link_supervisor_start()      puts the links under watch
    - a coupled link without its coupling device or its table;
    - a two-way link not wired `TX_RX`, or a one-way link wired `TX_RX`;
    - a frame rate of 0 or above 1000 Hz, or a receiving end without a loss timeout;
+   - a loss timeout not longer than the period of the frames: below 3 periods, the link starts with a warning;
    - a line rate above what the port accepts;
    - a line too loaded: above 70 % of its rate, the link starts with a warning; above 100 %, it is refused;
    - a table on a link between boards, or a table too large for the receive buffers.
-2. **Open.** The `ComPortCfg` is opened and gives a `ComPort`, the only interface the protocol talks to.
-3. **Build.** `combus_link_build()` fills the `ComBusLink` of the link, and prepares what the watch will need.
+2. **Set up.** The adapter of its kind sets up the port described by the `ComPortCfg`, and gives a `ComPort`, the only interface the protocol talks to.
+3. **Build.** `combus_link_build()` fills the `ComBusLink` of the link, and prepares what the supervisor will need.
 4. **Start.** `combus_link_start()` prepares the contract: the MD5 expected from the other end, and whether this end must wait for an ACK. The contract starts `UNKNOWN`. Then the TX and RX sides start.
-5. **Watch.** `combus_link_supervisor_start()` puts every link under watch. A link through a coupler starts off, until it is paired.
+5. **Supervise.** `combus_link_supervisor_start()` hands every link to the supervisor. A link through a coupler starts off, until it is paired.
 
 A failed link stays inactive and is reported in the log; the others start anyway. All the storage belongs to the caller and stays static.
 
@@ -89,13 +90,13 @@ From the first loop cycle, each end sends handshake requests that carry the MD5 
 
 The link counts as `ALIVE` at its first data frame applied. See the [handshake](../handshake/README.md) for the sequence, and [coupling](../coupling/README.md) for a link that waits to be hitched.
 
-## Watching
+## Supervising
 
-`combus_link_supervisor_update()` runs on every loop cycle. A receiving link has three states:
+`combus_link_supervisor_update()` runs on every loop cycle, called by the `com_manager` right after the reception. It follows the couplings, restores the safe values and, at the end of its pass, writes the contributors of the loss. A receiving link has three states:
 
 | State | Meaning |
 |---|---|
-| `NEVER_SEEN` | no frame since the watch started |
+| `NEVER_SEEN` | no frame since the supervisor started |
 | `ALIVE` | a recent frame, under a valid contract |
 | `LOST` | seen, then silent for longer than `linkTimeoutMs` |
 
