@@ -696,6 +696,9 @@ def forged(sc: str, a: Board, b: Board) -> None:
 
 def load(sc: str, a: Board, b: Board, secs: float = 20.0) -> None:
     """Load of the link: frames received per second, longest loop and TX time, losses."""
+    if MONKEY[sc]["hitch"]:                   # a coupled link only starts once hitched
+        for x in (a, b):
+            x.d("TEST_HITCHED", True)
     ok, dt, _ = until(lambda: stable(a) and stable(b), 8.0)
     s0 = [a.status(), b.status()]
     bd, hz, fl = s0[0]["bd"], s0[0]["hz"], max(s0[0]["fl"], s0[1]["fl"])
