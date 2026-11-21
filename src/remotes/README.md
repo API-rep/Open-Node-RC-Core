@@ -12,7 +12,7 @@ The link has its own table and its own MD5 (`combus::peer::kRemoteLink`), the sa
 
 ```text
 setup()  remote_links_init()     one link per driven machine (driven_machines.h)
-loop()   remote_links_update()   reception, watch, then sending
+loop()   remote_links_update()   reception, supervision, then sending
 ```
 
 The table of the driven machines, `config/driven_machines.h`, gives for each one its name, its ComBus and its link (port, direction, protocol).
@@ -28,6 +28,6 @@ These three points are marked `TODO(chantier 4)` in the code. The rest of the wo
 ## Going Further
 
 - [Linking nodes](../../doc/linking_nodes.md): the remote among the other nodes
-- [Links](../core/system/combus/protocol/link/README.md): describing, starting and watching a link
+- [Links](../core/system/combus/protocol/link/README.md): describing, starting and supervising a link
 - [ComBus transmission](../core/system/combus/protocol/README.md): the overview
 - [ComBus Builder](../../scripts/combus_builder/README.md): the mirror view of the remote

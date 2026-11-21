@@ -100,8 +100,8 @@ See [ComBus](../src/core/system/combus/README.md), [Links](../src/core/system/co
 ## Going Further
 
 * [ComBus](../src/core/system/combus/README.md): the shared register, its layers and its channels.
-* [ComBus transmission](../src/core/system/combus/protocol/README.md): how links are described, sent, received and watched.
-* [Links](../src/core/system/combus/protocol/link/README.md): declaring, starting and watching a link.
+* [ComBus transmission](../src/core/system/combus/protocol/README.md): how links are described, sent, received and supervised.
+* [Links](../src/core/system/combus/protocol/link/README.md): declaring, starting and supervising a link.
 * [Handshake](../src/core/system/combus/protocol/handshake/README.md): the contract of a link, its states and its modes.
 * [Coupling and pairing](../src/core/system/combus/protocol/coupling/README.md): the frame, the state machine, the timings.
 * [Failsafe module](../src/core/system/failsafe/failsafe_module.md): the two chains and their contributors.

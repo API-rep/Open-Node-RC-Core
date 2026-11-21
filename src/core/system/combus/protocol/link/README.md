@@ -4,10 +4,10 @@ This folder answers three questions: how is a link described, how does it start,
 
 ## Why Links
 
-A link carries no byte. It exists so that nothing is wired in the code: which port carries which channels, in which direction and at what rate, is left to the configuration. For each connection, a link joins the protocol and the hardware, with two roles:
+A link carries no byte. It exists so that nothing is wired in the code: which port carries which channels, in which direction and at what rate, is left to the configuration. For each connection, the link manager of this folder joins the protocol and the hardware, in two moments:
 
-- **a mapper**, on the hardware side: it puts a logical link (`ComDev`) on a physical port (`ComPortCfg`), with the role of this end (TX, RX or both). See [Describing a Link](#describing-a-link);
-- **an orchestrator**, on the protocol side: at boot, the setup has its port set up, sets its contract and starts its TX and RX; while it runs, the supervisor follows its state and reports its loss to the failsafe. See [Starting](#starting) and [Supervising](#supervising).
+- **At boot, the setup** follows the configuration: it puts each logical link (`ComDev`) on a physical port (`ComPortCfg`), with the role of this end (TX, RX or both), has the port set up, sets the contract of the link and starts its TX and RX. See [Describing a Link](#describing-a-link) and [Starting](#starting).
+- **While it runs, the supervisor** follows the state of each link and reports its loss to the failsafe. See [Supervising](#supervising).
 
 ## Describing a Link
 
@@ -130,4 +130,4 @@ When a link with a table stops being alive, what this node received through that
 - [ComBus transmission](../README.md): the overview
 - [Coupling and pairing](../coupling/README.md): the links that only exist once hitched
 - [Handshake](../handshake/README.md): the contract of a link
-- [UART workflow](uart_workflow.md): the init chain, from the board table to `loop()`
+- [Link workflow](link_workflow.md): the init chain and the loop, in detail

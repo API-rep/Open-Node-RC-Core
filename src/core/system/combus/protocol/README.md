@@ -23,9 +23,9 @@ Ports of the board        Links of the node
 What it brings:
 
 - **Generic boards.** A board describes what it has, not what it does. The same board serves another machine, or another role, without touching its description.
-- **Pluggable transports.** Every port is used through the same few calls, whatever its protocol (UART, ESP-NOW...).
-- **A change is one line.** Moving a link to another port, or from a wire to a radio, only changes the configuration.
-- **A new kind of port is easy to add.** It only needs its own transport module; the rest of transmission do not change.
+- **Pluggable transports.** Every port is used through the same few calls, a standard interface, whatever its protocol (UART, ESP-NOW...).
+- **A change stays small.** Moving a link to another port, or from a wire to a radio, only changes a few lines of the configuration.
+- **A new kind of port is easy to add.** It only needs its own transport module; the rest of the transmission does not change.
 
 ## The Layers
 
@@ -41,7 +41,7 @@ The ports and their transports are the ground floor. On top of them sits the pro
                 │  Frame                               │
                 │  Transmission   (TX, RX)             │
                 └──────────────────┬───────────────────┘
-                                   │  link: maps, starts, watches
+                                   │  link manager: maps, starts, supervises
                 ┌──────────────────┴───────────────────┐
   Hardware      │  Transport      (ComPort)            │
                 │  Port           (UART, ...)          │
@@ -55,48 +55,71 @@ The ports and their transports are the ground floor. On top of them sits the pro
 - the **contract** checks that both ends have compatible firmwares and share the same channels, before any data is applied ([handshake](handshake/README.md));
 - the **pairing** makes sure that a coupled link talks to the element actually hitched to it, before the link opens ([coupling](coupling/README.md));
 - the **frame** turns the channels into bytes ready to send, and the bytes received back into channels ([frame](frame/README.md));
-- the **transmission** decides what leaves and what arrives on each link, and exchanges the bytes with the hardware (`combus_tx.*`, `combus_rx.*`, [below](#sending-and-receiving-the-combus)).
+- the **transmission** decides what leaves and what arrives on each link, and exchanges the bytes with the hardware (`combus_tx.*`, `combus_rx.*`, [below](#receiving-and-sending-the-combus)).
 
 **Hardware.** It moves the bytes through the ports of the board ([the hardware](../../hw/README.md)):
 
 - the **transport** is reached through a **`ComPort`**: the same few calls (`write()`, `readByte()`, `available()`), whatever the hardware behind it;
 - the **port** is set up at boot by the module of its kind (UART today, ESP-NOW to come), which keeps the details of the hardware behind these calls.
 
-Behind the scenes, a [link](link/README.md) joins the **protocol** and the **hardware** for each connection, so that nothing is hard wired in the code.
-- As a **mapper**, it follows the configuration and puts a logical link on an available port.
-- As an **orchestrator**, it has that port set up and starts the protocol on it (contract, TX, RX), then watches the connection and reports its loss to the failsafe.
+Behind the scenes, the [link manager](link/README.md) ties the **protocol** to the **hardware**, connection by connection, at two moments:
 
-## Sending and Receiving the ComBus
+- **At boot, the setup** follows the configuration: it puts each logical link on its port, has the port set up, and starts the protocol on it (contract, TX, RX).
+- **While it runs, the supervisor** follows each connection and reports its loss to the failsafe.
 
-Two modules do the actual work, on every loop cycle: `combus_tx` sends, `combus_rx` receives. Each one serves all the links of the board in turn, every link at its own rate. Neither of them ever waits: when nothing is due, or nothing has arrived, it moves on, so the rest of the loop is never held up.
+This way, nothing is hard wired in the code, and the transmission stack stays modular.
 
-### One Loop Cycle
+## Receiving and Sending the ComBus
 
-1. **Reception**: `combus_rx_update()` reads the bytes of each link and routes them to the right decoder; once every link is read, it merges the [`both_or`](both_or.md) channels.
-2. **Supervision**: `combus_link_supervisor_update()` follows the couplings, detects the loss of a link and reports it to the failsafe ([link](link/README.md#supervising)).
-3. **Processing** of the machine.
-4. **Transmission**: `combus_tx_update()` sends what is due on each link.
+On every loop cycle, the [`com_manager`](../../com/com_manager.h) calls the transmission twice: at the beginning of the loop, to receive and supervise the links, and at the end, to send.
 
-### Sending
+```text
+  ┌────────────────────────────────────────┐
+  │                RECEIVE                 │◄──┐
+  │   - read the links                     │   │
+  │   - apply the frames                   │   │
+  │   ┌────────────────────────────────┐   │   │
+  │   │        LINK SUPERVISOR         │   │   │
+  │   │   - follow each link's health  │   │   │
+  │   └────────────────────────────────┘   │   │
+  └───────────────────┬────────────────────┘   │
+  ┌───────────────────┴────────────────────┐   │
+  │       PROCESSING OF THE MACHINE        │   │ loop()
+  └───────────────────┬────────────────────┘   │
+  ┌───────────────────┴────────────────────┐   │
+  │                  SEND                  │   │
+  │   - send what is due on each link      │───┘
+  └────────────────────────────────────────┘
+```
 
-On each link, `combus_tx_update()` first sends the handshakes due: an ACK to answer, the burst of the start, the periodic request. Then, when the period of the link has elapsed, it encodes a data frame and sends it.
-
-A two-way end sends no data as long as its contract is not established: the other end could not use it. See [the contract](handshake/README.md).
+Each pass processes all the links of the board in turn, every link at its own rate, and never waits: when nothing is due, or nothing has arrived, it moves on, so the rest of the loop is never held up.
 
 ### Receiving
 
-On each link, `combus_rx_update()` moves the available bytes into a ring buffer, then reads it frame by frame. The header of each frame says which decoder takes it: data, handshake or coupling ([telling frames apart](frame/README.md#telling-frames-apart)).
+On each link, `combus_rx_update()` simply reads all the bytes waiting on the port, and cuts them into frames. Each frame goes to its decoder: data, [handshake](handshake/README.md) or [coupling](coupling/README.md).
 
-Two guards protect the bus:
+Before any value reaches the bus, a few health checks:
 
-- **A corrupted frame costs one byte**: the receiver drops it and looks for the start of the next frame, without swallowing a good one.
-- **Old bytes are never applied**: when the loop comes back later than the loss timeout of a link, the bytes waiting are at least that old. They are dropped, and the link is lost by its silence rather than fed with stale values.
+- **A damaged frame is dropped**, and the reading goes on with the next one.
+- **Stale bytes are dropped**: after a long stall of the loop, a link is lost by its silence rather than fed with old values.
+- **No data without a contract**: data frames are only applied once both ends agree on their channels ([handshake](handshake/README.md)).
 
-A data frame received under an established contract goes to the bus; the others are ignored.
+Once every link is read, the **link supervisor** (`combus_link_supervisor_update()`) brings the state of each link up to date: it restores the safe values of a link that stops being alive, and reports its loss to the failsafe module.
+
+### Sending
+
+On each link, `combus_tx_update()` sends two kinds of frames:
+
+- **Handshakes**, at the start and then regularly, for as long as the link runs. They check that both ends have compatible firmwares and the same set of ComBus channels.
+- **Data frames**, at the rate of the link.
+
+If they agree, the data flows. If not, the data is held back until they do.
 
 ## Going Further
 
 - [Linking nodes](../../../../../doc/linking_nodes.md): the concepts behind the links
-- [The `both_or` merge](both_or.md): a fault shared by several boards, without ping-pong
-- [The UART workflow](link/uart_workflow.md): the init chain, from the board table to `loop()`
-- [The remote](../../../../remotes/README.md): the firmware of the remote and its link to the machine
+- [The links](link/README.md): describing, starting and supervising a link
+- [The hardware](../../hw/README.md): the ports and their transports
+- [The handshake](handshake/README.md): what both ends check, and when
+- [The failsafe](../../failsafe/failsafe_module.md): what happens when a link is lost
+- [The link workflow](link/link_workflow.md): the init chain and the loop, in detail
