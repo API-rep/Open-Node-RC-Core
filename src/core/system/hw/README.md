@@ -33,11 +33,9 @@ A transport adapter sets up one kind of port and drives it. It is the only code 
 
 | Kind | Adapter | Where |
 |---|---|---|
-| `UART` | `uart_port_init()` | [`transport/uart_port.h`](transport/uart_port.h) |
+| `UART` | `uart_port_init()` | [UART port](transport/uart_port.md) |
 
 At boot, the link calls the adapter of its port, with the line rate of the link and only the pins its end needs: a transmit-only end does not take the RX pin. The adapter claims the port and its pins: a port claimed twice is refused. It then returns a `ComPort`.
-
-The UART adapter reads the driver in blocks of 64 bytes, then serves them one by one. Byte by byte, the driver is slow once its buffer is full: after a stall of the loop, 380 bytes took 130 ms instead of 2.7 ms.
 
 ### ComPort
 

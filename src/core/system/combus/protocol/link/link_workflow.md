@@ -1,6 +1,6 @@
-# UART Workflow
+# Link Workflow
 
-How a ComBus link over UART is set up on a machine, from the table of the board to `loop()`, and what runs on every cycle. The frame and the handshake are described in their own documents: [data frame](../frame/README.md), [handshake](../handshake/README.md).
+How the links of a machine are set up, from the table of the board to `loop()`, and what runs on every cycle. What is specific to a kind of port is in the document of its adapter: [UART](../../../hw/transport/uart_port.md).
 
 ---
 
@@ -24,14 +24,14 @@ How a ComBus link over UART is set up on a machine, from the table of the board 
                                   ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
 │  TRANSPORT (ComPort)                                                     │
-│    uart_port_register_pool() ──► static pool of UartCtx                  │
-│    uart_port_init()          ──► ComPort* (write / readByte / available) │
+│    the adapter of the kind of port: UART today (uart_port_init())        │
+│    ──► ComPort* (write / readByte / available)                           │
 └──────────────────────────────────────────────────────────────────────────┘
                                   │
                                   ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
 │  PHYSICAL                                                                │
-│    HardwareSerial (Serial / Serial1 / Serial2), TX / RX pins (ComPortCfg)│
+│    the peripheral and its pins, described by the ComPortCfg              │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -47,8 +47,6 @@ How a ComBus link over UART is set up on a machine, from the table of the board 
 
 On the Volvo A60H, the main board wires the extension link (`kComDevExtUni`) on its `COM/GPIO` port (UART2), transmit only. To wire it both ways, use `kComDevExtBi` with `LinkEnd::TX_RX`.
 
-The UART index of a port maps to the ESP32 serial: 0 = `Serial` (USB), 1 = `Serial1`, 2 = `Serial2`.
-
 ---
 
 ## 3. Initialisation
@@ -57,7 +55,7 @@ The UART index of a port maps to the ESP32 serial: 0 = `Serial` (USB), 1 = `Seri
 
 | Step | Function | What it does for the link |
 |---|---|---|
-| 1 | `sys_init()` | pin registry (`pin_reg_init`), then the shared UART pool (`hw_init_com()` → `uart_port_register_pool()`), then the debug serial claims its slot |
+| 1 | `sys_init()` | pin registry (`pin_reg_init`), then the pools of the transports (UART: `hw_init_com()`), then the debug serial claims its slot |
 | 2 | `hw_init()` | the hardware peripherals (drivers, servos, battery) |
 | 3 | `input_init()` | the physical input sources |
 | 4 | `output_init()` → `com_init()` → `board_links_init()` | the links of the board, see below |
@@ -65,31 +63,13 @@ The UART index of a port maps to the ESP32 serial: 0 = `Serial` (USB), 1 = `Seri
 
 `board_links_init()` (`src/machines/init/com/board_links_init.cpp`) owns the storage of the links (TX state, RX state, runtime, `ComBusLink`, one slot per entry of `comLinks[]`) and calls `combus_links_init()` (`combus_link_setup.cpp`):
 
-1. **`combus_link_check()`**, for each link, before taking any port: a coupled link has its `CouplingDev` and its table; the link type and the role of the end agree; the frame rate is at most 1000 Hz and a receiving end has a loss timeout; the line rate is below the ceiling of the port; the line is not too loaded (see below); a table is used between nodes only, and fits the receive buffers. A refused link stays inactive and is logged; the others start anyway.
-2. **Opening the port**: `uart_port_init(serial, rate, txPin, rxPin, name, &pinReg)` gives the `ComPort` of the link. The pin of a direction the end does not use is passed as `-1` and is not reserved. A port already taken is refused. The driver gets a 512-byte transmit ring before `begin()`: a write copies the frame and returns at once, instead of waiting until the whole frame is in the hardware FIFO.
+1. **`combus_link_check()`**, for each link, before taking any port: it refuses a description that cannot work (the list is in [the links](README.md#at-boot)), and checks the load of the line ([UART](../../../hw/transport/uart_port.md#line-load)). A refused link stays inactive and is logged; the others start anyway.
+2. **Setting up the port**: `setupPort()` calls the adapter of the kind of port, which gives the `ComPort` of the link. Only the pins of the directions the end uses are taken, and a port already taken is refused.
 3. **`combus_link_build()`**: fills the `ComBusLink`: layer from the scope, frame sizes from the matching view, TX and RX from the role of the end, the table of the link if any.
 4. **TX and RX pools** registered, then **`combus_link_start()`** for each link: the handshake context (its contract), then the TX side and the RX side.
-5. **`combus_link_supervisor_start()`**: the links are put under watch; a coupled link starts off.
+5. **`combus_link_supervisor_start()`**: the links are handed to the supervisor; a coupled link starts off.
 
 Nothing is allocated: all the storage is static and belongs to the caller.
-
-### Line Load
-
-A transmitting end on a UART sends its full frame at its frame rate, plus a handshake request and its ACK every 250 ms, 10 bits per byte (start and stop). `combus_link_load_pct()` gives this load in % of the line rate:
-
-```text
-load = (frameLen × txHz + 2 × 26 × 1000 / 250) × 10 × 100 / rate
-```
-
-| Load | At boot |
-|---|---|
-| up to 70 % | the link starts |
-| above 70 % | the link starts, with a warning in the log |
-| above 100 % | the link is refused: the line cannot carry it |
-
-The margin is measured: at 94 % of a 19 200 baud line, the transmit ring fills and a write already blocks the loop for about 40 ms. The real configurations run at 115 200 baud and 50 Hz, about 20 %. The check only covers a UART: another kind of port counts as 0 for now.
-
-The transmit ring removes the blocking of large frames: a 226-byte frame took 20.6 ms to write without it, 0.19 ms with it. It does not save an overloaded line: the ring fills, and the writes block again.
 
 ---
 
@@ -114,6 +94,13 @@ loop()
 
 Each link keeps its own timer: `combus_tx_update()` never blocks, and does nothing without a sending link.
 
+### Inside the Reception
+
+On each link, `combus_rx_update()` moves the available bytes into a ring buffer, then reads it frame by frame:
+
+- **A corrupted frame costs one byte**: the receiver drops the first byte and looks for the start of the next frame, without swallowing a good one.
+- **A late pass drops its backlog**: when the loop comes back later than the loss timeout of a link, the bytes waiting are at least that old. They are dropped, with a warning in the log, and the link is lost by its silence rather than fed with stale values.
+
 ---
 
 ## 5. Files
@@ -122,19 +109,20 @@ Each link keeps its own timer: `combus_tx_update()` never blocks, and does nothi
 |---|---|
 | Links of the board | `src/machines/init/com/board_links_init.cpp` |
 | Communication init | `src/machines/init/com/com_init.cpp` |
-| UART pool | `src/machines/init/hw/hw_init_com.cpp` |
-| Check, build, start | `src/core/system/combus/protocol/link/combus_link_setup.cpp` |
-| Watch, loss, safe values | `src/core/system/combus/protocol/link/combus_link_supervisor.cpp` |
+| Pools of the transports | `src/machines/init/hw/hw_init_com.cpp` |
+| Check, set up, build, start | `src/core/system/combus/protocol/link/combus_link_setup.cpp` |
+| Supervision, loss, safe values | `src/core/system/combus/protocol/link/combus_link_supervisor.cpp` |
 | Sending | `src/core/system/combus/protocol/combus_tx.cpp` |
 | Reception | `src/core/system/combus/protocol/combus_rx.cpp` |
-| UART transport | `src/core/system/hw/transport/uart_port.cpp` |
+| Transport adapters | `src/core/system/hw/transport/` (UART: `uart_port.cpp`) |
 | Reception and sending in the loop | `src/core/system/com/com_manager.cpp` |
 
 ---
 
 ## 6. Going Further
 
-- [Links](README.md): describing, starting and watching a link
+- [Links](README.md): describing, starting and supervising a link
 - [Data frame](../frame/README.md): the format, the path of a frame
 - [Handshake](../handshake/README.md): the contract of a link
+- [UART port](../../../hw/transport/uart_port.md): the UART adapter, its buffers and the line load
 - [The `both_or` merge](../both_or.md): the anti ping-pong between boards
