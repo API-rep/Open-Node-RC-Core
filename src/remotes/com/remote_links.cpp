@@ -15,6 +15,7 @@
 #include <core/system/combus/protocol/link/combus_link_supervisor.h>
 #include <core/system/combus/protocol/combus_tx.h>
 #include <core/system/combus/protocol/combus_rx.h>
+#include <core/system/com/com_manager.h>              // com_rx_update(), com_tx_update()
 #include <core/system/hw/transport/uart_port.h>       // uart_port_register_pool, UartCtx
 #include <core/system/debug/logging/debug.h>
 #include <remotes/config/driven_machines.h>
@@ -71,14 +72,14 @@ ComLinkRuntime* remote_links_runtime( uint8_t idx )
 }
 
 
-	/// Receive first, then watch, then send: the sent frames follow the state of the links.
+	/// Through the com_manager, as on a machine: receive and supervise, then send; the
+	/// sent frames follow the state of the links.
 void remote_links_update( void )
 {
 	ComBus& bus = *kDrivenMachines[0].bus;
 
-	combus_rx_update();
-	combus_link_supervisor_update(bus);
-	combus_tx_update(&bus);
+	com_rx_update(bus);
+	com_tx_update(bus);
 }
 
 // EOF remote_links.cpp

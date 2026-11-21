@@ -17,7 +17,7 @@
 uint8_t remote_links_init( void );
 
 
-	/// One cycle of the links: receive, watch, send the inputs.
+	/// One cycle of the links, through the com_manager: receive and supervise, then send the inputs.
 void remote_links_update( void );
 
 
