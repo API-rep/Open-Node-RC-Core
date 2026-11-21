@@ -159,6 +159,11 @@ Les deux flags sont posés sur la carte mère de la Volvo et du nœud d'essai. L
 
 ## 4. Questions ouvertes
 
+- **Passage de `millis()` à zéro (49,7 jours), deux défauts** relevés à l'audit du 2026-11-17, reportés à ce chantier (décision du propriétaire) : une échéance absolue `now + durée` comparée par `<` / `>=`.
+  - `cb_brake.cpp:89-96` (`holdUntilMs`, `reverseHoldMs` 400 ms) : si la fenêtre chevauche le passage, le frein reste à fond 49,7 jours.
+  - `cb_gear.cpp:285-291` (`dampEndMs`, `upshiftDampMs` 500 ms) : l'accélération reste gelée ; en plus, 0 sert de marqueur « pas de fenêtre ».
+  - Correctif proposé : `(int32_t)(now - deadline) >= 0` (la forme de `combus_pairing`), un booléen de fenêtre active dans `cb_gear`, un test Unity à cheval sur le passage. Le protocole, lui, est sain.
+
 - Format du paquet : extension (`.cbproc` ou `.cbprocpkg`), contenu (YAML qui décrit la chaîne, ou YAML qui pointe vers le C++ des processors), place des `.cb` inclus.
 - Ce qui est généré à partir du paquet (tableaux `CbProc` / `CbChain`, aujourd'hui écrits à la main dans `proc_config.cpp` et les `*_config.h`), et ce qui reste du C++ écrit à la main (les fonctions des processors).
 - Comment se déclare une redéfinition de configuration seule (nom du traitement type, champs remplaçables).

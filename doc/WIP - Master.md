@@ -17,6 +17,9 @@ Le code est relu (blocs 1 à 11) ; reste, dans l'ordre :
 2. **Test à deux cartes** (deux cartes reliées en UART). **Session à part** (décidé le 2026-11-11, en parallèle de la relecture de la doc, qui garde sa propre conversation) : une première batterie de tests menée en autonome par l'IA, puis une reprise par un agent tiers sous Cline (étape 3).
    - Montage : deux ESP32 en USB, liaison croisée GPIO 17 ↔ 16 dans les deux sens, masse commune par l'USB du même PC.
    - Ce qui reste à prouver à deux cartes : la mémoire `historique-tests-rework` (colonne « reste à deux cartes »), à reprendre ligne par ligne.
+   - État au 2026-11-21 : banc à deux cartes (`test/two_boards/bench.py`) vert sur tous ses scénarios (A, B, C, monkey, corruption, trames forgées, charge, configurations mal assorties). Reste :
+     - **levier 0** : pic de boucle à 22 ms sur le nœud (scénario C), 11 ms sur A et B ; mesurer sans `DEBUG_SYSTEM`, puis avec `DEBUG_DASHBOARD`, pour savoir si les logs ou le tableau de bord bloquent la boucle ;
+     - **la vraie Volvo** (carte mère et extension, moteurs et servos) : seulement compilée ; le banc moteurs du propriétaire viendra plus tard.
    - Aucun firmware n'a encore les deux bouts d'un vrai lien : pas de configuration de carte d'extension, la Volvo n'a pas de lien vers la télécommande, le type `test_trailer` n'a pas d'env. Première décision de la session : quels firmwares d'essai (envs de test à deux bouts), à valider par le propriétaire avant de les écrire.
    - Relecture de la doc en cours dans l'autre conversation : ne pas toucher aux fichiers `.md`.
 3. **Revue indépendante** par un agent tiers : relecture et tests fonctionnels, à partir des règles et des résultats attendus, sans les conclusions de l'auteur.
