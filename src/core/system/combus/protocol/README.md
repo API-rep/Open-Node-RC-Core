@@ -122,4 +122,4 @@ If they agree, the data flows. If not, the data is held back until they do.
 - [The hardware](../../hw/README.md): the ports and their transports
 - [The handshake](handshake/README.md): what both ends check, and when
 - [The failsafe](../../failsafe/failsafe_module.md): what happens when a link is lost
-- [The link workflow](link/link_workflow.md): the init chain and the loop, in detail
+- [The link lifecycle](link/link_lifecycle.md): the init chain and the loop, in detail

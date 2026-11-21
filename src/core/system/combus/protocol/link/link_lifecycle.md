@@ -1,4 +1,4 @@
-# Link Workflow
+# Link Lifecycle
 
 How the links of a machine are set up, from the table of the board to `loop()`, and what runs on every cycle. What is specific to a kind of port is in the document of its adapter: [UART](../../../hw/transport/uart_port.md).
 

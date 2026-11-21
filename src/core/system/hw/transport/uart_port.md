@@ -54,4 +54,4 @@ The margin is measured: at 94 % of a 19 200 baud line, the transmit ring fills a
 ## Going Further
 
 - [The hardware](../README.md): the ports, the adapters and the `ComPort`
-- [The link workflow](../../combus/protocol/link/link_workflow.md): where the port is set up, in the init chain of a machine
+- [The link lifecycle](../../combus/protocol/link/link_lifecycle.md): where the port is set up, in the init chain of a machine

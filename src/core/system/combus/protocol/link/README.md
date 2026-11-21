@@ -130,4 +130,4 @@ When a link with a table stops being alive, what this node received through that
 - [ComBus transmission](../README.md): the overview
 - [Coupling and pairing](../coupling/README.md): the links that only exist once hitched
 - [Handshake](../handshake/README.md): the contract of a link
-- [Link workflow](link_workflow.md): the init chain and the loop, in detail
+- [Link lifecycle](link_lifecycle.md): the init chain and the loop, in detail
