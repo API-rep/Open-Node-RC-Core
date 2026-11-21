@@ -90,7 +90,7 @@ Aucun appel de plus dans la boucle : le driver se cale sur le RX et le TX.
 - **`available()`** (appelé par le RX à chaque tour) : une période passée et la manette connectée, il lit le backend, applique la table en RAM et dépose une trame dans son tampon interne.
 - **`write()`** (appelé par le TX) : il ne reçoit que des trames de données, qu'il décode (`combus_frame_decode()`) et passe à la table du retour.
 - `input_refresh()` et `input_update()` sortent de `sys_manager`.
-- Il manque un **encodeur à partir de positions brutes** : `combus_frame_encode()` lit un `ComBus`, le driver n'a que des valeurs. Une petite fonction dans `frame/`, avec le CRC existant.
+- L'**encodeur à partir de positions brutes** existe (L1) : `combus_frame_encode_values()`, des valeurs dans l'ordre du fil, le même code d'écriture que `combus_frame_encode()`.
 
 ## 7. Configuration : port, ComDev, carte
 
@@ -126,7 +126,7 @@ Le changement dans le code existant se limite à : le marqueur de confiance et s
 
 | Étape | Livrable | Preuve |
 |---|---|---|
-| L1 | Encodeur à positions brutes (`frame/`) | Unity loopback : même trame que `combus_frame_encode()` sur le même contenu |
+| L1 | ~~Encodeur à positions brutes (`frame/`)~~ fait le 2026-11-21 : `combus_frame_encode_values()`, l'écriture de la trame partagée avec `combus_frame_encode()` | Unity : loopback 93/93 (mêmes octets que `combus_frame_encode()`, gardes), peer_link 82/82 (valeurs brutes par la table du lien) ; deux mutants (analogique, numérique) détectés |
 | L2 | Lien de confiance, saut du contrôle de charge à `rate = 0` | Unity : un lien virtuel reste STABLE sans ACK, un vrai lien sans ACK tombe toujours ; mutant (marqueur sur tous les liens) qui fait échouer le test |
 | L3 | `ComPortType::LOCAL`, `local_port`, backend factice scripté pour les tests | Unity : les valeurs du backend arrivent sur le bus ; silence → valeurs sûres et `NODE_LINK_FAIL` ; retour de la manette → lien vivant |
 | L4 | Tables : celle du type, celle de l'instance qui la remplace, table en RAM, contrôles du boot, `local_map_apply()` | Unity : la table de l'instance remplace celle du type ; refus (channel hors lien, doublons) ; une table refusée laisse l'ancienne en place |
