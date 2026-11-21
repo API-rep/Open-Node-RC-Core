@@ -22,9 +22,10 @@ Le code est relu (blocs 1 à 11) ; reste, dans l'ordre :
      - **la vraie Volvo** (carte mère et extension, moteurs et servos) : seulement compilée ; le banc moteurs du propriétaire viendra plus tard.
    - Aucun firmware n'a encore les deux bouts d'un vrai lien : pas de configuration de carte d'extension, la Volvo n'a pas de lien vers la télécommande, le type `test_trailer` n'a pas d'env. Première décision de la session : quels firmwares d'essai (envs de test à deux bouts), à valider par le propriétaire avant de les écrire.
    - Relecture de la doc en cours dans l'autre conversation : ne pas toucher aux fichiers `.md`.
-3. **Revue indépendante** par un agent tiers : relecture et tests fonctionnels, à partir des règles et des résultats attendus, sans les conclusions de l'auteur.
-4. **Relecture de la doc** par le propriétaire. Note : le commit `ee4f269` (`docs(builder)`) contient aussi le `refactor(tests)` de `test_combus_loopback.cpp` (identifiants « legacy »).
-5. **Merge** dans `main`.
+3. **Sources locales de commandes** (manette PS4, plus tard SBUS), intercalées le 2026-11-21 pour que l'audit final les couvre : un `ComPort` virtuel sur la table de la télécommande, en lien de confiance. Concept, décisions et étapes L1 à L6 : [Local remote](<WIP - Local remote.md>).
+4. **Revue indépendante** par un agent tiers : relecture et tests fonctionnels, à partir des règles et des résultats attendus, sans les conclusions de l'auteur.
+5. **Relecture de la doc** par le propriétaire. Note : le commit `ee4f269` (`docs(builder)`) contient aussi le `refactor(tests)` de `test_combus_loopback.cpp` (identifiants « legacy »).
+6. **Merge** dans `main`.
 
 ## 2. Chantiers suivants (ordre proposé, à valider)
 
@@ -35,9 +36,8 @@ Le code est relu (blocs 1 à 11) ; reste, dans l'ordre :
 | 3 | Chaîne de simulation (entrées → simulation → sorties `BASE`) | [Simulation chain](<WIP - Simulation chain.md>) | s'appuie sur la norme des processors |
 | 4 | Feux | [Light rework](<WIP - Light rework.md>) | consommateur des sorties de la simulation |
 | 5 | Télécommande | [Remote firmware](<WIP - Remote firmware.md>) | grande utilisatrice des channels communs |
-| 6 | Sources locales de commandes (nœud virtuel) | [Local remote](<WIP - Local remote.md>) | même chemin que la télécommande |
-| 7 | Transports (ESP-NOW d'abord, I2C, CAN, contrat `SYSTEM`) | [Node transports](<WIP - Node transports.md>) | la télécommande et la remorque sans fil |
-| 8 | Builder de configuration à partir de fichiers YAML | — (pas encore de WIP) | voir §3 |
+| 6 | Transports (ESP-NOW d'abord, I2C, CAN, contrat `SYSTEM`) | [Node transports](<WIP - Node transports.md>) | la télécommande et la remorque sans fil |
+| 7 | Builder de configuration à partir de fichiers YAML | — (pas encore de WIP) | voir §3 |
 
 ## 3. Futur rework sans WIP : builder de configuration YAML
 

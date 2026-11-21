@@ -59,7 +59,7 @@ Décidé le 2026-11-01 : sans firmware de télécommande (config, init, entrées
 - **Sécurité** : le failsafe propre de la télécommande ; la **vraie perte du lien** (le bouton d'attelage reprend sa valeur sûre sans dételer, link rework 3.4e, prouvé seulement par simulation sur une carte).
 - **Retour de santé du lien vers la télécommande** (décidé le 2026-11-15) : la télécommande doit connaître l'état de sa connexion à la machine. Ce retour portera aussi les alertes de configuration que la machine détecte à son boot et qui ne sont aujourd'hui que dans son log : la charge d'une ligne (avertissement de 70 à 100 % de son débit, lien refusé au-delà, `combus_link_check()`), et plus largement un lien refusé. Pas de contrôle à la compilation (`static_assert` écarté). Dépend du retour machine → télécommande (§3, reste ouvert).
 - **Gabarit de connexion dans le contrat** (piste du 2026-11-19, à décider) : aujourd'hui, la télécommande a sa propre copie du protocole (`kComProtoMachine`, `remotes/config/driven_machines.h`), et la machine aura la sienne. Deux copies peuvent diverger. Une fréquence ou un délai de perte qui ne s'accordent pas font clignoter le lien sans aucun message (banc, levier 5, `a750523`). Piste : déclarer le gabarit (débit, fréquence, délai, grâce) dans le `.cb` du lien et l'inclure dans le MD5 du contrat ; un désaccord devient alors une poignée de main refusée, sans changer la trame. Limites : un débit différent reste indétectable (rien n'est compris ; symptôme : 0 trame, jamais STABLE) ; `ComProtocolCfg` passe du C++ au `.cb`, avec le travail correspondant dans le builder. Le contrôle sur une seule carte existe déjà : `combus_link_check()` refuse un délai ≤ période et avertit sous 3 périodes.
-- **La manette PS4 en lien ComBus** (le « nœud virtuel » du link rework §4) : vue de la machine, une manette PS4 ou un récepteur RC **est** une télécommande ; son backend remplit directement la trame d'un lien, appliquée par le même chemin qu'une trame reçue. Blocage complet si deux sources sont actives.
+- **La manette PS4 en lien ComBus** : vue de la machine, une manette PS4 ou un récepteur RC **est** une télécommande. Décidé le 2026-11-21 et traité avant l'audit du link rework : un `ComPort` virtuel sur la table `kRemoteLink`, en lien de confiance ; blocage si plus d'un lien vivant sur cette table. Voir [Local remote](<WIP - Local remote.md>).
 - **Transport radio** : ESP-NOW (link rework, chantier 5) ; une radio par config, le Bluetooth disparaît. **TODO** : le lien télécommande n'a pas d'appairage, donc pas d'appel à `ComPort::setPeer` ; en radio, il lui faudra une identité de pair, sinon une autre télécommande pourrait piloter la machine.
 
 ## 5. Feuille de route (proposée, à valider)
@@ -70,7 +70,7 @@ Décidé le 2026-11-01 : sans firmware de télécommande (config, init, entrées
 | R1 | Lien « remote » côté Volvo, config et init de la télécommande, carte réelle | deux cartes : handshake STABLE entre une vraie télécommande et une vraie machine |
 | R2 | Entrées physiques, mapping par type | la télécommande pilote la Volvo sur l'établi |
 | R3 | Failsafe de la télécommande, perte réelle du lien | la perte met la machine en attente et ne dételle pas |
-| R4 | La PS4 en nœud virtuel | une seule source active, blocage sinon |
+| R4 | ~~La PS4 en nœud virtuel~~ déplacé dans [Local remote](<WIP - Local remote.md>) (2026-11-21) | une seule source active, blocage sinon |
 | R5 | Plusieurs machines (repris de l'ancienne étape 4.1 et 4.2) | une télécommande pilote deux machines |
 
 ## 6. Questions ouvertes
