@@ -281,6 +281,69 @@ static void test_codec_crc_reject(void) {
     TEST_ASSERT_FALSE(ok);  // CRC must catch the corruption
 }
 
+/** The raw-value encoder writes the same bytes as the bus encoder, for the same values:
+ *  full set, a prefix (BASE view), the both_or override, and the clamp to the layout. */
+static void test_codec_encode_values_same_bytes(void) {
+    static uint16_t analog[kNAnalog];
+    static bool     digital[kNDigital];
+    static uint8_t  valuesBuf[255u];
+
+    fillRandom(0x5A5A1234ul);
+    for (uint8_t i = 0u; i < kNAnalog; ++i)  { analog[i]  = txComBus.analogBus[i].value; }
+    for (uint8_t i = 0u; i < kNDigital; ++i) { digital[i] = txComBus.digitalBus[i].value; }
+    TEST_ASSERT_TRUE_MESSAGE(kNAnalog > 1u && kNDigital > 1u, "too few channels: the test cannot bite");
+
+    struct Case { ComBusFrameCfg cfg; uint8_t aEnd; uint8_t dEnd; uint8_t seq; };
+    const Case cases[] = {
+        { kCfg,      kNAnalog, kNDigital, 1u },
+        { kCfg,      static_cast<uint8_t>(AnalogComBusBaseID::CH_COUNT),
+                     static_cast<uint8_t>(DigitalComBusBaseID::CH_COUNT), 7u },
+        { kSmallCfg, 200u,     200u,      255u },
+    };
+
+    for (const Case& c : cases) {
+        const uint8_t lenBus    = combus_frame_encode(c.cfg, encodeBuf, &txComBus, c.seq, c.aEnd, c.dEnd);
+        const uint8_t lenValues = combus_frame_encode_values(c.cfg, valuesBuf, c.seq, c.aEnd, c.dEnd, analog, digital);
+        TEST_ASSERT_GREATER_THAN_UINT8(0u, lenBus);
+        TEST_ASSERT_EQUAL_UINT8(lenBus, lenValues);
+        TEST_ASSERT_EQUAL_UINT8_ARRAY(encodeBuf, valuesBuf, lenBus);
+    }
+
+    // both_or override: the bus encoder takes the prepared digital values, so must the other
+    for (uint8_t i = 0u; i < kNDigital; ++i) { digital[i] = !txComBus.digitalBus[i].value; }
+    const uint8_t lenBus    = combus_frame_encode(kCfg, encodeBuf, &txComBus, 9u, kNAnalog, kNDigital, digital);
+    const uint8_t lenValues = combus_frame_encode_values(kCfg, valuesBuf, 9u, kNAnalog, kNDigital, analog, digital);
+    TEST_ASSERT_EQUAL_UINT8(lenBus, lenValues);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(encodeBuf, valuesBuf, lenBus);
+}
+
+/** The raw-value encoder keeps the guards of the bus encoder; a missing array sends 0 / false. */
+static void test_codec_encode_values_guards(void) {
+    static const uint16_t analog[4]  = { 1u, 2u, 3u, 4u };
+    static const bool     digital[6] = { true, true, true, true, true, true };
+
+    TEST_ASSERT_EQUAL_UINT8(0u, combus_frame_encode_values(kSmallCfg, encodeBuf, 0u, 4u, 6u, analog, digital));   // seq 0
+    TEST_ASSERT_EQUAL_UINT8(0u, combus_frame_encode_values(kSmallCfg, nullptr, 1u, 4u, 6u, analog, digital));     // no buffer
+
+    const ComBusFrameCfg tooLong = { 130u, 0u };   // 5 + 260 + 2 bytes: over 255
+    TEST_ASSERT_EQUAL_UINT8(0u, combus_frame_encode_values(tooLong, encodeBuf, 1u, 130u, 0u, nullptr, nullptr));
+
+        // No arrays: every position at 0 / false, after a decode that would show anything else
+    for (uint8_t i = 0u; i < 4u; ++i) { rxAnalogBuf[i] = 0xFFFFu; }
+    for (uint8_t i = 0u; i < 6u; ++i) { rxDigitalBuf[i] = true; }
+    const uint8_t len = combus_frame_encode_values(kSmallCfg, encodeBuf, 1u, 4u, 6u, nullptr, nullptr);
+    TEST_ASSERT_EQUAL_UINT8(frameLen(4u, 6u), len);
+    TEST_ASSERT_TRUE(combus_frame_decode(kSmallCfg, &rxFrame, encodeBuf, len));
+    for (uint8_t i = 0u; i < 4u; ++i) { TEST_ASSERT_EQUAL_UINT16(0u, rxAnalogBuf[i]); }
+    for (uint8_t i = 0u; i < 6u; ++i) { TEST_ASSERT_FALSE(rxDigitalBuf[i]); }
+
+        // With arrays: the values come back by wire position
+    const uint8_t len2 = combus_frame_encode_values(kSmallCfg, encodeBuf, 2u, 4u, 6u, analog, digital);
+    TEST_ASSERT_TRUE(combus_frame_decode(kSmallCfg, &rxFrame, encodeBuf, len2));
+    for (uint8_t i = 0u; i < 4u; ++i) { TEST_ASSERT_EQUAL_UINT16(analog[i], rxAnalogBuf[i]); }
+    for (uint8_t i = 0u; i < 6u; ++i) { TEST_ASSERT_TRUE(rxDigitalBuf[i]); }
+}
+
 /** CRC-16/CCITT-FALSE: the reference check value of "123456789" is 0x29B1. */
 static void test_codec_crc16_check_value(void) {
     const uint8_t data[] = { '1', '2', '3', '4', '5', '6', '7', '8', '9' };
@@ -2205,6 +2268,8 @@ void setup() {
     RUN_TEST(test_codec_flags_reserved);
     RUN_TEST(test_codec_crc_reject);
     RUN_TEST(test_codec_crc16_check_value);
+    RUN_TEST(test_codec_encode_values_same_bytes);
+    RUN_TEST(test_codec_encode_values_guards);
     RUN_TEST(test_codec_two_bit_errors_refused);
     RUN_TEST(test_codec_monkey_roundtrip);
 

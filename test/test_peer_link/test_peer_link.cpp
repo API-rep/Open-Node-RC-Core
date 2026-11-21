@@ -215,6 +215,33 @@ static void test_row3_reception_through_the_table(void) {
     TEST_ASSERT_FALSE(bus.digitalBus[kBeacon].value);                 // not in the link
 }
 
+/** Local source (Local remote L1): raw values in wire order, as a LOCAL port fills them,
+ *  give the bytes the far end would send, and land through the table like them. */
+static void test_local_source_raw_values_through_the_table(void) {
+    static uint8_t busBuf[CombusRxBufSize];
+    const uint16_t analog[3]  = { 0u, 500u, 333u };   // axle, brake, tilt (wire order)
+    const bool     digital[2] = { false, true };      // fault, lights
+
+        // Same bytes as the far end encoding its own bus
+    const uint8_t lenBus = encodeTrailerFrame(500u, 333u, false, true, 4u);
+    memcpy(busBuf, s_buf, lenBus);
+    const uint8_t len = combus_frame_encode_values(kLinkCfg, s_buf, 4u, 3u, 2u, analog, digital);
+    TEST_ASSERT_EQUAL_UINT8(lenBus, len);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(busBuf, s_buf, len);
+
+        // Applied through the table: only what this node receives
+    resetBus();
+    bus.analogBus[kBrake].value    = 111u;
+    bus.analogBus[kThrottle].value = 999u;
+    TEST_ASSERT_TRUE(combus_frame_decode(kLinkCfg, &s_frame, s_buf, len));
+    combus_frame_apply(kLinkCfg, &bus, &s_frame, ChanLayer::BASE, &kLink);
+
+    TEST_ASSERT_EQUAL_UINT16(333u, bus.analogBus[kTilt].value);       // received
+    TEST_ASSERT_EQUAL_UINT16(111u, bus.analogBus[kBrake].value);      // sent by this node: kept
+    TEST_ASSERT_FALSE(bus.digitalBus[kLights].value);                 // sent by this node: kept
+    TEST_ASSERT_EQUAL_UINT16(999u, bus.analogBus[kThrottle].value);   // not in the link
+}
+
 /** Row 5: the contract of the link is the MD5 of its coupler: the tractor announces its role, expects the other. */
 static void test_row5_contract_is_the_link_md5(void) {
     startLink();
@@ -1684,6 +1711,7 @@ void setup() {
     RUN_TEST(test_row1_generated_descriptor);
     RUN_TEST(test_row2_emission_through_the_table);
     RUN_TEST(test_row3_reception_through_the_table);
+    RUN_TEST(test_local_source_raw_values_through_the_table);
     RUN_TEST(test_row5_contract_is_the_link_md5);
     RUN_TEST(test_row5b_two_sockets_refuse_each_other);
     RUN_TEST(test_row6_both_or_through_the_table);

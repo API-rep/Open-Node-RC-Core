@@ -103,42 +103,41 @@ bool combus_frame_crc_ok(const uint8_t* frame, uint8_t len) {
 // 2. ENCODE
 // =============================================================================
 
+namespace {
+
 /**
- * @brief Control frame builder. Turns the bus state into the bytes one link sends.
+ * @brief Wire writer shared by both encoders. Turns values, by wire position, into the bytes of a frame.
  *
  * @details In order:
- *   1. Counts: the channels the link asks for (`analogWireEnd`, `digitalWireEnd`),
- *      clamped to the layout `cfg`.
- *   2. Guards: nothing is written and 0 is returned on a null pointer, on `seq == 0`,
+ *   1. Counts: the channels asked for (`analogWireEnd`, `digitalWireEnd`), clamped to
+ *      the layout `cfg`.
+ *   2. Guards: nothing is written and 0 is returned on a null buffer, on `seq == 0`,
  *      or if the frame would exceed the 255 bytes a one-byte length can hold.
  *   3. Flags: no bit is defined on a control frame, the byte stays 0.
  *   4. Fixed header: SOF, counts, seq, flags.
- *   5. Digital values, 8 per byte, LSB first.  Each one comes from `digitalValues` when
- *      given (values prepared for this link), otherwise from the bus; a bus without a
- *      digital array sends false.
- *   6. Analog values, little-endian.  A bus without an analog array sends 0.
+ *   5. Digital values, 8 per byte, LSB first, from `digitalAt(position)`.
+ *   6. Analog values, little-endian, from `analogAt(position)`.
  *   7. CRC over everything before it.  The return value is the total length.
  *
- *   In steps 5 and 6, a table (`digitalMap`, `analogMap`) turns a wire position into a
- *   channel ID on a link between nodes.  Without a table, both are the same.
+ *   The only place where the wire format is written: the two encoders differ only by
+ *   where they read the value of a position.
  */
 
-uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
-                             uint8_t*              outputBuffer,
-                             const ComBus*         combus,
-                             uint8_t               seq,
-                             uint8_t               analogWireEnd,
-                             uint8_t               digitalWireEnd,
-                             const bool*           digitalValues,
-                             const uint8_t*        analogMap,
-                             const uint8_t*        digitalMap ) {
+template <typename AnalogAt, typename DigitalAt>
+uint8_t encodeFrame( const ComBusFrameCfg& cfg,
+                     uint8_t*              outputBuffer,
+                     uint8_t               seq,
+                     uint8_t               analogWireEnd,
+                     uint8_t               digitalWireEnd,
+                     AnalogAt              analogAt,
+                     DigitalAt             digitalAt ) {
 
 		// 1. Channel counts of the frame, clamped to the layout
 	const uint8_t nAnalog  = (analogWireEnd  < cfg.nAnalog)  ? analogWireEnd  : cfg.nAnalog;
 	const uint8_t nDigital = (digitalWireEnd < cfg.nDigital) ? digitalWireEnd : cfg.nDigital;
 
 		// 2. Guard conditions
-	if (!outputBuffer || !combus) {
+	if (!outputBuffer) {
 		return 0;
 	}
 
@@ -177,14 +176,8 @@ uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
 				// Check for the padding of the last byte: no channel behind it
 			if (ch >= nDigital) { continue; }
 
-				// The values prepared for this link (both_or without echo) when given,
-				// the bus values otherwise (through the table of a link between nodes).
-			const uint8_t id = digitalMap ? digitalMap[ch] : ch;
-			const bool v = digitalValues ? digitalValues[ch]
-			                             : (combus->digitalBus && combus->digitalBus[id].value);
-
 				// Set the bit of a true channel
-			if (v) {
+			if (digitalAt(ch)) {
 				packed |= (uint8_t)(1u << bit);
 			}
 		}
@@ -195,9 +188,8 @@ uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
 
 		// 6. Analog values (uint16_t little-endian)
 	for (uint8_t a = 0; a < nAnalog; ++a) {
-			// Value of the channel at this wire position
-		const uint8_t id = analogMap ? analogMap[a] : a;
-		uint16_t val = combus->analogBus ? combus->analogBus[id].value : 0;
+			// Value at this wire position
+		const uint16_t val = analogAt(a);
 
 			// Store it, low byte first
 		outputBuffer[pos++] = (uint8_t)(val & 0xFFu);
@@ -209,6 +201,84 @@ uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
 	pos += CombusFrameCrcLen;
 
 	return pos;
+}
+
+}   // namespace
+
+
+/**
+ * @brief Control frame builder. Turns the bus state into the bytes one link sends.
+ *
+ * @details In order:
+ *   1. Guard: a null bus writes nothing and returns 0.
+ *   2. Value of a digital position: from `digitalValues` when given (values prepared
+ *      for this link), otherwise from the bus; a bus without a digital array sends
+ *      false.
+ *   3. Value of an analog position: from the bus; a bus without an analog array
+ *      sends 0.
+ *   4. The frame itself, written by the shared wire writer.
+ *
+ *   In steps 2 and 3, a table (`digitalMap`, `analogMap`) turns a wire position into a
+ *   channel ID on a link between nodes.  Without a table, both are the same.
+ */
+
+uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
+                             uint8_t*              outputBuffer,
+                             const ComBus*         combus,
+                             uint8_t               seq,
+                             uint8_t               analogWireEnd,
+                             uint8_t               digitalWireEnd,
+                             const bool*           digitalValues,
+                             const uint8_t*        analogMap,
+                             const uint8_t*        digitalMap ) {
+
+		// 1. Guard condition
+	if (!combus) {
+		return 0;
+	}
+
+		// 2. Digital position: the values prepared for this link (both_or without echo)
+		// when given, the bus values otherwise (through the table of a link between nodes)
+	auto digitalAt = [&](uint8_t ch) -> bool {
+		const uint8_t id = digitalMap ? digitalMap[ch] : ch;
+
+		return digitalValues ? digitalValues[ch]
+		                     : (combus->digitalBus && combus->digitalBus[id].value);
+	};
+
+		// 3. Analog position: the bus value (through the table of a link between nodes)
+	auto analogAt = [&](uint8_t a) -> uint16_t {
+		const uint8_t id = analogMap ? analogMap[a] : a;
+
+		return combus->analogBus ? combus->analogBus[id].value : 0u;
+	};
+
+		// 4. The frame
+	return encodeFrame(cfg, outputBuffer, seq, analogWireEnd, digitalWireEnd, analogAt, digitalAt);
+}
+
+
+/**
+ * @brief Control frame builder from raw values. The source that has no ComBus (a local remote).
+ *
+ * @details The values are already in wire order: no table, no bus.  A null array sends
+ *   0 (analog) or false (digital), like a bus without that array.  Same wire writer,
+ *   so the same bytes as combus_frame_encode() for the same values.
+ */
+
+uint8_t combus_frame_encode_values( const ComBusFrameCfg& cfg,
+                                    uint8_t*              outputBuffer,
+                                    uint8_t               seq,
+                                    uint8_t               analogWireEnd,
+                                    uint8_t               digitalWireEnd,
+                                    const uint16_t*       analogValues,
+                                    const bool*           digitalValues ) {
+
+		// Value at a wire position, 0 / false without an array
+	auto digitalAt = [&](uint8_t ch) -> bool     { return digitalValues && digitalValues[ch]; };
+	auto analogAt  = [&](uint8_t a)  -> uint16_t { return analogValues ? analogValues[a] : 0u; };
+
+	return encodeFrame(cfg, outputBuffer, seq, analogWireEnd, digitalWireEnd, analogAt, digitalAt);
 }
 
 

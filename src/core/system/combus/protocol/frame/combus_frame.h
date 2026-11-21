@@ -95,6 +95,37 @@ uint8_t combus_frame_encode( const ComBusFrameCfg& cfg,
 
 
 /**
+ * @brief Encode raw values, already in wire order, into a binary control frame.
+ *
+ * @details For a source that has no ComBus of its own: a local remote (a controller
+ *   behind a LOCAL port) fills the positions of its link table, then encodes them.
+ *   Same wire format and same guards as combus_frame_encode(): for the same values,
+ *   the same bytes.
+ *
+ * @param[in]  cfg             Static layout descriptor: the clamp of the counts below.
+ * @param[out] outputBuffer    Output buffer, sized as for combus_frame_encode().
+ * @param[in]  seq             Sequence counter, 1..255; 0 is refused.
+ * @param[in]  analogWireEnd   Number of analog positions to encode.
+ * @param[in]  digitalWireEnd  Number of digital positions to encode.
+ * @param[in]  analogValues    Analog value per wire position (at least @p analogWireEnd
+ *                             entries); nullptr = 0 for each.
+ * @param[in]  digitalValues   Digital value per wire position (at least @p digitalWireEnd
+ *                             entries); nullptr = false for each.
+ *
+ * @return Number of bytes written; 0 if the buffer is null, `seq` is 0, or the frame
+ *   would not fit a one-byte length (255 bytes).
+ */
+
+uint8_t combus_frame_encode_values( const ComBusFrameCfg& cfg,
+                                    uint8_t*              outputBuffer,
+                                    uint8_t               seq,
+                                    uint8_t               analogWireEnd,
+                                    uint8_t               digitalWireEnd,
+                                    const uint16_t*       analogValues,
+                                    const bool*           digitalValues );
+
+
+/**
  * @brief Decode and validate a binary control frame.
  *
  * @details Validates SOF, length and CRC before unpacking.  Refuses a frame with more

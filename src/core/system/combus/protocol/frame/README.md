@@ -42,7 +42,8 @@ In both cases, the [handshake](../handshake/README.md) proves that both ends agr
 ## The Path of a Frame
 
 ```text
-Sending     bus → combus_frame_encode() → bytes → ComPort
+Sending     bus    → combus_frame_encode()        → bytes → ComPort
+            values → combus_frame_encode_values() → bytes → ComPort
 
 Receiving   ComPort → bytes → combus_frame_decode() → snapshot of the link
                                                           │
@@ -51,6 +52,8 @@ Receiving   ComPort → bytes → combus_frame_decode() → snapshot of the link
                                           ▼
                                          bus
 ```
+
+**Two encoders, one format.** `combus_frame_encode()` reads the bus, through the table of the link when there is one. `combus_frame_encode_values()` takes values already in wire order, for a source that has no ComBus of its own (a local remote, such as a controller). Both write the frame through the same code, so the same values give the same bytes.
 
 **`combus_frame_decode()`** validates first, and only then writes: `SOF`, announced sizes, capacity of the link, CRC. A refused frame leaves the output untouched. The result stays indexed by position on the wire.
 
