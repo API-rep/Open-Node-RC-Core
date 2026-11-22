@@ -79,7 +79,7 @@ La modification à chaud n'est pas construite ici. La partie statique est faite 
 Les deux bouts sont dans le même firmware et lisent la même table : l'accord est garanti à la compilation.
 
 - `combus_link_build()` marque le lien « de confiance » quand son port est de type `LOCAL`.
-- Le handshake lit ce marqueur à deux endroits : au démarrage (STABLE d'emblée) et dans ses délais de chute (ignorés). Le TX n'émet aucune poignée de main sur ce lien.
+- Le handshake lit ce marqueur à trois endroits (L2) : au démarrage (STABLE d'emblée), à la chute du contrat (jamais), à l'émission (aucune poignée de main).
 - La perte : la manette déconnectée, le driver n'émet plus rien ; le lien tombe par son silence (`linkTimeoutMs`), le superviseur remet les valeurs sûres et lève `NODE_LINK_FAIL`. Au retour, les trames reprennent et le lien redevient vivant aussitôt.
 - Au boot, une manette pas encore connectée se comporte comme une télécommande éteinte : `NODE_LINK_FAIL` jusqu'à la première trame.
 
@@ -127,7 +127,7 @@ Le changement dans le code existant se limite à : le marqueur de confiance et s
 | Étape | Livrable | Preuve |
 |---|---|---|
 | L1 | ~~Encodeur à positions brutes (`frame/`)~~ fait le 2026-11-21 : `combus_frame_encode_values()`, l'écriture de la trame partagée avec `combus_frame_encode()` | Unity : loopback 93/93 (mêmes octets que `combus_frame_encode()`, gardes), peer_link 82/82 (valeurs brutes par la table du lien) ; deux mutants (analogique, numérique) détectés |
-| L2 | Lien de confiance, saut du contrôle de charge à `rate = 0` | Unity : un lien virtuel reste STABLE sans ACK, un vrai lien sans ACK tombe toujours ; mutant (marqueur sur tous les liens) qui fait échouer le test |
+| L2 | ~~Lien de confiance~~ fait le 2026-11-21 : `ComBusLink::trusted`, copié dans le contexte du handshake par `combus_link_start()` ; STABLE au départ, aucune poignée de main émise, jamais de chute du contrat. Le contrôle de charge sautait déjà tout port non UART ou à `rate = 0` (`combus_link_load_pct()`). Le marqueur sera posé par `combus_link_build()` sur un port `LOCAL` (L3) | Unity : loopback 95/95 (STABLE sans poignée de main, témoin vérifié sur un lien ordinaire ; jamais de chute sur ACK absent, refus ou silence ; perte par l'âge, retour à la trame suivante), peer_link 82/82, remote_link 3/3, runlevel 7/7 ; 4 mutants détectés, dont le marqueur sur tous les liens (20 échecs) |
 | L3 | `ComPortType::LOCAL`, `local_port`, backend factice scripté pour les tests | Unity : les valeurs du backend arrivent sur le bus ; silence → valeurs sûres et `NODE_LINK_FAIL` ; retour de la manette → lien vivant |
 | L4 | Tables : celle du type, celle de l'instance qui la remplace, table en RAM, contrôles du boot, `local_map_apply()` | Unity : la table de l'instance remplace celle du type ; refus (channel hors lien, doublons) ; une table refusée laisse l'ancienne en place |
 | L5 | Règle des deux sources | Unity : deux ports locaux sur `kRemoteLink`, les deux vivants → blocage et `NODE_LINK_FAIL` ; un seul → normal |
