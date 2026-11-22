@@ -117,7 +117,8 @@ static uint8_t requestFlags( CombusHandshakeContext* ctx )
  * @brief Handshake emission of a link. Decides, on every poll, what must leave now.
  *
  * @details In order:
- *   1. Guards: nothing leaves on a link not initialised (no transport, no MD5).
+ *   1. Guards: nothing leaves on a link not initialised (no transport, no MD5), nor on
+ *      a trusted link, whose contract needs no handshake.
  *   2. ACK: what the RX side armed on a request.  One of each kind at most; never an
  *      ACK to an ACK.
  *   3. Boot burst, if active: closed as soon as the contract is STABLE, otherwise one
@@ -133,6 +134,9 @@ uint8_t combus_handshake_tx_update( CombusHandshakeContext* ctx,
 {
 		// 1. Guard checks
 	if (!ctx || !port || !port->write || !ctx->expected.stable) { return 0u; }
+
+		// A trusted link sends no handshake
+	if (ctx->trusted) { return 0u; }
 
 	const uint32_t nowMs   = millis();
 	uint8_t        written = 0u;

@@ -135,15 +135,16 @@ namespace combus_handshake_internal {
 	 * @brief Fresh RX session. Forgets everything the previous session knew of the peer.
 	 *
 	 * @details Unlike dropContract(), also clears the pending ACKs and the refusal guard,
-	 *   and stays silent: nothing was lost, the transport just (re)starts.
+	 *   and stays silent: nothing was lost, the transport just (re)starts.  A trusted
+	 *   link starts STABLE: both ends are in this firmware, so they agree by construction.
 	 */
 
 	void clearContractValidated(CombusHandshakeContext* ctx) {
 			// Check the context
 		if (!ctx) { return; }
 
-			// Reset all that is known of the peer
-		ctx->contractValidated = false;
+			// Reset all that is known of the peer; a trusted link is STABLE at once
+		ctx->contractValidated = ctx->trusted;
 		ctx->ackPending        = false;
 		ctx->ackPendingNext    = false;
 		ctx->dataSinceStable   = false;
@@ -159,11 +160,13 @@ namespace combus_handshake_internal {
 	 * @details A no-op when already UNKNOWN, so a peer refused on every handshake logs one
 	 *   line and does not re-arm the NEXT requests each time.  A pending ACK stays armed:
 	 *   the peer asked for it, and the refusal guard stays set until the next STABLE.
+	 *   A trusted link is never dropped: no silence, missing ACK or refusal changes its
+	 *   contract, and its loss is the age of its last frame.
 	 */
 
 	void dropContract(CombusHandshakeContext* ctx, const char* reason) {
-			// Check the context: only a STABLE contract can be dropped
-		if (!ctx || !ctx->contractValidated) { return; }
+			// Check the context: only a STABLE contract can be dropped, never a trusted one
+		if (!ctx || !ctx->contractValidated || ctx->trusted) { return; }
 
 			// Back to UNKNOWN, NEXT requests re-armed
 		ctx->contractValidated = false;

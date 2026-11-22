@@ -217,6 +217,7 @@ struct CombusHandshakeContext {
 	bool               bidirectional = false;    ///< the end both transmits and receives
 	const ComPeerLink* peer          = nullptr;  ///< link between nodes: common frame and table; nullptr = view of the scope
 	bool               baseSet       = false;    ///< BASE link: the mode sets the size of the frames
+	bool               trusted       = false;    ///< both ends in this firmware: STABLE from the start, never dropped, no handshake sent
 
 		// MD5 of the contract (set by combus_link_start())
 	ComLinkMd5 expected      = {};       ///< MD5 expected from the peer, compared on every handshake
@@ -263,6 +264,9 @@ struct CombusHandshakeContext {
  *
  *   While UNKNOWN, the data frames received are not applied and the link is not
  *   alive; a bidirectional end sends no data.
+ *
+ *   A trusted link (both ends in this firmware, a LOCAL port) is STABLE from its
+ *   start and never goes back to UNKNOWN: its loss is the age of its last frame.
  *
  * @param ctx  Per-link handshake context.
  *
