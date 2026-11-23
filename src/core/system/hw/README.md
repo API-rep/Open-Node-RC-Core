@@ -66,4 +66,4 @@ None of them touches anything else of the hardware, so a new medium only needs a
 ## Going Further
 
 - [ComBus transmission](../combus/protocol/README.md): what travels over the ports
-- [The links](../combus/protocol/link/README.md): how a link names its port and starts
+- [The link manager](../combus/protocol/link/README.md): how a link names its port and starts

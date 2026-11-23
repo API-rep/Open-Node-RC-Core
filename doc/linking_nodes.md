@@ -93,7 +93,7 @@ Each side declares what it sends and what it receives. A channel has one sender 
 
 Every channel also has a **safe value**. When a link stops being alive, what the node received through it returns to that value: a machine never keeps obeying a command that no longer arrives. The loss itself is reported as a fact; the failsafe chains decide what it means.
 
-See [ComBus](../src/core/system/combus/README.md), [Links](../src/core/system/combus/protocol/link/README.md) and [Failsafe module](../src/core/system/failsafe/failsafe_module.md).
+See [ComBus](../src/core/system/combus/README.md), [Link manager](../src/core/system/combus/protocol/link/README.md) and [Failsafe module](../src/core/system/failsafe/failsafe_module.md).
 
 ---
 
@@ -101,7 +101,7 @@ See [ComBus](../src/core/system/combus/README.md), [Links](../src/core/system/co
 
 * [ComBus](../src/core/system/combus/README.md): the shared register, its layers and its channels.
 * [ComBus transmission](../src/core/system/combus/protocol/README.md): how links are described, sent, received and supervised.
-* [Links](../src/core/system/combus/protocol/link/README.md): declaring, starting and supervising a link.
+* [Link manager](../src/core/system/combus/protocol/link/README.md): declaring, setting up and supervising a link.
 * [Handshake](../src/core/system/combus/protocol/handshake/README.md): the contract of a link, its states and its modes.
 * [Coupling and pairing](../src/core/system/combus/protocol/coupling/README.md): the frame, the state machine, the timings.
 * [Failsafe module](../src/core/system/failsafe/failsafe_module.md): the two chains and their contributors.

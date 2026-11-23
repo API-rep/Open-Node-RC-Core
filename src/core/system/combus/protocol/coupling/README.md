@@ -97,6 +97,6 @@ The frame does not depend on pairing: pairing registers with it to receive the f
 ## Going Further
 
 - [ComBus transmission](../README.md): the overview
-- [Links](../link/README.md): how a link is described and supervised
+- [Link manager](../link/README.md): how a link is described and supervised
 - [Handshake](../handshake/README.md): what follows pairing
 - [Failsafe module](../../../failsafe/failsafe_module.md): where the contributor of a coupler goes

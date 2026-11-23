@@ -28,6 +28,6 @@ These three points are marked `TODO(chantier 4)` in the code. The rest of the wo
 ## Going Further
 
 - [Linking nodes](../../doc/linking_nodes.md): the remote among the other nodes
-- [Links](../core/system/combus/protocol/link/README.md): describing, starting and supervising a link
+- [The link manager](../core/system/combus/protocol/link/README.md): describing, setting up and supervising a link
 - [ComBus transmission](../core/system/combus/protocol/README.md): the overview
 - [ComBus Builder](../../scripts/combus_builder/README.md): the mirror view of the remote

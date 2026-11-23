@@ -41,7 +41,6 @@ The ports and their transports are the ground floor. On top of them sits the pro
                 │  Frame                               │
                 │  Transmission   (TX, RX)             │
                 └──────────────────┬───────────────────┘
-                                   │  link manager: maps, starts, supervises
                 ┌──────────────────┴───────────────────┐
   Hardware      │  Transport      (ComPort)            │
                 │  Port           (UART, ...)          │
@@ -76,16 +75,18 @@ On every loop cycle, the [`com_manager`](../../com/com_manager.h) calls the tran
 ```text
   ┌────────────────────────────────────────┐
   │                RECEIVE                 │◄──┐
-  │   - read the links                     │   │
+  │   - read the links                     │   │ loop()
   │   - apply the frames                   │   │
   │   ┌────────────────────────────────┐   │   │
   │   │        LINK SUPERVISOR         │   │   │
   │   │   - follow each link's health  │   │   │
   │   └────────────────────────────────┘   │   │
   └───────────────────┬────────────────────┘   │
+                      ▼                        │
   ┌───────────────────┴────────────────────┐   │
-  │       PROCESSING OF THE MACHINE        │   │ loop()
+  │       PROCESSING OF THE MACHINE        │   │
   └───────────────────┬────────────────────┘   │
+                      ▼                        │
   ┌───────────────────┴────────────────────┐   │
   │                  SEND                  │   │
   │   - send what is due on each link      │───┘
@@ -118,8 +119,7 @@ If they agree, the data flows. If not, the data is held back until they do.
 ## Going Further
 
 - [Linking nodes](../../../../../doc/linking_nodes.md): the concepts behind the links
-- [The links](link/README.md): describing, starting and supervising a link
+- [The link manager](link/README.md): describing, setting up and supervising a link
 - [The hardware](../../hw/README.md): the ports and their transports
 - [The handshake](handshake/README.md): what both ends check, and when
 - [The failsafe](../../failsafe/failsafe_module.md): what happens when a link is lost
-- [The link lifecycle](link/link_lifecycle.md): the init chain and the loop, in detail
