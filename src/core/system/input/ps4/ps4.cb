@@ -1,0 +1,244 @@
+# ps4.cb — Channels of the PS4 DualShock source (BOARD, requires HAS_REMOTE_PS4)
+#
+# The channels of the source, written by its backend (ps4_backend.cpp) on every
+# read, already scaled:
+#   - a stick: [0..max], neutral at the centre;
+#   - an analog trigger (L2, R2): [neutral..max], neutral when released;
+#   - a button: true when pressed.
+# The reframer of the source (chain of the `source` stage) overwrites them in
+# place right after a read; the mapper of the module then writes the inputs of
+# the type from them.  Design: doc/WIP - Local remote.md §2, §4, §7.
+#
+# Notes:
+# - BOARD scope: they exist on the board that acquires the commands only, and
+#   never travel.
+# - value: the safe value, written by the backend when the controller is not
+#   connected (neutral, released).
+# - requires: [HAS_REMOTE_PS4], the PS4 module; it needs HAS_REMOTE (checked by
+#   ps4_backend.h).
+
+channels:
+
+# -----------------------------------------------------------------------------
+# ANALOG — sticks and triggers
+# -----------------------------------------------------------------------------
+
+- id: PS4_LX
+  infoName: "PS4 left stick X"
+  type: analog
+  theme: source
+  scope: BOARD
+  direction: none
+  requires: [HAS_REMOTE_PS4]
+  value: CbusNeutral
+
+- id: PS4_LY
+  infoName: "PS4 left stick Y"
+  type: analog
+  theme: source
+  scope: BOARD
+  direction: none
+  requires: [HAS_REMOTE_PS4]
+  value: CbusNeutral
+
+- id: PS4_RX
+  infoName: "PS4 right stick X"
+  type: analog
+  theme: source
+  scope: BOARD
+  direction: none
+  requires: [HAS_REMOTE_PS4]
+  value: CbusNeutral
+
+- id: PS4_RY
+  infoName: "PS4 right stick Y"
+  type: analog
+  theme: source
+  scope: BOARD
+  direction: none
+  requires: [HAS_REMOTE_PS4]
+  value: CbusNeutral
+
+- id: PS4_L2
+  infoName: "PS4 L2 trigger"
+  type: analog
+  theme: source
+  scope: BOARD
+  direction: none
+  requires: [HAS_REMOTE_PS4]
+  value: CbusNeutral
+
+- id: PS4_R2
+  infoName: "PS4 R2 trigger"
+  type: analog
+  theme: source
+  scope: BOARD
+  direction: none
+  requires: [HAS_REMOTE_PS4]
+  value: CbusNeutral
+
+# -----------------------------------------------------------------------------
+# DIGITAL — buttons
+# -----------------------------------------------------------------------------
+
+- id: PS4_SQUARE
+  infoName: "PS4 square"
+  type: digital
+  theme: source
+  scope: BOARD
+  direction: none
+  requires: [HAS_REMOTE_PS4]
+  value: low
+
+- id: PS4_CROSS
+  infoName: "PS4 cross"
+  type: digital
+  theme: source
+  scope: BOARD
+  direction: none
+  requires: [HAS_REMOTE_PS4]
+  value: low
+
+- id: PS4_CIRCLE
+  infoName: "PS4 circle"
+  type: digital
+  theme: source
+  scope: BOARD
+  direction: none
+  requires: [HAS_REMOTE_PS4]
+  value: low
+
+- id: PS4_TRIANGLE
+  infoName: "PS4 triangle"
+  type: digital
+  theme: source
+  scope: BOARD
+  direction: none
+  requires: [HAS_REMOTE_PS4]
+  value: low
+
+- id: PS4_L1
+  infoName: "PS4 L1"
+  type: digital
+  theme: source
+  scope: BOARD
+  direction: none
+  requires: [HAS_REMOTE_PS4]
+  value: low
+
+- id: PS4_R1
+  infoName: "PS4 R1"
+  type: digital
+  theme: source
+  scope: BOARD
+  direction: none
+  requires: [HAS_REMOTE_PS4]
+  value: low
+
+- id: PS4_L2_PRESSED
+  infoName: "PS4 L2 pressed"
+  type: digital
+  theme: source
+  scope: BOARD
+  direction: none
+  requires: [HAS_REMOTE_PS4]
+  value: low
+
+- id: PS4_R2_PRESSED
+  infoName: "PS4 R2 pressed"
+  type: digital
+  theme: source
+  scope: BOARD
+  direction: none
+  requires: [HAS_REMOTE_PS4]
+  value: low
+
+- id: PS4_UP
+  infoName: "PS4 up arrow"
+  type: digital
+  theme: source
+  scope: BOARD
+  direction: none
+  requires: [HAS_REMOTE_PS4]
+  value: low
+
+- id: PS4_RIGHT
+  infoName: "PS4 right arrow"
+  type: digital
+  theme: source
+  scope: BOARD
+  direction: none
+  requires: [HAS_REMOTE_PS4]
+  value: low
+
+- id: PS4_DOWN
+  infoName: "PS4 down arrow"
+  type: digital
+  theme: source
+  scope: BOARD
+  direction: none
+  requires: [HAS_REMOTE_PS4]
+  value: low
+
+- id: PS4_LEFT
+  infoName: "PS4 left arrow"
+  type: digital
+  theme: source
+  scope: BOARD
+  direction: none
+  requires: [HAS_REMOTE_PS4]
+  value: low
+
+- id: PS4_SHARE
+  infoName: "PS4 share"
+  type: digital
+  theme: source
+  scope: BOARD
+  direction: none
+  requires: [HAS_REMOTE_PS4]
+  value: low
+
+- id: PS4_OPTIONS
+  infoName: "PS4 options"
+  type: digital
+  theme: source
+  scope: BOARD
+  direction: none
+  requires: [HAS_REMOTE_PS4]
+  value: low
+
+- id: PS4_PS
+  infoName: "PS4 PS button"
+  type: digital
+  theme: source
+  scope: BOARD
+  direction: none
+  requires: [HAS_REMOTE_PS4]
+  value: low
+
+- id: PS4_TOUCHPAD
+  infoName: "PS4 touchpad"
+  type: digital
+  theme: source
+  scope: BOARD
+  direction: none
+  requires: [HAS_REMOTE_PS4]
+  value: low
+
+- id: PS4_L3
+  infoName: "PS4 left stick pressed"
+  type: digital
+  theme: source
+  scope: BOARD
+  direction: none
+  requires: [HAS_REMOTE_PS4]
+  value: low
+
+- id: PS4_R3
+  infoName: "PS4 right stick pressed"
+  type: digital
+  theme: source
+  scope: BOARD
+  direction: none
+  requires: [HAS_REMOTE_PS4]
+  value: low
