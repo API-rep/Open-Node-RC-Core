@@ -58,6 +58,16 @@ Les `*_BUS` restent `BASE` (sorties du contrat du type), mais ne passent pas sur
 
 ---
 
+### 3.1 Précisé le 2026-11-24 : les entrées sont des channels `BOARD` de la carte d'acquisition
+
+Décidé avec le [WIP - Local remote](<WIP - Local remote.md>) §2 (modèle B). La décision du §3 tient (la télécommande n'envoie que les entrées, la machine tient l'état et calcule les `*_BUS`) ; seule sa conséquence change :
+
+- les entrées (`*_STICK`, `*_BTN`, `KEY_BTN`, `DIRECT_DRIVE_BTN` et `CRUISE_TOGGLE_BTN` compris) **ne deviennent pas des channels transportables** : ce sont des channels `BOARD` du type, sous `requires: [HAS_REMOTE]`, présents sur la carte d'acquisition seule ;
+- chaque source (télécommande du projet, manette PS4, récepteur SBUS...) est un module de cette carte, dont le mappeur écrit les entrées ; la télécommande du projet aussi : son lien les porte dans sa table (`kRemoteLink`), sans écrire le bus lui-même ;
+- les chaînes d'entrée tournent sur la carte d'acquisition ; la recopie `*_STICK` → `*_BUS` est la chaîne par défaut du §1 ;
+- les `*_BUS` restent `BASE downlink_pt` : la carte d'acquisition est la carte reliée, elle les calcule et les redistribue dans le nœud ;
+- plus aucun lien n'écrit les `*_BUS` : le conflit des deux sources (§4.4, point 7) disparaît.
+
 ## 4. État des lieux (relevé du 2026-10-29, Volvo A60H)
 
 ### 4.1 Chaînes d'entrée (`HAS_INPUT_PROC`, `volvo_A60H_bruder/combus/processors/input/proc_config.cpp`)
@@ -95,6 +105,9 @@ Les `*_BUS` restent `BASE` (sorties du contrat du type), mais ne passent pas sur
 4. **Les états calculés** (`SUBGEAR_BUS`, `GEAR_BUS`) déclarés `BASE downlink_pt`, comme des commandes reçues.
 5. **Boutons de deux natures** : `KEY_BTN`, `DIRECT_DRIVE_BTN`, `CRUISE_TOGGLE_BTN` en `BASE downlink`, les autres (`SUBGEAR_SET_BTN`, `GEAR_UP_BTN`, `GEAR_DOWN_BTN`, `CRUISE_UPDATE_BTN`, `HORN_BTN`) en `SYSTEM none` (question ouverte, processors §4).
 6. **Les chaînes ne sont pas sûres au neutre** : la liste vivante de S3-3 (frein, rapports, régime, runlevel).
+7. **Deux sources sur `STEERING_BUS` et `DUMP_BUS`** (relevé le 2026-11-23, WIP Local remote) : ils sont sur le lien télécommande (`kRemoteLink`), et les recopies INPUT (`steering`, `dump`, sans processor) les réécrivent à chaque tour depuis `*_STICK`. Avec une vraie télécommande, la valeur reçue serait écrasée par un stick resté au neutre. **Réglé par le modèle du 2026-11-24** (§3.1) : la télécommande n'écrit plus les `*_BUS`.
+
+**Décidé le 2026-11-23 (propriétaire)** : les chaînes SIM `steering`, `dump` et voisines sont à **réécrire ensemble**, avec le propriétaire. Point de départ : **une chaîne n'écrase jamais un channel alimenté par un lien** (entre deux trames, elle retraiterait sa propre sortie : une échelle appliquée plusieurs fois, une rampe qui se fige) ; elle lit l'entrée et écrit une autre sortie, comme `throttle` (`THROTTLE_BUS` → `ESC_RPM_BUS`). Avec le modèle du §3.1, les `*_BUS` sont réécrits à chaque tour par la chaîne par défaut : la convention actuelle tient encore, la séparation entrée / sortie de SC2 reste le but. Le recadrage d'une télécommande du commerce n'est plus le rôle des chaînes de la machine : il passe au recadreur de la source (WIP Local remote §6, ComBus processors §2.9).
 
 ---
 
@@ -102,7 +115,7 @@ Les `*_BUS` restent `BASE` (sorties du contrat du type), mais ne passent pas sur
 
 1. **Où vit le branchement par défaut** : un `.cbproc` (ou équivalent) du type de machine dans `core/config/machines/<type>/`, généré par le builder ? Format : `doc/WIP - ComBus processors.md` §4.
 2. **Comment la machine déclare un remplacement** (par nom de sortie ?) et comment le builder vérifie « une seule chaîne par sortie ».
-3. **La télécommande n'envoie que les entrées** (§3) : à confirmer, et ses conséquences sur les directions.
+3. **La télécommande n'envoie que les entrées** (§3) : confirmé le 2026-11-24 (§3.1) ; les entrées sont des channels `BOARD` de la carte d'acquisition, écrits par le module de chaque source.
 4. **Pipeline signé** (`int32_t`) : relire les processors qui supposent 0..65535 (bornes, `CbusMaxVal`, `CbAnalog` signe/grandeur sur 16 bits) ; chiffrer la RAM (estimé ~120 octets pour la Volvo).
 5. **Lectures directes `analogBus[…].value`** dans le code applicatif (tableau de bord : `dashboard_simulation.cpp:160` pour `GEAR_BUS`…) : à faire passer par `combus_get_analog` quand leur channel devient centré.
 6. **`RUNLEVEL` dans la liste vivante** : au neutre (32767) il tomberait dans le `default` (→ `HALT` verrouillé). Piste du propriétaire (2026-10-29) : un zéro en début de variable, le souci étant l'énumérateur −1. Relevé : `RunLevel::NOT_YET_SET` (−1) n'a qu'un usage, la valeur de départ de `lastRunLevel` (`main.cpp:66`, forcer « nouveau runlevel » au premier tour), facile à retirer. Mais le −1 vu au neutre vient surtout de la troncature : `RunLevel` est un `int8_t`, et 32767 (0x7FFF) converti donne 0xFF = −1, quel que soit l'énumérateur. Options : `zeroAt: neutral` (0 logique = `IDLE` au neutre, lecture par `combus_get_analog`), ou décaler l'énumération (et changer son type sous-jacent). À trancher en SC.

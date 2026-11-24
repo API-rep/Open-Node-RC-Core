@@ -2,7 +2,7 @@
 
 Statut : **en cours de rédaction** (document `WIP`), ouvert le 2026-10-25 pendant le *ComBus link rework* (recadrage avant l'étape 2.4). Rien n'est implémenté de ce document, sauf les deux premiers flags de traitement (§3).
 Public : le propriétaire et les futures sessions de travail sur la norme des processors.
-Plan : §1 objectif, §2 intentions (dont §2.5 sécurité, décidé le 2026-10-26, et §2.8 norme des channels communs, à traiter tôt), §3 premier pas fait, §4 questions ouvertes.
+Plan : §1 objectif, §2 intentions (dont §2.5 sécurité, décidé le 2026-10-26, §2.8 norme des channels communs, à traiter tôt, et §2.9 étages d'exécution et chaînes sans état, décidé le 2026-11-23), §3 premier pas fait, §4 questions ouvertes.
 
 ## 1. Objectif
 
@@ -148,6 +148,43 @@ Suite du codage centré `zeroAt` (link rework S3-4 : champ `.cb`, drapeau `Analo
 - **Un nom, un type** (proposition à valider) : un même nom de channel n'a qu'un seul type dans le dépôt (acquis par construction avec la bibliothèque de channels communs).
 - **Thème `sound`** à ajouter à `VALID_THEMES` quand les modules son reviendront.
 
+
+### 2.9 Étages d'exécution et chaînes sans état (décidé le 2026-11-23, avec le WIP Local remote)
+
+Origine : le recadreur d'une source locale de commandes ([WIP - Local remote](<WIP - Local remote.md>) §6) ne doit tourner que quand la source vient d'être lue. Une chaîne ramassée automatiquement ne doit donc pas tourner à chaque tour de boucle.
+
+**Aujourd'hui, une chaîne ne tourne jamais seule** : chaque tableau de chaînes a un seul appelant, qui décide quand il tourne (`main.cpp:57-58` pour `inputChain` et `simChain`, `failsafe.cpp:23`, `failsafe_soft_chain.cpp:93`, `CouplingDev::chain` pour un coupleur).
+
+**Le moment d'exécution devient une propriété déclarée du paquet : son étage.**
+
+```yaml
+stage: source        # source | input | sim | failsafe ...
+source: ps4          # étage source : la source qui l'appelle
+requires: [HAS_REMOTE_PS4]
+```
+
+- Le builder range chaque chaîne dans le tableau de son étage ; **chaque étage a un seul appelant** : `source` le module de la source, juste après sa lecture ; `input` et `sim` la boucle ; `failsafe` le module failsafe. Une chaîne `source` ramassée n'entre jamais dans les tableaux de la boucle.
+- **Une chaîne `source` n'écrit que les channels de sa source** : le builder le vérifiera. Un recadreur ne peut rien salir d'autre.
+- En attendant les paquets : un tableau écrit à la main, désigné par la configuration du module de la source ; il deviendra un tableau généré, `stage: source`.
+
+**Règle : une chaîne de l'étage `source` ne contient que des processors sans état.** Un processor est sans état quand sa sortie ne dépend que de la valeur du pipeline, de sa configuration et de son entrée secondaire (`inValue`) lue à ce passage : il n'utilise pas `state`, ne lit pas l'heure (`millis()`), n'a pas de variable `static`. Un tel processor donne le même résultat quel que soit le rythme de ses appels, ce qui rend son coût proportionnel au rythme de la source et son comportement indépendant de lui. Le builder des chaînes la vérifiera ; d'ici là, relecture.
+
+Inventaire du 2026-11-23 (`src/core/system/combus/processors/`) :
+
+| Dossier | Sans état | Avec état |
+|---|---|---|
+| `base/` | `cb_bypass`, `cb_io` (`cb_in_fn`, `cb_out_fn`), `cb_reset`, `cb_runlevel_fn`, `cb_runlevel_hold_fn` | `cb_runlevel_once_fn` (`prevValue` : détection de front) |
+| `math/` | `cb_abs`, `cb_center`, `cb_scale` | — |
+| `logic/` | `cb_or` | `cb_delay` (`state`, `millis()`) |
+| `motion/` | `cb_dir` | `cb_brake`, `cb_cruise`, `cb_ramp` |
+| `input/` | — | `cb_btn` (`state`, `millis()`) |
+| `modules/gear/` | — | `cb_gear` |
+
+`base/` et `math/` sont donc sans état, à une exception près (`cb_runlevel_once_fn`). Sans état ne veut pas dire « à sa place dans un recadreur » :
+- `cb_abs` et `cb_dir` écrivent une sortie secondaire (`outCh`) : permise seulement vers un channel de la source ;
+- `cb_runlevel*` écrit `RUNLEVEL` : hors de propos dans un recadreur, refusé par la règle des channels de la source ;
+- `cb_center` et `cb_abs` raisonnent sur 16 bits signés : à revoir avec le pipeline `int32_t` (§2.7).
+
 ## 3. Premier pas fait (recadrage du 2026-10-25)
 
 | Flag | Chaîne | Code | Channels produits |
@@ -164,9 +201,9 @@ Les deux flags sont posés sur la carte mère de la Volvo et du nœud d'essai. L
   - `cb_gear.cpp:285-291` (`dampEndMs`, `upshiftDampMs` 500 ms) : l'accélération reste gelée ; en plus, 0 sert de marqueur « pas de fenêtre ».
   - Correctif proposé : `(int32_t)(now - deadline) >= 0` (la forme de `combus_pairing`), un booléen de fenêtre active dans `cb_gear`, un test Unity à cheval sur le passage. Le protocole, lui, est sain.
 
-- Format du paquet : extension (`.cbproc` ou `.cbprocpkg`), contenu (YAML qui décrit la chaîne, ou YAML qui pointe vers le C++ des processors), place des `.cb` inclus.
+- Format du paquet : extension (`.cbproc` ou `.cbprocpkg`), contenu (YAML qui décrit la chaîne, ou YAML qui pointe vers le C++ des processors), place des `.cb` inclus. Champs déjà décidés : `stage` et, pour l'étage `source`, `source` (§2.9).
 - Ce qui est généré à partir du paquet (tableaux `CbProc` / `CbChain`, aujourd'hui écrits à la main dans `proc_config.cpp` et les `*_config.h`), et ce qui reste du C++ écrit à la main (les fonctions des processors).
 - Comment se déclare une redéfinition de configuration seule (nom du traitement type, champs remplaçables).
 - Liste des thèmes qui ont des chaînes, et nom de leurs flags ; place de la chaîne du runlevel, aujourd'hui dans les chaînes d'entrée.
 - Fichier mort à nettoyer : `volvo_A60H_bruder/combus/processors/runlevel/runlevel_procs.h` n'est inclus nulle part (remplacé par `input/runlevel_config.h`).
-- Les autres boutons bruts de `inputs/input.cb` (`SUBGEAR_SET_BTN`, `GEAR_UP_BTN`, `GEAR_DOWN_BTN`, `CRUISE_UPDATE_BTN`, `HORN_BTN`) : commandes qu'une télécommande pourra envoyer, donc `BASE downlink` comme `KEY_BTN` ? Les sticks bruts restent `SYSTEM` (périphérique local, avant conditionnement).
+- Les autres boutons bruts de `inputs/input.cb` (`SUBGEAR_SET_BTN`, `GEAR_UP_BTN`, `GEAR_DOWN_BTN`, `CRUISE_UPDATE_BTN`, `HORN_BTN`) : commandes qu'une télécommande pourra envoyer, donc `BASE downlink` comme `KEY_BTN` ? Les sticks bruts restent `SYSTEM` (périphérique local, avant conditionnement). **Tranché le 2026-11-24** ([WIP - Local remote](<WIP - Local remote.md>) §2) : tous les boutons et sticks, `KEY_BTN`, `DIRECT_DRIVE_BTN` et `CRUISE_TOGGLE_BTN` compris, deviennent les entrées `BOARD` du type, sous `requires: [HAS_REMOTE]`, sur la carte d'acquisition.

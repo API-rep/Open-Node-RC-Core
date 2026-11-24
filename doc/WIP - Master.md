@@ -22,7 +22,7 @@ Le code est relu (blocs 1 à 11) ; reste, dans l'ordre :
      - **la vraie Volvo** (carte mère et extension, moteurs et servos) : seulement compilée ; le banc moteurs du propriétaire viendra plus tard.
    - Aucun firmware n'a encore les deux bouts d'un vrai lien : pas de configuration de carte d'extension, la Volvo n'a pas de lien vers la télécommande, le type `test_trailer` n'a pas d'env. Première décision de la session : quels firmwares d'essai (envs de test à deux bouts), à valider par le propriétaire avant de les écrire.
    - Relecture de la doc en cours dans l'autre conversation : ne pas toucher aux fichiers `.md`.
-3. **Sources locales de commandes** (manette PS4, plus tard SBUS), intercalées le 2026-11-21 pour que l'audit final les couvre : un `ComPort` virtuel sur la table de la télécommande, en lien de confiance. Concept, décisions et étapes L1 à L6 : [Local remote](<WIP - Local remote.md>).
+3. **Sources locales de commandes** (manette PS4, plus tard SBUS), intercalées le 2026-11-21 pour que l'audit final les couvre : recadré le 2026-11-24 : chaque source (télécommande du projet comprise) est un module de la carte d'acquisition, qui écrit les entrées `BOARD` du type (`*_STICK`, `*_BTN`, sous `HAS_REMOTE`). Concept, décisions et étapes R0 à R5 : [Local remote](<WIP - Local remote.md>).
 4. **Revue indépendante** par un agent tiers : relecture et tests fonctionnels, à partir des règles et des résultats attendus, sans les conclusions de l'auteur.
 5. **Relecture de la doc** par le propriétaire. Note : le commit `ee4f269` (`docs(builder)`) contient aussi le `refactor(tests)` de `test_combus_loopback.cpp` (identifiants « legacy »).
 6. **Merge** dans `main`.
