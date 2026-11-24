@@ -104,6 +104,7 @@ VALID_THEMES: frozenset[str] = frozenset({
     "sim",        # values computed by the simulation chains (HAS_SIM_PROC): ESC_SPEED_BUS, ESC_RPM_BUS, DRIVE_STATE_BUS
     "coupler",    # local channels of a coupler (command, engaged switch...)
     "remote",     # inputs sent by the remote (buttons, sticks); TODO(Simulation chain): the existing inputs move here
+    "source",     # channels of a command source module (PS4_*...), BOARD, read by its mapper (WIP - Local remote)
     # Add the new legitimate themes here.
 })
 

@@ -41,7 +41,7 @@ Anywhere under `src/`, next to what it describes: a core module, the profile of 
 | `infoName` | yes | a short readable label |
 | `type` | yes | `analog` (0 to 65535) or `digital` (true / false) |
 | `scope` | yes | `BASE`, `SYSTEM` or `BOARD` (see below) |
-| `theme` | yes | one of `core`, `failsafe`, `vbat`, `light`, `input`, `sim`, `coupler`, `remote` |
+| `theme` | yes | one of `core`, `failsafe`, `vbat`, `light`, `input`, `sim`, `coupler`, `remote`, `source` |
 | `direction` | yes, except on `BOARD` | who sends and who receives (see below) |
 | `value` | yes | the safe value (see below) |
 | `requires` | no | build flags without which the channel does not exist |
