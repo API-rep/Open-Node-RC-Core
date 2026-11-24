@@ -212,7 +212,6 @@ struct ComBusLink {
 		// Transport and contract, shared by TX and RX of this link
 	ComPort*                port         = nullptr;
 	CombusHandshakeContext* handshakeCtx = nullptr;
-	bool                    trusted      = false;   ///< both ends in this firmware (a LOCAL port): contract STABLE by construction
 
 		// Transmission; txCfg absent = this end does not transmit
 	std::optional<ComBusFrameCfg> txCfg = std::nullopt;   ///< capacity on transmission

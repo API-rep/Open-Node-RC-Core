@@ -417,7 +417,7 @@ void combus_links_start_all( ComBusLink* links, uint8_t count )
  *   3. Context attached to both sides, before their init: combus_tx_init() arms the burst
  *      on it.
  *   4. Contract rules: a bidirectional end answers requests, waits for an ACK and sends
- *      no data while UNKNOWN.  A trusted link skips all of it: STABLE from the start.
+ *      no data while UNKNOWN.
  *   5. Next set: only a BASE link has its candidates apart.  A SYSTEM link carries them
  *      in its single set, so its next MD5 is the stable one.
  *   6. Table: a link between nodes has its own contract, the MD5 of its coupler and of a
@@ -457,11 +457,6 @@ void combus_link_start( uint8_t linkIdx, ComBusLink* link )
 		// 4. Contract rules
 	link->handshakeCtx->name          = link->name;
 	link->handshakeCtx->bidirectional = link->txCfg.has_value() && link->rxCfg.has_value();
-	link->handshakeCtx->trusted       = link->trusted;
-
-	if (link->trusted) {
-		sys_log_info("[COMBUS_LINKS] link '%s': trusted, both ends in this firmware (no handshake)\n", link->name);
-	}
 
 		// 5. Next set
 	link->handshakeCtx->baseSet       = (link->layer == ChanLayer::BASE);

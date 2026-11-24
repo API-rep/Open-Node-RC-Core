@@ -34,7 +34,7 @@ The major version of the project is also part of the contract. The minor and dev
 
 ## The Sequence
 
-A link starts `UNKNOWN`, a [trusted link](#the-trusted-link) aside. Each end sends a **burst** of 3 requests 100 ms apart, then one request every 250 ms, whatever the state of the contract.
+A link always starts `UNKNOWN`. Each end sends a **burst** of 3 requests 100 ms apart, then one request every 250 ms, whatever the state of the contract.
 
 ```text
 End A                                  End B
@@ -76,16 +76,6 @@ The contract falls back to `UNKNOWN` on:
 The link is then no longer alive, and its loss is published according to its scope (`NODE_LINK_FAIL` or `BOARD_LINK_FAIL`).
 
 A failsafe never touches the contract: blocking the frames would block the failsafe of the other boards.
-
-## The Trusted Link
-
-When both ends of a link live in the same firmware (a local source of commands, such as a controller behind a `LOCAL` port), they read the same table: they agree by construction, and a handshake would check nothing. Such a link is **trusted** (`ComBusLink::trusted`):
-
-- it is `STABLE` from its start, and its data flows at once;
-- it sends no handshake;
-- its contract never falls back to `UNKNOWN`: no silence, missing ACK or refused handshake changes it.
-
-Its loss goes through the usual path: the age of its last frame. A silent source is no longer alive, the [link supervisor](../link/README.md) gives back its safe values and publishes its loss; at its next frame, the link is alive again, with no handshake to redo.
 
 ## Candidate Channels: Stable, Next, Legacy
 

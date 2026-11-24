@@ -1116,16 +1116,14 @@ static bool healthLinkLost(void) {
     return view.receives && view.state != ComLinkState::ALIVE;
 }
 
-/** Build the health link on the loopback port, apply its frames to rxTargetBus and put it under watch.
- *  `trusted`: as a LOCAL port will mark it (Local remote L2). */
-static void startHealthLink(LinkEnd end, const ComDev& dev, bool trusted = false) {
+/** Build the health link on the loopback port, apply its frames to rxTargetBus and put it under watch. */
+static void startHealthLink(LinkEnd end, const ComDev& dev) {
     TEST_ASSERT_NOT_NULL_MESSAGE(s_port, "Run test_loopback_init first");
     resetRxTarget();
 
     const ComDevMap map = { &dev, &s_testPort, end };
     TEST_ASSERT_TRUE(combus_link_build(map, s_port, s_healthRuntime, s_healthLink));
     if (s_healthLink.rxCfg.has_value()) { s_healthLink.target = &rxTargetBus; }
-    s_healthLink.trusted = trusted;
 
     combus_link_start(kLinkIdx, &s_healthLink);
     combus_link_supervisor_start(&s_healthRuntime, 1u);
@@ -1689,56 +1687,6 @@ static void test_contract_row9_no_ack_means_lost(void) {
     TEST_ASSERT_TRUE_MESSAGE(stableAt600ms, "dropped too early");
     TEST_ASSERT_FALSE_MESSAGE(isStable(), "still STABLE after more than 1 s without ACK");
     TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::LOST);
-}
-
-/** Trusted link, row 1 (Local remote L2): STABLE at start, no handshake ever sent, data at once.
- *  The same run on an ordinary link does send handshakes: the witness can see them. */
-static void test_trusted_row1_stable_at_start_without_handshake(void) {
-    for (uint8_t pass = 0u; pass < 2u; ++pass) {
-        const bool trusted = (pass == 0u);
-        startHealthLink(LinkEnd::TX_RX, kHealthDev, trusted);
-        linkCtx()->everReceived = false;                            // witness of the handshake decoder
-        TEST_ASSERT_EQUAL(trusted, isStable());
-
-        for (uint32_t t0 = millis(); (millis() - t0) < 600u; ) {    // burst, then two periods
-            combus_tx_update(&txComBus);
-            delay(10u);
-            pumpRx();
-        }
-        if (trusted) {
-            TEST_ASSERT_FALSE_MESSAGE(linkCtx()->everReceived, "a trusted link sent a handshake");
-            TEST_ASSERT_TRUE(isStable());
-            TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::ALIVE);   // its own data, looped back
-        } else {
-            TEST_ASSERT_TRUE_MESSAGE(linkCtx()->everReceived, "no handshake on an ordinary link: the witness is blind");
-        }
-    }
-}
-
-/** Trusted link, row 2: never dropped (no ACK, refused handshake, silence); lost by the age
- *  of its last frame, alive again at the next frame, with no handshake. */
-static void test_trusted_row2_never_dropped_lost_by_age(void) {
-    startHealthLink(LinkEnd::TX_RX, kHealthDev, true);
-
-    for (uint32_t t0 = millis(); (millis() - t0) < 1300u; ) {       // data, never an ACK (row 9 drops here)
-        sendPeerFrame(false);
-        pumpRx();
-    }
-    TEST_ASSERT_TRUE_MESSAGE(isStable(), "dropped for a missing ACK");
-    TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::ALIVE);
-
-    sendForgedHandshake(false, false, combus::wire::kProjectVersionMajor, combus::wire::kProjectVersionMinor);
-    pumpRx();
-    TEST_ASSERT_TRUE_MESSAGE(isStable(), "dropped for a refused handshake");   // row 8 drops here
-
-    delay(kHealthProtocol.linkTimeoutMs + 60u);                     // silence
-    pumpRx();
-    TEST_ASSERT_TRUE_MESSAGE(isStable(), "dropped for a silence");
-    TEST_ASSERT_TRUE_MESSAGE(combus_link_state(kLinkIdx) == ComLinkState::LOST, "still alive after its timeout");
-
-    sendPeerFrame(false);                                           // back, data only (row 7 waits for a handshake)
-    pumpRx();
-    TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::ALIVE);
 }
 
 /** Row 10: a receive-only end ignores data until the request of its peer, never answers it. */
@@ -2408,8 +2356,6 @@ void setup() {
     RUN_TEST(test_contract_row13_alive_again_at_the_first_frame);
     RUN_TEST(test_contract_row9_no_ack_means_lost);
     RUN_TEST(test_contract_row10_rx_only_end);
-    RUN_TEST(test_trusted_row1_stable_at_start_without_handshake);
-    RUN_TEST(test_trusted_row2_never_dropped_lost_by_age);
     RUN_TEST(test_contract_row11_tx_only_end);
     RUN_TEST(test_contract_row12_no_reply_to_ack);
     RUN_TEST(test_contract_failsafe_keeps_contract);
