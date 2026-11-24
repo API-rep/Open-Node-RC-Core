@@ -26,6 +26,7 @@ One suite is one folder under `test/` and one env of the same name in `platformi
 | `test_peer_link` | a link between two nodes through the generated tables, coupling, pairing | same jumper |
 | `test_remote_link` | the link of a remote to the machine it drives | same jumper |
 | `test_runlevel` | the runlevel chain of the Volvo, `HALT` held until a reboot | none |
+| `test_remote_source` | the base of the command sources, with scripted fake sources: one drives, loss, two alive, return | none |
 
 With the jumper, the board talks to itself: what it sends on TX comes back on RX, so a single board plays both ends of a link. The pins are those of the link in the configuration of the test env.
 
