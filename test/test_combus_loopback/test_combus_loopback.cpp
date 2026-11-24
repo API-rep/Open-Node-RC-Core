@@ -584,11 +584,13 @@ static void test_rx_base_link_refuses_system_channels(void) {
 //
 // Channel choices (volvo_A60H_bruder / dumper_truck):
 //   - BRAKE_BUS (BASE analog, id=0): present in all 3 views.
-//   - DUMP_STICK (SYSTEM analog, id=18): present in combus + combus_system,
-//     absent from combus_base (BASE-only view).
-//   - CRUISE_ACTIVE (BASE digital, id=9): present in all 3 views.
-//   - CRUISE_TOGGLE_BTN (SYSTEM digital, id=21): present in combus +
-//     combus_system, absent from combus_base.
+//   - RUNLEVEL (SYSTEM analog): present in combus + combus_system, absent
+//     from combus_base (BASE-only view).
+//   - LIGHTS (BASE digital): present in all 3 views.
+//   - BRAKING (SYSTEM digital): present in combus + combus_system, absent
+//     from combus_base.
+//   The inputs of the type (*_STICK, *_BTN) are BOARD under HAS_REMOTE: not
+//   generated in this env.
 //
 // The generated combus_generated/combus.cpp is added to the test env's
 // source list via scripts/combus_test_add_generated_source.py (registered
@@ -619,22 +621,24 @@ static void test_same_memory_object_analog_base(void) {
 
 /** Analog: a SYSTEM-only channel must be the same object in combus + combus_system. */
 static void test_same_memory_object_analog_system_only(void) {
-    AnalogComBus& via_full  = AnalogComBusArray[static_cast<uint8_t>(AnalogComBusID::DUMP_STICK)];
-    AnalogComBus& via_system = AnalogComBusArray[static_cast<uint8_t>(AnalogComBusSystemID::DUMP_STICK)];
+    AnalogComBus& via_full  = AnalogComBusArray[static_cast<uint8_t>(AnalogComBusID::RUNLEVEL)];
+    AnalogComBus& via_system = AnalogComBusArray[static_cast<uint8_t>(AnalogComBusSystemID::RUNLEVEL)];
 
     // Pointer identity: combus and combus_system must share the object.
     TEST_ASSERT_EQUAL_PTR(&via_full, &via_system);
 
-    // Write via one view, read via the other.
+    // Write via one view, read via the other; RUNLEVEL is given back its value.
+    const uint16_t saved = via_full.value;
     via_system.value = 999u;
     TEST_ASSERT_EQUAL_UINT16(999u, via_full.value);
+    via_full.value = saved;
 }
 
 /** Digital: a BASE channel must be the same object in all 3 views. */
 static void test_same_memory_object_digital_base(void) {
-    DigitalComBus& via_full   = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::KEY_BTN)];
-    DigitalComBus& via_base = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusBaseID::KEY_BTN)];
-    DigitalComBus& via_system  = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusSystemID::KEY_BTN)];
+    DigitalComBus& via_full   = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::LIGHTS)];
+    DigitalComBus& via_base = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusBaseID::LIGHTS)];
+    DigitalComBus& via_system  = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusSystemID::LIGHTS)];
 
     TEST_ASSERT_EQUAL_PTR(&via_full, &via_base);
     TEST_ASSERT_EQUAL_PTR(&via_full, &via_system);
@@ -650,13 +654,14 @@ static void test_same_memory_object_digital_base(void) {
 
 /** Digital: a SYSTEM-only channel must be the same object in combus + combus_system. */
 static void test_same_memory_object_digital_system_only(void) {
-    DigitalComBus& via_full  = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::HORN_BTN)];
-    DigitalComBus& via_system = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusSystemID::HORN_BTN)];
+    DigitalComBus& via_full  = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusID::BRAKING)];
+    DigitalComBus& via_system = DigitalComBusArray[static_cast<uint8_t>(DigitalComBusSystemID::BRAKING)];
 
     TEST_ASSERT_EQUAL_PTR(&via_full, &via_system);
 
     via_system.value = true;
     TEST_ASSERT_TRUE(via_full.value);
+    via_full.value = false;
 }
 
 /** Prefix alignment: the 3 enums must agree on numeric values for shared channels. */
@@ -672,27 +677,25 @@ static void test_id_prefix_alignment_analog(void) {
                             static_cast<uint8_t>(AnalogComBusSystemID::THROTTLE_BUS));
 
     // SYSTEM-only channels: present in combus + combus_system, must agree.
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(AnalogComBusID::DUMP_STICK),
-                            static_cast<uint8_t>(AnalogComBusSystemID::DUMP_STICK));
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(AnalogComBusID::STEERING_STICK),
-                            static_cast<uint8_t>(AnalogComBusSystemID::STEERING_STICK));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(AnalogComBusID::RUNLEVEL),
+                            static_cast<uint8_t>(AnalogComBusSystemID::RUNLEVEL));
 }
 
 /** Prefix alignment: digital counterpart. */
 static void test_id_prefix_alignment_digital(void) {
     // BASE channels.
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DigitalComBusID::KEY_BTN),
-                            static_cast<uint8_t>(DigitalComBusBaseID::KEY_BTN));
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DigitalComBusID::KEY_BTN),
-                            static_cast<uint8_t>(DigitalComBusSystemID::KEY_BTN));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DigitalComBusID::HAZARDS),
+                            static_cast<uint8_t>(DigitalComBusBaseID::HAZARDS));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DigitalComBusID::HAZARDS),
+                            static_cast<uint8_t>(DigitalComBusSystemID::HAZARDS));
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DigitalComBusID::LIGHTS),
                             static_cast<uint8_t>(DigitalComBusBaseID::LIGHTS));
     TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DigitalComBusID::LIGHTS),
                             static_cast<uint8_t>(DigitalComBusSystemID::LIGHTS));
 
     // SYSTEM-only channels.
-    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DigitalComBusID::HORN_BTN),
-                            static_cast<uint8_t>(DigitalComBusSystemID::HORN_BTN));
+    TEST_ASSERT_EQUAL_UINT8(static_cast<uint8_t>(DigitalComBusID::BRAKING),
+                            static_cast<uint8_t>(DigitalComBusSystemID::BRAKING));
 }
 
 
@@ -2056,8 +2059,8 @@ static void test_frame_larger_than_the_set_is_refused(void) {
 /** Row 4: the padding bits of the last digital byte never reach the buffer. */
 static void test_padding_bits_do_not_reach_the_buffer(void) {
     fillRandom(0x600DF00Dul);
-    const uint8_t nDig = 9u;                                        // 2 bytes, 7 padding bits
-    TEST_ASSERT_TRUE(kNDigital > 16u);
+    const uint8_t nDig = 1u;                                        // 1 byte, 7 padding bits
+    TEST_ASSERT_TRUE(kNDigital >= 8u);                              // the 7 padding positions are in the buffer
     const uint8_t len = combus_frame_encode(kCfg, encodeBuf, &txComBus, 4u, kNAnalog, nDig);
 
     for (uint8_t i = 0u; i < kNDigital; ++i) { rxDigitalBuf[i] = true; }   // sentinel

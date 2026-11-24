@@ -1,7 +1,7 @@
 # input.cb — states the input chains of a dumper truck compute from the buttons (SYSTEM)
 #
-# The remote sends the intent (the button, BASE downlink); the machine
-# computes the state:
+# The command source writes the intent (the button, an input of the type,
+# BOARD under HAS_REMOTE); the machine computes the state:
 # - KEY_ACTIVE: engine on / off, toggled from KEY_BTN by the
 #   INPUT_KEY_RUNLEVEL chain.  Read by the runlevel chain (key -> STARTING),
 #   main loop, dashboards.

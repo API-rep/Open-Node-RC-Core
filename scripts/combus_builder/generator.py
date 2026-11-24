@@ -82,6 +82,7 @@ from pathlib import Path
 
 from .canon.channels import ChannelDefinition
 from .flags import BuildContext
+from .links import REMOTE_FLAG
 
 
 # =============================================================================
@@ -709,7 +710,7 @@ def _render_source(view: View, ctx: BuildContext, *, filename_prefix: str = "") 
 # Flags that mean "this board establishes the connection with another node":
 # it is the source, inside the node, of the BASE channels it receives.
 INTER_NODE_FLAGS: frozenset[str] = frozenset({
-    "INPUT_PS4_DS4_BT",   # the PS4 controller stands for the remote
+    REMOTE_FLAG,          # the board that acquires the commands (remote link, PS4, ...)
     # Add the inter-node transports here (ESP-NOW, radio, ...).
 })
 
@@ -1034,7 +1035,7 @@ def _remote_contract(channels: list[ChannelDefinition], ctx: BuildContext):
     except LinkError as e:
         raise GeneratorError(f"contract of the machine type {machine_type!r}: {e}") from e
     plugs = {name: links_module.load_coupler_channels(ctx.buildroot, name) for name in config.plug}
-    return machine_type, remote_commands(type_base, supported, plugs)
+    return machine_type, remote_commands(channels, supported, plugs)
 
 
 def _is_remote(ctx: BuildContext) -> bool:
@@ -1121,7 +1122,9 @@ def _emit_peer_links(channels: list[ChannelDefinition], couplers, contract, ctx:
             print(f"[combus_builder] set LINK {name} ({link.role})  md5={link_md5(link)}  "
                   f"A{n_analog}+D{n_digital}{board}")
             links.append(link)
-        if contract and contract[1]:        # the link with the remote, its own contract
+        # The link with the remote, its own contract: on the remote, and on the
+        # board of the machine that acquires the commands (its inputs exist there only).
+        if contract and contract[1] and (_is_remote(ctx) or ctx.has(REMOTE_FLAG)):
             machine_type, commands = contract
             link = compute_remote_link(machine_type, commands, PLUG if _is_remote(ctx) else SOCKET)
             print(f"[combus_builder] set LINK {link.coupler} ({link.role})  md5={link_md5(link)}  "

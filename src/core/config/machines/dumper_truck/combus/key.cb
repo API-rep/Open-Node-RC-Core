@@ -1,7 +1,8 @@
-# key.cb — Engine key button (BASE)
+# key.cb — Engine key button (BOARD, input of the type, requires HAS_REMOTE)
 #
 # - KEY_BTN: physical key switch input (TRIANGLE on PS4 in dumper-truck layout).
-#   Written by input module (PS4 controller), or sent by a remote.
+#   Written by the command source (PS4 controller, or the remote link) on the
+#   board that acquires the commands (HAS_REMOTE): see inputs/input.cb.
 #   Read by INPUT_KEY_RUNLEVEL chain (key_on + key_off + runlevel).
 # - The engine state it toggles, KEY_ACTIVE, is computed by the machine:
 #   processors/input.cb (SYSTEM).
@@ -19,6 +20,6 @@ channels:
   infoName: "Engine key button (raw, TRIANGLE)"
   type: digital
   theme: core
-  scope: BASE
-  direction: downlink_pt
+  scope: BOARD
+  requires: [HAS_REMOTE]
   value: low

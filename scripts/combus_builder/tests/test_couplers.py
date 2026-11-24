@@ -177,7 +177,7 @@ def test_l4b_a_local_channel_is_never_base(tmp_path):
 
 
 def test_l5_local_channels_on_the_vehicle_only_and_off_the_link(tmp_path, tractor, trailer):
-    generate(tractor, _ctx(M, "MACHINE_TYPE_TEST_TRACTOR", HITCH), tmp_path / "v")
+    generate(tractor, _ctx(M, "MACHINE_TYPE_TEST_TRACTOR", HITCH, "HAS_REMOTE"), tmp_path / "v")
     ids_v = (tmp_path / "v" / "combus_ids.h").read_text(encoding="utf-8")
     assert "TEST_COUPLER_CMD" in ids_v
     assert "TEST_COUPLER_ENGAGED_SW" not in ids_v                    # its flag is not set

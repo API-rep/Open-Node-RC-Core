@@ -4,7 +4,8 @@ Rules validated by the owner (2026-10-25):
   - the direction of a BASE `.cb` is the direction of the NODE (between
     nodes); inside the node, the source of a BASE channel is the board that
     establishes the connection with another node (a flag of
-    INTER_NODE_FLAGS, today INPUT_PS4_DS4_BT);
+    INTER_NODE_FLAGS, HAS_REMOTE since 2026-11-24: the board that acquires
+    the commands);
   - `downlink_pt` (BASE only): the connected board redistributes it in the
     node (node direction uplink), the other boards receive it (downlink);
   - `downlink` without `_pt`: the connected board uses it alone (node
@@ -118,7 +119,7 @@ def test_generated_array_carries_the_node_direction(tmp_path):
 
 
 def test_connected_board_redistributes(tmp_path):
-    generate(_canon(_ch("THROTTLE")), _ctx("INPUT_PS4_DS4_BT"), tmp_path)
+    generate(_canon(_ch("THROTTLE")), _ctx("HAS_REMOTE"), tmp_path)
     text = (tmp_path / "combus.cpp").read_text(encoding="utf-8")
     assert ".flow = { .betweenNodes = Direction::Downlink, .betweenBoards = Direction::Uplink }, .safe = CbusNeutral }, // THROTTLE" in text
 
@@ -135,12 +136,12 @@ def test_pt_does_not_change_the_md5():
 # =============================================================================
 
 def test_one_connected_board_is_accepted():
-    check_single_connected_board({None: _ctx("INPUT_PS4_DS4_BT"),          # the mother env is not a board
-                                  "mainboard": _ctx("INPUT_PS4_DS4_BT"),
+    check_single_connected_board({None: _ctx("HAS_REMOTE"),          # the mother env is not a board
+                                  "mainboard": _ctx("HAS_REMOTE"),
                                   "extboard": _ctx()})
 
 
 def test_two_connected_boards_are_refused():
     with pytest.raises(GeneratorError, match="mainboard.*extboard|extboard.*mainboard"):
-        check_single_connected_board({"mainboard": _ctx("INPUT_PS4_DS4_BT"),
-                                      "extboard": _ctx("INPUT_PS4_DS4_BT")})
+        check_single_connected_board({"mainboard": _ctx("HAS_REMOTE"),
+                                      "extboard": _ctx("HAS_REMOTE")})

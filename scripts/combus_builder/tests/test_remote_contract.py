@@ -7,6 +7,10 @@ Rules validated by the owner (2026-11-02):
     and the commands the supported couplers relay (`downlink_pt`), never what
     a plug side sends; its own table and MD5, the same on both ends, with or
     without the coupler;
+  - model B (2026-11-24): the inputs of the type are BOARD under HAS_REMOTE;
+    the BASE channels of the type are not on the remote link; the link exists
+    on the remote and on the board of the machine that acquires the commands
+    (HAS_REMOTE) only;
   - link channels have generic names shared between couplers: one channel, no
     more bytes; the same name agrees on type, value and zeroAt;
   - one source per channel: a channel of the type comes from the remote, a
@@ -45,6 +49,7 @@ from scripts.combus_builder.parser import discover_config_files, parse_all  # no
 
 SRC = REPO_ROOT / "src"
 M, R = "IS_MACHINE", "IS_REMOTE"
+ACQ = "HAS_REMOTE"
 TRACTOR = "MACHINE_TYPE_TEST_TRACTOR"
 HITCH = "HAS_COUPLER_SOCKET_TEST_COUPLER"
 
@@ -58,6 +63,12 @@ def _ch(id_, direction="downlink", type_="analog", value=None):
     return {"id": id_, "infoName": id_.lower(), "type": type_, "scope": "BASE", "theme": "core",
             "direction": direction,
             "value": value if value is not None else ("low" if type_ == "digital" else "CbusNeutral")}
+
+
+def _in(id_, type_="analog"):
+    """An input of the machine type: BOARD, on the board that acquires the commands."""
+    return {"id": id_, "infoName": id_.lower(), "type": type_, "scope": "BOARD", "theme": "core",
+            "requires": [ACQ], "value": "low" if type_ == "digital" else "CbusNeutral"}
 
 
 def _canon(*raws):
@@ -122,11 +133,24 @@ def test_a_coupler_needs_a_machine_type(tmp_path, tractor):
 # =============================================================================
 
 def test_the_remote_link_carries_only_what_the_remote_sends():
-    type_base = _canon(_ch("KEY", "downlink", "digital"), _ch("BRAKE", "downlink_pt"), _ch("OWN", "uplink"))
+    type_chs = _canon(_in("KEY", "digital"), _ch("BRAKE", "downlink_pt"), _ch("THROTTLE_BUS", "downlink_pt"),
+                      _ch("OWN", "uplink"))
     coupler = _canon(_ch("BRAKE", "downlink_pt"), _ch("RAMP", "downlink_pt", "digital"), _ch("TILT", "downlink"),
                      _ch("MINE", "uplink"))
-    ids = [c.id for c in remote_commands(type_base, {"c": coupler})]
+    ids = [c.id for c in remote_commands(type_chs, {"c": coupler})]
     assert ids == ["BRAKE", "KEY", "RAMP"]            # not TILT (the plug side), not OWN / MINE (the machine)
+
+
+def test_the_base_of_the_type_is_not_on_the_remote_link():
+    """Model B: the remote sends the inputs; the BASE buses are computed by the machine."""
+    type_chs = _canon(_in("THROTTLE_STICK"), _ch("THROTTLE_BUS", "downlink_pt"), _ch("GEAR_BUS", "downlink"))
+    assert [c.id for c in remote_commands(type_chs, {})] == ["THROTTLE_STICK"]
+
+
+def test_a_board_channel_without_has_remote_is_not_an_input():
+    raw = _in("LOCAL_SW", "digital")
+    raw["requires"] = ["HAS_SOMETHING"]
+    assert remote_commands(_canon(raw), {}) == []
 
 
 def test_a_generic_name_shared_by_two_couplers_is_one_channel():
@@ -144,9 +168,9 @@ def test_a_command_relayed_from_a_plug_is_not_sent_by_the_remote():
 
 def test_what_the_plug_receives_is_not_sent_by_the_remote():
     """One source per channel, even on a carried machine: BRAKE arrives through its plug."""
-    type_base = _canon(_ch("BRAKE", "downlink"), _ch("KEY", "downlink", "digital"))
+    type_chs = _canon(_in("BRAKE"), _in("KEY", "digital"))
     plug = {"c": _canon(_ch("BRAKE", "downlink_pt"), _ch("OWN", "uplink"), _ch("TILT", "downlink"))}
-    assert [c.id for c in remote_commands(type_base, {}, plug)] == ["KEY"]
+    assert [c.id for c in remote_commands(type_chs, {}, plug)] == ["KEY"]
 
 
 def test_a_type_with_no_command_has_no_remote_link(tmp_path):
@@ -192,8 +216,8 @@ def test_the_machine_type_is_in_the_contract():
 
 
 def test_machine_and_remote_agree_with_and_without_the_coupler(tmp_path, tractor):
-    generate(tractor, _ctx(M, TRACTOR), tmp_path / "bare")
-    generate(tractor, _ctx(M, TRACTOR, HITCH), tmp_path / "coupled")
+    generate(tractor, _ctx(M, TRACTOR, ACQ), tmp_path / "bare")
+    generate(tractor, _ctx(M, TRACTOR, HITCH, ACQ), tmp_path / "coupled")
     generate(tractor, _ctx(R, TRACTOR), tmp_path / "remote")
     bare, coupled, remote = (_remote_md5s(tmp_path / d) for d in ("bare", "coupled", "remote"))
     assert bare == coupled                            # the coupler does not change the contract
@@ -201,7 +225,7 @@ def test_machine_and_remote_agree_with_and_without_the_coupler(tmp_path, tractor
 
 
 def test_the_machine_receives_the_table_and_the_remote_sends_it(tmp_path, tractor):
-    generate(tractor, _ctx(M, TRACTOR, HITCH), tmp_path / "m")
+    generate(tractor, _ctx(M, TRACTOR, HITCH, ACQ), tmp_path / "m")
     generate(tractor, _ctx(R, TRACTOR), tmp_path / "r")
     machine = (tmp_path / "m" / "combus_peer_links.h").read_text(encoding="utf-8")
     remote = (tmp_path / "r" / "combus_peer_links.h").read_text(encoding="utf-8")
@@ -212,6 +236,17 @@ def test_the_machine_receives_the_table_and_the_remote_sends_it(tmp_path, tracto
     block = remote[remote.index("namespace RemoteTestTractor {"):]
     assert "true" not in re.search(r"kAnalogRx\[\] = \{([^}]*)\}", block).group(1)
     assert "TEST_TILT_ANGLE" not in block             # what the plug side sends never reaches the remote
+
+
+def test_the_remote_link_lives_on_the_board_that_acquires_the_commands(tmp_path, tractor):
+    """Its inputs exist there only: another board of the machine has no remote link."""
+    generate(tractor, _ctx(M, TRACTOR, HITCH), tmp_path / "other")
+    generate(tractor, _ctx(M, TRACTOR, HITCH, ACQ), tmp_path / "acq")
+    other = (tmp_path / "other" / "combus_peer_links.h").read_text(encoding="utf-8")
+    assert "namespace TestCoupler {" in other and "kRemoteLink" not in other
+    assert "TEST_COUPLER_BTN" not in (tmp_path / "other" / "combus_ids.h").read_text(encoding="utf-8")
+    acq = (tmp_path / "acq" / "combus_peer_links.h").read_text(encoding="utf-8")
+    assert "kRemoteLink = RemoteTestTractor::kLink" in acq
 
 
 def test_the_commands_of_a_supported_coupler_exist_without_it(tmp_path, monkeypatch, tractor):

@@ -8,6 +8,8 @@ Rules validated by the owner (2026-11-01):
     sends (`uplink`); what the machine sends (`uplink`) the remote receives
     (`downlink`, a feedback); `both` and `both_or` unchanged; the SYSTEM and
     BOARD channels of the type stay inside the machine;
+  - R2b (model B, 2026-11-24) the inputs of the type (BOARD under HAS_REMOTE)
+    are what the remote sends: BASE `uplink` on the remote, without `requires`;
   - R3 the contract of the link is the BASE of the machine type as written:
     the BASE MD5 of the remote is hashed on the machine view (the generated
     code keeps the mirrored directions), so both ends announce the same MD5
@@ -92,9 +94,19 @@ def test_row2_or_directions_are_swapped():
 
 def test_row1_the_system_and_board_channels_of_the_type_stay_in_the_machine(dumper):
     ids = {c.id for c in remote_channels(dumper, "dumper_truck")}
-    assert {"BRAKE_BUS", "THROTTLE_BUS", "KEY_BTN", "LIGHTS"} <= ids         # BASE of the type
-    assert not ids & {"THROTTLE_STICK", "KEY_ACTIVE", "ESC_RPM_BUS"}        # SYSTEM of the type
+    assert {"BRAKE_BUS", "THROTTLE_BUS", "LIGHTS"} <= ids                   # BASE of the type
+    assert {"THROTTLE_STICK", "KEY_BTN"} <= ids                             # the inputs of the type
+    assert not ids & {"KEY_ACTIVE", "ESC_RPM_BUS"}                          # SYSTEM of the type
     assert "RUNLEVEL" in ids                                                # the core stays
+
+
+@pytest.mark.parametrize("type_", ["analog", "digital"])
+def test_row2b_the_inputs_of_the_type_are_sent_by_the_remote(type_):
+    raw = _ch("X_IN", None, scope="BOARD", type_=type_)
+    raw["requires"] = ["HAS_REMOTE"]
+    x = {c.id: c for c in remote_channels(_canon(raw), "dumper_truck")}["X_IN"]
+    assert (x.scope, x.direction, x.passthrough, x.requires) == ("BASE", frozenset({"uplink"}), False, frozenset())
+    assert (x.raw["scope"], x.raw["direction"], "requires" in x.raw) == ("BASE", "uplink", False)
 
 
 # =============================================================================
@@ -104,13 +116,21 @@ def test_row1_the_system_and_board_channels_of_the_type_stay_in_the_machine(dump
 def test_row1_the_remote_combus_holds_the_base_of_the_type(tmp_path, dumper):
     generate(dumper, _ctx("IS_REMOTE", TYPE), tmp_path)
     ids = (tmp_path / "combus_ids.h").read_text(encoding="utf-8")
-    assert "BRAKE_BUS" in ids and "KEY_BTN" in ids
-    assert "THROTTLE_STICK" not in ids and "KEY_ACTIVE" not in ids
+    assert "BRAKE_BUS" in ids and "KEY_BTN" in ids and "THROTTLE_STICK" in ids   # no HAS_REMOTE on the remote
+    assert "KEY_ACTIVE" not in ids
+
+
+def test_row5_the_dumper_remote_link_carries_the_inputs_only(tmp_path, dumper):
+    generate(dumper, _ctx("IS_MACHINE", TYPE, "HAS_REMOTE"), tmp_path)
+    text = (tmp_path / "combus_peer_links.h").read_text(encoding="utf-8")
+    block = text[text.index("namespace RemoteDumperTruck {"):]
+    assert "THROTTLE_STICK" in block and "KEY_BTN" in block and "HORN_BTN" in block
+    assert "_BUS" not in block                                              # the buses are computed by the machine
 
 
 def test_row5_the_remote_and_the_machine_agree_on_the_link(tmp_path, dumper):
     """The contract is the MD5 of the remote link, not the BASE one."""
-    generate(dumper, _ctx("IS_MACHINE", TYPE), tmp_path / "machine")
+    generate(dumper, _ctx("IS_MACHINE", TYPE, "HAS_REMOTE"), tmp_path / "machine")
     generate(dumper, _ctx("IS_REMOTE", TYPE), tmp_path / "remote")
     def md5s(folder):
         text = (tmp_path / folder / "combus_peer_links.h").read_text(encoding="utf-8")
@@ -129,6 +149,6 @@ def test_row6_a_remote_drives_a_machine_type(tmp_path, dumper):
 
 def test_a_machine_is_not_mirrored(tmp_path, dumper):
     """Only a remote is mirrored: a machine keeps its own directions."""
-    generate(dumper, _ctx("IS_MACHINE", TYPE), tmp_path)
+    generate(dumper, _ctx("IS_MACHINE", TYPE, "HAS_REMOTE"), tmp_path)
     ids = (tmp_path / "combus_ids.h").read_text(encoding="utf-8")
     assert "THROTTLE_STICK" in ids

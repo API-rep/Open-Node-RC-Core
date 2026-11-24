@@ -1,4 +1,4 @@
-# test_links.cb — BASE profile of the TEST tractor type
+# test_links.cb — BASE profile and input of the TEST tractor type
 #
 # A fictitious machine type used only by the tests of the links between
 # nodes (pytest, and the Unity test env).  Never loaded by a real machine:
@@ -7,18 +7,19 @@
 #
 # Directions are those of the tractor (node view):
 # - TEST_BRAKE_BUS, TEST_LIGHTS: received from the remote, relayed to the trailer;
-# - TEST_THROTTLE_BUS: received from the remote, not relayed;
+# - TEST_THROTTLE_BUS: on no link (the remote sends the inputs only), not
+#   relayed;
 # - TEST_TILT_ANGLE, received from the trailer, is not here: the coupler brings
 #   it (a channel of this file comes from the remote);
 # - TEST_COUPLED_FAIL: fault shared by the whole convoy (OR merge);
-# - TEST_BEACON: received from the remote, not relayed (the trailer does not
+# - TEST_BEACON: on no link, not relayed (the trailer does not
 #   know it).  It comes before the digital channels of the link in the local
 #   order, so that the table of the link is not the identity.
-# - TEST_GEAR_BUS: received from the remote, not relayed; its logical zero is
+# - TEST_GEAR_BUS: on no link, not relayed; its logical zero is
 #   at CbusNeutral (`zeroAt: neutral`): test of the application accessors.
-# - TEST_COUPLER_BTN: the coupling button of the TEST coupler, an input from
-#   the remote (input contract of the machine type), read by the chain of the
-#   coupler.
+# - TEST_COUPLER_BTN: the coupling button of the TEST coupler, an input of the
+#   machine type (BOARD, requires HAS_REMOTE: on the board that acquires the
+#   commands), sent by the remote, read by the chain of the coupler.
 
 channels:
 
@@ -74,7 +75,7 @@ channels:
 - id: TEST_COUPLER_BTN
   infoName: "Test coupler button"
   type: digital
-  scope: BASE
+  scope: BOARD
   theme: remote
-  direction: downlink
+  requires: [HAS_REMOTE]
   value: low

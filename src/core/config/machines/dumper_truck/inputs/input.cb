@@ -1,19 +1,17 @@
-# input.cb — Raw input acquisition channels (SYSTEM, direction: none)
+# input.cb — Inputs of the machine type (BOARD, requires HAS_REMOTE)
 #
 # Purpose:
-#   - Defines the raw acquisition channels (sticks + buttons) that input_update()
-#     writes each loop, before any INPUT/SIM processor conditions them.
-#   - The buttons a remote can send too are BASE commands in combus/
-#     (KEY_BTN, DIRECT_DRIVE_BTN, CRUISE_TOGGLE_BTN).
-#   - These channels live in firmware ONLY — NEVER transmitted on the wire
-#     (direction: none). They are private to the acquisition layer.
+#   - Defines the inputs (sticks + buttons) the command source writes, before
+#     any INPUT/SIM processor conditions them.  The three other inputs are in
+#     combus/ (KEY_BTN, DIRECT_DRIVE_BTN, CRUISE_TOGGLE_BTN).
 #   - They are the SOURCE side of the input mapping (PS4_dualshock_map.cpp)
 #     and the INPUT side of subsequent processors (THROTTLE_BUS, etc.).
+#   - The remote link carries them (kRemoteLink): the remote sends them.
 #
-# Scope: SYSTEM
-#   - Per ChanLayer spec: "Local firmware caller + extension boards caller
-#     of same node". input_update() is the local firmware producer.
-#   - direction: none  → not on the wire (NOT uplink, NOT downlink).
+# Scope: BOARD, requires: [HAS_REMOTE]
+#   - They exist on the board that acquires the commands only (HAS_REMOTE):
+#     not in the BASE MD5, not in the frames between boards, not in the RAM
+#     of the other boards.  WIP - Local remote §2.
 #
 # Wire format:
 #   - analog channels: uint16_t [0..65535], post map() from device raw domain.
@@ -43,24 +41,24 @@ channels:
   infoName: "Throttle stick (raw, LY)"
   type: analog
   theme: core
-  scope: SYSTEM
-  direction: none
+  scope: BOARD
+  requires: [HAS_REMOTE]
   value: CbusNeutral
   
 - id: STEERING_STICK
   infoName: "Steering stick (raw, LX)"
   type: analog
   theme: core
-  scope: SYSTEM
-  direction: none
+  scope: BOARD
+  requires: [HAS_REMOTE]
   value: CbusNeutral
 
 - id: DUMP_STICK
   infoName: "Dump stick (raw, RY)"
   type: analog
   theme: core
-  scope: SYSTEM
-  direction: none
+  scope: BOARD
+  requires: [HAS_REMOTE]
   value: CbusNeutral
 # -----------------------------------------------------------------------------
 # DIGITAL — buttons (PS4 DigitalInputDevID)
@@ -70,38 +68,38 @@ channels:
   infoName: "Sub-gear toggle button (raw, SHARE)"
   type: digital
   theme: core
-  scope: SYSTEM
-  direction: none
+  scope: BOARD
+  requires: [HAS_REMOTE]
   value: low
 
 - id: GEAR_UP_BTN
   infoName: "Gear up button (raw, UP_ARROW)"
   type: digital
   theme: core
-  scope: SYSTEM
-  direction: none
+  scope: BOARD
+  requires: [HAS_REMOTE]
   value: low
 
 - id: GEAR_DOWN_BTN
   infoName: "Gear down button (raw, DOWN_ARROW)"
   type: digital
   theme: core
-  scope: SYSTEM
-  direction: none
+  scope: BOARD
+  requires: [HAS_REMOTE]
   value: low
 
 - id: CRUISE_UPDATE_BTN
   infoName: "Cruise update button (raw, L3)"
   type: digital
   theme: core
-  scope: SYSTEM
-  direction: none
+  scope: BOARD
+  requires: [HAS_REMOTE]
   value: low
 
 - id: HORN_BTN
   infoName: "Horn button (raw, CIRCLE)"
   type: digital
   theme: core
-  scope: SYSTEM
-  direction: none
+  scope: BOARD
+  requires: [HAS_REMOTE]
   value: low

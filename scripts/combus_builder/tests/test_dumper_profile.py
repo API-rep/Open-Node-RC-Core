@@ -1,10 +1,11 @@
-"""The dumper_truck channel set: BASE commands, SYSTEM computed states.
+"""The dumper_truck channel set: BOARD inputs, BASE command buses, SYSTEM computed states.
 
 Rules validated by the owner:
-  - BASE holds the standard command buses only, the ones a remote sends:
+  - BASE holds the standard command buses only:
     no BASE channel with direction `none` remains;
-  - the remote sends the intent (the button), the machine computes the state:
-    KEY_BTN, DIRECT_DRIVE_BTN, CRUISE_TOGGLE_BTN are BASE downlink;
+  - the command source writes the intent (the button), the machine computes
+    the state: the inputs (*_STICK, *_BTN) are BOARD under HAS_REMOTE, on the
+    board that acquires the commands only (model B, 2026-11-24);
     KEY_ACTIVE, DIRECT_DRIVE, CRUISE_ACTIVE are SYSTEM uplink;
   - the values computed by the processor chains are SYSTEM uplink:
     ESC_SPEED_BUS, DRIVE_STATE_BUS, ESC_RPM_BUS;
@@ -49,9 +50,18 @@ def test_no_base_channel_without_direction(channels):
     assert left == [], f"BASE channels with direction none: {left}"
 
 
-@pytest.mark.parametrize("cid", ["KEY_BTN", "DIRECT_DRIVE_BTN", "CRUISE_TOGGLE_BTN"])
-def test_buttons_are_base_downlink(channels, cid):
-    assert (channels[cid].scope, _dir(channels[cid])) == ("BASE", "downlink")
+@pytest.mark.parametrize("cid", ["THROTTLE_STICK", "STEERING_STICK", "DUMP_STICK",
+                                 "SUBGEAR_SET_BTN", "GEAR_UP_BTN", "GEAR_DOWN_BTN", "CRUISE_UPDATE_BTN", "HORN_BTN",
+                                 "KEY_BTN", "DIRECT_DRIVE_BTN", "CRUISE_TOGGLE_BTN"])
+def test_inputs_are_board_under_has_remote(channels, cid):
+    assert (channels[cid].scope, _dir(channels[cid]), set(channels[cid].requires)) ==         ("BOARD", "none", {"HAS_REMOTE"})
+
+
+def test_the_inputs_are_all_the_stick_and_btn_channels(channels):
+    """No input left elsewhere: every *_STICK / *_BTN of the type is BOARD under HAS_REMOTE."""
+    left = sorted(cid for cid, ch in channels.items() if cid.endswith(("_STICK", "_BTN"))
+                  and (ch.scope, set(ch.requires)) != ("BOARD", {"HAS_REMOTE"}))
+    assert left == []
 
 
 @pytest.mark.parametrize("cid", ["KEY_ACTIVE", "DIRECT_DRIVE", "CRUISE_ACTIVE",

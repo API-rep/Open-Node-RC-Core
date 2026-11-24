@@ -1,7 +1,8 @@
-# drive_mode_btn.cb — drive mode buttons of a dumper truck (BASE)
+# drive_mode_btn.cb — drive mode buttons of a dumper truck (BOARD, inputs of the type, requires HAS_REMOTE)
 #
-# Commands a remote sends: the intent (the button), the machine computes the
-# state (DIRECT_DRIVE, CRUISE_ACTIVE: processors/input.cb).
+# Inputs the command source writes (PS4 controller, or the remote link) on the
+# board that acquires the commands: the intent (the button), the machine
+# computes the state (DIRECT_DRIVE, CRUISE_ACTIVE: processors/input.cb).
 # - DIRECT_DRIVE_BTN: direct-drive toggle (OPTIONS on the PS4 layout).
 # - CRUISE_TOGGLE_BTN: cruise toggle (SQUARE on the PS4 layout).
 
@@ -11,14 +12,14 @@ channels:
   infoName: "Direct-drive toggle button (raw, OPTIONS)"
   type: digital
   theme: core
-  scope: BASE
-  direction: downlink_pt
+  scope: BOARD
+  requires: [HAS_REMOTE]
   value: low
 
 - id: CRUISE_TOGGLE_BTN
   infoName: "Cruise toggle button (raw, SQUARE)"
   type: digital
   theme: core
-  scope: BASE
-  direction: downlink_pt
+  scope: BOARD
+  requires: [HAS_REMOTE]
   value: low

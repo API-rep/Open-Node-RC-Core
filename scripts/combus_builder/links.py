@@ -85,6 +85,10 @@ NODE_CATEGORIES = ("IS_MACHINE", "IS_REMOTE")
 SOCKET, PLUG = "socket", "plug"               # the two sides of a coupler, the role of a node on its link
 REMOTE_LINK_PREFIX = "remote_"                # the link machine <-> remote, per machine type
 
+# The board that acquires the commands of the machine: the inputs of the type
+# (BOARD, `requires: [HAS_REMOTE]`) exist on it only, and so does the remote link.
+REMOTE_FLAG = "HAS_REMOTE"
+
 _UP, _DOWN = "uplink", "downlink"
 _SWAP = {_UP: _DOWN, _DOWN: _UP}
 
@@ -163,12 +167,12 @@ def node_category(defines) -> str:
 
 
 def load_type_base_channels(buildroot: Path, type_dir: str) -> list[ChannelDefinition]:
-    """Read the BASE channels of a machine type apart (tests and diagnostics)."""
+    """Read the BASE channels and the inputs of a machine type apart (tests and diagnostics)."""
     folder = Path(buildroot) / "core" / "config" / "machines" / type_dir
     if not folder.is_dir():
         raise LinkError(f"machine type {type_dir!r}: no profile folder {folder}")
     parsed = [parse_yaml_file(p) for p in sorted(folder.rglob("*.cb"))]
-    return [ch for ch in canonize(parsed).canonical_definitions if ch.scope == "BASE"]
+    return [ch for ch in canonize(parsed).canonical_definitions if ch.scope == "BASE" or is_remote_input(ch)]
 
 
 def _side_flags(name: str) -> frozenset[str]:
@@ -292,11 +296,24 @@ def _remote_view(ch: ChannelDefinition) -> ChannelDefinition:
     return replace(seen, raw=raw)
 
 
+def is_remote_input(ch: ChannelDefinition) -> bool:
+    """An input of the machine type: BOARD, created by HAS_REMOTE on the board that acquires the commands."""
+    return ch.scope == "BOARD" and REMOTE_FLAG in ch.requires
+
+
+def _remote_input_view(ch: ChannelDefinition) -> ChannelDefinition:
+    """An input of the machine type seen from the remote: a BASE channel it sends (`uplink`), always there."""
+    raw = {k: v for k, v in ch.raw.items() if k != "requires"}
+    raw["scope"], raw["direction"] = "BASE", "uplink"
+    return replace(ch, scope="BASE", direction=frozenset({_UP}), passthrough=False, requires=frozenset(), raw=raw)
+
+
 def remote_channels(channels, machine_type: str) -> list[ChannelDefinition]:
     """The ComBus of a remote driving `machine_type`.
 
-    Every BASE channel (the contract of the machine type) seen from the
-    remote (_remote_view); the SYSTEM and BOARD channels of the machine type
+    The inputs of the machine type, which the remote sends
+    (_remote_input_view); every BASE channel seen from the remote
+    (_remote_view); the other SYSTEM and BOARD channels of the machine type
     stay inside the machine; the other channels (core, remote) are kept.
     The contract of the link is its own MD5 (compute_remote_link).
     """
@@ -304,7 +321,9 @@ def remote_channels(channels, machine_type: str) -> list[ChannelDefinition]:
 
     out = []
     for ch in channels:
-        if ch.scope == "BASE":
+        if is_remote_input(ch):
+            out.append(_remote_input_view(ch))
+        elif ch.scope == "BASE":
             out.append(_remote_view(ch))
         elif not is_machine_type_path(ch.source_path, [machine_type]):
             out.append(ch)
@@ -386,10 +405,10 @@ def check_supported_couplers(type_base, supported: dict) -> None:
                                 f"side of the coupler {name!r}")
 
 
-def remote_commands(type_base, supported: dict, plugs: dict | None = None) -> list[ChannelDefinition]:
+def remote_commands(channels, supported: dict, plugs: dict | None = None) -> list[ChannelDefinition]:
     """What the remote sends, machine view: the only channels of the remote link.
 
-    The inputs of the machine type, and the commands the supported couplers
+    The inputs of the machine type (is_remote_input), and the commands the supported couplers
     relay (one channel per name); never what a plug side sends, nor what the
     plug of this type receives (one source per channel; who commands a carried
     machine left stand-alone is an open question, WIP Remote firmware).  The
@@ -398,8 +417,8 @@ def remote_commands(type_base, supported: dict, plugs: dict | None = None) -> li
     from_plug = {c.id for name, chs in supported.items() for c in _plug_sourced(chs, name)}
     from_plug |= {c.id for name, chs in (plugs or {}).items() for c in _delivered_to_plug(chs, name)}
     commands: dict[str, ChannelDefinition] = {}
-    for c in type_base:
-        if c.scope == "BASE" and c.direction == frozenset({_DOWN}) and c.id not in from_plug:
+    for c in channels:
+        if is_remote_input(c) and c.id not in from_plug:
             commands[c.id] = c
     for name, chs in supported.items():
         for c in _relayed(chs, name):
