@@ -148,6 +148,10 @@ The objective is to convert device-specific values into the standard Open RC Nod
 
 This stage is device-oriented and should be configured at the input-device level rather than inside machine configurations.
 
+For a source of commands with a fixed protocol (a controller or a receiver plugged into the machine), this stage is the **reframer** of the source: a chain of the `source` stage, called by the module of the source right after each read of the device, never by the main loop. It therefore runs once per fresh sample, before any chain of the machine.
+
+A chain of the `source` stage holds **stateless processors only**: their output depends on the pipeline value, their configuration and their secondary input of this pass, nothing else (no `state`, no `millis()`, no `static`). Scaling, deadband, centering, inversion and expo belong here; ramps and inertia belong to the simulation chains. It writes the channels of its source only. Rule and inventory: `doc/WIP - ComBus processors.md` §2.9.
+
 The associated channel conventions and encoding rules are documented separately in the internal channel specification.
 
 ---
