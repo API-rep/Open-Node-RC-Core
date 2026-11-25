@@ -16,6 +16,7 @@
 #include <core/system/hw/com_port.h>
 #include <core/config/machines/combus_types.h>                       // AnalogComBusID, DigitalComBusID
 #include "combus_system_ids.h"                                       // size of the SYSTEM view
+#include "combus_peer_links.h"                                       // largest table of a link between nodes
 #include <core/system/combus/protocol/link/combus_link_defs.h>
 #include <core/system/combus/protocol/handshake/combus_handshake.h>
 #include <core/system/combus/protocol/coupling/combus_pairing.h>     // ComLinkPairing
@@ -25,6 +26,14 @@
 // =============================================================================
 // 1. PER-LINK STORAGE
 // =============================================================================
+
+	/// Room of the RX buffers of a link: the SYSTEM next set, or the largest table of a link between nodes.
+inline constexpr uint8_t kComLinkRxAnalogCap =
+	(static_cast<uint8_t>(AnalogComBusSystemID::CH_COUNT) > combus::peer::kMaxLinkAnalogCount)
+		? static_cast<uint8_t>(AnalogComBusSystemID::CH_COUNT) : combus::peer::kMaxLinkAnalogCount;
+inline constexpr uint8_t kComLinkRxDigitalCap =
+	(static_cast<uint8_t>(DigitalComBusSystemID::CH_COUNT) > combus::peer::kMaxLinkDigitalCount)
+		? static_cast<uint8_t>(DigitalComBusSystemID::CH_COUNT) : combus::peer::kMaxLinkDigitalCount;
 
 /**
  * @brief What the watch of a link needs.
@@ -56,11 +65,13 @@ struct ComLinkCoupling {
  * @brief Per-link storage that the protocol layers keep pointing to.
  *
  * @details Holds the handshake context shared by TX and RX of the link, the RX decode
- *   buffers, and what the watch needs.  The buffers are sized to the SYSTEM next set
- *   (BASE stable channels, candidates, SYSTEM channels), the largest set that travels:
- *   they fit any link, BASE being a prefix of it.  BOARD channels never travel and get
- *   no room.  The limit accepted on a link is the set of that link (its rxCfg), not
- *   the buffer size.
+ *   buffers, and what the watch needs.  The buffers are sized to the largest set that
+ *   travels: the SYSTEM next set (BASE stable channels, candidates, SYSTEM channels),
+ *   BASE being a prefix of it, or the largest table of a link between nodes of this
+ *   board (kMaxLink*Count), which may hold BOARD channels (the inputs of the type, on
+ *   the link with the remote).  No room for the other BOARD channels, which never
+ *   travel.  The limit accepted on a link is the set of that link (its rxCfg), not the
+ *   buffer size.
  *
  *   The name, the scope and the table of the link are read from its ComDev, never
  *   copied: the description stays const, in Flash.
@@ -76,9 +87,9 @@ struct ComLinkRuntime {
 	ComLinkWatch           watch     = {};
 	ComLinkCoupling        coupling  = {};
 
-		// RX decode buffers, sized to the SYSTEM next set
-	uint16_t analogRx[static_cast<uint8_t>(AnalogComBusSystemID::CH_COUNT)]   = {};
-	bool     digitalRx[static_cast<uint8_t>(DigitalComBusSystemID::CH_COUNT)] = {};
+		// RX decode buffers, sized to the largest set that travels
+	uint16_t analogRx[kComLinkRxAnalogCap]   = {};
+	bool     digitalRx[kComLinkRxDigitalCap] = {};
 };
 
 
