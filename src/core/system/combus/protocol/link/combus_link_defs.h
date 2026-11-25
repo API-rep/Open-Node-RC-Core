@@ -165,6 +165,12 @@ struct CouplingDev {
  *   scope too: BOARD_LINK_FAIL between boards, NODE_LINK_FAIL to another node, or the
  *   contributor of its CouplingDev for a coupled link.  The failsafe chain that reads
  *   the contributor decides the severity.
+ *
+ *   A command source (`source`: the link of the machine with its remote, on the board
+ *   that acquires the commands) writes no bus: its frames stay in the snapshot, which
+ *   the module of the source reads (remote_node_source.h).  Its loss is the base's
+ *   business (remote_source.h): it counts neither in NODE_LINK_FAIL nor in the safe
+ *   values the supervisor takes back.
  */
 
 struct ComDev {
@@ -174,7 +180,8 @@ struct ComDev {
 	const ComProtocolCfg* protocol;
 	LinkActivation        activation;
 	const CouplingDev*    coupling;       ///< required when activation == ON_COUPLING, else nullptr
-	const ComPeerLink*    peer = nullptr; ///< INTER_NODE only: table of the link (combus_peer_links.h); nullptr = BASE view
+	const ComPeerLink*    peer   = nullptr; ///< INTER_NODE only: table of the link (combus_peer_links.h); nullptr = BASE view
+	bool                  source = false;   ///< command source: no target bus, read by its module, its loss counted by the base
 };
 
 

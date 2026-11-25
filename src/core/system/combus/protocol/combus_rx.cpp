@@ -124,23 +124,21 @@ static void rxBufConsume( CombusRxState& st, uint8_t n )
 // =============================================================================
 
 /**
- * @brief Snapshot to bus bridge. Writes the frame just accepted to the target of the link.
+ * @brief Snapshot writer. Writes the snapshot of a link to a bus, through its table.
  *
  * @details In order:
- *   1. No target: nothing to write, the frame stays in the snapshot.
- *   2. Counts: a BASE link out of next mode writes the stable channels only, so the
+ *   1. Counts: a BASE link out of next mode writes the stable channels only, so the
  *      candidates keep their default value.
- *   3. Write, with the layer of the link as identity and its table, if it has one.
+ *   2. Write, with the given identity and the table of the link, if it has one.
  *
- * @param st  State of the link.
+ * @param st      State of the link.
+ * @param bus     ComBus written.
+ * @param caller  Identity of the writes.
  */
 
-static void applyToBus( CombusRxState& st )
+static void writeSnapshot( const CombusRxState& st, ComBus& bus, ChanLayer caller )
 {
-		// 1. No target
-	if (st.target == nullptr) { return; }
-
-		// 2. Counts of this frame
+		// 1. Counts of this frame
 	const ComPeerLink* peer = st.handshakeCtx ? st.handshakeCtx->peer : nullptr;
 	ComBusFrameCfg applyCfg = st.frameCfg;
 
@@ -149,8 +147,26 @@ static void applyToBus( CombusRxState& st )
 		applyCfg.nDigital = peer ? peer->digital.stableCount : combus::wire::kCombusBaseStableDigitalCount;
 	}
 
-		// 3. Write to the bus
-	combus_frame_apply(applyCfg, st.target, &st.snap, st.writeLayer, peer);
+		// 2. Write to the bus
+	combus_frame_apply(applyCfg, &bus, &st.snap, caller, peer);
+}
+
+
+/**
+ * @brief Snapshot to bus bridge. Writes the frame just accepted to the target of the link.
+ *
+ * @details No target (a command source, a test): nothing to write, the frame stays in
+ *   the snapshot.  Otherwise, with the layer of the link as identity.
+ *
+ * @param st  State of the link.
+ */
+
+static void applyToBus( CombusRxState& st )
+{
+		// Check for a target
+	if (st.target == nullptr) { return; }
+
+	writeSnapshot(st, *st.target, st.writeLayer);
 }
 
 
@@ -517,6 +533,22 @@ const ComBusFrame* combus_rx_snapshot( uint8_t linkIdx )
 	const CombusRxState& st = s_rxStates[linkIdx];
 
 	return st.snapValid ? &st.snap : nullptr;
+}
+
+
+	/// The same counts and table as the target of a link: only the bus and the identity differ.
+bool combus_rx_apply_snapshot( uint8_t linkIdx, ComBus& bus, ChanLayer caller )
+{
+	if (!s_rxStates || linkIdx >= s_capacity) { return false; }
+
+	const CombusRxState& st = s_rxStates[linkIdx];
+
+		// Check for a valid snapshot
+	if (!st.snapValid) { return false; }
+
+	writeSnapshot(st, bus, caller);
+
+	return true;
 }
 
 

@@ -35,6 +35,7 @@ inline constexpr uint8_t kComLinkRxDigitalCap =
 	(static_cast<uint8_t>(DigitalComBusSystemID::CH_COUNT) > combus::peer::kMaxLinkDigitalCount)
 		? static_cast<uint8_t>(DigitalComBusSystemID::CH_COUNT) : combus::peer::kMaxLinkDigitalCount;
 
+
 /**
  * @brief What the watch of a link needs.
  */
@@ -170,7 +171,9 @@ void combus_link_supervisor_start( ComLinkRuntime* runtime, uint8_t count );
  *     never seen once startupGraceMs has elapsed, whatever the scope.
  *   Then NODE_LINK_FAIL and BOARD_LINK_FAIL are written from combus_links_lost(), on
  *   every cycle, when the build has these contributors (HAS_NODE_LINK_FAILSAFE,
- *   HAS_BOARD_LINK_FAILSAFE); false when there is no such link.
+ *   HAS_BOARD_LINK_FAILSAFE); false when there is no such link.  NODE_LINK_FAIL is left
+ *   to the base of the sources on a board that has a source module (HAS_REMOTE_NODE,
+ *   HAS_REMOTE_PS4).  A command source never writes the bus, and takes back nothing.
  *
  * @param bus  ComBus the received positions and the contributors are written to.
  */
@@ -200,7 +203,8 @@ ComLinkState combus_link_state( uint8_t linkIdx );
  *     grace: the other node may not be there.
  *
  *   A coupled link never counts here: its loss goes to the contributor of its
- *   CouplingDev.  A link that only transmits never counts: it cannot know its peer.
+ *   CouplingDev.  Nor does a command source (ComDev::source): the base of the sources
+ *   counts it.  A link that only transmits never counts: it cannot know its peer.
  *
  * @param scope  Scope of the links to look at.
  *
@@ -218,11 +222,13 @@ bool combus_links_lost( LinkScope scope );
  *   position is left out: a frame never writes it, and the merge ignores a link that is
  *   not alive.
  *
- * @param peer  Table of the link.
- * @param bus   ComBus the positions are written to.
+ * @param peer    Table of the link.
+ * @param bus     ComBus the positions are written to.
+ * @param caller  Identity of the writes: BASE, that of a link between nodes; BOARD for
+ *                the module of a command source, which writes the inputs.
  */
 
-void combus_link_take_back_safe_values( const ComPeerLink& peer, ComBus& bus );
+void combus_link_take_back_safe_values( const ComPeerLink& peer, ComBus& bus, ChanLayer caller = ChanLayer::BASE );
 
 
 /**

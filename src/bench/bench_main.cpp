@@ -67,6 +67,11 @@
 #include <combus.h>                // generated: comBus, the IDs
 #include <combus_peer_links.h>     // generated: the tables of the links between nodes
 
+#if defined(BENCH_MACHINE)
+#include <core/system/input/remote_source.h>                    // remote_sources_update()
+#include <core/system/input/remote_node/remote_node_source.h>   // the remote, a command source
+#endif
+
 
 
 // =============================================================================
@@ -102,10 +107,16 @@ static constexpr ComDev kDev = {
 	&kProto, LinkActivation::ON_COUPLING, &kHitch, &combus::peer::TestCoupler::kLink
 };
 #elif defined(BENCH_MACHINE) || defined(BENCH_REMOTE)
-	/// The link between the dumper truck and its remote: its own table and MD5.
+	/// The link between the dumper truck and its remote: its own table and MD5.  On the
+	/// machine, a command source: its module writes the inputs (remote_node_source.h).
 static constexpr ComDev kDev = {
 	"remote", LinkScope::INTER_NODE, LinkType::BIDIRECTIONAL,
-	&kProto, LinkActivation::ALWAYS, nullptr, &combus::peer::kRemoteLink
+	&kProto, LinkActivation::ALWAYS, nullptr, &combus::peer::kRemoteLink,
+#if defined(BENCH_MACHINE)
+	true
+#else
+	false
+#endif
 };
 #elif defined(BENCH_NODE)
 	/// The link between two boards of one node: the SYSTEM set, no table.
@@ -125,6 +136,20 @@ static CombusTxState  s_tx[1];
 static CombusRxState  s_rx[1];
 static ComLinkRuntime s_runtime[1];
 static ComBusLink     s_links[1];
+
+#if defined(BENCH_MACHINE)
+	/// The sources of the machine: its remote alone, on the link of the bench.
+static RemoteNodeSource      s_remote   = { 0u, &combus::peer::kRemoteLink };
+static const RemoteSourceDev kSources[] = { { "remote", remote_node_poll, remote_node_apply, &s_remote } };
+static RemoteSources         s_sources  = {
+	.devs   = kSources,
+	.count  = 1u,
+	.inputs = {
+		{ combus::peer::kRemoteAnalogInputs,  combus::peer::kRemoteAnalogInputCount },
+		{ combus::peer::kRemoteDigitalInputs, combus::peer::kRemoteDigitalInputCount },
+	},
+};
+#endif
 
 
 
@@ -534,6 +559,11 @@ void loop()
 	const uint32_t rx0 = micros();
 
 	com_rx_update(comBus);
+
+#if defined(BENCH_MACHINE)
+		// The sources write the inputs, and NODE_LINK_FAIL
+	remote_sources_update(s_sources, comBus);
+#endif
 
 	uint32_t cb = micros() - rx0;
 

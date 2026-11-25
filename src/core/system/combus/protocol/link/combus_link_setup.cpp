@@ -166,6 +166,8 @@ uint32_t combus_link_load_pct( const ComDevMap& map )
  *   6. Load of the line, see combus_link_load_pct(): warned above the margin, refused
  *      above 100 %, where the writes would block the loop.
  *   7. Table: between nodes only, and small enough for the RX buffers.
+ *   8. Command source: a receiving link between nodes, with its table, always active:
+ *      its module reads the snapshot through the table, and the base counts its loss.
  */
 
 bool combus_link_check( const ComDevMap& map )
@@ -270,6 +272,14 @@ bool combus_link_check( const ComDevMap& map )
 		return false;
 	}
 
+		// 8. Command source
+	if (dev.source && (dev.scope != LinkScope::INTER_NODE || !dev.peer || !endReceives(map.end)
+	                   || dev.activation != LinkActivation::ALWAYS)) {
+		sys_log_err("[COMBUS_LINKS] link '%s': a command source receives from another node, "
+		            "through its table, always active\n", dev.name);
+		return false;
+	}
+
 	return true;
 }
 
@@ -350,7 +360,8 @@ bool combus_link_build( const ComDevMap& map,
  * @details In order:
  *   1. Each map: validate before claiming the port, open it, build the link.  A failure
  *      leaves an empty slot, which the next steps skip: the other links still start.
- *      Frames are written to the target on the receiving links only.
+ *      Frames are written to the target on the receiving links only, a command source
+ *      left out: its module reads the snapshot (ComDev::source).
  *   2. Pools, then each link.
  *   3. Watch of the links.
  */
@@ -382,8 +393,8 @@ bool combus_links_init( const ComDevMap*       maps,
 			continue;
 		}
 
-			// Set the target of a receiving link
-		if (storage.links[i].rxCfg.has_value()) { storage.links[i].target = target; }
+			// Set the target of a receiving link that is not a command source
+		if (storage.links[i].rxCfg.has_value() && !maps[i].dev->source) { storage.links[i].target = target; }
 	}
 
 		// 2. Pools, then each link

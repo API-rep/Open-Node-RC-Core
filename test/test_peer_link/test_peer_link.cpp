@@ -61,6 +61,8 @@
 #include <core/system/combus/combus_access.h>
 #include <core/system/combus/combus_res.h>     // CbusNeutral (safe value of an analog channel, 3.2c)
 #include <core/system/com/com_manager.h>
+#include <core/system/input/remote_source.h>                    // remote_sources_update()
+#include <core/system/input/remote_node/remote_node_source.h>   // the remote, a command source
 
 #include "combus.h"
 #include "combus_peer_links.h"
@@ -1695,6 +1697,157 @@ void test_zero_row7_layer_check_kept(void) {
 }
 
 
+
+// =============================================================================
+// THE REMOTE LINK, A COMMAND SOURCE (WIP - Local remote, R4)
+// The link of the tractor with its remote (combus::peer::kRemoteLink, socket):
+//   analog 0: TEST_BRAKE_BUS, digital 0: TEST_COUPLER_BTN (the input of the type,
+//   BOARD), 1: TEST_LIGHTS; all received (the last two relayed for the coupler).
+// Declared a command source, it writes no bus: its module (remote_node_source.h)
+// writes the snapshot with the identity of the board, through the base of the
+// sources (remote_source.h).  What the remote sends is forged.
+// =============================================================================
+
+static constexpr ComDev kRemoteSourceDev = {
+    "remote", LinkScope::INTER_NODE, LinkType::BIDIRECTIONAL,
+    &kProto, LinkActivation::ALWAYS, nullptr, &combus::peer::kRemoteLink, true
+};
+
+static RemoteNodeSource      s_remoteSrc;
+static const RemoteSourceDev kRemoteSources[] = { { "remote", remote_node_poll, remote_node_apply, &s_remoteSrc } };
+static RemoteSources         s_remoteBase;
+
+
+/** The remote link as a command source on the loopback, its contract STABLE, the base ready. */
+static void startRemoteSource(void) {
+    resetBus();
+    const ComDevMap map = { &kRemoteSourceDev, &s_portCfg, LinkEnd::TX_RX };
+    TEST_ASSERT_TRUE(combus_link_build(map, s_port, s_runtime, s_link));
+    // No target: what combus_links_init() does for a command source
+    combus_link_start(kLinkIdx, &s_link);
+    combus_link_supervisor_start(&s_runtime, 1u);
+
+    s_remoteSrc  = { kLinkIdx, &combus::peer::kRemoteLink };
+    s_remoteBase = {};
+    s_remoteBase.devs   = kRemoteSources;
+    s_remoteBase.count  = 1u;
+    s_remoteBase.inputs = {
+        { combus::peer::kRemoteAnalogInputs,  combus::peer::kRemoteAnalogInputCount },
+        { combus::peer::kRemoteDigitalInputs, combus::peer::kRemoteDigitalInputCount },
+    };
+
+    // On the loopback the tractor hears itself: make it announce the remote side
+    CombusHandshakeContext* ctx = &s_runtime.handshake;
+    ctx->announced = combus::peer::kRemoteLink.expected;
+    for (uint32_t t0 = millis(); !combus_handshake_is_contract_validated(ctx) && (millis() - t0) < 1500u; ) {
+        combus_handshake_tx_update(ctx, s_port);
+        delay(10u);
+        combus_rx_update();
+    }
+    TEST_ASSERT_TRUE_MESSAGE(combus_handshake_is_contract_validated(ctx), "link not established - check TX<->RX jumper");
+}
+
+/** The remote sends one frame, in the wire order of the link; the tractor receives it. */
+static void receiveFromRemote(uint16_t brake, bool couplerBtn, bool lights, uint8_t seq) {
+    static AnalogComBus  a[1];
+    static DigitalComBus d[2];
+    static ComBus remote = { .analogBus = a, .digitalBus = d };
+    a[0].value = brake;
+    d[0].value = couplerBtn;  d[1].value = lights;
+    remote.analogBusMaxVal = bus.analogBusMaxVal;
+    const uint8_t len = combus_frame_encode({ 1u, 2u }, s_buf, &remote, seq, 1u, 2u);
+    s_port->write(s_port->ctx, s_buf, len);
+    delay(kRxPollMs);
+    com_rx_update(bus);
+}
+
+/** One cycle of the base of the sources. */
+static void sourcesCycle(void) { remote_sources_update(s_remoteBase, bus); }
+
+
+/** Row 1: the inputs generated for this board, and the frames of a source stay in the snapshot. */
+void test_source_row1_frames_stay_in_the_snapshot(void) {
+    TEST_ASSERT_EQUAL_UINT8(0u, combus::peer::kRemoteAnalogInputCount);
+    TEST_ASSERT_EQUAL_UINT8(1u, combus::peer::kRemoteDigitalInputCount);
+    TEST_ASSERT_TRUE(combus::peer::kRemoteDigitalInputs[0] == DigitalComBusID::TEST_COUPLER_BTN);
+
+    startRemoteSource();
+    receiveFromRemote(4321u, true, true, 3u);
+
+    TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::ALIVE);
+    TEST_ASSERT_NOT_NULL(combus_rx_snapshot(kLinkIdx));
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(0u, bus.analogBus[kBrake].value, "a command source must not write the bus");
+    TEST_ASSERT_FALSE(bus.digitalBus[kCouplerBtn].value);
+    TEST_ASSERT_FALSE(bus.digitalBus[kLights].value);
+}
+
+/** Row 2: the module drives through the base: the input and the relayed commands written. */
+void test_source_row2_the_module_writes_the_snapshot(void) {
+    startRemoteSource();
+    receiveFromRemote(4321u, true, true, 4u);
+    sourcesCycle();
+
+    TEST_ASSERT_EQUAL(static_cast<int>(RemoteSourceState::ONE), static_cast<int>(s_remoteBase.watch.state));
+    TEST_ASSERT_TRUE_MESSAGE(bus.digitalBus[kCouplerBtn].value, "the input (BOARD) must be written by the module");
+    TEST_ASSERT_EQUAL_UINT16(4321u, bus.analogBus[kBrake].value);
+    TEST_ASSERT_TRUE(bus.digitalBus[kLights].value);
+}
+
+/** Row 3: the loss: the input and the relayed commands back to their safe value. */
+void test_source_row3_loss_gives_the_safe_values_back(void) {
+    startRemoteSource();
+    receiveFromRemote(4321u, true, true, 5u);
+    sourcesCycle();
+
+    delay(kProto.linkTimeoutMs + 60u);
+    com_rx_update(bus);
+    sourcesCycle();
+
+    TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::LOST);
+    TEST_ASSERT_EQUAL(static_cast<int>(RemoteSourceState::NONE), static_cast<int>(s_remoteBase.watch.state));
+    TEST_ASSERT_FALSE(bus.digitalBus[kCouplerBtn].value);
+    TEST_ASSERT_EQUAL_UINT16_MESSAGE(bus.analogBus[kBrake].safe, bus.analogBus[kBrake].value,
+                                     "a relayed command must take back its safe value at the loss");
+    TEST_ASSERT_FALSE(bus.digitalBus[kLights].value);
+}
+
+/** Row 4: a lost source never counts in NODE_LINK_FAIL, and the supervisor takes nothing back. */
+void test_source_row4_the_supervisor_leaves_a_source_alone(void) {
+    startRemoteSource();
+    TEST_ASSERT_FALSE_MESSAGE(combus_links_lost(LinkScope::INTER_NODE), "a source never seen must not count");
+
+    receiveFromRemote(4321u, true, true, 6u);
+    delay(kProto.linkTimeoutMs + 60u);
+    bus.analogBus[kBrake].value = 777u;   // written by the tractor after the loss
+    com_rx_update(bus);                   // the supervisor sees the loss
+
+    TEST_ASSERT_TRUE(combus_link_state(kLinkIdx) == ComLinkState::LOST);
+    TEST_ASSERT_FALSE(combus_links_lost(LinkScope::INTER_NODE));
+    TEST_ASSERT_EQUAL_UINT16(777u, bus.analogBus[kBrake].value);
+}
+
+/** Row 5: a command source receives from another node, through its table, always active. */
+void test_source_row5_the_check_of_a_source(void) {
+    static constexpr ComDev kNoTable = {
+        "source_no_table", LinkScope::INTER_NODE, LinkType::BIDIRECTIONAL,
+        &kProto, LinkActivation::ALWAYS, nullptr, nullptr, true
+    };
+    static constexpr ComDev kBetweenBoards = {
+        "source_between_boards", LinkScope::INTRA_NODE, LinkType::BIDIRECTIONAL,
+        &kProto, LinkActivation::ALWAYS, nullptr, &combus::peer::kRemoteLink, true
+    };
+    static constexpr ComDev kSendOnly = {
+        "source_send_only", LinkScope::INTER_NODE, LinkType::UNIDIRECTIONAL,
+        &kProto, LinkActivation::ALWAYS, nullptr, &combus::peer::kRemoteLink, true
+    };
+
+    TEST_ASSERT_FALSE(combus_link_check({ &kNoTable,       &s_portCfg, LinkEnd::TX_RX }));
+    TEST_ASSERT_FALSE(combus_link_check({ &kBetweenBoards, &s_portCfg, LinkEnd::TX_RX }));
+    TEST_ASSERT_FALSE(combus_link_check({ &kSendOnly,      &s_portCfg, LinkEnd::TX }));
+    TEST_ASSERT_TRUE(combus_link_check({ &kRemoteSourceDev, &s_portCfg, LinkEnd::TX_RX }));
+}
+
+
 // =============================================================================
 // RUNNER
 // =============================================================================
@@ -1733,6 +1886,12 @@ void setup() {
     RUN_TEST(test_zero_row5_channel_without_zero_at_unchanged);
     RUN_TEST(test_zero_row6_raw_accessors_never_offset);
     RUN_TEST(test_zero_row7_layer_check_kept);
+
+    RUN_TEST(test_source_row1_frames_stay_in_the_snapshot);
+    RUN_TEST(test_source_row2_the_module_writes_the_snapshot);
+    RUN_TEST(test_source_row3_loss_gives_the_safe_values_back);
+    RUN_TEST(test_source_row4_the_supervisor_leaves_a_source_alone);
+    RUN_TEST(test_source_row5_the_check_of_a_source);
 
     RUN_TEST(test_coupling_row1_unhitched_link_is_inactive);
     RUN_TEST(test_coupling_row2_unhitched_frame_not_applied);

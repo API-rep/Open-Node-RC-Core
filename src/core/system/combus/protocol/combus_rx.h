@@ -182,6 +182,24 @@ const ComBusFrame* combus_rx_snapshot( uint8_t linkIdx );
 
 
 /**
+ * @brief Write the snapshot of one link to a bus, through the table of the link.
+ *
+ * @details For a link without a target bus (a command source): its module writes the
+ *   last frame accepted itself, with its own identity.  The same counts and table as a
+ *   target would get: the stable channels only out of next mode, the positions this
+ *   node receives only, a both_or never.
+ *
+ * @param linkIdx  Slot of this link in the pool.
+ * @param bus      ComBus written.
+ * @param caller   Identity of the writes (BOARD for the module of a source).
+ *
+ * @return false if there is no valid snapshot, or @p linkIdx is out of range.
+ */
+
+bool combus_rx_apply_snapshot( uint8_t linkIdx, ComBus& bus, ChanLayer caller );
+
+
+/**
  * @brief Milliseconds elapsed since the last frame accepted on one link.
  *
  * @param linkIdx  Slot of this link in the pool.

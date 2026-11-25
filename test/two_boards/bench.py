@@ -365,30 +365,32 @@ def scenario_b(m: Board, rc: Board) -> None:
                 lambda: f"machine ct={m.status()['ct']} st={m.status()['st']}, remote ct={rc.status()['ct']} st={rc.status()['st']}")
     check_until("B1 machine: NODE_LINK_FAIL healthy", lambda: not m.gd("NODE_LINK_FAIL"), 1.0)
 
-    rc.a("STEERING_BUS", 1111)
-    rc.a("THROTTLE_BUS", 2222)
+    rc.a("STEERING_STICK", 1111)
+    rc.a("THROTTLE_STICK", 2222)
     rc.d("KEY_BTN", True)
-    check_until("B2 steering remote -> machine", lambda: m.ga("STEERING_BUS") == 1111, 1.0)
-    check_until("B2 throttle remote -> machine", lambda: m.ga("THROTTLE_BUS") == 2222, 1.0)
+    check_until("B2 steering remote -> machine", lambda: m.ga("STEERING_STICK") == 1111, 1.0)
+    check_until("B2 throttle remote -> machine", lambda: m.ga("THROTTLE_STICK") == 2222, 1.0)
     check_until("B2 key button remote -> machine", lambda: m.gd("KEY_BTN"), 1.0)
+    den = m.status()["den"]
+    check("B2 machine: no write refused (the remote link is a source, it writes no bus)", den == 0, f"den={den}")
 
     # The remote falls silent (held in reset)
     rc.hold(True)
     check_until("B3 remote silent: NODE_LINK_FAIL raised on the machine", lambda: m.gd("NODE_LINK_FAIL"), 1.0)
-    check_until("B3 remote silent: steering back to neutral", lambda: m.ga("STEERING_BUS") == n, 1.0,
-                lambda: f"steering={m.ga('STEERING_BUS')}")
+    check_until("B3 remote silent: steering back to neutral", lambda: m.ga("STEERING_STICK") == n, 1.0,
+                lambda: f"steering={m.ga('STEERING_STICK')}")
     check("B3 remote silent: key button back to its safe value", not m.gd("KEY_BTN"))
     rc.hold(False)
     check_until("B3 remote back: STABLE again, NODE_LINK_FAIL healthy",
                 lambda: stable(m) and not m.gd("NODE_LINK_FAIL"), 4.0)
 
     # The remote stops sending
-    rc.a("STEERING_BUS", 1111)
+    rc.a("STEERING_STICK", 1111)
     rc.cmd("t 0")
     check_until("B4 remote stops sending: NODE_LINK_FAIL raised", lambda: m.gd("NODE_LINK_FAIL"), 1.0)
     rc.cmd("t 1")
     check_until("B4 remote sends again: STABLE, NODE_LINK_FAIL healthy, steering received",
-                lambda: stable(m) and not m.gd("NODE_LINK_FAIL") and m.ga("STEERING_BUS") == 1111, 4.0)
+                lambda: stable(m) and not m.gd("NODE_LINK_FAIL") and m.ga("STEERING_STICK") == 1111, 4.0)
 
     # The remote no longer receives: no ACK, it drops its contract within 1 s and stops sending data
     rc.cmd("r 0")
@@ -491,8 +493,8 @@ MONKEY = {
         "fail": [None, None], "hitch": True,
     },
     "B": {
-        "rx": [{"STEERING_BUS": "N", "THROTTLE_BUS": "N", "KEY_BTN": False}, {}],
-        "wa": [[], ["STEERING_BUS", "THROTTLE_BUS"]],
+        "rx": [{"STEERING_STICK": "N", "THROTTLE_STICK": "N", "KEY_BTN": False}, {}],
+        "wa": [[], ["STEERING_STICK", "THROTTLE_STICK"]],
         "wd": [[], ["KEY_BTN"]],
         "fail": ["NODE_LINK_FAIL", None], "hitch": False,
     },
@@ -980,7 +982,7 @@ def monkey(sc: str, a: Board, b: Board, steps: int, seed: int) -> None:
           "; ".join(violations[:5]) + (f" (+{len(violations) - 5})" if len(violations) > 5 else ""))
     check_until(f"M{sc} recovery: STABLE and alive on both", lambda: stable(a) and stable(b), 8.0,
                 lambda: f"a ct={a.status()['ct']} st={a.status()['st']}, b ct={b.status()['ct']} st={b.status()['st']}")
-    sender, receiver, name = {"A": (a, b, "TEST_BRAKE_BUS"), "B": (b, a, "STEERING_BUS"),
+    sender, receiver, name = {"A": (a, b, "TEST_BRAKE_BUS"), "B": (b, a, "STEERING_STICK"),
                               "C": (a, b, "ESC_RPM_BUS")}[sc]
     sender.a(name, 4242)
     check_until(f"M{sc} recovery: data flows again ({name})", lambda: receiver.ga(name) == 4242, 1.5)

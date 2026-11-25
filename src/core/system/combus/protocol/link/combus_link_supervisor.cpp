@@ -122,9 +122,12 @@ void combus_link_supervisor_start( ComLinkRuntime* runtime, uint8_t count )
  *   1. Coupling: step the pairing, write the contributors.  An unhitched link stops here.
  *   2. A link that only transmits has nothing to watch.
  *   3. A link with a table that stops being alive: safe values, so that a relaying node
- *      passes on the safe value as it is.
+ *      passes on the safe value as it is.  Not a command source: it writes no bus, the
+ *      base of the sources takes its inputs back.
  *   4. Log the loss and the recovery, once per change.
- *   Last, the contributors of the loss, by scope, written on every cycle.
+ *   Last, the contributors of the loss, by scope, written on every cycle.  On a board
+ *   that runs the base of the sources (a source module: HAS_REMOTE_NODE, HAS_REMOTE_PS4),
+ *   the base writes NODE_LINK_FAIL instead: one writer per contributor.
  */
 
 void combus_link_supervisor_update( ComBus& bus )
@@ -149,7 +152,7 @@ void combus_link_supervisor_update( ComBus& bus )
 			// 3. Safe values on the loss
 		const bool alive = (combus_link_state(i) == ComLinkState::ALIVE);
 
-		if (rt.watch.wasAlive && !alive && rt.dev->peer) {
+		if (rt.watch.wasAlive && !alive && rt.dev->peer && !rt.dev->source) {
 			combus_link_take_back_safe_values(*rt.dev->peer, bus);
 
 			sys_log_warn("[COMBUS_LINKS] link '%s': received channels back to their safe value\n",
@@ -173,8 +176,8 @@ void combus_link_supervisor_update( ComBus& bus )
 		}
 	}
 
-		// Contributors of the loss
-#if defined(HAS_FAILSAFE) && defined(HAS_NODE_LINK_FAILSAFE)
+		// Contributors of the loss; NODE_LINK_FAIL by the base of the sources where it runs
+#if defined(HAS_FAILSAFE) && defined(HAS_NODE_LINK_FAILSAFE) && !defined(HAS_REMOTE_NODE) && !defined(HAS_REMOTE_PS4)
 	combus_set_digital(bus, DigitalComBusID::NODE_LINK_FAIL, combus_links_lost(LinkScope::INTER_NODE));
 #endif
 #if defined(HAS_FAILSAFE) && defined(HAS_BOARD_LINK_FAILSAFE)
@@ -201,6 +204,8 @@ ComLinkState combus_link_state( uint8_t linkIdx )
  *
  * @details A link to another node counts at once, since that node may not be there.  A
  *   link between boards waits for the startup grace, since the boards start together.
+ *   A command source never counts: the base of the sources counts it, so that a machine
+ *   driven by another source is not at fault because its remote is away.
  */
 
 bool combus_links_lost( LinkScope scope )
@@ -209,8 +214,8 @@ bool combus_links_lost( LinkScope scope )
 	for (uint8_t i = 0u; i < s_watchedCount; ++i) {
 		const ComLinkRuntime& rt = s_watched[i];
 
-			// Check that this link counts: a coupled link has its own contributor
-		if (!rt.watch.receives || rt.dev->scope != scope || rt.coupling.dev) { continue; }
+			// Check that this link counts: a coupled link has its own contributor, a command source the base
+		if (!rt.watch.receives || rt.dev->scope != scope || rt.coupling.dev || rt.dev->source) { continue; }
 
 		if (scope == LinkScope::INTER_NODE && combus_link_state(i) != ComLinkState::ALIVE) { return true; }
 		if (scope == LinkScope::INTRA_NODE && lostAfterGrace(i))                           { return true; }
@@ -229,14 +234,14 @@ bool combus_links_lost( LinkScope scope )
  *   not alive.
  */
 
-void combus_link_take_back_safe_values( const ComPeerLink& peer, ComBus& bus )
+void combus_link_take_back_safe_values( const ComPeerLink& peer, ComBus& bus, ChanLayer caller )
 {
 		// Each analog position this node receives
 	for (uint8_t p = 0u; p < peer.analog.count; ++p) {
 		if (!peer.analog.rx[p]) { continue; }
 
 		const uint8_t id = peer.analog.ids[p];
-		combus_link_set_raw_analog(bus, static_cast<AnalogComBusID>(id), bus.analogBus[id].safe, ChanLayer::BASE);
+		combus_link_set_raw_analog(bus, static_cast<AnalogComBusID>(id), bus.analogBus[id].safe, caller);
 	}
 
 		// Each digital position this node receives, both_or left out
@@ -244,7 +249,7 @@ void combus_link_take_back_safe_values( const ComPeerLink& peer, ComBus& bus )
 		const uint8_t id = peer.digital.ids[p];
 		if (!peer.digital.rx[p] || bus.digitalBus[id].bothOr.enabled) { continue; }
 
-		combus_link_set_digital(bus, static_cast<DigitalComBusID>(id), bus.digitalBus[id].safe, ChanLayer::BASE);
+		combus_link_set_digital(bus, static_cast<DigitalComBusID>(id), bus.digitalBus[id].safe, caller);
 	}
 }
 
