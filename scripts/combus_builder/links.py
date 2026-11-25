@@ -557,8 +557,15 @@ def _md5_array(name: str, md5_hex: str) -> str:
     return f"static constexpr uint8_t {name} = {{ {', '.join(f'0x{x:02X}u' for x in bytes.fromhex(md5_hex))} }};"
 
 
-def render_peer_links_header(links: list[LinkSet], ids_header: str = "combus_ids.h") -> str:
-    """combus_peer_links.h: per coupler, the MD5 and the table ComBus -> common frame."""
+def render_peer_links_header(links: list[LinkSet], ids_header: str = "combus_ids.h",
+                             inputs: tuple[list[str], list[str]] = ((), ())) -> str:
+    """combus_peer_links.h: per coupler, the MD5 and the table ComBus -> common frame.
+
+    `inputs`: the IDs of the inputs of the machine type on this board (analog,
+    digital; is_remote_input()), emitted as kRemoteAnalogInputs and
+    kRemoteDigitalInputs: what a command source may write.  Empty off the
+    board that acquires the commands (nullptr, count 0).
+    """
     body = [
         "/******************************************************************************",
         " * GENERATED FILE - DO NOT EDIT.",
@@ -626,5 +633,20 @@ def render_peer_links_header(links: list[LinkSet], ids_header: str = "combus_ids
             body.append("/// The link machine <-> remote of this node, whatever the machine type.")
             body.append(f"static constexpr const ComPeerLink& kRemoteLink = {_cpp_ident(link.coupler)}::kLink;")
             body.append("")
+    body.append("/// Largest table of the links between nodes of this board, 0 without any: with the SYSTEM set,")
+    body.append("/// it sizes the RX buffers of a link (ComLinkRuntime).")
+    for kind in ("analog", "digital"):
+        biggest = max((sum(1 for c in link.channels if c.type == kind) for link in links), default=0)
+        body.append(f"static constexpr uint8_t kMaxLink{kind.capitalize()}Count = {biggest}u;")
+    body.append("")
+    body.append("/// The inputs of the machine type on this board (BOARD, HAS_REMOTE): what a command source may write.")
+    for kind, enum, ids in (("Analog", "AnalogComBusID", inputs[0]), ("Digital", "DigitalComBusID", inputs[1])):
+        if ids:
+            body.append(f"static constexpr {enum} kRemote{kind}Inputs[] = {{ "
+                        f"{', '.join(f'{enum}::{cid}' for cid in ids)} }};")
+        else:
+            body.append(f"static constexpr const {enum}* kRemote{kind}Inputs = nullptr;")
+        body.append(f"static constexpr uint8_t kRemote{kind}InputCount = {len(ids)}u;")
+    body.append("")
     body += ["} // namespace peer", "} // namespace combus", "", "// EOF"]
     return "\n".join(body) + "\n"

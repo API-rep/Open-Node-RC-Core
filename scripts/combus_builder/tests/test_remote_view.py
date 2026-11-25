@@ -128,6 +128,51 @@ def test_row5_the_dumper_remote_link_carries_the_inputs_only(tmp_path, dumper):
     assert "_BUS" not in block                                              # the buses are computed by the machine
 
 
+def _inputs(text, kind):
+    """(IDs, count) of kRemote<kind>Inputs in combus_peer_links.h; IDs None for the nullptr form."""
+    count = int(re.search(rf"kRemote{kind}InputCount = (\d+)u;", text).group(1))
+    m = re.search(rf"kRemote{kind}Inputs\[\] = \{{([^}}]*)\}};", text)
+    ids = [s.strip().split("::")[1] for s in m.group(1).split(",")] if m else None
+    if ids is None:
+        assert re.search(rf"\* kRemote{kind}Inputs = nullptr;", text)
+    return ids, count
+
+
+def test_row5b_the_board_with_has_remote_lists_its_inputs(tmp_path, dumper):
+    """The inputs a command source may write, for the base and the checks of a mapper (R4).
+
+    Other BOARD channels on the board (the PS4 source, NODE_LINK_FAIL) are not inputs.
+    """
+    generate(dumper, _ctx("IS_MACHINE", TYPE, "HAS_REMOTE", "HAS_REMOTE_PS4", "HAS_FAILSAFE",
+                          "HAS_NODE_LINK_FAILSAFE"), tmp_path)
+    ids = (tmp_path / "combus_ids.h").read_text(encoding="utf-8")
+    assert "PS4_LX" in ids and "NODE_LINK_FAIL" in ids                     # BOARD, on the board, not inputs
+    text = (tmp_path / "combus_peer_links.h").read_text(encoding="utf-8")
+    assert _inputs(text, "Analog") == (["DUMP_STICK", "STEERING_STICK", "THROTTLE_STICK"], 3)
+    assert _inputs(text, "Digital") == (["CRUISE_TOGGLE_BTN", "CRUISE_UPDATE_BTN", "DIRECT_DRIVE_BTN",
+                                         "GEAR_DOWN_BTN", "GEAR_UP_BTN", "HORN_BTN", "KEY_BTN",
+                                         "SUBGEAR_SET_BTN"], 8)
+
+
+@pytest.mark.parametrize("flags, expected", [
+    (("IS_MACHINE", TYPE, "HAS_REMOTE"), (3, 8)),       # the remote link: the 3 sticks, the 8 buttons
+    (("IS_MACHINE", TYPE), (0, 0)),                     # no link between nodes on this board
+], ids=["has_remote", "no_link"])
+def test_row5c_the_largest_link_sizes_the_rx_buffers(tmp_path, dumper, flags, expected):
+    """kMaxLink*Count: with the SYSTEM set, the room of the RX buffers of a link (ComLinkRuntime)."""
+    generate(dumper, _ctx(*flags), tmp_path)
+    text = (tmp_path / "combus_peer_links.h").read_text(encoding="utf-8")
+    got = tuple(int(re.search(rf"kMaxLink{k}Count = (\d+)u;", text).group(1)) for k in ("Analog", "Digital"))
+    assert got == expected
+
+
+@pytest.mark.parametrize("flags", [("IS_MACHINE", TYPE), ("IS_REMOTE", TYPE)], ids=["no_has_remote", "remote"])
+def test_row5b_no_input_listed_off_the_board_that_acquires(tmp_path, dumper, flags):
+    generate(dumper, _ctx(*flags), tmp_path)
+    text = (tmp_path / "combus_peer_links.h").read_text(encoding="utf-8")
+    assert (_inputs(text, "Analog"), _inputs(text, "Digital")) == ((None, 0), (None, 0))
+
+
 def test_row5_the_remote_and_the_machine_agree_on_the_link(tmp_path, dumper):
     """The contract is the MD5 of the remote link, not the BASE one."""
     generate(dumper, _ctx("IS_MACHINE", TYPE, "HAS_REMOTE"), tmp_path / "machine")

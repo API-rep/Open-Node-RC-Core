@@ -1104,10 +1104,12 @@ def _emit_peer_links(channels: list[ChannelDefinition], couplers, contract, ctx:
     """The links through the couplers of this node (combus_peer_links.h).
 
     Always written (empty without coupler), so that the build has a fixed set
-    of artefacts.  One build-log line per link: its MD5 and its size.
+    of artefacts.  One build-log line per link: its MD5 and its size.  Also
+    the inputs of the machine type on this board (kRemote*Inputs), empty off
+    the board that acquires the commands.
     """
     from .links import PLUG, SOCKET, LinkError, check_single_source, compute_coupler_link, compute_remote_link, \
-        is_passive_coupler, link_md5, render_peer_links_header
+        is_passive_coupler, is_remote_input, link_md5, render_peer_links_header
 
     links = []
     try:
@@ -1135,9 +1137,12 @@ def _emit_peer_links(channels: list[ChannelDefinition], couplers, contract, ctx:
     except LinkError as e:
         raise GeneratorError(f"link through a coupler: {e}") from e
 
+    # The inputs of the machine type on this board: what a command source may write.
+    inputs = tuple(sorted(c.id for c in channels if is_remote_input(c) and c.type == t) for t in ("analog", "digital"))
+
     ids_header = f"{_file_base('combus', filename_prefix)}_ids.h"
     _safe_write(out_dir / f"{_file_base('combus_peer_links', filename_prefix)}.h",
-                render_peer_links_header(links, ids_header))
+                render_peer_links_header(links, ids_header, inputs))
 
 
 # =============================================================================
