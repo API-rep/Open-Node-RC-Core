@@ -56,7 +56,7 @@ This approach makes it possible to create machine variants while preserving a co
 
 # Sharing Between Nodes
 
-The ComBus Set is also the **functional contract** that lets the nodes of a system interact: a remote controller, a machine, or any other node shares the same ComBus Set and manipulates the same functional information.
+The ComBus Set is also the **functional contract** that lets the nodes of a system interact: a remote controller, a machine, or any other node speaks the same channels, with the same names and the same meaning. Each link between nodes carries only the part it needs.
 
 Synchronization between multiple ComBus instances is handled by communication modules. These modules select the channels to transmit, encapsulate them using the protocol appropriate for the underlying transport, then update the local ComBus instance with the received data.
 
@@ -72,29 +72,29 @@ Not every value has to travel everywhere. The ComBus organizes channels into thr
 
 | Layer | Scope | Description |
 |---|---|---|
-| **BASE** | Inter-node | Standard profile of the machine type, shared by every compatible node (remote ↔ machine, machine ↔ trailer) |
+| **BASE** | Machine type | Standard profile of the machine type: the same channels on every machine of the type, and on each of its boards |
 | **SYSTEM** | Intra-node | Data shared between all boards of the same node |
 | **BOARD** | Intra-device | Private data within a single board's firmware |
 
 The layers are nested: `SYSTEM` includes all the `BASE` channels, and the ComBus of a board includes all the `SYSTEM` channels. The final ComBus of a board is the superposition of the three:
 
 ```text
-BASE                    = what travels between nodes
+BASE                    = the profile of the machine type
 BASE + SYSTEM           = what the boards of a node share
 BASE + SYSTEM + BOARD   = ComBus of the board
 ```
 
-A layer adds channels; it never replaces a lower one. A remote only needs to know the `BASE` channels of the machine it drives; the boards of a truck share their `SYSTEM` channels.
+A layer adds channels; it never replaces a lower one.
 
 ## Layer Definitions
 
-### BASE (Inter-node)
+### BASE (Machine Type)
 
-- **Purpose**: the contract of a machine type (truck, excavator, tractor...), known to every node that works with it: the norm of the communication between nodes, and the common base of the boards of a node.
-- **Example**: steering, throttle, brake, the buttons a remote sends.
+- **Purpose**: the profile of a machine type (truck, excavator, tractor...): the channels common to all its machines, and to all their boards.
+- **Example**: the commands the machine applies, computed from its inputs: `STEERING_BUS`, `THROTTLE_BUS`, `BRAKE_BUS`.
 - **Characteristics**:
   - defined once per machine type (`core/config/machines/<type>/`), identical for all its machines;
-  - travels between nodes; its fingerprint is checked before any exchange;
+  - shared by the boards of a node;
   - never conditional: a `BASE` channel cannot depend on a build flag.
 
 ### SYSTEM (Intra-node)
@@ -108,7 +108,7 @@ A layer adds channels; it never replaces a lower one. A remote only needs to kno
 ### BOARD (Intra-device)
 
 - **Purpose**: private data of one board or sub-board firmware, for its internal use.
-- **Example**: intermediate values between processors, the local channels of a coupler.
+- **Example**: intermediate values between processors, the local channels of a coupler, the inputs of the remote (`*_STICK`, `*_BTN`).
 - **Characteristics**:
   - never shared between boards;
   - no reason to propagate beyond the local firmware.

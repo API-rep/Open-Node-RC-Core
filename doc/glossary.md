@@ -13,5 +13,6 @@ Words used throughout the project.
 | **plug** | the side that is carried: `HAS_COUPLER_PLUG_<NAME>` (0 or 1 per node) |
 | **tool** | an element carried without a node: a passive coupler, socket only |
 | **coupled / stand-alone** | the role at a given time, read in the state of the coupling (a towed trommel is coupled when hitched, stand-alone otherwise) |
-| **layer** | the scope of a channel: `BASE` (between nodes), `SYSTEM` (inside a node), `BOARD` (inside a board) |
+| **layer** | the scope of a channel: `BASE` (the profile of the machine type), `SYSTEM` (inside a node), `BOARD` (inside a board) |
+| **input** | a command as the machine receives it, before its processing (`*_STICK`, `*_BTN`): a `BOARD` channel of the board that acquires the commands |
 | **safe value** | the value of a channel when nobody writes it, or when its source is lost |

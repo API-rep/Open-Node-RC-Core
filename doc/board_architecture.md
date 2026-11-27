@@ -38,6 +38,7 @@ What a board does is given by functional flags, not by its configuration:
 
 | Flag | The board |
 |---|---|
+| `HAS_REMOTE` | acquires the commands: carries the inputs of the machine type (`*_STICK`, `*_BTN`), one board per machine |
 | `HAS_INPUT_PROC` | runs the input chains (buttons → states, run level) |
 | `HAS_SIM_PROC` | runs the simulation chains |
 | `HAS_RUNLEVEL_MANAGER` | owns the `RUNLEVEL` channel (one board per machine, the main board by convention) |
@@ -55,7 +56,7 @@ A further category exists below "board": hardware with a fixed function acting a
 * **Board** — has its own MCU, runs its own compiled firmware, participates in the ComBus of its node.
 * **Peripheral** — fixed-function hardware module, reusable by any board.
 
-Peripherals will follow a dedicated prefix-flag pattern, distinct from the per-domain flags such as `INPUT_*`:
+Peripherals will follow a dedicated prefix-flag pattern, distinct from the per-domain flags such as `VBAT_*`:
 
 ```cpp
 #define PERIPH_<NAME>

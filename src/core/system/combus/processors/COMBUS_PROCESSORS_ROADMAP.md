@@ -17,15 +17,11 @@ Ces processors travaillent sur le ComBus complet (AnalogComBusID/DigitalComBusID
 
 ### Mapping manette (PS4)
 
-Le mapping manette vit également côté instance :
-- `src/machines/config/machines/volvo_A60H_bruder/inputs_map/`
+Le mapping manette est la table du type (`core/config/machines/dumper_truck/inputs/ps4_map.cpp`), qu'une instance peut remplacer en entier.
 
 ### Vocabulaire manette générique
 
-Le vocabulaire de la manette elle-même (boutons, sticks — pas le mapping vers les canaux) reste générique en core :
-- `core/config/inputs/PS4_dualshock.h`
-
-Ce vocabulaire est réutilisable par toute instance/machine qui embarque ce type de manette.
+Le vocabulaire de la manette elle-même (boutons, sticks — pas le mapping vers les canaux) reste générique en core : les channels de la source PS4 (`core/system/input/ps4/ps4.cb`). Voir les sources de commandes (`core/system/input/~README.md`).
 
 ---
 

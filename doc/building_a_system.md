@@ -149,10 +149,10 @@ hosting the authoritative ComBus (`IS_MAINBOARD`), or a child board with its
 own compiled firmware, participating in the same node's ComBus as a
 secondary participant (`IS_EXT_BOARD`).
 
-This mirrors the existing `INPUT_MODULE_IS_PRESENT` / `INPUT_PS4_DS4_BT`
-split documented in `coding_dispatcher.md` — an assertion flag (`IS_*`)
-set once at the point of selection, and a derived presence flag (`HAS_*`)
-computed in exactly one place and consumed everywhere else.
+This mirrors the `VBAT_LIPO` / `HAS_VBAT_SENSING` split documented in
+`coding_dispatcher.md` — a selection flag set once at the point of
+selection, and a derived presence flag (`HAS_*`) computed in exactly one
+place and consumed everywhere else.
 
 #### `IS_*` vs `HAS_*` Convention
 
@@ -160,15 +160,16 @@ Every new `IS_*`, `PERIPH_*`, or domain-specific selection flag introduced
 in the project should clearly indicate, in one line, which architectural
 axis it belongs to and whether it is a build-time assertion.
 
-`HAS_*` capability flags are never selected directly. They are defined by
-the selected backend header, included through its dispatcher during
-compilation.
+`HAS_*` flags say what a board has or does. Most of them are the functions
+of the board, set in `platformio.ini` (see `board_architecture.md`). A few
+are derived by the selected backend header, included through its dispatcher
+during compilation (`HAS_VBAT_SENSING`, for instance).
 
 **Rules:**
 
-- Never define `HAS_*` flags in `platformio.ini` or any other build flags.
-- Any file evaluating a `HAS_*` capability must first include the
-  corresponding dispatcher header.
+- A function of the board is a `HAS_*` flag in `platformio.ini`.
+- A capability derived by a backend is never set in `platformio.ini`: any
+  file evaluating it must first include the corresponding dispatcher header.
 
 ---
 
@@ -190,9 +191,21 @@ compile time, following the umbrella/dispatcher pattern documented in
 its domain.
 
 ```ini
--D INPUT_PS4_DS4_BT       ; selects the PS4 DualShock input backend
-; -D INPUT_NONE    ; alternative: no physical input device (autonomous build)
+-D VBAT_LIPO              ; selects the LiPo battery sensing backend
+; -D VBAT_NONE            ; alternative: no battery sensing
 ```
+
+### Command Sources
+
+The board that acquires the commands declares it, then the sources it may read. Several sources can be built together: only one alive at a time drives the machine.
+
+```ini
+-D HAS_REMOTE             ; this board acquires the commands (one board per machine)
+-D HAS_REMOTE_PS4         ; a PS4 controller plugged into the machine
+-D HAS_REMOTE_NODE        ; the remote of the project, through its link
+```
+
+See the [command sources](../src/core/system/input/~README.md).
 
 ### Peripheral Selection
 

@@ -9,7 +9,7 @@ This document explains how Open RC Node links [nodes](nodes.md) together, and wh
 ## Two Kinds of Links
 
 * **Inside a node**, the main board and its sub-boards share the channels of their node (the `SYSTEM` layer, which includes `BASE`). See [Inside a Node](nodes.md#inside-a-node).
-* **Between nodes**, a remote and its machine, a truck and its trailer exchange the channels of the machine type (the `BASE` layer).
+* **Between nodes**, a remote and its machine, a truck and its trailer exchange only the channels of their link: the inputs of the machine, or the channels of a coupler.
 
 This document focuses on this second kind of link.
 
@@ -70,6 +70,8 @@ When unhitched, the link goes off. A short loss of contact does not unhitch.
 ## The Remote
 
 The link between a remote and its machine needs no hitching: it is on as soon as both are powered. It has its own set of channels: only what the remote sends. The remote sends inputs; the machine computes its own state.
+
+On the machine, the remote is a source of commands like any other, such as a controller plugged into the machine: only one source alive at a time drives it.
 
 Today a remote drives a single machine, chosen at build time. Driving several machines, and switching from one to another, is planned.
 

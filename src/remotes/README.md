@@ -20,7 +20,7 @@ The table of the driven machines, `config/driven_machines.h`, gives for each one
 ## Current Limits
 
 - **A single driven machine.** Driving several needs one ComBus per machine, so one per link: `combus_links_init()` and `combus_tx_update()` only take one today.
-- **No physical input** (`INPUT_NONE`): the channels keep their safe value.
+- **No physical input**: the channels keep their safe value.
 - **The port is hard-coded** (UART2, GPIO 17/16), until the remote has a board configuration.
 
 These three points are marked `TODO(chantier 4)` in the code. The rest of the work is in [WIP - Remote firmware](<../../doc/WIP - Remote firmware.md>).

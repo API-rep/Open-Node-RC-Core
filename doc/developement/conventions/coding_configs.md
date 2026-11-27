@@ -81,12 +81,12 @@ Enums used to index configuration arrays shall expose a terminal `*_COUNT` entry
 Example:
 
 ```cpp
-enum class AnalogInputDevID : uint8_t {
-    LX_STICK,
-    LY_STICK,
-    RX_STICK,
-
-    ANALOG_DEV_COUNT
+enum DrvDev {
+    STEERING = 0,
+    CABIN_LEFT_MOTOR,
+    CABIN_RIGHT_MOTOR,
+    // ...
+    DC_DRV_COUNT
 };
 ```
 
@@ -105,9 +105,7 @@ Configuration headers shall declare the associated descriptor arrays using this 
 Example:
 
 ```cpp
-extern AnalogInputDev AnalogInputDevArray[
-    static_cast<uint8_t>(AnalogInputDevID::ANALOG_DEV_COUNT)
-];
+extern DcDevice dcDevArray[DC_DRV_COUNT];
 ```
 
 The header therefore defines both:
@@ -134,36 +132,42 @@ Fields relying on safe defaults may be omitted. Default values should represent 
 Example:
 
 ```cpp
-AnalogInputDev AnalogInputDevArray[
-    static_cast<uint8_t>(AnalogInputDevID::ANALOG_DEV_COUNT)
-] = {
+DcDevice dcDevArray[DC_DRV_COUNT] = {
 
-    // LX_STICK
+    // STEERING
     {
-        .infoName   = "left X axis stick",
-        .type       = RemoteComp::ANALOG_STICK,
-        .minVal     = StickMinVal,
-        .maxVal     = StickMaxVal,
-        .isInverted = false
+        .ID         = STEERING,
+        .infoName   = "steering actuators",
+        .drvPort    = &drvPortArray[DRV_PORT_1A],
+        .DevType    = DcDevType::DC_MOTOR,
+        .usage      = DevUsage::STEER_MOTOR,
+        .signal     = DcDrvSignal::PWM_TWO_WAY_NEUTRAL_CENTER,
+        .comChannel = AnalogComBusID::STEERING_BUS,
+        .pwmFreq    = M_DEF_PWM_FREQ,
+        .polInv     = true
     },
 
-    // LY_STICK
+    // CABIN_LEFT_MOTOR
     {
-        .infoName   = "left Y axis stick",
-        .type       = RemoteComp::ANALOG_STICK,
-        .minVal     = StickMinVal,
-        .maxVal     = StickMaxVal,
-        .isInverted = false
+        .ID         = CABIN_LEFT_MOTOR,
+        .infoName   = "cabin left motor",
+        .drvPort    = &drvPortArray[DRV_PORT_1B],
+        .DevType    = DcDevType::DC_MOTOR,
+        .usage      = DevUsage::TRACT_WHEEL,
+        .signal     = DcDrvSignal::PWM_TWO_WAY_NEUTRAL_CENTER,
+        .comChannel = AnalogComBusID::ESC_SPEED_BUS,
+        .pwmFreq    = M_DEF_PWM_FREQ,
+        .polInv     = true
     },
 
-    // RX_STICK
+    // CABIN_RIGHT_MOTOR: a clone, only the overrides are declared
     {
-        .infoName   = "right X axis stick",
-        .type       = RemoteComp::ANALOG_STICK,
-        .minVal     = StickMinVal,
-        .maxVal     = StickMaxVal,
-        .isInverted = false
-    }
+        .ID       = CABIN_RIGHT_MOTOR,
+        .infoName = "cabin right motor",
+        .drvPort  = &drvPortArray[DRV_PORT_2B],
+        .polInv   = false,
+        .parentID = CABIN_LEFT_MOTOR
+    },
 
     // ...
 };
@@ -180,7 +184,6 @@ Each configuration domain should expose a top-level descriptor aggregating its r
 Examples include:
 
 - board descriptors;
-- remote descriptors;
 - sensing containers;
 - machine descriptors.
 
@@ -193,13 +196,13 @@ Whenever possible, they should remain lightweight and declarative.
 Example:
 
 ```cpp
-inline constexpr InputDev inputDev {
-    .infoName             = "PS4 dualshock controller",
-    .protocol             = RemoteProtocol::PS4_BLUETOOTH,
-    .analogInputDev       = AnalogInputDevArray,
-    .digitalInputDev      = digitalInputDevArray,
-    .analogInputDevCount  = static_cast<uint8_t>(AnalogInputDevID::ANALOG_DEV_COUNT),
-    .digitalInputDevCount = static_cast<uint8_t>(DigitalInputDevID::DIGITAL_DEV_COUNT)
+inline constexpr EnvCfg machine {
+    .infoName    = kVehicleName,
+    .dcDev       = dcDevArray,
+    .dcDevCount  = DC_DRV_COUNT,
+    .srvDev      = SrvDevArray,
+    .srvDevCount = SRV_COUNT,
+    // ...
 };
 ```
 
@@ -224,10 +227,8 @@ Compile-time guards may appear either:
 Example:
 
 ```cpp
-static_assert(
-    static_cast<uint8_t>(AnalogInputDevID::ANALOG_DEV_COUNT) <= 6u,
-    "Exceeded hardware capabilities."
-);
+static_assert(VBatCutoffVoltage >= 2.5f,
+              "VBatCutoffVoltage below 2.5 V/cell — risk of irreversible LiPo cell damage");
 ```
 
 Assertions that merely restate obvious implementation details should be avoided.

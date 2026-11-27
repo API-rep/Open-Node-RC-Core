@@ -160,7 +160,7 @@ Used only when meaningful categories emerge.
 **Usage:** Identify configuration entries whose meaning depends on enum ordering.
 
 ```cpp
-// LX_STICK
+// STEERING
 {
     ...
 },

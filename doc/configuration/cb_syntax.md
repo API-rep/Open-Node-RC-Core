@@ -50,7 +50,7 @@ Anywhere under `src/`, next to what it describes: a core module, the profile of 
 
 ### `scope`
 
-* `BASE`: part of the machine type, shared with the remote and with the other nodes;
+* `BASE`: the profile of the machine type, common to all its machines;
 * `SYSTEM`: shared by the boards of the node;
 * `BOARD`: private to one board.
 

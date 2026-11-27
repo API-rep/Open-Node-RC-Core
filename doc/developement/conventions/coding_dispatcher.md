@@ -38,8 +38,8 @@ Dispatcher selection shall use **independent boolean build flags**. These flags 
 Example:
 
 ```text
--D INPUT_PS4_DS4_BT
--D INPUT_MODULE_NOP
+-D VBAT_LIPO
+-D VBAT_NONE
 -D MACHINE_VOLVO_A60_H_BRUDER
 ```
 
@@ -48,7 +48,7 @@ Numeric comparisons shall not be used.
 Forbidden:
 
 ```cpp
-#if INPUT_MODULE == PS4_DS4_BT
+#if VBAT_PROFILE == LIPO
 ```
 
 Unknown identifiers are silently replaced by `0` by the C preprocessor, potentially producing incorrect matches without any compilation error.
@@ -60,9 +60,9 @@ If the selected backend exposes an optional feature, it shall define a dedicated
 Example:
 
 ```cpp
-// lipo.h
+// bat_lipo.h
 
-#if defined(VBAT_SENSE_LIPO)
+#if defined(VBAT_LIPO)
 
 #define HAS_VBAT_SENSING
 
@@ -82,7 +82,7 @@ Preferred:
 instead of:
 
 ```cpp
-#if defined(VBAT_SENSE_LIPO)
+#if defined(VBAT_LIPO)
 ```
 
 Capability flags (`HAS_xxx`) shall always be defined by the backend itself, never by the dispatcher.
@@ -108,7 +108,7 @@ Both the header **and** the source file shall be guarded.
 Example:
 
 ```cpp
-#if defined(INPUT_PS4_DS4_BT)
+#if defined(VBAT_LIPO)
 
 // Backend declarations or implementation
 
@@ -155,14 +155,13 @@ Application code shall include **only the dispatcher**.
 Example:
 
 ```cpp
-#include <config/inputs/inputs.h>
+#include <core/config/vbat/config.h>
 ```
 
 and **never**:
 
 ```cpp
-#include "PS4_dualshock.h"
-#include "nop.h"
+#include "bat_lipo.h"
 ```
 
 Capability flags (`HAS_xxx`) are defined by the selected backend. Therefore, any source file testing a capability shall first include the corresponding dispatcher.
@@ -170,7 +169,7 @@ Capability flags (`HAS_xxx`) are defined by the selected backend. Therefore, any
 Correct:
 
 ```cpp
-#include <config/vbat/vbat.h>
+#include <core/config/vbat/config.h>
 
 #ifdef HAS_VBAT_SENSING
 ...

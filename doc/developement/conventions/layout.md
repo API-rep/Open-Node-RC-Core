@@ -149,7 +149,7 @@ This rule does **not** apply to:
 
 * End-of-line comments (`code;  // explanation`, `member;  ///< explanation`)
 * Section separators (`// === SECTION ===`)
-* Configuration entry labels (`// LX_STICK`)
+* Configuration entry labels (`// STEERING`)
 * File banners and Doxygen blocks (`/** ... */`), which stay at the level of the code they document
 
 ### Example
@@ -293,23 +293,21 @@ Rules:
 Example:
 
 ```cpp
-// LX_STICK
+// CABIN_LEFT_MOTOR
 {
-	.infoName    = "Left X stick",
-	.type        = RemoteComp::ANALOG_STICK,
-	.minVal      = StickMinVal,
-	.maxVal      = StickMaxVal,
-	.isInverted  = false
+	.ID          = CABIN_LEFT_MOTOR,
+	.infoName    = "cabin left motor",
+	.drvPort     = &drvPortArray[DRV_PORT_1B],
+	.DevType     = DcDevType::DC_MOTOR,
+	.usage       = DevUsage::TRACT_WHEEL,
+	.signal      = DcDrvSignal::PWM_TWO_WAY_NEUTRAL_CENTER,
+	.comChannel  = AnalogComBusID::ESC_SPEED_BUS,
+	.pwmFreq     = M_DEF_PWM_FREQ,
+	.polInv      = true
 },
 
-// LY_STICK
-{
-	.infoName    = "Left Y stick",
-	.type        = RemoteComp::ANALOG_STICK,
-	.minVal      = StickMinVal,
-	.maxVal      = StickMaxVal,
-	.isInverted  = false
-},
+// CABIN_RIGHT_MOTOR
+{ .ID = CABIN_RIGHT_MOTOR, .infoName = "cabin right motor", .drvPort = &drvPortArray[DRV_PORT_2B], .polInv = false, .parentID = CABIN_LEFT_MOTOR },
 ```
 
 ---
