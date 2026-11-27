@@ -11,7 +11,7 @@ The module distinguishes two severities of fault. Each one has its aggregate and
 | Chain | Aggregate | Reaction (run level) | Example of cause |
 |---|---|---|---|
 | **hard** | `FAILSAFE_HARD` | `HALT`: motors stopped, put to sleep, disabled; only a reboot leaves it | low battery, loss of a link between boards |
-| **soft** | `FAILSAFE_SOFT` | `IDLE`: on hold; resuming takes the key | loss of the remote, loss of a link to another node |
+| **soft** | `FAILSAFE_SOFT` | `IDLE`: on hold; resuming takes the key | no command source drives, loss of a link to another node |
 
 The aggregate states the **severity**, not the reaction: the reaction may change without any renaming. The hard chain always wins over the soft one (§6).
 
@@ -24,7 +24,7 @@ The whole module is enabled by `HAS_FAILSAFE` (set by `[env:machines]`). Without
 | Element | Form | Examples |
 |---|---|---|
 | aggregate | `FAILSAFE_<SEVERITY>` | `FAILSAFE_HARD`, `FAILSAFE_SOFT` |
-| contributor | `<SOURCE>_FAIL` | `VBAT_FAIL`, `BOARD_LINK_FAIL`, `NODE_LINK_FAIL`, `LOCAL_REMOTE_FAIL` |
+| contributor | `<SOURCE>_FAIL` | `VBAT_FAIL`, `BOARD_LINK_FAIL`, `NODE_LINK_FAIL` |
 | flag of a contributor | `HAS_<SOURCE>_FAILSAFE` | `HAS_VBAT_FAILSAFE`, `HAS_BOARD_LINK_FAILSAFE` |
 | flag of the module | `HAS_FAILSAFE` | — |
 
@@ -40,8 +40,7 @@ A contributor states a **fact** ("the battery is failing", "a link between board
 |---|---|---|---|---|
 | `VBAT_FAIL` | battery below the threshold | `vbat_update()` (`src/core/system/vbat/vbat.cpp`) | `HAS_VBAT_FAILSAFE` | hard |
 | `BOARD_LINK_FAIL` | a receiving link, between boards of the node, is lost | `combus_link_supervisor_update()` (`src/core/system/combus/protocol/link/combus_link_supervisor.cpp`) | `HAS_BOARD_LINK_FAILSAFE` | hard |
-| `NODE_LINK_FAIL` | a receiving link, to another node, is lost | `combus_link_supervisor_update()` | `HAS_NODE_LINK_FAILSAFE` | soft |
-| `LOCAL_REMOTE_FAIL` | the local remote (PS4 controller; tomorrow a PPM/SBUS receiver) no longer answers | `input_update()` (`src/machines/system/input/input_update.cpp`) | `HAS_LOCAL_REMOTE_FAILSAFE` | soft |
+| `NODE_LINK_FAIL` | no command source drives (none alive, or several), or a receiving link to another node is lost | the base of the sources (`remote_sources_update()`, `src/core/system/input/remote_source.cpp`) on a board with a source module; `combus_link_supervisor_update()` elsewhere | `HAS_NODE_LINK_FAILSAFE` | soft |
 
 A contributor requires `HAS_FAILSAFE` and **its own flag**, never the flag of a chain: it stays neutral and **pluggable**.
 
@@ -49,7 +48,7 @@ A contributor requires `HAS_FAILSAFE` and **its own flag**, never the flag of a 
 
 **A coupled link** (`ON_COUPLING`) has its own contributor, named by its `CouplingDev` (`fail`, for example `TRAILER_LINK_FAIL`): healthy while unhitched and during pairing; at fault when hitched without a healthy link: pairing in conflict (two candidates) or failed (too few answers), or a paired link lost after the grace counted from pairing. A coupled link never counts in `NODE_LINK_FAIL`: the machine puts this contributor in the chain of its choice.
 
-`BOARD_LINK_FAIL` and `NODE_LINK_FAIL` are fed by the **scope** of the link: a link between boards counts as lost if it is silent, or never seen once its startup grace (`startupGraceMs`) is over; a link to another node counts as soon as it is not alive, never seen included. There is no per-link loss policy: the severity is decided by placing the contributor in a chain.
+`BOARD_LINK_FAIL` and `NODE_LINK_FAIL` are fed by the **scope** of the link: a link between boards counts as lost if it is silent, or never seen once its startup grace (`startupGraceMs`) is over; a link to another node counts as soon as it is not alive, never seen included. There is no per-link loss policy: the severity is decided by placing the contributor in a chain. The link of a command source (the remote) does not count in `combus_links_lost()`: its loss is the loss of a source, counted by the base of the sources ([command sources](../input/~README.md)).
 
 ---
 
@@ -77,11 +76,11 @@ Both chains have the same shape: a reset first (`cb_reset_fn`, aggregate to 0 = 
 |---|---|---|
 | code | `src/core/system/failsafe/failsafe_chain.cpp` (`kFailsafeChain[]`) | `src/core/system/failsafe/failsafe_soft_chain.cpp` (`kFailsafeSoftChain[]`) |
 | run by | `failsafe_update()` | `failsafe_soft_update()` |
-| contributors | `VBAT_FAIL`, `BOARD_LINK_FAIL` | `LOCAL_REMOTE_FAIL`, `NODE_LINK_FAIL` |
+| contributors | `VBAT_FAIL`, `BOARD_LINK_FAIL` | `NODE_LINK_FAIL` |
 
 Each contributor is in an `#if defined(HAS_<SOURCE>_FAILSAFE)` block. A chain without a contributor writes `false` on every cycle.
 
-**Execution order** (`sys_manager_update()`, `src/machines/system/sys_manager.cpp`): reception (`com_rx_update`, whose supervisor writes the link contributors), inputs (`input_update`), battery (`vbat_update`), hard chain, soft chain. All the sources have therefore written before the chains, and both aggregates are fresh before the run level chain and the state machine of `main.cpp`. The startup value of the aggregates never reaches the state machine.
+**Execution order** (`sys_manager_update()`, `src/machines/system/sys_manager.cpp`): reception (`com_rx_update`, whose supervisor writes the link contributors), command sources (`input_sources_update`, whose base writes `NODE_LINK_FAIL` on a board with a source module), battery (`vbat_update`), hard chain, soft chain. All the sources have therefore written before the chains, and both aggregates are fresh before the run level chain and the state machine of `main.cpp`. The startup value of the aggregates never reaches the state machine.
 
 ---
 
@@ -125,9 +124,8 @@ src/core/system/failsafe/
 The contributors stay next to the module that writes them:
 
 src/core/system/com/board_link_fail.cb      // BOARD_LINK_FAIL (BOARD), written by combus_link_supervisor_update()
-src/core/system/com/node_link_fail.cb       // NODE_LINK_FAIL (BOARD), written by combus_link_supervisor_update()
+src/core/system/com/node_link_fail.cb       // NODE_LINK_FAIL (BOARD), written by the base of the sources or by combus_link_supervisor_update()
 src/core/system/vbat/vbat_fail.cb           // VBAT_FAIL (SYSTEM, uplink_or)
-src/core/config/inputs/local_remote_fail.cb // LOCAL_REMOTE_FAIL (BOARD), written by input_update()
 src/core/system/combus/processors/logic/cb_or.h   // cb_or_fn
 ```
 
@@ -140,7 +138,7 @@ src/core/system/combus/processors/logic/cb_or.h   // cb_or_fn
 | Holding `HALT` | `cb_runlevel_hold_fn`, `src/core/system/combus/processors/base/cb_runlevel.h` |
 | Aggregates | `failsafe_hard.cb`, `failsafe_soft.cb` |
 | Chains | `failsafe_chain.cpp`, `failsafe_soft_chain.cpp` |
-| Link contributors | `combus_link_supervisor_update()`, `src/core/system/combus/protocol/link/combus_link_supervisor.cpp` |
+| Link contributors | `combus_link_supervisor_update()`, `src/core/system/combus/protocol/link/combus_link_supervisor.cpp`; `NODE_LINK_FAIL` by `remote_sources_update()` on a board with a source module |
 | Execution order | `sys_manager_update()`, `src/machines/system/sys_manager.cpp` |
 | Run level reaction | `kRunlevelProcs[]`, `.../processors/input/runlevel_config.h` |
 | Motor reaction | `src/machines/main.cpp`, `case RunLevel::HALT` |

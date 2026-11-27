@@ -39,8 +39,8 @@ machines/
 ├── dumper_truck/              ← One machine family
 │   ├── combus/*.cb            ← ComBus channels of the family (BASE scope)
 │   ├── inputs/
-│   │   ├── input.cb           ← Raw input acquisition channels
-│   │   └── inputs_map/        ← Input device → ComBus routing
+│   │   ├── input.cb           ← Inputs of the type (*_STICK, *_BTN: BOARD, HAS_REMOTE)
+│   │   └── ps4_map.*          ← Mapper of the PS4 source: its channels → the inputs
 │   ├── light/                 ← Light channels (light.cb) and presets
 │   ├── motion/                ← Drive-train and actuator config
 │   ├── sound/                 ← Sound presets (see the roadmap, Machine / Sound convergence)
@@ -97,8 +97,10 @@ For core code that only needs the ID enums, include
 `core/config/machines/combus_types.h` (it includes `<combus_ids.h>`).
 
 The `.cb` files of a family use the `BASE` scope: the standard profile of the
-machine type, shared by every compatible node. Channels that belong to one
-machine instance or to one board use the `SYSTEM` and `BOARD` scopes. See
+machine type, common to all its machines. Its inputs are the exception: `BOARD`
+channels under `requires: [HAS_REMOTE]`, on the board that acquires the
+commands only. Channels that belong to one machine instance or to one board use
+the `SYSTEM` and `BOARD` scopes. See
 `doc/configuration/cb_syntax.md` for the syntax and
 `scripts/combus_builder/README.md` for the generator.
 
@@ -209,9 +211,11 @@ generic enough to become a dedicated configuration domain if required.
 
 ### Input Mapping
 
-Default mappings between user inputs and ComBus channels
-(`inputs/inputs_map/`). These mappings define how commands enter the system
-while remaining independent from the execution logic.
+The inputs of the type (`inputs/input.cb`) and the default table of each command
+source (`inputs/ps4_map.cpp` for the PS4): from the channels of the source to
+the inputs. An instance may replace a table whole. These mappings define how
+commands enter the system while remaining independent from the execution logic.
+See the [command sources](../../system/input/~README.md).
 
 ### Light
 

@@ -4,7 +4,9 @@ The remote is a node like any other: it has its own ComBus and a link to the mac
 
 ## What It Sends
 
-A machine type (`-D MACHINE_TYPE_<TYPE>`, for example `dumper_truck`) has an **input contract**: the `BASE` view of its profile. The remote has its mirror, built by the ComBus Builder: what the machine receives, the remote sends. It therefore only sends inputs (sticks, buttons), and the machine alone decides what to do with them.
+A machine type (`-D MACHINE_TYPE_<TYPE>`, for example `dumper_truck`) has an **input contract**: its inputs (`*_STICK`, `*_BTN`), which exist on the board of the machine that acquires the commands. The remote has their mirror, built by the ComBus Builder: what the machine receives, the remote sends. It therefore only sends inputs (sticks, buttons), and the machine alone decides what to do with them.
+
+On the machine, the remote is a command source like any other, such as a controller plugged into the machine: its link writes no bus, and its module applies what the link received when the remote is the source that drives. See the [command sources](../core/system/input/~README.md).
 
 The link has its own table and its own MD5 (`combus::peer::kRemoteLink`), the same whether the machine has couplers or not. As for any link with a table, the MD5 also carries the side of each end: the machine is the socket, the remote the plug. There is no pairing: it is an ordinary link between nodes.
 
