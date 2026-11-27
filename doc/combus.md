@@ -26,7 +26,7 @@ This is where the ComBus is used the most:
 * by the **modules**: inputs, motors, lights, battery, debug dashboard;
 * by the **processor chains**: small processing blocks that read channels, transform them and write others (ramps, inertia, gearbox, cruise control). Chained together, they build the behaviour of a machine without changing the firmware;
 * by the **safety**: the failsafe faults and the run level are channels like the others, so every board of a machine sees them;
-* by the **links**: between the boards and sub-boards of a machine, and between a remote, a machine and its trailer, the same register is synchronised.
+* by the **links**: between the boards and sub-boards of a machine, and between a remote, a machine and its trailer, the channels they share travel.
 
 ---
 

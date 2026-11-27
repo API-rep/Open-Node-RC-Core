@@ -9,5 +9,5 @@ Start with the master: it gives the work site in progress, the order of the next
 * [Simulation chain](<WIP - Simulation chain.md>) — putting the machine processing chain in order: type contract, default mapping, overwrite by the machine, safe at neutral
 * [Light rework](<WIP - Light rework.md>) — state of the light module and the rules decided for it
 * [Remote firmware](<WIP - Remote firmware.md>) — the firmware of the remote: what exists, what remains to build
-* [Local remote](<WIP - Local remote.md>) — a local command source (PS4 controller, RC receiver) seen as a virtual node
+* [Local remote](<WIP - Local remote.md>) — the command sources (PS4 controller, the remote, an RC receiver): one module per source, one source alive drives
 * [Node transports](<WIP - Node transports.md>) — ESP-NOW first, then I2C and CAN; several peers on a link; the `SYSTEM` contract between boards
