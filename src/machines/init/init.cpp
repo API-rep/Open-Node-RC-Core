@@ -62,6 +62,14 @@ void machine_init() {
   sys_log_info("[SYSTEM] Applying boot-safe runlevel...\n");
   // The run level is the analog channel RUNLEVEL.
   combus_set_analog(comBus, AnalogComBusID::RUNLEVEL, (uint16_t)DEF_RUNLEVEL);
+
+#if defined(DIRECT_DRIVE_AT_BOOT) && defined(HAS_INPUT_PROC)
+	  // Direct drive from boot (no simulation: no inertia, no gears), while the processing
+	  // chains are reworked; the OPTIONS button still toggles back to the simulation.
+  sys_log_info("[SYSTEM] Direct drive at boot (DIRECT_DRIVE_AT_BOOT)\n");
+  combus_set_digital(comBus, DigitalComBusID::DIRECT_DRIVE, true);
+#endif
+
   stopAllDcDrivers(machine);
   sleepAllDcDrivers(machine);
   disableAllDcDrivers(machine);
