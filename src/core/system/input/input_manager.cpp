@@ -5,8 +5,9 @@
 
 #include "input_manager.h"
 
-int16_t inputAnalogValue[static_cast<uint8_t>(AnalogInputDevID::ANALOG_DEV_COUNT)]   = {0};
-bool    inputDigitalValue[static_cast<uint8_t>(DigitalInputDevID::DIGITAL_DEV_COUNT)] = {false};
+	// Empty initialisers: with INPUT_NONE, the device counts are 0
+int16_t inputAnalogValue[static_cast<uint8_t>(AnalogInputDevID::ANALOG_DEV_COUNT)]   = {};
+bool    inputDigitalValue[static_cast<uint8_t>(DigitalInputDevID::DIGITAL_DEV_COUNT)] = {};
 
 static bool inputConnected = false;
 

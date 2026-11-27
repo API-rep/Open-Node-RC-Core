@@ -1,7 +1,7 @@
 # failsafe_soft.cb — aggregator of the soft failsafe chain
 #
 # FAILSAFE_SOFT is true when at least one contributor of the soft chain reports a
-# fault (today LOCAL_REMOTE_FAIL and NODE_LINK_FAIL).  Its reaction is the run
+# fault (today NODE_LINK_FAIL).  Its reaction is the run
 # level IDLE (the hard chain, FAILSAFE_HARD, leads to HALT).
 #
 # It is computed, never written by a source:

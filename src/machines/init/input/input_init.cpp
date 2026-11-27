@@ -5,7 +5,7 @@
 
 #include "input_init.h"
 #include <core/system/debug/logging/debug.h>
-#include <core/system/input/input_manager.h>
+#include <machines/system/input/input_sources.h>   // input_sources_begin()
 
 
 // =============================================================================
@@ -13,11 +13,11 @@
 // =============================================================================
 
 /**
- * @brief Input system init — input_setup() with init-sequence log output.
+ * @brief Input system init — the command source modules, with init-sequence log output.
  */
 void input_init() {
   sys_log_info("[INPUT] Input init...\n");
-  input_setup();
+  input_sources_begin();
   sys_log_info("[INPUT] Input init complete\n\n");
 }
 

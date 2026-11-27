@@ -10,7 +10,7 @@
  *          Sub-modules included:
  *            combus   — always (generated BASE channel IDs, <combus_base_ids.h>)
  *            motion   — always (traction preset alias)
- *            inputs_map — not included here (see note below)
+ *            input mapper — not included here (see note below)
  *            sound    — if SOUND_ENABLED is defined (no env defines it yet;
  *                       see the Machine / Sound convergence in doc/roadmap.md)
  *
@@ -46,8 +46,9 @@
   // =============================================================================
   // 3. INPUT MAPPING
   // =============================================================================
-  // NOTE: the input mapping lives in dumper_truck/inputs/inputs_map/ and is
-  // not included here: input_update.cpp includes inputs_map.h directly.
+  // NOTE: the mapper of each command source lives in dumper_truck/inputs/
+  // (ps4_map.h for the PS4) and is not included here: the source modules of the
+  // board include it (machines/system/input/input_sources.cpp).
   
   
   // =============================================================================

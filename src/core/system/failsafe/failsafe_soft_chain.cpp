@@ -35,20 +35,10 @@ static CbProc kFailsafeSoftProcs[] = {
 		.fn      = cb_reset_fn,
 	},
 
-#if defined(HAS_LOCAL_REMOTE_FAILSAFE)
-		// 1. Local remote lost, written every cycle by input_update() while the
-		//    input backend (PS4 Bluetooth today) is connected
-	{
-		.name    = "failsafe_soft_or_local_remote",
-		.inCh    = DigitalComBusID::LOCAL_REMOTE_FAIL,
-		.outCh   = DigitalComBusID::LOCAL_REMOTE_FAIL,
-		.fn      = cb_or_fn,
-	},
-#endif
-
 #if defined(HAS_NODE_LINK_FAILSAFE)
-		// 2. Link to another node not alive, never seen included; written every
-		//    cycle by com_rx_update(), false without such a link
+		// 1. Link to another node not alive, never seen included, or no single command
+		//    source alive; written every cycle by com_rx_update(), or by the base of the
+		//    sources on a board with a source module; false without such a link
 	{
 		.name    = "failsafe_soft_or_node_link",
 		.inCh    = DigitalComBusID::NODE_LINK_FAIL,

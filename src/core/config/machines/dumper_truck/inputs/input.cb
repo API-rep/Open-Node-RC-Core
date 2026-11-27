@@ -4,7 +4,7 @@
 #   - Defines the inputs (sticks, brake + buttons) the command source writes, before
 #     any INPUT/SIM processor conditions them.  The three other inputs are in
 #     combus/ (KEY_BTN, DIRECT_DRIVE_BTN, CRUISE_TOGGLE_BTN).
-#   - They are the SOURCE side of the input mapping (PS4_dualshock_map.cpp)
+#   - They are the target side of the mapper of a source (ps4_map.cpp)
 #     and the INPUT side of subsequent processors (THROTTLE_BUS, etc.).
 #   - The remote link carries them (kRemoteLink): the remote sends them.
 #
@@ -26,9 +26,9 @@
 #     enums and arrays.
 #
 # Runtime source chain:
-#   PS4 hardware → input_manager::inputAnalogValue[] (int16_t, raw)
-#                → input_update() map() → bus[CHANNEL].value (uint16_t)
-#                → INPUT processors (THROTTLE_BUS, etc.) or direct consumers
+#   command source (remote_source.h: PS4 module, remote of the project...)
+#                → its mapper → these inputs (uint16_t)
+#                → INPUT chains (THROTTLE_BUS, BRAKE_BUS, etc.) or direct consumers
 #                → consumer (sim_brake, INPUT_SUBGEAR, etc.)
 
 channels:

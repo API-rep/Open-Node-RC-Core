@@ -40,7 +40,7 @@
 // 4. INPUT INITIALIZATION
 // =============================================================================
 
-	/// Input system init — input_setup() wrapper with init-sequence log output.
+	/// Input system init — the command source modules (input_sources_begin()), with init-sequence log output.
 void input_init();
 
 // EOF input_init.h
