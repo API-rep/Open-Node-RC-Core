@@ -10,7 +10,7 @@
 #include <core/system/combus/combus_access.h>  // combus_denied_writes()
 #include <machines/config/config.h>  // Combus definitions
 #include <core/system/debug/dashboard/dashboard.h>
-#include <core/system/input/input_manager.h>
+#include <machines/system/input/input_sources.h>  // input_sources_driver()
 
 #include <Arduino.h>
 #include <stdio.h>
@@ -39,11 +39,11 @@ static uint8_t       s_digitalCh  = 0;
 static void renderDigitalCompact(const ComBus* bus, uint8_t n)
 {
 	// '*' = healthy, derived from FAILSAFE_SOFT
-	// (SYSTEM aggregator).  Fallback to lastFrameMs proxy on autonomous builds.
+	// (SYSTEM aggregator).  Without the failsafe: a command source drives.
 #if defined(HAS_FAILSAFE)
 	const bool busDriven = !bus->digitalBus[static_cast<uint8_t>(DigitalComBusID::FAILSAFE_SOFT)].value;
 #else
-	const bool busDriven = (millis() - bus->lastFrameMs) < 2000u;
+	const bool busDriven = (input_sources_driver() != nullptr);
 #endif
 	for (uint8_t r = 0u; r < n; r += 4u) {
 		char buf[DashInnerW + 4];
@@ -68,12 +68,15 @@ static void render_input_view() {
 	char upt[12];
 	fmtUptime(upt, sizeof(upt));
 
+		// The command source that drives, if any
+	const char* driver = input_sources_driver();
+
 		// --- Live section header ---
 	dPre();
 	dTop();
 	{
 		char left[72], right[28];
-		int lLen = snprintf(left,  sizeof(left),  "  [ INPUTS ]  %s", input_get_name());
+		int lLen = snprintf(left,  sizeof(left),  "  [ INPUTS ]  %s", driver ? driver : "---");
 		int rLen = snprintf(right, sizeof(right), "uptime: %s  ", upt);
 		dLine("%s%*s%s", left, (int)DashInnerW - lLen - rLen, "", right);
 	}
@@ -83,8 +86,8 @@ static void render_input_view() {
 	dLine("  %-3s  %-40s  %-6s  %-5s  %s",
 	      "CH", "Name", "Raw", "Pct", "Drived");
 	dMid();
-	// Same heuristic as renderDigitalCompact() — see above.
-	const bool busDrivenIn = (millis() - s_bus->lastFrameMs) < 2000u;
+	// Driven: a command source drives the inputs.
+	const bool busDrivenIn = (driver != nullptr);
 	for (uint8_t i = 0; i < s_analogCh; i++) {
 		uint16_t    raw  = s_bus->analogBus[i].value;
 		int16_t     pct  = dashPctBipolar(raw, s_bus->analogBusMaxVal);

@@ -12,7 +12,6 @@
 #include <defs/defs.h>
 
 #include <core/config/machines/machine_type.h>        // dispatches by MACHINE_TYPE_*; pulls combus_base.h transitively (AnalogComBusBaseID / DigitalComBusBaseID)
-#include "inputs/inputs.h"
 #include "com/com.h"
 
 /**

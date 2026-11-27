@@ -2,9 +2,8 @@
  * @file input_init.h
  * @brief Input system initialisation script
  * 
- * This module handles the initialization of the input system, including
- * remote and mapping configuration parsing, sanity checks, and hardware
- * object creation.
+ * This module starts the command source modules of the board: each one starts
+ * its backend and checks its table (input_sources_begin()).
  * 
  * This script MUST be included via the init.h umbrella file.
  * 
@@ -29,15 +28,7 @@
 #include <core/config/machines/machine_type.h>
 
 // =============================================================================
-// 3. REMOTE MAPPING STRUCTURES
-// =============================================================================
-
-	// Input device vocabulary + mapping structures
-#include <core/config/inputs/inputs.h>
-
-
-// =============================================================================
-// 4. INPUT INITIALIZATION
+// 3. INPUT INITIALIZATION
 // =============================================================================
 
 	/// Input system init — the command source modules (input_sources_begin()), with init-sequence log output.

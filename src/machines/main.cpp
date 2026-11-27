@@ -6,7 +6,6 @@
 #include "config/config.h"
 #include "init/init.h"
 #include "system/utils.h"
-#include <core/config/inputs/PS4_dualshock.h>  // DigitalInputDevID enum
 #include <core/system/debug/logging/debug.h>
 #include <core/system/debug/dashboard/dashboard.h>
 #include <core/system/output/output_manager.h>

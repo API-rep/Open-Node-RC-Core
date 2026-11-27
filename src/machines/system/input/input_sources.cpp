@@ -85,12 +85,22 @@ void input_sources_update( ComBus& bus )
 }
 
 
+	/// A name only in state ONE: the index of the watch is valid then only.
+const char* input_sources_driver( void )
+{
+	if (s_sources.watch.state != RemoteSourceState::ONE) { return nullptr; }
+
+	return s_sources.devs[s_sources.watch.active].name;
+}
+
 #else  // HAS_REMOTE_PS4
 
-	// No source module on this board: nothing to start, nothing to run.
+	// No source module on this board: nothing to start, nothing to run, nobody drives.
 void input_sources_begin( void ) {}
 
 void input_sources_update( ComBus& /*bus*/ ) {}
+
+const char* input_sources_driver( void ) { return nullptr; }
 
 #endif  // HAS_REMOTE_PS4
 

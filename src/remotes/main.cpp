@@ -5,7 +5,7 @@
  * @details Opens the link to the machine it drives and runs it: the remote sends its
  *   inputs, the BASE view of the machine type, mirrored.
  *
- *   TODO(chantier 4): no physical input yet (INPUT_NONE): the channels keep their
+ *   TODO(chantier 4): no physical input yet: the channels keep their
  *   safe value.
  *****************************************************************************/
 

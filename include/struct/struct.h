@@ -7,7 +7,6 @@
 //#include "core_struct.h"
 #include "machines_struct.h"
 #include "simulation_struct.h"
-#include "remotes_struct.h"
 #include "vbat_struct.h"
 #include "pin_struct.h"
 #include "uart_struct.h"

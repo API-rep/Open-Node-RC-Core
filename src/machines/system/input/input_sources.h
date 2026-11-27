@@ -39,4 +39,12 @@ void input_sources_begin( void );
 void input_sources_update( ComBus& bus );
 
 
+/**
+ * @brief The source that drives, at the last update, for the dashboards.
+ *
+ * @return Its name; nullptr when no source drives (none alive, several, or no module).
+ */
+
+const char* input_sources_driver( void );
+
 // EOF input_sources.h

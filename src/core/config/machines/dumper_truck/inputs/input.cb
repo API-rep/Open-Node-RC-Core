@@ -14,10 +14,8 @@
 #     of the other boards.  WIP - Local remote §2.
 #
 # Wire format:
-#   - analog channels: uint16_t [0..65535], post map() from device raw domain.
+#   - analog channels: uint16_t [0..65535], already scaled by the backend of the source.
 #   - digital channels: bool.
-#   - Device raw sources from PS4_dualshock.cpp descriptors
-#     (sticks: [-127,+127], triggers: [0,255]).
 #
 # Type level:
 #   - These channels are the default for ANY dumper_truck instance
@@ -71,7 +69,7 @@ channels:
   requires: [HAS_REMOTE]
   value: CbusNeutral
 # -----------------------------------------------------------------------------
-# DIGITAL — buttons (PS4 DigitalInputDevID)
+# DIGITAL — buttons
 # -----------------------------------------------------------------------------
 
 - id: SUBGEAR_SET_BTN
