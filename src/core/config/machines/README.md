@@ -4,9 +4,7 @@
 
 Machine family configurations are **definitions** of a vehicle category.
 
-They describe what exists and how components are connected. They act both as
-reusable templates and as a common reference shared by multiple node
-sub-projects for inter-node interactions such as ComBus communication.
+They describe what exists and how components are connected. They act both as reusable templates and as a common reference shared by multiple node sub-projects for inter-node interactions such as ComBus communication.
 
 They define:
 
@@ -18,19 +16,15 @@ They define:
 
 They do not implement runtime behavior.
 
-Runtime behavior is implemented elsewhere by Runtime Engines, CBProc chains,
-device processors, and subsystem execution code.
+Runtime behavior is implemented elsewhere by Runtime Engines, CBProc chains, device processors, and subsystem execution code.
 
-This separation helps keep configurations reusable, minimizes duplication
-between machine variants, and allows execution logic to evolve independently
-from machine definitions.
+This separation helps keep configurations reusable, minimizes duplication between machine variants, and allows execution logic to evolve independently from machine definitions.
 
 ---
 
 ## 1. What This Directory Contains
 
-Each subdirectory represents a **machine family** — a reusable vehicle
-template.
+Each subdirectory represents a **machine family** — a reusable vehicle template.
 
 ```text
 machines/
@@ -49,10 +43,7 @@ machines/
 └── loader/                    ← Stub (config skeleton + sound, not dispatched yet)
 ```
 
-A machine family is **not** a single vehicle instance. It is a reusable
-configuration pattern that can be instantiated on any compatible hardware
-platform. Vehicle instances (for example the Volvo A60H Bruder) live under
-`src/machines/config/machines/`.
+A machine family is **not** a single vehicle instance. It is a reusable configuration pattern that can be instantiated on any compatible hardware platform. Vehicle instances (for example the Volvo A60H Bruder) live under `src/machines/config/machines/`.
 
 ---
 
@@ -70,22 +61,14 @@ Selection happens in two stages:
 ```
 
 - `-D MACHINE_*` picks the vehicle instance.
-- `-D MACHINE_TYPE_*` gives the class it belongs to. Both flags are set together in
-  `platformio.ini` (`[volvo_A60H_id]`), because the ComBus builder reads
-  `MACHINE_TYPE_*` from the build flags to filter the `.cb` files.
-- `machine_type.h` dispatches on `MACHINE_TYPE_*` and pulls the matching
-  `<family>_config.h`. Consumers include `machine_type.h` only, never a
-  per-family path.
+- `-D MACHINE_TYPE_*` gives the class it belongs to. Both flags are set together in `platformio.ini` (`[volvo_A60H_id]`), because the ComBus builder reads `MACHINE_TYPE_*` from the build flags to filter the `.cb` files.
+- `machine_type.h` dispatches on `MACHINE_TYPE_*` and pulls the matching `<family>_config.h`. Consumers include `machine_type.h` only, never a per-family path.
 
 ---
 
 ## 3. ComBus Definitions
 
-The ComBus channels of a family are declared in `.cb` files, not in C++. The
-**ComBus Builder** (`scripts/combus_builder/`) reads them at build time and
-GENERATES the C++ headers and sources under `<build_dir>/combus_generated/`.
-The SCons hook adds that folder to the include path, so the code includes the
-generated files directly:
+The ComBus channels of a family are declared in `.cb` files, not in C++. The **ComBus Builder** (`scripts/combus_builder/`) reads them at build time and GENERATES the C++ headers and sources under `<build_dir>/combus_generated/`. The SCons hook adds that folder to the include path, so the code includes the generated files directly:
 
 ```cpp
 #include <combus.h>              // channel arrays, `comBus`, all enums (generated)
@@ -93,20 +76,11 @@ generated files directly:
 #include <combus_base_ids.h>     // BASE view enums only (generated)
 ```
 
-For core code that only needs the ID enums, include
-`core/config/machines/combus_types.h` (it includes `<combus_ids.h>`).
+For core code that only needs the ID enums, include `core/config/machines/combus_types.h` (it includes `<combus_ids.h>`).
 
-The `.cb` files of a family use the `BASE` scope: the standard profile of the
-machine type, common to all its machines. Its inputs are the exception: `BOARD`
-channels under `requires: [HAS_REMOTE]`, on the board that acquires the
-commands only. Channels that belong to one machine instance or to one board use
-the `SYSTEM` and `BOARD` scopes. See
-`doc/configuration/cb_syntax.md` for the syntax and
-`scripts/combus_builder/README.md` for the generator.
+The `.cb` files of a family use the `BASE` scope: the standard profile of the machine type, common to all its machines. Its inputs are the exception: `BOARD` channels under `requires: [HAS_REMOTE]`, on the board that acquires the commands only. Channels that belong to one machine instance or to one board use the `SYSTEM` and `BOARD` scopes. See `doc/configuration/cb_syntax.md` for the syntax and `scripts/combus_builder/README.md` for the generator.
 
-`combus.h` is unique in the project: it is always the generated file. The
-former `core/system/combus/combus.h` (the `combus_init()` API) is now
-`core/system/combus/combus_init.h`.
+`combus.h` is unique in the project: it is always the generated file. The former `core/system/combus/combus.h` (the `combus_init()` API) is now `core/system/combus/combus_init.h`.
 
 ---
 
@@ -114,8 +88,7 @@ former `core/system/combus/combus.h` (the `combus_init()` API) is now
 
 ### 4.1 The Problem
 
-`machines_struct.h` (in `include/struct/`) needs `AnalogComBusID` and
-`DigitalComBusID` as field types:
+`machines_struct.h` (in `include/struct/`) needs `AnalogComBusID` and `DigitalComBusID` as field types:
 
 ```cpp
 struct MachineCfg {
@@ -125,28 +98,20 @@ struct MachineCfg {
 };
 ```
 
-The compiler only needs the **size** of the enum to lay out this structure,
-not the enumerator values. Including the full generated headers from shared
-structure headers would couple them to the ComBus runtime and recreate include
-cycles.
+The compiler only needs the **size** of the enum to lay out this structure, not the enumerator values. Including the full generated headers from shared structure headers would couple them to the ComBus runtime and recreate include cycles.
 
 ### 4.2 The Solution: Forward Declaration
 
-C++11 allows forward declaration of scoped enums when the underlying type is
-known:
+C++11 allows forward declaration of scoped enums when the underlying type is known:
 
 ```cpp
 enum class AnalogComBusID  : uint8_t;
 enum class DigitalComBusID : uint8_t;
 ```
 
-Struct headers and core modules (`machines_struct.h`, `combus_defs.h`,
-`combus_access.h`, the `hw/dev` headers, `light_interpreter.h`...) only forward
-declare the enums. The enumerator values are resolved by the translation units
-that include the generated headers.
+Struct headers and core modules (`machines_struct.h`, `combus_defs.h`, `combus_access.h`, the `hw/dev` headers, `light_interpreter.h`...) only forward declare the enums. The enumerator values are resolved by the translation units that include the generated headers.
 
-The generated enums are emitted in the **global scope**, without a per-family
-namespace.
+The generated enums are emitted in the **global scope**, without a per-family namespace.
 
 ---
 
@@ -160,9 +125,7 @@ src/core/config/machines/<family_name>/
 
 ### Step 2 — Declare the ComBus Contract
 
-Write the family channels as `.cb` files under `<family_name>/combus/`, with
-`scope: BASE` (see `doc/configuration/cb_syntax.md`). The builder discovers
-every `.cb` file under `src/`; no registration is needed.
+Write the family channels as `.cb` files under `<family_name>/combus/`, with `scope: BASE` (see `doc/configuration/cb_syntax.md`). The builder discovers every `.cb` file under `src/`; no registration is needed.
 
 ### Step 3 — Create the Family Umbrella
 
@@ -170,8 +133,7 @@ every `.cb` file under `src/`; no registration is needed.
 <family_name>/<family_name>_config.h
 ```
 
-Guard it with `#if defined(MACHINE_TYPE_<FAMILY>)` and include the sub-modules
-of the family (motion, inputs, light, sound).
+Guard it with `#if defined(MACHINE_TYPE_<FAMILY>)` and include the sub-modules of the family (motion, inputs, light, sound).
 
 ### Step 4 — Add a Branch to `machine_type.h`
 
@@ -182,13 +144,9 @@ of the family (motion, inputs, light, sound).
 
 ### Step 5 — Create a Vehicle Instance
 
-Under `src/machines/config/machines/<instance>/`: an instance header that
-defines `MACHINE_TYPE_<FAMILY>`, and a branch for it in `machines.h`. Then add
-the `MACHINE_*` build flag in `platformio.ini`.
+Under `src/machines/config/machines/<instance>/`: an instance header that defines `MACHINE_TYPE_<FAMILY>`, and a branch for it in `machines.h`. Then add the `MACHINE_*` build flag in `platformio.ini`.
 
-Also declare the new type in the builder's `MACHINE_TYPE_FLAGS`
-(`scripts/combus_builder/machine_type.py`) so channels under the family folder
-are filtered by machine type.
+Also declare the new type in the builder's `MACHINE_TYPE_FLAGS` (`scripts/combus_builder/machine_type.py`) so channels under the family folder are filtered by machine type.
 
 ---
 
@@ -196,26 +154,17 @@ are filtered by machine type.
 
 ### ComBus
 
-Reference communication layout for the machine family: channel identifiers,
-types, directions, expected data flow. All compatible vehicles within the same
-family share the same reference ComBus structure.
+Reference communication layout for the machine family: channel identifiers, types, directions, expected data flow. All compatible vehicles within the same family share the same reference ComBus structure.
 
 ### Motion
 
-Motion-related configuration: drive train descriptors, steering models,
-transmission presets, actuator configuration, simulation parameters.
+Motion-related configuration: drive train descriptors, steering models, transmission presets, actuator configuration, simulation parameters.
 
-The current implementation also hosts CBProc chains used to derive and process
-machine states. This organization may evolve; CBProc configurations are
-generic enough to become a dedicated configuration domain if required.
+The current implementation also hosts CBProc chains used to derive and process machine states. This organization may evolve; CBProc configurations are generic enough to become a dedicated configuration domain if required.
 
 ### Input Mapping
 
-The inputs of the type (`inputs/input.cb`) and the default table of each command
-source (`inputs/ps4_map.cpp` for the PS4): from the channels of the source to
-the inputs. An instance may replace a table whole. These mappings define how
-commands enter the system while remaining independent from the execution logic.
-See the [command sources](../../system/input/~README.md).
+The inputs of the type (`inputs/input.cb`) and the default table of each command source (`inputs/ps4_map.cpp` for the PS4): from the channels of the source to the inputs. An instance may replace a table whole. These mappings define how commands enter the system while remaining independent from the execution logic. See the [command sources](../../system/input/~README.md).
 
 ### Light
 
@@ -223,11 +172,7 @@ Light channels and presets of the family.
 
 ### Sound
 
-Optional sound-related definitions (engine sound profile of the family). They
-are included only when `SOUND_ENABLED` is defined, which no environment does
-yet. The former `SOUND_NODE` guard was removed on 2026-10-18 together with the
-stand-alone sound environment. The integration of these resources belongs to
-the "Machine / Sound convergence" work in `doc/roadmap.md`.
+Optional sound-related definitions (engine sound profile of the family). They are included only when `SOUND_ENABLED` is defined, which no environment does yet. The former `SOUND_NODE` guard was removed on 2026-10-18 together with the stand-alone sound environment. The integration of these resources belongs to the "Machine / Sound convergence" work in `doc/roadmap.md`.
 
 ---
 
@@ -253,40 +198,23 @@ build_flags =
     -D MACHINE_TYPE_DUMPER_TRUCK
 ```
 
-(`[volvo_A60H_id]` is a shared section, referenced as
-`${volvo_A60H_id.build_flags}` by the Volvo environments.)
+(`[volvo_A60H_id]` is a shared section, referenced as `${volvo_A60H_id.build_flags}` by the Volvo environments.)
 
-`MACHINE_*` selects the machine instance; `MACHINE_TYPE_*` its family, read by
-the ComBus Builder (machine type filter) and by `machine_type.h`.  Words: see
-the [glossary](../../../../doc/glossary.md).
+`MACHINE_*` selects the machine instance; `MACHINE_TYPE_*` its family, read by the ComBus Builder (machine type filter) and by `machine_type.h`. Words: see the [glossary](../../../../doc/glossary.md).
 
-**Category of the node**: every env sets exactly one
-category, checked by the ComBus Builder hook (`links.node_category()`):
-`IS_MACHINE` (a node that is driven) or `IS_REMOTE` (a node that drives).
+**Category of the node**: every env sets exactly one category, checked by the ComBus Builder hook (`links.node_category()`): `IS_MACHINE` (a node that is driven) or `IS_REMOTE` (a node that drives).
 
-**Sides of the couplers**: the place of a machine in the
-star of the links is the side of each of its couplers, never a fixed nature
-(a towed trommel is carried when hitched, stand-alone otherwise):
+**Sides of the couplers**: the place of a machine in the star of the links is the side of each of its couplers, never a fixed nature (a towed trommel is carried when hitched, stand-alone otherwise):
 
 | Flag | Side | Per node |
 |---|---|---|
 | `HAS_COUPLER_SOCKET_<NAME>` | the socket: it carries (truck, excavator with its bucket) | 0 to n |
 | `HAS_COUPLER_PLUG_<NAME>` | the plug: it is carried (trailer, trommel, dolly) | 0 or 1 |
 
-A coupler declared on both sides of one node, two plugs, or a remote with a
-coupler is refused explicitly.  A dolly has a plug and a socket; relaying
-from its plug to its socket (series) is for later.  `[env:machines]` sets
-no category: each machine identity declares its own.
+A coupler declared on both sides of one node, two plugs, or a remote with a coupler is refused explicitly. A dolly has a plug and a socket; relaying from its plug to its socket (series) is for later. `[env:machines]` sets no category: each machine identity declares its own.
 
 ---
 
 ## 9. History
 
-Until August 2026 the ComBus definitions were hand-written per family
-(`.inc` fragments assembled by `combus.h` / `combus_ids.h` dispatchers, enums
-wrapped in a per-family namespace and a `using namespace <Family>` in the
-dispatchers, and a two-section layout guarded by `#ifdef IS_MACHINE`). The
-ComBus Builder (2026-08-22) replaced all of it with generated headers in the
-global scope. The `.inc` fragments, the per-instance `combus.h` /
-`combus_ids.h` redirection headers and the namespaces were removed (the last
-cleanup is dated 2026-10-18). Older commits and documents use these names.
+Until August 2026 the ComBus definitions were hand-written per family (`.inc` fragments assembled by `combus.h` / `combus_ids.h` dispatchers, enums wrapped in a per-family namespace and a `using namespace <Family>` in the dispatchers, and a two-section layout guarded by `#ifdef IS_MACHINE`). The ComBus Builder (2026-08-22) replaced all of it with generated headers in the global scope. The `.inc` fragments, the per-instance `combus.h` / `combus_ids.h` redirection headers and the namespaces were removed (the last cleanup is dated 2026-10-18). Older commits and documents use these names.
