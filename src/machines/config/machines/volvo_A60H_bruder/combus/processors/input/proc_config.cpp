@@ -43,6 +43,9 @@
 #include <core/system/combus/processors/input/cb_btn.h>    // cb_btn_push_fn, cb_btn_toggle_fn, cb_btn_inc_fn, cb_btn_dec_fn, CbBtnCfg, CbBtnState, CbBtnTrigger
 #include <core/system/combus/processors/base/cb_runlevel.h>               // cb_runlevel_fn, cb_runlevel_hold_fn, CbRunlevelCfg
 #include <core/system/combus/processors/base/cb_bypass.h>                 // cb_bypass_fn
+#include <core/system/combus/processors/math/cb_center.h>                 // cb_center_fn, CbCenterCfg
+#include <core/system/combus/processors/math/cb_abs.h>                    // cb_abs_fn
+#include <core/system/combus/processors/math/cb_scale.h>                  // cb_scale_fn, CbScaleCfg
 
 
 // Chain configs — included in any order (no cross-dependencies between input chains).
@@ -52,6 +55,7 @@
 #include "key_runlevel_config.h"   // kKeyRunlevelProcs — key_on + key_off
 #include "runlevel_config.h"       // kRunlevelProcs — halt_hold + failsafe + failsafe_soft + runlevel
 #include "cruise_input_config.h"   // kCruiseInputProcs — gate(SUBGEAR) + toggle(□)
+#include "brake_input_config.h"    // kBrakeInputProcs — center + abs + scale
 
 
 // =============================================================================
@@ -125,6 +129,15 @@ CbChain kInputChains[INPUT_CH_COUNT] = {
     .outCh      = AnalogComBusID::DUMP_BUS,
     .procs      = nullptr,
     .procCount  = 0u,
+  },
+
+  // INPUT_BRAKE — BRAKE_STICK (released at neutral) → [center, abs, scale] → BRAKE_BUS (released at 0).
+  // The throttle chain (cb_brake) reads BRAKE_BUS and merges the reverse brake into it.
+  { .name       = "brake",
+    .inCh       = AnalogComBusID::BRAKE_STICK,
+    .outCh      = AnalogComBusID::BRAKE_BUS,
+    .procs      = kBrakeInputProcs,
+    .procCount  = static_cast<uint8_t>(std::size(kBrakeInputProcs)),
   },
 
 };

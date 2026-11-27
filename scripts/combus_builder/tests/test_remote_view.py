@@ -148,14 +148,14 @@ def test_row5b_the_board_with_has_remote_lists_its_inputs(tmp_path, dumper):
     ids = (tmp_path / "combus_ids.h").read_text(encoding="utf-8")
     assert "PS4_LX" in ids and "NODE_LINK_FAIL" in ids                     # BOARD, on the board, not inputs
     text = (tmp_path / "combus_peer_links.h").read_text(encoding="utf-8")
-    assert _inputs(text, "Analog") == (["DUMP_STICK", "STEERING_STICK", "THROTTLE_STICK"], 3)
+    assert _inputs(text, "Analog") == (["BRAKE_STICK", "DUMP_STICK", "STEERING_STICK", "THROTTLE_STICK"], 4)
     assert _inputs(text, "Digital") == (["CRUISE_TOGGLE_BTN", "CRUISE_UPDATE_BTN", "DIRECT_DRIVE_BTN",
                                          "GEAR_DOWN_BTN", "GEAR_UP_BTN", "HORN_BTN", "KEY_BTN",
                                          "SUBGEAR_SET_BTN"], 8)
 
 
 @pytest.mark.parametrize("flags, expected", [
-    (("IS_MACHINE", TYPE, "HAS_REMOTE"), (3, 8)),       # the remote link: the 3 sticks, the 8 buttons
+    (("IS_MACHINE", TYPE, "HAS_REMOTE"), (4, 8)),       # the remote link: the 3 sticks and the brake, the 8 buttons
     (("IS_MACHINE", TYPE), (0, 0)),                     # no link between nodes on this board
 ], ids=["has_remote", "no_link"])
 def test_row5c_the_largest_link_sizes_the_rx_buffers(tmp_path, dumper, flags, expected):

@@ -50,7 +50,7 @@ def test_no_base_channel_without_direction(channels):
     assert left == [], f"BASE channels with direction none: {left}"
 
 
-@pytest.mark.parametrize("cid", ["THROTTLE_STICK", "STEERING_STICK", "DUMP_STICK",
+@pytest.mark.parametrize("cid", ["THROTTLE_STICK", "STEERING_STICK", "DUMP_STICK", "BRAKE_STICK",
                                  "SUBGEAR_SET_BTN", "GEAR_UP_BTN", "GEAR_DOWN_BTN", "CRUISE_UPDATE_BTN", "HORN_BTN",
                                  "KEY_BTN", "DIRECT_DRIVE_BTN", "CRUISE_TOGGLE_BTN"])
 def test_inputs_are_board_under_has_remote(channels, cid):

@@ -3,8 +3,8 @@
  * @brief Mapper of the PS4 source for a dumper truck: the table of the type.
  *
  * @details The rows of the former PS4_dualshock_map.cpp, input by input.  L2 went to
- *   BRAKE_BUS, an output of the machine, not an input: a mapper writes inputs only,
- *   so the row is not here (WIP - Local remote §10).
+ *   BRAKE_BUS, an output of the machine: it goes to the input BRAKE_STICK now, which the
+ *   INPUT_BRAKE chain rescales to BRAKE_BUS (WIP - Local remote §10).
  *****************************************************************************/
 
 #if defined(HAS_REMOTE_PS4) && defined(MACHINE_TYPE_DUMPER_TRUCK)
@@ -24,6 +24,7 @@ static const RemoteAnalogRoute kAnalog[] = {
 	{ AnalogComBusID::PS4_LY,    AnalogComBusID::THROTTLE_STICK,  false },
 	{ AnalogComBusID::PS4_LX,    AnalogComBusID::STEERING_STICK,  false },
 	{ AnalogComBusID::PS4_RY,    AnalogComBusID::DUMP_STICK,      false },
+	{ AnalogComBusID::PS4_L2,    AnalogComBusID::BRAKE_STICK,     false },
 };
 
 static const RemoteDigitalRoute kDigital[] = {

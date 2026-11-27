@@ -17,6 +17,9 @@
  *     8  RUNNING, soft fault rising edge → IDLE.
  *   Row 6 (unknown value → HALT) is in main.cpp: build and review only.
  *
+ *   Then the brake input chain of the Volvo (INPUT_BRAKE, kBrakeInputProcs):
+ *   BRAKE_STICK released at neutral → BRAKE_BUS 0, full at max → max.
+ *
  *   No jumper needed.  Run: pio test -e test_runlevel
  *****************************************************************************/
 
@@ -31,6 +34,13 @@
 
   // The chain under test, with the context its umbrella (proc_config.cpp) gives it.
 #include <machines/config/machines/volvo_A60H_bruder/combus/processors/input/runlevel_config.h>
+
+  // The brake input chain (R5 of WIP - Local remote), with its context.
+#include <core/system/combus/processors/math/cb_center.h>
+#include <core/system/combus/processors/math/cb_abs.h>
+#include <core/system/combus/processors/math/cb_scale.h>
+#include <core/system/combus/combus_res.h>   // CbusNeutral
+#include <machines/config/machines/volvo_A60H_bruder/combus/processors/input/brake_input_config.h>
 
 
 // =============================================================================
@@ -162,6 +172,39 @@ void test_row8_soft_fault_edge_gives_idle(void) {
 
 
 // =============================================================================
+// BRAKE INPUT CHAIN (INPUT_BRAKE: BRAKE_STICK -> BRAKE_BUS)
+// The input is released at neutral, BRAKE_BUS at 0: the real proc array
+// (kBrakeInputProcs) run on one value, as the runner would.
+// =============================================================================
+
+  /** One pass of the brake procs on `stick`; the value they commit to BRAKE_BUS. */
+static uint16_t brake(uint16_t stick) {
+    uint16_t value   = stick;
+    bool     claimed = false;
+    for (CbProc& p : kBrakeInputProcs) { p.fn(&p, value, claimed); }
+    TEST_ASSERT_FALSE(claimed);
+    return value;
+}
+
+void test_brake_released_at_neutral(void) {
+    TEST_ASSERT_EQUAL_UINT16(0u, brake(CbusNeutral));
+}
+
+void test_brake_full_at_max(void) {
+    TEST_ASSERT_EQUAL_UINT16(65535u, brake(65535u));
+}
+
+void test_brake_half_way(void) {
+    TEST_ASSERT_UINT16_WITHIN(2u, 32767u, brake(CbusNeutral + 16384u));
+}
+
+void test_brake_below_neutral_brakes_too(void) {
+    // abs: a stick pulled below neutral brakes as much (a trigger never goes there)
+    TEST_ASSERT_UINT16_WITHIN(2u, 65533u, brake(0u));
+}
+
+
+// =============================================================================
 // RUNNER
 // =============================================================================
 
@@ -176,6 +219,11 @@ void setup() {
     RUN_TEST(test_row5_reboot_leaves_halt);
     RUN_TEST(test_row7_key_starts_from_idle);
     RUN_TEST(test_row8_soft_fault_edge_gives_idle);
+
+    RUN_TEST(test_brake_released_at_neutral);
+    RUN_TEST(test_brake_full_at_max);
+    RUN_TEST(test_brake_half_way);
+    RUN_TEST(test_brake_below_neutral_brakes_too);
 
     UNITY_END();
 }

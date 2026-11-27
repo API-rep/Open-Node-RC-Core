@@ -1,7 +1,7 @@
 # input.cb — Inputs of the machine type (BOARD, requires HAS_REMOTE)
 #
 # Purpose:
-#   - Defines the inputs (sticks + buttons) the command source writes, before
+#   - Defines the inputs (sticks, brake + buttons) the command source writes, before
 #     any INPUT/SIM processor conditions them.  The three other inputs are in
 #     combus/ (KEY_BTN, DIRECT_DRIVE_BTN, CRUISE_TOGGLE_BTN).
 #   - They are the SOURCE side of the input mapping (PS4_dualshock_map.cpp)
@@ -55,6 +55,16 @@ channels:
 
 - id: DUMP_STICK
   infoName: "Dump stick (raw, RY)"
+  type: analog
+  theme: core
+  scope: BOARD
+  requires: [HAS_REMOTE]
+  value: CbusNeutral
+
+# Brake: released at neutral, full at max (an analog trigger, L2 on a PS4);
+# the INPUT_BRAKE chain rescales it to BRAKE_BUS (0 = released).
+- id: BRAKE_STICK
+  infoName: "Brake stick (raw, L2)"
   type: analog
   theme: core
   scope: BOARD

@@ -48,6 +48,7 @@ enum InputCh {
                                 ///<   Future: center+abs+scale+dir — splits conditioning from SIM chain.
     INPUT_DUMP = 7,             ///< DUMP_STICK (raw bipolar) → [passthrough for now] → DUMP_BUS.
                                 ///<   Future: center+abs+scale+dir — splits conditioning from SIM chain.
+    INPUT_BRAKE = 8,            ///< BRAKE_STICK (released at neutral) → [center+abs+scale] → BRAKE_BUS (released at 0).
     INPUT_CH_COUNT              ///< Sentinel — number of CbChain entries.
 };
 

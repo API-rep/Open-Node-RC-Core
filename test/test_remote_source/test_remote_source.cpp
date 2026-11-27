@@ -352,6 +352,7 @@ static CbChain s_reframeChains[] = {
 	/// The inputs of the dumper truck on this board: all of them.
 static const AnalogComBusID kAllAnalogInputs[] = {
 	AnalogComBusID::THROTTLE_STICK, AnalogComBusID::STEERING_STICK, AnalogComBusID::DUMP_STICK,
+	AnalogComBusID::BRAKE_STICK,
 };
 static const DigitalComBusID kAllDigitalInputs[] = {
 	DigitalComBusID::SUBGEAR_SET_BTN,   DigitalComBusID::GEAR_UP_BTN,       DigitalComBusID::GEAR_DOWN_BTN,
@@ -592,7 +593,7 @@ void test_m8_the_table_of_the_type_for_the_ps4_passes_the_checks( void )
 	RemoteMapRam ram = {};
 
 	TEST_ASSERT_TRUE(remote_map_apply(ram, kPs4TypeMap, kAllInputs));
-	TEST_ASSERT_EQUAL_UINT8(3u, ram.analogCount);
+	TEST_ASSERT_EQUAL_UINT8(4u, ram.analogCount);
 	TEST_ASSERT_EQUAL_UINT8(8u, ram.digitalCount);
 	TEST_ASSERT_NULL_MESSAGE(ps4_instance_map(), "no instance declares a table in this build");
 }
@@ -657,7 +658,7 @@ void test_m10_the_cost_of_a_read_with_a_reframer( void )
 	const uint32_t dt = micros() - t0;
 
 	char msg[96];
-	snprintf(msg, sizeof(msg), "read + reframer (6 chains) + mapper (11 rows): %lu us per pass (%u passes)",
+	snprintf(msg, sizeof(msg), "read + reframer (6 chains) + mapper (12 rows): %lu us per pass (%u passes)",
 	         (unsigned long)(dt / kPasses), (unsigned)kPasses);
 	TEST_MESSAGE(msg);
 
