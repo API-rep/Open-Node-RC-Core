@@ -18,7 +18,18 @@ Le code est relu (blocs 1 à 11) ; reste, dans l'ordre :
    - Montage : deux ESP32 en USB, liaison croisée GPIO 17 ↔ 16 dans les deux sens, masse commune par l'USB du même PC.
    - Ce qui reste à prouver à deux cartes : la mémoire `historique-tests-rework` (colonne « reste à deux cartes »), à reprendre ligne par ligne.
    - État au 2026-11-21 : banc à deux cartes (`test/two_boards/bench.py`) vert sur tous ses scénarios (A, B, C, monkey, corruption, trames forgées, charge, configurations mal assorties). Reste :
-     - **levier 0** : pic de boucle à 22 ms sur le nœud (scénario C), 11 ms sur A et B ; mesurer sans `DEBUG_SYSTEM`, puis avec `DEBUG_DASHBOARD`, pour savoir si les logs ou le tableau de bord bloquent la boucle ;
+     - ~~**levier 0**~~ **mesuré le 2026-11-28** : les pics viennent des logs de `DEBUG_SYSTEM`. Monkey MA, MB, MC rejoués avec les mêmes graines (`1795859226`, `1795859614`, `1795859963`, 300 événements), avec puis sans `DEBUG_SYSTEM` (`--fa=-UDEBUG_SYSTEM --fb=-UDEBUG_SYSTEM`), tous verts :
+
+       | | pic ComBus (a / b) | pic ComBus après un événement | boucle la plus longue (a / b) |
+       |---|---|---|---|
+       | MA avec / sans debug | 24,0 / 23,3 ms → 4,4 / 2,9 ms | ~11 ms → ≤ 1,0 ms | 32 / 23 ms → 18 / 18 ms |
+       | MB avec / sans debug | 23,2 / 23,3 ms → 2,1 / 2,9 ms | ~11 ms → ≤ 1,2 ms | 32 / 23 ms → 20 / 17 ms |
+       | MC avec / sans debug | 13,3 / 14,7 ms → 3,4 / 2,5 ms | ~11 ms → ≤ 1,0 ms | 22 / 22 ms → 22 / 16 ms |
+
+       **Cause** : le code du lien logue chaque changement d'état (perte, retour, handshake, refus) par `sys_log_*()`, qui écrit sur l'USB série par `Serial.printf()` ([debug.h:200](../src/core/system/debug/logging/debug.h#L200)). À 115 200 bauds, un caractère prend ~87 µs : une ligne de ~100 caractères, ~9 ms, dès que le tampon d'émission du port est plein ; la boucle attend que la ligne parte. D'où ~11 ms par événement et ~23 ms quand deux ou trois lignes s'enchaînent. Sans les logs, le code du lien prend ≤ 1 ms par événement : il n'est pas en cause. L'attente a lieu **que quelqu'un lise ou non** : le pont USB-série absorbe les octets au rythme de la ligne, même port fermé.
+       **Reste hors ComBus** : la boucle entière reste à 16-22 ms sans debug, alors que le ComBus n'y prend que ≤ 4 ms. Probablement la console du banc (`pollConsole()` : une ligne d'état de plusieurs centaines de caractères par `Serial.printf()`, plus `delay(2)`) : un artefact de l'outil, pas du firmware ; déduit, pas mesuré (le banc ne chronomètre pas sa console à part).
+       **Pas mesuré** : `DEBUG_DASHBOARD` (le banc ne compile pas le tableau de bord) ; à mesurer sur la Volvo, qui tourne avec `DEBUG_SYSTEM` et le tableau de bord : elle a sans doute les mêmes saccades de ~11 ms à chaque changement d'état d'un lien.
+       **Pas de risque de sûreté** : on reste loin des délais de perte des liens et du seuil du banc (100 ms). Correction : un chantier à part, §4 « Logs qui n'attendent jamais ».
      - **la vraie Volvo** (carte mère et extension, moteurs et servos) : seulement compilée ; le banc moteurs du propriétaire viendra plus tard.
    - Les deux bouts d'un lien sont joués par les firmwares du banc (`src/bench/`, envs `bench_*` : tracteur et remorque, machine et télécommande, nœud à deux cartes). La Volvo n'a toujours pas de lien vers la télécommande : elle pilote par la PS4.
 3. **Sources de commandes** (manette PS4, télécommande du projet, plus tard SBUS), intercalées le 2026-11-21 pour que l'audit final les couvre : recadré le 2026-11-24 : chaque source (télécommande du projet comprise) est un module de la carte d'acquisition, qui écrit les entrées `BOARD` du type (`*_STICK`, `*_BTN`, sous `HAS_REMOTE`). Concept, décisions et étapes R0 à R5 : [Local remote](<WIP - Local remote.md>).
@@ -51,6 +62,17 @@ Générer la configuration (dont `platformio.ini`) à partir de fichiers YAML, c
 - **`doc/board_architecture.md` à remanier** avec ce rework (décision du propriétaire, 2026-11-11) : le document n'est pas vraiment défini ; il trouvera sa place dans la section configuration YAML et dans la section flags du script. Laissé en l'état d'ici là (catégorie, arbre de configuration, fonctions d'une carte, `PERIPH_` réservé, relevés sur le code).
 
 ## 4. En attente, sans chantier
+
+- **Logs qui n'attendent jamais, affichés seulement pour un lecteur** (idée du propriétaire, 2026-11-28 ; cause mesurée au levier 0, §1 point 2). Aujourd'hui, `sys_log_*()` écrit chaque ligne sur l'USB série et la boucle attend qu'elle parte : ~9 ms par ligne à 115 200 bauds, des saccades de 11 à 23 ms à chaque changement d'état d'un lien, et ce même sans personne au bout du câble.
+  - **Contrainte matérielle** : on ne peut pas savoir qu'un terminal est ouvert. La carte (`esp32dev`) passe par un pont USB-série : le PC ne signale pas l'ouverture du port, et ses lignes DTR/RTS servent au reset. Seule une puce à USB natif (ESP32-S2, S3) le saurait. « Quelqu'un lit » doit donc être **dit par le lecteur** (une touche, comme le tableau de bord pour se suspendre et reprendre).
+  - **Solution proposée** : séparer l'enregistrement de l'affichage, et ne jamais attendre le port.
+    1. **Toujours enregistrer en RAM** : chaque log dans un tampon circulaire de quelques Ko (quelques µs) ; une copie existe déjà pour la « log tail » du tableau de bord ([debug.h:187](../src/core/system/debug/logging/debug.h#L187)), à généraliser.
+    2. **N'afficher que pendant une session de lecture** : sans session, rien ne part sur le port ; une touche de la console l'ouvre, une autre la ferme.
+    3. **À l'ouverture, vider le tampon** : le log du boot et les derniers événements, y compris ce qui s'est passé avant qu'on regarde ; ne pas afficher ne fait rien perdre.
+    4. **Une écriture qui n'attend jamais**, même en session : n'écrire que ce qui tient dans le tampon d'émission du port (`Serial.availableForWrite()`), le reste attend dans le tampon RAM ; s'il déborde, une ligne « N lignes perdues ». C'est ce point qui supprime les saccades.
+    5. **Plus tard** : le même tampon lu par d'autres lecteurs (la télécommande par ESP-NOW, une page web) ; le port série n'est plus qu'un lecteur parmi d'autres.
+  - **Ce qui ne change pas** : `DEBUG_SYSTEM` reste le flag de compilation qui fait exister les logs dans le firmware ; la session ne décide que de leur affichage, à l'exécution.
+  - **Quand** : après le merge du link rework, ou avec le chantier des transports (ESP-NOW change le chemin chaud des liens). Le module touché : `src/core/system/debug/logging/` (et le tableau de bord, qui partage le port série). Ensuite, mesurer `DEBUG_DASHBOARD` sur la Volvo et rejouer le levier 0.
 
 - **Un même type plusieurs fois** dans un ensemble de nœuds (deux remorques, double traction) et deux nœuds de même type en égal à égal : il faudra raisonner sur les instances, plus sur les types ; piste d'un mode « twin » (deux composants qui ne forment qu'une entité). À reprendre avec l'identité des pairs (Node transports §6).
 - **Un module qui fait de sa carte la carte mère** (une carte son et lumière pour une petite machine) : ressources minimales à vérifier au démarrage.
