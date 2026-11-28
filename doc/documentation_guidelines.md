@@ -79,6 +79,7 @@ The code can be read at any time, by a person or by an AI. A document is only wo
 **Allowed:**
 
 * A pointer to the folder or to the entry point of a module, in one line.
+* The values of an enum that name a concept, with their meaning: the states of a link, the levels of a fault. They are vocabulary, not a copy of the enum.
 * A short code example when it shows what the reader writes, or illustrates a convention. It is taken from living code, so that it does not outlive what it shows.
 
 ---
