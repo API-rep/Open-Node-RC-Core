@@ -8,9 +8,9 @@ Only the communication ports are described here for now.
 
 ### Declaring a Port
 
-A **`ComPortCfg`** ([`com_port.h`](com_port.h)) describes one communication port of a board: its name, its kind (`ComPortType`) and the settings of that kind. It is purely descriptive and lives in flash: declaring a port does not start it.
+A **`ComPortCfg`** ([`com_port.h`](com_port.h)) describes one communication port of a board: its name, its kind, and the settings of that kind, such as its pins and its highest rate. It is purely descriptive and lives in flash: declaring a port does not start it.
 
-The board lists all its ports in a table, `comPorts[]` of its `envCfg.cpp`, even those that no link uses yet. Each port is created with the factory of its kind:
+The board lists all its ports in `comPorts[]` of its `envCfg.cpp`, even those that no link uses yet, each one created with the factory of its kind:
 
 ```cpp
 const ComPortCfg comPorts[] = {
@@ -19,34 +19,19 @@ const ComPortCfg comPorts[] = {
 };
 ```
 
-| Kind | Settings | Fields |
-|---|---|---|
-| `UART` | `UartPortCfg` | `index` (peripheral: 0, 1 or 2), `txPin`, `rxPin` (-1 = not wired), `maxBaud` (highest rate of the port) |
-
-The name is the one printed on the board, so that the logs point to the right connector. A link names the port it uses in its `ComDevMap`; a rate above `maxBaud` is refused at boot.
+The name is the one printed on the board, so that the logs point to the right connector. A link names the port it uses in its `ComDevMap`; a link faster than its port allows is refused at boot.
 
 *To come*: the configuration of the boards will move to configuration files, like the channels in `.cb` files. The ports will then be declared there.
 
 ### Transport Adapters
 
-A transport adapter sets up one kind of port and drives it. It is the only code that knows the medium.
+A transport adapter sets up one kind of port and drives it: everything specific to a UART, or tomorrow to a radio, stays inside it. The adapters live in `transport/`, one per kind; today, the [UART port](transport/uart_port.md).
 
-| Kind | Adapter | Where |
-|---|---|---|
-| `UART` | `uart_port_init()` | [UART port](transport/uart_port.md) |
-
-At boot, the link calls the adapter of its port, with the line rate of the link and only the pins its end needs: a transmit-only end does not take the RX pin. The adapter claims the port and its pins: a port claimed twice is refused. It then returns a `ComPort`.
+At boot, the link manager calls the adapter of the port, with the line rate of the link and only the pins its end needs: a transmit-only end does not take the RX pin. The adapter claims the port and its pins, refuses a port claimed twice, and returns a `ComPort`.
 
 ### ComPort
 
-A **`ComPort`** ([`com_port.h`](com_port.h)) is the accessor of a port once set up: a small structure of functions, filled by the adapter.
-
-| Function | Role |
-|---|---|
-| `write()` | send bytes |
-| `readByte()` | read one byte (-1 when empty) |
-| `available()` | number of bytes waiting |
-| `setPeer()` | optional: the only peer to deliver frames from, on a transport with several peers |
+A **`ComPort`** ([`com_port.h`](com_port.h)) is the accessor of a port once set up: a few functions filled by the adapter, to write bytes, read them, and know how many are waiting. A transport with several peers, such as a radio, is also told the only peer to listen to.
 
 Each link keeps its `ComPort` for the whole run, and the [ComBus transmission](../combus/protocol/README.md) goes through it alone:
 
@@ -61,7 +46,7 @@ None of them touches anything else of the hardware, so a new medium only needs a
 1. One value in `ComPortType`.
 2. One settings structure, and its member in the union of `ComPortCfg`, with its factory.
 3. One adapter in `transport/`, which returns a `ComPort`.
-4. One case where the link sets up its port (`setupPort()` in `combus_link_setup.cpp`).
+4. One case where the link manager sets up its port (`setupPort()` in `combus_link_setup.cpp`).
 
 ## Going Further
 

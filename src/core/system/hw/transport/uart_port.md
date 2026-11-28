@@ -1,55 +1,36 @@
 # UART Port
 
-The UART adapter sets up a UART port of the ESP32 and drives it behind a `ComPort`. It is the only code of the ComBus transmission that knows `HardwareSerial`.
+The UART adapter sets up a UART port of the controller and drives it behind a `ComPort`: everything specific to a UART, `HardwareSerial` included, stays inside it.
 
 ## Declaring a UART Port
 
-A board declares a UART port with `ComPortCfg::makeUart()` and its `UartPortCfg` (see [the hardware](../README.md#declaring-a-port)). The index of the port is the ESP32 peripheral:
-
-| Index | Serial | Usual role |
-|---|---|---|
-| 0 | `Serial` | USB, debug serial |
-| 1 | `Serial1` | |
-| 2 | `Serial2` | extension port |
+A board declares a UART port with `ComPortCfg::makeUart()` (see [the hardware](../README.md#declaring-a-port)). Its index is the UART peripheral of the controller: `Serial`, `Serial1` or `Serial2`. The first one is usually the USB and the debug serial.
 
 ## Setting Up
 
-All the UART ports of the program share one pool of slots (`UartCtx`), owned by the machine and registered once at boot: `hw_init_com()` calls `uart_port_register_pool()` from `sys_init()`. The debug serial claims its slot first.
+All the UART ports of the program share one pool of slots, owned by the machine and registered once at boot, from `hw_init_com()`. When the debug is on, the debug serial claims its slot first.
 
-A link then sets up its port with `uart_port_init(serial, rate, txPin, rxPin, name, &pinReg)`, which returns the `ComPort` of the link:
+A link then sets up its port with `uart_port_init()`, which returns the `ComPort` of the link:
 
-- **Only the pins of the end are taken.** The pin of a direction the end does not use is passed as `-1`, and is not reserved.
+- **Only the pins in use are taken.** The others are left free, for the next modules to claim.
 - **A port is claimed once.** A second claim of the same port is refused, and so is any claim once the pool is full.
-- **The driver gets a transmit ring** of 512 bytes before `begin()`. A write copies the frame and returns at once, instead of waiting until the whole frame is in the 128-byte FIFO of the hardware.
+- **The driver gets a transmit buffer** before it starts.
 
 ## Reading and Writing
 
-- **Writing**: a 226-byte frame took 20.6 ms to write without the transmit ring, 0.19 ms with it. The ring does not save an overloaded line: once it is full, the writes block again.
-- **Reading**: the adapter reads the driver in blocks of 64 bytes, then serves them one by one. Byte by byte, the driver is slow once its buffer is full: after a stall of the loop, 380 bytes took 130 ms instead of 2.7 ms.
+Both go through a buffer, so that the main loop never waits on the line:
+
+- **Writing** copies the frame into the transmit buffer and returns at once. Only an overloaded line, which fills the buffer, can block it again.
+- **Reading** takes the bytes from the driver in blocks, much faster than one by one.
 
 ## Line Load
 
-At boot, a link is checked against the line that carries it. A transmitting end on a UART sends its full frame at its frame rate, plus a handshake request and its ACK every 250 ms, 10 bits per byte (start and stop). `combus_link_load_pct()` gives this load in % of the line rate:
+At boot, a link is checked against the line that carries it: what a transmitting end sends, its frames and its handshakes, is weighed against the line rate (`combus_link_load_pct()`). Two limits:
 
-```text
-load = (frameLen × txHz + 2 × 26 × 1000 / 250) × 10 × 100 / rate
-```
+- close to the line rate, the link starts with a **warning** in the log;
+- above the line rate, the link is refused with an **error**: the line cannot carry it.
 
-| Load | At boot |
-|---|---|
-| up to 70 % | the link starts |
-| above 70 % | the link starts, with a warning in the log |
-| above 100 % | the link is refused: the line cannot carry it |
-
-The margin is measured: at 94 % of a 19 200 baud line, the transmit ring fills and a write already blocks the loop for about 40 ms. The real configurations run at 115 200 baud and 50 Hz, about 20 %. The check only covers a UART: another kind of port counts as 0 for now.
-
-## Files
-
-| Role | File |
-|---|---|
-| The adapter | `uart_port.h`, `uart_port.cpp` |
-| The pool of the machine | `src/machines/init/hw/hw_init_com.cpp` |
-| The line load | `combus_link_load_pct()`, `src/core/system/combus/protocol/link/combus_link_setup.cpp` |
+The margin of the warning is measured: near the full load, the transmit buffer fills, and the writes already block the loop. The check only covers a UART: another kind of port counts as unloaded for now.
 
 ## Going Further
 
